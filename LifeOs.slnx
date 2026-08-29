@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LifeOs.Application/LifeOs.Application.csproj" />
+    <Project Path="src/LifeOs.Cli/LifeOs.Cli.csproj" />
+    <Project Path="src/LifeOs.Domain/LifeOs.Domain.csproj" />
+    <Project Path="src/LifeOs.Infrastructure/LifeOs.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LifeOs.Tests/LifeOs.Tests.csproj" />
+  </Folder>
+</Solution>

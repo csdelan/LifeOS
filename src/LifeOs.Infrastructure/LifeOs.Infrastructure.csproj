@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LifeOs.Application\LifeOs.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+  </ItemGroup>
+
+  <!--
+    Migration SQL lives at the repo root under db/migrations so it is easy to
+    read and diff. It is embedded into this assembly so the runner works from a
+    clean clone regardless of the process working directory (CLI or tests).
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\db\migrations\*.sql">
+      <LogicalName>LifeOs.Infrastructure.Migrations.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,45 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+artifacts/
+
+# .NET / Visual Studio
+.vs/
+*.user
+*.suo
+*.userprefs
+*_i.c
+*_p.c
+*.rsp
+project.lock.json
+project.fragment.lock.json
+
+# Rider / VS Code
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# Test / coverage results
+[Tt]est[Rr]esult*/
+[Cc]overage*/
+*.trx
+*.coverage
+*.coveragexml
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!Directory.Packages.props
+
+# Local environment
+*.env
+.env
+.env.local
+appsettings.*.local.json
+
+# OS
+.DS_Store
+Thumbs.db

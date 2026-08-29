@@ -1,0 +1,32 @@
+# Local development Postgres for the Life Kernel.
+#
+# The test suite does NOT use this file — it spins up its own throwaway Postgres
+# via Testcontainers. This compose file is for interactive local use: running
+# `bsk migrate` and the diagnostic queries against a persistent database.
+#
+#   docker compose up -d
+#   ./run.ps1 migrate
+#
+# Credentials here are local-development-only and match
+# KernelConnectionString.LocalDevelopmentDefault.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: lifeos-postgres
+    environment:
+      POSTGRES_DB: lifeos
+      POSTGRES_USER: lifeos
+      POSTGRES_PASSWORD: lifeos
+    ports:
+      - "5432:5432"
+    volumes:
+      - lifeos-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifeos -d lifeos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  lifeos-pgdata:
