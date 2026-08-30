@@ -11,11 +11,15 @@ and prints the findings grouped by diagnostic. `bsk check --only <name>` runs
 one; `bsk check --json` emits the findings as data for downstream consumers.
 
 The Stage 1 diagnostics land across M4.2–M4.6: `neglect` (M4.2), `breach`
-(M4.3), and `wishes` + `drift` (M4.4) are here; unclosed loops, decorative
-identity, and the capacity-constraint check follow. Each must satisfy the
-runner's output format (M4.1) below. Diagnostics that need to tell an active
-subject from a finished one use `bsk.is_terminal_status(text)` (migration 0008)
-rather than hard-coding the "done" words.
+(M4.3), `wishes` + `drift` (M4.4), `unclosed_loops` + `decorative_identity`
+(M4.5), and `constraint` (M4.6) are all here. Each must satisfy the runner's
+output format (M4.1) below. Diagnostics that need to tell an active subject from
+a finished one use `bsk.is_terminal_status(text)` (migration 0008) rather than
+hard-coding the "done" words, and ones that read a free-text attribute
+(`neglect`'s cadence, `constraint`'s limit) interpret what they can and skip what
+they cannot rather than guessing. The `constraint` capacity check reads a plain
+`committed_hours` jsonb attribute (set with `bsk new … --attr committed_hours=5`)
+to total booked hours against a Constraint's stated focused-hours limit.
 
 ## File naming
 
