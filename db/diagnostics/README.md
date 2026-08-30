@@ -10,10 +10,9 @@ The runner discovers every `*.sql` file in this directory (embedded into
 and prints the findings grouped by diagnostic. `bsk check --only <name>` runs
 one; `bsk check --json` emits the findings as data for downstream consumers.
 
-The individual Stage 1 diagnostics land in M4.2–M4.6 (neglect, breach, wishes,
-drift, unclosed loops, decorative identity, and the capacity-constraint check).
-This directory is intentionally empty until then — M4.1 is the runner and the
-output format that every one of those must satisfy.
+The Stage 1 diagnostics land across M4.2–M4.6: `neglect` (M4.2) is here; breach,
+wishes, drift, unclosed loops, decorative identity, and the capacity-constraint
+check follow. Each must satisfy the runner's output format (M4.1) below.
 
 ## File naming
 

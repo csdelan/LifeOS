@@ -51,10 +51,12 @@ public sealed class EmbeddedDiagnosticSourceTests
     }
 
     [Fact]
-    public void Production_assembly_has_no_diagnostics_yet()
+    public void Production_assembly_ships_the_neglect_diagnostic()
     {
-        // M4.1 ships the runner and format only; the diagnostics land in M4.2-M4.6.
-        Assert.Empty(new EmbeddedDiagnosticSource().Load());
+        // M4.2 added the first real diagnostic; more land in M4.3-M4.6.
+        var names = new EmbeddedDiagnosticSource().Load().Select(d => d.Name).ToList();
+
+        Assert.Contains("neglect", names);
     }
 
     private static int IndexOf(IReadOnlyList<Diagnostic> diagnostics, string name)
