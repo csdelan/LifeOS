@@ -23,6 +23,12 @@ public interface IEventStore
     Task<Guid> AppendAsync(NewEvent newEvent, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Reads source events. Read-only; the source stream is never mutated.</summary>
+public interface IEventReader
+{
+    Task<SourceEvent?> FindAsync(Guid id, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Reads and creates subjects. Used by resolve-or-create flows.</summary>
 public interface ISubjectRepository
 {

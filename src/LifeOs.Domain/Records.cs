@@ -25,3 +25,10 @@ public sealed record NewSubject(
 
 /// <summary>A lightweight read view of a subject, used for resolve-or-create.</summary>
 public sealed record SubjectRef(Guid Id, string Urn, string Type, string Title);
+
+/// <summary>
+/// A lightweight read view of a source event, used by promotion. <c>SubjectId</c>
+/// is the subject the event's payload references (e.g. the Problem an
+/// <c>idea_session</c> is about), or <c>null</c> when the event names no subject.
+/// </summary>
+public sealed record SourceEvent(Guid Id, string Kind, Guid? SubjectId);
