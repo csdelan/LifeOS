@@ -29,6 +29,7 @@ public sealed class SubjectDetail
     public string? ExpectedCadence { get; set; }
     public DateTime? NextReviewAt { get; set; }
     public string? Scope { get; set; }
+    public string? Statement { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

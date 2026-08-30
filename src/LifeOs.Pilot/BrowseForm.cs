@@ -342,6 +342,13 @@ public sealed class BrowseForm : Form
             var text = new StringBuilder();
             text.AppendLine(subject.Urn);
             text.AppendLine();
+            if (!string.IsNullOrWhiteSpace(subject.Statement))
+            {
+                text.AppendLine("Statement");
+                text.AppendLine($"  {subject.Statement}");
+                text.AppendLine();
+            }
+
             text.AppendLine($"Status    {subject.Status}");
             if (!string.IsNullOrWhiteSpace(subject.ExpectedCadence))
             {
@@ -453,15 +460,33 @@ public sealed class BrowseForm : Form
             return;
         }
 
-        var title = InputDialog.Show(this, $"New {type}", $"Title for the new {type}:");
-        if (title is null)
+        // A Value is an identity statement: capture both the short handle (title)
+        // and the full statement, and pass the statement through to the kernel.
+        string[] args;
+        if (type == "Value")
         {
-            return;
+            using var dialog = new ValueDialog();
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            args = ["new", "Value", dialog.HandleText, "--statement", dialog.Statement];
+        }
+        else
+        {
+            var title = InputDialog.Show(this, $"New {type}", $"Title for the new {type}:");
+            if (title is null)
+            {
+                return;
+            }
+
+            args = ["new", type, title];
         }
 
         try
         {
-            _bsk.Run("new", type, title);
+            _bsk.Run(args);
             LoadTypes();
             SelectType(type);
         }

@@ -20,7 +20,9 @@ SELECT
     v.urn   AS subject_urn,
     v.type  AS subject_type,
     v.title AS subject_title,
-    'No Goal serves this Value — it is stated, but nothing is aimed at it.' AS summary,
+    'No Goal serves this Value — “'
+        || coalesce(nullif(trim(v.attributes->>'statement'), ''), v.title)
+        || '” is stated, but nothing is aimed at it.' AS summary,
     jsonb_build_array(
         jsonb_build_object(
             'kind', 'expected_relation',

@@ -56,6 +56,10 @@ internal static class NewCommand
         {
             Description = "Season: when it ends (ISO-8601 date)."
         };
+        var statementOption = new Option<string?>("--statement")
+        {
+            Description = "Value: the full identity statement (the title is its short handle)."
+        };
         var slotOption = new Option<string[]>("--slot")
         {
             Description = "Value: a slot this value occupies (repeatable).",
@@ -75,7 +79,7 @@ internal static class NewCommand
         foreach (var option in new Option[]
                  {
                      cadenceOption, reviewAtOption, endStateOption, scopeOption, limitOption,
-                     focusOption, endsOption, slotOption, attrOption
+                     focusOption, endsOption, statementOption, slotOption, attrOption
                  })
         {
             command.Options.Add(option);
@@ -92,6 +96,16 @@ internal static class NewCommand
             {
                 var canonicalType = ResolveType(type);
 
+                // A Value is an identity statement: the title is its short handle, and a
+                // full statement is required (enforced by the kernel; checked here so the
+                // message is actionable rather than a raw constraint violation).
+                var statement = parseResult.GetValue(statementOption);
+                if (canonicalType == SubjectTypes.Value && string.IsNullOrWhiteSpace(statement))
+                {
+                    throw new ArgumentException(
+                        "A Value needs --statement: the title is the short handle, the statement is who you've chosen to be.");
+                }
+
                 var attributes = new JsonObject();
                 Set(attributes, "expected_cadence", parseResult.GetValue(cadenceOption));
                 Set(attributes, "next_review_at", parseResult.GetValue(reviewAtOption));
@@ -100,6 +114,7 @@ internal static class NewCommand
                 Set(attributes, "limit", parseResult.GetValue(limitOption));
                 Set(attributes, "focus", parseResult.GetValue(focusOption));
                 Set(attributes, "ends", parseResult.GetValue(endsOption));
+                Set(attributes, "statement", parseResult.GetValue(statementOption));
 
                 var slots = parseResult.GetValue(slotOption) ?? [];
                 if (slots.Length > 0)

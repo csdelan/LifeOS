@@ -50,7 +50,7 @@ public sealed class SubjectReader(string connectionString)
             """
             SELECT s.id, s.urn, s.type, s.title,
                    coalesce(c.status, 'open') AS status,
-                   s.expected_cadence, s.next_review_at, s.scope, s.created_at
+                   s.expected_cadence, s.next_review_at, s.scope, s.statement, s.created_at
             FROM bsk.v_subject s
             LEFT JOIN bsk.v_subject_current c ON c.subject_id = s.id
             WHERE s.id = @id

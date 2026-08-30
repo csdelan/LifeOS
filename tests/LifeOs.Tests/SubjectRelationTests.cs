@@ -51,7 +51,10 @@ public sealed class SubjectRelationTests(PostgresFixture postgres)
 
         foreach (var type in AllSubjectTypes)
         {
-            await InsertSubjectAsync(connection, type, $"urn:bsk:{type.ToLowerInvariant()}:{ns}");
+            // A Value must carry a statement (migration 0010); the rest insert bare.
+            var attributes = type == "Value" ? """{"statement": "identity"}""" : "{}";
+            await InsertSubjectAsync(
+                connection, type, $"urn:bsk:{type.ToLowerInvariant()}:{ns}", attributes: attributes);
         }
 
         var distinctTypes = await connection.ExecuteScalarAsync<long>(new CommandDefinition(

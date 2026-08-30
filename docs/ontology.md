@@ -134,7 +134,7 @@ type stabilizes and earns real constraints. This means exercising or adding a ty
 
 | Type | What it represents |
 | --- | --- |
-| **Value** | An enduring principle — who I've chosen to be. The top of the alignment graph. |
+| **Value** | An enduring principle — who I've chosen to be. Stated as a short **handle** (the title, which drives the slug) plus a full first-person **identity statement** (`attributes.statement`, required). The top of the alignment graph. |
 | **Goal** | A desired outcome that serves a Value. |
 | **Problem** | A durable open question I return to (the reuse-by-title anchor, §6). |
 | **Project** | A body of work that results in outcomes and serves Goals/Commitments. |

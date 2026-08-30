@@ -30,7 +30,10 @@ public sealed class UnclosedLoopsDecorativeDiagnosticTests(PostgresFixture postg
     private async Task<Guid> InsertSubjectAsync(
         NpgsqlConnection connection, string type, string ns, object? attributes = null)
     {
-        var attrs = JsonSerializer.Serialize(attributes ?? new { });
+        // A Value must carry a statement (migration 0010); default one when a test
+        // doesn't set attributes of its own, so these fixtures satisfy the CHECK.
+        var effective = attributes ?? (type == "Value" ? new { statement = $"identity {ns}" } : new object());
+        var attrs = JsonSerializer.Serialize(effective);
         return await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
             """
             INSERT INTO bsk.subject (urn, type, title, attributes)
