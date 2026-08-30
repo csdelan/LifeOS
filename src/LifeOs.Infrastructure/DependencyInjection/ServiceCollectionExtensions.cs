@@ -50,6 +50,10 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IEventReader>(),
             sp.GetRequiredService<IRelationRepository>()));
 
+        services.AddSingleton(sp => new DecisionService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<RelationService>()));
+
         // Operational services that work directly against the store.
         services.AddSingleton(_ => new MigrationRunner(connectionString));
         services.AddSingleton(_ => new DerivedRebuilder(connectionString));
