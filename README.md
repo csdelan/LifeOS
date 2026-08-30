@@ -157,6 +157,30 @@ any drift without changing anything:
 ./run.ps1 rebuild --verify   # report drift (exit 1 if drifted), change nothing
 ```
 
+## Diagnostics (`bsk check`)
+
+`bsk check` runs the deterministic SQL diagnostics and prints an evidence-bearing
+report — every finding names the subject it concerns, the rule that fired, and
+the evidence rows (event/relation ids) that triggered it. Explaining itself is
+built in: no finding is unexplained.
+
+```powershell
+./run.ps1 check                 # run every diagnostic, grouped by kind
+./run.ps1 check --only neglect  # run one
+./run.ps1 check --json          # machine-readable, for downstream consumers
+```
+
+Findings are advisory, not a pass/fail gate: a completed run exits 0 whether or
+not it flagged anything, so `bsk check` composes in scripts. `--json` carries the
+findings (and their evidence arrays) as data.
+
+Each diagnostic is a plain SQL file under `db/diagnostics`, embedded into
+`LifeOs.Infrastructure` and run inside a single read-only transaction — the
+runner never involves a model. The individual Stage 1 diagnostics land in
+M4.2–M4.6; until then `bsk check` reports that none are configured. See
+[`db/diagnostics/README.md`](db/diagnostics/README.md) for the file-naming and
+result contract every diagnostic must satisfy.
+
 ## Read-only access (`bsk_reader`)
 
 `bsk` is the only write path. Every other consumer reads Postgres directly

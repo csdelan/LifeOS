@@ -26,4 +26,16 @@
     </EmbeddedResource>
   </ItemGroup>
 
+  <!--
+    Diagnostic SQL lives at the repo root under db/diagnostics, embedded the same
+    way as migrations so `bsk check` works from a clean clone. The individual
+    diagnostics land in M4.2-M4.6; the glob matches none until then, which is
+    fine (no resources, no error).
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\db\diagnostics\*.sql">
+      <LogicalName>LifeOs.Infrastructure.Diagnostics.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
 </Project>

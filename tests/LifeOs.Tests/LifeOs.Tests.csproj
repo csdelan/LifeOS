@@ -16,6 +16,17 @@
     <ProjectReference Include="..\..\src\LifeOs.Cli\LifeOs.Cli.csproj" />
   </ItemGroup>
 
+  <!--
+    Fixture diagnostics for the runner tests. Embedded under the same logical
+    prefix EmbeddedDiagnosticSource looks for, so pointing it at this assembly
+    discovers them exactly as it discovers the real ones in Infrastructure.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="DiagnosticFixtures\*.sql">
+      <LogicalName>LifeOs.Infrastructure.Diagnostics.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit.v3" />

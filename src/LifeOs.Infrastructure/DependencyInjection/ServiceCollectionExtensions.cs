@@ -2,6 +2,7 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Capture;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
+using LifeOs.Infrastructure.Diagnostics;
 using LifeOs.Infrastructure.Migrations;
 using LifeOs.Infrastructure.Persistence;
 using LifeOs.Infrastructure.Rebuild;
@@ -63,6 +64,7 @@ public static class ServiceCollectionExtensions
         // Operational services that work directly against the store.
         services.AddSingleton(_ => new MigrationRunner(connectionString));
         services.AddSingleton(_ => new DerivedRebuilder(connectionString));
+        services.AddSingleton(_ => new DiagnosticRunner(connectionString));
 
         return services;
     }
