@@ -49,16 +49,25 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
             RETURNING id;
             """;
 
-        return await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
-            sql,
-            new
-            {
-                newSubject.Urn,
-                newSubject.Type,
-                newSubject.Title,
-                Attributes = newSubject.AttributesJson,
-                newSubject.OriginEventId
-            },
-            cancellationToken: cancellationToken));
+        try
+        {
+            return await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
+                sql,
+                new
+                {
+                    newSubject.Urn,
+                    newSubject.Type,
+                    newSubject.Title,
+                    Attributes = newSubject.AttributesJson,
+                    newSubject.OriginEventId
+                },
+                cancellationToken: cancellationToken));
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // Translate the store's unique-violation into an application concept so
+            // callers (e.g. SubjectService) don't depend on Npgsql error codes.
+            throw new DuplicateSubjectException(newSubject.Type, newSubject.Title, ex);
+        }
     }
 }
