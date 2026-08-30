@@ -37,6 +37,48 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
             new { type, title }, cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyList<SubjectRef>> FindByShortIdAsync(
+        string shortId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        // The short id is the URN's trailing token, separated from the slug by '-'
+        // or (when there is no slug) from the type by ':'. Anchor on that separator
+        // so a short id cannot match mid-slug. shortId is validated hex upstream, so
+        // it carries no regex metacharacters.
+        var matches = await connection.QueryAsync<SubjectRef>(new CommandDefinition(
+            """
+            SELECT id, urn, type, title
+            FROM bsk.subject
+            WHERE urn ~ ('[:-]' || @shortId || '$')
+            ORDER BY created_at, id;
+            """,
+            new { shortId }, cancellationToken: cancellationToken));
+
+        return matches.AsList();
+    }
+
+    public async Task<IReadOnlyList<SubjectRef>> FindByTitleContainsAsync(
+        string fragment, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        // Case-insensitive substring match; an exact (case-insensitive) title sorts
+        // first so the resolver can prefer it when several titles contain the text.
+        var matches = await connection.QueryAsync<SubjectRef>(new CommandDefinition(
+            """
+            SELECT id, urn, type, title
+            FROM bsk.subject
+            WHERE strpos(lower(title), lower(@fragment)) > 0
+            ORDER BY (lower(title) = lower(@fragment)) DESC, created_at, id;
+            """,
+            new { fragment }, cancellationToken: cancellationToken));
+
+        return matches.AsList();
+    }
+
     public async Task<Guid> CreateAsync(
         NewSubject newSubject, CancellationToken cancellationToken = default)
     {

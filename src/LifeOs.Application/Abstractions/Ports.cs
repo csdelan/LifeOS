@@ -31,5 +31,21 @@ public interface ISubjectRepository
     Task<SubjectRef?> FindByTypeAndTitleAsync(
         string type, string title, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Finds subjects whose URN carries the given short id (the minted hex tail).
+    /// Returns every match so the caller can disambiguate; short ids are unique by
+    /// construction, so this is normally zero or one.
+    /// </summary>
+    Task<IReadOnlyList<SubjectRef>> FindByShortIdAsync(
+        string shortId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finds subjects whose title contains <paramref name="fragment"/>
+    /// (case-insensitive), for fuzzy resolution. An exact case-insensitive title
+    /// match, when present, sorts first so the resolver can prefer it.
+    /// </summary>
+    Task<IReadOnlyList<SubjectRef>> FindByTitleContainsAsync(
+        string fragment, CancellationToken cancellationToken = default);
+
     Task<Guid> CreateAsync(NewSubject newSubject, CancellationToken cancellationToken = default);
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LifeOs.Application.Subjects;
 using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -45,6 +46,19 @@ internal static class Cli
         {
             WriteError(asJson, "Operation cancelled.");
             return 130;
+        }
+        catch (AmbiguousSubjectException ex) when (asJson)
+        {
+            // Machine consumers get the candidates as data, not a formatted message,
+            // so they can present the choice themselves.
+            Console.Error.WriteLine(JsonSerializer.Serialize(
+                new
+                {
+                    error = $"'{ex.Reference}' is ambiguous.",
+                    candidates = ex.Candidates.Select(c => new { id = c.Id, urn = c.Urn, type = c.Type, title = c.Title })
+                },
+                JsonOptions));
+            return 1;
         }
         catch (Exception ex)
         {

@@ -21,6 +21,15 @@ public static class Urns
 
     public static bool IsUrn(string value) => value.StartsWith("urn:bsk:", StringComparison.Ordinal);
 
+    /// <summary>
+    /// The short id is the trailing hex token minted onto every URN (the
+    /// <c>-a1b2c3</c> in <c>urn:bsk:problem:how-do-i-sleep-a1b2c3</c>, or the whole
+    /// tail when the title slugged to nothing). It is what a person types to name a
+    /// subject without quoting its full URN.
+    /// </summary>
+    public static bool IsShortId(string value)
+        => value.Length is >= 4 and <= 12 && value.All(Uri.IsHexDigit);
+
     // Lowercase, alphanumeric runs joined by single dashes, no leading/trailing dash.
     private static string Slugify(string title)
     {
