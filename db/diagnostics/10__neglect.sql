@@ -12,6 +12,10 @@
 -- Subjects with no focus tag are never parked; with no active Season, nothing is
 -- parked.
 --
+-- Finished subjects are excluded: a subject whose current status is terminal
+-- (bsk.is_terminal_status — done, abandoned, …) has nothing left to tend, so its
+-- silence is not neglect. Status is folded from source, so no rebuild is needed.
+--
 -- This is information, not confrontation: it reports what has gone quiet, not a
 -- rule you broke (that is the breach diagnostic). Cadence words are mapped to
 -- windows below; an explicit interval like "10 days" is also accepted, and an
@@ -57,8 +61,13 @@ cadenced AS (
             END
         END AS window
     FROM bsk.subject s
+    -- Current status folded from source (no rebuild needed), to skip finished subjects.
+    LEFT JOIN bsk_derived.subject_current_source scs ON scs.subject_id = s.id
     WHERE jsonb_exists(s.attributes, 'expected_cadence')
       AND coalesce(trim(s.attributes->>'expected_cadence'), '') <> ''
+      -- A done/abandoned/… subject is not neglected — there is nothing left to tend.
+      -- (bsk.is_terminal_status, migration 0008; NULL status counts as active.)
+      AND NOT bsk.is_terminal_status(scs.status)
 ),
 -- The single most recent concerning event per subject, for the staleness clock
 -- and the evidence row.

@@ -63,6 +63,18 @@ public sealed class NeglectDiagnosticTests(PostgresFixture postgres)
         return eventId;
     }
 
+    private async Task SetStatusAsync(
+        NpgsqlConnection connection, Guid subjectId, string status, DateTimeOffset occurredAt)
+    {
+        var payload = JsonSerializer.Serialize(new { subject_id = subjectId.ToString(), status });
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO bsk.event (kind, provenance, occurred_at, source_id, payload)
+            VALUES ('state_change', 'declared', @occurredAt, 'test', @payload::jsonb);
+            """,
+            new { occurredAt, payload }, cancellationToken: Ct));
+    }
+
     private async Task<Finding?> FindAsync(Guid subjectId)
     {
         var report = await Runner.RunAsync(only: "neglect", cancellationToken: Ct);
@@ -245,6 +257,38 @@ public sealed class NeglectDiagnosticTests(PostgresFixture postgres)
         var subject = await InsertSubjectAsync(
             connection, "Commitment", ns, new { expected_cadence = "weekly" },
             DateTimeOffset.UtcNow.AddDays(-30));
+
+        Assert.NotNull(await FindAsync(subject));
+    }
+
+    [Fact]
+    public async Task Finished_subject_is_not_flagged()
+    {
+        await using var connection = await OpenAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var subject = await InsertSubjectAsync(
+            connection, "Project", ns, new { expected_cadence = "weekly" },
+            DateTimeOffset.UtcNow.AddDays(-30));
+
+        // Stale by cadence, but done -> nothing left to tend -> not neglect.
+        await SetStatusAsync(connection, subject, "done", DateTimeOffset.UtcNow.AddDays(-1));
+
+        Assert.Null(await FindAsync(subject));
+    }
+
+    [Fact]
+    public async Task Reopened_subject_is_flagged_again()
+    {
+        await using var connection = await OpenAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var subject = await InsertSubjectAsync(
+            connection, "Project", ns, new { expected_cadence = "weekly" },
+            DateTimeOffset.UtcNow.AddDays(-30));
+
+        // Marked done, then reopened later: the CURRENT folded status is active,
+        // so the subject is neglected again (not excluded on the stale 'done').
+        await SetStatusAsync(connection, subject, "done", DateTimeOffset.UtcNow.AddDays(-10));
+        await SetStatusAsync(connection, subject, "active", DateTimeOffset.UtcNow.AddDays(-3));
 
         Assert.NotNull(await FindAsync(subject));
     }
