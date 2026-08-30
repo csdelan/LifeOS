@@ -22,5 +22,6 @@ rootCommand.Options.Add(jsonOption);
 rootCommand.Subcommands.Add(MigrateCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(RebuildCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(CaptureCommand.Create(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(JournalCommand.Create(connectionOption, jsonOption));
 
 return await rootCommand.Parse(args).InvokeAsync();

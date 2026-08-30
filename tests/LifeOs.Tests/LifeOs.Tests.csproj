@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\src\LifeOs.Domain\LifeOs.Domain.csproj" />
     <ProjectReference Include="..\..\src\LifeOs.Application\LifeOs.Application.csproj" />
     <ProjectReference Include="..\..\src\LifeOs.Infrastructure\LifeOs.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\LifeOs.Cli\LifeOs.Cli.csproj" />
   </ItemGroup>
 
   <ItemGroup>
