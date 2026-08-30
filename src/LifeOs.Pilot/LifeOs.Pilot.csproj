@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Throwaway pilot UI (epic #1 PoC). Deliberately decoupled from the kernel:
+    it READS Postgres directly through the bsk_reader role, and (later) WRITES
+    only by shelling out to the bsk CLI — honouring invariant 9 (bsk is the one
+    write path). No ProjectReference to the kernel, so deleting this folder is a
+    clean rm -rf. Windows-only (WinForms); the kernel stays cross-platform.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Dapper" />
+  </ItemGroup>
+
+</Project>
