@@ -25,5 +25,7 @@ rootCommand.Subcommands.Add(CaptureCommand.Create(connectionOption, jsonOption))
 rootCommand.Subcommands.Add(JournalCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(IdeasCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(NewCommand.Create(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(LinkCommand.Create(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(StatusCommand.Create(connectionOption, jsonOption));
 
 return await rootCommand.Parse(args).InvokeAsync();

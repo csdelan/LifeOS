@@ -38,6 +38,23 @@ public static class SubjectTypes
     public const string Season = "Season";
 }
 
+/// <summary>Relation kinds, matching the CHECK constraint on <c>bsk.relation.relation</c>.</summary>
+public static class RelationKinds
+{
+    public const string Serves = "serves";
+    public const string ResultsIn = "results_in";
+    public const string Evidences = "evidences";
+    public const string Violates = "violates";
+    public const string Concerns = "concerns";
+    public const string Supersedes = "supersedes";
+    public const string PromotedFrom = "promoted_from";
+
+    public static readonly IReadOnlyList<string> All =
+    [
+        Serves, ResultsIn, Evidences, Violates, Concerns, Supersedes, PromotedFrom
+    ];
+}
+
 /// <summary>Identifiers for where an event originated (the event's <c>source_id</c>).</summary>
 public static class KernelSources
 {

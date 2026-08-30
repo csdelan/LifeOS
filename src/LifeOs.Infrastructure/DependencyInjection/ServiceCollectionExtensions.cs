@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IArtifactStore>(_ => new NpgsqlArtifactStore(connectionString));
         services.AddSingleton<IEventStore>(_ => new NpgsqlEventStore(connectionString));
         services.AddSingleton<ISubjectRepository>(_ => new NpgsqlSubjectRepository(connectionString));
+        services.AddSingleton<IRelationRepository>(_ => new NpgsqlRelationRepository(connectionString));
 
         services.AddSingleton(sp => new CaptureService(
             sp.GetRequiredService<IEventStore>(),
@@ -32,6 +33,16 @@ public static class ServiceCollectionExtensions
             sourceId));
 
         services.AddSingleton(sp => new SubjectService(sp.GetRequiredService<ISubjectRepository>()));
+
+        services.AddSingleton(sp => new RelationService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<IRelationRepository>()));
+
+        services.AddSingleton(sp => new StatusService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<IEventStore>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
 
         // Operational services that work directly against the store.
         services.AddSingleton(_ => new MigrationRunner(connectionString));
