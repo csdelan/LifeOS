@@ -54,6 +54,12 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<RelationService>()));
 
+        services.AddSingleton(sp => new ActivityService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<IEventStore>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
+
         // Operational services that work directly against the store.
         services.AddSingleton(_ => new MigrationRunner(connectionString));
         services.AddSingleton(_ => new DerivedRebuilder(connectionString));
