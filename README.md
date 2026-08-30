@@ -107,3 +107,22 @@ any drift without changing anything:
 ./run.ps1 rebuild            # regenerate derived tables
 ./run.ps1 rebuild --verify   # report drift (exit 1 if drifted), change nothing
 ```
+
+## Read-only access (`bsk_reader`)
+
+`bsk` is the only write path. Every other consumer reads Postgres directly
+through the `bsk_reader` role, which has `USAGE` + `SELECT` and no write grants.
+Flattened views unpack common jsonb attributes into columns for convenience:
+`bsk.v_subject`, `bsk.v_event`, `bsk.v_relation`, and `bsk.v_subject_current`.
+
+Point read-only consumers (Python, BI, ad-hoc `psql`) at `bsk_reader`; never at
+the owner used by `bsk migrate` / `bsk rebuild`. The role's password in
+migration 0005 is a **local-development** credential (matches
+`docker-compose.yml`); production supplies its own.
+
+A Python script proves the door end-to-end (reads succeed, writes are rejected):
+
+```bash
+pip install "psycopg[binary]"
+python scripts/verify_reader.py     # uses BSK_READER_DSN, or the local dev default
+```
