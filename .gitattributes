@@ -1,0 +1,11 @@
+# Normalize text files to LF in the repository.
+* text=auto
+
+# Migration SQL is byte-sensitive: the migration runner checksums it to detect
+# post-apply edits. Pin it to LF in the working tree too, so the executed bytes
+# are identical on every platform regardless of core.autocrlf. (The runner also
+# normalizes line endings before hashing, so this is defense in depth.)
+db/migrations/*.sql text eol=lf
+
+# Windows-oriented scripts stay CRLF.
+*.ps1 text eol=crlf

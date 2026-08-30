@@ -30,7 +30,13 @@ public sealed class MigrationScript
 
     private static string ComputeChecksum(string sql)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(sql));
+        // Normalize line endings before hashing so the checksum is identical
+        // whether the migration file was checked out with CRLF or LF (git
+        // autocrlf, .editorconfig, editor differences). Without this a database
+        // first migrated by one build would falsely reject the same migration
+        // from a build whose working tree used the other line ending.
+        var normalized = sql.Replace("\r\n", "\n").Replace("\r", "\n");
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
         return Convert.ToHexStringLower(bytes);
     }
 }

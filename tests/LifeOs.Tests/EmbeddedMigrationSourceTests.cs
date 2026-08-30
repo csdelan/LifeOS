@@ -38,4 +38,15 @@ public sealed class EmbeddedMigrationSourceTests
         Assert.Equal(script.Checksum, script.Checksum.ToLowerInvariant());
         Assert.Equal(new MigrationScript(1, "baseline", "SELECT 1;").Checksum, script.Checksum);
     }
+
+    [Fact]
+    public void Checksum_is_invariant_to_line_endings()
+    {
+        var crlf = new MigrationScript(1, "x", "CREATE TABLE t (id int);\r\nSELECT 1;\r\n");
+        var lf = new MigrationScript(1, "x", "CREATE TABLE t (id int);\nSELECT 1;\n");
+        var cr = new MigrationScript(1, "x", "CREATE TABLE t (id int);\rSELECT 1;\r");
+
+        Assert.Equal(lf.Checksum, crlf.Checksum);
+        Assert.Equal(lf.Checksum, cr.Checksum);
+    }
 }
