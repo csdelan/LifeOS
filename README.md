@@ -10,6 +10,55 @@ for the hypothesis under test and the full scope.
 > deliberately standalone so that discarding it is `rm -rf`, not an untangling
 > exercise.
 
+## High-level goals
+
+> **A note on the name.** "BlueSkies" is also the name of an existing personal
+> **trading system**, and that is no coincidence: BlueSkies Life Intelligence
+> (this project, with the Life Kernel as Stage 1) **builds upon** the trading
+> system's architecture. The trading system executes and manages market
+> activity; the same event-sourced, continuously-learning foundations are
+> carried forward and generalized here to manage a life rather than a portfolio.
+> New readers should treat this as an evolution of that architecture, not an
+> unrelated project that happens to share a name.
+
+**The BlueSkies Life Intelligence vision.** BlueSkies is a continuously
+learning personal intelligence system that helps me live and work in alignment
+with my chosen identity, values, goals, projects, and commitments.
+
+- **Builds a trustworthy, evolving model of my life.** It develops its
+  understanding from configurable data sources, direct interaction, observed
+  events, reflection, and the outcomes of earlier decisions.
+
+- **Protects my attention.** It surfaces what matters now, filters out
+  irrelevant noise, flags neglected commitments and conflicts, and presents only
+  the most useful next actions for my current focus.
+
+- **Acts as an adaptive coach and thinking partner.** It helps me establish the
+  rules, habits, and strategies that move me toward who I want to become. It may
+  intervene when I drift, but its interventions stay explainable, configurable,
+  respectful of my autonomy, and bounded by explicit limits. It learns the
+  timing, communication style, and coaching techniques that help me most —
+  without deception, coercion, or unhealthy optimization.
+
+- **Is my launchpad for delegating work** to people and AI agents. It picks the
+  right resources, supplies context, controls permissions, tracks progress,
+  triages their questions, and escalates only the decisions that genuinely need
+  me.
+
+- **Works across every interface** — mobile, desktop, voice, text, wearables,
+  and whatever comes next. These are different doors into the same authoritative
+  personal intelligence, not separate systems.
+
+- **Accumulates a governed history** of my events, goals, decisions,
+  commitments, habits, projects, observations, and outcomes. As AI and
+  human-computer interfaces advance, this history enables increasingly ambient
+  and proactive assistance.
+
+The long-term destination is a trusted cognitive companion that understands how
+I think and what I care about deeply enough to guide me with minimal effort —
+even through future interfaces such as BCI — while leaving me in control of my
+identity, choices, attention, and life.
+
 ## Requirements
 
 - [.NET SDK 10.0](https://dotnet.microsoft.com/) (pinned in `global.json`)
