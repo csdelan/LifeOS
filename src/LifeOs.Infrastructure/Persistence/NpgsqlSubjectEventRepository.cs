@@ -4,25 +4,25 @@ using Npgsql;
 
 namespace LifeOs.Infrastructure.Persistence;
 
-/// <summary>Creates directed subject → subject edges in <c>bsk.subject_relation</c>.</summary>
-public sealed class NpgsqlRelationRepository(string connectionString) : IRelationRepository
+/// <summary>Creates event → subject edges in <c>bsk.subject_event</c>.</summary>
+public sealed class NpgsqlSubjectEventRepository(string connectionString) : ISubjectEventRepository
 {
     public async Task<Guid> CreateAsync(
-        Guid fromSubject, string relation, Guid toSubject, string provenance,
+        Guid eventId, string relation, Guid subjectId, string provenance,
         CancellationToken cancellationToken = default)
     {
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
 
         const string sql = """
-            INSERT INTO bsk.subject_relation (from_subject, relation, to_subject, provenance)
-            VALUES (@fromSubject, @relation, @toSubject, @provenance)
+            INSERT INTO bsk.subject_event (event_id, relation, subject_id, provenance)
+            VALUES (@eventId, @relation, @subjectId, @provenance)
             RETURNING id;
             """;
 
         return await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
             sql,
-            new { fromSubject, relation, toSubject, provenance },
+            new { eventId, relation, subjectId, provenance },
             cancellationToken: cancellationToken));
     }
 }

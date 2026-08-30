@@ -56,10 +56,18 @@ public interface ISubjectRepository
     Task<Guid> CreateAsync(NewSubject newSubject, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Creates directed edges between subjects in <c>bsk.relation</c>.</summary>
+/// <summary>Creates directed subject → subject edges in <c>bsk.subject_relation</c>.</summary>
 public interface IRelationRepository
 {
     Task<Guid> CreateAsync(
         Guid fromSubject, string relation, Guid toSubject, string provenance,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>Creates event → subject edges in <c>bsk.subject_event</c>.</summary>
+public interface ISubjectEventRepository
+{
+    Task<Guid> CreateAsync(
+        Guid eventId, string relation, Guid subjectId, string provenance,
         CancellationToken cancellationToken = default);
 }

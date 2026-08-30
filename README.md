@@ -113,7 +113,8 @@ any drift without changing anything:
 `bsk` is the only write path. Every other consumer reads Postgres directly
 through the `bsk_reader` role, which has `USAGE` + `SELECT` and no write grants.
 Flattened views unpack common jsonb attributes into columns for convenience:
-`bsk.v_subject`, `bsk.v_event`, `bsk.v_relation`, and `bsk.v_subject_current`.
+`bsk.v_subject`, `bsk.v_event`, `bsk.v_subject_relation`, `bsk.v_subject_event`,
+and `bsk.v_subject_current`.
 
 Point read-only consumers (Python, BI, ad-hoc `psql`) at `bsk_reader`; never at
 the owner used by `bsk migrate` / `bsk rebuild`. The role's password in

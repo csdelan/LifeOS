@@ -56,7 +56,7 @@ public sealed class DecisionServiceTests(PostgresFixture postgres)
 
         // No relations for a decision that resulted in nothing.
         var edges = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            "SELECT count(*) FROM bsk.relation WHERE from_subject = @id;",
+            "SELECT count(*) FROM bsk.subject_relation WHERE from_subject = @id;",
             new { id = result.Decision.Id }, cancellationToken: Ct));
         Assert.Equal(0, edges);
     }
@@ -77,9 +77,9 @@ public sealed class DecisionServiceTests(PostgresFixture postgres)
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync(Ct);
         var relation = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
-            "SELECT relation FROM bsk.relation WHERE from_subject = @from AND to_subject = @to;",
+            "SELECT relation FROM bsk.subject_relation WHERE from_subject = @from AND to_subject = @to;",
             new { from = result.Decision.Id, to = project.Id }, cancellationToken: Ct));
-        Assert.Equal(RelationKinds.ResultsIn, relation);
+        Assert.Equal(SubjectRelations.ResultsIn, relation);
     }
 
     [Fact]
@@ -96,8 +96,8 @@ public sealed class DecisionServiceTests(PostgresFixture postgres)
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync(Ct);
         var relation = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
-            "SELECT relation FROM bsk.relation WHERE from_subject = @from AND to_subject = @to;",
+            "SELECT relation FROM bsk.subject_relation WHERE from_subject = @from AND to_subject = @to;",
             new { from = reversal.Decision.Id, to = prior.Decision.Id }, cancellationToken: Ct));
-        Assert.Equal(RelationKinds.Supersedes, relation);
+        Assert.Equal(SubjectRelations.Supersedes, relation);
     }
 }

@@ -31,17 +31,17 @@ public sealed class RelationServiceTests(PostgresFixture postgres)
         var task = await subjects.CreateAsync(SubjectTypes.Task, $"call the plumber {ns}", cancellationToken: Ct);
         var commitment = await subjects.CreateAsync(SubjectTypes.Commitment, $"keep the house running {ns}", cancellationToken: Ct);
 
-        var result = await relations.LinkAsync(task.Urn, RelationKinds.Serves, commitment.Urn, Ct);
+        var result = await relations.LinkAsync(task.Urn, SubjectRelations.Serves, commitment.Urn, Ct);
 
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync(Ct);
         var row = await connection.QuerySingleAsync<(Guid FromSubject, string Relation, Guid ToSubject, string Provenance)>(
             new CommandDefinition(
-                "SELECT from_subject, relation, to_subject, provenance FROM bsk.relation WHERE id = @id;",
+                "SELECT from_subject, relation, to_subject, provenance FROM bsk.subject_relation WHERE id = @id;",
                 new { id = result.Id }, cancellationToken: Ct));
 
         Assert.Equal(task.Id, row.FromSubject);
-        Assert.Equal(RelationKinds.Serves, row.Relation);
+        Assert.Equal(SubjectRelations.Serves, row.Relation);
         Assert.Equal(commitment.Id, row.ToSubject);
         Assert.Equal(Provenances.Declared, row.Provenance);
     }
@@ -58,7 +58,7 @@ public sealed class RelationServiceTests(PostgresFixture postgres)
         var task = await subjects.CreateAsync(SubjectTypes.Task, $"tidy the desk {ns}", cancellationToken: Ct);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await relations.LinkAsync(goal.Urn, RelationKinds.Serves, task.Urn, Ct));
+            async () => await relations.LinkAsync(goal.Urn, SubjectRelations.Serves, task.Urn, Ct));
 
         Assert.Contains("Task is a leaf", ex.Message);
 
@@ -66,7 +66,7 @@ public sealed class RelationServiceTests(PostgresFixture postgres)
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync(Ct);
         var count = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            "SELECT count(*) FROM bsk.relation WHERE to_subject = @task;",
+            "SELECT count(*) FROM bsk.subject_relation WHERE to_subject = @task;",
             new { task = task.Id }, cancellationToken: Ct));
         Assert.Equal(0, count);
     }
@@ -82,7 +82,7 @@ public sealed class RelationServiceTests(PostgresFixture postgres)
         var task = await subjects.CreateAsync(SubjectTypes.Task, $"draft the report {ns}", cancellationToken: Ct);
         var commitment = await subjects.CreateAsync(SubjectTypes.Commitment, $"weekly reporting {ns}", cancellationToken: Ct);
 
-        var result = await relations.LinkAsync(task.Urn, RelationKinds.Serves, commitment.Urn, Ct);
+        var result = await relations.LinkAsync(task.Urn, SubjectRelations.Serves, commitment.Urn, Ct);
 
         Assert.NotEqual(Guid.Empty, result.Id);
     }

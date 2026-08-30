@@ -21,15 +21,15 @@ internal static class LinkCommand
         };
         var relationArgument = new Argument<string>("relation")
         {
-            Description = $"The relation: {string.Join(", ", RelationKinds.All)}."
+            Description = $"The subject-to-subject relation: {string.Join(", ", SubjectRelations.All)}."
         };
-        relationArgument.AcceptOnlyFromAmong([.. RelationKinds.All]);
+        relationArgument.AcceptOnlyFromAmong([.. SubjectRelations.All]);
         var toArgument = new Argument<string>("to")
         {
             Description = "The target subject (urn, short id, or title)."
         };
 
-        var command = new Command("link", "Link two subjects with one of the seven relations.");
+        var command = new Command("link", "Link two subjects with a subject-to-subject relation.");
         command.Arguments.Add(fromArgument);
         command.Arguments.Add(relationArgument);
         command.Arguments.Add(toArgument);

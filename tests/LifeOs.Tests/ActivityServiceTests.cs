@@ -36,19 +36,20 @@ public sealed class ActivityServiceTests(PostgresFixture postgres)
 
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync(Ct);
-        var row = await connection.QuerySingleAsync<(string Kind, string Text, bool Evidenced)>(
-            new CommandDefinition(
-                """
-                SELECT kind,
-                       payload->>'text',
-                       (payload->'evidences' @> to_jsonb(@commitment::text)) AS Evidenced
-                FROM bsk.event WHERE id = @id;
-                """,
-                new { id = result.EventId, commitment = commitment.Id }, cancellationToken: Ct));
 
-        Assert.Equal(EventKinds.Activity, row.Kind);
-        Assert.Equal("ran 5k this morning", row.Text);
-        Assert.True(row.Evidenced);
+        // The event carries only its text...
+        var eventRow = await connection.QuerySingleAsync<(string Kind, string Text)>(
+            new CommandDefinition(
+                "SELECT kind, payload->>'text' FROM bsk.event WHERE id = @id;",
+                new { id = result.EventId }, cancellationToken: Ct));
+        Assert.Equal(EventKinds.Activity, eventRow.Kind);
+        Assert.Equal("ran 5k this morning", eventRow.Text);
+
+        // ...and the evidences edge is an event -> subject row in subject_event.
+        var relation = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
+            "SELECT relation FROM bsk.subject_event WHERE event_id = @event AND subject_id = @commitment;",
+            new { @event = result.EventId, commitment = commitment.Id }, cancellationToken: Ct));
+        Assert.Equal(SubjectEventRelations.Evidences, relation);
     }
 
     [Fact]
@@ -66,12 +67,12 @@ public sealed class ActivityServiceTests(PostgresFixture postgres)
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync(Ct);
 
-        // The shape a breach diagnostic (M4.3) uses: activity events whose payload
-        // marks them as violating the commitment.
+        // The shape a breach diagnostic (M4.3) uses: violating events for a
+        // Commitment, read straight off subject_event.
         var breaches = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             """
-            SELECT count(*) FROM bsk.event
-            WHERE kind = 'activity' AND payload->'violates' @> to_jsonb(@commitment::text);
+            SELECT count(*) FROM bsk.subject_event
+            WHERE relation = 'violates' AND subject_id = @commitment;
             """,
             new { commitment = commitment.Id }, cancellationToken: Ct));
 

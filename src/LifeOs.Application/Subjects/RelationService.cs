@@ -32,10 +32,13 @@ public sealed class RelationService(SubjectService subjects, IRelationRepository
         SubjectRef from, string relation, SubjectRef to,
         CancellationToken cancellationToken = default)
     {
-        if (!RelationKinds.All.Contains(relation))
+        // subject → subject only. concerns/evidences/violates are event → subject
+        // edges and go through capture / `bsk log`, not through link.
+        if (!SubjectRelations.All.Contains(relation))
         {
             throw new ArgumentException(
-                $"Unknown relation '{relation}'. Expected one of: {string.Join(", ", RelationKinds.All)}.",
+                $"'{relation}' is not a subject-to-subject relation. Expected one of: " +
+                $"{string.Join(", ", SubjectRelations.All)}.",
                 nameof(relation));
         }
 

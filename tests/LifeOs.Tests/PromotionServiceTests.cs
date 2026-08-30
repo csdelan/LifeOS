@@ -61,7 +61,7 @@ public sealed class PromotionServiceTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Promoting_from_an_idea_session_links_promoted_from_to_the_problem()
+    public async Task Promotion_records_the_origin_and_no_promoted_from_edge()
     {
         var provider = Provider();
         var subjects = provider.GetRequiredService<SubjectService>();
@@ -76,20 +76,16 @@ public sealed class PromotionServiceTests(PostgresFixture postgres)
         var result = await promotion.PromoteAsync(
             session.EventId, SubjectTypes.Project, $"morning focus system {Guid.NewGuid():N}", Ct);
 
-        Assert.Equal(problem.Subject.Id, result.PromotedFromSubjectId);
+        // The promotion link is origin_event_id (subject -> event) — not a relation
+        // edge. The source subject stays reachable via the event's payload.
+        Assert.Equal(session.EventId, result.OriginEventId);
 
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync(Ct);
-        var row = await connection.QuerySingleAsync<(Guid ToSubject, string Provenance)>(
-            new CommandDefinition(
-                """
-                SELECT to_subject, provenance FROM bsk.relation
-                WHERE from_subject = @from AND relation = 'promoted_from';
-                """,
-                new { from = result.Subject.Id }, cancellationToken: Ct));
-
-        Assert.Equal(problem.Subject.Id, row.ToSubject);
-        Assert.Equal(Provenances.Derived, row.Provenance);
+        var edges = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject_relation WHERE from_subject = @from;",
+            new { from = result.Subject.Id }, cancellationToken: Ct));
+        Assert.Equal(0, edges);
     }
 
     [Fact]

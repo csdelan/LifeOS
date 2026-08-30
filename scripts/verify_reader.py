@@ -25,11 +25,13 @@ DEFAULT_DSN = "host=localhost port=5432 dbname=lifeos user=bsk_reader password=b
 READABLE = [
     "bsk.subject",
     "bsk.event",
-    "bsk.relation",
+    "bsk.subject_relation",
+    "bsk.subject_event",
     "bsk_derived.subject_current",
     "bsk.v_subject",
     "bsk.v_event",
-    "bsk.v_relation",
+    "bsk.v_subject_relation",
+    "bsk.v_subject_event",
     "bsk.v_subject_current",
 ]
 

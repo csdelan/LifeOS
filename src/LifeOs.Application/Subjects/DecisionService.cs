@@ -36,7 +36,7 @@ public sealed class DecisionService(SubjectService subjects, RelationService rel
         if (!string.IsNullOrWhiteSpace(input.ResultsIn))
         {
             var target = await subjects.ResolveAsync(input.ResultsIn, cancellationToken);
-            await relations.LinkResolvedAsync(decision, RelationKinds.ResultsIn, target, cancellationToken);
+            await relations.LinkResolvedAsync(decision, SubjectRelations.ResultsIn, target, cancellationToken);
             resultsIn = target.Id;
         }
 
@@ -45,7 +45,7 @@ public sealed class DecisionService(SubjectService subjects, RelationService rel
         if (!string.IsNullOrWhiteSpace(input.Supersedes))
         {
             var prior = await subjects.ResolveAsync(input.Supersedes, cancellationToken);
-            await relations.LinkResolvedAsync(decision, RelationKinds.Supersedes, prior, cancellationToken);
+            await relations.LinkResolvedAsync(decision, SubjectRelations.Supersedes, prior, cancellationToken);
             supersedes = prior.Id;
         }
 

@@ -47,17 +47,17 @@ public sealed class DomainRuleTests(PostgresFixture postgres)
 
         // Nothing may serve a Task.
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await relations.LinkAsync(goal.Urn, RelationKinds.Serves, task.Urn, Ct));
+            async () => await relations.LinkAsync(goal.Urn, SubjectRelations.Serves, task.Urn, Ct));
 
         // A Task may serve a Commitment.
-        var served = await relations.LinkAsync(task.Urn, RelationKinds.Serves, commitment.Urn, Ct);
+        var served = await relations.LinkAsync(task.Urn, SubjectRelations.Serves, commitment.Urn, Ct);
         Assert.NotEqual(Guid.Empty, served.Id);
 
         // And a Task may stand alone — a second task created with no relation at all.
         var standalone = await subjects.CreateAsync(SubjectTypes.Task, $"standalone leaf {ns}", cancellationToken: Ct);
         await using var connection = await OpenAsync();
         var standaloneEdges = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            "SELECT count(*) FROM bsk.relation WHERE from_subject = @task;",
+            "SELECT count(*) FROM bsk.subject_relation WHERE from_subject = @task;",
             new { task = standalone.Id }, cancellationToken: Ct));
         Assert.Equal(0, standaloneEdges);
     }
@@ -167,7 +167,7 @@ public sealed class DomainRuleTests(PostgresFixture postgres)
         var standalone = await subjects.CreateAsync(SubjectTypes.Task, $"standalone {ns}", cancellationToken: Ct);
         var aligned = await subjects.CreateAsync(SubjectTypes.Task, $"aligned {ns}", cancellationToken: Ct);
         var commitment = await subjects.CreateAsync(SubjectTypes.Commitment, $"the commitment {ns}", cancellationToken: Ct);
-        await relations.LinkAsync(aligned.Urn, RelationKinds.Serves, commitment.Urn, Ct);
+        await relations.LinkAsync(aligned.Urn, SubjectRelations.Serves, commitment.Urn, Ct);
 
         await using var connection = await OpenAsync();
 
@@ -178,7 +178,7 @@ public sealed class DomainRuleTests(PostgresFixture postgres)
             WHERE s.type = 'Task'
               AND s.id = ANY(@ids)
               AND EXISTS (
-                  SELECT 1 FROM bsk.relation r
+                  SELECT 1 FROM bsk.subject_relation r
                   WHERE r.from_subject = s.id AND r.relation = 'serves');
             """;
         var alignedTasks = (await connection.QueryAsync<Guid>(new CommandDefinition(

@@ -134,7 +134,7 @@ public sealed class SubjectRelationTests(PostgresFixture postgres)
 
         var relationId = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
             """
-            INSERT INTO bsk.relation (from_subject, relation, to_subject, provenance)
+            INSERT INTO bsk.subject_relation (from_subject, relation, to_subject, provenance)
             VALUES (@from, 'serves', @to, 'declared')
             RETURNING id;
             """,
@@ -154,8 +154,53 @@ public sealed class SubjectRelationTests(PostgresFixture postgres)
         var ex = await Assert.ThrowsAsync<PostgresException>(async () =>
             await connection.ExecuteAsync(new CommandDefinition(
                 """
-                INSERT INTO bsk.relation (from_subject, relation, to_subject, provenance)
+                INSERT INTO bsk.subject_relation (from_subject, relation, to_subject, provenance)
                 VALUES (@from, 'not_a_relation', @to, 'declared');
+                """,
+                new { from = a, to = b }, cancellationToken: Ct)));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, ex.SqlState);
+    }
+
+    [Theory]
+    [InlineData("concerns")]
+    [InlineData("evidences")]
+    [InlineData("violates")]
+    public async Task Subject_relation_now_rejects_event_oriented_kinds(string relation)
+    {
+        // After 0007 these are event -> subject edges and belong in subject_event;
+        // the narrowed CHECK must refuse them here.
+        await using var connection = await OpenAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var a = await InsertSubjectAsync(connection, "Task", $"urn:bsk:task:{ns}");
+        var b = await InsertSubjectAsync(connection, "Commitment", $"urn:bsk:commitment:{ns}");
+
+        var ex = await Assert.ThrowsAsync<PostgresException>(async () =>
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO bsk.subject_relation (from_subject, relation, to_subject, provenance)
+                VALUES (@from, @relation, @to, 'declared');
+                """,
+                new { from = a, relation, to = b }, cancellationToken: Ct)));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, ex.SqlState);
+    }
+
+    [Fact]
+    public async Task Promoted_from_is_no_longer_a_relation_kind()
+    {
+        // promoted_from is represented by subject.origin_event_id, not an edge.
+        await using var connection = await OpenAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var a = await InsertSubjectAsync(connection, "Project", $"urn:bsk:project:{ns}");
+        // Problem is reuse-by-title (unique on title); keep it unique to this test.
+        var b = await InsertSubjectAsync(connection, "Problem", $"urn:bsk:problem:{ns}", title: $"promoted-from {ns}");
+
+        var ex = await Assert.ThrowsAsync<PostgresException>(async () =>
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO bsk.subject_relation (from_subject, relation, to_subject, provenance)
+                VALUES (@from, 'promoted_from', @to, 'declared');
                 """,
                 new { from = a, to = b }, cancellationToken: Ct)));
 
@@ -171,7 +216,7 @@ public sealed class SubjectRelationTests(PostgresFixture postgres)
         var ex = await Assert.ThrowsAsync<PostgresException>(async () =>
             await connection.ExecuteAsync(new CommandDefinition(
                 """
-                INSERT INTO bsk.relation (from_subject, relation, to_subject, provenance)
+                INSERT INTO bsk.subject_relation (from_subject, relation, to_subject, provenance)
                 VALUES (@from, 'serves', @to, 'declared');
                 """,
                 new { from, to = Guid.NewGuid() }, cancellationToken: Ct)));

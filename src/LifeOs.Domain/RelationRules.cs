@@ -15,7 +15,7 @@ public static class RelationRules
     /// </summary>
     public static string? Rejection(string relation, string toType)
     {
-        if (relation == RelationKinds.Serves && toType == SubjectTypes.Task)
+        if (relation == SubjectRelations.Serves && toType == SubjectTypes.Task)
         {
             return "Nothing may 'serves' a Task: a Task is a leaf. "
                    + "A Task may serve a Commitment or stand alone.";

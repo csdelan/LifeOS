@@ -40,8 +40,10 @@ public sealed class ReaderRoleTests(PostgresFixture postgres)
         // Reads against base tables and every flattened view succeed.
         foreach (var relation in new[]
                  {
-                     "bsk.subject", "bsk.event", "bsk.relation", "bsk_derived.subject_current",
-                     "bsk.v_subject", "bsk.v_event", "bsk.v_relation", "bsk.v_subject_current"
+                     "bsk.subject", "bsk.event", "bsk.subject_relation", "bsk.subject_event",
+                     "bsk_derived.subject_current",
+                     "bsk.v_subject", "bsk.v_event", "bsk.v_subject_relation", "bsk.v_subject_event",
+                     "bsk.v_subject_current"
                  })
         {
             var count = await reader.ExecuteScalarAsync<long>(new CommandDefinition(

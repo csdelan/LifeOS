@@ -52,17 +52,13 @@ internal static class PromoteCommand
                         urn = result.Subject.Urn,
                         type = result.Subject.Type,
                         title = result.Subject.Title,
-                        originEventId = result.OriginEventId,
-                        promotedFromSubjectId = result.PromotedFromSubjectId
+                        originEventId = result.OriginEventId
                     });
                 }
                 else
                 {
-                    var trail = result.PromotedFromSubjectId is { } from
-                        ? $" (promoted_from {from})"
-                        : string.Empty;
                     Console.WriteLine(
-                        $"Promoted event {result.OriginEventId} into {result.Subject.Type} {result.Subject.Urn}{trail}.");
+                        $"Promoted event {result.OriginEventId} into {result.Subject.Type} {result.Subject.Urn}.");
                 }
 
                 return 0;
