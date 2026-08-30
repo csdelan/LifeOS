@@ -26,12 +26,10 @@ WITH active_season AS (
     FROM bsk.subject s
     WHERE s.type = 'Season'
       AND coalesce(trim(s.attributes->>'focus'), '') <> ''
-      AND (
-          s.attributes->>'ends' IS NULL
-          -- An unparseable end date is treated as open-ended (still active).
-          OR s.attributes->>'ends' !~ '^\d{4}-\d{2}-\d{2}'
-          OR (s.attributes->>'ends')::date >= current_date
-      )
+      -- A Season with no end date, or one that is missing/malformed/out-of-range
+      -- (bsk.try_to_date yields NULL for all of those), is treated as open-ended
+      -- and therefore still active. A well-formed past date makes it inactive.
+      AND coalesce(bsk.try_to_date(s.attributes->>'ends') >= current_date, true)
 ),
 cadenced AS (
     SELECT

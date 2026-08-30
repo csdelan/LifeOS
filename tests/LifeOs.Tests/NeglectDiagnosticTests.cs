@@ -261,6 +261,43 @@ public sealed class NeglectDiagnosticTests(PostgresFixture postgres)
         Assert.NotNull(await FindAsync(subject));
     }
 
+    [Theory]
+    [InlineData("2026-02-15", false)] // valid
+    [InlineData("2026-02-30", true)]  // right shape, impossible day -> NULL (the bug)
+    [InlineData("2026-13-01", true)]  // impossible month -> NULL
+    [InlineData("soon", true)]        // malformed -> NULL
+    public async Task Try_to_date_returns_null_for_unparseable_values(string value, bool expectNull)
+    {
+        await using var connection = await OpenAsync();
+        var parsed = await connection.ExecuteScalarAsync<object?>(new CommandDefinition(
+            "SELECT bsk.try_to_date(@value);", new { value }, cancellationToken: Ct));
+        Assert.Equal(expectNull, parsed is null);
+    }
+
+    [Fact]
+    public async Task Invalid_season_end_date_does_not_crash_the_run_and_stays_active()
+    {
+        await using var connection = await OpenAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var inFocus = $"focus-in-{ns}";
+        var outFocus = $"focus-out-{ns}";
+
+        // A Season with a right-shaped but impossible end date. Before the fix this
+        // crashed the whole `bsk check`; now the date is treated as open-ended, so
+        // the Season is still active and parking is in effect.
+        await InsertSubjectAsync(
+            connection, "Season", ns, new { focus = inFocus, ends = "2026-02-30" },
+            DateTimeOffset.UtcNow.AddDays(-10));
+
+        var parked = await InsertSubjectAsync(
+            connection, "Commitment", $"{ns}-out", new { expected_cadence = "weekly", focus = outFocus },
+            DateTimeOffset.UtcNow.AddDays(-30));
+
+        // The run completes (no throw) and the out-of-focus subject is parked,
+        // proving the invalid-date Season is treated as active/open-ended.
+        Assert.Null(await FindAsync(parked));
+    }
+
     [Fact]
     public async Task Finished_subject_is_not_flagged()
     {
