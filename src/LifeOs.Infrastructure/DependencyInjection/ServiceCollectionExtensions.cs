@@ -1,0 +1,39 @@
+using LifeOs.Application.Abstractions;
+using LifeOs.Application.Capture;
+using LifeOs.Domain;
+using LifeOs.Infrastructure.Migrations;
+using LifeOs.Infrastructure.Persistence;
+using LifeOs.Infrastructure.Rebuild;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace LifeOs.Infrastructure.DependencyInjection;
+
+/// <summary>
+/// Composition root: registers the application services and their Postgres-backed
+/// implementations against a single connection string. This is the only place
+/// wiring lives; the CLI and any future host build on it.
+/// </summary>
+public static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddLifeOsKernel(
+        this IServiceCollection services, string connectionString, string sourceId = KernelSources.Cli)
+    {
+        services.AddSingleton<IClock, SystemClock>();
+
+        services.AddSingleton<IArtifactStore>(_ => new NpgsqlArtifactStore(connectionString));
+        services.AddSingleton<IEventStore>(_ => new NpgsqlEventStore(connectionString));
+        services.AddSingleton<ISubjectRepository>(_ => new NpgsqlSubjectRepository(connectionString));
+
+        services.AddSingleton(sp => new CaptureService(
+            sp.GetRequiredService<IEventStore>(),
+            sp.GetRequiredService<IArtifactStore>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
+
+        // Operational services that work directly against the store.
+        services.AddSingleton(_ => new MigrationRunner(connectionString));
+        services.AddSingleton(_ => new DerivedRebuilder(connectionString));
+
+        return services;
+    }
+}
