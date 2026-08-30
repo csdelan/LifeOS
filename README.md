@@ -1,7 +1,8 @@
 # LifeOS — Life Kernel
 
-Stage 1 of the Life Kernel: the minimum system needed to test whether the Life
-ontology survives contact with real daily use. It delivers a PostgreSQL schema,
+Stage 1 of the Life Kernel: the minimum system needed to test whether the
+[Life ontology](docs/ontology.md) survives contact with real daily use. It
+delivers a PostgreSQL schema,
 a `bsk` command-line interface, and a set of diagnostic queries — **no UI, no
 agent, no integrations**. See [epic #1](https://github.com/csdelan/LifeOS/issues/1)
 for the hypothesis under test and the full scope.
@@ -137,7 +138,9 @@ with the next version number.
 
 Source-of-truth tables live in the `bsk` schema; derived, rebuildable
 projections live in `bsk_derived`. Nothing in `bsk_derived` is canonical — it is
-regenerated from `bsk` on demand.
+regenerated from `bsk` on demand. See [the ontology design document](docs/ontology.md)
+for the three-layer model, the full vocabulary, and how each layer maps to the
+high-level goals above.
 
 `subject_current` (the one Stage 1 projection) folds `state_change` events to
 the current status of each subject. A status changes only by appending a
