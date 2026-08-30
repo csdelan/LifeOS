@@ -9,9 +9,10 @@ namespace LifeOs.Tests;
 
 /// <summary>
 /// <c>bsk log activity</c> (M3.5): an activity event is written, its evidences /
-/// violates linkage to a Commitment is recorded in the payload with the correct
-/// kind, and a commitment with a violating activity is detectable by the same SQL a
-/// breach diagnostic would use. Non-Commitment targets are rejected.
+/// violates linkage to a Commitment is recorded as a <c>subject_event</c> edge with
+/// the correct kind, and a commitment with a violating activity is detectable by the
+/// same SQL a breach diagnostic would use. Non-Commitment targets are rejected;
+/// duplicate references collapse to one edge; the event and its edges are atomic.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class ActivityServiceTests(PostgresFixture postgres)
@@ -101,5 +102,30 @@ public sealed class ActivityServiceTests(PostgresFixture postgres)
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await activities.LogAsync(new ActivityInput("went running", Evidences: [goal.Urn]), Ct));
+    }
+
+    [Fact]
+    public async Task Naming_the_same_commitment_twice_records_one_edge_not_an_error()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var activities = provider.GetRequiredService<ActivityService>();
+        var commitment = await subjects.CreateAsync(
+            SubjectTypes.Commitment, $"strength twice a week {Guid.NewGuid():N}", cancellationToken: Ct);
+
+        // Two distinct references — the urn and the minted short id — to the SAME
+        // commitment. The old code wrote both and tripped the unique index.
+        var shortId = commitment.Urn[(commitment.Urn.LastIndexOfAny(['-', ':']) + 1)..];
+        var result = await activities.LogAsync(
+            new ActivityInput("lifted", Evidences: [commitment.Urn, shortId]), Ct);
+
+        Assert.Equal([commitment.Id], result.EvidencesCommitmentIds);
+
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync(Ct);
+        var edges = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject_event WHERE event_id = @event AND subject_id = @commitment;",
+            new { @event = result.EventId, commitment = commitment.Id }, cancellationToken: Ct));
+        Assert.Equal(1, edges);
     }
 }

@@ -26,7 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEventReader>(_ => new NpgsqlEventReader(connectionString));
         services.AddSingleton<ISubjectRepository>(_ => new NpgsqlSubjectRepository(connectionString));
         services.AddSingleton<IRelationRepository>(_ => new NpgsqlRelationRepository(connectionString));
-        services.AddSingleton<ISubjectEventRepository>(_ => new NpgsqlSubjectEventRepository(connectionString));
+        services.AddSingleton<IActivityWriter>(_ => new NpgsqlActivityWriter(connectionString));
 
         services.AddSingleton(sp => new CaptureService(
             sp.GetRequiredService<IEventStore>(),
@@ -56,8 +56,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(sp => new ActivityService(
             sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<IEventStore>(),
-            sp.GetRequiredService<ISubjectEventRepository>(),
+            sp.GetRequiredService<IActivityWriter>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
 

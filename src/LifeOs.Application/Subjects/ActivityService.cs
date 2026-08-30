@@ -15,9 +15,7 @@ namespace LifeOs.Application.Subjects;
 /// Commitment such as "never add to a losing position", answered by the same SQL
 /// over <c>subject_event WHERE relation = 'violates'</c>.
 /// </summary>
-public sealed class ActivityService(
-    SubjectService subjects, IEventStore events, ISubjectEventRepository subjectEvents,
-    IClock clock, string sourceId)
+public sealed class ActivityService(SubjectService subjects, IActivityWriter writer, IClock clock, string sourceId)
 {
     public async Task<ActivityResult> LogAsync(
         ActivityInput input, CancellationToken cancellationToken = default)
@@ -28,39 +26,37 @@ public sealed class ActivityService(
         }
 
         // Resolve (and type-check) the referenced Commitments before writing anything.
+        // Ids are de-duplicated so naming the same commitment twice — e.g. once by urn
+        // and once by title — records one edge rather than tripping the unique index.
         var evidences = await ResolveCommitmentsAsync(input.Evidences, cancellationToken);
         var violates = await ResolveCommitmentsAsync(input.Violates, cancellationToken);
 
+        var edges = new List<SubjectEventEdge>(evidences.Count + violates.Count);
+        edges.AddRange(evidences.Select(id =>
+            new SubjectEventEdge(id, SubjectEventRelations.Evidences, Provenances.Declared)));
+        edges.AddRange(violates.Select(id =>
+            new SubjectEventEdge(id, SubjectEventRelations.Violates, Provenances.Declared)));
+
         var payload = JsonSerializer.Serialize(new { text = input.Text.Trim() });
         var now = clock.UtcNow;
-        var eventId = await events.AppendAsync(
-            new NewEvent(
-                Kind: EventKinds.Activity,
-                Provenance: Provenances.Declared,
-                OccurredAt: now,
-                RecordedAt: now,
-                SourceId: sourceId,
-                PayloadJson: payload),
-            cancellationToken);
+        var activityEvent = new NewEvent(
+            Kind: EventKinds.Activity,
+            Provenance: Provenances.Declared,
+            OccurredAt: now,
+            RecordedAt: now,
+            SourceId: sourceId,
+            PayloadJson: payload);
 
-        foreach (var commitmentId in evidences)
-        {
-            await subjectEvents.CreateAsync(
-                eventId, SubjectEventRelations.Evidences, commitmentId, Provenances.Declared, cancellationToken);
-        }
-
-        foreach (var commitmentId in violates)
-        {
-            await subjectEvents.CreateAsync(
-                eventId, SubjectEventRelations.Violates, commitmentId, Provenances.Declared, cancellationToken);
-        }
-
+        // The event and its edges land together, or not at all (the stream is
+        // append-only, so a half-written activity could never be repaired).
+        var eventId = await writer.WriteAsync(activityEvent, edges, cancellationToken);
         return new ActivityResult(eventId, evidences, violates);
     }
 
     // Each named subject must be a Commitment — evidence and breaches are recorded
     // against commitments, so a mistyped reference is a clear error, not a silent
-    // edge to the wrong kind of subject.
+    // edge to the wrong kind of subject. De-duplicates on the resolved id so distinct
+    // references to the same commitment collapse to one.
     private async Task<IReadOnlyList<Guid>> ResolveCommitmentsAsync(
         IReadOnlyList<string>? references, CancellationToken cancellationToken)
     {
@@ -70,6 +66,7 @@ public sealed class ActivityService(
         }
 
         var ids = new List<Guid>(references.Count);
+        var seen = new HashSet<Guid>();
         foreach (var reference in references)
         {
             var subject = await subjects.ResolveAsync(reference, cancellationToken);
@@ -80,7 +77,10 @@ public sealed class ActivityService(
                     "activities evidence or violate Commitments.");
             }
 
-            ids.Add(subject.Id);
+            if (seen.Add(subject.Id))
+            {
+                ids.Add(subject.Id);
+            }
         }
 
         return ids;

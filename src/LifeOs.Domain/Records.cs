@@ -32,3 +32,10 @@ public sealed record SubjectRef(Guid Id, string Urn, string Type, string Title);
 /// <c>idea_session</c> is about), or <c>null</c> when the event names no subject.
 /// </summary>
 public sealed record SourceEvent(Guid Id, string Kind, Guid? SubjectId);
+
+/// <summary>
+/// An <c>event → subject</c> edge to write alongside its event: which subject, with
+/// which relation (concerns/evidences/violates) and provenance. The event id is
+/// supplied by the writer that creates the event in the same transaction.
+/// </summary>
+public sealed record SubjectEventEdge(Guid SubjectId, string Relation, string Provenance);

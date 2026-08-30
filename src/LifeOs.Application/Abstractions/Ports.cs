@@ -64,10 +64,15 @@ public interface IRelationRepository
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>Creates event → subject edges in <c>bsk.subject_event</c>.</summary>
-public interface ISubjectEventRepository
+/// <summary>
+/// Writes an event and its <c>event → subject</c> edges as one atomic unit, so an
+/// activity and the commitments it evidences/violates are never half-recorded. The
+/// event stream is append-only, so a partial write cannot be corrected after the
+/// fact — atomicity here is a correctness requirement, not an optimisation.
+/// </summary>
+public interface IActivityWriter
 {
-    Task<Guid> CreateAsync(
-        Guid eventId, string relation, Guid subjectId, string provenance,
+    Task<Guid> WriteAsync(
+        NewEvent activityEvent, IReadOnlyList<SubjectEventEdge> edges,
         CancellationToken cancellationToken = default);
 }
