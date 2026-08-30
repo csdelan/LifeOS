@@ -7,9 +7,10 @@ namespace LifeOs.Cli.Commands;
 
 /// <summary>
 /// <c>bsk promote &lt;event-id&gt; &lt;type&gt; "title"</c> — turn a capture into a
-/// tracked subject. The new subject records the source event as its origin and, when
-/// the event names a subject, a <c>promoted_from</c> relation back to it. The source
-/// event is never touched.
+/// tracked subject. The new subject records the source event as its
+/// <c>origin_event_id</c>, which is the promotion link; the source event is never
+/// touched. There is no <c>promoted_from</c> edge (see #24) — the source subject
+/// stays reachable through the source event's payload.
 /// </summary>
 internal static class PromoteCommand
 {

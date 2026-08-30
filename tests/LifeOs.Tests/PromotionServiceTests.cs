@@ -10,8 +10,8 @@ namespace LifeOs.Tests;
 
 /// <summary>
 /// <c>bsk promote</c> (M3.3): promotion creates exactly one new subject with
-/// origin_event_id set, leaves the source event byte-identical, and records a
-/// promoted_from relation to the subject the source event named.
+/// origin_event_id set and leaves the source event byte-identical. The origin
+/// column is the promotion link; there is no promoted_from edge (see #24).
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class PromotionServiceTests(PostgresFixture postgres)
