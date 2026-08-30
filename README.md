@@ -83,3 +83,27 @@ The runner (`bsk migrate`, and `MigrationRunner` in code):
 
 Migrations are immutable once applied. To change the schema, add a new migration
 with the next version number.
+
+## Source and derived layers
+
+Source-of-truth tables live in the `bsk` schema; derived, rebuildable
+projections live in `bsk_derived`. Nothing in `bsk_derived` is canonical — it is
+regenerated from `bsk` on demand.
+
+`subject_current` (the one Stage 1 projection) folds `state_change` events to
+the current status of each subject. A status changes only by appending a
+`state_change` event whose payload names the subject and new status:
+
+```json
+{ "subject_id": "<uuid>", "status": "<text>" }
+```
+
+`bsk rebuild` truncates and repopulates every derived table from source inside a
+transaction. Its output is deterministic and byte-comparable across runs. Use
+`bsk rebuild --verify` to diff the materialized state against source and report
+any drift without changing anything:
+
+```powershell
+./run.ps1 rebuild            # regenerate derived tables
+./run.ps1 rebuild --verify   # report drift (exit 1 if drifted), change nothing
+```
