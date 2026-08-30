@@ -13,6 +13,11 @@ namespace LifeOs.Pilot;
 /// </summary>
 public sealed class BrowseForm : Form
 {
+    // Where the last window position/size/state is remembered between runs.
+    private static readonly string PlacementPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "BlueSkies", "Pilot", "window-placement.json");
+
     private readonly SubjectReader _reader;
     private readonly BskCli? _bsk;
 
@@ -165,6 +170,12 @@ public sealed class BrowseForm : Form
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
+
+        // Restore the exact position, size, monitor, and maximized/normal state
+        // from the previous run. Falls back to CenterScreen (the StartPosition set
+        // in the constructor) on first launch or if the saved placement is unusable.
+        WindowPlacement.Restore(this, PlacementPath);
+
         try
         {
             _outer.SplitterDistance = 150;  // narrow left pane
@@ -176,6 +187,14 @@ public sealed class BrowseForm : Form
         }
 
         LoadTypes();
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        // Capture placement before the window tears down, so the next launch reopens
+        // where this one closed. Best-effort: a save failure never blocks shutdown.
+        WindowPlacement.Save(this, PlacementPath);
+        base.OnFormClosing(e);
     }
 
     private void LoadTypes()
