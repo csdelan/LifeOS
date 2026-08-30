@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LifeOs.Application.Abstractions;
 using LifeOs.Domain;
 
@@ -19,6 +20,41 @@ public sealed class CaptureService(
     /// <summary>Captures a longer body as one <c>journal</c> event.</summary>
     public Task<CaptureResult> CaptureJournalAsync(string text, CancellationToken cancellationToken = default)
         => CaptureBodyAsync(EventKinds.Journal, text, cancellationToken);
+
+    /// <summary>
+    /// Records an idea session — a problem statement and all its ideas — as ONE
+    /// immutable <c>idea_session</c> event that references the Problem subject.
+    /// The ideas are stored verbatim; no rating or judgement happens here, and no
+    /// subjects are created for the individual ideas.
+    /// </summary>
+    public async Task<IdeaSessionResult> CaptureIdeaSessionAsync(
+        Guid problemId, string problemStatement, IReadOnlyList<string> ideas,
+        CancellationToken cancellationToken = default)
+    {
+        if (ideas.Count == 0)
+        {
+            throw new ArgumentException("An idea session needs at least one idea.", nameof(ideas));
+        }
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            subject_id = problemId,
+            problem = problemStatement,
+            ideas
+        });
+
+        var now = clock.UtcNow;
+        var newEvent = new NewEvent(
+            Kind: EventKinds.IdeaSession,
+            Provenance: Provenances.Declared,
+            OccurredAt: now,
+            RecordedAt: now,
+            SourceId: sourceId,
+            PayloadJson: payload);
+
+        var eventId = await events.AppendAsync(newEvent, cancellationToken);
+        return new IdeaSessionResult(eventId, problemId, ideas.Count);
+    }
 
     private async Task<CaptureResult> CaptureBodyAsync(
         string kind, string text, CancellationToken cancellationToken)
@@ -48,3 +84,6 @@ public sealed class CaptureService(
 
 /// <summary>The outcome of a capture: the event written and the artifact it references.</summary>
 public sealed record CaptureResult(Guid EventId, Guid ArtifactId);
+
+/// <summary>The outcome of an idea session: the one event written and its idea count.</summary>
+public sealed record IdeaSessionResult(Guid EventId, Guid ProblemId, int IdeaCount);

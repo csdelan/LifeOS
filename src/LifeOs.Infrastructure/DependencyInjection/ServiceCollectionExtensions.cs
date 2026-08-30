@@ -1,5 +1,6 @@
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Capture;
+using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.Migrations;
 using LifeOs.Infrastructure.Persistence;
@@ -29,6 +30,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IArtifactStore>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
+
+        services.AddSingleton(sp => new SubjectService(sp.GetRequiredService<ISubjectRepository>()));
 
         // Operational services that work directly against the store.
         services.AddSingleton(_ => new MigrationRunner(connectionString));
