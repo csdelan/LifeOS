@@ -41,6 +41,10 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IRelationRepository>()));
 
+        services.AddSingleton(sp => new AttributeService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>()));
+
         services.AddSingleton(sp => new StatusService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventStore>(),

@@ -34,10 +34,14 @@ public sealed class BrowseForm : Form
     private readonly Button _newButton = new() { Text = "New…", AutoSize = true };
     private readonly Button _statusButton = new() { Text = "Change status…", AutoSize = true, Enabled = false };
     private readonly Button _linkButton = new() { Text = "Link…", AutoSize = true, Enabled = false };
+    private readonly Button _datesButton = new() { Text = "Set dates…", AutoSize = true, Enabled = false };
 
     private Guid _currentId;
     private string? _currentUrn;
     private string? _currentTitle;
+    private string? _currentDue;
+    private string? _currentReview;
+    private string? _currentCadence;
 
     public BrowseForm(SubjectReader reader, BskCli? bsk)
     {
@@ -57,6 +61,7 @@ public sealed class BrowseForm : Form
         _newButton.Click += (_, _) => DoNew();
         _statusButton.Click += (_, _) => DoStatus();
         _linkButton.Click += (_, _) => DoLink();
+        _datesButton.Click += (_, _) => DoDates();
 
         _status.AutoSize = true;
         _status.Padding = new Padding(10, 8, 0, 0);
@@ -133,6 +138,7 @@ public sealed class BrowseForm : Form
         };
         detailToolbar.Controls.Add(_statusButton);
         detailToolbar.Controls.Add(_linkButton);
+        detailToolbar.Controls.Add(_datesButton);
 
         _detail.Dock = DockStyle.Fill;
         _detail.ReadOnly = true;
@@ -260,7 +266,7 @@ public sealed class BrowseForm : Form
         if (_grid.Columns.Contains("Id"))
         {
             _grid.Columns["Id"]!.Visible = false;
-            _grid.Columns["Id"]!.DisplayIndex = 5;
+            _grid.Columns["Id"]!.DisplayIndex = 6;
         }
 
         const int minTitle = 160;
@@ -279,9 +285,10 @@ public sealed class BrowseForm : Form
 
         SetColumn("Title", titleWidth, 0);
         SetColumn("Status", 80, 1);
-        SetColumn("ExpectedCadence", 90, 2, "Cadence");
-        SetColumn("NextReviewAt", 96, 3, "Review");
-        SetColumn("Urn", 92, 4);
+        SetColumn("Due", 92, 2);
+        SetColumn("ExpectedCadence", 90, 3, "Cadence");
+        SetColumn("NextReviewAt", 96, 4, "Review");
+        SetColumn("Urn", 92, 5);
     }
 
     private void SetColumn(string name, int width, int displayIndex, string? header = null)
@@ -360,6 +367,11 @@ public sealed class BrowseForm : Form
                 text.AppendLine($"Review    {review:yyyy-MM-dd}");
             }
 
+            if (!string.IsNullOrWhiteSpace(subject.Due))
+            {
+                text.AppendLine($"Due       {subject.Due}");
+            }
+
             if (!string.IsNullOrWhiteSpace(subject.Scope))
             {
                 text.AppendLine($"Scope     {subject.Scope}");
@@ -393,10 +405,14 @@ public sealed class BrowseForm : Form
             _currentId = subject.Id;
             _currentUrn = subject.Urn;
             _currentTitle = subject.Title;
+            _currentDue = subject.Due;
+            _currentReview = subject.NextReviewAt?.ToString("yyyy-MM-dd");
+            _currentCadence = subject.ExpectedCadence;
             _detailHeader.Text = $"{subject.Type} — {subject.Title}";
             _detail.Text = text.ToString();
             _statusButton.Enabled = _bsk is not null;
             _linkButton.Enabled = _bsk is not null;
+            _datesButton.Enabled = _bsk is not null;
 
             _edges.BeginUpdate();
             _edges.Items.Clear();
@@ -436,11 +452,15 @@ public sealed class BrowseForm : Form
         _currentId = Guid.Empty;
         _currentUrn = null;
         _currentTitle = null;
+        _currentDue = null;
+        _currentReview = null;
+        _currentCadence = null;
         _detailHeader.Text = "— select a subject —";
         _detail.Clear();
         _edges.Items.Clear();
         _statusButton.Enabled = false;
         _linkButton.Enabled = false;
+        _datesButton.Enabled = false;
     }
 
     // ---- writes (shell out to bsk) ----------------------------------------
@@ -551,6 +571,58 @@ public sealed class BrowseForm : Form
         catch (BskException ex)
         {
             ShowError("Link failed", ex);
+        }
+    }
+
+    private void DoDates()
+    {
+        if (_bsk is null || _currentUrn is null)
+        {
+            return;
+        }
+
+        using var dialog = new AttributesDialog(
+            _currentTitle ?? _currentUrn, _currentDue, _currentReview, _currentCadence);
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        // Only send the keys that actually changed; a blank field clears its key.
+        var args = new List<string> { "set", _currentUrn };
+        AddIfChanged(args, "due", _currentDue, dialog.Due);
+        AddIfChanged(args, "next_review_at", _currentReview, dialog.Review);
+        AddIfChanged(args, "expected_cadence", _currentCadence, dialog.Cadence);
+        if (args.Count == 2)
+        {
+            return; // nothing changed
+        }
+
+        try
+        {
+            _bsk.Run(args.ToArray());
+            var id = _currentId;
+            if (_tree.SelectedNode?.Tag is string type)
+            {
+                LoadSubjects(type);
+            }
+
+            if (!SelectRowById(id))
+            {
+                LoadDetail(id);
+            }
+        }
+        catch (BskException ex)
+        {
+            ShowError("Update failed", ex);
+        }
+    }
+
+    private static void AddIfChanged(List<string> args, string key, string? oldValue, string newValue)
+    {
+        if ((oldValue ?? string.Empty) != newValue)
+        {
+            args.Add($"{key}={newValue}");
         }
     }
 

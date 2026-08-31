@@ -54,6 +54,16 @@ public interface ISubjectRepository
         string fragment, CancellationToken cancellationToken = default);
 
     Task<Guid> CreateAsync(NewSubject newSubject, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Merges a jsonb patch into a subject's <c>attributes</c> and removes the named
+    /// keys, in one update. Returns whether a row was affected (<c>false</c> = no such
+    /// subject). Only the attributes bag is touched — type, title, and status are
+    /// unaffected; status still moves solely by a <c>state_change</c> event.
+    /// </summary>
+    Task<bool> UpdateAttributesAsync(
+        Guid id, string patchJson, IReadOnlyList<string> removeKeys,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>Creates directed subject → subject edges in <c>bsk.subject_relation</c>.</summary>

@@ -14,6 +14,7 @@ public sealed class SubjectListItem
     public string Urn { get; set; } = "";
     public string Title { get; set; } = "";
     public string Status { get; set; } = "";
+    public string? Due { get; set; }
     public string? ExpectedCadence { get; set; }
     public DateTime? NextReviewAt { get; set; }
 }
@@ -26,6 +27,7 @@ public sealed class SubjectDetail
     public string Type { get; set; } = "";
     public string Title { get; set; } = "";
     public string Status { get; set; } = "";
+    public string? Due { get; set; }
     public string? ExpectedCadence { get; set; }
     public DateTime? NextReviewAt { get; set; }
     public string? Scope { get; set; }

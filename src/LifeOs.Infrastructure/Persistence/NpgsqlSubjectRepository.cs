@@ -112,4 +112,28 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
             throw new DuplicateSubjectException(newSubject.Type, newSubject.Title, ex);
         }
     }
+
+    public async Task<bool> UpdateAttributesAsync(
+        Guid id, string patchJson, IReadOnlyList<string> removeKeys,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        // Merge the patch (right wins), then strip any keys marked for removal — one
+        // update, so a set-and-clear in the same call is atomic. Only the attributes
+        // bag changes; the subject row is otherwise untouched.
+        const string sql = """
+            UPDATE bsk.subject
+            SET attributes = (attributes || @Patch::jsonb) - @Remove::text[]
+            WHERE id = @Id;
+            """;
+
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new { Id = id, Patch = patchJson, Remove = removeKeys.ToArray() },
+            cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
 }
