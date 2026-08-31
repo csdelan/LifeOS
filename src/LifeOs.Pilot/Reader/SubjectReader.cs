@@ -103,6 +103,25 @@ public sealed class SubjectReader(string connectionString)
             new { id }).AsList();
     }
 
+    /// <summary>
+    /// Untriaged captures: note/journal events that no subject was promoted from and
+    /// that are not yet related to any subject. This is the Inbox's worklist.
+    /// </summary>
+    public IReadOnlyList<CaptureItem> GetUnprocessedCaptures()
+    {
+        using var db = Open();
+        return db.Query<CaptureItem>(
+            """
+            SELECT e.id, e.kind, e.occurred_at, a.content
+            FROM bsk.event e
+            LEFT JOIN bsk.artifact a ON a.id = e.artifact_id
+            WHERE e.kind IN ('note', 'journal')
+              AND NOT EXISTS (SELECT 1 FROM bsk.subject s WHERE s.origin_event_id = e.id)
+              AND NOT EXISTS (SELECT 1 FROM bsk.subject_event se WHERE se.event_id = e.id)
+            ORDER BY e.occurred_at DESC
+            """).AsList();
+    }
+
     /// <summary>The subject's status history, folded from state_change events.</summary>
     public IReadOnlyList<StatusHistoryEntry> GetStatusHistory(Guid id)
     {

@@ -49,6 +49,6 @@ internal static class Program
             }
         }
 
-        Application.Run(new BrowseForm(reader, bsk));
+        Application.Run(new MainForm(reader, bsk));
     }
 }

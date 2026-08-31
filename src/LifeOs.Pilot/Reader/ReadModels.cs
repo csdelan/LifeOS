@@ -59,3 +59,27 @@ public sealed class StatusHistoryEntry
     public DateTime OccurredAt { get; set; }
     public Guid Id { get; set; }
 }
+
+/// <summary>
+/// An untriaged capture (a note or journal) — one that has not been promoted into a
+/// subject and is not yet related to one. The Inbox works this list down.
+/// </summary>
+public sealed class CaptureItem
+{
+    public Guid Id { get; set; }
+    public string Kind { get; set; } = "";
+    public DateTime OccurredAt { get; set; }
+    public string? Content { get; set; }
+
+    /// <summary>A one-line, length-capped preview of the content, for the list.</summary>
+    public string Preview
+    {
+        get
+        {
+            var text = (Content ?? string.Empty).ReplaceLineEndings(" ").Trim();
+            return text.Length == 0 ? "(empty)"
+                : text.Length > 100 ? text[..100] + "…"
+                : text;
+        }
+    }
+}

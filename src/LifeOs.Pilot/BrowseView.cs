@@ -11,13 +11,8 @@ namespace LifeOs.Pilot;
 /// serves/served-by edges). Reads go through <see cref="SubjectReader"/> (bsk_reader);
 /// the New / Link / Change-status buttons write by shelling out to <see cref="BskCli"/>.
 /// </summary>
-public sealed class BrowseForm : Form
+public sealed class BrowseView : UserControl
 {
-    // Where the last window position/size/state is remembered between runs.
-    private static readonly string PlacementPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "BlueSkies", "Pilot", "window-placement.json");
-
     private readonly SubjectReader _reader;
     private readonly BskCli? _bsk;
 
@@ -43,15 +38,10 @@ public sealed class BrowseForm : Form
     private string? _currentReview;
     private string? _currentCadence;
 
-    public BrowseForm(SubjectReader reader, BskCli? bsk)
+    public BrowseView(SubjectReader reader, BskCli? bsk)
     {
         _reader = reader;
         _bsk = bsk;
-
-        Text = "BlueSkies Pilot — Browse";
-        StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(1180, 720);
-        MinimumSize = new Size(820, 500);
 
         BuildTree();
         BuildGrid();
@@ -177,11 +167,6 @@ public sealed class BrowseForm : Form
     {
         base.OnLoad(e);
 
-        // Restore the exact position, size, monitor, and maximized/normal state
-        // from the previous run. Falls back to CenterScreen (the StartPosition set
-        // in the constructor) on first launch or if the saved placement is unusable.
-        WindowPlacement.Restore(this, PlacementPath);
-
         try
         {
             _outer.SplitterDistance = 150;  // narrow left pane
@@ -189,18 +174,21 @@ public sealed class BrowseForm : Form
         }
         catch (InvalidOperationException)
         {
-            // Window too small to honour the preferred split; leave the defaults.
+            // Too narrow to honour the preferred split; leave the defaults.
         }
 
         LoadTypes();
     }
 
-    protected override void OnFormClosing(FormClosingEventArgs e)
+    /// <summary>Re-reads from the store, keeping the currently selected type in view.</summary>
+    public void Reload()
     {
-        // Capture placement before the window tears down, so the next launch reopens
-        // where this one closed. Best-effort: a save failure never blocks shutdown.
-        WindowPlacement.Save(this, PlacementPath);
-        base.OnFormClosing(e);
+        var selectedType = _tree.SelectedNode?.Tag as string;
+        LoadTypes();
+        if (selectedType is not null)
+        {
+            SelectType(selectedType);
+        }
     }
 
     private void LoadTypes()
