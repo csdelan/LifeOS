@@ -86,3 +86,19 @@ public interface IActivityWriter
         NewEvent activityEvent, IReadOnlyList<SubjectEventEdge> edges,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Creates <c>event → subject</c> edges (concerns/evidences/violates) for events that
+/// already exist — the write path behind <c>bsk relate</c>. Distinct from
+/// <see cref="IActivityWriter"/>, which writes a new event and its edges together.
+/// </summary>
+public interface ISubjectEventRepository
+{
+    /// <summary>
+    /// Records one edge, idempotently: an edge that already exists is left untouched.
+    /// Returns whether a new edge was created.
+    /// </summary>
+    Task<bool> CreateEdgeAsync(
+        Guid eventId, Guid subjectId, string relation, string provenance,
+        CancellationToken cancellationToken = default);
+}

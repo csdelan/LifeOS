@@ -31,6 +31,7 @@ rootCommand.Subcommands.Add(PromoteCommand.Create(connectionOption, jsonOption))
 rootCommand.Subcommands.Add(DecideCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(LogCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(SetCommand.Create(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(RelateCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(CheckCommand.Create(connectionOption, jsonOption));
 
 return await rootCommand.Parse(args).InvokeAsync();
