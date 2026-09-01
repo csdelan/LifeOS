@@ -72,6 +72,10 @@ requirements cluster and the ID says where it lives:
 `needs-kernel` (requires a schema/verb change; see backlog) → `building` → `done`.
 `deferred` parks it deliberately.
 
+`proposed` means the workflow is defined well enough for an Ontology-fit pass; it does not
+mean the requirement is frozen. Proposed requirements may still be edited, clarified, or
+iterated as later interviews and Pilot use reveal better behavior.
+
 **Handoff rule:** Claude does not write an Ontology fit until Chris moves a requirement
 off `drafting`. Give the fullest workflow picture first — no jumping into solution space
 before the requirement has settled.
@@ -115,6 +119,145 @@ these are the canonical picture; this doc is the traceable requirement list besi
 ## Requirements
 
 
+### GEN-0 — LifeOS is a prioritization command center, not a second brain
+Status: proposed
+Priority: Pilot
+
+**Workflow (Chris):**
+- LifeOS is primarily a command center for prioritizing my life. Its most important job is
+  helping me decide what deserves my attention and effort now.
+- It also helps me organize the parts of my life that make those priorities meaningful,
+  including my vision, identity statements, Goals, Projects, Tasks, Commitments, and Habits.
+- LifeOS is explicitly not intended to be a second brain or a general-purpose repository
+  for everything I know. That will be a separate system.
+- The Pilot should be optimized for rapid development in WinForms and for proving whether
+  the workflows and ontology survive real daily use. Pilot phase 2 remains WinForms but
+  expands into richer workflows. Production will probably be web-centric and place much
+  greater emphasis on polish, aesthetics, accessibility, and fit for long-term use.
+- The long-term direction is for AI to understand my life in real time and guide me toward
+  the highest-return areas of focus. The Pilot must still be useful before that intelligence
+  exists, so I need to be able to manage priorities myself.
+- The most important product-level success test for the Pilot is whether I feel compelled
+  to use it. Feature completeness does not validate the Pilot if I do not voluntarily make
+  it part of my daily routine.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### DASHBOARD-1 — The opening screen is a daily prioritization command center
+Status: proposed
+Priority: Pilot
+
+**Workflow (Chris):**
+- On opening LifeOS, I want to understand what deserves my attention within roughly 30
+  seconds. Starting in Pilot phase 2, this includes my current Primary focus and my top one
+  to three objectives for the day.
+- The opening screen should contain Active Goals and Projects, suggested next actions,
+  due and overdue Tasks, an Inbox summary, and the Habits I should focus on today.
+- In Pilot phase 2, my Primary focus and today's objectives should be visually dominant.
+  Counts, navigation, history, and general reference information should not compete with
+  them for attention.
+- The Inbox should appear only as a compact summary and entry point. The full Inbox and its
+  triage actions belong on the separate Inbox screen.
+- Active Goals and Projects, suggested next actions, due and overdue Tasks, and today's
+  Habits should also appear as compact summaries rather than full management screens.
+- Today's Habit summary should show each applicable occurrence's current state and provide
+  the one-click followed / not followed / partial-credit action defined by GEN-3 without
+  requiring me to open the full Habit detail screen.
+- Each summary should provide an obvious path to the corresponding focused screen or
+  filtered list. The Dashboard should not duplicate every object editor.
+- Each empty state should distinguish a genuinely clear category, such as having no
+  overdue Tasks, from information that failed to load or is not configured yet.
+- In Pilot phase 2, the Dashboard should provide an obvious path into the appropriate
+  review or planning session where I can set or revise the manually controlled parts of my
+  plan. Inline editing on the Dashboard is not required.
+- The Active Goals and Projects summary should use a combination of items connected to my
+  Primary focus, items I have manually pinned, recent activity, and system prioritization.
+  The exact weighting is expected to improve through use.
+- Future AI agents should be able to apply broader context and real intelligence to which
+  Goals and Projects deserve attention, without changing the basic Dashboard workflow.
+- Due and overdue Tasks or Commitments should appear in their own clearly labeled section,
+  separate from next actions associated with my current focus. Both sections deserve strong
+  visual emphasis; one must not hide the other.
+- Open decision: whether the Dashboard is always the default opening view or the app
+  remembers the last-opened screen.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### TODAY-1 — I want to set a Primary focus and one to three objectives for today
+Status: proposed
+Priority: Pilot phase 2
+
+**Workflow (Chris):**
+- Each day can have one prominent **Primary focus** and between one and three **objectives**.
+- These should be the first things I see when orienting myself in LifeOS.
+- Primary focus represents where I intend to invest most of my mental energy. Examples
+  include finishing a home-improvement project, finishing a BlueSkies development release,
+  or improving my overall health.
+- Primary focus and daily objectives should be flexible: each may select an existing Area
+  of Focus or Goal, or may be entered as free text when no existing item is the right fit.
+- Choosing an existing item should be quick and searchable, while the free-text path should
+  not force me to create a permanent Goal or Area merely to plan today.
+- Primary focus persists for an arbitrary length of time until I deliberately change it. It
+  does not expire or reset merely because a new day, week, or month begins.
+- I expect to set or change Primary focus and daily objectives mainly during daily, weekly,
+  or monthly review and planning sessions, when I assess priorities and plan upcoming Goals,
+  Projects, and Tasks.
+- During Pilot phase 2 I need to manage them manually. Later recommendations may propose
+  or pre-populate them, but I must remain able to override the plan.
+- Daily objectives express the outcomes or areas of emphasis for the day. They should not
+  automatically be treated as the same thing as every Task that happens to be due today.
+- The UI should allow the Primary focus to be set, replaced, or cleared and objectives to
+  be added, reordered, replaced, or removed.
+- The normal UI should enforce a maximum of three active objectives. It should not silently
+  discard an existing objective if a fourth is proposed.
+- The UI should clearly distinguish priorities I selected from suggestions made by the
+  system or a future AI.
+- At the end of the day, each unfinished objective should be flagged into the Inbox for
+  manual triage so it cannot be silently ignored. It should not automatically remain on the
+  next day's plan.
+- Objective scoring or outcomes such as achieved, partial, missed, or abandoned are extra
+  credit rather than part of the initial workflow. Their definition is deferred until the
+  daily-review workflow has been exercised.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### TODAY-2 — Today's priorities combine manual planning with explainable suggestions
+Status: drafting
+Priority: Pilot
+
+**Workflow (Chris):**
+- The Pilot should combine priorities I manage myself with useful system suggestions.
+- The long-term goal is for AI to understand my life in real time and recommend the
+  highest-return things for me to focus on.
+- Suggestions should draw attention to valuable action without taking control away from me.
+- The UI should visually separate **My plan** from **Suggested next actions** while keeping
+  both available from the same command-center screen.
+- For the Pilot, suggested next actions should include anything due and the identified next
+  action for an active Project or Goal. In Pilot phase 2, Primary focus should help determine
+  which of those Project or Goal actions are most relevant.
+- Due and overdue Tasks or Commitments should be presented separately from focus-aligned
+  next actions. Both categories should be highlighted rather than allowing focus-aligned
+  recommendations to obscure an urgent obligation, or vice versa.
+- A suggestion should offer a direct next step appropriate to its type, such as opening the
+  item, accepting it into today's plan, scheduling it, or dismissing it.
+- Each suggestion should show a concise reason, such as overdue, serves the Primary Goal,
+  commitment at risk, or neglected Project. More detailed explanation can be available on
+  demand without overwhelming the main screen.
+- My manual order and overrides win for the current day. The system may warn me about a
+  conflict or risk, but it should not silently reorder my declared objectives.
+- Open decision: whether accepting a suggested next action normally makes it one of today's
+  objectives, leaves it as a separate recommended action, or depends on the suggestion.
+
+**Ontology fit (Claude):**
+- pending
+
+
 ### BROWSE-1 — I want an object graph view similar to Obsidian
 Status: drafting
 Priority: Production
@@ -124,6 +267,56 @@ Priority: Production
 - Filters to show orphans only, or omit orphans.
 - Filter for "Area", or only certain types.
 - Clicking on any node opens up the detail editor for that subject.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### BROWSE-2 — Browse uses filters, a context-sensitive item list, and read-only detail
+Status: proposed
+Priority: Pilot
+
+**Workflow (Chris):**
+- Use a three-pane Browse layout: a generalized filter pane, an item list, and a selected-
+  item detail pane.
+- Object type should be one filter within the filter pane rather than the pane being only a
+  fixed list of types. The design should allow additional filters to be added as the Pilot
+  reveals what is useful.
+- The item-list columns should change according to what is being viewed rather than forcing
+  every kind of item into one column set.
+- For workflow objects such as Goals, Projects, Tasks, and other subjects, the list should
+  initially support Title, Status, Due date, Area, and Tags where those fields apply.
+- When viewing Events, show event-appropriate fields instead of empty or irrelevant workflow-
+  object columns.
+- The initial Pilot filters and sorting choices should include Status, Due date, Entered
+  date, Area, and Title where applicable.
+- Combine different filter categories with AND. For example, `Status = Active` and
+  `Area = Trading` should return items satisfying both categories.
+- When multiple values are selected inside one category, combine those values with OR. For
+  example, selecting two Areas should return items in either selected Area while still
+  respecting the other active filter categories.
+- Apply filter changes immediately as I make them; do not require a separate Apply action.
+- Remember the active Browse filters when I leave and return, and restore them after LifeOS
+  restarts.
+- Treat the initial columns, filters, and sorting choices as a starting point that can be
+  refined iteratively during Pilot use.
+- Selecting an item should show it in read-only mode first. Editing must be an explicit
+  opt-in action rather than making every selection immediately editable.
+- The detail pane should show an Edit action only when the selected item is editable.
+- Edit mode should provide explicit Save and Cancel actions. Do not save automatically as
+  individual fields change.
+- If I try to select another item, leave Browse, or close the window while edits are unsaved,
+  prompt me to **Save**, **Discard**, or **Cancel** the navigation.
+- Saving should return the detail pane to read-only mode and refresh the item list with any
+  changed display fields. Cancelling should discard the unsaved changes and return to the
+  prior read-only values.
+- When no item is selected, the detail pane should show a neutral empty state rather than a
+  stale previously selected item's content.
+- Organize the detail pane into clear sections or tabs for **Overview**, **Relationships**,
+  **Tags**, **Journal**, and **History** where those sections apply to the selected item.
+- Keep Tags and Relationships visually separate according to GEN-1. Journal and History
+  should follow JOURNAL-1 and GEN-4 respectively rather than introducing Browse-specific
+  versions of those interactions.
 
 **Ontology fit (Claude):**
 - pending
@@ -168,8 +361,83 @@ Priority: Pilot
 - The recurrence pattern of a habit can be daily, weekly, other interval, or set by trigger/cue
 - A UI component/viewer should exist just for habits, because of the unique properties.
 - I should be able to open a habit and view its streak/adherence history.  You can also do this in the review views (see REVIEW sections)
-- Habits should always be related to some parent, such as a goal or identity statement (aka value).  This should be a validation rule when editing a habit.
+- Every expected Habit occurrence begins as unrecorded. It should not immediately be treated
+  as **not followed** merely because no adherence has been entered yet.
+- Keep occurrence deadlines simple: a daily Habit remains unrecorded until end-of-day, and
+  a weekly Habit remains unrecorded until end-of-week. Configurable time-of-day windows are
+  not required.
+- Once the applicable daily or weekly period ends, an occurrence with no recorded adherence
+  may be shown as **not followed**.
+- I should be able to record an occurrence from the Dashboard/Today screen, Habit detail
+  screen, daily review, or weekly review.
+- Recording should be a one-click choice between **followed**, **not followed**, and
+  **partial credit**, with an optional note available when I want to add context.
+- The same occurrence and current state should be shown consistently from every entry point;
+  recording it in one place must prevent another screen from presenting it as unrecorded.
+- Partial credit should break the normal binary streak, but its distinct result must remain
+  in history. I may later define a more granular streak or adherence score that gives some
+  weight to both full and partial credit.
+- I should be able to backfill or correct a past occurrence when I followed a Habit but
+  forgot to record it, or when I previously selected the wrong result.
+- Correcting an occurrence should automatically recalculate the streak and every displayed
+  adherence summary affected by the correction. The chronological history should retain the
+  original result and the later correction according to GEN-4.
+- Habit adherence follows a **scout's honor** principle. For most Habits, I assess whether
+  the cue occurred and how well I adhered; the system should not pretend it can determine
+  that answer from missing data.
+- Some objective Habits, such as reaching Inbox Zero at least once during a day, may be
+  scored automatically when an algorithm can determine the result reliably. The UI should
+  distinguish an automatically determined result from one I assessed manually.
+- Habits should always be related to one or more parents, such as a Goal or identity
+  statement (aka Value). This should be a validation rule when editing a Habit, and multiple
+  parent relationships should be supported.
 - SIDE NOTE:  Depending on how habits are represented in the ontology, it could relate to commitment also.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-4 — History views show chronological change with progressive detail
+Status: proposed
+Priority: Pilot phase 2
+
+**Workflow (Chris):**
+- Any history view should present changes in chronological order so I can understand how
+  the item, review, or activity evolved over time.
+- The initial history view may use a straightforward chronological presentation without
+  advanced filtering.
+- Production should add flexible filters so I can narrow history by the kinds of records,
+  changes, or activity relevant to the question I am investigating.
+- A history row should expose additional detail according to the amount and complexity of
+  its content: concise supporting information may appear in a tooltip, while substantial
+  content should open in a drill-down page or detail view.
+- The default presentation should remain readable and focused on meaningful information;
+  access to more detail should not require showing every field in the main chronology.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-5 — Self-assessed adherence uses scout's honor and remains correctable
+Status: proposed
+Priority: Pilot
+
+**Workflow (Chris):**
+- For Habits and Commitments that cannot be measured objectively, I am the authority on
+  whether I adhered. LifeOS should support honest self-assessment rather than claim certainty
+  from the absence of automatically collected evidence.
+- A missed or failed result must be correctable when I actually adhered but forgot to record
+  it, recorded it late, or selected the wrong result.
+- A correction should update the current status, streak, score, and other summaries that
+  depend on that result while retaining a chronological history of the original result and
+  correction.
+- When adherence can be measured reliably, such as reaching Inbox Zero at least once in a
+  day, LifeOS may score it automatically.
+- The UI should make the source of an adherence result understandable: manually assessed or
+  automatically determined. I should still be able to inspect and correct an automated
+  result when its inputs were incomplete or wrong.
+- The initial workflow should favor simple, transparent rules over elaborate scheduling or
+  confidence logic.
 
 **Ontology fit (Claude):**
 - pending
@@ -177,17 +445,43 @@ Priority: Pilot
 
 
 ### CAP-1 — I want to be able to quickly capture a note, idea, problem from anywhere in the app
-Status: drafting
+Status: proposed
 Priority: pilot
 
 **Workflow (Chris):**
-- Global hot key brings a pop up dialog to add a note, idea, problem
+- A system-wide global hotkey brings up the capture dialog even when LifeOS is not the
+  focused application.
+- Use Alt+N as the provisional Pilot hotkey. The final shortcut has not been decided yet.
+- Keep system-wide capture available while the main LifeOS window is minimized to the
+  system tray.
 - Always visible button on the UI does the same thing (eg in a top banner/frame)
 - auto focus cursor in the text box so I can just start typing immediately
 - The most ubiquitous action that I want to make quick and easy.
 - the dialog can have a simply 1 click selector (tabbable also) to choose what type it is. Default: note
+- Note, Idea, and Problem should all use the same simple text box during quick capture. Do
+  not introduce type-specific fields into this popup.
 - All captures default to the inbox. There must be an initial triage (but by design, it can be in the future)
 - Many capture notes are just 1 liners, but the text box should be multi-line just in case, so I can see the entire message as I type.
+- Pressing Enter should submit the capture. I should also be able to Tab to the Submit button
+  and activate it with Enter.
+- Ctrl+Enter should insert a line break within the multiline text box rather than submitting.
+- Tabbing to the Note / Idea / Problem selector is sufficient. Direct per-type keyboard
+  shortcuts are not required.
+- Pressing Escape should immediately discard the current draft and close that capture
+  dialog without an additional warning.
+- If the global hotkey is pressed while another capture dialog is open, create another
+  independent capture dialog rather than focusing or replacing the existing one.
+- Place concurrent capture dialogs using window tiling so they do not open in the same
+  location and I can see each draft at the same time.
+- Submitting or cancelling one capture dialog must not affect the content or selected type
+  in any other open capture dialog.
+- On successful capture, close the popup immediately. Do not show an additional confirmation
+  dialog; closing the popup is sufficient feedback.
+- Do not require a separate title. Derive the display title automatically from the entered
+  text while preserving the complete original content.
+- Do not submit blank or whitespace-only content.
+- If saving fails, keep the popup open, preserve everything I entered and the selected type,
+  and show the error within the dialog so I can retry without retyping.
 
 **Ontology fit (Claude):**
 - Maps to: a `note` flavor lands cleanly as a `note` event (`bsk capture`). An *idea*
@@ -218,9 +512,41 @@ Status: proposed
 Priority: Pilot Phase 2
 
 **Workflow (Chris):**
-- App captures mic audio for dictated note.
-- Can be a different hot key, or autodetect voice on same hotkey as normal keyboard centric capture.
-- Have an option to capture actual voice file, or to just transcribe the text.
+- Alt+V is the system-wide hotkey for voice capture. It should remain available while the
+  main LifeOS window is minimized to the system tray.
+- Invoking voice capture should begin microphone recording immediately without requiring a
+  separate Record action.
+- Show an unmistakable recording indicator so I can tell that the microphone is active.
+- Show a live volume/audio-level bar while recording so I can tell at a glance whether the
+  microphone is detecting my speech.
+- Transcribe speech live in real time and display the growing transcript in the capture
+  window.
+- While recording, pressing Enter or selecting a visible Stop button should stop the
+  microphone and move the capture into review mode.
+- Stopping recording should not submit automatically. I should be able to review and edit
+  the transcript before explicitly submitting the capture.
+- Review mode should provide audio playback so I can compare the recording with the live
+  transcript before making corrections.
+- Keep the recording available temporarily for review and playback even when **Keep audio**
+  is not selected. After successful submission, discard it unless retention is required by
+  **Keep audio** or transcription failure.
+- Pressing Escape should immediately cancel the voice capture and discard its transcript
+  and temporary audio without an additional warning.
+- If Alt+V is pressed while a voice-capture window is already open, do not start another
+  recording. Focus the existing voice-capture window instead.
+- Voice capture should provide the same tabbable Note / Idea / Problem selector as keyboard
+  capture, with Note selected by default.
+- The default behavior is **transcript only**. Do not retain the audio recording after a
+  successful transcription unless I select a **Keep audio** checkbox for that capture.
+- When **Keep audio** is selected, save the original recording with the transcript so it can
+  be retrieved later.
+- If transcription fails, preserve the audio and place it in the Inbox for later processing
+  even when **Keep audio** was not selected. The transcript-only default must not cause the
+  only usable copy of a failed capture to be discarded.
+- Clearly identify a failed-transcription Inbox item as needing transcription or manual
+  processing.
+- A successful voice capture should enter the same Inbox triage workflow as a keyboard
+  capture.
 
 **Ontology fit (Claude):**
 - pending
@@ -237,13 +563,24 @@ Priority: Production
 - pending
 
 ### CAP-4 — I want to capture "documents" (represented as attachments)
-Status: drafting
+Status: proposed
 Priority: Pilot Phase 2
 
 **Workflow (Chris):**
 - Documents should be stored intact for later retrieval workflows
 - Attachments should just be an add-on feature to the normal capture flow introduced in pilot phase. So it is in ADDITION to any text description.  For example, I can upload a bank statement PDF, along with a title describing the relevance of it (eg disputed Comcast charge reference statement)
 - these captures that have attachments become a "document", which essentially serves as a reference item.
+- Use a standard file picker to select the attachment. Drag-and-drop and clipboard paste are
+  not required for the Pilot phases.
+- Support one attachment per capture for simplicity. Capturing another file creates another
+  reference item rather than adding it to the existing capture.
+- Copy the selected file into LifeOS-managed storage so the reference remains usable if the
+  original file is moved, renamed, or deleted.
+- Embedded file preview is not required for Pilot or Pilot phase 2.
+- Double-clicking the attachment should open the managed copy in the operating system's
+  associated application.
+- Production or Someday/Maybe may add in-app previews for common formats such as images and
+  PDFs, but the Pilot workflow must not depend on them.
 
 
 **Ontology fit (Claude):**
@@ -251,40 +588,68 @@ Priority: Pilot Phase 2
 
 
 ### CAP-5 — I want to capture URL reference
-Status: drafting
+Status: proposed
 Priority: Pilot Phase 2
 
 **Workflow (Chris):**
-- Documents should be stored intact for later retrieval workflows
-- Attachments should just be an add-on feature to the normal capture flow introduced in pilot phase. So it is in ADDITION to any text description.  For example, I can upload a bank statement PDF, along with a title describing the relevance of it (eg disputed Comcast charge reference statement)
-- these captures that have attachments become a "document", which essentially serves as a reference item.
+- Capture and retain the live URL as a reference item.
+- Storing a snapshot or archived copy of the referenced page is not required for Pilot
+  phase 2.
+- The URL capture may include descriptive text so I can record why the link matters rather
+  than relying only on the address.
+- Double-clicking or activating the URL should open it in the operating system's default
+  browser.
+- URL references should enter the Inbox for normal tagging, relating, editing, and explicit
+  triage resolution.
 
 
 **Ontology fit (Claude):**
 - pending
 
 
-### JOURNAL-1 — Support append only journals with rich content and inline attachments, media
+### JOURNAL-1 — Support append-only plain-text journals on subjects
 Status: proposed
 Priority: Pilot
 
 **Workflow (Chris):**
-- Support a rich Journal control that can be associated to any subject of any type (goals, problems, projects, habits, etc)
-- Each journal is append only.  Only 1 journal is associated to any single object; I just keep appending to the same journal over time.
-- In read only mode, the editor controls of the journal component should be hidden if possible.  Only if you click to append to the journal does it show the editor controls.
-- It will be very common to support embedded images or video.  Should also support HTTP reference.
-- Many subjects are likely to have a journal on them.  So it will be a very common task to journal about a subject (adding evolving thoughts about the subject). This could theoretically also be done by just creating a note and relating it to that subject, so thoughts can be added to a subject in multiple ways.
+- A Journal can be associated with a subject of any type, including Goals, Problems,
+  Projects, and Habits.
+- Each subject has one Journal that accumulates entries over time.
+- Display the Journal as a chronological series of individually timestamped entries.
+- Journal entries are append-only. Once an entry is appended, it becomes permanently
+  read-only; a correction or clarification must be added as a new entry.
+- Plain text is sufficient for the Pilot. Rich formatting and inline media belong to the
+  Production requirement JOURNAL-2.
+- On the subject detail screen, show the existing Journal history first. Keep editor controls
+  hidden in the normal read view.
+- Provide an obvious **Append** action that reveals a plain-text editor at the bottom of the
+  history, near where the new entry will appear.
+- After appending, return to the clean read view and show the new timestamped entry in the
+  chronology.
+- Journaling about a subject will be a common action because it records evolving thoughts
+  about that subject over time.
+- Creating a separate Note and relating it to the subject remains a different valid workflow;
+  the UI should not imply that every thought concerning a subject must be appended to its
+  Journal.
 
 **Ontology fit (Claude):**
 - pending
 
 
-### JOURNAL-2 — TBD
-Status: drafting
-Priority: Pilot Phase 2
+### JOURNAL-2 — Production journals support rich formatting and inline media
+Status: proposed
+Priority: Production
 
 **Workflow (Chris):**
--  
+- Production Journal entries should support headings, lists, bold, italic, and hyperlinks.
+- Production Journal entries should support inline images and video.
+- A single Journal entry may contain multiple inline images or other media items.
+- Rich content should appear in the intended position within the entry rather than being
+  collected only as a separate attachment list.
+- The read view should render rich content cleanly while continuing to hide editing controls
+  until I choose Append.
+- The append-only rule from JOURNAL-1 still applies to rich entries: after an entry is saved,
+  corrections are made through a new entry rather than editing history.
 
 **Ontology fit (Claude):**
 - pending
@@ -304,7 +669,11 @@ Priority: pilot
   item is (note, idea, email, a nudge) or **where it came from** (I typed it, or — in the
   future — an AI agent read my email and dropped it here for me to triage).
 - Membership can ALSO include a notification that results from missed commitments, or other diagnostics, rule breaks, etc. (again, anything that should require my attention is the goalpost)
-- It may make sense to have different permitted actions on each item in the inbox based on its type.  The UI should only provide me appropriate actions based on the type of the item.  
+- An unfinished daily objective should be flagged into the Inbox at the end of the day. It
+  remains there until I explicitly decide what to do with it through the normal triage
+  workflow; it must not roll into the next day's plan silently.
+- Permitted actions depend on the item's type. The UI should show only appropriate actions,
+  using the triage behavior specified by INBOX-3.
 
 
 **Ontology fit (Claude):**
@@ -338,34 +707,309 @@ Priority: pilot
   explicit Drop; promote/relate stay untouched and count as resolution.)
 
 
-### REVIEW-1 — I want to perform daily reviews
+### INBOX-2 — Reaching Inbox Zero is a recurring commitment to myself
 Status: drafting
 Priority: Pilot phase 2
 
 **Workflow (Chris):**
-- App captures mic audio for dictated note.
+- Clearing the Inbox should be represented as a recurring Commitment I make to myself,
+  rather than as a mandatory step embedded in the daily-review workflow.
+- The Commitment is satisfied by reaching Inbox Zero during its applicable period.
+- Once the required tracking logic exists, LifeOS should recognize that Inbox Zero was
+  reached and satisfy the Commitment automatically; I should not also have to check off a
+  separate completion control.
+- The automatically determined result should remain inspectable and correctable according
+  to the scout's-honor behavior in GEN-5.
+- If I do not reach Inbox Zero by the Commitment's deadline, it should use the same missed-
+  Commitment tracking and reminder behavior as other Commitments.
+- The Dashboard Inbox summary may show both the current Inbox count and the state of this
+  Commitment without displaying the full triage queue.
+- Open decision: the recurrence and deadline for the Inbox Zero Commitment.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### INBOX-3 — The Inbox provides prioritized, type-specific triage with a selected-item preview
+Status: proposed
+Priority: Pilot
+
+**Workflow (Chris):**
+- Present the Inbox as a list with a selected-item preview. I should be able to scan the
+  queue while seeing enough content and context to make a processing decision without
+  opening every item in a separate window.
+- Sort items by interpreted priority when LifeOS can determine a meaningful priority.
+  Items whose priority cannot be determined must remain visible in a consistent fallback
+  order rather than being hidden or treated as unimportant.
+- When an item has no due date, other meaningful date, or determinable priority, sort it
+  newest first.
+- Do not add manual Inbox ordering, pinning, or priority overrides. The goal is Inbox Zero,
+  so managing the queue's sort order should not become a workflow of its own.
+- When priority is interpreted rather than manually declared, the preview should provide a
+  concise explanation of why the item appears where it does when that explanation is
+  available.
+- Show the selected item's full content in the preview rather than an abbreviated snippet.
+- Every editable item should provide an Edit action that opens the appropriate type-specific
+  editor so I can modify its fields. Closing the editor should return me to the same Inbox
+  context and refresh the preview with the saved changes.
+- Editing an item, including changing its type or fields, must not resolve it or remove it
+  from the Inbox. I must still choose an explicit resolution action such as Do, Defer,
+  Delegate, File, or Drop.
+- Show only the actions appropriate to the selected item's type. The screen should not
+  present every theoretical Inbox action when an action would be invalid or meaningless for
+  that item.
+- **Do** should offer **Mark in progress** or **Mark completed** when those states make
+  sense for the selected type. Other item types may expose a different type-appropriate Do
+  action rather than being forced into Task-style states.
+- **Defer** should support a specific date, a relative number of days, a relative number of
+  minutes or hours, **Someday/Maybe**, or open-ended **Postponed** with no date.
+- Relative defer choices should be fast to enter, while a specific date remains available
+  when precision matters.
+- **Delegate** is expected to be used less frequently because I am a solopreneur and will
+  mostly delegate to AI agents. It should not dominate the primary triage controls.
+- Delegation should allow me to select or update the responsible Person and add or update
+  notes. The Person selector must support virtual AI agents as well as human people once AI
+  delegation is available.
+- After any action, remove the item from the active Inbox when that action resolves the need
+  for triage, select the next prioritized item, and provide clear feedback about what
+  happened.
+- The Pilot should support keyboard-efficient processing. Up and Down arrow keys should move
+  the selected item through the Inbox list, and Enter should activate the currently focused
+  action or control.
+- Keyboard behavior must not bypass required confirmation, including the confirmation for
+  Drop.
+- Open decision: the phase in which delegation to virtual AI agents first becomes available.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### INBOX-4 — Tagging and relating organize an item but do not resolve Inbox triage
+Status: proposed
+Priority: Pilot
+
+**Workflow (Chris):**
+- Adding and removing Tags will be one of the most common actions while processing an Inbox
+  item. The selected-item view should keep the Tag control readily available.
+- Relating the item to another LifeOS object will also be a common action and should be
+  available from the selected-item view without opening an unrelated screen.
+- Tags and relationships must remain visually and conceptually separate, consistent with
+  GEN-1: Tags classify an item, while relationships connect it to another object.
+- Adding or removing Tags, or adding a relationship, does not by itself remove the item from
+  the Inbox. These actions organize the item but do not answer what I intend to do with it.
+- Removing an item from the Inbox requires an explicit GTD-style resolution decision such
+  as Do, Defer, Delegate, File, or Drop.
+- **File** means retain the item as reference material and resolve it out of the Inbox.
+- Filing does not require the item to have a Tag or relationship. I may file an item as a
+  standalone reference when no additional classification or connection is useful.
+- **Drop** must ask for confirmation before resolving and removing the item from the Inbox.
+  The Pilot should not rely on an immediate Drop action followed only by Undo.
+- I should be able to organize the item first and then make the resolution decision without
+  losing the selected item or the context I just added.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### REVIEW-0 — Review sessions are recurring commitments with a consistent sequence
+Status: proposed
+Priority: Pilot phase 2
+
+**Workflow (Chris):**
+- Daily, weekly, and monthly review sessions are commitments I make to myself, not optional
+  informational reminders in a separate notification system.
+- Their schedules, reminders, due state, and missed state should use the normal Commitment
+  tracking experience. A due or missed review should therefore surface wherever other due
+  or missed Commitments surface.
+- Review-Commitment adherence should remain backfillable and correctable according to
+  GEN-5, with the original timing and correction retained in history.
+- Daily, weekly, and monthly reviews should be distinct guided experiences suited to their
+  different time horizons. They should not merely be the same form with a different title.
+- The review types should still share useful reflection prompts where appropriate, including
+  **What worked well?** and **What do I want to do differently?**
+- If multiple review cadences fall on the same day, they should be completed in this order:
+  daily first, then weekly, then monthly. The UI should show this order clearly and guide me
+  to the next review without combining them into one session.
+- Within every review session, reflection on the previous period comes before planning the
+  next period. Once I reach planning, I may move backward to revise a reflection response,
+  but the default forward flow should preserve reflection -> planning.
+- Completing reflection should lead directly into the appropriate planning step rather than
+  returning me to an unrelated screen between the two parts.
+- Planning should combine two sources: lessons from the period just reviewed and direction
+  from longer-horizon Goals and the current Primary focus.
+- Goals are generally multi-week or annual outcomes rather than special daily or weekly
+  objects. Focus determines which Goals should be prominent for the current period, while
+  Projects, Tasks, Commitments, and Decisions are the primary ways I make progress toward
+  those Goals.
+- Goal target dates still matter at shorter horizons. A Goal whose target date lands within
+  the upcoming week should be surfaced during weekly review and planning.
+- The planning UI should keep the relevant prior-period learnings and higher-horizon Goals
+  available while I make decisions, so I do not have to remember or repeatedly navigate
+  between them.
+- This is an iterative planning aid rather than an automatic cascade. I decide what to carry
+  forward, change, add, or leave unchanged.
+- Review sections and questions should guide me, not act as hard validation rules. I decide
+  when the review has served its purpose and explicitly mark the session complete.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### REVIEW-1 — I want to perform daily reviews
+Status: proposed
+Priority: Pilot phase 2
+
+**Workflow (Chris):**
+- A daily review should be created automatically at the start of every day and remain
+  available throughout that day.
+- Each daily review should contain one editable working document, not an append-only series
+  of timestamped entries. I should be able to use that document for stream-of-consciousness
+  journaling throughout the day.
+- This editable daily-review document is intentionally different from the append-only
+  subject journals described by JOURNAL-1.
+- The UI should make the current day's document easy to reopen and continue editing without
+  starting a separate review or journal entry.
+- The review becomes due at the end of the day. It does not need a specific clock time;
+  end-of-day is the meaningful deadline.
+- The end-of-day experience should begin with a comprehensive recap of everything recorded
+  about my activity during the day. This should be based on the available database records,
+  not only on items I manually remembered to add to the review.
+- The initial recap can present the recorded activity directly. In later phases, AI agents
+  may summarize it, identify patterns, or add useful interpretation, but the underlying
+  recorded activity should remain accessible.
+- Activity and change history should follow the chronological behavior in GEN-4. Advanced
+  history filters are deferred to Production.
+- The initial daily review should then provide a guided journaling and reflection workflow
+  rather than an automatically scored performance report.
+- The initial predefined reflection questions are **What worked well?** and **What do I
+  want to do differently?** Each question should have a clear response area.
+- The questions should make it easy to think through the day without requiring me to
+  design the review from scratch each time.
+- The session should also include a planning area within the review itself where I can
+  reassess my Primary focus and daily objectives and write down the next items that need
+  attention. Projects and Tasks are the main work items, but Habit occurrences and
+  Appointments are also relevant to planning.
+- The planning area is not an embedded replacement for the normal Project, Task, Habit, or
+  Appointment editors. For now, I will separately create or modify those items as needed.
+- The planning workflow should be flexible rather than forcing every day through the same
+  set of edits.
+- The next day's plan should be informed both by what I learned during the current day and
+  by the current Focus, prominent Goals, and the nearer-term Projects, Tasks, Commitments,
+  and Decisions that advance them.
+- Once the corresponding weekly review exists, the daily review should provide a link to
+  that weekly-review document.
+- Clearing the Inbox is not a required step inside the daily-review flow; Inbox Zero is a
+  separate recurring Commitment described by INBOX-2.
+- Primary focus does not need to change during a review; keeping the current focus should
+  be an explicit, low-friction choice.
+- The review should feel like one coherent session, with visible progress through the
+  predefined questions and a clear completion action.
+- I should be able to move backward and revise an answer before completing the review.
+- I should be able to explicitly complete the review whenever I feel it is complete. The
+  UI should not require every question to be answered or every planning field to contain a
+  value before enabling completion.
+- A completed daily-review document should remain editable afterward. Post-completion edits
+  should be retained in history and shown chronologically according to GEN-4 rather than
+  silently replacing the earlier completed version.
+- Automatic scoring, automatic summaries, and formal daily-objective outcome categories
+  are extra credit and are deferred for later definition.
+- A daily review cannot meaningfully be deferred because the details will be forgotten. If
+  it is not completed by its end-of-day deadline, it should become a missed Commitment.
+- After a review is missed, I should be able to record an optional reason for missing it.
+- Open decision: whether responses are plain text only or also support dictated input, and
+  how the comprehensive activity recap is grouped in the initial WinForms UI.
 
 **Ontology fit (Claude):**
 - pending
 
 
 ### REVIEW-2 — I want to perform weekly reviews (every Sunday)
-Status: drafting
+Status: proposed
 Priority: Pilot phase 2
 
 **Workflow (Chris):**
-- App captures mic audio for dictated note.
+- The weekly review should be created on Sunday and should normally be completed on Sunday.
+  It does not need to exist as an editable document throughout the preceding week.
+- Until the weekly review is created, I record real-time thoughts in the daily reviews. The
+  weekly review should not create a second running document earlier in the week.
+- The weekly review should use one editable document rather than a collection of separate
+  documents. Guided reflection and planning can appear as sections within that document.
+- It should combine reflection on the prior week with planning for the upcoming week.
+- Begin with a comprehensive weekly summary. Initially include links to every daily review
+  from the week, completed and overdue Tasks, Project progress, Habit adherence,
+  Appointments, missed Commitments, Inbox history, and any other recorded weekly activity.
+  It is preferable to begin comprehensively and trim the summary later through real use.
+- Links to daily reviews should open the corresponding review without losing the weekly
+  review session. The linked daily reviews should also link back to this weekly review once
+  it has been created.
+- Include the common reflection questions from REVIEW-0 plus questions specific to weekly
+  progress, patterns, and upcoming priorities.
+- Weekly planning should begin by asking whether I want to keep or change my Primary focus
+  based on what I learned during the prior week.
+- Focus determines which of my existing longer-term Goals are most prominent for the week;
+  there is no separate weekly-cadence Goal concept.
+- Any Goal whose target date falls within the upcoming week should be called out even if it
+  was not otherwise selected as prominent through Focus.
+- After the focus decision, I should identify the important Projects for the next week,
+  then schedule or plan other Tasks and Appointments. Commitments and Decisions may also be
+  relevant because they help advance Goals alongside Projects and Tasks.
+- The next week's plan should be informed both by learnings from the prior week and by the
+  applicable longer-horizon Goals.
+- Primary focus may persist unchanged across weeks; keeping it should be an explicit,
+  low-friction choice rather than forcing a change.
+- If Sunday ends without completion, the weekly review becomes a missed Commitment with no
+  grace period. I should still be able to backfill and complete it late; doing so must not
+  erase the fact that the original Commitment was missed.
+- A completed weekly-review document should remain editable afterward. Post-completion
+  edits should be retained and presented through the chronological history behavior in
+  GEN-4.
+- A partially written Sunday review should be preserved if I close LifeOS before explicitly
+  completing it, so I can reopen the same document and continue later.
+- Open decision: the remaining weekly-specific reflection questions.
 
 **Ontology fit (Claude):**
 - pending
 
 
-### REVIEW-3 — I want to perform monthly reviews (EOM, give or take a day or 2)
-Status: drafting
+### REVIEW-3 — I want to perform monthly reviews with an end-of-month completion window
+Status: proposed
 Priority: Production
 
 **Workflow (Chris):**
-- App captures mic audio for dictated note.
+- The monthly review should be created on the last calendar day of the month.
+- It may be completed on the last day of the reviewed month or during the first three
+  calendar days of the following month. If it is still incomplete after that window, it
+  becomes a missed Commitment.
+- It should combine reflection on the prior month with planning for the upcoming month.
+- The monthly review should use one editable document, consistent with the daily and weekly
+  review model. Guided reflection and planning can appear as sections within it.
+- Begin with a summary that links to every completed weekly review covering the month.
+- Because a month may end partway through a week, also identify and link to any daily reviews
+  within the month that are not covered by one of those completed weekly reviews. The UI
+  should avoid omitting those days or presenting their activity as though it was already
+  summarized by a weekly review.
+- The monthly summary may include the other recorded activity used by shorter reviews, but
+  should use the completed weekly reviews as its primary roll-up where coverage exists.
+- Include the common reflection questions from REVIEW-0 plus questions specific to monthly
+  progress, patterns, and upcoming priorities.
+- Monthly planning should begin by reassessing whether to keep or change my Primary focus.
+- It should then review progress toward long-term Goals, identify the Goals and Projects
+  that should be prominent during the upcoming month, review important target dates, and
+  account for realistic capacity.
+- Tasks, Commitments, Decisions, Appointments, and Habits may also inform the plan where they
+  materially affect progress or capacity.
+- This is an initial comprehensive scope that should be refined through actual use rather
+  than treated as a permanently fixed checklist.
+- Primary focus may persist unchanged across months; the review should not force a change.
+- A partially written monthly review should be preserved if I close LifeOS before explicitly
+  completing it, so I can reopen the same document and continue later.
+- A completed monthly-review document should remain editable afterward. Post-completion
+  edits should be retained and presented through the chronological history behavior in
+  GEN-4.
+- If the review becomes missed after its three-day completion window, I should still be able
+  to backfill it later. Backfilling must not erase the fact that the original Commitment was
+  missed or that the review was completed late.
+- Open decision: the remaining monthly-specific reflection questions.
 
 **Ontology fit (Claude):**
 - pending
@@ -383,12 +1027,28 @@ Priority: Someday Maybe
 
 
 ### REVIEW-5 — Habits should be recordable and reviewable during daily, or weekly reviews
-Status: drafting
+Status: proposed
 Priority: Pilot phase 2
 
 **Workflow (Chris):**
 - Habit streaks should be trackable.  I should be able to record whether I stuck with that habit or not.  The UI will show a small grid that renders a box for each time period I followed the habit.
 - Support 3 states per habit record:  Habit followed, Habit not followed, and partial credit
+- During daily and weekly reviews, each applicable Habit occurrence should offer the same
+  one-click recording control used by Dashboard/Today and Habit detail.
+- A daily occurrence remains visibly unrecorded until end-of-day, and a weekly occurrence
+  remains unrecorded until end-of-week; the review must not present it as a failure
+  prematurely.
+- Each state in the history grid should be visually distinguishable, including unrecorded,
+  followed, not followed, and partial credit.
+- Selecting followed, not followed, or partial credit should update the review and Habit
+  history immediately, with an optional note available for additional context.
+- Partial credit breaks the normal binary streak but remains visible as its own historical
+  result so a more granular adherence score can be added later.
+- I should be able to correct or backfill an occurrence directly from a review. Doing so
+  should recalculate the visible streak and adherence summary while preserving the change
+  in chronological history.
+- Reviews should distinguish manually self-assessed occurrences from automatically scored
+  objective occurrences without making the manual path feel secondary or less trustworthy.
 
 **Ontology fit (Claude):**
 - pending
@@ -410,4 +1070,3 @@ work. One line per item; details live in the requirement.
   `bsk ideas` brainstorm ritual.
 
 *(Prior mapping gaps already closed: the `concerns` write path — shipped as `bsk relate`.)*
-
