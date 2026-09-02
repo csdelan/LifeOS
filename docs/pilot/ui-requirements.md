@@ -37,8 +37,9 @@ evolve the ontology in a careful, future proof way.
 
 ```
 ### <ID> — <title>
-Status: <status>
-Priority: <Pilot | Pilot phase 2 | Production | Someday Maybe>
+Horizon:    <Pilot | Pilot phase 2 | Production | Someday Maybe>
+Definition: <drafting | active>
+Build:      <unmapped | mapped | needs-kernel | building | built>
 
 **Workflow (Chris):**
 - Goal / job-to-be-done, steps, UI expectations.
@@ -64,25 +65,32 @@ requirements cluster and the ID says where it lives:
 | `DASHBOARD-` | Dashboard view |
 | `NAV-` / `GEN-` | Cross-cutting (navigation, shell, general) |
 
-**Status vocabulary** — the handoff between the two roles:
+**Three status fields, each answering one question.** Nothing here is ever "final" — this
+is a living spec, iterated as Pilot use reveals better behavior. The old single `Status`
+tried to be two things at once; these split it so no field has to mean "finished".
 
-`drafting` (Chris still shaping it — Claude holds off; Ontology fit stays _pending_) →
-`proposed` (Chris hands it off; ready for an Ontology-fit pass) →
-`mapped` (fits existing kernel, no change) →
-`needs-kernel` (requires a schema/verb change; see backlog) → `building` → `done`.
-`deferred` parks it deliberately.
+**Definition** — *is the thinking settled enough to act?* (Chris's axis)
+- `drafting` — Chris is still shaping it; Claude holds off, the Ontology fit stays _pending_.
+- `active` — settled enough to map / build against **now**. *Not* frozen: an `active`
+  requirement stays open to iteration forever. This is the resting state — there is no
+  terminal "done".
 
-`proposed` means the workflow is defined well enough for an Ontology-fit pass; it does not
-mean the requirement is frozen. Proposed requirements may still be edited, clarified, or
-iterated as later interviews and Pilot use reveal better behavior.
+**Build** — *where is the implementation?* (Claude's axis; may move **backward** when a
+requirement changes)
+- `unmapped` → `mapped` (fits existing kernel, no change) → `needs-kernel` (requires a
+  schema / verb change; see backlog) → `building` → `built` (live in the Pilot — which is
+  not "finished forever" either).
 
-**Handoff rule:** Claude does not write an Ontology fit until Chris moves a requirement
-off `drafting`. Give the fullest workflow picture first — no jumping into solution space
-before the requirement has settled.
+So "shipped but still evolving" is `Definition: active` + `Build: built`, and reworking it
+drops Build back toward `mapped` while Definition stays `active`.
+
+**Handoff rule:** Claude does not write an Ontology fit until Chris moves a requirement's
+**Definition** off `drafting`. Give the fullest workflow picture first — no jumping into
+solution space before it has settled.
 
 **High Level Context Rule:** Whenever you process new changes in a requirement, you need to do a quick assessment of whether your entire ontology solution still works with no alterations. Since this is an iterative process, and the UI set and solution sets are interweaving, new or modified requirements added on CAN, and sometimes WILL require adjustments in previous decisions.
 
-**Priority (horizon)** — which milestone a requirement belongs to, not its urgency:
+**Horizon** — which milestone a requirement belongs to, not its urgency:
 
 | Value | Meaning |
 |---|---|
@@ -120,8 +128,9 @@ these are the canonical picture; this doc is the traceable requirement list besi
 
 
 ### GEN-0 — LifeOS is a prioritization command center, not a second brain
-Status: proposed
-Priority: Pilot
+Horizon:    Pilot
+Definition: active
+Build:      mapped
 
 **Workflow (Chris):**
 - LifeOS is primarily a command center for prioritizing my life. Its most important job is
@@ -142,12 +151,20 @@ Priority: Pilot
   it part of my daily routine.
 
 **Ontology fit (Claude):**
-- pending
+- No direct schema mapping — this is **product intent that shapes priorities**, worth
+  recording as an ontology *boundary*: "prioritization command center, not a second brain"
+  means the **alignment graph (`serves` / `results_in`) + diagnostics are the core**, and
+  general knowledge storage is explicitly **out of scope**. That bounds what Tags, captures,
+  and references are for — attention management, not a knowledge base.
+- Kernel delta: none.
+- Implications: when a later requirement pulls toward general-purpose note/knowledge
+  storage, this is the line to check it against.
 
 
 ### DASHBOARD-1 — The opening screen is a daily prioritization command center
-Status: proposed
-Priority: Pilot
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
 
 **Workflow (Chris):**
 - On opening LifeOS, I want to understand what deserves my attention within roughly 30
@@ -188,8 +205,9 @@ Priority: Pilot
 
 
 ### TODAY-1 — I want to set a Primary focus and one to three objectives for today
-Status: proposed
-Priority: Pilot phase 2
+Horizon:    Pilot phase 2
+Definition: active
+Build:      unmapped
 
 **Workflow (Chris):**
 - Each day can have one prominent **Primary focus** and between one and three **objectives**.
@@ -228,8 +246,9 @@ Priority: Pilot phase 2
 
 
 ### TODAY-2 — Today's priorities combine manual planning with explainable suggestions
-Status: drafting
-Priority: Pilot
+Horizon:    Pilot
+Definition: drafting
+Build:      unmapped
 
 **Workflow (Chris):**
 - The Pilot should combine priorities I manage myself with useful system suggestions.
@@ -259,8 +278,9 @@ Priority: Pilot
 
 
 ### BROWSE-1 — I want an object graph view similar to Obsidian
-Status: drafting
-Priority: Production
+Horizon:    Production
+Definition: drafting
+Build:      unmapped
 
 **Workflow (Chris):**
 - Object graph very similar to obsidian
@@ -273,8 +293,9 @@ Priority: Production
 
 
 ### BROWSE-2 — Browse uses filters, a context-sensitive item list, and read-only detail
-Status: proposed
-Priority: Pilot
+Horizon:    Pilot
+Definition: active
+Build:      mapped
 
 **Workflow (Chris):**
 - Use a three-pane Browse layout: a generalized filter pane, an item list, and a selected-
@@ -319,13 +340,24 @@ Priority: Pilot
   versions of those interactions.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: almost entirely **reads** over the existing `v_subject` / `v_event` /
+  `v_subject_relation` views, plus the new Tag (GEN-1) and Area (GEN-2) dimensions. Filters
+  (Status, Due, Entered, Area, Tags, Title) are query predicates; the tenet — **AND across
+  categories, OR within a category** — is straightforward SQL.
+- Context-sensitive columns = different projections for subjects vs events (a subject list
+  shows Title / Status / Due / Area / Tags; an event list shows event-appropriate fields).
+- Edit mode (read-only-first, explicit Save / Cancel) writes through `bsk`: attribute changes
+  via `bsk set`, status via `state_change`. The dirty-nav prompt is pure app state.
+- Kernel delta: none beyond Tags (GEN-1) and Area (GEN-2); the detail sections (Overview /
+  Relationships / Tags / Journal / History) each read an existing edge / event source.
+- Open decisions: none blocking — this rides on GEN-1 and GEN-2 landing.
 
 
 
 ### GEN-1 — I want tags as a ubiquitous classification mechanism
-Status: proposed
-Priority: Pilot
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - Everything created by hand should be taggable. From notes to first class objects like decisions or projects.
@@ -335,13 +367,25 @@ Priority: Pilot
 - Tags are separate from relations.  They are a flexible classification scheme, not a relation scheme.  So any user interface needs to separate out these 2 things clearly "Relate to" vs "Tag" so that the user understands they are separate.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: a **new tag primitive**, deliberately separate from `subject_relation`. The
+  kernel has no general tags today — the closest is the `attributes.focus` string the
+  Season/neglect logic already treats as a life-area tag (see GEN-2). Tags attach to *items*
+  (subjects *and* events), so a raw capture can be tagged before it's ever a subject.
+- Kernel delta (needs-kernel): a tag store (a normalized `item_tag` table is cheapest for
+  the "tag universe" + autocomplete, vs a `tags` array per row), a `bsk tag <item> +x -y`
+  verb kept distinct from `bsk relate` / `link`, and a reader for the live tag set.
+- Implications & constraints: keeping Tags in their own store + own verb is what makes the
+  UI's "Tag" vs "Relate to" separation real rather than cosmetic. "Universal" = one shared
+  tag space across subjects and events.
+- Open decisions: normalized table vs per-row array; whether the reserved `focus` attribute
+  becomes just another tag or stays special for Season parking.
 
 
 
 ### GEN-2 — Area of Focus should be a property of goals, tasks, projects (at a minimum)
-Status: proposed
-Priority: Pilot
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - This will be GTD style Area of focus (or just "Areas").  So "Trading", "Family", "Dev Career" are normal values
@@ -350,11 +394,24 @@ Priority: Pilot
 - I may decide later to add additional types to include "areas", but goals, tasks, and projects should be the minimum bar.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to (D1): **Area = a new durable subject type.** The master "Areas" list is
+  `bsk new Area "Trading"` etc.; an item names its Area via an attribute (`attributes.area`),
+  a soft reference to the Area subject — kept as a *property*, not an alignment edge, so the
+  `serves` / `results_in` graph stays about work, not classification.
+- **Pre-existing overlap worth surfacing:** the kernel already has a `focus` axis — subjects
+  carry an `attributes.focus` tag and Seasons park out-of-focus subjects by matching it.
+  "Area of Focus" is conceptually that same axis — a strong candidate to **unify Area with
+  `focus`** rather than add a parallel dimension.
+- Kernel delta: add the `Area` subject type (a careful, future-proofed type extension); a
+  master-list reader; `attributes.area` on items (settable via `bsk set`).
+- Open decisions: unify with `focus` or keep separate; single vs multi-Area (`attributes.area`
+  scalar vs array); attribute-reference (recommended) vs a graph edge if BROWSE-1 wants Area
+  as a first-class graph node.
 
 ### GEN-3 — The UI should support habits as a first class concept, including occurrences of the habit.
-Status: proposed
-Priority: Pilot
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - Each habit should have start date, end date, last date I confirmed the habit, streak, recurrence, cue, routine, reward
@@ -394,12 +451,27 @@ Priority: Pilot
 - SIDE NOTE:  Depending on how habits are represented in the ontology, it could relate to commitment also.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to (D2): a Habit **is a Commitment** with habit attributes (cue / routine / reward,
+  start / end, `expected_cadence` for recurrence). Occurrences are **not stored** — they're a
+  projection over cadence + adherence events: followed = an activity `evidences` it,
+  not-followed = `violates`, **partial = fixed half-credit** (per D2), gated by an
+  `allows_partial` attribute. Streak = derived. "Unrecorded until end of period, then
+  not-followed" is a projection rule, not a stored fact. Parents (Goal / Value) = `serves`
+  edges, with ≥1 enforced on save. Backfill / correct = append a corrective adherence event.
+- Kernel delta: (1) the **partial-credit** third state (backlog); (2) an **occurrence +
+  streak projection** over cadence & adherence events; (3) present Habit-Commitment misses
+  as a gentle streak break — **exclude them from the confrontational breach report**;
+  (4) habit fields are just attributes (free).
+- Implications: "Habit" never appears in storage — it's a Commitment the UI dresses up. A
+  missed day is an absence / `violates`, shown as a broken streak, not a breach.
+- Open decisions: partial as a new edge relation vs an activity-event attribute; materialize
+  "not-followed at window close" or leave it purely projected.
 
 
 ### GEN-4 — History views show chronological change with progressive detail
-Status: proposed
-Priority: Pilot phase 2
+Horizon:    Pilot phase 2
+Definition: active
+Build:      mapped
 
 **Workflow (Chris):**
 - Any history view should present changes in chronological order so I can understand how
@@ -415,12 +487,20 @@ Priority: Pilot phase 2
   access to more detail should not require showing every field in the main chronology.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the append-only **event log is already the chronology** — `v_event`,
+  `state_change` history, concerning events, plus D3 review edit-events. A history view is a
+  time-ordered query over these for the item in question.
+- Kernel delta: none for the Pilot (reads exist). Production's flexible filters are richer
+  queries, not schema.
+- Implications: "progressive detail" (tooltip vs drill-down) is pure UI over existing event
+  rows; nothing new to store.
+- Open decisions: none blocking.
 
 
 ### GEN-5 — Self-assessed adherence uses scout's honor and remains correctable
-Status: proposed
-Priority: Pilot
+Horizon:    Pilot
+Definition: active
+Build:      mapped
 
 **Workflow (Chris):**
 - For Habits and Commitments that cannot be measured objectively, I am the authority on
@@ -440,13 +520,23 @@ Priority: Pilot
   confidence logic.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the **provenance axis already carries this** — manual self-assessment =
+  `declared`; auto-scored (e.g. Inbox Zero) = `derived`. A correction is a newer adherence
+  event the projection prefers; append-only keeps the original *and* the correction in
+  history.
+- Kernel delta: none beyond GEN-3's partial-credit; a **latest-wins-per-occurrence**
+  convention (or an explicit supersede) so a correction overrides the earlier result.
+- Implications: "was this manual or automatic?" is answered by reading provenance — no new
+  field. Pairs directly with GEN-3.
+- Open decisions: correction via latest-wins-by-occurrence-key vs an explicit `supersedes`
+  edge on adherence events.
 
 
 
 ### CAP-1 — I want to be able to quickly capture a note, idea, problem from anywhere in the app
-Status: proposed
-Priority: pilot
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - A system-wide global hotkey brings up the capture dialog even when LifeOS is not the
@@ -504,12 +594,15 @@ Priority: pilot
   distinct event kind; the heavyweight structured brainstorm (`bsk ideas`) remains a
   separate act reachable elsewhere. This is a clean example of the guiding tenet — the UI
   offers two sibling captures; the store may file them the same way plus a marker.
-- Open decisions: **which of A / B / C.** (Leaning B.)
+- Open decisions: folded into **D4** (one capture / reference flavor model); direction is
+  **B — flavored capture** (note / idea / problem are flavors of one `note`-family event).
+  Exact flavor vocabulary + where the flavor is stored are tracked in D4.
 
 
 ### CAP-2 — I want Voice mode for captures. 
-Status: proposed
-Priority: Pilot Phase 2
+Horizon:    Pilot phase 2
+Definition: active
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - Alt+V is the system-wide hotkey for voice capture. It should remain available while the
@@ -549,22 +642,44 @@ Priority: Pilot Phase 2
   capture.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the **`voice` event kind** — which already exists in the ontology but has **no
+  `bsk` write path today** (one of the 4 unreachable kinds). Audio = a binary artifact; the
+  transcript = the event's text content. Note / Idea / Problem flavor per D4. Enters the
+  same inbox via the triage marker (INBOX-1).
+- Kernel delta: a `bsk` write verb for `voice` events (closes an unreachable kind);
+  **managed binary artifact storage** for the audio (shared with CAP-4 / JOURNAL-2 — see
+  backlog). The transcription itself is app-side, not kernel.
+- Implications: "Keep audio" = retain the binary artifact; transcript-only = discard it
+  after success; failed transcription = keep audio + flag to inbox as needing processing.
+- Open decisions: where audio bytes live (DB large object vs a managed file dir) — one
+  decision shared across all binary attachments.
 
 ### CAP-3 - I want AI assist mode for captures
-Status: proposed
-Priority: Production
+Horizon:    Production
+Definition: active
+Build:      mapped
 
 **Workflow (Chris):**
 - Voice activated wake up AI (if needed), then I just speak freely to give an AI instructions on what to capture.
 - The AI will interpret my intent and capture the necessary content from its own interpretation.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: an **AI-authored capture** — provenance `derived` / `observed`, written through
+  `bsk` by an agent (the single-writer invariant already treats agents as callers). The AI
+  may emit a note / idea / problem or a structured subject; provenance keeps it
+  distinguishable from `declared` human capture.
+- Kernel delta: none to the ontology (provenance + agent-as-caller exist); needs the AI
+  integration and, for attribution, the agent modeled as a (virtual) `Person` the event can
+  reference. Production horizon.
+- Implications: ties to INBOX-3 delegation-to-AI (virtual-agent People) and CAP-2's voice
+  front-end.
+- Open decisions: how "who captured this" is attributed (a virtual `Person` vs a provenance
+  source string).
 
 ### CAP-4 — I want to capture "documents" (represented as attachments)
-Status: proposed
-Priority: Pilot Phase 2
+Horizon:    Pilot phase 2
+Definition: active
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - Documents should be stored intact for later retrieval workflows
@@ -584,12 +699,22 @@ Priority: Pilot Phase 2
 
 
 **Ontology fit (Claude):**
-- pending
+- Maps to (D4): a capture-with-attachment is a **`document` / reference flavor** of the one
+  capture model — the text description is the event content / title; the file is a **binary
+  artifact** copied into managed storage. "Reference item" = a filed capture, not a new
+  subject type.
+- Kernel delta: **managed binary artifact storage** (shared with CAP-2 audio / JOURNAL-2
+  media — one backlog item); the reference flavor (D4); copy-into-managed-store semantics.
+- Implications: today's artifact table holds *text* content; binary / large-file handling is
+  genuinely new infra. One attachment per capture keeps it simple (another file = another
+  reference item).
+- Open decisions: blob-in-DB vs managed-file-dir + stored path; retention / dedup.
 
 
 ### CAP-5 — I want to capture URL reference
-Status: proposed
-Priority: Pilot Phase 2
+Horizon:    Pilot phase 2
+Definition: active
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - Capture and retain the live URL as a reference item.
@@ -604,12 +729,18 @@ Priority: Pilot Phase 2
 
 
 **Ontology fit (Claude):**
-- pending
+- Maps to (D4): a **`url` / reference flavor** — the live URL (+ optional description) stored
+  as plain-text artifact content. The lightest reference type: no snapshot (deferred), no
+  binary storage, so **no new infra** unlike CAP-4.
+- Kernel delta: just the D4 reference flavor; opening in the default browser is app-side.
+- Implications: shares the one capture / reference model; enters the inbox like any capture.
+- Open decisions: a distinct `url` flavor vs a plain note carrying a `url` attribute.
 
 
 ### JOURNAL-1 — Support append-only plain-text journals on subjects
-Status: proposed
-Priority: Pilot
+Horizon:    Pilot
+Definition: active
+Build:      mapped
 
 **Workflow (Chris):**
 - A Journal can be associated with a subject of any type, including Goals, Problems,
@@ -633,12 +764,23 @@ Priority: Pilot
   Journal.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: **`journal` events, each `concerns` the subject** — and append-only immutability
+  is an *exact* fit for "entries are permanently read-only; a correction is a new entry."
+  "One Journal per subject" is a **projection** (all journal-kind events concerning that
+  subject, chronological), not a stored container.
+- Kernel delta: minimal — today it's `bsk journal` then `bsk relate <event> <subject>`; a
+  convenience verb that journals-and-relates atomically + a `v_subject_journal` reader would
+  smooth it. No ontology change.
+- Implications: the cleanest fit in the batch — the append-only spine was built for exactly
+  this. "Journal vs a related Note" is a flavor distinction (D4); both are events that
+  `concern` the subject.
+- Open decisions: a dedicated journal-append verb vs composing the existing two.
 
 
 ### JOURNAL-2 — Production journals support rich formatting and inline media
-Status: proposed
-Priority: Production
+Horizon:    Production
+Definition: active
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - Production Journal entries should support headings, lists, bold, italic, and hyperlinks.
@@ -652,14 +794,20 @@ Priority: Production
   corrections are made through a new entry rather than editing history.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: same as JOURNAL-1 (append-only `journal` events) with **rich artifact content**
+  (markdown / HTML + inline media artifacts). Append-only is unchanged.
+- Kernel delta: rich content format + **inline media storage** (shares the managed binary
+  artifact infra with CAP-2 / CAP-4). Production horizon.
+- Implications: media items are artifacts referenced inline; no new relation or subject.
+- Open decisions: content format (markdown vs HTML); media storage (the shared infra call).
 
 
 
 
 ### INBOX-1 — The Inbox is a source-agnostic triage queue, not a capture log
-Status: needs-kernel
-Priority: pilot
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - The Inbox is **manual triage for anything that needs a processing decision** —
@@ -708,8 +856,9 @@ Priority: pilot
 
 
 ### INBOX-2 — Reaching Inbox Zero is a recurring commitment to myself
-Status: drafting
-Priority: Pilot phase 2
+Horizon:    Pilot phase 2
+Definition: drafting
+Build:      unmapped
 
 **Workflow (Chris):**
 - Clearing the Inbox should be represented as a recurring Commitment I make to myself,
@@ -731,8 +880,9 @@ Priority: Pilot phase 2
 
 
 ### INBOX-3 — The Inbox provides prioritized, type-specific triage with a selected-item preview
-Status: proposed
-Priority: Pilot
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - Present the Inbox as a list with a selected-item preview. I should be able to scan the
@@ -781,12 +931,27 @@ Priority: Pilot
 - Open decision: the phase in which delegation to virtual AI agents first becomes available.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: composes INBOX-1's **triage marker** with type-specific actions. The GTD exits
+  reuse existing verbs — Do = promote→Task / `state_change`; Defer = `attributes.due` (+ the
+  Defer variants below); Delegate = an owner link to a `Person` (incl. virtual AI agents as
+  People); File = `bsk relate`; Drop = the triage-marker Drop outcome.
+- Priority ordering = the diagnostics / derived layer (due-ness, neglect, breach-risk), with
+  a newest-first fallback when no priority is computable — a read-only ranking, no stored
+  order (matches "no manual pinning").
+- Kernel delta: Defer needs richer date semantics — a specific date, relative (+N days /
+  hours), **Someday/Maybe**, and open-ended **Postponed (no date)** — likely a small
+  `defer_state` attribute alongside `due`. Virtual-agent People = `Person` subjects flagged
+  as agents.
+- Implications: editing an item (even changing its type) must **not** clear the triage
+  marker — only an explicit Do / Defer / Delegate / File / Drop resolves it.
+- Open decisions: Defer storage (one `defer_state` enum + date vs several attributes); when
+  virtual-agent delegation first ships.
 
 
 ### INBOX-4 — Tagging and relating organize an item but do not resolve Inbox triage
-Status: proposed
-Priority: Pilot
+Horizon:    Pilot
+Definition: active
+Build:      mapped
 
 **Workflow (Chris):**
 - Adding and removing Tags will be one of the most common actions while processing an Inbox
@@ -808,12 +973,22 @@ Priority: Pilot
   losing the selected item or the context I just added.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: **Tag (GEN-1) and Relate (`bsk relate` / `link`) are organization, not
+  resolution** — neither clears the triage marker. Only a GTD resolution (Do / Defer /
+  Delegate / **File** / Drop) transitions the marker. File = retain as reference + resolve
+  (a marker→resolved transition with a "reference" disposition, no promote required).
+- Kernel delta: none beyond INBOX-1's marker + GEN-1 tags — this requirement is mostly a
+  **constraint** on when the marker flips (organize actions must leave it set).
+- Implications: cleanly separates classification (tags / relations) from triage resolution —
+  the marker is the single source of "still needs a decision." Drop stays confirm-gated.
+- Open decisions: whether "File" records a distinct reference disposition on the resolved
+  marker, or is just Drop-without-discard.
 
 
 ### REVIEW-0 — Review sessions are recurring commitments with a consistent sequence
-Status: proposed
-Priority: Pilot phase 2
+Horizon:    Pilot phase 2
+Definition: active
+Build:      unmapped
 
 **Workflow (Chris):**
 - Daily, weekly, and monthly review sessions are commitments I make to myself, not optional
@@ -856,8 +1031,9 @@ Priority: Pilot phase 2
 
 
 ### REVIEW-1 — I want to perform daily reviews
-Status: proposed
-Priority: Pilot phase 2
+Horizon:    Pilot phase 2
+Definition: active
+Build:      unmapped
 
 **Workflow (Chris):**
 - A daily review should be created automatically at the start of every day and remain
@@ -924,8 +1100,9 @@ Priority: Pilot phase 2
 
 
 ### REVIEW-2 — I want to perform weekly reviews (every Sunday)
-Status: proposed
-Priority: Pilot phase 2
+Horizon:    Pilot phase 2
+Definition: active
+Build:      unmapped
 
 **Workflow (Chris):**
 - The weekly review should be created on Sunday and should normally be completed on Sunday.
@@ -972,8 +1149,9 @@ Priority: Pilot phase 2
 
 
 ### REVIEW-3 — I want to perform monthly reviews with an end-of-month completion window
-Status: proposed
-Priority: Production
+Horizon:    Production
+Definition: active
+Build:      unmapped
 
 **Workflow (Chris):**
 - The monthly review should be created on the last calendar day of the month.
@@ -1016,8 +1194,9 @@ Priority: Production
 
 
 ### REVIEW-4 — I want to perform yearly reviews (EOM, give or take a day or 2)
-Status: drafting
-Priority: Someday Maybe
+Horizon:    Someday Maybe
+Definition: drafting
+Build:      unmapped
 
 **Workflow (Chris):**
 - App captures mic audio for dictated note.
@@ -1027,8 +1206,9 @@ Priority: Someday Maybe
 
 
 ### REVIEW-5 — Habits should be recordable and reviewable during daily, or weekly reviews
-Status: proposed
-Priority: Pilot phase 2
+Horizon:    Pilot phase 2
+Definition: active
+Build:      unmapped
 
 **Workflow (Chris):**
 - Habit streaks should be trackable.  I should be able to record whether I stuck with that habit or not.  The UI will show a small grid that renders a box for each time period I followed the habit.
@@ -1057,16 +1237,89 @@ Priority: Pilot phase 2
 
 ---
 
+## Cross-cutting ontology decisions
+
+Foundational modeling calls that many requirements inherit. Decided directions are locked;
+open sub-points are flagged. Owned by Claude; set with Chris. (Locked 2026-09-01.)
+
+**D1 — Area of Focus = a durable subject.** "Areas" (Trading, Family, Dev Career) are
+first-class subjects with a master list, that Goals/Tasks/Projects point to; they appear as
+a node/filter in the BROWSE-1 graph. Open: the item→Area link — a dedicated attribute vs a
+`serves`/membership relation (a relation slightly bends the "Areas are a property, Tags are
+separate" framing).
+
+**D2 — Habit = a UI abstraction over Commitment (storage).** Habit is the user-facing
+concept; the underlying data model is a Commitment. Mechanics verified-compatible: followed
+= an event `evidences` it, not-followed = `violates` it; streak / adherence-over-a-window =
+the breach query + a date filter (the kernel already names this as the intended extension);
+recurrence rides `expected_cadence` + the neglect clock; cue/routine/reward are attributes;
+manual-vs-auto is provenance. **Two strain points:** (a) **partial credit** is a third
+adherence state the binary `evidences`/`violates` vocabulary can't express — a real kernel
+gap; (b) Commitment's framing is **confrontational** (breach = "a line you drew and
+crossed"), while a Habit wants a gentle streak/scout's-honor tone — an app-layer
+presentation concern. **Resolved (2026-09-01):** partial credit = **fixed half-credit** — a
+three-state record (done / half / not-done), gated per-habit by an `allows_partial` flag
+(binary habits like *Brush Teeth* stay two-state; malleable ones like *tidy the room* allow
+half). Missed occurrences read as a **gentle streak break**, never surfaced in the
+confrontational breach report. Evolve the ontology only if later strain exceeds these.
+
+**D3 — Review = a subject with a mutable body + an append-only edit trail.** Reviews are
+editable working documents (unlike append-only JOURNAL-1). Store the body as a subject
+attribute; append each save as an edit event so "history retained" holds; the app presents
+one document. Reconciles editable-doc UX with the append-only spine.
+
+**D4 — One capture / reference-item model.** note / idea / problem / document / URL /
+filed-reference are flavors of one capture-and-classify scheme, not separate machinery.
+Folds in CAP-1's A/B/C (leaning flavored-capture) and CAP-4 / CAP-5 / INBOX-4's "reference
+item". Open: the exact flavor/type vocabulary and where the flavor is stored.
+
+**D5 — The recurring-commitment engine is derived from the UIs, not decided top-down.**
+Reviews (REVIEW-0..3), Inbox Zero (INBOX-2), and Habits (GEN-3) are all "recurring
+self-commitments with per-period satisfaction + missed detection + backfillable
+correction." Let each UI settle, then extract the shared storage primitive — don't design
+it first.
+
+**D6 — Primary focus & daily objectives model (OPEN).** Lightweight planning intents that
+may be free text *or* reference an existing Area/Goal, and that expire (objectives flag to
+the Inbox at day's end). Fork: **durable subjects** (URN + provenance — heavyweight, but
+graph-linkable) vs an **ephemeral per-day planning record** the UI reads (not a first-class
+subject). Leaning ephemeral for objectives, with Primary focus possibly a thin persistent
+pointer. DASHBOARD-1 / TODAY-1 / TODAY-2 / REVIEW-* all inherit this, so their Ontology-fit
+is deferred until it's decided.
+
+### Method for the Habit ↔ Commitment discrepancy
+
+"Habit" (UI concept) and "Commitment" (storage type) are deliberately decoupled — Chris
+never reasons in storage terms. Chris specifies the Habit UI fully; Claude owns whether/how
+it lands on Commitment. Data mechanics are verified-compatible (D2); the open strain is
+partial-credit + framing. If richer UI outgrows Commitment, evolve carefully (Habit as a
+Commitment specialization, or its own type sharing the recurrence+adherence machinery) —
+the pilot's purpose is to evolve the ontology to fit real workflows, not force-fit them.
+
+---
+
 ## Kernel build backlog
 
 The roll-up of every `needs-kernel` delta above — the authoritative feeder for ontology
 work. One line per item; details live in the requirement.
 
 - **Triage marker primitive** (INBOX-1) — a flag that asserts inbox membership + a `Drop`
-  outcome + a `v_inbox` projection (flagged AND not resolved). Makes membership explicit
-  and source-agnostic.
-- **Capture flavor** (CAP-1, if option B) — an optional flavor/tag on `bsk capture`
-  threaded through to the artifact, so a quick "Idea" is a first-class capture without the
-  `bsk ideas` brainstorm ritual.
+  outcome + a `v_inbox` projection (flagged AND not resolved). Source-agnostic membership.
+- **Tag primitive** (GEN-1) — a tag store separate from relations + a `bsk tag` verb + a
+  live "tag universe" reader; reconcile with the existing reserved `focus` attribute.
+- **Area subject type** (GEN-2 / D1) — a new `Area` type + master-list reader +
+  `attributes.area` on items; decide whether it unifies with the existing `focus` axis.
+- **Capture / reference flavor model** (D4) — a flavor field on the `note`-family capture
+  covering note / idea / problem / document / url / reference (folds in old CAP-1 B).
+- **Managed binary artifact storage** (CAP-2 / CAP-4 / JOURNAL-2) — blob/file storage for
+  audio, attachments, and inline media; today's artifact table holds text only.
+- **`voice` write path** (CAP-2) — a `bsk` verb that writes `voice` events (closes one of
+  the 4 unreachable event kinds).
+- **Partial-credit adherence** (D2 / GEN-3) — a third state (**fixed half-credit**) beyond
+  `evidences`/`violates`, gated per-habit by `allows_partial`.
+- **Habit occurrence + streak projection** (GEN-3) — a projection over cadence + adherence
+  events; present misses as a gentle streak break, excluded from the breach report.
+- *(pending derivation, D5)* **Recurring-commitment engine** — the shared missable /
+  backfillable / per-period-satisfaction primitive behind Reviews, Inbox Zero, and Habits.
 
 *(Prior mapping gaps already closed: the `concerns` write path — shipped as `bsk relate`.)*
