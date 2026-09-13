@@ -161,6 +161,69 @@ Build:      mapped
   storage, this is the line to check it against.
 
 
+### NAV-1 — The Pilot uses persistent top-tab navigation and opens on Dashboard
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- Use a persistent top tab strip as the primary navigation model for the WinForms Pilot.
+- The initial top-level destinations are **Dashboard**, **Inbox**, **Browse**, **Vision**,
+  **Reviews**, **People / Agents**, and **Areas**.
+- Also provide dedicated navigation destinations for **Goals**, **Projects**, **Tasks**, and
+  **Habits**. These may participate in the same top-tab navigation while the Pilot reveals
+  whether grouping is needed to keep the strip manageable.
+- Use this provisional common-work-first order: **Dashboard**, **Inbox**, **Tasks**,
+  **Projects**, **Goals**, **Habits**, **Reviews**, **Vision**, **Browse**, **Areas**, and
+  **People / Agents**. The order may be refined through Pilot use.
+- When the available width is insufficient, wrap the tabs onto additional rows while
+  preserving their left-to-right sequence. Do not replace them with horizontal scrolling or
+  an overflow menu in the Pilot.
+- Goals, Projects, Tasks, and Habits should also be available as preset Browse filters. The
+  dedicated destinations and Browse presets are two ways to reach the same underlying
+  objects, not separate copies or separate management workflows.
+- Keep the top tabs visible while navigating and show one primary destination in the main
+  content region at a time.
+- Each dedicated tab should remember its own active filters, sorting, and selected item when
+  I switch away and return. Persist that view state across application restarts.
+- Open on Dashboard every time LifeOS starts. Do not restore the last-opened destination in
+  place of Dashboard.
+- Opening an item from Dashboard, a dedicated destination, Vision, or another summary should
+  take me to its normal detail view and preserve a clear path back to the source context.
+- Global and contextual object-creation forms should open as modal dialogs over the current
+  main screen. Save or Cancel closes the dialog and returns me to the invoking screen.
+- Ordinary browsing, read-only detail, and explicit editing should remain within the main
+  application window following BROWSE-2 rather than opening a new window for every item.
+- If I switch tabs while the current screen has unsaved edits, prompt me to **Save**,
+  **Discard**, or **Stay**. Save should complete validation before navigation; a failed save
+  or Stay should leave me on the current editor with my values preserved.
+- Do not add Back or Forward navigation-history buttons to either WinForms phase. That
+  behavior belongs to Production under NAV-2.
+- The independent quick-capture and voice-capture windows are exceptions governed by CAP-1
+  and CAP-2; they must retain their previously defined system-wide behavior.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### NAV-2 — Production supports Back and Forward navigation history
+Horizon:    Production
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- Production should provide Back and Forward controls for moving through recently viewed
+  screens and objects.
+- Navigation history should restore the prior destination and enough view context to remain
+  useful, including the selected item and applicable filters or scroll position.
+- Moving Back or Forward must not create duplicate objects, repeat commands, or silently
+  discard unsaved edits.
+- This is a Production goal and is not required in the Pilot or Pilot phase 2 WinForms UI.
+
+**Ontology fit (Claude):**
+- pending
+
+
 ### DASHBOARD-1 — The opening screen is a daily prioritization command center
 Horizon:    Pilot
 Definition: active
@@ -197,8 +260,8 @@ Build:      unmapped
 - Due and overdue Tasks or Commitments should appear in their own clearly labeled section,
   separate from next actions associated with my current focus. Both sections deserve strong
   visual emphasis; one must not hide the other.
-- Open decision: whether the Dashboard is always the default opening view or the app
-  remembers the last-opened screen.
+- Dashboard is always the default opening view, following NAV-1. The app should not replace
+  it with the last-opened screen on startup.
 
 **Ontology fit (Claude):**
 - pending
@@ -319,6 +382,9 @@ Build:      mapped
 - Apply filter changes immediately as I make them; do not require a separate Apply action.
 - Remember the active Browse filters when I leave and return, and restore them after LifeOS
   restarts.
+- Global object creation follows GEN-6. After creation, show and select the new object in
+  Browse only when it matches the active filters; otherwise preserve the filtered results
+  and confirm creation without changing the filters.
 - Treat the initial columns, filters, and sorting choices as a starting point that can be
   refined iteratively during Pilot use.
 - Selecting an item should show it in read-only mode first. Editing must be an explicit
@@ -388,10 +454,28 @@ Definition: active
 Build:      needs-kernel
 
 **Workflow (Chris):**
-- This will be GTD style Area of focus (or just "Areas").  So "Trading", "Family", "Dev Career" are normal values
-- The UI should allow the user to maintain a master "Areas" list
-- Support for multiple areas of focus for an item is a "nice to have", but not at all a requirement.
-- I may decide later to add additional types to include "areas", but goals, tasks, and projects should be the minimum bar.
+- Use the short user-facing term **Area**. An Area may represent either an ongoing domain of
+  my life or an enduring responsibility; examples include Trading, Family, Health, and Dev
+  Career.
+- The UI should provide a master Areas list.
+- The Area creation and edit form should include **Name**, **Description**, and **Notes**.
+  Name is required; Description and Notes are optional.
+- Color and icon fields are not required for the Pilot.
+- Areas are permanent. Do not provide Archive or Delete actions for them.
+- Do not add a separate prominence or emphasis field in the Pilot. An Area may naturally
+  become less prominent when it is not my Primary focus and has less prominent active work;
+  this does not change the Area itself.
+- Pilot only needs zero-or-one Area per item. Multiple Areas on one item may be considered
+  later but are not required.
+- Goals, Projects, and Tasks must support an optional Area property at minimum.
+- Identity Statements and Habits should also be visible from an Area detail screen when they
+  are associated with that Area.
+- The Area detail screen should show its related Identity Statements, Goals, Projects, Tasks,
+  and Habits in clearly separated groups, with each item opening its normal detail view.
+- Creating a Goal, Project, Task, Identity Statement, or Habit from an Area detail screen
+  should prepopulate that Area when the selected object type supports it.
+- Area editing should follow BROWSE-2: read-only detail first, explicit Edit, and explicit
+  Save or Cancel.
 
 **Ontology fit (Claude):**
 - Maps to (D1): **Area = a new durable subject type.** The master "Areas" list is
@@ -532,6 +616,523 @@ Build:      mapped
   edge on adherence events.
 
 
+### GEN-6 — Object creation is globally available and uses type-specific forms
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- Provide a global **New** action from the main LifeOS application shell so I can create an
+  object from any primary screen. Creation must not be limited to Browse.
+- A keyboard shortcut for global **New** is not important for the Pilot.
+- Activating **New** should first ask me to select the object type.
+- Global **New** should create subjects of every supported subject type. Notes, Ideas, and
+  other event-style entries should continue through the Capture workflow rather than being
+  mixed into this object-creation flow.
+- Problems are available through both paths: Capture provides minimal title-first intake,
+  while global **New** opens the full Problem form defined by GEN-14.
+- Because the supported type vocabulary is small, a simple visible type list is sufficient
+  for the Pilot. Search, recent types, and favorites are not required.
+- After I select a type, show a creation form designed for that type rather than one generic
+  form containing every possible field.
+- If I change the selected type before saving, update the form without an additional warning.
+  Preserve values that remain applicable and discard values belonging only to the prior type.
+- Require only the fields that are mandatory for the selected type. Other applicable fields
+  should remain optional.
+- Allow Tags and Relationships to be assigned during creation.
+- Tags and Relationships must also remain editable after creation; choosing not to assign
+  them initially must not limit the object later.
+- Keep Tags and Relationships visually and conceptually separate according to GEN-1.
+- Provide explicit Save and Cancel actions. Saving creates the object; cancelling returns me
+  to the screen where I invoked **New** without creating anything.
+- When creation is invoked from Browse, preserve the active filters. The new object should
+  appear in the item list only when it matches those filters; do not clear or relax filters
+  merely to reveal it.
+- If the new object matches the active Browse filters, refresh the list and select it. If it
+  does not match, leave the filtered list unchanged and provide clear confirmation that the
+  object was created successfully.
+- Parent-first child creation follows GEN-7 and should be the preferred path when I am
+  creating work beneath an existing object.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-7 — Create a child from its parent and relate it automatically
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- A common creation workflow begins from an existing parent object: I create the parent,
+  open it, and then create a child object from that context.
+- The dominant Pilot hierarchy is **Value -> Goal -> Project -> Task**.
+- A Task may also be created directly beneath a Goal when a Project would add unnecessary
+  structure. These combinations cover the vast majority of initial parent-first creation.
+- The parent detail view should provide an obvious **New child** or equivalent action from
+  the area where related children are displayed.
+- Starting creation from a parent should retain that parent context while I select the child
+  type and complete the type-specific form from GEN-6.
+- Limit the child-type chooser to types that are valid beneath the selected parent. Do not
+  show every subject type in this contextual creation flow.
+- Show the pending parent relationship clearly in the child form so I understand where the
+  new object will be connected.
+- Saving the child should create the child and automatically relate it to the parent. I
+  should not have to reopen the new child and add the relationship manually.
+- The initiating parent should be the child's only parent by default. I may add other parent
+  relationships later through the normal Relationships UI.
+- The UI should infer the appropriate parent/child relationship from the selected parent and
+  child types when the relationship is unambiguous.
+- If more than one relationship meaning is valid, ask me to choose the relationship as part
+  of creation rather than silently selecting an arbitrary one.
+- Cancelling child creation should return me to the unchanged parent detail view.
+- Group related children by type on the parent detail screen so Goals, Projects, and Tasks
+  remain easy to distinguish.
+- After saving, keep focus on the parent, refresh its related-child section, and show the new
+  child in the appropriate type group. Do not navigate automatically to the child.
+- Other active Browse filters should remain authoritative and should not be cleared.
+- If the child cannot be related successfully, do not present the workflow as successfully
+  completed; preserve the entered child data so I can retry or cancel.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-8 — Goals use a type-specific form and must be developed before activation
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- The Goal creation and edit form should include **Title**, **Desired end state**,
+  **Target date**, **Area**, **Status**, **Description**, and **Motivation**.
+- Title is required. Other fields may remain incomplete while the Goal is still being
+  developed, subject to the activation rules below.
+- For now, every Goal should connect to at least one Value / identity statement. The Value
+  relationship is a provisional rule that may be reconsidered after Pilot use.
+- When a Goal is created as a child of a Value through GEN-7, prepopulate that Value
+  relationship automatically.
+- A target date is optional while a Goal is still inactive or being developed.
+- A Goal cannot become **Active** without a target date. If I attempt to activate it without
+  one, keep the form open, explain what is missing, and move focus to the Target date field.
+- Do not add a Goal progress percentage, progress bar, or calculated completion score in the
+  Pilot. The KISS principle is more important than an imprecise progress metric.
+- The Goal detail view should show its related Values, child Projects, and any Tasks created
+  directly beneath it, using the grouped parent/child behavior in GEN-7.
+- Completing or abandoning a Goal should be an explicit Status change.
+- When changing a Goal to a completed or abandoned status, allow optional notes but do not
+  require a formal outcome or reflection before saving.
+- Goal editing should follow BROWSE-2: read-only detail first, explicit Edit, and explicit
+  Save or Cancel.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-9 — Projects use a type-specific form and may stand alone
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- The Project creation and edit form should include **Title**, **Description / scope**,
+  **Start date**, **Target / due date**, **Area**, **Status**, and **Notes**.
+- Do not include a separate Desired outcome field in the Pilot Project form.
+- Title is required. Start date, Target / due date, Area, Description / scope, and Notes
+  may remain empty unless a later workflow introduces a specific reason to require them.
+- A Project may be created as a child of a Goal through GEN-7, but it may also exist as a
+  standalone Project without a parent Goal.
+- When a Project is created from a Goal, prepopulate that Goal relationship automatically.
+  Do not require the user to reselect the initiating Goal.
+- A Project does not need to have a next Task before it can become Active. The UI may call
+  attention to an Active Project that has no next action, but it must not prevent activation
+  or saving.
+- A Target / due date is optional for both developing and Active Projects.
+- The Project detail view should show any parent Goals and its child Tasks using the grouped
+  parent/child behavior in GEN-7. A standalone Project should remain fully usable when the
+  parent-Goal group is empty.
+- Completing or abandoning a Project should be an explicit Status change.
+- When changing a Project to a completed or abandoned status, allow optional notes but do
+  not require a formal outcome or reflection before saving.
+- Project editing should follow BROWSE-2: read-only detail first, explicit Edit, and explicit
+  Save or Cancel.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-10 — Tasks support title-only quick entry and optional planning detail
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- The Task creation and edit form should include **Title**, **Description / Notes**,
+  **Status**, **Due date**, **Scheduled / Do date**, **Area**, **Priority**,
+  **Estimated duration**, and **Relationships**, subject to the simplified Priority behavior
+  below.
+- Task creation must be extremely fast for the common case. Open with the Title field
+  focused so I can type only a title and press Enter to create the Task immediately.
+- Title is the only required field. Every other Task field may remain empty.
+- The title-only path should not force me through the remaining fields, a second confirmation,
+  or a separate Save action.
+- After a title-only Task is created successfully, close the entry form and return me to the
+  context from which I opened it. Do not keep the form open for another Task.
+- Keep the full set of optional fields available in the same creation workflow so I can add
+  planning detail before saving when needed.
+- A Task may be created as a child of a Project or directly beneath a Goal through GEN-7,
+  but it may also exist as a standalone Task without either parent.
+- Global Task entry should create a standalone Task by default and must not guess or reuse a
+  Goal or Project relationship from a prior creation.
+- When Task entry is launched from a contextual Goal, Project, or other object screen, link
+  the Task to that initiating object automatically when that relationship is valid. Show the
+  pending relationship in the form, but do not require me to reselect the object.
+- **Due date** and **Scheduled / Do date** are separate fields and must remain independently
+  editable. Entering one must not silently populate or replace the other.
+- Due date represents a genuine deadline. Scheduled / Do date represents when I intend to
+  work on the Task; scheduling it does not create or imply a deadline.
+- Do not ask me to choose a Priority during Pilot Task creation. Assign **Medium** by default
+  so quick entry remains simple. The manual Priority choices may be reconsidered later.
+- The initial Task statuses are **Not started**, **In progress**, **Waiting**,
+  **Completed**, and **Cancelled**.
+- New Tasks default to **Not started** unless their creation context explicitly supplies a
+  different status.
+- Completing or cancelling a Task should be an explicit Status change.
+- When changing a Task to Completed or Cancelled, allow optional notes but do not require a
+  note or an additional completion dialog.
+- Open decision: whether selecting **Waiting** should offer a Person or AI agent and a
+  follow-up date, and whether either field should be required.
+- Task editing should follow BROWSE-2: read-only detail first, explicit Edit, and explicit
+  Save or Cancel.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### TASKS-1 — The Tasks tab optimizes daily execution and quick entry
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- Provide the dedicated **Tasks** destination defined by NAV-1 as a focused working view,
+  not merely a generic list with a Task filter applied visibly.
+- Group the default active view into **Overdue**, **Today**, **Upcoming**, and
+  **Unscheduled** sections.
+- Overdue contains incomplete Tasks whose Due date is before today.
+- Today contains incomplete Tasks whose Due date or Scheduled / Do date is today, unless
+  they already appear in Overdue.
+- Upcoming contains incomplete Tasks with a future Due date or Scheduled / Do date.
+- Unscheduled contains incomplete Tasks with neither date.
+- Show each Task only once in the first applicable group, using the group order above as
+  precedence. Completed and Cancelled Tasks are hidden from the default active view but
+  remain available through Status filters.
+- Provide an always-visible title-only quick-entry row at the top of the Tasks tab. Focused
+  entry should allow me to type a Title and press Enter to create a standalone Task with the
+  defaults from GEN-10.
+- After successful inline creation, clear the entry row and leave it ready for another Task.
+  This is intentionally different from the modal quick-entry form, which closes after save.
+- Provide an obvious way to expand the inline entry into the full Task form before saving
+  when I want to enter optional planning detail.
+- If inline creation fails, preserve the typed Title in place and show an actionable error
+  without creating a duplicate Task.
+- Provide direct list actions to mark a Task **Completed** or **In progress** without opening
+  its editor. Apply the change immediately and preserve it in Task history.
+- Include filters for **Status**, **Due date**, **Scheduled / Do date**, **Area**,
+  **Goal / Project**, and **Tags**. Apply changes immediately and remember this tab's filter
+  state following NAV-1.
+- Selecting a Task should show its read-only detail, with explicit Edit and Save / Cancel
+  behavior following BROWSE-2.
+- Multi-select and bulk actions are not required for Pilot. They may be reconsidered for a
+  later phase after single-item workflows have been validated.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-11 — Identity Statements are timeless rather than status-driven work
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- Use **Identity Statement** as the user-facing term throughout the UI. This is the concept
+  represented as a Value in the ontology and in older requirements.
+- An Identity Statement expresses a property of who I am, not an outcome I am trying to
+  complete.
+- An example is: **I'm the type of person who treats others how I would like to be treated
+  myself.** The UI should present Identity Statements as first-person declarations rather
+  than as Tasks, aspirations, or performance measures.
+- The Identity Statement creation and edit form should include **Title**,
+  **Statement / description**,
+  **Why it matters**, **Area**, and **Notes**. Title is required; the other fields are
+  optional.
+- Do not give Identity Statements a Status field or workflow states. An identity is not Active,
+  In progress, Completed, or otherwise status-driven; it simply is.
+- Do not give Identity Statements target dates, due dates, scheduled dates, or other
+  lifecycle dates. They are intended to be timeless and potentially eternal.
+- Do not add adherence, compliance, or divergence state to an Identity Statement. Times when
+  my behavior diverges from it should be reflected in Journals, reviews, or other activity
+  records without changing what the Identity Statement is.
+- Area is an optional property. An Identity Statement may describe who I am across my whole
+  life without being forced into one Area.
+- If an Identity Statement no longer represents me, I may archive it or delete it rather
+  than changing a status.
+- Archiving is reversible. Archived Identity Statements should be hidden from normal views
+  but available through an explicit Archived filter, where I can restore them.
+- Permanent deletion should require confirmation before the Identity Statement is removed.
+- Sort Identity Statements alphabetically by Title in the Pilot. Manual ordering is not
+  required in the general Identity Statement list; the composed Vision view has its own
+  manual ordering under GEN-16.
+- The Identity Statement detail view should prominently show all Goals connected to and
+  supported by it, using the grouped parent/child behavior in GEN-7.
+- Creating a Goal from an Identity Statement should use GEN-7 and automatically prepopulate
+  the initiating relationship.
+- Identity Statement editing should follow BROWSE-2: read-only detail first, explicit Edit,
+  and explicit Save or Cancel.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-12 — Commitments support promises to myself and others
+Horizon:    Pilot
+Definition: drafting
+Build:      unmapped
+
+**Workflow (Chris):**
+- This is an intentionally provisional first pass. Commitments are currently the object type
+  I am least confident about in the LifeOS architecture, so the Pilot should keep this UI
+  simple and easy to revise through use.
+- A Commitment may represent a promise to myself or a promise involving another person or
+  an AI agent.
+- The Commitment creation and edit form should initially include **Title**,
+  **Description / Notes**, **Person or AI agent**, **Due date**, **Recurrence**, **Area**,
+  and **Status**.
+- Title is required. The other fields are optional unless a particular recurring workflow
+  later establishes a stronger rule.
+- Use the same form for one-time and recurring Commitments. Selecting a recurrence should
+  reveal only the additional recurrence controls that are needed; it should not switch to a
+  different object-creation workflow.
+- The provisional Commitment statuses are **Open**, **Fulfilled**, **Missed**, and
+  **Cancelled**.
+- New Commitments default to Open.
+- Fulfilling, missing, or cancelling a Commitment should be an explicit Status change.
+- When marking a Commitment Missed, allow me to record an optional reason. A missed
+  Commitment must remain correctable when it was fulfilled but recorded late or incorrectly.
+- Person or AI agent should use the same selector and should not treat virtual AI agents as
+  free-text notes or second-class assignees.
+- Commitment editing should follow BROWSE-2: read-only detail first, explicit Edit, and
+  explicit Save or Cancel.
+- Open decision: the durable distinction between a Commitment and a Task, and which user
+  actions should create one versus the other, remains to be refined through Pilot use.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-13 — Decisions record conclusions already made and remain editable with history
+Horizon:    Pilot
+Definition: drafting
+Build:      unmapped
+
+**Workflow (Chris):**
+- A Decision represents a decision that has already been made. It is not primarily a
+  workspace for comparing options or tracking a question that still needs an answer.
+- The Decision creation and edit form should include **Title**, **Description**,
+  **Decision date**, **Area**, **Status**, and **Relationships**.
+- Title is required. The remaining fields should be easy to add without making the initial
+  form cumbersome.
+- Decision date is optional and should not default automatically to today or another date.
+- The Decision statuses are **Open**, **Implementing**, **Cancelled**, and **Closed**.
+- Open means the decision has been made but implementation has not started.
+- Implementing means the actions that carry out the decision are underway.
+- Closed means implementation is complete or the decision needs no further attention.
+- Cancelled means the decision was reversed or I chose not to carry it out.
+- Decisions remain editable after creation. Editing must preserve chronological history so
+  I can see what changed and when, following GEN-4.
+- Decisions are contextual and should be easy to relate to the Goals, Projects, Problems,
+  Tasks, or other objects that gave rise to them or are affected by them.
+- When Decision creation is launched from another object's detail screen, show and
+  prepopulate that initiating relationship without requiring me to select the object again.
+- Do not force Decisions into one parent/child direction in the Pilot. It is still unclear
+  whether I will normally create a Decision from a Goal, Project, or Problem; create those
+  objects from a Decision; or use both directions.
+- Allow Relationships to be added both during creation and later editing so the thought
+  workflow can evolve without requiring a rigid creation order.
+- Decision editing should follow BROWSE-2: read-only detail first, explicit Edit, and
+  explicit Save or Cancel.
+- The larger thought workflow around Problems, Decisions, resulting work, and relationship
+  direction remains an open design area that should be refined before this requirement is
+  marked active.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-14 — Problems track unresolved situations that need thought or action
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- A Problem is a durable object representing an unresolved situation or question that needs
+  thought or action.
+- The Problem creation and edit form should include **Title**, **Description**,
+  **Date identified**, **Area**, **Status**, **Impact**, and **Relationships**.
+- Title is required. The remaining fields are optional unless later Problem workflows
+  establish a reason to require them.
+- Date identified should default to the Problem's capture or creation date and remain
+  editable afterward.
+- Impact is a free-text field rather than a fixed Low / Medium / High rating.
+- The Problem statuses are **Open**, **Working**, and **Resolved**.
+- New Problems default to Open. Working means I am actively investigating or addressing the
+  Problem. Resolved means it no longer needs further thought or action.
+- A Problem may be created independently or contextually from another object.
+- From a Problem detail screen, I should be able to create a related Decision, Goal,
+  Project, or Task when that is the appropriate outcome or next step.
+- Creating one of those objects from a Problem should automatically prepopulate the Problem
+  relationship and show it in the new object's form.
+- Creating related work or recording a Decision must not silently mark the Problem Resolved.
+  Resolution remains an explicit Status change because the new object may represent only
+  one part of the response.
+- When changing a Problem to Resolved, allow optional resolution notes but do not require
+  them or show an additional mandatory completion dialog.
+- Problems remain editable after creation, with chronological change history following
+  GEN-4.
+- Problem editing should follow BROWSE-2: read-only detail first, explicit Edit, and
+  explicit Save or Cancel.
+- Problem must be available from global **New**, which opens the full type-specific form.
+- A Problem created through the full global **New** form should also be flagged for Inbox
+  triage. Deliberately entering its details does not bypass the Inbox decision workflow.
+- Selecting Problem in quick capture immediately creates the same durable Problem object
+  with Status Open, Date identified set from the capture date, and its other optional fields
+  initially empty. It is also flagged for Inbox triage.
+- Quick capture and global **New** are two entry paths into the same Problem type, not two
+  different Problem concepts and not a later promotion from one object into another.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-15 — People and AI agents share one filterable directory
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- Humans and virtual AI agents should appear together in one **People / Agents** directory
+  rather than requiring separate navigation or management screens.
+- Provide a clear filter for **All**, **Humans**, and **AI agents**. Filtering should update
+  the list immediately and retain the selected filter when I leave and return.
+- The creation and edit form should include **Name**, **Human / AI type**,
+  **Role or relationship**, **Description**, **Contact / reference information**,
+  **Notes**, **Tags**, and **Relationships**.
+- Name and Human / AI type are required. The other fields are optional.
+- Use type-appropriate labels or hints where helpful, but keep the common form and directory
+  structure consistent between humans and AI agents.
+- People and AI agents should be archived when they are no longer active or relevant. Pilot
+  does not need permanent deletion as the normal removal workflow.
+- Archived records should be hidden from the normal directory and selection controls but
+  available through an Archived filter, where they can be reviewed or restored.
+- A Person or Agent detail screen should group related Commitments, Tasks, Appointments,
+  delegated work, and other related objects so I can understand the context at a glance.
+- Selectors used by Commitments, Appointments, delegation, and Relationships should search
+  the same combined directory and visually distinguish humans from AI agents.
+- In Pilot, AI agents are tracked as records only. LifeOS should not attempt to launch,
+  message, control, or monitor an agent from this UI.
+- AI agents will query LifeOS through their own integration path; the Pilot UI should not
+  imply that LifeOS initiates those interactions.
+- People / Agent editing should follow BROWSE-2: read-only detail first, explicit Edit, and
+  explicit Save or Cancel.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### GEN-16 — Vision is composed from Identity Statements and long-term Goals
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- Vision is not a separate entity, editable document, or object type in LifeOS.
+- Do not offer Vision in global **New** and do not build a Vision creation or edit form.
+- When the UI presents my Vision, compose it from my Identity Statements and long-term
+  Goals. Identity Statements describe who I am; long-term Goals describe the outcomes I am
+  working toward.
+- Treat a Goal as long-term when its Target date is more than two years beyond the current
+  date. Use this as a rolling threshold rather than a hard-coded calendar year.
+- Provide Vision as a top-level navigation destination in the Pilot.
+- A Vision presentation should link each included Identity Statement and Goal to its normal
+  detail view rather than copying it into separately editable Vision content.
+- Changes to Vision happen by editing the underlying Identity Statements and Goals. There is
+  no separate Vision status, lifecycle, save action, or change history.
+- History remains attached to the underlying Identity Statements and Goals so the composed
+  Vision always reflects their current state while preserving their individual histories.
+- Reviews may surface this composed Vision as higher-horizon context, especially during
+  monthly and yearly reflection and planning, without creating a new Vision record.
+- The Pilot may use a simple grouped presentation: **Who I am** for Identity Statements and
+  **Where I am going** for long-term Goals. Additional visual polish belongs to Production.
+- Hide archived Identity Statements and completed, cancelled, or otherwise inactive Goals
+  from the default Vision presentation. Provide an explicit way to include them when I want
+  historical context without mixing them into the normal view.
+- Allow me to arrange the Identity Statements and long-term Goals in my own persistent order
+  within their respective Vision groups. Do not replace my order with alphabetical or
+  target-date sorting.
+- Journal entries should not appear inline in Vision. They remain available through the
+  linked Identity Statement and Goal detail screens.
+
+**Ontology fit (Claude):**
+- pending
+
+
+### CAL-1 — Appointments support manual calendar-style scheduling
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- Pilot Appointments are entered and maintained manually. Synchronization with an external
+  calendar is deferred to a later phase.
+- Use a familiar calendar-style creation and edit form with **Title**, **Date**,
+  **Start time**, **End time**, **All day**, **Location**, **Meeting link**,
+  **People / attendees**, **Recurrence**, **Area**, **Status**, **Notes**, and
+  **Relationships**.
+- Title, date, and the applicable start/end values are required. The other fields are
+  optional.
+- Selecting All day should replace or disable the time controls rather than requiring
+  meaningless start and end times.
+- Start and end values should use the local time zone by default and validate that the end
+  does not precede the start.
+- One-time and recurring Appointments should use the same form. Recurrence controls should
+  appear only when recurrence is enabled.
+- The Appointment statuses are **Scheduled**, **Completed**, **Cancelled**, and **Missed**.
+- New Appointments default to Scheduled.
+- Do not change an Appointment automatically to Missed merely because its end time has
+  passed. I will set Completed, Cancelled, or Missed myself.
+- Status changes remain editable with chronological history following GEN-4.
+- Each occurrence of a recurring Appointment should have its own editable Status so one
+  missed or cancelled occurrence does not rewrite the status of the entire series.
+- Today's Appointments should appear prominently on the Dashboard in chronological order,
+  with their time, title, and current status visible at a glance.
+- Activating an Appointment from the Dashboard should open its normal detail view without
+  requiring me to find it again in Browse.
+- Appointment creation should be available through global **New** and may prepopulate Area
+  or Relationships when invoked from a valid contextual object screen.
+- Dashboard and Browse are sufficient for Pilot Appointment access. Do not build a dedicated
+  day, week, month, or agenda Calendar screen in the Pilot.
+- Appointment-focused views should contain Appointments rather than mixing Scheduled Tasks
+  or dated Commitments into a calendar-style presentation.
+- Do not require reminders in Pilot or Pilot phase 2. Reminder behavior is deferred to a
+  later phase.
+- Appointment editing should follow BROWSE-2: read-only detail first, explicit Edit, and
+  explicit Save or Cancel.
+
+**Ontology fit (Claude):**
+- pending
+
+
 
 ### CAP-1 — I want to be able to quickly capture a note, idea, problem from anywhere in the app
 Horizon:    Pilot
@@ -550,6 +1151,12 @@ Build:      needs-kernel
 - the dialog can have a simply 1 click selector (tabbable also) to choose what type it is. Default: note
 - Note, Idea, and Problem should all use the same simple text box during quick capture. Do
   not introduce type-specific fields into this popup.
+- A captured Problem immediately creates the durable Problem defined by GEN-14 rather than
+  a temporary capture that must later be promoted. Derive its Title from the captured text,
+  preserve the full text as its Description, default Status to Open, and default Date
+  identified to the capture date.
+- The additional Problem fields remain available through its normal detail editor after
+  capture; they must not slow down the quick-capture dialog.
 - All captures default to the inbox. There must be an initial triage (but by design, it can be in the future)
 - Many capture notes are just 1 liners, but the text box should be multi-line just in case, so I can see the entire message as I type.
 - Pressing Enter should submit the capture. I should also be able to Tab to the Submit button
@@ -735,6 +1342,47 @@ Build:      needs-kernel
 - Kernel delta: just the D4 reference flavor; opening in the default browser is app-side.
 - Implications: shares the one capture / reference model; enters the inbox like any capture.
 - Open decisions: a distinct `url` flavor vs a plain note carrying a `url` attribute.
+
+
+### CAP-6 — Ideas remain lightweight until promoted or rejected
+Horizon:    Pilot
+Definition: active
+Build:      unmapped
+
+**Workflow (Chris):**
+- An Idea is a lightweight captured thought, not a durable work object with a large
+  type-specific form or lifecycle.
+- Quick capture should create an Idea with the complete original text, a display Title
+  derived from that text, its capture timestamp, and Status New.
+- New Ideas enter the Inbox and remain available until I explicitly decide what to do with
+  them. Age alone must not close, delete, or promote an Idea.
+- The Idea statuses are **New**, **Promoted**, and **Rejected**.
+- New means I have not yet converted the Idea into a durable, actionable, or otherwise
+  trackable object.
+- Promoted means I converted it into a Goal, Project, Task, Problem, Decision, or another
+  supported trackable object.
+- Rejected means I decided against the Idea. Rejection should preserve the Idea and its
+  history while hiding it from normal active views; it is the Idea's archival outcome, not
+  permanent deletion.
+- Provide explicit Promote and Reject actions during Inbox triage and from the Idea's detail
+  view.
+- Promote should ask me for the destination object type, open that type's normal creation
+  form with applicable Idea content prepopulated, and allow me to review or edit it before
+  saving.
+- A successful promotion should automatically relate the resulting object to the source
+  Idea, set the Idea to Promoted, and resolve its Inbox triage state.
+- If creation or relationship saving fails, keep the Idea New and in the Inbox, preserve my
+  entered values, and do not report the promotion as successful.
+- Reject should set the Idea to Rejected and resolve its Inbox triage state without deleting
+  the captured content.
+- Editing, tagging, or relating a New Idea without using Promote or Reject must not remove it
+  from the Inbox, following INBOX-4.
+- Global **New** does not need a separate full Idea form; Capture is the Pilot entry path for
+  Ideas.
+- Idea content and status remain editable with chronological change history following GEN-4.
+
+**Ontology fit (Claude):**
+- pending
 
 
 ### JOURNAL-1 — Support append-only plain-text journals on subjects
