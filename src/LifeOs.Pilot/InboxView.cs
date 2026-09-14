@@ -5,10 +5,12 @@ using LifeOs.Pilot.Reader;
 namespace LifeOs.Pilot;
 
 /// <summary>
-/// Inbox — the clarify step. Lists untriaged captures (notes/journals not yet promoted
-/// or related) and lets you act on each: promote it into a tracked subject, or relate
-/// it to the subject it concerns. Acting on a capture removes it from the list. Reads
-/// go through <see cref="SubjectReader"/>; writes shell out to <see cref="BskCli"/>.
+/// Inbox — the clarify step. Lists items flagged for triage (INBOX-1's <c>v_inbox</c>:
+/// captured notes plus Ideas/Problems flagged on creation) and resolves each with a
+/// GTD decision: Promote it into tracked work, Relate a capture to the subject it
+/// concerns, File it as reference, or Drop it. Tagging/relating alone do not resolve
+/// (INBOX-4) — only Promote / File / Drop take an item out of the Inbox. Reads go
+/// through <see cref="SubjectReader"/>; writes shell out to <see cref="BskCli"/>.
 /// </summary>
 public sealed class InboxView : UserControl
 {
@@ -23,8 +25,10 @@ public sealed class InboxView : UserControl
     private readonly Button _refreshButton = new() { Text = "Refresh", AutoSize = true };
     private readonly Button _promoteButton = new() { Text = "Promote…", AutoSize = true, Enabled = false };
     private readonly Button _relateButton = new() { Text = "Relate to…", AutoSize = true, Enabled = false };
+    private readonly Button _fileButton = new() { Text = "File", AutoSize = true, Enabled = false };
+    private readonly Button _dropButton = new() { Text = "Drop…", AutoSize = true, Enabled = false };
 
-    private Guid _currentCaptureId;
+    private InboxItem? _current;
 
     public InboxView(SubjectReader reader, BskCli? bsk)
     {
@@ -39,9 +43,11 @@ public sealed class InboxView : UserControl
         _content.Font = new Font(FontFamily.GenericMonospace, 9.5f);
 
         _newButton.Click += (_, _) => DoNewNote();
-        _refreshButton.Click += (_, _) => LoadCaptures();
+        _refreshButton.Click += (_, _) => LoadInbox();
         _promoteButton.Click += (_, _) => DoPromote();
         _relateButton.Click += (_, _) => DoRelate();
+        _fileButton.Click += (_, _) => DoResolve("file", "File");
+        _dropButton.Click += (_, _) => DoDrop();
 
         _status.AutoSize = true;
         _status.Padding = new Padding(10, 8, 0, 0);
@@ -57,6 +63,8 @@ public sealed class InboxView : UserControl
         };
         actions.Controls.Add(_promoteButton);
         actions.Controls.Add(_relateButton);
+        actions.Controls.Add(_fileButton);
+        actions.Controls.Add(_dropButton);
 
         var right = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(6) };
         right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -89,7 +97,7 @@ public sealed class InboxView : UserControl
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
         _grid.BorderStyle = BorderStyle.None;
-        _grid.SelectionChanged += OnCaptureSelected;
+        _grid.SelectionChanged += OnItemSelected;
     }
 
     protected override void OnLoad(EventArgs e)
@@ -104,27 +112,27 @@ public sealed class InboxView : UserControl
             // Window too small to honour the preferred split; leave the default.
         }
 
-        LoadCaptures();
+        LoadInbox();
     }
 
-    /// <summary>Re-reads the untriaged captures — called when the Inbox tab is shown.</summary>
-    public void Reload() => LoadCaptures();
+    /// <summary>Re-reads the inbox — called when the Inbox tab is shown.</summary>
+    public void Reload() => LoadInbox();
 
-    private void LoadCaptures()
+    private void LoadInbox()
     {
         try
         {
-            var captures = _reader.GetUnprocessedCaptures().ToList();
-            _grid.DataSource = captures;
+            var items = _reader.GetInbox().ToList();
+            _grid.DataSource = items;
             ConfigureColumns();
-            if (captures.Count == 0)
+            if (items.Count == 0)
             {
                 ClearSelection();
             }
 
             _status.Text = _bsk is null
-                ? $"{captures.Count} unprocessed · read-only (bsk.exe not found)"
-                : $"{captures.Count} unprocessed capture(s)";
+                ? $"{items.Count} to triage · read-only (bsk.exe not found)"
+                : items.Count == 0 ? "Inbox Zero ✓" : $"{items.Count} item(s) to triage";
         }
         catch (Exception ex)
         {
@@ -139,17 +147,15 @@ public sealed class InboxView : UserControl
             return;
         }
 
-        foreach (var hidden in new[] { "Id", "Content" })
+        // Show only Kind / When / Preview; hide every other bound + computed property.
+        foreach (DataGridViewColumn column in _grid.Columns)
         {
-            if (_grid.Columns.Contains(hidden))
-            {
-                _grid.Columns[hidden]!.Visible = false;
-            }
+            column.Visible = false;
         }
 
-        SetColumn("Kind", 72, 0);
-        SetColumn("OccurredAt", 130, 1, "When");
-        SetColumn("Preview", 380, 2);
+        SetColumn("Kind", 84, 0);
+        SetColumn("TriagedAt", 130, 1, "When");
+        SetColumn("Preview", 360, 2);
     }
 
     private void SetColumn(string name, int width, int displayIndex, string? header = null)
@@ -160,6 +166,7 @@ public sealed class InboxView : UserControl
         }
 
         var column = _grid.Columns[name]!;
+        column.Visible = true;
         column.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
         column.Width = width;
         column.DisplayIndex = displayIndex;
@@ -169,23 +176,28 @@ public sealed class InboxView : UserControl
         }
     }
 
-    private void OnCaptureSelected(object? sender, EventArgs e)
+    private void OnItemSelected(object? sender, EventArgs e)
     {
-        if (_grid.CurrentRow?.DataBoundItem is CaptureItem item)
+        if (_grid.CurrentRow?.DataBoundItem is InboxItem item)
         {
-            _currentCaptureId = item.Id;
-            _content.Text = item.Content ?? "";
-            _promoteButton.Enabled = _bsk is not null;
-            _relateButton.Enabled = _bsk is not null;
+            _current = item;
+            _content.Text = item.Content;
+            var canWrite = _bsk is not null;
+            _promoteButton.Enabled = canWrite;
+            _relateButton.Enabled = canWrite && item.IsEvent; // relate a capture to a subject
+            _fileButton.Enabled = canWrite;
+            _dropButton.Enabled = canWrite;
         }
     }
 
     private void ClearSelection()
     {
-        _currentCaptureId = Guid.Empty;
+        _current = null;
         _content.Clear();
         _promoteButton.Enabled = false;
         _relateButton.Enabled = false;
+        _fileButton.Enabled = false;
+        _dropButton.Enabled = false;
     }
 
     private void DoNewNote()
@@ -202,20 +214,12 @@ public sealed class InboxView : UserControl
             return;
         }
 
-        try
-        {
-            _bsk.Run("capture", text);
-            LoadCaptures();
-        }
-        catch (BskException ex)
-        {
-            ShowError("Capture failed", ex);
-        }
+        Write("Capture failed", () => _bsk.Run("capture", text));
     }
 
     private void DoPromote()
     {
-        if (_bsk is null || _currentCaptureId == Guid.Empty)
+        if (_bsk is null || _current is null)
         {
             return;
         }
@@ -226,20 +230,15 @@ public sealed class InboxView : UserControl
             return;
         }
 
-        try
-        {
-            _bsk.Run("promote", _currentCaptureId.ToString(), dialog.SubjectType, dialog.TitleText);
-            LoadCaptures();
-        }
-        catch (BskException ex)
-        {
-            ShowError("Promote failed", ex);
-        }
+        // `bsk promote` dispatches on the source: an event id promotes the capture into
+        // a subject; a subject ref (an Idea) promotes it into new work. Either resolves
+        // the item out of the inbox.
+        Write("Promote failed", () => _bsk.Run("promote", _current.Ref, dialog.SubjectType, dialog.TitleText));
     }
 
     private void DoRelate()
     {
-        if (_bsk is null || _currentCaptureId == Guid.Empty)
+        if (_bsk is null || _current is null || !_current.IsEvent)
         {
             return;
         }
@@ -251,14 +250,50 @@ public sealed class InboxView : UserControl
             return;
         }
 
+        // Relating organizes but does NOT resolve (INBOX-4): file/drop still needed.
+        Write("Relate failed", () => _bsk.Run("relate", _current.ItemId.ToString(), target));
+    }
+
+    private void DoResolve(string verb, string caption)
+    {
+        if (_bsk is null || _current is null)
+        {
+            return;
+        }
+
+        Write($"{caption} failed", () => _bsk.Run(verb, _current.Ref));
+    }
+
+    private void DoDrop()
+    {
+        if (_bsk is null || _current is null)
+        {
+            return;
+        }
+
+        // Drop requires confirmation (INBOX-4) — it is a deliberate "this is nothing".
+        var confirm = MessageBox.Show(
+            this, "Drop this item out of the Inbox? It is kept in history but marked resolved.",
+            "Confirm Drop", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+        if (confirm != DialogResult.OK)
+        {
+            return;
+        }
+
+        Write("Drop failed", () => _bsk.Run("drop", _current.Ref));
+    }
+
+    // Runs a write, refreshes the list on success, and surfaces a clean error otherwise.
+    private void Write(string caption, Action write)
+    {
         try
         {
-            _bsk.Run("relate", _currentCaptureId.ToString(), target);
-            LoadCaptures();
+            write();
+            LoadInbox();
         }
         catch (BskException ex)
         {
-            ShowError("Relate failed", ex);
+            ShowError(caption, ex);
         }
     }
 

@@ -104,21 +104,20 @@ public sealed class SubjectReader(string connectionString)
     }
 
     /// <summary>
-    /// Untriaged captures: note/journal events that no subject was promoted from and
-    /// that are not yet related to any subject. This is the Inbox's worklist.
+    /// The Inbox worklist: items flagged for triage and not yet resolved
+    /// (<c>bsk.v_inbox</c>, INBOX-1). Membership is asserted, not inferred — covers
+    /// captured notes and Ideas/Problems flagged on creation. Newest first.
     /// </summary>
-    public IReadOnlyList<CaptureItem> GetUnprocessedCaptures()
+    public IReadOnlyList<InboxItem> GetInbox()
     {
         using var db = Open();
-        return db.Query<CaptureItem>(
+        return db.Query<InboxItem>(
             """
-            SELECT e.id, e.kind, e.occurred_at, a.content
-            FROM bsk.event e
-            LEFT JOIN bsk.artifact a ON a.id = e.artifact_id
-            WHERE e.kind IN ('note', 'journal')
-              AND NOT EXISTS (SELECT 1 FROM bsk.subject s WHERE s.origin_event_id = e.id)
-              AND NOT EXISTS (SELECT 1 FROM bsk.subject_event se WHERE se.event_id = e.id)
-            ORDER BY e.occurred_at DESC
+            SELECT item_id, item_kind, triaged_at,
+                   subject_urn, subject_type, subject_title,
+                   event_kind, event_content
+            FROM bsk.v_inbox
+            ORDER BY triaged_at DESC
             """).AsList();
     }
 

@@ -61,22 +61,40 @@ public sealed class StatusHistoryEntry
 }
 
 /// <summary>
-/// An untriaged capture (a note or journal) — one that has not been promoted into a
-/// subject and is not yet related to one. The Inbox works this list down.
+/// One flagged item awaiting triage, from <c>bsk.v_inbox</c> (INBOX-1): membership is
+/// asserted by a triage flag, not inferred. An item is either an event (a raw capture)
+/// or a subject (an Idea/Problem flagged on creation). The Inbox works this list down
+/// with a GTD resolution (Promote / Relate / File / Drop).
 /// </summary>
-public sealed class CaptureItem
+public sealed class InboxItem
 {
-    public Guid Id { get; set; }
-    public string Kind { get; set; } = "";
-    public DateTime OccurredAt { get; set; }
-    public string? Content { get; set; }
+    public Guid ItemId { get; set; }
+    public string ItemKind { get; set; } = "";
+    public DateTime TriagedAt { get; set; }
+    public string? SubjectUrn { get; set; }
+    public string? SubjectType { get; set; }
+    public string? SubjectTitle { get; set; }
+    public string? EventKind { get; set; }
+    public string? EventContent { get; set; }
+
+    /// <summary>True when the item is a raw capture event (rather than a subject).</summary>
+    public bool IsEvent => string.Equals(ItemKind, "event", StringComparison.Ordinal);
+
+    /// <summary>How to name this item to <c>bsk</c>: an event by its id, a subject by its urn.</summary>
+    public string Ref => IsEvent ? ItemId.ToString() : SubjectUrn ?? ItemId.ToString();
+
+    /// <summary>Display kind: the event kind, or the subject type.</summary>
+    public string Kind => (IsEvent ? EventKind : SubjectType) ?? "";
+
+    /// <summary>The item's full text for the preview pane: event content, or subject title.</summary>
+    public string Content => (IsEvent ? EventContent : SubjectTitle) ?? "";
 
     /// <summary>A one-line, length-capped preview of the content, for the list.</summary>
     public string Preview
     {
         get
         {
-            var text = (Content ?? string.Empty).ReplaceLineEndings(" ").Trim();
+            var text = Content.ReplaceLineEndings(" ").Trim();
             return text.Length == 0 ? "(empty)"
                 : text.Length > 100 ? text[..100] + "…"
                 : text;
