@@ -1063,8 +1063,8 @@ Build:      unmapped
 
 ### GEN-13 — Decisions record conclusions already made and remain editable with history
 Horizon:    Pilot
-Definition: drafting
-Build:      unmapped
+Definition: active
+Build:      mapped
 
 **Workflow (Chris):**
 - A Decision represents a decision that has already been made. It is not primarily a
@@ -1073,31 +1073,67 @@ Build:      unmapped
   **Decision date**, **Area**, **Status**, and **Relationships**.
 - Title is required. The remaining fields should be easy to add without making the initial
   form cumbersome.
+- Title should state the conclusion that was reached, such as **Use SQLite for local
+  storage**, rather than restating the unresolved question.
+- Description should provide the available context, reasoning, and consequences without
+  requiring separate structured fields for each in the Pilot.
 - Decision date is optional and should not default automatically to today or another date.
 - The Decision statuses are **Open**, **Implementing**, **Cancelled**, and **Closed**.
 - Open means the decision has been made but implementation has not started.
 - Implementing means the actions that carry out the decision are underway.
 - Closed means implementation is complete or the decision needs no further attention.
 - Cancelled means the decision was reversed or I chose not to carry it out.
+- All Decision status changes are manual. Creating, starting, completing, or cancelling
+  related work must not silently move the Decision to Implementing, Closed, or Cancelled.
 - Decisions remain editable after creation. Editing must preserve chronological history so
   I can see what changed and when, following GEN-4.
-- Decisions are contextual and should be easy to relate to the Goals, Projects, Problems,
-  Tasks, or other objects that gave rise to them or are affected by them.
+- The Decision detail screen should separate relationships into two clear groups:
+  **Context** and **Resulting work**.
+- Context contains the Problems, Ideas, Goals, Projects, or other objects that prompted or
+  informed the Decision.
+- Resulting work contains the Goals, Projects, Tasks, or other trackable objects created or
+  affected to carry out the Decision.
 - When Decision creation is launched from another object's detail screen, show and
-  prepopulate that initiating relationship without requiring me to select the object again.
-- Do not force Decisions into one parent/child direction in the Pilot. It is still unclear
-  whether I will normally create a Decision from a Goal, Project, or Problem; create those
-  objects from a Decision; or use both directions.
+  prepopulate that initiating object in Context without requiring me to select it again.
+- From a Decision detail screen, provide a contextual action to create resulting work. Ask
+  me for the valid object type, open its normal type-specific form, and show the pending
+  Decision relationship before saving.
+- Support both directions as normal workflows: I may create a Decision from a contextual
+  object, or create resulting work from an existing Decision.
+- Do not force Decisions into the Value -> Goal -> Project -> Task parent hierarchy. The two
+  relationship groups express the thought and implementation flow without pretending that
+  the Decision is a structural parent or child.
 - Allow Relationships to be added both during creation and later editing so the thought
   workflow can evolve without requiring a rigid creation order.
+- When a Decision is reversed, the normal workflow is to change the original Decision to
+  Cancelled and create a linked replacement Decision containing the new conclusion.
+- Provide a **Create replacement Decision** action that opens a new Decision form, preserves
+  a visible link to the original Decision, and lets me enter the replacement conclusion.
+  Do not overwrite the original conclusion or its history.
 - Decision editing should follow BROWSE-2: read-only detail first, explicit Edit, and
   explicit Save or Cancel.
-- The larger thought workflow around Problems, Decisions, resulting work, and relationship
-  direction remains an open design area that should be refined before this requirement is
-  marked active.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the existing **Decision** subject — and the ontology **already anticipated this**:
+  Decision ships with the `supersedes` relation ("a Decision supersedes an earlier one"), which
+  is exactly the reversal flow. `decision_date` and `area` (D1) are attributes; Status via
+  `state_change` (D7: Open / Implementing / Cancelled / Closed; terminal = Cancelled / Closed),
+  **all manual** — an app rule that related work never auto-moves the Decision.
+- The two relationship groups are **one `results_in` chain split by direction**: **Context** =
+  *incoming* `results_in` (the Problems / Ideas / Goals that led to the Decision), **Resulting
+  work** = *outgoing* `results_in` (the Goals / Projects / Tasks the Decision produces). This
+  slots Decision into the same chain as Problem → Idea → work (GEN-14 / CAP-6):
+  Problem / Idea → **Decision** → work.
+- **Reversal** = the purpose-built `supersedes`: a replacement Decision `supersedes` the
+  original and the original moves to `Cancelled`; append-only + `supersedes` means the original
+  conclusion and its history are never overwritten.
+- Kernel delta: none of its own — Decision, `results_in`, and `supersedes` all exist; rides D7
+  (status), D1 (Area), GEN-4 (history), and GEN-7's atomic create-and-link for
+  create-resulting-work. Decision is deliberately **outside** the Value→Goal→Project→Task
+  hierarchy, so it uses generic create + `results_in`, not GEN-7's parent map.
+- Open decisions: Context-via-incoming-`results_in` fits Problems / Ideas (causal) cleanly but
+  is a looser "informed by" for a Goal that merely informed without causing — fine for the
+  Pilot, or allow a generic association later if it grates.
 
 
 ### GEN-14 — Problems track unresolved situations that need thought or action
