@@ -119,8 +119,41 @@ public sealed class SubjectService(ISubjectRepository subjects)
         return (new SubjectRef(childId, urn, type, cleanTitle), edgeId);
     }
 
-    public async Task<ResolvedSubject> ResolveOrCreateAsync(
+    /// <summary>
+    /// Creates a subject as the target of an edge from an existing subject
+    /// (<paramref name="fromId"/> <paramref name="relation"/> new subject), atomically
+    /// — the shape promotion uses to record "the Idea <c>results_in</c> this new work".
+    /// </summary>
+    public async Task<(SubjectRef Subject, Guid EdgeId)> CreateWithIncomingEdgeAsync(
+        string type, string title, string attributesJson, string relation, Guid fromId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            throw new ArgumentException("A title is required.", nameof(title));
+        }
+
+        var cleanTitle = NormalizeTitle(title);
+        var urn = Urns.Build(type, cleanTitle);
+        var (newId, edgeId) = await subjects.CreateWithIncomingEdgeAsync(
+            new NewSubject(urn, type, cleanTitle, attributesJson, OriginEventId: null),
+            relation, fromId, Provenances.Declared, cancellationToken);
+        return (new SubjectRef(newId, urn, type, cleanTitle), edgeId);
+    }
+
+    public Task<ResolvedSubject> ResolveOrCreateAsync(
         string type, string urnOrTitle, CancellationToken cancellationToken = default)
+        => ResolveOrCreateAsync(type, urnOrTitle, "{}", cancellationToken);
+
+    /// <summary>
+    /// As <see cref="ResolveOrCreateAsync(string,string,CancellationToken)"/>, but the
+    /// attributes are applied only when a subject is <em>created</em>; a reused subject
+    /// is returned untouched (so re-capturing an existing Problem does not overwrite
+    /// what it has accumulated — the reuse-by-title anchor, §6 / D4).
+    /// </summary>
+    public async Task<ResolvedSubject> ResolveOrCreateAsync(
+        string type, string urnOrTitle, string attributesJson,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(urnOrTitle))
         {
@@ -147,7 +180,7 @@ public sealed class SubjectService(ISubjectRepository subjects)
         var urn = Urns.Build(type, title);
         try
         {
-            var id = await subjects.CreateAsync(new NewSubject(urn, type, title), cancellationToken);
+            var id = await subjects.CreateAsync(new NewSubject(urn, type, title, attributesJson), cancellationToken);
             return new ResolvedSubject(new SubjectRef(id, urn, type, title), Created: true);
         }
         catch (DuplicateSubjectException)

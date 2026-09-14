@@ -92,7 +92,7 @@ recurrence, adherence/occurrence projections, materialized occurrences).
 - [x] Phase 4 — Area type
 - [x] Phase 5 — Triage marker + `v_inbox`
 - [x] Phase 6 — Atomic create-and-link
-- [ ] Phase 7 — Capture bifurcation + split promote
+- [x] Phase 7 — Capture bifurcation + split promote
 - [ ] Phase 8 — Recurrence representation
 - [ ] Phase 9 — Habit type + adherence + partial credit
 - [ ] Phase 10 — Habit occurrence + streak projection

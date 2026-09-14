@@ -66,6 +66,17 @@ public interface ISubjectRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Creates a subject and an edge pointing <em>into</em> it (existing
+    /// <paramref name="fromId"/> <paramref name="relation"/> new subject) in one
+    /// transaction — the shape promotion needs: an Idea <c>results_in</c> the new work
+    /// it produced. All-or-nothing, so a failed edge leaves no orphan. Returns the new
+    /// subject id and edge id.
+    /// </summary>
+    Task<(Guid NewId, Guid EdgeId)> CreateWithIncomingEdgeAsync(
+        NewSubject newSubject, string relation, Guid fromId, string provenance,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Merges a jsonb patch into a subject's <c>attributes</c> and removes the named
     /// keys, in one update. Returns whether a row was affected (<c>false</c> = no such
     /// subject). Only the attributes bag is touched — type, title, and status are

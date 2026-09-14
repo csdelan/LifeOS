@@ -160,6 +160,52 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
         }
     }
 
+    public async Task<(Guid NewId, Guid EdgeId)> CreateWithIncomingEdgeAsync(
+        NewSubject newSubject, string relation, Guid fromId, string provenance,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var newId = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
+                """
+                INSERT INTO bsk.subject (urn, type, title, attributes, origin_event_id)
+                VALUES (@Urn, @Type, @Title, @Attributes::jsonb, @OriginEventId)
+                RETURNING id;
+                """,
+                new
+                {
+                    newSubject.Urn,
+                    newSubject.Type,
+                    newSubject.Title,
+                    Attributes = newSubject.AttributesJson,
+                    newSubject.OriginEventId
+                },
+                transaction: transaction, cancellationToken: cancellationToken));
+
+            // Edge points into the new subject: existing `from` -> new `to`. A bad
+            // `from` id fails the FK here and rolls the whole thing back — no orphan.
+            var edgeId = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
+                """
+                INSERT INTO bsk.subject_relation (from_subject, relation, to_subject, provenance)
+                VALUES (@FromId, @Relation, @NewId, @Provenance)
+                RETURNING id;
+                """,
+                new { FromId = fromId, Relation = relation, NewId = newId, Provenance = provenance },
+                transaction: transaction, cancellationToken: cancellationToken));
+
+            await transaction.CommitAsync(cancellationToken);
+            return (newId, edgeId);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new DuplicateSubjectException(newSubject.Type, newSubject.Title, ex);
+        }
+    }
+
     public async Task<bool> UpdateAttributesAsync(
         Guid id, string patchJson, IReadOnlyList<string> removeKeys,
         CancellationToken cancellationToken = default)

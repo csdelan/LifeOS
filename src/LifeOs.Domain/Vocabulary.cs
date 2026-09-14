@@ -30,6 +30,9 @@ public static class TriageStates
     public const string Flagged = "flagged";
     public const string Dropped = "dropped";
     public const string Filed = "filed";
+
+    /// <summary>Resolved by being promoted into a subject / into new work (CAP-6 / D4).</summary>
+    public const string Promoted = "promoted";
 }
 
 /// <summary>Provenance values, matching the CHECK on <c>provenance</c> columns.</summary>

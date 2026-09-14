@@ -35,7 +35,16 @@ public sealed class TriageService(
     /// </summary>
     public Task<Guid> FlagItemAsync(
         bool isEvent, Guid itemId, CancellationToken cancellationToken = default)
-        => AppendAsync(isEvent, itemId, TriageStates.Flagged, cancellationToken);
+        => SetStateAsync(isEvent, itemId, TriageStates.Flagged, cancellationToken);
+
+    /// <summary>
+    /// Writes a triage state for an item whose id is already known — used by the
+    /// promote path to resolve an item out of the inbox (<see cref="TriageStates.Promoted"/>)
+    /// without re-resolving the reference. Returns the marker event id.
+    /// </summary>
+    public Task<Guid> SetStateAsync(
+        bool isEvent, Guid itemId, string state, CancellationToken cancellationToken = default)
+        => AppendAsync(isEvent, itemId, state, cancellationToken);
 
     private async Task<TriageResult> ResolveThenWriteAsync(
         string reference, string state, CancellationToken cancellationToken)

@@ -153,6 +153,7 @@ internal static class NewCommand
 
                 SubjectRef created;
                 ChildCreationResult? childLink = null;
+                var reused = false;
                 if (!string.IsNullOrWhiteSpace(parent))
                 {
                     // Parent-first: create the child and its parent edge atomically (GEN-7).
@@ -160,6 +161,16 @@ internal static class NewCommand
                         .CreateChildAsync(
                             canonicalType, title, parent, relation, attributes.ToJsonString(), cancellationToken);
                     created = childLink.Child;
+                }
+                else if (canonicalType == SubjectTypes.Problem)
+                {
+                    // A Problem is unique by title — the durable question you keep returning
+                    // to (§6 / D4). Re-creating one reuses the existing subject rather than
+                    // erroring; attributes apply only when it is genuinely new.
+                    var resolved = await subjects.ResolveOrCreateAsync(
+                        canonicalType, title, attributes.ToJsonString(), cancellationToken);
+                    created = resolved.Subject;
+                    reused = !resolved.Created;
                 }
                 else
                 {
@@ -184,6 +195,7 @@ internal static class NewCommand
                         urn = created.Urn,
                         type = created.Type,
                         title = created.Title,
+                        reused,
                         parent = childLink is null ? null : new { childLink.Parent.Urn, childLink.Relation }
                     });
                 }
@@ -191,6 +203,10 @@ internal static class NewCommand
                 {
                     Console.WriteLine(
                         $"Created {created.Type} {created.Urn} ({childLink.Relation} {childLink.Parent.Urn}).");
+                }
+                else if (reused)
+                {
+                    Console.WriteLine($"Reused existing {created.Type} {created.Urn} (flagged for triage).");
                 }
                 else
                 {
