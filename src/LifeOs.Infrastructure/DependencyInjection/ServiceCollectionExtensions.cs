@@ -30,6 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IActivityWriter>(_ => new NpgsqlActivityWriter(connectionString));
         services.AddSingleton<ISubjectEventRepository>(_ => new NpgsqlSubjectEventRepository(connectionString));
         services.AddSingleton<ITagRepository>(_ => new NpgsqlTagRepository(connectionString));
+        services.AddSingleton<IAppointmentRepository>(_ => new NpgsqlAppointmentRepository(connectionString));
 
         services.AddSingleton(sp => new CaptureService(
             sp.GetRequiredService<IEventStore>(),
@@ -100,6 +101,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new PeopleService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>()));
+
+        services.AddSingleton(sp => new AppointmentService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<IAppointmentRepository>()));
 
         services.AddSingleton(sp => new TriageService(
             sp.GetRequiredService<SubjectService>(),

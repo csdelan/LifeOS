@@ -20,7 +20,7 @@ internal static class NewCommand
         SubjectTypes.Value, SubjectTypes.Goal, SubjectTypes.Problem, SubjectTypes.Project,
         SubjectTypes.Task, SubjectTypes.Commitment, SubjectTypes.Decision, SubjectTypes.Idea,
         SubjectTypes.Person, SubjectTypes.Constraint, SubjectTypes.Season, SubjectTypes.Area,
-        SubjectTypes.Habit
+        SubjectTypes.Habit, SubjectTypes.Appointment
     ];
 
     public static Command Create(Option<string?> connectionOption, Option<bool> jsonOption)

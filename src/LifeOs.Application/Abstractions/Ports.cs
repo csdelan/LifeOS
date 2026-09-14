@@ -94,6 +94,17 @@ public interface ISubjectRepository
         Guid id, string key, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Reads which occurrence dates of a recurring appointment series still need to be
+/// materialized (CAL-1 / D10). Expands the series' recurrence in the database and
+/// subtracts the dates already materialized as occurrence subjects.
+/// </summary>
+public interface IAppointmentRepository
+{
+    Task<IReadOnlyList<DateOnly>> PendingOccurrenceDatesAsync(
+        Guid seriesId, string seriesUrn, DateOnly through, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Creates directed subject → subject edges in <c>bsk.subject_relation</c>.</summary>
 public interface IRelationRepository
 {

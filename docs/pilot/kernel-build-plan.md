@@ -97,4 +97,4 @@ recurrence, adherence/occurrence projections, materialized occurrences).
 - [x] Phase 9 — Habit type + adherence + partial credit
 - [x] Phase 10 — Habit occurrence + streak projection
 - [x] Phase 11 — People-association link
-- [ ] Phase 12 — Appointment type + materialized occurrences
+- [x] Phase 12 — Appointment type + materialized occurrences

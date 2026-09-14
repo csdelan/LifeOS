@@ -63,6 +63,9 @@ public static class SubjectTypes
 
     /// <summary>A habit — its own type composing recurrence + adherence (GEN-3 / D2, migration 0017).</summary>
     public const string Habit = "Habit";
+
+    /// <summary>A calendar appointment; occurrences are materialized subjects (CAL-1 / D10, migration 0020).</summary>
+    public const string Appointment = "Appointment";
 }
 
 /// <summary>

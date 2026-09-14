@@ -27,7 +27,7 @@ public static class StatusVocabulary
         [SubjectTypes.Commitment] = ["Open", "Fulfilled", "Missed", "Cancelled"],
         [SubjectTypes.Decision] = ["Open", "Implementing", "Cancelled", "Closed"],
         [SubjectTypes.Problem] = ["Open", "Working", "Resolved"],
-        ["Appointment"] = ["Scheduled", "Completed", "Cancelled", "Missed"],
+        [SubjectTypes.Appointment] = ["Scheduled", "Completed", "Cancelled", "Missed"],
         [SubjectTypes.Idea] = ["New", "Promoted", "Rejected"],
     };
 
