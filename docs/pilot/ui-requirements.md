@@ -63,7 +63,15 @@ requirements cluster and the ID says where it lives:
 | `REVIEW-` | Review (diagnostics, the manual coach) |
 | `JOURNAL-` | Journal & Timeline |
 | `DASHBOARD-` | Dashboard view |
-| `NAV-` / `GEN-` | Cross-cutting (navigation, shell, general) |
+| `TASKS-` | Tasks working view |
+| `CAL-` | Calendar / Appointments |
+| `NAV-` | Navigation shell |
+| `GEN-` | Cross-cutting conventions **and** per-subject-type object specs (Goals, Projects, Tasks, Identity Statements, Commitments, Decisions, Problems, People, Vision, …) |
+
+> Organization note: `GEN-` has become a grab-bag of two different things — cross-cutting UI
+> conventions (GEN-1 Tags, GEN-4/5/6/7) and per-type object specs (GEN-8..16). A future tidy
+> could split the object specs into their own `OBJ-` prefix; deferred to avoid renumbering
+> live references.
 
 **Three status fields, each answering one question.** Nothing here is ever "final" — this
 is a living spec, iterated as Pilot use reveals better behavior. The old single `Status`
@@ -1911,29 +1919,110 @@ three-state record (done / half / not-done), gated per-habit by an `allows_parti
 half). Missed occurrences read as a **gentle streak break**, never surfaced in the
 confrontational breach report. Evolve the ontology only if later strain exceeds these.
 
+**Revised (2026-09-13) — Habit gets its own type.** Given the god-type concern (see D8),
+Habit moves from *is a Commitment* to **its own subject type that composes the shared
+adherence / recurrence mechanism (D8)** rather than being stored as a Commitment. The
+partial-credit + gentle-framing resolution above is unchanged, but now holds *by
+construction*: Habit's distinct workflow (streak, partial credit, cue / routine / reward)
+and its exclusion from the breach report fall out of it being a separate type, not
+special-casing inside Commitment. Supersedes the earlier lean toward Habit = Commitment.
+
 **D3 — Review = a subject with a mutable body + an append-only edit trail.** Reviews are
 editable working documents (unlike append-only JOURNAL-1). Store the body as a subject
 attribute; append each save as an edit event so "history retained" holds; the app presents
 one document. Reconciles editable-doc UX with the append-only spine.
 
-**D4 — One capture / reference-item model.** note / idea / problem / document / URL /
-filed-reference are flavors of one capture-and-classify scheme, not separate machinery.
-Folds in CAP-1's A/B/C (leaning flavored-capture) and CAP-4 / CAP-5 / INBOX-4's "reference
-item". Open: the exact flavor/type vocabulary and where the flavor is stored.
+**D4 — Capture bifurcates: reference-captures are events, thinking-captures are subjects.**
+*(Revised 2026-09-13, superseding the earlier "one flavor model".)* Newer requirements split
+capture by kind: **note / document / URL** land as **events + artifacts** (reference-ish
+captures — CAP-4 / CAP-5), while **idea / problem** create their **durable subject
+immediately** on capture (CAP-6 Idea with Status New; GEN-14 / CAP-1 Problem), flagged for
+Inbox triage. Consequences: (a) **"promote" splits** — event→subject (a `note` → an Idea)
+vs subject→subject (an Idea → a Goal, per CAP-6, which relates the source Idea and sets it
+Promoted); (b) the **triage marker (INBOX-1) attaches to subjects too**, not only events
+(INBOX-1's "item = subject or event" already allows this). CAP-1's older Ontology-fit
+(leaning "idea = flavored note") is now **stale** and will be re-mapped. Open: whether
+`note` keeps any flavor tag once idea / problem are their own subjects.
 
 **D5 — The recurring-commitment engine is derived from the UIs, not decided top-down.**
 Reviews (REVIEW-0..3), Inbox Zero (INBOX-2), and Habits (GEN-3) are all "recurring
 self-commitments with per-period satisfaction + missed detection + backfillable
 correction." Let each UI settle, then extract the shared storage primitive — don't design
-it first.
+it first. *(See D8: the extracted primitive is a shared **mechanism** composed per-type,
+not a Commitment base type.)*
 
-**D6 — Primary focus & daily objectives model (OPEN).** Lightweight planning intents that
-may be free text *or* reference an existing Area/Goal, and that expire (objectives flag to
-the Inbox at day's end). Fork: **durable subjects** (URN + provenance — heavyweight, but
-graph-linkable) vs an **ephemeral per-day planning record** the UI reads (not a first-class
-subject). Leaning ephemeral for objectives, with Primary focus possibly a thin persistent
-pointer. DASHBOARD-1 / TODAY-1 / TODAY-2 / REVIEW-* all inherit this, so their Ontology-fit
-is deferred until it's decided.
+**D6 — Primary focus & daily objectives model. RESOLVED (2026-09-14) — hybrid.**
+- **Primary focus = two levels, both Goal-linked (resolved 2026-09-14):** a **Monthly focus**
+  (set in the monthly review) and a **Weekly focus** (set in the weekly review). Each is a
+  durable pointer to a **Goal** — not daily, not free text. Store each as a thin persistent
+  setting; record changes as events so history falls out of the append-only log for free.
+- **Soft alignment:** the Weekly focus should *usually* advance the Monthly focus, but this
+  is **not enforced**. Because both point to Goals, alignment is **read from the existing
+  alignment graph** (`serves` / `results_in`) — the UI can show the two foci are aligned when
+  the weekly Goal advances the monthly Goal, and gently flag it when they aren't. No new
+  relation type; it rides the graph we already have. Open detail: what counts as "advances" —
+  a direct edge vs any path.
+- **Daily objectives** = an **optional**, lightweight, *ephemeral* per-day list; each entry
+  is either free text or a pointer to an existing item (Task / Goal). Not first-class
+  subjects; no rich daily history required. Unfinished objectives at day's end become
+  **Inbox items** (the triage marker, INBOX-1) — the only durable record they leave.
+- Rationale (Chris, 2026-09-14): no need to browse daily-objective history; objectives must
+  stay optional and low-friction; Primary focus is a review-cadence, Goal-linked thing.
+- **Possible alignment (check during mapping):** a weekly/monthly Goal-focus resembles the
+  kernel's existing `focus` / Season axis (a time-boxed focus that parks out-of-focus work);
+  Primary focus may *be* a lightweight Season rather than a new mechanism.
+- Sub-point resolved (2026-09-14): **two foci** — separate Monthly and Weekly, with the soft
+  alignment described above. D6 is fully settled.
+- **Reconcile:** TODAY-1 still allows Primary focus as free text / set on the Today screen —
+  Chris to align those bullets with "Goal-linked, review-set" when convenient.
+
+With this resolved, DASHBOARD-1 / TODAY-1 / TODAY-2 / REVIEW-* can now be mapped.
+
+**D7 — Per-type status vocabularies + terminal classification.** Each subject type now
+carries its own status set, moved by `state_change` events: Goal (developing → Active →
+Completed / Abandoned), Project (same shape), Task (Not started / In progress / Waiting /
+Completed / Cancelled), Commitment (Open / Fulfilled / Missed / Cancelled), Decision (Open /
+Implementing / Cancelled / Closed), Problem (Open / Working / Resolved), Appointment
+(Scheduled / Completed / Cancelled / Missed), Idea (New / Promoted / Rejected). **Identity
+Statement has no status** (it uses archive, D9). The diagnostics depend on which statuses
+are **terminal** — neglect skips terminal subjects via `is_terminal_status` (migration
+0008); breach is Commitment-only. Deliverable: a documented per-type status map + terminal
+set, and an extended `is_terminal_status`. Open: enforce the vocabularies as kernel enums
+vs validate them app-side.
+
+**D8 — Recurrence + adherence is a shared *mechanism*, not a base type (resolves the
+Commitment god-type).** Chris confirmed Commitment is too abstract to be a first-order
+concept — too many different-workflow things ride it (which is why productivity apps don't
+surface "commitments"). So we do **not** make Commitment the universal recurring base. What
+is shared is *mechanism*, not identity: (1) a **recurrence representation** richer than
+today's `expected_cadence` — it must express calendar-anchored patterns (*every Sunday*,
+*last calendar day of month*) as well as intervals; (2) **adherence / fulfillment recorded
+as events** that `evidences` / `violates` the subject; (3) **missed-detection + backfillable
+correction** (the old D5 "engine"). Habit, recurring Appointments, Reviews (for
+scheduling / missed-tracking), and Commitment-the-promise each **compose** this mechanism as
+their own type. **Commitment (GEN-12) shrinks to its natural meaning — a promise to self or
+others** — and is never surfaced as a universal abstraction. Diagnostic *framing* stays
+per-type: breach only for promises, a gentle streak for Habit, a missed-review nudge for
+Reviews.
+
+**D9 — Universal archive / active flag; nothing is ever deleted.** Chris: never delete —
+only toggle inactive / archived. So archive is a **cross-cutting flag on every item**,
+orthogonal to workflow status, that **hides it from all default views**, is **reversible**,
+and **never removes data** (append-only: archive / restore is a recorded state change).
+Because it is orthogonal to status, **status-less types (Identity Statement) can still
+archive**. Applies uniformly to subjects, and to events where meaningful. Replaces the
+per-type archive handling scattered across GEN-11 / GEN-15 / CAP-6. Exceptions: Areas are
+declared permanent (GEN-2) — they just become less prominent, not archived. Open: one
+boolean vs a small lifecycle state; whether a "Rejected" Idea (CAP-6) is the same flag or a
+distinct outcome.
+
+**D10 — Appointment = a new durable subject type** (net-new, alongside Area — the pilot
+pushes the ontology from 11 → 13 types). Time attributes (date / start / end / all-day /
+location / meeting link), attendees = `Person` relations, recurrence via D8. **Divergence to
+note:** CAL-1 wants **materialized per-occurrence status** (each occurrence individually
+Scheduled / Completed / Cancelled / Missed), unlike Habit's **projected** occurrences (D2).
+Two different recurrence-instance models under one roof — deliberate, recorded here so it
+isn't an accident.
 
 ### Method for the Habit ↔ Commitment discrepancy
 
@@ -1944,6 +2033,11 @@ partial-credit + framing. If richer UI outgrows Commitment, evolve carefully (Ha
 Commitment specialization, or its own type sharing the recurrence+adherence machinery) —
 the pilot's purpose is to evolve the ontology to fit real workflows, not force-fit them.
 
+**Resolved (2026-09-13):** took the *own-type* path — Habit becomes its own subject type
+(revised D2) and Commitment stays narrow (D8). The decoupling principle still stands for
+every future type: a UI concept is not a storage type, and shared behavior is composed as a
+mechanism, never inherited from a god-type.
+
 ---
 
 ## Kernel build backlog
@@ -1952,22 +2046,33 @@ The roll-up of every `needs-kernel` delta above — the authoritative feeder for
 work. One line per item; details live in the requirement.
 
 - **Triage marker primitive** (INBOX-1) — a flag that asserts inbox membership + a `Drop`
-  outcome + a `v_inbox` projection (flagged AND not resolved). Source-agnostic membership.
+  outcome + a `v_inbox` projection (flagged AND not resolved). Source-agnostic; attaches to
+  subjects and events (D4).
 - **Tag primitive** (GEN-1) — a tag store separate from relations + a `bsk tag` verb + a
   live "tag universe" reader; reconcile with the existing reserved `focus` attribute.
-- **Area subject type** (GEN-2 / D1) — a new `Area` type + master-list reader +
-  `attributes.area` on items; decide whether it unifies with the existing `focus` axis.
-- **Capture / reference flavor model** (D4) — a flavor field on the `note`-family capture
-  covering note / idea / problem / document / url / reference (folds in old CAP-1 B).
-- **Managed binary artifact storage** (CAP-2 / CAP-4 / JOURNAL-2) — blob/file storage for
+- **Area + Appointment subject types** (GEN-2 / D1, CAL-1 / D10) — two net-new types
+  (11 → 13); master-list / readers; `attributes.area` on items.
+- **Habit subject type** (GEN-3 / revised D2) — its own type composing the shared
+  adherence / recurrence mechanism, **no longer stored as a Commitment**.
+- **Per-type status vocabularies + terminal classification** (D7) — a documented status map
+  + an extended `is_terminal_status`.
+- **Recurrence representation** (D8) — richer than `expected_cadence`; calendar-anchored
+  patterns (every Sunday, last day of month) + intervals; shared by Habit / Appointment /
+  Commitment / Review.
+- **Shared adherence + missed / backfill mechanism** (D8, was the "recurring engine") —
+  `evidences` / `violates` events + missed-detection + correction, composed per-type with
+  per-type diagnostic framing.
+- **Universal archive / active flag** (D9) — cross-cutting hide-from-default-views flag;
+  reversible; never deletes; orthogonal to workflow status.
+- **Capture bifurcation** (D4) — note / document / url as events; idea / problem as
+  subjects-on-capture; split the `promote` paths (event→subject vs subject→subject).
+- **Managed binary artifact storage** (CAP-2 / CAP-4 / JOURNAL-2) — blob / file storage for
   audio, attachments, and inline media; today's artifact table holds text only.
 - **`voice` write path** (CAP-2) — a `bsk` verb that writes `voice` events (closes one of
   the 4 unreachable event kinds).
 - **Partial-credit adherence** (D2 / GEN-3) — a third state (**fixed half-credit**) beyond
-  `evidences`/`violates`, gated per-habit by `allows_partial`.
-- **Habit occurrence + streak projection** (GEN-3) — a projection over cadence + adherence
-  events; present misses as a gentle streak break, excluded from the breach report.
-- *(pending derivation, D5)* **Recurring-commitment engine** — the shared missable /
-  backfillable / per-period-satisfaction primitive behind Reviews, Inbox Zero, and Habits.
+  `evidences` / `violates`, gated per-habit by `allows_partial`.
+- **Habit occurrence + streak projection** (GEN-3) — a projection over recurrence +
+  adherence events; misses shown as a gentle streak break, excluded from the breach report.
 
 *(Prior mapping gaps already closed: the `concerns` write path — shipped as `bsk relate`.)*
