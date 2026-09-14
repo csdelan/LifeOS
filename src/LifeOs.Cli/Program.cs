@@ -35,6 +35,9 @@ rootCommand.Subcommands.Add(LogCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(SetCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(RelateCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(TagCommand.Create(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(TriageCommand.CreateFlag(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(TriageCommand.CreateDrop(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(TriageCommand.CreateFile(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(CheckCommand.Create(connectionOption, jsonOption));
 
 return await rootCommand.Parse(args).InvokeAsync();

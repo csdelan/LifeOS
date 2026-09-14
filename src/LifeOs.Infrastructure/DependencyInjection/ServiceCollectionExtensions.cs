@@ -83,6 +83,13 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IEventReader>(),
             sp.GetRequiredService<ITagRepository>()));
 
+        services.AddSingleton(sp => new TriageService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<IEventReader>(),
+            sp.GetRequiredService<IEventStore>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
+
         // Operational services that work directly against the store.
         services.AddSingleton(_ => new MigrationRunner(connectionString));
         services.AddSingleton(_ => new DerivedRebuilder(connectionString));

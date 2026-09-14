@@ -15,6 +15,21 @@ public static class EventKinds
 
     /// <summary>Archive / restore, folded by <c>bsk.is_archived</c> (D9, migration 0012).</summary>
     public const string ArchiveChange = "archive_change";
+
+    /// <summary>Inbox triage marker, folded by <c>v_inbox</c> (INBOX-1, migration 0015).</summary>
+    public const string Triage = "triage";
+}
+
+/// <summary>
+/// Triage marker states (INBOX-1). The newest marker per item wins: <c>flagged</c>
+/// means the item is in the inbox awaiting a decision; <c>dropped</c> ("nothing to
+/// do") and <c>filed</c> (kept as reference) both resolve it out.
+/// </summary>
+public static class TriageStates
+{
+    public const string Flagged = "flagged";
+    public const string Dropped = "dropped";
+    public const string Filed = "filed";
 }
 
 /// <summary>Provenance values, matching the CHECK on <c>provenance</c> columns.</summary>

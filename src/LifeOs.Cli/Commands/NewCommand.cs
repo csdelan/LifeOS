@@ -138,6 +138,15 @@ internal static class NewCommand
                 var created = await subjects.CreateAsync(
                     canonicalType, title, attributes.ToJsonString(), cancellationToken: cancellationToken);
 
+                // A Problem or Idea is a capture-like subject: it enters the inbox for
+                // triage on creation, whether from quick capture or global New
+                // (GEN-14 / CAP-6 flag-on-capture). Other types are deliberate and not flagged.
+                if (canonicalType is SubjectTypes.Problem or SubjectTypes.Idea)
+                {
+                    await provider.GetRequiredService<TriageService>()
+                        .FlagItemAsync(isEvent: false, created.Id, cancellationToken);
+                }
+
                 if (asJson)
                 {
                     Cli.WriteJson(new { id = created.Id, urn = created.Urn, type = created.Type, title = created.Title });
