@@ -172,7 +172,7 @@ Build:      mapped
 ### NAV-1 — The Pilot uses persistent top-tab navigation and opens on Dashboard
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - Use a persistent top tab strip as the primary navigation model for the WinForms Pilot.
@@ -211,13 +211,21 @@ Build:      unmapped
   and CAP-2; they must retain their previously defined system-wide behavior.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: **pure app shell — no ontology mapping.** Tab strip, tab order, open-on-Dashboard,
+  per-tab remembered filters / sort / selection, modal create dialogs, and the unsaved-edit
+  prompt are all app concerns. The dedicated Goals / Projects / Tasks / Habits tabs and their
+  Browse presets are the **same subjects seen through different filtered reads** — one source,
+  many views (the "many readers" principle), not separate stores.
+- Kernel delta: none. Per-tab view state is app-local (like BROWSE-2's remembered filters).
+- Implications: a dedicated tab and its Browse preset must never diverge — both are reads over
+  the same subjects.
+- Open decisions: none blocking (pure UI).
 
 
 ### NAV-2 — Production supports Back and Forward navigation history
 Horizon:    Production
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - Production should provide Back and Forward controls for moving through recently viewed
@@ -229,13 +237,18 @@ Build:      unmapped
 - This is a Production goal and is not required in the Pilot or Pilot phase 2 WinForms UI.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: **pure app-side** navigation history (Back / Forward). No ontology involvement;
+  restoring a prior destination + view context is app state.
+- Kernel delta: none. Production horizon.
+- Implications: "must not duplicate objects or repeat commands" is an app guarantee — history
+  navigation only re-reads, never re-writes.
+- Open decisions: none blocking.
 
 
 ### DASHBOARD-1 — The opening screen is a daily prioritization command center
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - On opening LifeOS, I want to understand what deserves my attention within roughly 30
@@ -272,13 +285,23 @@ Build:      unmapped
   it with the last-opened screen on startup.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: **almost entirely reads / projections** composed from things mapped elsewhere —
+  Active Goals & Projects (status + focus), suggested next actions (the diagnostics / derived
+  layer + TODAY-2), due / overdue Tasks (the TASKS-1 projection), Inbox summary (a `v_inbox`
+  count), today's Habits (the Habit occurrence projection, GEN-3), and Primary focus +
+  objectives (D6). One-click Habit recording writes an adherence event (GEN-3).
+- Kernel delta: none structural of its own — rides D6 (focus / objectives), GEN-3 (habits),
+  TASKS-1, and INBOX-1. The only new bit is a **`pinned` flag** for manually-pinned Goals /
+  Projects — a small boolean attribute.
+- Implications: the Dashboard stores essentially nothing; it composes reads. "Genuinely clear
+  vs failed-to-load" empty states are app-side.
+- Open decisions: `pinned` as a simple per-item boolean attribute (recommended).
 
 
 ### TODAY-1 — I want to set a Primary focus and one to three objectives for today
 Horizon:    Pilot phase 2
 Definition: active
-Build:      unmapped
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - Each day can have one prominent **Primary focus** and between one and three **objectives**.
@@ -313,7 +336,20 @@ Build:      unmapped
   daily-review workflow has been exercised.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to (D6): **Monthly focus + Weekly focus** = two persistent **Goal pointers**, each set
+  in its review; record each change as an event so history falls out of the append-only log.
+  **Daily objectives** = an **optional, ephemeral** per-day list (free text or a pointer to a
+  Task / Goal) — *not* subjects, and not necessarily in the kernel at all (no history needed);
+  the only durable write is that **unfinished objectives become Inbox items** (the triage
+  marker) at day's end.
+- Kernel delta (needs-kernel): a home for the **current Monthly / Weekly focus** (a Goal
+  pointer with change history) — cleanest as `focus-set` events (current = latest) or a
+  lightweight **Season** (the D6 alignment note). Daily objectives can stay app-local.
+- Implications: the "weekly advances monthly" alignment is **read from the `serves` /
+  `results_in` Goal graph** (D6), not stored. Max-3-objectives is an app rule.
+- Open decisions: focus stored as events vs a Season vs a setting; **reconcile TODAY-1's
+  free-text / set-on-the-Today-screen bullets** with the resolved "Goal-linked, review-set"
+  model.
 
 
 ### TODAY-2 — Today's priorities combine manual planning with explainable suggestions
@@ -1117,11 +1153,14 @@ Build:      mapped
 - Implications: creating a related Decision / Goal / Project / Task from a Problem must **not**
   auto-resolve it — resolution stays an explicit `state_change`; the new object relates back to
   the Problem.
-- Open decisions: **which relation connects a Problem to the work that addresses it?** The
-  graph has `serves` / `results_in` / `supersedes`; none cleanly means "addresses". Lean: reuse
-  `results_in` (the work results in resolving the Problem) for the Pilot, revisit when the
-  Decisions / thought-workflow (GEN-13) firms up. Also: does capture **reuse** an existing
-  same-title Problem, or always create new?
+- **Resolved (2026-09-14) — it's a `results_in` chain:** a Problem **`results_in`** Ideas that
+  might solve it, and an Idea **`results_in`** (a.k.a. "promotes to") a new Project / Task /
+  Goal. A Problem may also `results_in` a Project / Task / Goal **directly**, skipping Ideas,
+  when it's simple enough. So "addresses" = the existing `results_in` (from = the source that
+  led to it, to = the produced work) — no new edge type. Resolution of the Problem itself stays
+  an explicit `state_change`.
+- Open decision: does capture **reuse** an existing same-title Problem (the reuse-by-title
+  anchor, §6) or always create new?
 
 
 ### GEN-15 — People and AI agents share one filterable directory
@@ -1221,7 +1260,7 @@ Build:      mapped
 ### CAL-1 — Appointments support manual calendar-style scheduling
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - Pilot Appointments are entered and maintained manually. Synchronization with an external
@@ -1261,7 +1300,20 @@ Build:      unmapped
   explicit Save or Cancel.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to (D10): a new **Appointment** subject type. Time fields (`date`, `start`, `end`,
+  `all_day`, `location`, `meeting_link`), `area` (D1), and notes are attributes. Status is
+  per-**occurrence** (D7: Scheduled / Completed / Cancelled / Missed). Recurrence via D8.
+- Kernel delta (needs-kernel): the **Appointment type** (D10) + **materialized recurring
+  occurrences** — each occurrence its own status-bearing record (the deliberate D10 divergence
+  from Habit's *projected* occurrences) + recurrence (D8). **Attendees** link to `Person`
+  subjects, but "attendee" isn't a `serves` / `results_in` / `supersedes` meaning — see the
+  People-association item.
+- Implications: no dedicated calendar screen in the Pilot (Dashboard + Browse only); an
+  Appointment view shows only Appointments, never dated Tasks / Commitments. Status is never
+  auto-advanced to Missed — the user sets it.
+- Open decisions: **how People links meaning "attendee / involves" are modeled** — a generic
+  association relation vs a Person-ref attribute (recurs across Appointments, Commitments,
+  delegation, Task `waiting_for`). Lean: a Person-ref attribute for the Pilot.
 
 
 
@@ -1326,8 +1378,9 @@ Build:      needs-kernel
   event). `bsk capture` (note) and `bsk new Problem/Idea` already exist; the new bits are
   choosing between them by type and attaching the triage marker.
 - Implications: **"promote" now splits** — a `note` (event) promotes *into* a subject, while an
-  `Idea` (already a subject) "promotes" *to another type* by creating it, relating it back, and
-  setting the Idea `Promoted` (CAP-6). Concurrency, hotkeys, and title-derivation stay app-side.
+  `Idea` (already a subject) "promotes" *to another type* by creating it, adding a `results_in`
+  edge from the Idea, and setting the Idea `Promoted` (CAP-6). Concurrency, hotkeys, and
+  title-derivation stay app-side.
 - Open decisions: does capturing a Problem **reuse an existing same-title Problem** (the
   ontology's reuse-by-title anchor, §6) or always create new? Does a plain `note` keep any
   flavor tag at all now that idea / problem are their own subjects? *(Supersedes the earlier
@@ -1512,16 +1565,18 @@ Build:      mapped
 **Ontology fit (Claude):**
 - Maps to: the existing **Idea** subject, created on capture (CAP-1 / D4) with Status `New`.
   Statuses New / Promoted / Rejected (D7). **Promote** = create the target subject
-  (Goal / Project / Task / Problem / Decision), relate it back to the source Idea, and set the
-  Idea `Promoted` — the subject→subject "promote" from D4. **Reject** = set `Rejected`, the
-  Idea's archival outcome (hidden from active views, preserved — i.e. D9 archive behavior).
+  (Goal / Project / Task / Problem / Decision), add a **`results_in`** edge from the Idea to it,
+  and set the Idea `Promoted` — the subject→subject "promote" from D4 (Problem→Idea→work is one
+  `results_in` chain; see GEN-14). **Reject** = set the terminal `Rejected` status, which — like
+  Completed / Cancelled — drops the Idea from default active views while preserving it.
 - Kernel delta: none of its own — Idea exists; rides D4 (capture + split promote), D7 (status),
   D9 (Rejected = archived), INBOX-1 (triage marker).
 - Implications: an Idea stays deliberately lightweight — no big form, a 3-status lifecycle;
   Capture is its only entry path (no global-New Idea form). Editing / tagging / relating a New
   Idea does not resolve it (INBOX-4); only Promote or Reject does.
-- Open decisions: is **Rejected** a terminal status (D7), the archive flag (D9), or both? —
-  exactly D9's open "Rejected vs archived" sub-point.
+- **Resolved (2026-09-14): Rejected is a (terminal) status** (D7), not the archive flag — like
+  Completed / Cancelled it hides the Idea from default active views; the universal archive flag
+  (D9) stays a separate, orthogonal mechanism. No blocking open decisions.
 
 
 ### JOURNAL-1 — Support append-only plain-text journals on subjects
@@ -1775,7 +1830,7 @@ Build:      mapped
 ### REVIEW-0 — Review sessions are recurring commitments with a consistent sequence
 Horizon:    Pilot phase 2
 Definition: active
-Build:      unmapped
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - Daily, weekly, and monthly review sessions are commitments I make to myself, not optional
@@ -1814,13 +1869,23 @@ Build:      unmapped
   when the review has served its purpose and explicitly mark the session complete.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to (D3 + D8): a Review is a **subject with a mutable body + an append-only edit trail**
+  (D3) — a **new subject type** — whose *scheduling, due, and missed* behavior **composes the
+  shared recurrence + missed mechanism (D8)** rather than being a Commitment (the god-type
+  resolution). The reflection→planning sequence, the daily→weekly→monthly ordering, and
+  "guide, don't hard-validate" are app-side flow. Planning reads Goals + Primary focus (D6).
+- Kernel delta (needs-kernel): the **Review subject type** + its **mutable-body-plus-edit-trail**
+  storage (D3), and review scheduling / missed via D8.
+- Implications: reviews surface as due / missed wherever other recurring obligations do (via
+  D8), yet their content is an editable document (D3) — the two halves are deliberately
+  different mechanisms. Adherence is backfillable / correctable (GEN-5).
+- Open decisions: none beyond D3 / D8 details.
 
 
 ### REVIEW-1 — I want to perform daily reviews
 Horizon:    Pilot phase 2
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - A daily review should be created automatically at the start of every day and remain
@@ -1883,13 +1948,24 @@ Build:      unmapped
   how the comprehensive activity recap is grouped in the initial WinForms UI.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: a **daily Review subject** (D3), **lazily created** on first access each day (no
+  scheduler in the Pilot). One editable body = the mutable-body-plus-edit-trail (D3); the
+  end-of-day **recap** is a read over the day's events (GEN-4). Reflection questions + the
+  planning area are fields within the body. Due at end-of-day; missed via D8; the link to the
+  week's Review is a relation between Review subjects.
+- Kernel delta: none of its own — rides D3 (Review type + edit trail), D8 (missed / backfill),
+  GEN-4 (recap reads), D6 (focus / objectives in planning). Lazy creation is app-side.
+- Implications: the daily Review's editable body is explicitly *unlike* append-only Journals
+  (JOURNAL-1) — that contrast is the whole reason for D3. Post-completion edits are just more
+  edit-events (still editable, history retained). "Can't defer a daily review" is an app rule;
+  an uncompleted one becomes missed (D8).
+- Open decisions: plain text vs dictated responses; recap grouping (both app-side).
 
 
 ### REVIEW-2 — I want to perform weekly reviews (every Sunday)
 Horizon:    Pilot phase 2
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - The weekly review should be created on Sunday and should normally be completed on Sunday.
@@ -1932,13 +2008,23 @@ Build:      unmapped
 - Open decision: the remaining weekly-specific reflection questions.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: a **weekly Review subject** (D3), created on Sunday; same mutable-body model. The
+  **weekly summary** is a read / rollup over the week (daily Reviews, completed / overdue Tasks,
+  Project progress, Habit adherence, Appointments, missed Commitments, Inbox history) — all
+  reads over already-mapped data. Daily↔weekly links are relations between Review subjects.
+  Weekly planning reads Goals + Primary focus (D6), surfacing Goals whose target date lands in
+  the week.
+- Kernel delta: none of its own — rides D3, D8, D6, GEN-4, and the per-type data it summarizes.
+- Implications: no second running document mid-week (only daily Reviews accumulate); the weekly
+  Review is created and normally completed Sunday. Missed with no grace period, but backfillable
+  (D8 / GEN-5).
+- Open decisions: the weekly-specific reflection questions (content, app-side).
 
 
 ### REVIEW-3 — I want to perform monthly reviews with an end-of-month completion window
 Horizon:    Production
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - The monthly review should be created on the last calendar day of the month.
@@ -1977,7 +2063,15 @@ Build:      unmapped
 - Open decision: the remaining monthly-specific reflection questions.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: a **monthly Review subject** (D3), created on the last day of the month, completable
+  through the first three days of the next (the grace window = an app / D8 rule); same
+  mutable-body model. The summary primarily rolls up the month's **completed weekly Reviews**,
+  plus any daily Reviews not covered by one — a coverage read over Review subjects and their
+  date ranges. Monthly planning reads long-term Goals + Primary focus (D6).
+- Kernel delta: none of its own — rides D3, D8, D6, GEN-4.
+- Implications: the "which daily reviews aren't covered by a weekly review" gap-check is a
+  date-range read, not new storage. Production horizon.
+- Open decisions: the monthly-specific reflection questions (content, app-side).
 
 
 ### REVIEW-4 — I want to perform yearly reviews (EOM, give or take a day or 2)
@@ -1995,7 +2089,7 @@ Build:      unmapped
 ### REVIEW-5 — Habits should be recordable and reviewable during daily, or weekly reviews
 Horizon:    Pilot phase 2
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - Habit streaks should be trackable.  I should be able to record whether I stuck with that habit or not.  The UI will show a small grid that renders a box for each time period I followed the habit.
@@ -2018,7 +2112,15 @@ Build:      unmapped
   objective occurrences without making the manual path feel secondary or less trustworthy.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the **Habit occurrence recording** from GEN-3, surfaced inside daily / weekly
+  Reviews — the same one-click followed / not-followed / partial control writing the same
+  adherence events, and the history grid is the Habit streak projection (GEN-3). Correct /
+  backfill from a review = a corrective adherence event (GEN-5).
+- Kernel delta: none of its own — rides GEN-3 (habit occurrences + partial credit + streak
+  projection) and GEN-5 (correction). Purely a second surface onto the same data.
+- Implications: recording a habit in a review and on the Dashboard are the **same** occurrence —
+  consistency comes from both reading / writing the one adherence stream (GEN-3).
+- Open decisions: none blocking.
 
 
 
@@ -2144,8 +2246,9 @@ Because it is orthogonal to status, **status-less types (Identity Statement) can
 archive**. Applies uniformly to subjects, and to events where meaningful. Replaces the
 per-type archive handling scattered across GEN-11 / GEN-15 / CAP-6. Exceptions: Areas are
 declared permanent (GEN-2) — they just become less prominent, not archived. Open: one
-boolean vs a small lifecycle state; whether a "Rejected" Idea (CAP-6) is the same flag or a
-distinct outcome.
+boolean vs a small lifecycle state. (Resolved: a "Rejected" Idea is a terminal *status*, not
+this flag — terminal-status hiding and archive hiding are separate mechanisms that both drop an
+item from default views.)
 
 **D10 — Appointment = a new durable subject type** (net-new, alongside Area — the pilot
 pushes the ontology from 11 → 13 types). Time attributes (date / start / end / all-day /
@@ -2181,8 +2284,9 @@ work. One line per item; details live in the requirement.
   subjects and events (D4).
 - **Tag primitive** (GEN-1) — a tag store separate from relations + a `bsk tag` verb + a
   live "tag universe" reader; reconcile with the existing reserved `focus` attribute.
-- **Area + Appointment subject types** (GEN-2 / D1, CAL-1 / D10) — two net-new types
-  (11 → 13); master-list / readers; `attributes.area` on items.
+- **New subject types** — Area (GEN-2 / D1), Appointment (CAL-1 / D10), Habit (revised D2),
+  Review (D3 / REVIEW-0): the pilot grows the model **11 → ~15 types**; plus master-list /
+  readers and `attributes.area` on items.
 - **Habit subject type** (GEN-3 / revised D2) — its own type composing the shared
   adherence / recurrence mechanism, **no longer stored as a Commitment**.
 - **Per-type status vocabularies + terminal classification** (D7) — a documented status map
@@ -2208,5 +2312,15 @@ work. One line per item; details live in the requirement.
   `evidences` / `violates`, gated per-habit by `allows_partial`.
 - **Habit occurrence + streak projection** (GEN-3) — a projection over recurrence +
   adherence events; misses shown as a gentle streak break, excluded from the breach report.
+- **Review subject type + mutable-body edit trail** (D3 / REVIEW-0) — a body attribute with
+  each save appended as an edit event; scheduling / missed via the D8 mechanism.
+- **D6 focus storage** (TODAY-1) — current Monthly + Weekly Primary-focus Goal pointers with
+  change history (focus-set events or a lightweight Season); daily objectives stay app-local,
+  materializing into Inbox items only when unfinished.
+- **Materialized recurring occurrences** (CAL-1 / D10) — each Appointment occurrence is its own
+  status-bearing record (unlike Habit's *projected* occurrences).
+- **People-association link** — a non-alignment way to attach a `Person` (involves / attendee /
+  owner / assignee / waiting-for), recurring across CAL-1, GEN-12, INBOX-3, GEN-10; lean: a
+  Person-ref attribute for the Pilot.
 
 *(Prior mapping gaps already closed: the `concerns` write path — shipped as `bsk relate`.)*
