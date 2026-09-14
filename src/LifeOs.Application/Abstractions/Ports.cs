@@ -102,3 +102,21 @@ public interface ISubjectEventRepository
         Guid eventId, Guid subjectId, string relation, string provenance,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Adds and removes tags on an item (a subject or an event) in <c>bsk.item_tag</c>
+/// (GEN-1). Tags arrive already normalized (see <see cref="LifeOs.Domain.Tags"/>).
+/// Adding is idempotent; removing a tag that is absent is a no-op.
+/// </summary>
+public interface ITagRepository
+{
+    /// <summary>Adds tags to the item; returns how many were newly added.</summary>
+    Task<int> AddAsync(
+        bool isEvent, Guid itemId, IReadOnlyCollection<string> tags,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Removes tags from the item; returns how many were removed.</summary>
+    Task<int> RemoveAsync(
+        bool isEvent, Guid itemId, IReadOnlyCollection<string> tags,
+        CancellationToken cancellationToken = default);
+}

@@ -88,7 +88,7 @@ recurrence, adherence/occurrence projections, materialized occurrences).
 
 - [x] Phase 1 — D7 status vocab + terminal set
 - [x] Phase 2 — D9 universal archive flag
-- [ ] Phase 3 — Tag primitive
+- [x] Phase 3 — Tag primitive
 - [ ] Phase 4 — Area type
 - [ ] Phase 5 — Triage marker + `v_inbox`
 - [ ] Phase 6 — Atomic create-and-link

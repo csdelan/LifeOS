@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRelationRepository>(_ => new NpgsqlRelationRepository(connectionString));
         services.AddSingleton<IActivityWriter>(_ => new NpgsqlActivityWriter(connectionString));
         services.AddSingleton<ISubjectEventRepository>(_ => new NpgsqlSubjectEventRepository(connectionString));
+        services.AddSingleton<ITagRepository>(_ => new NpgsqlTagRepository(connectionString));
 
         services.AddSingleton(sp => new CaptureService(
             sp.GetRequiredService<IEventStore>(),
@@ -76,6 +77,11 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventReader>(),
             sp.GetRequiredService<ISubjectEventRepository>()));
+
+        services.AddSingleton(sp => new TagService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<IEventReader>(),
+            sp.GetRequiredService<ITagRepository>()));
 
         // Operational services that work directly against the store.
         services.AddSingleton(_ => new MigrationRunner(connectionString));
