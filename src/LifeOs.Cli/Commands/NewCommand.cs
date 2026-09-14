@@ -42,6 +42,14 @@ internal static class NewCommand
         {
             Description = "Area of Focus this item belongs to (an Area subject's urn/reference; any item)."
         };
+        var parentOption = new Option<string?>("--parent")
+        {
+            Description = "Create beneath this parent (urn/short id/title) and relate to it atomically (GEN-7)."
+        };
+        var relationOption = new Option<string?>("--relation")
+        {
+            Description = "The child→parent relation, when the parent pair is ambiguous (default: inferred)."
+        };
         var endStateOption = new Option<string?>("--end-state")
         {
             Description = "Goal: the end-state that counts as reaching the goal."
@@ -82,7 +90,8 @@ internal static class NewCommand
         command.Arguments.Add(titleArgument);
         foreach (var option in new Option[]
                  {
-                     cadenceOption, reviewAtOption, areaOption, endStateOption, scopeOption, limitOption,
+                     cadenceOption, reviewAtOption, areaOption, parentOption, relationOption,
+                     endStateOption, scopeOption, limitOption,
                      focusOption, endsOption, statementOption, slotOption, attrOption
                  })
         {
@@ -135,8 +144,28 @@ internal static class NewCommand
                 await using var provider = Cli.BuildServices(connectionString);
                 var subjects = provider.GetRequiredService<SubjectService>();
 
-                var created = await subjects.CreateAsync(
-                    canonicalType, title, attributes.ToJsonString(), cancellationToken: cancellationToken);
+                var parent = parseResult.GetValue(parentOption);
+                var relation = parseResult.GetValue(relationOption);
+                if (string.IsNullOrWhiteSpace(parent) && !string.IsNullOrWhiteSpace(relation))
+                {
+                    throw new ArgumentException("--relation only applies with --parent.");
+                }
+
+                SubjectRef created;
+                ChildCreationResult? childLink = null;
+                if (!string.IsNullOrWhiteSpace(parent))
+                {
+                    // Parent-first: create the child and its parent edge atomically (GEN-7).
+                    childLink = await provider.GetRequiredService<ChildCreationService>()
+                        .CreateChildAsync(
+                            canonicalType, title, parent, relation, attributes.ToJsonString(), cancellationToken);
+                    created = childLink.Child;
+                }
+                else
+                {
+                    created = await subjects.CreateAsync(
+                        canonicalType, title, attributes.ToJsonString(), cancellationToken: cancellationToken);
+                }
 
                 // A Problem or Idea is a capture-like subject: it enters the inbox for
                 // triage on creation, whether from quick capture or global New
@@ -149,7 +178,19 @@ internal static class NewCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new { id = created.Id, urn = created.Urn, type = created.Type, title = created.Title });
+                    Cli.WriteJson(new
+                    {
+                        id = created.Id,
+                        urn = created.Urn,
+                        type = created.Type,
+                        title = created.Title,
+                        parent = childLink is null ? null : new { childLink.Parent.Urn, childLink.Relation }
+                    });
+                }
+                else if (childLink is not null)
+                {
+                    Console.WriteLine(
+                        $"Created {created.Type} {created.Urn} ({childLink.Relation} {childLink.Parent.Urn}).");
                 }
                 else
                 {

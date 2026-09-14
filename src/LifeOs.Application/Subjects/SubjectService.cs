@@ -95,6 +95,30 @@ public sealed class SubjectService(ISubjectRepository subjects)
         return new SubjectRef(id, urn, type, cleanTitle);
     }
 
+    /// <summary>
+    /// Creates a child subject and, in the same transaction, the edge to its parent
+    /// (child <paramref name="relation"/> parent) — the atomic half of parent-first
+    /// creation (GEN-7). Relation validity and the parent are the caller's to settle
+    /// (see <see cref="ChildCreationService"/>); this just builds the child and hands
+    /// the pair to the store so it is all-or-nothing.
+    /// </summary>
+    public async Task<(SubjectRef Child, Guid EdgeId)> CreateWithParentEdgeAsync(
+        string type, string title, string attributesJson, string relation, Guid parentId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            throw new ArgumentException("A title is required.", nameof(title));
+        }
+
+        var cleanTitle = NormalizeTitle(title);
+        var urn = Urns.Build(type, cleanTitle);
+        var (childId, edgeId) = await subjects.CreateWithParentEdgeAsync(
+            new NewSubject(urn, type, cleanTitle, attributesJson, OriginEventId: null),
+            relation, parentId, Provenances.Declared, cancellationToken);
+        return (new SubjectRef(childId, urn, type, cleanTitle), edgeId);
+    }
+
     public async Task<ResolvedSubject> ResolveOrCreateAsync(
         string type, string urnOrTitle, CancellationToken cancellationToken = default)
     {

@@ -113,6 +113,53 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
         }
     }
 
+    public async Task<(Guid ChildId, Guid EdgeId)> CreateWithParentEdgeAsync(
+        NewSubject child, string relation, Guid parentId, string provenance,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var childId = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
+                """
+                INSERT INTO bsk.subject (urn, type, title, attributes, origin_event_id)
+                VALUES (@Urn, @Type, @Title, @Attributes::jsonb, @OriginEventId)
+                RETURNING id;
+                """,
+                new
+                {
+                    child.Urn,
+                    child.Type,
+                    child.Title,
+                    Attributes = child.AttributesJson,
+                    child.OriginEventId
+                },
+                transaction: transaction, cancellationToken: cancellationToken));
+
+            // The child is the edge's `from`, the parent the `to`. A bad parent id
+            // fails the FK here and rolls the whole thing back — no orphan child.
+            var edgeId = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
+                """
+                INSERT INTO bsk.subject_relation (from_subject, relation, to_subject, provenance)
+                VALUES (@ChildId, @Relation, @ParentId, @Provenance)
+                RETURNING id;
+                """,
+                new { ChildId = childId, Relation = relation, ParentId = parentId, Provenance = provenance },
+                transaction: transaction, cancellationToken: cancellationToken));
+
+            await transaction.CommitAsync(cancellationToken);
+            return (childId, edgeId);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // Not committed: the transaction is rolled back on dispose, so no partial row.
+            throw new DuplicateSubjectException(child.Type, child.Title, ex);
+        }
+    }
+
     public async Task<bool> UpdateAttributesAsync(
         Guid id, string patchJson, IReadOnlyList<string> removeKeys,
         CancellationToken cancellationToken = default)

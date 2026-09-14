@@ -91,7 +91,7 @@ recurrence, adherence/occurrence projections, materialized occurrences).
 - [x] Phase 3 — Tag primitive
 - [x] Phase 4 — Area type
 - [x] Phase 5 — Triage marker + `v_inbox`
-- [ ] Phase 6 — Atomic create-and-link
+- [x] Phase 6 — Atomic create-and-link
 - [ ] Phase 7 — Capture bifurcation + split promote
 - [ ] Phase 8 — Recurrence representation
 - [ ] Phase 9 — Habit type + adherence + partial credit

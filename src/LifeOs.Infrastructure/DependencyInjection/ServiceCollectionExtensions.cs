@@ -39,6 +39,8 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(sp => new SubjectService(sp.GetRequiredService<ISubjectRepository>()));
 
+        services.AddSingleton(sp => new ChildCreationService(sp.GetRequiredService<SubjectService>()));
+
         services.AddSingleton(sp => new RelationService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IRelationRepository>()));

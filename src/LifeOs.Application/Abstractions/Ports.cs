@@ -56,6 +56,16 @@ public interface ISubjectRepository
     Task<Guid> CreateAsync(NewSubject newSubject, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Creates a subject and a parent edge (child <paramref name="relation"/> parent,
+    /// child = the edge's <c>from</c>) in one transaction, so parent-first creation is
+    /// all-or-nothing: if the edge cannot be written, the child is not left orphaned
+    /// (GEN-7). Returns the new child id and edge id.
+    /// </summary>
+    Task<(Guid ChildId, Guid EdgeId)> CreateWithParentEdgeAsync(
+        NewSubject child, string relation, Guid parentId, string provenance,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Merges a jsonb patch into a subject's <c>attributes</c> and removes the named
     /// keys, in one update. Returns whether a row was affected (<c>false</c> = no such
     /// subject). Only the attributes bag is touched — type, title, and status are
