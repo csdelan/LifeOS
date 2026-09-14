@@ -27,6 +27,8 @@ rootCommand.Subcommands.Add(IdeasCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(NewCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(LinkCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(StatusCommand.Create(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(ArchiveCommand.CreateArchive(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(ArchiveCommand.CreateRestore(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(PromoteCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(DecideCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(LogCommand.Create(connectionOption, jsonOption));

@@ -66,6 +66,8 @@ cadenced AS (
       -- A done/abandoned/… subject is not neglected — there is nothing left to tend.
       -- (bsk.is_terminal_status, migration 0008; NULL status counts as active.)
       AND NOT bsk.is_terminal_status(scs.status)
+      -- Archived subjects are hidden from every default view (D9, migration 0012).
+      AND NOT bsk.is_archived(s.id)
 ),
 -- The single most recent concerning event per subject, for the staleness clock
 -- and the evidence row.

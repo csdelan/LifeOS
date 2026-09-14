@@ -12,6 +12,9 @@ public static class EventKinds
     public const string Measurement = "measurement";
     public const string Interaction = "interaction";
     public const string StateChange = "state_change";
+
+    /// <summary>Archive / restore, folded by <c>bsk.is_archived</c> (D9, migration 0012).</summary>
+    public const string ArchiveChange = "archive_change";
 }
 
 /// <summary>Provenance values, matching the CHECK on <c>provenance</c> columns.</summary>

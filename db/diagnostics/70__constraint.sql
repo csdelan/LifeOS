@@ -42,6 +42,8 @@ WITH capacity_constraints AS (
         END AS dimension
     FROM bsk.subject s
     WHERE s.type = 'Constraint'
+      -- Archived subjects are hidden from every default view (D9, migration 0012).
+      AND NOT bsk.is_archived(s.id)
       -- Only capacity limits are counted; interaction constraints are policy, not capacity.
       AND lower(trim(s.attributes->>'scope')) = 'capacity'
       AND coalesce(trim(s.attributes->>'limit'), '') <> ''
@@ -53,6 +55,8 @@ active_projects AS (
     LEFT JOIN bsk_derived.subject_current_source scs ON scs.subject_id = s.id
     WHERE s.type = 'Project'
       AND NOT bsk.is_terminal_status(scs.status)
+      -- Archived subjects are hidden from every default view (D9, migration 0012).
+      AND NOT bsk.is_archived(s.id)
 ),
 -- Active subjects that have booked focused hours: the pool the "hours" dimension sums.
 -- Guard the numeric cast with a regex so a malformed committed_hours is ignored, not fatal.
@@ -62,6 +66,8 @@ committed_hours AS (
     FROM bsk.subject s
     LEFT JOIN bsk_derived.subject_current_source scs ON scs.subject_id = s.id
     WHERE NOT bsk.is_terminal_status(scs.status)
+      -- Archived subjects are hidden from every default view (D9, migration 0012).
+      AND NOT bsk.is_archived(s.id)
       AND s.attributes->>'committed_hours' ~ '^\s*\d+(\.\d+)?\s*$'
 ),
 observed AS (

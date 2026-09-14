@@ -35,6 +35,8 @@ WITH decisions AS (
       AND jsonb_exists(s.attributes, 'next_review_at')
       -- An outcome recorded = the Decision is closed out (terminal status). NULL is active.
       AND NOT bsk.is_terminal_status(scs.status)
+      -- Archived subjects are hidden from every default view (D9, migration 0012).
+      AND NOT bsk.is_archived(s.id)
 )
 SELECT
     d.id    AS subject_id,

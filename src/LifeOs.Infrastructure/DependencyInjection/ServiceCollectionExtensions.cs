@@ -52,6 +52,12 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IClock>(),
             sourceId));
 
+        services.AddSingleton(sp => new ArchiveService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<IEventStore>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
+
         services.AddSingleton(sp => new PromotionService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventReader>()));

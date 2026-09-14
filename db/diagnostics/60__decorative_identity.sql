@@ -33,6 +33,8 @@ SELECT
     ) AS evidence
 FROM bsk.subject v
 WHERE v.type = 'Value'
+  -- Archived subjects are hidden from every default view (D9, migration 0012).
+  AND NOT bsk.is_archived(v.id)
   AND NOT EXISTS (
       SELECT 1
       FROM bsk.subject_relation r

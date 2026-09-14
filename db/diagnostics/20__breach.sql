@@ -53,5 +53,7 @@ FROM bsk.subject s
 JOIN violations v ON v.subject_id = s.id
 -- Only Commitments can be breached; evidences/violates are Commitment-oriented.
 WHERE s.type = 'Commitment'
+  -- Archived subjects are hidden from every default view (D9, migration 0012).
+  AND NOT bsk.is_archived(s.id)
 GROUP BY s.id, s.urn, s.type, s.title
 ORDER BY count(v.event_id) DESC, s.urn;

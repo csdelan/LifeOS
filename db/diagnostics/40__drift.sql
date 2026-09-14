@@ -51,6 +51,8 @@ SELECT
     ), '[]'::jsonb) AS evidence
 FROM bsk.subject p
 WHERE p.type = 'Project'
+  -- Archived subjects are hidden from every default view (D9, migration 0012).
+  AND NOT bsk.is_archived(p.id)
   AND NOT EXISTS (
       SELECT 1
       FROM bsk.subject_relation r
