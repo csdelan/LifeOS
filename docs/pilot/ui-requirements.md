@@ -627,7 +627,7 @@ Build:      mapped
 ### GEN-6 — Object creation is globally available and uses type-specific forms
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - Provide a global **New** action from the main LifeOS application shell so I can create an
@@ -663,13 +663,26 @@ Build:      unmapped
   creating work beneath an existing object.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: `bsk new <Type> "<title>"` creates a subject of the chosen type; the kernel is
+  **type-agnostic at write time**, so "pick a type, then a type-specific form" is entirely
+  app-side. Initial attributes → `bsk set`; Tags → `bsk tag` (GEN-1); Relationships →
+  `bsk link` / `bsk relate`. Notes / Ideas stay on the Capture path (D4), not here. A Problem
+  opened via **New** creates the *same* `Problem` subject that capture would (GEN-14 / D4).
+- Kernel delta: none of its own — rides `bsk new` + `bsk set` + Tags (GEN-1) + the new types
+  (Area / Appointment, D1 / D10). Changing type before save is app-only (the kernel sees only
+  the final create).
+- Implications: "Save creates it / Cancel creates nothing" is a single `bsk new` at the end,
+  not incremental writes. Tags & relationships are assignable at creation *and* later — same
+  verbs either way.
+- Open decisions: whether `bsk new` should accept attributes + tags + an initial parent link
+  in **one atomic call** (cleaner for GEN-7's all-or-nothing guarantee) vs the app composing
+  several `bsk` calls — see GEN-7.
 
 
 ### GEN-7 — Create a child from its parent and relate it automatically
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - A common creation workflow begins from an existing parent object: I create the parent,
@@ -703,13 +716,30 @@ Build:      unmapped
   completed; preserve the entered child data so I can retry or cancel.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: create the child (`bsk new <ChildType>`), then add a parent edge on the existing
+  alignment graph. **Canonical parent→child relation map** for the Pilot hierarchy (the child
+  is the edge's `from`, the parent the `to`):
+  - Goal → Value: `serves`
+  - Project → Goal: `results_in`
+  - Task → Project: `serves`
+  - Task → Goal (direct): `serves`
+  These pairs are unambiguous, so the UI infers the relation silently; only a genuinely
+  ambiguous pair prompts. The **leaf invariant** (nothing serves a Task) makes the child-type
+  chooser under a Task empty for free.
+- Kernel delta (needs-kernel): an **atomic create-and-link** (child + parent edge in one
+  transaction) so "if the relate fails, don't report success and keep my child data" holds
+  without leaving an orphan — important under the no-delete policy (D9). Plus recording the
+  relation map above.
+- Implications: the child defaults to a **single** parent; more are added later via normal
+  Relationships. Grouping children by type on the parent screen is a read over incoming edges.
+- Open decisions: atomic create+link as a `bsk` flag (e.g. `bsk new Task "…" --serves <p>`)
+  vs app-composed with rollback; whether the relation map lives in the kernel or the app.
 
 
 ### GEN-8 — Goals use a type-specific form and must be developed before activation
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - The Goal creation and edit form should include **Title**, **Desired end state**,
@@ -734,13 +764,26 @@ Build:      unmapped
   Save or Cancel.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the existing **Goal** subject. Fields are attributes — `desired_end_state`,
+  `target_date`, `motivation`, `description`, `area` (D1) — set via `bsk set`. Status moves by
+  `state_change` (D7 vocab: developing → Active → Completed / Abandoned). The "≥1 Value" link
+  is a `serves` edge Goal→Value (the ontology's canonical Goal-serves-Value); GEN-7
+  prepopulates it when the Goal is created under a Value.
+- Kernel delta: none of its own — rides D7 (status vocab + terminal set) and D1 (Area). "No
+  progress %/bar" = nothing stored.
+- Implications: the two gates — **target date required to activate** and **≥1 Value** — are
+  **app-layer validations**, not kernel invariants (the kernel would still accept a Goal
+  without them; the app is the gatekeeper). This matches the tenet; flag if you ever want them
+  enforced in the kernel like the leaf rule. Completion / abandonment notes ride the
+  `state_change` event.
+- Open decisions: keep the activation gates app-side (recommended for the Pilot) vs
+  kernel-enforced.
 
 
 ### GEN-9 — Projects use a type-specific form and may stand alone
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - The Project creation and edit form should include **Title**, **Description / scope**,
@@ -766,13 +809,21 @@ Build:      unmapped
   Save or Cancel.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the existing **Project** subject. Attributes — `description` / scope, `start_date`,
+  `target_date`, `area` (D1), `notes` — via `bsk set`. Status by `state_change` (D7:
+  developing → Active → Completed / Abandoned). Parent Goal = a `results_in` edge Project→Goal
+  (GEN-7), **optional** — a standalone Project simply has no parent edge.
+- Kernel delta: none of its own — rides D7 + D1.
+- Implications: a standalone Project is an **intentional orphan** in the alignment graph — the
+  BROWSE-1 "orphans" filter will surface it, which is correct, not an error. "Active without a
+  next Task" is allowed (no blocking validation; the UI may nudge, per GEN-9).
+- Open decisions: none blocking.
 
 
 ### GEN-10 — Tasks support title-only quick entry and optional planning detail
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - The Task creation and edit form should include **Title**, **Description / Notes**,
@@ -814,13 +865,26 @@ Build:      unmapped
   Save or Cancel.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the existing **Task** subject (a **leaf** — nothing serves a Task). Attributes:
+  `due` and `scheduled` (do-date) as **two independent keys**, plus `priority` (default
+  Medium), `estimated_duration`, `area` (D1), `description`. Status by `state_change` (D7:
+  Not started / In progress / Waiting / Completed / Cancelled). Title-only quick create = a
+  bare `bsk new Task "<title>"`. Parent (Project or Goal) via GEN-7's `serves`, optional.
+- Kernel delta: none structural — all fields are jsonb attributes (free); the only work is
+  standardizing keys (`due` exists; add `scheduled`, `priority`, `estimated_duration`) plus
+  D7 status.
+- Implications: `due` (a real deadline) and `scheduled` (intent-to-work) stay separate and are
+  never cross-populated. **Priority re-enters here** (default Medium) after being deferred
+  earlier — harmless as a latent attribute, but note it against the earlier "let AI infer
+  priority" stance. The leaf rule blocks children under a Task (GEN-7).
+- Open decisions: **Waiting** → an optional `waiting_for` Person edge + a follow-up-date
+  attribute (GEN-10's open question); final key name (`scheduled` vs `do_date`).
 
 
 ### TASKS-1 — The Tasks tab optimizes daily execution and quick entry
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - Provide the dedicated **Tasks** destination defined by NAV-1 as a focused working view,
@@ -855,7 +919,17 @@ Build:      unmapped
   later phase after single-item workflows have been validated.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: pure **reads** over Task subjects. The four groups are a derived projection over
+  the two date attributes vs today — Overdue (incomplete, `due` < today), Today (`due` or
+  `scheduled` = today), Upcoming (future `due` / `scheduled`), Unscheduled (neither) — with
+  "show once, first group wins" as app precedence. Inline quick-entry = `bsk new Task`; list
+  actions (Completed / In progress) = `state_change`.
+- Kernel delta: none — rides GEN-10's attribute keys, D7 status, Tags (GEN-1), Area (D1), and
+  the alignment edges for the Goal / Project filter.
+- Implications: the groups are computed, not stored; Completed / Cancelled Tasks drop out of
+  the default view but remain reachable via Status filters. This is the Task-scoped sibling of
+  BROWSE-2.
+- Open decisions: none blocking.
 
 
 ### GEN-11 — Identity Statements are timeless rather than status-driven work
@@ -2066,6 +2140,9 @@ work. One line per item; details live in the requirement.
   reversible; never deletes; orthogonal to workflow status.
 - **Capture bifurcation** (D4) — note / document / url as events; idea / problem as
   subjects-on-capture; split the `promote` paths (event→subject vs subject→subject).
+- **Atomic create-and-link + parent→child relation map** (GEN-7) — a one-transaction create +
+  parent edge so parent-first creation is all-or-nothing (no orphan on failure); canonical
+  map: Goal→Value `serves`, Project→Goal `results_in`, Task→Project/Goal `serves`.
 - **Managed binary artifact storage** (CAP-2 / CAP-4 / JOURNAL-2) — blob / file storage for
   audio, attachments, and inline media; today's artifact table holds text only.
 - **`voice` write path** (CAP-2) — a `bsk` verb that writes `voice` events (closes one of
