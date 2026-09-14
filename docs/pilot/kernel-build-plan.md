@@ -94,7 +94,7 @@ recurrence, adherence/occurrence projections, materialized occurrences).
 - [x] Phase 6 — Atomic create-and-link
 - [x] Phase 7 — Capture bifurcation + split promote
 - [x] Phase 8 — Recurrence representation
-- [ ] Phase 9 — Habit type + adherence + partial credit
+- [x] Phase 9 — Habit type + adherence + partial credit
 - [ ] Phase 10 — Habit occurrence + streak projection
 - [ ] Phase 11 — People-association link
 - [ ] Phase 12 — Appointment type + materialized occurrences

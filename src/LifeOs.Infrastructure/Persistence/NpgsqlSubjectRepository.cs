@@ -160,6 +160,17 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
         }
     }
 
+    public async Task<string?> GetAttributeValueAsync(
+        Guid id, string key, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT attributes->>@key FROM bsk.subject WHERE id = @id;",
+            new { id, key }, cancellationToken: cancellationToken));
+    }
+
     public async Task<(Guid NewId, Guid EdgeId)> CreateWithIncomingEdgeAsync(
         NewSubject newSubject, string relation, Guid fromId, string provenance,
         CancellationToken cancellationToken = default)

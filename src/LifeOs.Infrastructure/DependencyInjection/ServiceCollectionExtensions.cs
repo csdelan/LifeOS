@@ -80,6 +80,13 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IClock>(),
             sourceId));
 
+        services.AddSingleton(sp => new AdherenceService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<IActivityWriter>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
+
         services.AddSingleton(sp => new RelateService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventReader>(),

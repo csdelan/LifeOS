@@ -60,6 +60,24 @@ public static class SubjectTypes
 
     /// <summary>Area of Focus — a durable life domain items point to (GEN-2 / D1, migration 0014).</summary>
     public const string Area = "Area";
+
+    /// <summary>A habit — its own type composing recurrence + adherence (GEN-3 / D2, migration 0017).</summary>
+    public const string Habit = "Habit";
+}
+
+/// <summary>
+/// How an expected habit occurrence turned out (GEN-3). Recorded on the adherence
+/// event's payload; the edge is <c>evidences</c> for followed/partial and
+/// <c>violates</c> for a miss. Partial is fixed half-credit and is only permitted
+/// when the habit's <c>allows_partial</c> flag is set (D2).
+/// </summary>
+public static class AdherenceResults
+{
+    public const string Followed = "followed";
+    public const string Partial = "partial";
+    public const string Missed = "missed";
+
+    public static readonly IReadOnlyList<string> All = [Followed, Partial, Missed];
 }
 
 /// <summary>

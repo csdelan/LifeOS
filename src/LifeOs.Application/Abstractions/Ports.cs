@@ -85,6 +85,13 @@ public interface ISubjectRepository
     Task<bool> UpdateAttributesAsync(
         Guid id, string patchJson, IReadOnlyList<string> removeKeys,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads a single top-level attribute value as text (<c>attributes-&gt;&gt;key</c>),
+    /// or <c>null</c> when the subject or the key is absent.
+    /// </summary>
+    Task<string?> GetAttributeValueAsync(
+        Guid id, string key, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Creates directed subject → subject edges in <c>bsk.subject_relation</c>.</summary>
