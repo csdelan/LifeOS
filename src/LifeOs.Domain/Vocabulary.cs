@@ -39,6 +39,9 @@ public static class SubjectTypes
     public const string Person = "Person";
     public const string Constraint = "Constraint";
     public const string Season = "Season";
+
+    /// <summary>Area of Focus — a durable life domain items point to (GEN-2 / D1, migration 0014).</summary>
+    public const string Area = "Area";
 }
 
 /// <summary>

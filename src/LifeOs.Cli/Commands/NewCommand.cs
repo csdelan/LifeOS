@@ -19,7 +19,7 @@ internal static class NewCommand
     [
         SubjectTypes.Value, SubjectTypes.Goal, SubjectTypes.Problem, SubjectTypes.Project,
         SubjectTypes.Task, SubjectTypes.Commitment, SubjectTypes.Decision, SubjectTypes.Idea,
-        SubjectTypes.Person, SubjectTypes.Constraint, SubjectTypes.Season
+        SubjectTypes.Person, SubjectTypes.Constraint, SubjectTypes.Season, SubjectTypes.Area
     ];
 
     public static Command Create(Option<string?> connectionOption, Option<bool> jsonOption)
@@ -37,6 +37,10 @@ internal static class NewCommand
         var reviewAtOption = new Option<string?>("--review-at")
         {
             Description = "When this subject should next be reviewed (ISO-8601, any subject)."
+        };
+        var areaOption = new Option<string?>("--area")
+        {
+            Description = "Area of Focus this item belongs to (an Area subject's urn/reference; any item)."
         };
         var endStateOption = new Option<string?>("--end-state")
         {
@@ -78,7 +82,7 @@ internal static class NewCommand
         command.Arguments.Add(titleArgument);
         foreach (var option in new Option[]
                  {
-                     cadenceOption, reviewAtOption, endStateOption, scopeOption, limitOption,
+                     cadenceOption, reviewAtOption, areaOption, endStateOption, scopeOption, limitOption,
                      focusOption, endsOption, statementOption, slotOption, attrOption
                  })
         {
@@ -109,6 +113,7 @@ internal static class NewCommand
                 var attributes = new JsonObject();
                 Set(attributes, "expected_cadence", parseResult.GetValue(cadenceOption));
                 Set(attributes, "next_review_at", parseResult.GetValue(reviewAtOption));
+                Set(attributes, "area", parseResult.GetValue(areaOption));
                 Set(attributes, "end_state", parseResult.GetValue(endStateOption));
                 Set(attributes, "scope", parseResult.GetValue(scopeOption));
                 Set(attributes, "limit", parseResult.GetValue(limitOption));

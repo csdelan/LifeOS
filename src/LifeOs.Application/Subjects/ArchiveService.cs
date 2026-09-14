@@ -29,6 +29,14 @@ public sealed class ArchiveService(SubjectService subjects, IEventStore events, 
     {
         var subject = await subjects.ResolveAsync(reference, cancellationToken);
 
+        // Areas are declared permanent (GEN-2 / D9 exemption): they become less
+        // prominent, never archived. Enforced at the single writer, not just the UI.
+        if (archived && subject.Type == SubjectTypes.Area)
+        {
+            throw new InvalidOperationException(
+                "An Area is permanent and cannot be archived (GEN-2). Areas become less prominent, not archived.");
+        }
+
         var payload = JsonSerializer.Serialize(new { subject_id = subject.Id.ToString(), archived });
 
         var now = clock.UtcNow;
