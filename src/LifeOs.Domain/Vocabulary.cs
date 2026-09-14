@@ -110,6 +110,21 @@ public static class SubjectEventRelations
     public static readonly IReadOnlyList<string> All = [Concerns, Evidences, Violates];
 }
 
+/// <summary>
+/// Roles for a People-association (<c>attributes.people</c>): how a Person is involved
+/// in an item. A property, not an alignment edge — see migration 0019.
+/// </summary>
+public static class PersonRoles
+{
+    public const string Attendee = "attendee";
+    public const string Owner = "owner";
+    public const string Assignee = "assignee";
+    public const string WaitingFor = "waiting_for";
+    public const string Involves = "involves";
+
+    public static readonly IReadOnlyList<string> All = [Attendee, Owner, Assignee, WaitingFor, Involves];
+}
+
 /// <summary>Identifiers for where an event originated (the event's <c>source_id</c>).</summary>
 public static class KernelSources
 {

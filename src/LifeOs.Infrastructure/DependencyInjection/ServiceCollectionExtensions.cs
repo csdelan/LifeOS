@@ -97,6 +97,10 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IEventReader>(),
             sp.GetRequiredService<ITagRepository>()));
 
+        services.AddSingleton(sp => new PeopleService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>()));
+
         services.AddSingleton(sp => new TriageService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventReader>(),
