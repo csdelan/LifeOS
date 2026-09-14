@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace LifeOs.Pilot.Cli;
 
@@ -57,8 +58,13 @@ public sealed class BskCli(string executablePath)
         return null;
     }
 
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     /// <summary>Runs <c>bsk &lt;args&gt;</c>; returns stdout, or throws on a non-zero exit.</summary>
-    public string Run(params string[] args)
+    public string Run(params string[] args) => Run(extraEnv: null, args);
+
+    /// <summary>Like <see cref="Run(string[])"/>, with extra environment variables for the child process.</summary>
+    public string Run(IReadOnlyDictionary<string, string>? extraEnv, params string[] args)
     {
         var startInfo = new ProcessStartInfo(executablePath)
         {
@@ -70,6 +76,14 @@ public sealed class BskCli(string executablePath)
         foreach (var arg in args)
         {
             startInfo.ArgumentList.Add(arg);
+        }
+
+        if (extraEnv is not null)
+        {
+            foreach (var (key, value) in extraEnv)
+            {
+                startInfo.Environment[key] = value;
+            }
         }
 
         using var process = Process.Start(startInfo)
@@ -88,4 +102,83 @@ public sealed class BskCli(string executablePath)
 
         return stdout;
     }
+
+    /// <summary>Runs <c>bsk … --json</c> and deserializes stdout.</summary>
+    public T RunJson<T>(params string[] args)
+    {
+        var withJson = new string[args.Length + 1];
+        args.CopyTo(withJson, 0);
+        withJson[^1] = "--json";
+        var stdout = Run(withJson);
+        try
+        {
+            return JsonSerializer.Deserialize<T>(stdout, JsonOptions)
+                ?? throw new BskException("bsk --json returned empty output.");
+        }
+        catch (JsonException ex)
+        {
+            throw new BskException($"Could not parse bsk JSON output: {ex.Message}\n{stdout}");
+        }
+    }
+
+    public CreatedSubject NewSubject(params string[] args)
+        => RunJson<CreatedSubject>(args);
+
+    /// <summary>
+    /// Append a journal entry and relate it to <paramref name="subjectUrn"/> without
+    /// opening $EDITOR: a tiny helper copies the drafted text into the file the
+    /// existing <c>bsk journal</c> verb already expects, then <c>bsk relate</c> files it.
+    /// </summary>
+    public void AppendJournal(string subjectUrn, string text)
+    {
+        var draft = Path.Combine(Path.GetTempPath(), $"lifeos-journal-draft-{Guid.NewGuid():N}.txt");
+        var helper = Path.Combine(Path.GetTempPath(), $"lifeos-journal-write-{Guid.NewGuid():N}.cmd");
+        File.WriteAllText(draft, text);
+        File.WriteAllText(helper, $"@echo off{Environment.NewLine}copy /Y \"{draft}\" %1 >nul{Environment.NewLine}exit 0{Environment.NewLine}");
+        try
+        {
+            var created = Run(
+                new Dictionary<string, string> { ["VISUAL"] = helper, ["EDITOR"] = helper },
+                "journal", "--json");
+            var parsed = JsonSerializer.Deserialize<JournalCapture>(created, JsonOptions)
+                ?? throw new BskException("bsk journal --json returned empty output.");
+            if (parsed.Id == Guid.Empty)
+            {
+                throw new BskException("Journal capture did not return an event id.");
+            }
+
+            Run("relate", parsed.Id.ToString(), subjectUrn);
+        }
+        finally
+        {
+            TryDelete(draft);
+            TryDelete(helper);
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+            // Temp leftovers are harmless.
+        }
+    }
+
+    private sealed class JournalCapture
+    {
+        public Guid Id { get; set; }
+    }
+}
+
+/// <summary>The structured result of <c>bsk new --json</c>.</summary>
+public sealed class CreatedSubject
+{
+    public Guid Id { get; set; }
+    public string Urn { get; set; } = "";
+    public string Type { get; set; } = "";
+    public string Title { get; set; } = "";
 }

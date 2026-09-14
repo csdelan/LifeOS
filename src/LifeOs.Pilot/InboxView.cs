@@ -1,6 +1,7 @@
 using LifeOs.Pilot.Cli;
 using LifeOs.Pilot.Dialogs;
 using LifeOs.Pilot.Reader;
+using LifeOs.Pilot.Shell;
 
 namespace LifeOs.Pilot;
 
@@ -12,7 +13,7 @@ namespace LifeOs.Pilot;
 /// (INBOX-4) — only Promote / File / Drop take an item out of the Inbox. Reads go
 /// through <see cref="SubjectReader"/>; writes shell out to <see cref="BskCli"/>.
 /// </summary>
-public sealed class InboxView : UserControl
+internal sealed class InboxView : UserControl, IPilotView
 {
     private readonly SubjectReader _reader;
     private readonly BskCli? _bsk;
@@ -117,6 +118,40 @@ public sealed class InboxView : UserControl
 
     /// <summary>Re-reads the inbox — called when the Inbox tab is shown.</summary>
     public void Reload() => LoadInbox();
+
+    public bool IsDirty => false;
+
+    public bool TrySaveEdits() => true;
+
+    public void DiscardEdits()
+    {
+    }
+
+    public void SelectSubject(Guid id)
+    {
+        foreach (DataGridViewRow row in _grid.Rows)
+        {
+            if (row.DataBoundItem is InboxItem item && !item.IsEvent
+                && _reader.GetSubjectByUrn(item.SubjectUrn ?? "")?.Id == id)
+            {
+                var visible = _grid.Columns.Cast<DataGridViewColumn>().FirstOrDefault(c => c.Visible);
+                if (visible is not null)
+                {
+                    _grid.CurrentCell = row.Cells[visible.Index];
+                }
+
+                return;
+            }
+        }
+    }
+
+    public void SaveViewState(ViewStateStore store)
+    {
+    }
+
+    public void RestoreViewState(ViewStateStore store)
+    {
+    }
 
     private void LoadInbox()
     {

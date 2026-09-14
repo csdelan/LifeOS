@@ -7,32 +7,50 @@ public sealed class TypeCount
     public long N { get; set; }
 }
 
-/// <summary>One row in the middle list: a subject of the selected type.</summary>
+/// <summary>One row in a subject list (Browse, Goals, Projects, Tasks, …).</summary>
 public sealed class SubjectListItem
 {
     public Guid Id { get; set; }
     public string Urn { get; set; } = "";
+    public string Type { get; set; } = "";
     public string Title { get; set; } = "";
-    public string Status { get; set; } = "";
+    public string? Status { get; set; }
     public string? Due { get; set; }
+    public string? Scheduled { get; set; }
+    public string? TargetDate { get; set; }
+    public string? Area { get; set; }
+    public string? AreaName { get; set; }
+    public string? Tags { get; set; }
+    public bool Archived { get; set; }
+    public DateTime CreatedAt { get; set; }
     public string? ExpectedCadence { get; set; }
     public DateTime? NextReviewAt { get; set; }
+    public string? PersonKind { get; set; }
+    public int? VisionOrder { get; set; }
+
+    public string DisplayStatus => Shell.PilotVocab.EffectiveStatus(Type, Status);
 }
 
-/// <summary>The detail-pane header fields for one subject.</summary>
+/// <summary>The detail-pane header fields for one subject, plus the raw attributes jsonb.</summary>
 public sealed class SubjectDetail
 {
     public Guid Id { get; set; }
     public string Urn { get; set; } = "";
     public string Type { get; set; } = "";
     public string Title { get; set; } = "";
-    public string Status { get; set; } = "";
+    public string? Status { get; set; }
     public string? Due { get; set; }
     public string? ExpectedCadence { get; set; }
     public DateTime? NextReviewAt { get; set; }
     public string? Scope { get; set; }
     public string? Statement { get; set; }
     public DateTime CreatedAt { get; set; }
+    public bool Archived { get; set; }
+    public string? Area { get; set; }
+    public string? AreaName { get; set; }
+    public string? Attributes { get; set; }
+
+    public string DisplayStatus => Shell.PilotVocab.EffectiveStatus(Type, Status);
 }
 
 /// <summary>One alignment-graph edge, in whichever direction it was queried.</summary>
@@ -42,6 +60,7 @@ public sealed class RelationEdge
     public string Urn { get; set; } = "";
     public string Type { get; set; } = "";
     public Guid SubjectId { get; set; }
+    public string? Title { get; set; }
 }
 
 /// <summary>An event that <c>concerns</c> the selected subject.</summary>
@@ -50,6 +69,7 @@ public sealed class ConcerningEvent
     public string Kind { get; set; } = "";
     public DateTime OccurredAt { get; set; }
     public Guid EventId { get; set; }
+    public string? Content { get; set; }
 }
 
 /// <summary>One recorded <c>state_change</c> in the subject's status history.</summary>
@@ -100,4 +120,98 @@ public sealed class InboxItem
                 : text;
         }
     }
+}
+
+public sealed class AreaRow
+{
+    public Guid Id { get; set; }
+    public string Urn { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    public string? Notes { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public sealed class TagUniverseItem
+{
+    public string Tag { get; set; } = "";
+    public long ItemCount { get; set; }
+}
+
+public sealed class HabitRow
+{
+    public Guid Id { get; set; }
+    public string Urn { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string? Cue { get; set; }
+    public string? Routine { get; set; }
+    public string? Reward { get; set; }
+    public string? StartDate { get; set; }
+    public string? EndDate { get; set; }
+    public bool AllowsPartial { get; set; }
+    public string? Recurrence { get; set; }
+    public bool Archived { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public int CurrentStreak { get; set; }
+    public string? LastState { get; set; }
+}
+
+public sealed class HabitOccurrenceRow
+{
+    public Guid HabitId { get; set; }
+    public string HabitUrn { get; set; } = "";
+    public string HabitName { get; set; } = "";
+    public DateOnly OccurrenceDate { get; set; }
+    public string State { get; set; } = "";
+    public bool AllowsPartial { get; set; }
+}
+
+public sealed class AppointmentRow
+{
+    public Guid Id { get; set; }
+    public string Urn { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string? Date { get; set; }
+    public string? StartTime { get; set; }
+    public string? EndTime { get; set; }
+    public string? AllDay { get; set; }
+    public string? Location { get; set; }
+    public string? MeetingLink { get; set; }
+    public string? Area { get; set; }
+    public string? SeriesUrn { get; set; }
+    public string? Recurrence { get; set; }
+    public string Status { get; set; } = "";
+    public bool Archived { get; set; }
+    public DateTime CreatedAt { get; set; }
+
+    public bool IsSeries => !string.IsNullOrWhiteSpace(Recurrence) && string.IsNullOrWhiteSpace(Date);
+}
+
+public sealed class PersonAssociationRow
+{
+    public Guid SubjectId { get; set; }
+    public string SubjectUrn { get; set; } = "";
+    public string SubjectType { get; set; } = "";
+    public string SubjectTitle { get; set; } = "";
+    public string Role { get; set; } = "";
+    public Guid PersonId { get; set; }
+    public string PersonUrn { get; set; } = "";
+    public string PersonName { get; set; } = "";
+}
+
+public sealed class PersonRow
+{
+    public Guid Id { get; set; }
+    public string Urn { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string? PersonKind { get; set; }
+    public string? Role { get; set; }
+    public bool Archived { get; set; }
+}
+
+public sealed class JournalEntry
+{
+    public Guid EventId { get; set; }
+    public DateTime OccurredAt { get; set; }
+    public string Content { get; set; } = "";
 }
