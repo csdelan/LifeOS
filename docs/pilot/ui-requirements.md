@@ -935,7 +935,7 @@ Build:      mapped
 ### GEN-11 — Identity Statements are timeless rather than status-driven work
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - Use **Identity Statement** as the user-facing term throughout the UI. This is the concept
@@ -974,7 +974,19 @@ Build:      unmapped
   and explicit Save or Cancel.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the existing **Value** subject — "Identity Statement" is just the UI label. Value
+  already carries a `statement` column (migration 0010), an exact home for the first-person
+  declaration; "Why it matters", Notes, and `area` (D1) are attributes. **No status** — Value
+  has no `state_change` workflow, which is precisely the status-less case D9 was built for: it
+  uses the **universal archive flag** instead.
+- Kernel delta: none of its own — Value + `statement` exist; the rest are attributes; archive
+  is D9. Goals attach via the canonical `serves` edge (Goal→Value), prepopulated by GEN-7.
+- Implications: Value is the one type with a first-class `statement` and no status. "Behavior
+  diverging from an identity" is recorded via Journals / activity (GEN-11), never as a status
+  on the Value.
+- Open decisions: **reconcile with D9** — GEN-11 still mentions permanent *delete*, but D9 is
+  archive-only (never delete); archive should be the mechanism. Also the `why_it_matters`
+  attribute key.
 
 
 ### GEN-12 — Commitments support promises to myself and others
@@ -1055,7 +1067,7 @@ Build:      unmapped
 ### GEN-14 — Problems track unresolved situations that need thought or action
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - A Problem is a durable object representing an unresolved situation or question that needs
@@ -1094,13 +1106,28 @@ Build:      unmapped
   different Problem concepts and not a later promotion from one object into another.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the existing **Problem** subject (the ontology's reuse-by-title anchor, §6). Fields
+  are attributes — `date_identified` (default = capture / creation date), `impact` (free
+  text), `area` (D1) — plus Description; Status by `state_change` (D7: Open / Working /
+  Resolved). Both entry paths create the *same* Problem type: quick capture (D4 / CAP-1) makes
+  it with Status Open + date-from-capture, and global **New** opens the full form — both
+  flagged for Inbox triage.
+- Kernel delta: none structural of its own — Problem exists; rides D4 (capture), D7 (status),
+  D1 (Area), INBOX-1 (triage marker). The one soft spot is the Problem→work relation (below).
+- Implications: creating a related Decision / Goal / Project / Task from a Problem must **not**
+  auto-resolve it — resolution stays an explicit `state_change`; the new object relates back to
+  the Problem.
+- Open decisions: **which relation connects a Problem to the work that addresses it?** The
+  graph has `serves` / `results_in` / `supersedes`; none cleanly means "addresses". Lean: reuse
+  `results_in` (the work results in resolving the Problem) for the Pilot, revisit when the
+  Decisions / thought-workflow (GEN-13) firms up. Also: does capture **reuse** an existing
+  same-title Problem, or always create new?
 
 
 ### GEN-15 — People and AI agents share one filterable directory
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - Humans and virtual AI agents should appear together in one **People / Agents** directory
@@ -1129,13 +1156,24 @@ Build:      unmapped
   explicit Save or Cancel.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the existing **Person** subject; an **AI agent is a Person with a type attribute**
+  (`person_kind` = human | ai), not a new type. Role, contact / reference, description, and
+  notes are attributes; Tags (GEN-1) and Relationships as usual. Archive via D9 (no delete).
+  The directory + All / Humans / AI filter are reads; the detail screen's grouped Commitments /
+  Tasks / Appointments / delegated work are reads over incoming relations.
+- Kernel delta: none of its own — Person exists; the human / AI split is one attribute;
+  archive is D9.
+- Implications: one directory backs every Person selector — Commitment owner (GEN-12), Inbox
+  Delegate (INBOX-3), Appointment attendees (CAL-1), and AI-authored captures (CAP-3) all point
+  here. Contact details are plain attributes (fine for a single-user local Pilot). AI agents
+  are records only in the Pilot; the integration path is out of scope.
+- Open decisions: the `person_kind` attribute key; whether agents grow distinct fields later.
 
 
 ### GEN-16 — Vision is composed from Identity Statements and long-term Goals
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - Vision is not a separate entity, editable document, or object type in LifeOS.
@@ -1166,7 +1204,18 @@ Build:      unmapped
   linked Identity Statement and Goal detail screens.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: **not a subject** — a composed, derived **read**. "Who I am" = non-archived Values
+  (GEN-11); "Where I am going" = long-term Goals, i.e. Goals whose `target_date` is more than
+  ~2 years out (a rolling query predicate, not a stored flag) and still active. Each shown item
+  links to its normal detail view; there is no Vision entity, status, or history.
+- Kernel delta: none structural — a query over Values + Goals. The only stored bit is the
+  **manual Vision ordering** you set within each group — a small per-item attribute
+  (`vision_order`) or a tiny ordered-list setting.
+- Implications: Vision always reflects the current Values / Goals (edit those to change it);
+  archived Values and inactive Goals drop out by default via D9 + status. Journals never appear
+  inline (they stay on the item's detail).
+- Open decisions: where the manual ordering lives (per-item `vision_order` attribute vs one
+  ordered-list setting) — a "view-ordering" question that may recur.
 
 
 ### CAL-1 — Appointments support manual calendar-style scheduling
@@ -1263,29 +1312,26 @@ Build:      needs-kernel
   and show the error within the dialog so I can retry without retyping.
 
 **Ontology fit (Claude):**
-- Maps to: a `note` flavor lands cleanly as a `note` event (`bsk capture`). An *idea*
-  has **no lightweight kernel path today** — `bsk ideas` is a structured, problem-anchored
-  brainstorm that requires a problem statement, *creates a Problem subject as a side
-  effect*, and reads N ideas from stdin. That is a deliberate sit-down ritual, the wrong
-  tool for a stray thought.
-- Options for what a quick "Idea" capture stores:
-  - **A. Idea = note** — no kernel change; "idea" isn't distinct at capture time, you
-    promote it to an `Idea` subject later.
-  - **B. Idea = flavored note** *(recommended)* — a `note` carrying an `idea` flavor
-    (e.g. `bsk capture --as idea`); Inbox shows the flavor and Promote pre-selects the
-    `Idea` type. `bsk ideas` stays for real brainstorms.
-  - **C. Idea = solo idea_session** — relax `bsk ideas` to allow a problemless,
-    single-idea session; larger change, stretches the "session is problem-anchored"
-    semantics.
-- Kernel delta (option B): an optional flavor/tag argument on `bsk capture`, threaded
-  through to the artifact so the reader can surface it.
-- Implications & constraints: at capture time "Idea" is a *flavor*, not necessarily a
-  distinct event kind; the heavyweight structured brainstorm (`bsk ideas`) remains a
-  separate act reachable elsewhere. This is a clean example of the guiding tenet — the UI
-  offers two sibling captures; the store may file them the same way plus a marker.
-- Open decisions: folded into **D4** (one capture / reference flavor model); direction is
-  **B — flavored capture** (note / idea / problem are flavors of one `note`-family event).
-  Exact flavor vocabulary + where the flavor is stored are tracked in D4.
+- Maps to (D4 — capture bifurcates by type):
+  - **Note** → a `note` event + artifact (the plain, reference-ish capture), flagged for the
+    Inbox via the triage marker (INBOX-1).
+  - **Problem** → **immediately a `Problem` subject** (GEN-14): Title derived from the text,
+    full text as Description, Status `Open`, Date identified = capture date; flagged for triage.
+  - **Idea** → **immediately an `Idea` subject** (CAP-6): full text, derived Title, Status
+    `New`; flagged for triage.
+  (Document / URL flavors are CAP-4 / CAP-5 — events + reference.) All land in the Inbox.
+- Kernel delta (needs-kernel): the **bifurcated capture path** (D4) — create an *event* (note)
+  or a *subject* (idea / problem) from the same dialog — plus **flag-on-create** so a freshly
+  created capture subject enters the triage queue (the INBOX-1 marker on a subject, not only an
+  event). `bsk capture` (note) and `bsk new Problem/Idea` already exist; the new bits are
+  choosing between them by type and attaching the triage marker.
+- Implications: **"promote" now splits** — a `note` (event) promotes *into* a subject, while an
+  `Idea` (already a subject) "promotes" *to another type* by creating it, relating it back, and
+  setting the Idea `Promoted` (CAP-6). Concurrency, hotkeys, and title-derivation stay app-side.
+- Open decisions: does capturing a Problem **reuse an existing same-title Problem** (the
+  ontology's reuse-by-title anchor, §6) or always create new? Does a plain `note` keep any
+  flavor tag at all now that idea / problem are their own subjects? *(Supersedes the earlier
+  A / B / C flavored-note mapping, now retired.)*
 
 
 ### CAP-2 — I want Voice mode for captures. 
@@ -1429,7 +1475,7 @@ Build:      needs-kernel
 ### CAP-6 — Ideas remain lightweight until promoted or rejected
 Horizon:    Pilot
 Definition: active
-Build:      unmapped
+Build:      mapped
 
 **Workflow (Chris):**
 - An Idea is a lightweight captured thought, not a durable work object with a large
@@ -1464,7 +1510,18 @@ Build:      unmapped
 - Idea content and status remain editable with chronological change history following GEN-4.
 
 **Ontology fit (Claude):**
-- pending
+- Maps to: the existing **Idea** subject, created on capture (CAP-1 / D4) with Status `New`.
+  Statuses New / Promoted / Rejected (D7). **Promote** = create the target subject
+  (Goal / Project / Task / Problem / Decision), relate it back to the source Idea, and set the
+  Idea `Promoted` — the subject→subject "promote" from D4. **Reject** = set `Rejected`, the
+  Idea's archival outcome (hidden from active views, preserved — i.e. D9 archive behavior).
+- Kernel delta: none of its own — Idea exists; rides D4 (capture + split promote), D7 (status),
+  D9 (Rejected = archived), INBOX-1 (triage marker).
+- Implications: an Idea stays deliberately lightweight — no big form, a 3-status lifecycle;
+  Capture is its only entry path (no global-New Idea form). Editing / tagging / relating a New
+  Idea does not resolve it (INBOX-4); only Promote or Reject does.
+- Open decisions: is **Rejected** a terminal status (D7), the archive flag (D9), or both? —
+  exactly D9's open "Rejected vs archived" sub-point.
 
 
 ### JOURNAL-1 — Support append-only plain-text journals on subjects
