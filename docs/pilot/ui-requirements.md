@@ -172,7 +172,7 @@ Build:      mapped
 ### NAV-1 — The Pilot uses persistent top-tab navigation and opens on Dashboard
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - Use a persistent top tab strip as the primary navigation model for the WinForms Pilot.
@@ -248,7 +248,7 @@ Build:      mapped
 ### DASHBOARD-1 — The opening screen is a daily prioritization command center
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - On opening LifeOS, I want to understand what deserves my attention within roughly 30
@@ -402,7 +402,7 @@ Build:      unmapped
 ### BROWSE-2 — Browse uses filters, a context-sensitive item list, and read-only detail
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - Use a three-pane Browse layout: a generalized filter pane, an item list, and a selected-
@@ -467,7 +467,7 @@ Build:      mapped
 ### GEN-1 — I want tags as a ubiquitous classification mechanism
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      built
 
 **Workflow (Chris):**
 - Everything created by hand should be taggable. From notes to first class objects like decisions or projects.
@@ -495,7 +495,7 @@ Build:      needs-kernel
 ### GEN-2 — Area of Focus should be a property of goals, tasks, projects (at a minimum)
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      built
 
 **Workflow (Chris):**
 - Use the short user-facing term **Area**. An Area may represent either an ongoing domain of
@@ -539,7 +539,7 @@ Build:      needs-kernel
 ### GEN-3 — The UI should support habits as a first class concept, including occurrences of the habit.
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      built
 
 **Workflow (Chris):**
 - Each habit should have start date, end date, last date I confirmed the habit, streak, recurrence, cue, routine, reward
@@ -628,7 +628,7 @@ Build:      mapped
 ### GEN-5 — Self-assessed adherence uses scout's honor and remains correctable
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - For Habits and Commitments that cannot be measured objectively, I am the authority on
@@ -663,7 +663,7 @@ Build:      mapped
 ### GEN-6 — Object creation is globally available and uses type-specific forms
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - Provide a global **New** action from the main LifeOS application shell so I can create an
@@ -718,7 +718,7 @@ Build:      mapped
 ### GEN-7 — Create a child from its parent and relate it automatically
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      built
 
 **Workflow (Chris):**
 - A common creation workflow begins from an existing parent object: I create the parent,
@@ -775,7 +775,7 @@ Build:      needs-kernel
 ### GEN-8 — Goals use a type-specific form and must be developed before activation
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - The Goal creation and edit form should include **Title**, **Desired end state**,
@@ -819,7 +819,7 @@ Build:      mapped
 ### GEN-9 — Projects use a type-specific form and may stand alone
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - The Project creation and edit form should include **Title**, **Description / scope**,
@@ -859,7 +859,7 @@ Build:      mapped
 ### GEN-10 — Tasks support title-only quick entry and optional planning detail
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - The Task creation and edit form should include **Title**, **Description / Notes**,
@@ -920,7 +920,7 @@ Build:      mapped
 ### TASKS-1 — The Tasks tab optimizes daily execution and quick entry
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - Provide the dedicated **Tasks** destination defined by NAV-1 as a focused working view,
@@ -971,7 +971,7 @@ Build:      mapped
 ### GEN-11 — Identity Statements are timeless rather than status-driven work
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - Use **Identity Statement** as the user-facing term throughout the UI. This is the concept
@@ -1064,7 +1064,7 @@ Build:      unmapped
 ### GEN-13 — Decisions record conclusions already made and remain editable with history
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - A Decision represents a decision that has already been made. It is not primarily a
@@ -1139,7 +1139,7 @@ Build:      mapped
 ### GEN-14 — Problems track unresolved situations that need thought or action
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - A Problem is a durable object representing an unresolved situation or question that needs
@@ -1202,7 +1202,7 @@ Build:      mapped
 ### GEN-15 — People and AI agents share one filterable directory
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - Humans and virtual AI agents should appear together in one **People / Agents** directory
@@ -1248,7 +1248,7 @@ Build:      mapped
 ### GEN-16 — Vision is composed from Identity Statements and long-term Goals
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - Vision is not a separate entity, editable document, or object type in LifeOS.
@@ -1296,7 +1296,7 @@ Build:      mapped
 ### CAL-1 — Appointments support manual calendar-style scheduling
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      built
 
 **Workflow (Chris):**
 - Pilot Appointments are entered and maintained manually. Synchronization with an external
@@ -1354,9 +1354,9 @@ Build:      needs-kernel
 
 
 ### CAP-1 — I want to be able to quickly capture a note, idea, problem from anywhere in the app
-Horizon:    Pilot
+Horizon:    Pilot phase 2
 Definition: active
-Build:      needs-kernel
+Build:      mapped
 
 **Workflow (Chris):**
 - A system-wide global hotkey brings up the capture dialog even when LifeOS is not the
@@ -1564,7 +1564,7 @@ Build:      needs-kernel
 ### CAP-6 — Ideas remain lightweight until promoted or rejected
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - An Idea is a lightweight captured thought, not a durable work object with a large
@@ -1618,7 +1618,7 @@ Build:      mapped
 ### JOURNAL-1 — Support append-only plain-text journals on subjects
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - A Journal can be associated with a subject of any type, including Goals, Problems,
@@ -1685,7 +1685,7 @@ Build:      needs-kernel
 ### INBOX-1 — The Inbox is a source-agnostic triage queue, not a capture log
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      built
 
 **Workflow (Chris):**
 - The Inbox is **manual triage for anything that needs a processing decision** —
@@ -1760,7 +1760,7 @@ Build:      unmapped
 ### INBOX-3 — The Inbox provides prioritized, type-specific triage with a selected-item preview
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      built
 
 **Workflow (Chris):**
 - Present the Inbox as a list with a selected-item preview. I should be able to scan the
@@ -1829,7 +1829,7 @@ Build:      needs-kernel
 ### INBOX-4 — Tagging and relating organize an item but do not resolve Inbox triage
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - Adding and removing Tags will be one of the most common actions while processing an Inbox
