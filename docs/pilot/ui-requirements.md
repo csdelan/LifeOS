@@ -802,7 +802,7 @@ Build:      built
 **Ontology fit (Claude):**
 - Maps to: the existing **Goal** subject. Fields are attributes — `desired_end_state`,
   `target_date`, `motivation`, `description`, `area` (D1) — set via `bsk set`. Status moves by
-  `state_change` (D7 vocab: developing → Active → Completed / Abandoned). The "≥1 Value" link
+  `state_change` (D7 vocab: New → Active → Completed / Abandoned). The "≥1 Value" link
   is a `serves` edge Goal→Value (the ontology's canonical Goal-serves-Value); GEN-7
   prepopulates it when the Goal is created under a Value.
 - Kernel delta: none of its own — rides D7 (status vocab + terminal set) and D1 (Area). "No
@@ -834,7 +834,7 @@ Build:      built
 - A Project does not need to have a next Task before it can become Active. The UI may call
   attention to an Active Project that has no next action, but it must not prevent activation
   or saving.
-- A Target / due date is optional for both developing and Active Projects.
+- A Target / due date is optional for both New and Active Projects.
 - The Project detail view should show any parent Goals and its child Tasks using the grouped
   parent/child behavior in GEN-7. A standalone Project should remain fully usable when the
   parent-Goal group is empty.
@@ -847,7 +847,7 @@ Build:      built
 **Ontology fit (Claude):**
 - Maps to: the existing **Project** subject. Attributes — `description` / scope, `start_date`,
   `target_date`, `area` (D1), `notes` — via `bsk set`. Status by `state_change` (D7:
-  developing → Active → Completed / Abandoned). Parent Goal = a `results_in` edge Project→Goal
+  New → Active → Completed / Abandoned). Parent Goal = a `results_in` edge Project→Goal
   (GEN-7), **optional** — a standalone Project simply has no parent edge.
 - Kernel delta: none of its own — rides D7 + D1.
 - Implications: a standalone Project is an **intentional orphan** in the alignment graph — the
@@ -2248,7 +2248,7 @@ not a Commitment base type.)*
 With this resolved, DASHBOARD-1 / TODAY-1 / TODAY-2 / REVIEW-* can now be mapped.
 
 **D7 — Per-type status vocabularies + terminal classification.** Each subject type now
-carries its own status set, moved by `state_change` events: Goal (developing → Active →
+carries its own status set, moved by `state_change` events: Goal (New → Active →
 Completed / Abandoned), Project (same shape), Task (Not started / In progress / Waiting /
 Completed / Cancelled), Commitment (Open / Fulfilled / Missed / Cancelled), Decision (Open /
 Implementing / Cancelled / Closed), Problem (Open / Working / Resolved), Appointment

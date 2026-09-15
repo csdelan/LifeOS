@@ -209,20 +209,23 @@ internal sealed class DashboardView : UserControl, IPilotView
 
     private void AddWork(string heading, string type, string destination)
     {
+        // The type's starting status (e.g. Goal/Project "New") — items still there are
+        // not yet Active work, so they list separately from the active items below.
+        var startStatus = PilotVocab.DefaultStatusFor(type);
         var items = _reader.GetSubjects(type)
             .Where(s => !s.Archived && PilotVocab.IsActiveWorkStatus(type, s.Status)
-                        && !string.Equals(s.DisplayStatus, "developing", StringComparison.OrdinalIgnoreCase))
+                        && !string.Equals(s.DisplayStatus, startStatus, StringComparison.OrdinalIgnoreCase))
             .Take(8)
             .ToList();
-        var developing = _reader.GetSubjects(type)
-            .Where(s => string.Equals(s.DisplayStatus, "developing", StringComparison.OrdinalIgnoreCase))
+        var starting = _reader.GetSubjects(type)
+            .Where(s => string.Equals(s.DisplayStatus, startStatus, StringComparison.OrdinalIgnoreCase))
             .Take(3)
             .ToList();
         var panel = Section(heading);
         if (items.Count == 0)
         {
-            panel.Controls.Add(Empty(developing.Count > 0
-                ? $"No Active {heading.ToLowerInvariant()} (some still developing)."
+            panel.Controls.Add(Empty(starting.Count > 0
+                ? $"No Active {heading.ToLowerInvariant()} (some still {startStatus.ToLowerInvariant()})."
                 : $"No {heading.ToLowerInvariant()}."));
         }
         else

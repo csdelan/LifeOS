@@ -70,6 +70,16 @@ recurrence, adherence/occurrence projections, materialized occurrences).
 - D6 focus storage (Monthly/Weekly Goal pointers as change-events; daily objectives app-local)
 - Managed binary artifact storage (CAP-2/4, JOURNAL-2) → then `voice` write path (CAP-2)
 - INBOX-2 (still `drafting`, unmapped)
+- **Vocabulary single-source (production, behind the REST API).** Today the status vocabulary
+  is authored in the Domain ontology (`StatusVocabulary`) and hand-mirrored into the Pilot
+  (`PilotVocab`, invariant 9 — no ProjectReference); a drift-guard test keeps the two in
+  lockstep. At production, keep the Domain as the one authoritative definition and make
+  everything downstream a **projection/consumer** of it: generate the SQL vocab table from the
+  ontology (so the terminal predicate + `is_terminal`/`ordinal`/`is_default` columns can't
+  disagree with it), serve it via the REST API, and have the web UI read the API instead of
+  keeping its own copy. The Pilot's hand-mirror disappears at that point; the client keeps only
+  presentation helpers (labels, destinations, status folding). Default status stays "first item
+  of the list" — no separate map.
 
 ## Band-A settled defaults (approved)
 

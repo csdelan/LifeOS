@@ -16,8 +16,8 @@ namespace LifeOs.Domain;
 /// </summary>
 public static class StatusVocabulary
 {
-    /// <summary>Goal / Project share one shape: developing → Active → done/dead.</summary>
-    private static readonly string[] GoalProject = ["developing", "Active", "Completed", "Abandoned"];
+    /// <summary>Goal / Project share one shape: New → Active → done/dead.</summary>
+    private static readonly string[] GoalProject = ["New", "Active", "Completed", "Abandoned"];
 
     private static readonly Dictionary<string, string[]> ByType = new(StringComparer.OrdinalIgnoreCase)
     {

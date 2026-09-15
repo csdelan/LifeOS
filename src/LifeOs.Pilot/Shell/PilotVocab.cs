@@ -47,8 +47,8 @@ internal static class PilotVocab
 
     private static readonly Dictionary<string, string[]> StatusByType = new(StringComparer.OrdinalIgnoreCase)
     {
-        [Goal] = ["developing", "Active", "Completed", "Abandoned"],
-        [Project] = ["developing", "Active", "Completed", "Abandoned"],
+        [Goal] = ["New", "Active", "Completed", "Abandoned"],
+        [Project] = ["New", "Active", "Completed", "Abandoned"],
         [Task] = ["Not started", "In progress", "Waiting", "Completed", "Cancelled"],
         [Commitment] = ["Open", "Fulfilled", "Missed", "Cancelled"],
         [Decision] = ["Open", "Implementing", "Cancelled", "Closed"],
@@ -62,18 +62,6 @@ internal static class PilotVocab
         "done", "completed", "resolved", "closed", "cancelled",
         "abandoned", "dropped", "archived", "superseded",
         "fulfilled", "missed", "promoted", "rejected",
-    };
-
-    private static readonly Dictionary<string, string> DefaultStatus = new(StringComparer.OrdinalIgnoreCase)
-    {
-        [Goal] = "developing",
-        [Project] = "developing",
-        [Task] = "Not started",
-        [Commitment] = "Open",
-        [Decision] = "Open",
-        [Problem] = "Open",
-        [Appointment] = "Scheduled",
-        [Idea] = "New",
     };
 
     // (childType, parentType) → relation. Dominant hierarchy Value→Goal→Project→Task, plus Task under Goal.
@@ -99,6 +87,13 @@ internal static class PilotVocab
         return !IsTerminal(effective);
     }
 
+    /// <summary>
+    /// The default status for a type — the first status in its vocabulary (D7). A
+    /// status-less type has no default and returns "".
+    /// </summary>
+    public static string DefaultStatusFor(string type)
+        => StatusesFor(type) is [var first, ..] ? first : "";
+
     /// <summary>Folded status, or the type's default when the projection is still null (D7).</summary>
     public static string EffectiveStatus(string type, string? status)
     {
@@ -107,7 +102,8 @@ internal static class PilotVocab
             return CanonicalStatus(type, status);
         }
 
-        return DefaultStatus.TryGetValue(type, out var fallback) ? fallback : "open";
+        var fallback = DefaultStatusFor(type);
+        return string.IsNullOrEmpty(fallback) ? "open" : fallback;
     }
 
     /// <summary>

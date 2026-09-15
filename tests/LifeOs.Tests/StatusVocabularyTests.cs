@@ -44,7 +44,6 @@ public sealed class StatusVocabularyTests(PostgresFixture postgres)
     // ---- non-terminal statuses across the type map must NOT be terminal ----
 
     [Theory]
-    [InlineData("developing")]  // Goal / Project
     [InlineData("Active")]      // Goal / Project
     [InlineData("Not started")] // Task
     [InlineData("In progress")] // Task
