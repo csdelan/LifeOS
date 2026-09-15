@@ -58,6 +58,7 @@ internal sealed class BrowseView : UserControl, IPilotView
         _inner.Panel1.Controls.Add(_grid);
         _inner.Panel1.Controls.Add(listToolbar);
         _inner.Panel2.Controls.Add(_detail);
+        Ui.PrepareListDetailSplit(_inner, setDistance: false);
 
         var banner = Ui.Toolbar();
         banner.Controls.Add(refresh);
@@ -97,6 +98,7 @@ internal sealed class BrowseView : UserControl, IPilotView
         var subject = _reader.GetSubject(id);
         if (subject is null)
         {
+            _detail.Clear();
             return;
         }
 
@@ -115,6 +117,8 @@ internal sealed class BrowseView : UserControl, IPilotView
                 return;
             }
         }
+
+        _detail.Clear();
     }
 
     public void SaveViewState(ViewStateStore store)

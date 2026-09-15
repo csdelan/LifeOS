@@ -1,14 +1,16 @@
+using LifeOs.Pilot.Controls;
+
 namespace LifeOs.Pilot.Dialogs;
 
 /// <summary>
 /// Edits a subject's date/cadence attributes — due / do-on date, next review date,
-/// and cadence — for <c>bsk set</c>. A blank field clears that attribute. Content-
+/// and cadence — for <c>bsk set</c>. Unchecked date fields clear that attribute. Content-
 /// sized so nothing clips at any DPI.
 /// </summary>
 public sealed class AttributesDialog : Form
 {
-    private readonly TextBox _due = new();
-    private readonly TextBox _review = new();
+    private readonly DateField _due = new();
+    private readonly DateField _review = new();
     private readonly TextBox _cadence = new();
 
     public AttributesDialog(string subjectLabel, string? due, string? review, string? cadence)
@@ -26,8 +28,8 @@ public sealed class AttributesDialog : Form
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         Padding = new Padding(12);
 
-        _due.Text = due ?? "";
-        _review.Text = review ?? "";
+        _due.IsoDate = due;
+        _review.IsoDate = review;
         _cadence.Text = cadence ?? "";
 
         var root = new TableLayoutPanel
@@ -53,11 +55,12 @@ public sealed class AttributesDialog : Form
             Font = new Font(Font, FontStyle.Bold)
         };
 
-        foreach (var box in new[] { _due, _review, _cadence })
+        _cadence.Width = 430;
+        _cadence.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _cadence.Margin = new Padding(0, 0, 0, 10);
+        foreach (var picker in new[] { _due, _review })
         {
-            box.Width = 430;
-            box.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            box.Margin = new Padding(0, 0, 0, 10);
+            picker.Margin = new Padding(0, 0, 0, 10);
         }
 
         var ok = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
@@ -74,7 +77,7 @@ public sealed class AttributesDialog : Form
         buttons.Controls.Add(ok);
 
         root.Controls.Add(header, 0, 0);
-        root.Controls.Add(FieldLabel("Due / do-on date (e.g. 2026-09-02 — blank to clear):"), 0, 1);
+        root.Controls.Add(FieldLabel("Due / do-on date (uncheck to clear):"), 0, 1);
         root.Controls.Add(_due, 0, 2);
         root.Controls.Add(FieldLabel("Next review date:"), 0, 3);
         root.Controls.Add(_review, 0, 4);
@@ -87,9 +90,9 @@ public sealed class AttributesDialog : Form
         CancelButton = cancel;
     }
 
-    public string Due => _due.Text.Trim();
+    public string Due => _due.IsoDate ?? "";
 
-    public string Review => _review.Text.Trim();
+    public string Review => _review.IsoDate ?? "";
 
     public string Cadence => _cadence.Text.Trim();
 

@@ -77,6 +77,7 @@ internal sealed class TypedListView : UserControl, IPilotView
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical };
         split.Panel1.Controls.Add(_grid);
         split.Panel2.Controls.Add(_detail);
+        Ui.PrepareListDetailSplit(split);
 
         var banner = Ui.Toolbar();
         banner.Controls.Add(newButton);
@@ -150,6 +151,8 @@ internal sealed class TypedListView : UserControl, IPilotView
                 return;
             }
         }
+
+        _detail.Clear();
     }
 
     public void SaveViewState(ViewStateStore store)

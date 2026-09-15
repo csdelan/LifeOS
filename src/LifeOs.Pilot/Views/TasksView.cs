@@ -94,6 +94,7 @@ internal sealed class TasksView : UserControl, IPilotView
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical };
         split.Panel1.Controls.Add(_grid);
         split.Panel2.Controls.Add(_detail);
+        Ui.PrepareListDetailSplit(split);
 
         var banner = Ui.Toolbar();
         banner.Controls.Add(new Label { Text = "Quick:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
@@ -188,6 +189,8 @@ internal sealed class TasksView : UserControl, IPilotView
                 return;
             }
         }
+
+        _detail.Clear();
     }
 
     public void SaveViewState(ViewStateStore store)

@@ -17,13 +17,34 @@ internal sealed class DetailPane : UserControl
     private readonly SubjectReader _reader;
     private readonly BskCli? _bsk;
     private readonly Navigator _navigator;
-    private readonly Label _header = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Panel _head = new()
+    {
+        Dock = DockStyle.Top,
+        AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        Padding = new Padding(0, 0, 4, 0)
+    };
+    private readonly Label _header = new()
+    {
+        Dock = DockStyle.Fill,
+        AutoSize = false,
+        AutoEllipsis = true,
+        TextAlign = ContentAlignment.MiddleLeft
+    };
     private readonly Button _edit = Ui.Action("Edit…");
     private readonly Button _status = Ui.Action("Change status…");
     private readonly Button _archive = Ui.Action("Archive");
     private readonly Button _child = Ui.Action("New child…");
     private readonly Button _materialize = Ui.Action("Materialize…");
     private readonly Button _open = Ui.Action("Open in tab");
+    private readonly FlowLayoutPanel _toolbar = new()
+    {
+        AutoSize = true,
+        WrapContents = true,
+        Dock = DockStyle.Top,
+        Margin = new Padding(0),
+        Padding = new Padding(0, 2, 0, 4)
+    };
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
     private readonly RichTextBox _overview = ReadOnlyBox();
     private readonly RelationshipEditor _relationships;
@@ -36,6 +57,7 @@ internal sealed class DetailPane : UserControl
     private readonly Label _empty = new()
     {
         Dock = DockStyle.Fill,
+        AutoSize = false,
         TextAlign = ContentAlignment.MiddleCenter,
         ForeColor = SystemColors.GrayText,
         Text = "Select an item to see its detail."
@@ -57,6 +79,8 @@ internal sealed class DetailPane : UserControl
         _tags = new TagEditor(reader, bsk) { Dock = DockStyle.Fill };
 
         _header.Font = new Font(Font, FontStyle.Bold);
+        _header.AutoSize = false;
+        _header.AutoEllipsis = true;
         _edit.Click += (_, _) => DoEdit();
         _status.Click += (_, _) => DoStatus();
         _archive.Click += (_, _) => DoArchive();
@@ -79,7 +103,11 @@ internal sealed class DetailPane : UserControl
         _journalAppend.Click += (_, _) => DoJournal();
         _journalAppend.Visible = false;
 
-        var toolbar = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Dock = DockStyle.Fill };
+        Dock = DockStyle.Fill;
+        AutoSize = false;
+        Padding = new Padding(8, 4, 8, 4);
+
+        var toolbar = _toolbar;
         toolbar.Controls.Add(_edit);
         toolbar.Controls.Add(_status);
         toolbar.Controls.Add(_archive);
@@ -91,11 +119,18 @@ internal sealed class DetailPane : UserControl
         var relPage = Page("Relationships", _relationships);
         var tagPage = Page("Tags", _tags);
 
-        var journalHost = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1 };
+        var journalHost = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 3,
+            ColumnCount = 1,
+            GrowStyle = TableLayoutPanelGrowStyle.FixedSize
+        };
+        journalHost.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         journalHost.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         journalHost.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         journalHost.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var journalBar = new FlowLayoutPanel { AutoSize = true };
+        var journalBar = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Dock = DockStyle.Top };
         journalBar.Controls.Add(_journalReveal);
         journalBar.Controls.Add(_journalAppend);
         journalHost.Controls.Add(_journal, 0, 0);
@@ -111,18 +146,41 @@ internal sealed class DetailPane : UserControl
         _tabs.TabPages.Add(journalPage);
         _tabs.TabPages.Add(historyPage);
 
-        var body = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
-        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var head = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, RowCount = 2 };
-        head.Controls.Add(_header, 0, 0);
-        head.Controls.Add(toolbar, 0, 1);
-        body.Controls.Add(head, 0, 0);
-        body.Controls.Add(_tabs, 0, 1);
+        // Dock.Top panel stretches to the parent width, so the title can ellipsize
+        // and the toolbar can wrap. An AutoSize TableLayoutPanel grows to the
+        // unwrapped button row instead, and the parent clips the overflow.
+        _header.Dock = DockStyle.Top;
+        _header.Height = 28;
+        _head.Controls.Add(_toolbar);
+        _head.Controls.Add(_header);
 
-        Controls.Add(body);
+        Controls.Add(_tabs);
+        Controls.Add(_head);
         Controls.Add(_empty);
         Clear();
+    }
+
+    protected override void OnLayout(LayoutEventArgs e)
+    {
+        base.OnLayout(e);
+
+        // FlowLayoutPanel AutoSize reports the unwrapped button row; pin the
+        // header block to the pane's client width so the title ellipsizes and
+        // buttons wrap instead of painting past the right edge.
+        var inner = Math.Max(0, DisplayRectangle.Width);
+        if (inner <= 0 || _head.MaximumSize.Width == inner)
+        {
+            return;
+        }
+
+        _head.MaximumSize = new Size(inner, 4096);
+        _head.Width = inner;
+        var content = Math.Max(0, inner - _head.Padding.Horizontal);
+        _header.AutoSize = false;
+        _header.MaximumSize = new Size(content, 28);
+        _header.Width = content;
+        _toolbar.MaximumSize = new Size(content, 4096);
+        _toolbar.Width = content;
     }
 
     public bool HasSelection => _id != Guid.Empty;
@@ -299,11 +357,18 @@ internal sealed class DetailPane : UserControl
             return;
         }
 
-        var verb = _archived ? "restore" : "archive";
-        Ui.RunWrite(this, _bsk, "Archive failed", bsk =>
+        var restoring = _archived;
+        if (!Ui.ConfirmArchive(this, _title ?? _urn, restoring))
+        {
+            return;
+        }
+
+        var verb = restoring ? "restore" : "archive";
+        Ui.RunWrite(this, _bsk, restoring ? "Restore failed" : "Archive failed", bsk =>
         {
             bsk.Run(verb, _urn);
-            LoadSubject(_id);
+            // The owning list reloads via Changed and drops hidden items; do not
+            // keep the archived subject selected in the detail pane.
             Changed?.Invoke(this, EventArgs.Empty);
         });
     }
@@ -330,7 +395,7 @@ internal sealed class DetailPane : UserControl
             return;
         }
 
-        var through = InputDialog.Show(this, "Materialize occurrences", "Create occurrences through (YYYY-MM-DD):", Ui.Today.AddMonths(3).ToString("yyyy-MM-dd"));
+        var through = DatePrompt.Show(this, "Materialize occurrences", "Create occurrences through:", Ui.Today.AddMonths(3));
         if (through is null)
         {
             return;

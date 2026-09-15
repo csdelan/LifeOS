@@ -59,7 +59,7 @@ internal sealed class InboxView : UserControl, IPilotView
             Dock = DockStyle.Fill,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            WrapContents = false,
+            WrapContents = true,
             Margin = new Padding(0)
         };
         actions.Controls.Add(_promoteButton);
@@ -67,7 +67,8 @@ internal sealed class InboxView : UserControl, IPilotView
         actions.Controls.Add(_fileButton);
         actions.Controls.Add(_dropButton);
 
-        var right = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(6) };
+        var right = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(6, 6, 16, 6) };
+        right.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         right.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         right.Controls.Add(_content, 0, 0);
@@ -76,6 +77,7 @@ internal sealed class InboxView : UserControl, IPilotView
         _split.Dock = DockStyle.Fill;
         _split.Panel1.Controls.Add(_grid);
         _split.Panel2.Controls.Add(right);
+        Ui.PrepareListDetailSplit(_split, setDistance: false);
 
         var banner = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(6) };
         banner.Controls.Add(_newButton);
@@ -88,16 +90,7 @@ internal sealed class InboxView : UserControl, IPilotView
 
     private void BuildGrid()
     {
-        _grid.Dock = DockStyle.Fill;
-        _grid.ReadOnly = true;
-        _grid.AllowUserToAddRows = false;
-        _grid.AllowUserToDeleteRows = false;
-        _grid.AllowUserToResizeRows = false;
-        _grid.RowHeadersVisible = false;
-        _grid.MultiSelect = false;
-        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
-        _grid.BorderStyle = BorderStyle.None;
+        Ui.ConfigureGrid(_grid);
         _grid.SelectionChanged += OnItemSelected;
     }
 
@@ -182,34 +175,14 @@ internal sealed class InboxView : UserControl, IPilotView
             return;
         }
 
-        // Show only Kind / When / Preview; hide every other bound + computed property.
-        foreach (DataGridViewColumn column in _grid.Columns)
-        {
-            column.Visible = false;
-        }
-
+        Ui.HideAllColumns(_grid);
         SetColumn("Kind", 84, 0);
         SetColumn("TriagedAt", 130, 1, "When");
         SetColumn("Preview", 360, 2);
     }
 
     private void SetColumn(string name, int width, int displayIndex, string? header = null)
-    {
-        if (!_grid.Columns.Contains(name))
-        {
-            return;
-        }
-
-        var column = _grid.Columns[name]!;
-        column.Visible = true;
-        column.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-        column.Width = width;
-        column.DisplayIndex = displayIndex;
-        if (header is not null)
-        {
-            column.HeaderText = header;
-        }
-    }
+        => Ui.ShowColumn(_grid, name, width, displayIndex, header);
 
     private void OnItemSelected(object? sender, EventArgs e)
     {

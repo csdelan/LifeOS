@@ -22,24 +22,24 @@ public sealed class NewSubjectDialog : Form
     private readonly TextBox _notes = Multiline(60);
     private readonly TextBox _motivation = Multiline(60);
     private readonly TextBox _endState = Multiline(60);
-    private readonly TextBox _targetDate = new() { Width = 160, PlaceholderText = "YYYY-MM-DD" };
-    private readonly TextBox _startDate = new() { Width = 160, PlaceholderText = "YYYY-MM-DD" };
-    private readonly TextBox _due = new() { Width = 160, PlaceholderText = "YYYY-MM-DD" };
-    private readonly TextBox _scheduled = new() { Width = 160, PlaceholderText = "YYYY-MM-DD" };
-    private readonly TextBox _decisionDate = new() { Width = 160, PlaceholderText = "YYYY-MM-DD" };
-    private readonly TextBox _identified = new() { Width = 160, PlaceholderText = "YYYY-MM-DD" };
+    private readonly DateField _targetDate = new();
+    private readonly DateField _startDate = new();
+    private readonly DateField _due = new();
+    private readonly DateField _scheduled = new();
+    private readonly DateField _decisionDate = new();
+    private readonly DateField _identified = new(optional: false);
     private readonly TextBox _impact = Multiline(50);
-    private readonly TextBox _why = Multiline(50);
+    private readonly TextBox _why = Multiline(150);
     private readonly TextBox _duration = new() { Width = 160, PlaceholderText = "e.g. 30m" };
     private readonly TextBox _cue = new() { Width = 460 };
     private readonly TextBox _routine = Multiline(50);
     private readonly TextBox _reward = new() { Width = 460 };
-    private readonly TextBox _habitStart = new() { Width = 160, PlaceholderText = "YYYY-MM-DD" };
-    private readonly TextBox _habitEnd = new() { Width = 160, PlaceholderText = "YYYY-MM-DD" };
+    private readonly DateField _habitStart = new();
+    private readonly DateField _habitEnd = new();
     private readonly CheckBox _allowsPartial = new() { Text = "Allows partial credit", AutoSize = true };
-    private readonly TextBox _apptDate = new() { Width = 160, PlaceholderText = "YYYY-MM-DD" };
-    private readonly TextBox _startTime = new() { Width = 100, PlaceholderText = "HH:MM" };
-    private readonly TextBox _endTime = new() { Width = 100, PlaceholderText = "HH:MM" };
+    private readonly DateField _apptDate = new();
+    private readonly TimeField _startTime = new();
+    private readonly TimeField _endTime = new(optional: true);
     private readonly CheckBox _allDay = new() { Text = "All day", AutoSize = true };
     private readonly TextBox _location = new() { Width = 460 };
     private readonly TextBox _meetingLink = new() { Width = 460 };
@@ -91,7 +91,7 @@ public sealed class NewSubjectDialog : Form
         MinimizeBox = false;
         MaximizeBox = false;
         ShowInTaskbar = false;
-        Size = new Size(580, 720);
+        Size = new Size(580, 760);
         MinimumSize = new Size(520, 480);
         Padding = new Padding(12);
 
@@ -359,7 +359,7 @@ public sealed class NewSubjectDialog : Form
 
         if (_currentType == PilotVocab.Appointment)
         {
-            if (_apptDate.Text.Trim().Length == 0 && !_recurrence.IsRecurring)
+            if (_apptDate.IsoDate is null && !_recurrence.IsRecurring)
             {
                 MessageBox.Show(this, "An Appointment needs a date (or a recurrence for a series).", "New",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -367,7 +367,7 @@ public sealed class NewSubjectDialog : Form
                 return;
             }
 
-            if (!_allDay.Checked && _startTime.Text.Trim().Length == 0)
+            if (!_allDay.Checked && _startTime.IsoTime is null)
             {
                 MessageBox.Show(this, "Start time is required unless All day is checked.", "New",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -455,31 +455,31 @@ public sealed class NewSubjectDialog : Form
                 break;
             case PilotVocab.Goal:
                 Yield("desired_end_state", _endState.Text);
-                Yield("target_date", _targetDate.Text);
+                Yield("target_date", _targetDate.IsoDate);
                 Yield("description", _description.Text);
                 Yield("motivation", _motivation.Text);
                 break;
             case PilotVocab.Project:
                 Yield("description", _description.Text);
-                Yield("start_date", _startDate.Text);
-                Yield("target_date", _targetDate.Text);
+                Yield("start_date", _startDate.IsoDate);
+                Yield("target_date", _targetDate.IsoDate);
                 Yield("notes", _notes.Text);
                 break;
             case PilotVocab.Task:
                 Yield("description", _description.Text);
-                Yield("due", _due.Text);
-                Yield("scheduled", _scheduled.Text);
+                Yield("due", _due.IsoDate);
+                Yield("scheduled", _scheduled.IsoDate);
                 Yield("estimated_duration", _duration.Text);
                 Yield("priority", "Medium");
                 break;
             case PilotVocab.Problem:
                 Yield("description", _description.Text);
-                Yield("date_identified", string.IsNullOrWhiteSpace(_identified.Text) ? Ui.TodayIso : _identified.Text);
+                Yield("date_identified", _identified.IsoDate ?? Ui.TodayIso);
                 Yield("impact", _impact.Text);
                 break;
             case PilotVocab.Decision:
                 Yield("description", _description.Text);
-                Yield("decision_date", _decisionDate.Text);
+                Yield("decision_date", _decisionDate.IsoDate);
                 break;
             case PilotVocab.Idea:
                 Yield("description", _description.Text);
@@ -499,17 +499,17 @@ public sealed class NewSubjectDialog : Form
                 Yield("cue", _cue.Text);
                 Yield("routine", _routine.Text);
                 Yield("reward", _reward.Text);
-                Yield("start", _habitStart.Text);
-                Yield("end", _habitEnd.Text);
+                Yield("start", _habitStart.IsoDate);
+                Yield("end", _habitEnd.IsoDate);
                 Yield("allows_partial", _allowsPartial.Checked ? "true" : "false");
                 break;
             case PilotVocab.Appointment:
-                Yield("date", _apptDate.Text);
+                Yield("date", _apptDate.IsoDate);
                 Yield("all_day", _allDay.Checked ? "true" : "false");
                 if (!_allDay.Checked)
                 {
-                    Yield("start", _startTime.Text);
-                    Yield("end", _endTime.Text);
+                    Yield("start", _startTime.IsoTime);
+                    Yield("end", _endTime.IsoTime);
                 }
 
                 Yield("location", _location.Text);

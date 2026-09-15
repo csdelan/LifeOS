@@ -15,10 +15,11 @@ internal static class Ui
         grid.RowHeadersVisible = false;
         grid.MultiSelect = false;
         grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         grid.BorderStyle = BorderStyle.None;
         grid.ShowCellToolTips = true;
+        grid.ScrollBars = ScrollBars.Vertical;
     }
 
     public static void HideAllColumns(DataGridView grid)
@@ -26,6 +27,8 @@ internal static class Ui
         foreach (DataGridViewColumn column in grid.Columns)
         {
             column.Visible = false;
+            column.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+            column.FillWeight = 1;
         }
     }
 
@@ -38,13 +41,59 @@ internal static class Ui
 
         var column = grid.Columns[name]!;
         column.Visible = true;
-        column.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-        column.Width = width;
+        column.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        column.FillWeight = Math.Max(width, 40);
+        column.MinimumWidth = Math.Clamp(width / 3, 40, 80);
         column.DisplayIndex = displayIndex;
         if (header is not null)
         {
             column.HeaderText = header;
         }
+    }
+
+    /// <summary>
+    /// Right-hand detail gets padding so header/buttons are not clipped, and the
+    /// splitter opens with a usable list/detail split on first layout.
+    /// Min sizes are deferred: a SplitContainer's default width is ~150px, so
+    /// assigning them in a constructor throws <see cref="InvalidOperationException"/>.
+    /// </summary>
+    public static void PrepareListDetailSplit(SplitContainer split, float listShare = 0.52f, bool setDistance = true)
+    {
+        const int panel1Min = 200;
+        const int panel2Min = 260;
+
+        split.SplitterWidth = Math.Max(split.SplitterWidth, 6);
+
+        void ApplyWhenWideEnough(object? sender, EventArgs e)
+        {
+            var usable = split.Width - split.SplitterWidth;
+            if (usable < panel1Min + panel2Min)
+            {
+                return;
+            }
+
+            split.Layout -= ApplyWhenWideEnough;
+            split.SizeChanged -= ApplyWhenWideEnough;
+
+            try
+            {
+                // SplitterDistance must sit between the new mins *before* they are applied.
+                var distance = setDistance
+                    ? (int)(usable * listShare)
+                    : split.SplitterDistance;
+                split.SplitterDistance = (int)Math.Clamp(distance, panel1Min, usable - panel2Min);
+                split.Panel1MinSize = panel1Min;
+                split.Panel2MinSize = panel2Min;
+            }
+            catch (InvalidOperationException)
+            {
+                split.Layout += ApplyWhenWideEnough;
+                split.SizeChanged += ApplyWhenWideEnough;
+            }
+        }
+
+        split.Layout += ApplyWhenWideEnough;
+        split.SizeChanged += ApplyWhenWideEnough;
     }
 
     public static void WarnNoBsk(IWin32Window owner)
@@ -128,6 +177,17 @@ internal static class Ui
             default:
                 return false;
         }
+    }
+
+    /// <summary>OK/Cancel confirmation for Archive and Restore (D9).</summary>
+    public static bool ConfirmArchive(IWin32Window owner, string label, bool restoring)
+    {
+        var caption = restoring ? "Restore" : "Archive";
+        var body = restoring
+            ? $"Restore “{label}”? It will show up in default views again."
+            : $"Archive “{label}”? It will be hidden from default views. You can restore it later with the Archived filter.";
+        return MessageBox.Show(owner, body, caption, MessageBoxButtons.OKCancel, MessageBoxIcon.Question)
+            == DialogResult.OK;
     }
 
     public static void RunWrite(IWin32Window owner, BskCli? bsk, string caption, Action<BskCli> write)

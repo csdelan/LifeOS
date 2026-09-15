@@ -64,6 +64,7 @@ internal sealed class PeopleView : UserControl, IPilotView
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical };
         split.Panel1.Controls.Add(_grid);
         split.Panel2.Controls.Add(right);
+        Ui.PrepareListDetailSplit(split);
 
         var banner = Ui.Toolbar();
         banner.Controls.Add(create);
@@ -131,6 +132,9 @@ internal sealed class PeopleView : UserControl, IPilotView
                 return;
             }
         }
+
+        _detail.Clear();
+        _involvements.Controls.Clear();
     }
 
     public void SaveViewState(ViewStateStore store)

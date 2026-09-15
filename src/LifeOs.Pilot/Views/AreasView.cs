@@ -62,6 +62,7 @@ internal sealed class AreasView : UserControl, IPilotView
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical };
         split.Panel1.Controls.Add(_grid);
         split.Panel2.Controls.Add(right);
+        Ui.PrepareListDetailSplit(split);
 
         var banner = Ui.Toolbar();
         banner.Controls.Add(create);

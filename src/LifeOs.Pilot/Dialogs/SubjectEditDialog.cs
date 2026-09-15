@@ -15,10 +15,11 @@ internal sealed class SubjectEditDialog : Form
     private readonly string _urn;
     private readonly string _type;
     private readonly TextBox _title;
-    private readonly Dictionary<string, TextBox> _fields = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Control> _fields = new(StringComparer.Ordinal);
     private readonly AreaSelector? _area;
     private readonly ComboBox? _personKind;
     private readonly CheckBox? _allowsPartial;
+    private readonly CheckBox? _allDay;
     private readonly RecurrenceEditor? _recurrence;
 
     public SubjectEditDialog(SubjectReader reader, BskCli bsk, Guid id)
@@ -52,11 +53,60 @@ internal sealed class SubjectEditDialog : Form
             AddLabeled(stack, "Statement:", statement);
         }
 
-        foreach (var (label, key, multiline) in FieldsFor(_type))
+        CheckBox? allDay = null;
+        TimeField? startTime = null;
+        TimeField? endTime = null;
+        foreach (var (label, key, kind) in FieldsFor(_type))
         {
-            var box = Box(attrs.GetValueOrDefault(key), multiline ? 70 : 0);
-            _fields[key] = box;
-            AddLabeled(stack, label, box);
+            var height = key == "why_it_matters" ? 160 : 70;
+            Control control = kind switch
+            {
+                FieldKind.Date => new DateField { IsoDate = attrs.GetValueOrDefault(key) },
+                FieldKind.Time => TimeBox(attrs.GetValueOrDefault(key), optional: key == "end"),
+                FieldKind.Multiline => Box(attrs.GetValueOrDefault(key), height),
+                _ => Box(attrs.GetValueOrDefault(key), 0)
+            };
+            _fields[key] = control;
+            AddLabeled(stack, label, control);
+
+            if (control is TimeField time)
+            {
+                if (key == "start")
+                {
+                    startTime = time;
+                }
+                else if (key == "end")
+                {
+                    endTime = time;
+                }
+            }
+
+            if (_type == PilotVocab.Appointment && key == "date")
+            {
+                allDay = new CheckBox
+                {
+                    Text = "All day",
+                    AutoSize = true,
+                    Checked = attrs.GetValueOrDefault("all_day") is "true" or "t"
+                };
+                stack.Controls.Add(allDay);
+            }
+        }
+
+        _allDay = allDay;
+        if (_allDay is not null && startTime is not null && endTime is not null)
+        {
+            var allDayBox = _allDay;
+            var start = startTime;
+            var end = endTime;
+            void SyncTimes()
+            {
+                start.Enabled = !allDayBox.Checked;
+                end.Enabled = !allDayBox.Checked;
+            }
+
+            allDayBox.CheckedChanged += (_, _) => SyncTimes();
+            SyncTimes();
         }
 
         if (_type != PilotVocab.Area)
@@ -119,9 +169,25 @@ internal sealed class SubjectEditDialog : Form
         try
         {
             var values = new Dictionary<string, string?>();
-            foreach (var (key, box) in _fields)
+            foreach (var (key, control) in _fields)
             {
-                values[key] = box.Text.Trim();
+                values[key] = control switch
+                {
+                    DateField date => date.IsoDate ?? "",
+                    TimeField time => time.IsoTime ?? "",
+                    TextBox box => box.Text.Trim(),
+                    _ => ""
+                };
+            }
+
+            if (_allDay is not null)
+            {
+                values["all_day"] = _allDay.Checked ? "true" : "false";
+                if (_allDay.Checked)
+                {
+                    values["start"] = "";
+                    values["end"] = "";
+                }
             }
 
             if (_area is not null)
@@ -154,69 +220,77 @@ internal sealed class SubjectEditDialog : Form
         }
     }
 
-    private static IEnumerable<(string Label, string Key, bool Multiline)> FieldsFor(string type) => type switch
+    private enum FieldKind { Text, Multiline, Date, Time }
+
+    private static IEnumerable<(string Label, string Key, FieldKind Kind)> FieldsFor(string type) => type switch
     {
-        PilotVocab.Value => [("Why it matters:", "why_it_matters", true), ("Notes:", "notes", true)],
+        PilotVocab.Value => [("Why it matters:", "why_it_matters", FieldKind.Multiline), ("Notes:", "notes", FieldKind.Multiline)],
         PilotVocab.Goal =>
         [
-            ("Desired end state:", "desired_end_state", true),
-            ("Target date:", "target_date", false),
-            ("Description:", "description", true),
-            ("Motivation:", "motivation", true)
+            ("Desired end state:", "desired_end_state", FieldKind.Multiline),
+            ("Target date:", "target_date", FieldKind.Date),
+            ("Description:", "description", FieldKind.Multiline),
+            ("Motivation:", "motivation", FieldKind.Multiline)
         ],
         PilotVocab.Project =>
         [
-            ("Description / scope:", "description", true),
-            ("Start date:", "start_date", false),
-            ("Target / due date:", "target_date", false),
-            ("Notes:", "notes", true)
+            ("Description / scope:", "description", FieldKind.Multiline),
+            ("Start date:", "start_date", FieldKind.Date),
+            ("Target / due date:", "target_date", FieldKind.Date),
+            ("Notes:", "notes", FieldKind.Multiline)
         ],
         PilotVocab.Task =>
         [
-            ("Description / notes:", "description", true),
-            ("Due date:", "due", false),
-            ("Scheduled / do date:", "scheduled", false),
-            ("Estimated duration:", "estimated_duration", false)
+            ("Description / notes:", "description", FieldKind.Multiline),
+            ("Due date:", "due", FieldKind.Date),
+            ("Scheduled / do date:", "scheduled", FieldKind.Date),
+            ("Estimated duration:", "estimated_duration", FieldKind.Text)
         ],
         PilotVocab.Problem =>
         [
-            ("Description:", "description", true),
-            ("Date identified:", "date_identified", false),
-            ("Impact:", "impact", true)
+            ("Description:", "description", FieldKind.Multiline),
+            ("Date identified:", "date_identified", FieldKind.Date),
+            ("Impact:", "impact", FieldKind.Multiline)
         ],
         PilotVocab.Decision =>
         [
-            ("Description:", "description", true),
-            ("Decision date:", "decision_date", false)
+            ("Description:", "description", FieldKind.Multiline),
+            ("Decision date:", "decision_date", FieldKind.Date)
         ],
         PilotVocab.Person =>
         [
-            ("Role or relationship:", "role", false),
-            ("Description:", "description", true),
-            ("Contact / reference:", "contact", false),
-            ("Notes:", "notes", true)
+            ("Role or relationship:", "role", FieldKind.Text),
+            ("Description:", "description", FieldKind.Multiline),
+            ("Contact / reference:", "contact", FieldKind.Text),
+            ("Notes:", "notes", FieldKind.Multiline)
         ],
-        PilotVocab.Area => [("Description:", "description", true), ("Notes:", "notes", true)],
+        PilotVocab.Area => [("Description:", "description", FieldKind.Multiline), ("Notes:", "notes", FieldKind.Multiline)],
         PilotVocab.Habit =>
         [
-            ("Cue:", "cue", false),
-            ("Routine:", "routine", true),
-            ("Reward:", "reward", false),
-            ("Start date:", "start", false),
-            ("End date:", "end", false)
+            ("Cue:", "cue", FieldKind.Text),
+            ("Routine:", "routine", FieldKind.Multiline),
+            ("Reward:", "reward", FieldKind.Text),
+            ("Start date:", "start", FieldKind.Date),
+            ("End date:", "end", FieldKind.Date)
         ],
         PilotVocab.Appointment =>
         [
-            ("Date:", "date", false),
-            ("Start time:", "start", false),
-            ("End time:", "end", false),
-            ("All day (true/false):", "all_day", false),
-            ("Location:", "location", false),
-            ("Meeting link:", "meeting_link", false),
-            ("Notes:", "notes", true)
+            ("Date:", "date", FieldKind.Date),
+            ("Start time:", "start", FieldKind.Time),
+            ("End time:", "end", FieldKind.Time),
+            ("Location:", "location", FieldKind.Text),
+            ("Meeting link:", "meeting_link", FieldKind.Text),
+            ("Notes:", "notes", FieldKind.Multiline)
         ],
-        _ => [("Description:", "description", true), ("Notes:", "notes", true)]
+        _ => [("Description:", "description", FieldKind.Multiline), ("Notes:", "notes", FieldKind.Multiline)]
     };
+
+    private static TimeField TimeBox(string? value, bool optional)
+    {
+        var field = new TimeField(optional);
+        field.SetTime(value);
+        return field;
+    }
 
     private static TextBox Box(string? value, int multilineHeight)
     {

@@ -26,6 +26,7 @@ internal sealed class VisionView : UserControl, IPilotView
         _reader = reader;
         _bsk = bsk;
         _detail = new DetailPane(reader, bsk, navigator);
+        _detail.Changed += (_, _) => Reload();
         _who.SelectedIndexChanged += (_, _) => OnPick(_who, _values);
         _where.SelectedIndexChanged += (_, _) => OnPick(_where, _goals);
         _includeInactive.CheckedChanged += (_, _) => Reload();
@@ -46,6 +47,7 @@ internal sealed class VisionView : UserControl, IPilotView
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical };
         split.Panel1.Controls.Add(lists);
         split.Panel2.Controls.Add(_detail);
+        Ui.PrepareListDetailSplit(split);
 
         var banner = Ui.Toolbar();
         banner.Controls.Add(_includeInactive);
@@ -74,11 +76,20 @@ internal sealed class VisionView : UserControl, IPilotView
     {
         try
         {
+            var keep = _detail.SelectedId;
             _values = _reader.GetVisionValues(_includeInactive.Checked).ToList();
             _goals = _reader.GetLongTermGoals(_includeInactive.Checked).ToList();
             Fill(_who, _values);
             Fill(_where, _goals);
-            if (_values.Count + _goals.Count == 0)
+            if (keep != Guid.Empty)
+            {
+                SelectSubject(keep);
+                if (!_values.Exists(v => v.Id == keep) && !_goals.Exists(g => g.Id == keep))
+                {
+                    _detail.Clear();
+                }
+            }
+            else if (_values.Count + _goals.Count == 0)
             {
                 _detail.Clear();
             }
