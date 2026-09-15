@@ -91,7 +91,10 @@ public sealed class NewSubjectDialog : Form
         MinimizeBox = false;
         MaximizeBox = false;
         ShowInTaskbar = false;
-        Size = new Size(620, 820);
+        // ~30% taller than the previous 820 so most type forms fit without scrolling;
+        // clamped to the work area so it never opens taller than the screen.
+        var workHeight = Screen.PrimaryScreen?.WorkingArea.Height ?? 1066;
+        Size = new Size(620, Math.Min(1066, workHeight - 40));
         MinimumSize = new Size(540, 560);
         Padding = new Padding(12);
 

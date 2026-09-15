@@ -104,10 +104,36 @@ internal static class PilotVocab
     {
         if (!string.IsNullOrWhiteSpace(status))
         {
-            return status.Trim();
+            return CanonicalStatus(type, status);
         }
 
         return DefaultStatus.TryGetValue(type, out var fallback) ? fallback : "open";
+    }
+
+    /// <summary>
+    /// Canonical casing for a status. Status is free text in the kernel (D7 validates
+    /// app-side), so the same status can end up stored in mixed case — e.g. a manual
+    /// <c>bsk status … active</c> versus the UI's "Active". Fold a recognized status
+    /// back to its documented spelling so every screen (history, lists, overview)
+    /// reads consistently; an unrecognized value passes through trimmed.
+    /// </summary>
+    public static string CanonicalStatus(string type, string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return "";
+        }
+
+        var trimmed = status.Trim();
+        foreach (var known in StatusesFor(type))
+        {
+            if (string.Equals(known, trimmed, StringComparison.OrdinalIgnoreCase))
+            {
+                return known;
+            }
+        }
+
+        return trimmed;
     }
 
     public static string? InferChildRelation(string childType, string parentType)

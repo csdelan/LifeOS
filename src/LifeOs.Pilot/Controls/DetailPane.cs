@@ -226,7 +226,7 @@ internal sealed class DetailPane : UserControl
             _empty.Visible = false;
             _tabs.Visible = true;
             _header.Text = $"{PilotVocab.Label(subject.Type)} — {subject.Title}";
-            _overview.Text = FormatOverview(subject);
+            RenderOverview(subject);
             _relationships.Bind(subject.Id, subject.Urn);
             _tags.Bind(subject.Urn, _reader.GetTags(subject.Id));
             LoadJournal();
@@ -281,7 +281,7 @@ internal sealed class DetailPane : UserControl
             text.AppendLine("Status history");
             foreach (var entry in history)
             {
-                text.AppendLine($"  {entry.OccurredAt:yyyy-MM-dd}  →  {entry.Status}");
+                text.AppendLine($"  {entry.OccurredAt:yyyy-MM-dd}  →  {PilotVocab.CanonicalStatus(subject.Type, entry.Status)}");
             }
         }
 
@@ -434,31 +434,37 @@ internal sealed class DetailPane : UserControl
         });
     }
 
-    private static string FormatOverview(SubjectDetail subject)
+    // Property rows render with a bold label in a fixed column and a two-space gutter
+    // before the value, so a long key (e.g. target_date) can't collide with its value
+    // and the name reads distinctly from the value.
+    private void RenderOverview(SubjectDetail subject)
     {
-        var text = new StringBuilder();
-        text.AppendLine(subject.Urn);
-        text.AppendLine();
+        var box = _overview;
+        box.Clear();
+
+        AppendRun(box, subject.Urn + "\n", bold: false, SystemColors.GrayText);
+        AppendRun(box, "\n", bold: false);
+
         if (!string.IsNullOrWhiteSpace(subject.Statement))
         {
-            text.AppendLine("Statement");
-            text.AppendLine($"  {subject.Statement}");
-            text.AppendLine();
+            AppendRun(box, "Statement\n", bold: true);
+            AppendRun(box, "  " + subject.Statement + "\n\n", bold: false);
         }
 
+        var rows = new List<(string Label, string Value)>();
         if (PilotVocab.HasStatus(subject.Type))
         {
-            text.AppendLine($"Status    {subject.DisplayStatus}");
+            rows.Add(("Status", subject.DisplayStatus));
         }
 
         if (!string.IsNullOrWhiteSpace(subject.AreaName) || !string.IsNullOrWhiteSpace(subject.Area))
         {
-            text.AppendLine($"Area      {subject.AreaName ?? subject.Area}");
+            rows.Add(("Area", subject.AreaName ?? subject.Area ?? ""));
         }
 
         if (subject.Archived)
         {
-            text.AppendLine("Archived  yes");
+            rows.Add(("Archived", "yes"));
         }
 
         foreach (var (key, value) in ParseAttrs(subject.Attributes))
@@ -468,11 +474,30 @@ internal sealed class DetailPane : UserControl
                 continue;
             }
 
-            text.AppendLine($"{key,-10}{value}");
+            rows.Add((key, value));
         }
 
-        text.AppendLine($"Created   {subject.CreatedAt:yyyy-MM-dd}");
-        return text.ToString();
+        rows.Add(("Created", subject.CreatedAt.ToString("yyyy-MM-dd")));
+
+        var width = rows.Count == 0 ? 0 : rows.Max(r => r.Label.Length) + 2;
+        foreach (var (label, value) in rows)
+        {
+            AppendRun(box, label.PadRight(width), bold: true);
+            AppendRun(box, value + "\n", bold: false);
+        }
+
+        box.SelectionStart = 0;
+        box.SelectionLength = 0;
+        box.ScrollToCaret();
+    }
+
+    private static void AppendRun(RichTextBox box, string text, bool bold, Color? color = null)
+    {
+        box.SelectionStart = box.TextLength;
+        box.SelectionLength = 0;
+        box.SelectionColor = color ?? box.ForeColor;
+        box.SelectionFont = new Font(box.Font, bold ? FontStyle.Bold : FontStyle.Regular);
+        box.AppendText(text);
     }
 
     internal static string? Attr(string? json, string key)

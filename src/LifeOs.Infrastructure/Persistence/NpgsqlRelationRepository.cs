@@ -25,4 +25,24 @@ public sealed class NpgsqlRelationRepository(string connectionString) : IRelatio
             new { fromSubject, relation, toSubject, provenance },
             cancellationToken: cancellationToken));
     }
+
+    public async Task<int> DeleteAsync(
+        Guid fromSubject, string relation, Guid toSubject,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        const string sql = """
+            DELETE FROM bsk.subject_relation
+            WHERE from_subject = @fromSubject
+              AND relation = @relation
+              AND to_subject = @toSubject;
+            """;
+
+        return await connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new { fromSubject, relation, toSubject },
+            cancellationToken: cancellationToken));
+    }
 }

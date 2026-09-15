@@ -86,4 +86,44 @@ public sealed class RelationServiceTests(PostgresFixture postgres)
 
         Assert.NotEqual(Guid.Empty, result.Id);
     }
+
+    [Fact]
+    public async Task Unlinking_removes_the_edge_row()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var relations = provider.GetRequiredService<RelationService>();
+        var ns = Guid.NewGuid().ToString("N");
+
+        var task = await subjects.CreateAsync(SubjectTypes.Task, $"send the invoice {ns}", cancellationToken: Ct);
+        var commitment = await subjects.CreateAsync(SubjectTypes.Commitment, $"bill clients weekly {ns}", cancellationToken: Ct);
+        await relations.LinkAsync(task.Urn, SubjectRelations.Serves, commitment.Urn, Ct);
+
+        var result = await relations.UnlinkAsync(task.Urn, SubjectRelations.Serves, commitment.Urn, Ct);
+
+        Assert.Equal(1, result.Removed);
+
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync(Ct);
+        var count = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject_relation WHERE from_subject = @from AND to_subject = @to;",
+            new { from = task.Id, to = commitment.Id }, cancellationToken: Ct));
+        Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public async Task Unlinking_a_missing_edge_is_a_no_op()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var relations = provider.GetRequiredService<RelationService>();
+        var ns = Guid.NewGuid().ToString("N");
+
+        var task = await subjects.CreateAsync(SubjectTypes.Task, $"unrelated task {ns}", cancellationToken: Ct);
+        var commitment = await subjects.CreateAsync(SubjectTypes.Commitment, $"unrelated commitment {ns}", cancellationToken: Ct);
+
+        var result = await relations.UnlinkAsync(task.Urn, SubjectRelations.Serves, commitment.Urn, Ct);
+
+        Assert.Equal(0, result.Removed);
+    }
 }

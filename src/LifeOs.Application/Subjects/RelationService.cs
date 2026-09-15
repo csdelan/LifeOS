@@ -50,7 +50,36 @@ public sealed class RelationService(SubjectService subjects, IRelationRepository
 
         return await relations.CreateAsync(from.Id, relation, to.Id, Provenances.Declared, cancellationToken);
     }
+
+    /// <summary>
+    /// Removes an edge (<c>bsk unlink</c>). Both endpoints are named through the shared
+    /// resolver; the relation must be a real subject-to-subject relation. Removal is a
+    /// hard delete — an alignment edge is a structural fact, not a lifecycle to reflect
+    /// on — so this is not recorded as an event. Idempotent: removing an edge that is
+    /// not there succeeds with <c>Removed = 0</c> rather than throwing.
+    /// </summary>
+    public async Task<UnlinkResult> UnlinkAsync(
+        string fromReference, string relation, string toReference,
+        CancellationToken cancellationToken = default)
+    {
+        if (!SubjectRelations.All.Contains(relation))
+        {
+            throw new ArgumentException(
+                $"'{relation}' is not a subject-to-subject relation. Expected one of: " +
+                $"{string.Join(", ", SubjectRelations.All)}.",
+                nameof(relation));
+        }
+
+        var from = await subjects.ResolveAsync(fromReference, cancellationToken);
+        var to = await subjects.ResolveAsync(toReference, cancellationToken);
+
+        var removed = await relations.DeleteAsync(from.Id, relation, to.Id, cancellationToken);
+        return new UnlinkResult(from, relation, to, removed);
+    }
 }
 
 /// <summary>The outcome of a link: the edge id and its resolved endpoints.</summary>
 public sealed record RelationResult(Guid Id, SubjectRef From, string Relation, SubjectRef To);
+
+/// <summary>The outcome of an unlink: the resolved endpoints and how many edges were removed.</summary>
+public sealed record UnlinkResult(SubjectRef From, string Relation, SubjectRef To, int Removed);

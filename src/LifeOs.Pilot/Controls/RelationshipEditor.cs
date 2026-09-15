@@ -5,8 +5,9 @@ using LifeOs.Pilot.Shell;
 namespace LifeOs.Pilot.Controls;
 
 /// <summary>
-/// Subject→subject links via <c>bsk link</c>, kept visually separate from tags (GEN-1).
-/// Immediate when a subject URN is bound; deferred (create) otherwise.
+/// Subject→subject links via <c>bsk link</c> / <c>bsk unlink</c>, kept visually
+/// separate from tags (GEN-1). Immediate when a subject URN is bound; deferred
+/// (create) otherwise.
 /// </summary>
 internal sealed class RelationshipEditor : UserControl
 {
@@ -16,6 +17,7 @@ internal sealed class RelationshipEditor : UserControl
     private readonly ComboBox _relation = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
     private readonly SubjectPicker _target;
     private readonly Button _add = Ui.Action("Add");
+    private readonly Button _remove = Ui.Action("Remove");
     private readonly Label _hint = new()
     {
         Dock = DockStyle.Top,
@@ -36,6 +38,9 @@ internal sealed class RelationshipEditor : UserControl
         _relation.Items.AddRange(PilotVocab.AlignmentRelations);
         _relation.SelectedIndex = 0;
         _add.Click += (_, _) => Add();
+        _remove.Click += (_, _) => Remove();
+        _remove.Enabled = false;
+        _list.SelectedIndexChanged += (_, _) => _remove.Enabled = SelectedRow?.Removable == true;
 
         var entry = new FlowLayoutPanel
         {
@@ -50,7 +55,17 @@ internal sealed class RelationshipEditor : UserControl
         entry.Controls.Add(_target);
         entry.Controls.Add(_add);
 
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(0, 2, 0, 0)
+        };
+        actions.Controls.Add(_remove);
+
         Controls.Add(_list);
+        Controls.Add(actions);
         Controls.Add(_hint);
         Controls.Add(entry);
     }
@@ -66,12 +81,14 @@ internal sealed class RelationshipEditor : UserControl
         base.OnLayout(e);
     }
 
-    protected override Size DefaultSize => new(420, 180);
+    protected override Size DefaultSize => new(420, 200);
 
     public IReadOnlyList<(string Relation, string Target)> Pending
         => _pending.Select(p => (p.Relation, p.Target)).ToList();
 
     public event EventHandler? Changed;
+
+    private EdgeRow? SelectedRow => _list.SelectedItem as EdgeRow;
 
     public void Bind(Guid id, string? urn)
     {
@@ -88,6 +105,7 @@ internal sealed class RelationshipEditor : UserControl
         _fromUrn = null;
         _pending.Clear();
         _list.Items.Clear();
+        _remove.Enabled = false;
         _target.Reload();
     }
 
@@ -96,16 +114,18 @@ internal sealed class RelationshipEditor : UserControl
         _list.Items.Clear();
         if (_fromId == Guid.Empty)
         {
-            foreach (var pending in _pending)
+            for (var i = 0; i < _pending.Count; i++)
             {
-                _list.Items.Add($"{pending.Relation} → {pending.Label} (pending save)");
+                var pending = _pending[i];
+                _list.Items.Add(new EdgeRow($"{pending.Relation} → {pending.Label} (pending save)") { PendingIndex = i });
             }
 
             if (_pending.Count == 0)
             {
-                _list.Items.Add("(none yet — assigned on Save)");
+                _list.Items.Add(new EdgeRow("(none yet — assigned on Save)"));
             }
 
+            _remove.Enabled = SelectedRow?.Removable == true;
             return;
         }
 
@@ -113,23 +133,35 @@ internal sealed class RelationshipEditor : UserControl
         {
             foreach (var edge in _reader.GetServes(_fromId))
             {
-                _list.Items.Add($"{edge.Relation} → {PilotVocab.Label(edge.Type)}: {edge.Title ?? edge.Urn}");
+                _list.Items.Add(new EdgeRow($"{edge.Relation} → {PilotVocab.Label(edge.Type)}: {edge.Title ?? edge.Urn}")
+                {
+                    FromUrn = _fromUrn,
+                    Relation = edge.Relation,
+                    ToUrn = edge.Urn
+                });
             }
 
             foreach (var edge in _reader.GetServedBy(_fromId))
             {
-                _list.Items.Add($"{PilotVocab.Label(edge.Type)}: {edge.Title ?? edge.Urn} {edge.Relation} this");
+                _list.Items.Add(new EdgeRow($"{PilotVocab.Label(edge.Type)}: {edge.Title ?? edge.Urn} {edge.Relation} this")
+                {
+                    FromUrn = edge.Urn,
+                    Relation = edge.Relation,
+                    ToUrn = _fromUrn
+                });
             }
 
             if (_list.Items.Count == 0)
             {
-                _list.Items.Add("(no relationships)");
+                _list.Items.Add(new EdgeRow("(no relationships)"));
             }
         }
         catch (Exception ex)
         {
-            _list.Items.Add($"Read failed: {ex.Message}");
+            _list.Items.Add(new EdgeRow($"Read failed: {ex.Message}"));
         }
+
+        _remove.Enabled = SelectedRow?.Removable == true;
     }
 
     private void Add()
@@ -170,5 +202,66 @@ internal sealed class RelationshipEditor : UserControl
         }
     }
 
+    private void Remove()
+    {
+        if (SelectedRow is not { Removable: true } row)
+        {
+            return;
+        }
+
+        // Deferred (pre-save) pending link: just drop it from the list.
+        if (row.PendingIndex >= 0)
+        {
+            if (row.PendingIndex < _pending.Count)
+            {
+                _pending.RemoveAt(row.PendingIndex);
+                Reload();
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
+
+            return;
+        }
+
+        if (_bsk is null || row.FromUrn is null || row.Relation is null || row.ToUrn is null)
+        {
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            this,
+            $"Remove this relationship?\n\n{row}\n\nThe items are kept; only the link between them is removed.",
+            "Remove relationship", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+        if (confirm != DialogResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            _bsk.Run("unlink", row.FromUrn, row.Relation, row.ToUrn);
+            Reload();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+        catch (BskException ex)
+        {
+            Ui.ShowError(this, "Remove failed", ex);
+        }
+    }
+
     private sealed record PendingLink(string Relation, string Target, string Label);
+
+    // A list row that carries what it takes to unlink the edge it displays. A
+    // placeholder / error row leaves the edge fields null and is not Removable.
+    private sealed record EdgeRow(string Display)
+    {
+        public string? FromUrn { get; init; }
+        public string? Relation { get; init; }
+        public string? ToUrn { get; init; }
+        public int PendingIndex { get; init; } = -1;
+
+        public bool Removable
+            => PendingIndex >= 0 || (FromUrn is not null && Relation is not null && ToUrn is not null);
+
+        public override string ToString() => Display;
+    }
 }

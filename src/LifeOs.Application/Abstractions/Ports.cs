@@ -111,6 +111,16 @@ public interface IRelationRepository
     Task<Guid> CreateAsync(
         Guid fromSubject, string relation, Guid toSubject, string provenance,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes a directed edge (from → relation → to). An alignment edge is a
+    /// structural fact, not a lifecycle event, so removal is a hard delete rather
+    /// than a tombstone (unlike status / archive, whose history matters). Returns the
+    /// number of edges removed — 0 when none matched.
+    /// </summary>
+    Task<int> DeleteAsync(
+        Guid fromSubject, string relation, Guid toSubject,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
