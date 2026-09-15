@@ -52,6 +52,71 @@ internal static class Ui
     }
 
     /// <summary>
+    /// Windows 11 visual styles draw TabControl headers as unmarked text.
+    /// Owner-draw gives each tab a border and a selected highlight.
+    /// </summary>
+    public static void ConfigureTabs(TabControl tabs)
+    {
+        tabs.DrawMode = TabDrawMode.OwnerDrawFixed;
+        tabs.SizeMode = TabSizeMode.Normal;
+        tabs.ItemSize = new Size(1, 28);
+        tabs.Padding = new Point(14, 6);
+        tabs.HotTrack = true;
+        tabs.DrawItem -= DrawTabHeader;
+        tabs.DrawItem += DrawTabHeader;
+    }
+
+    private static void DrawTabHeader(object? sender, DrawItemEventArgs e)
+    {
+        if (sender is not TabControl tabs || e.Index < 0 || e.Index >= tabs.TabCount)
+        {
+            return;
+        }
+
+        var selected = e.Index == tabs.SelectedIndex;
+        var bounds = e.Bounds;
+        bounds.Inflate(-2, 0);
+        if (!selected)
+        {
+            bounds.Y += 3;
+            bounds.Height -= 3;
+        }
+
+        using (var fill = new SolidBrush(selected ? SystemColors.Window : SystemColors.Control))
+        {
+            e.Graphics.FillRectangle(fill, bounds);
+        }
+
+        using (var border = new Pen(selected ? SystemColors.ControlDarkDark : SystemColors.ControlDark))
+        {
+            e.Graphics.DrawRectangle(border, bounds.X, bounds.Y, bounds.Width - 1, bounds.Height - 1);
+        }
+
+        if (selected)
+        {
+            using var accent = new Pen(SystemColors.Highlight, 3);
+            e.Graphics.DrawLine(accent, bounds.Left + 1, bounds.Top + 2, bounds.Right - 2, bounds.Top + 2);
+        }
+
+        Font? bold = null;
+        var font = tabs.Font;
+        if (selected)
+        {
+            bold = new Font(tabs.Font, FontStyle.Bold);
+            font = bold;
+        }
+
+        TextRenderer.DrawText(
+            e.Graphics,
+            tabs.TabPages[e.Index].Text,
+            font,
+            bounds,
+            SystemColors.ControlText,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        bold?.Dispose();
+    }
+
+    /// <summary>
     /// Right-hand detail gets padding so header/buttons are not clipped, and the
     /// splitter opens with a usable list/detail split on first layout.
     /// Min sizes are deferred: a SplitContainer's default width is ~150px, so

@@ -106,6 +106,7 @@ internal sealed class DetailPane : UserControl
         Dock = DockStyle.Fill;
         AutoSize = false;
         Padding = new Padding(8, 4, 8, 4);
+        Ui.ConfigureTabs(_tabs);
 
         var toolbar = _toolbar;
         toolbar.Controls.Add(_edit);

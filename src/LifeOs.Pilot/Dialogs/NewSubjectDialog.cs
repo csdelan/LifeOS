@@ -91,8 +91,8 @@ public sealed class NewSubjectDialog : Form
         MinimizeBox = false;
         MaximizeBox = false;
         ShowInTaskbar = false;
-        Size = new Size(580, 760);
-        MinimumSize = new Size(520, 480);
+        Size = new Size(620, 820);
+        MinimumSize = new Size(540, 560);
         Padding = new Padding(12);
 
         var types = lockedType is not null
@@ -138,6 +138,8 @@ public sealed class NewSubjectDialog : Form
         Controls.Add(buttons);
         Controls.Add(typeRow);
 
+        _fieldsHost.Resize += (_, _) => FitFieldsWidth();
+
         _allDay.CheckedChanged += (_, _) =>
         {
             _startTime.Enabled = !_allDay.Checked;
@@ -145,6 +147,7 @@ public sealed class NewSubjectDialog : Form
         };
 
         RebuildFields();
+        Shown += (_, _) => FitFieldsWidth();
         _title.Focus();
     }
 
@@ -225,9 +228,10 @@ public sealed class NewSubjectDialog : Form
         var stack = new TableLayoutPanel
         {
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
-            Dock = DockStyle.Top,
-            Padding = new Padding(0, 4, 12, 4)
+            Location = Point.Empty,
+            Padding = new Padding(0, 4, 8, 16)
         };
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
@@ -328,11 +332,30 @@ public sealed class NewSubjectDialog : Form
         _tags.Height = 80;
         AddRow(stack, _tags);
         AddRow(stack, Ui.Heading("Relationships"));
-        _relationships.Height = 140;
+        _relationships.Height = 180;
         AddRow(stack, _relationships);
 
         _fieldsHost.Controls.Add(stack);
+        FitFieldsWidth();
         _rebuilding = false;
+    }
+
+    /// <summary>
+    /// AutoScroll on a Panel ignores a Dock.Top child's preferred height, so the
+    /// form clips instead of scrolling. Keep the stack undocked and pin its width.
+    /// </summary>
+    private void FitFieldsWidth()
+    {
+        if (_fieldsHost.Controls.Count == 0)
+        {
+            return;
+        }
+
+        var stack = _fieldsHost.Controls[0];
+        var inner = Math.Max(0, _fieldsHost.ClientSize.Width);
+        stack.MaximumSize = new Size(inner, 100_000);
+        stack.Width = inner;
+        _fieldsHost.AutoScrollMinSize = new Size(0, stack.PreferredSize.Height);
     }
 
     private string TitleLabel() => _currentType == PilotVocab.Value

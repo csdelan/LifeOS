@@ -58,7 +58,6 @@ internal sealed class BrowseView : UserControl, IPilotView
         _inner.Panel1.Controls.Add(_grid);
         _inner.Panel1.Controls.Add(listToolbar);
         _inner.Panel2.Controls.Add(_detail);
-        Ui.PrepareListDetailSplit(_inner, setDistance: false);
 
         var banner = Ui.Toolbar();
         banner.Controls.Add(refresh);
@@ -66,6 +65,7 @@ internal sealed class BrowseView : UserControl, IPilotView
         banner.Controls.Add(_status);
         Controls.Add(_outer);
         Controls.Add(banner);
+        _outer.Layout += OnOuterLayout;
     }
 
     public bool IsDirty => false;
@@ -152,19 +152,58 @@ internal sealed class BrowseView : UserControl, IPilotView
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        try
-        {
-            _outer.SplitterDistance = 150;
-            _inner.SplitterDistance = 460;
-        }
-        catch (InvalidOperationException)
-        {
-        }
-
+        ApplyBrowseSplits();
         LoadTypes();
         if (_pendingSelect != Guid.Empty)
         {
             SelectSubject(_pendingSelect);
+        }
+    }
+
+    private void OnOuterLayout(object? sender, LayoutEventArgs e)
+    {
+        if (_outer.Width < 400)
+        {
+            return;
+        }
+
+        _outer.Layout -= OnOuterLayout;
+        ApplyBrowseSplits();
+    }
+
+    /// <summary>
+    /// Type tree was 150px and the list 460px — both too tight. Prefer 1.5×
+    /// for the tree (225) and a slightly tighter list (650), clamped when the
+    /// window cannot hold the full pair plus a usable detail pane.
+    /// </summary>
+    private void ApplyBrowseSplits()
+    {
+        try
+        {
+            const int treeWidth = 225;
+            const int gridWidth = 650;
+            const int treeMin = 120;
+            const int gridMin = 280;
+            const int detailMin = 220;
+
+            var outerUsable = _outer.Width - _outer.SplitterWidth;
+            if (outerUsable >= treeMin + gridMin + detailMin)
+            {
+                _outer.SplitterDistance = (int)Math.Clamp(treeWidth, treeMin, outerUsable - gridMin - detailMin);
+                _outer.Panel1MinSize = treeMin;
+            }
+
+            var innerUsable = _inner.Width - _inner.SplitterWidth;
+            if (innerUsable >= gridMin + detailMin)
+            {
+                _inner.SplitterDistance = (int)Math.Clamp(gridWidth, gridMin, innerUsable - detailMin);
+                _inner.Panel1MinSize = gridMin;
+                _inner.Panel2MinSize = detailMin;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // Window too small to honour the preferred split; leave the default.
         }
     }
 
