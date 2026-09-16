@@ -37,6 +37,8 @@ internal sealed class InboxView : UserControl, IPilotView
         _bsk = bsk;
 
         BuildGrid();
+        Ui.SelectRowOnRightClick(_grid);
+        _grid.ContextMenuStrip = BuildProblemIdeaMenu();
 
         _content.Dock = DockStyle.Fill;
         _content.ReadOnly = true;
@@ -206,6 +208,52 @@ internal sealed class InboxView : UserControl, IPilotView
         _relateButton.Enabled = false;
         _fileButton.Enabled = false;
         _dropButton.Enabled = false;
+    }
+
+    private ContextMenuStrip BuildProblemIdeaMenu()
+    {
+        var menu = new ContextMenuStrip();
+        var newIdea = new ToolStripMenuItem("New idea…");
+        newIdea.Click += (_, _) => DoNewIdeaFromProblem();
+        menu.Items.Add(newIdea);
+        menu.Opening += (_, e) =>
+        {
+            e.Cancel = _bsk is null || CurrentProblem() is null;
+        };
+        return menu;
+    }
+
+    private InboxItem? CurrentProblem()
+        => _grid.CurrentRow?.DataBoundItem is InboxItem { IsEvent: false, SubjectType: PilotVocab.Problem } item
+            && !string.IsNullOrWhiteSpace(item.SubjectUrn)
+            ? item
+            : null;
+
+    private void DoNewIdeaFromProblem()
+    {
+        if (_bsk is null)
+        {
+            WarnNoBsk();
+            return;
+        }
+
+        if (CurrentProblem() is not { } problem || problem.SubjectUrn is null)
+        {
+            return;
+        }
+
+        var subject = _reader.GetSubjectByUrn(problem.SubjectUrn);
+        var created = NewSubjectDialog.ShowIdeaForProblem(
+            this, _reader, _bsk,
+            problem.SubjectUrn,
+            problem.SubjectTitle ?? problem.Content,
+            subject?.Area);
+        if (created is null)
+        {
+            return;
+        }
+
+        LoadInbox();
     }
 
     private void DoNewNote()

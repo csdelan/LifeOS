@@ -37,7 +37,9 @@ internal sealed class BrowseView : UserControl, IPilotView
         _tree.AfterSelect += OnTypeSelected;
 
         Ui.ConfigureGrid(_grid);
+        Ui.SelectRowOnRightClick(_grid);
         _grid.SelectionChanged += OnSubjectSelected;
+        _grid.ContextMenuStrip = BuildProblemIdeaMenu();
         _archived.CheckedChanged += (_, _) => LoadTypes();
 
         var newButton = Ui.Action("New…");
@@ -281,6 +283,51 @@ internal sealed class BrowseView : UserControl, IPilotView
         {
             _detail.LoadSubject(item.Id);
         }
+    }
+
+    private ContextMenuStrip BuildProblemIdeaMenu()
+    {
+        var menu = new ContextMenuStrip();
+        var newIdea = new ToolStripMenuItem("New idea…");
+        newIdea.Click += (_, _) => DoNewIdeaFromProblem();
+        menu.Items.Add(newIdea);
+        menu.Opening += (_, e) =>
+        {
+            e.Cancel = _bsk is null || CurrentProblem() is null;
+        };
+        return menu;
+    }
+
+    private SubjectListItem? CurrentProblem()
+        => _grid.CurrentRow?.DataBoundItem is SubjectListItem { Type: PilotVocab.Problem } item
+            ? item
+            : null;
+
+    private void DoNewIdeaFromProblem()
+    {
+        if (_bsk is null)
+        {
+            Ui.WarnNoBsk(this);
+            return;
+        }
+
+        if (CurrentProblem() is not { } problem)
+        {
+            return;
+        }
+
+        var created = NewSubjectDialog.ShowIdeaForProblem(
+            this, _reader, _bsk, problem.Urn, problem.Title, problem.Area);
+        if (created is null)
+        {
+            return;
+        }
+
+        // Stay on the Problem so its Relationships refresh with the new Idea.
+        var problemId = problem.Id;
+        LoadTypes();
+        SelectType(PilotVocab.Problem);
+        SelectSubject(problemId);
     }
 
     private void DoNew()

@@ -22,6 +22,39 @@ internal static class Ui
         grid.ScrollBars = ScrollBars.Vertical;
     }
 
+    /// <summary>
+    /// Selects the row under a right-click so a context menu acts on that row
+    /// rather than whatever was last left-clicked.
+    /// </summary>
+    public static void SelectRowOnRightClick(DataGridView grid)
+    {
+        grid.MouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Right)
+            {
+                return;
+            }
+
+            var hit = grid.HitTest(e.X, e.Y);
+            if (hit.RowIndex < 0 || hit.RowIndex >= grid.Rows.Count)
+            {
+                return;
+            }
+
+            var visible = grid.Columns.Cast<DataGridViewColumn>().FirstOrDefault(c => c.Visible);
+            if (visible is null)
+            {
+                return;
+            }
+
+            var cell = grid.Rows[hit.RowIndex].Cells[visible.Index];
+            if (cell.Visible)
+            {
+                grid.CurrentCell = cell;
+            }
+        };
+    }
+
     public static void HideAllColumns(DataGridView grid)
     {
         foreach (DataGridViewColumn column in grid.Columns)

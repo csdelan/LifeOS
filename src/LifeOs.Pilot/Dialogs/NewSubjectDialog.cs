@@ -57,6 +57,7 @@ public sealed class NewSubjectDialog : Form
     private readonly string? _parentUrn;
     private readonly string? _parentType;
     private readonly string? _parentTitle;
+    private readonly PresetLink? _presetLink;
     private string _currentType;
     private bool _rebuilding;
 
@@ -67,7 +68,8 @@ public sealed class NewSubjectDialog : Form
         string? parentUrn,
         string? parentType,
         string? parentTitle,
-        string? presetArea)
+        string? presetArea,
+        PresetLink? presetLink = null)
     {
         _reader = reader;
         _bsk = bsk;
@@ -75,6 +77,7 @@ public sealed class NewSubjectDialog : Form
         _parentUrn = parentUrn;
         _parentType = parentType;
         _parentTitle = parentTitle;
+        _presetLink = presetLink;
         _area = new AreaSelector(reader);
         _tags = new TagEditor(reader, bsk: null); // deferred until Save
         _relationships = new RelationshipEditor(reader, bsk: null);
@@ -119,6 +122,12 @@ public sealed class NewSubjectDialog : Form
             _area.SelectUrn(presetArea);
         }
 
+        if (presetLink is not null)
+        {
+            _relationships.SeedPending(
+                presetLink.Relation, presetLink.OtherUrn, presetLink.Label, presetLink.Incoming);
+        }
+
         _save.Click += (_, _) => DoSave();
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
         AcceptButton = _save;
@@ -150,7 +159,17 @@ public sealed class NewSubjectDialog : Form
         };
 
         RebuildFields();
-        Shown += (_, _) => FitFieldsWidth();
+        Shown += (_, _) =>
+        {
+            FitFieldsWidth();
+            // ListBox items added before the handle exists can fail to paint;
+            // re-bind so a preset results_in row is visible when the dialog opens.
+            if (_presetLink is not null)
+            {
+                _relationships.ApplyPresetUi(_presetLink.Relation, _presetLink.OtherUrn);
+                _relationships.Reload();
+            }
+        };
         _title.Focus();
     }
 
@@ -166,6 +185,26 @@ public sealed class NewSubjectDialog : Form
         IWin32Window owner, SubjectReader reader, BskCli bsk, string type, string? presetArea = null)
     {
         using var dialog = new NewSubjectDialog(reader, bsk, type, null, null, null, presetArea);
+        return dialog.ShowDialog(owner) == DialogResult.OK ? dialog.CreatedSubject : null;
+    }
+
+    /// <summary>
+    /// Idea created from a Problem: type is locked, Area copies the Problem's (if
+    /// any), and the Relationships list is pre-filled with Problem
+    /// <c>results_in</c> this Idea (GEN-14). Save writes the Idea then that edge.
+    /// </summary>
+    public static CreatedSubject? ShowIdeaForProblem(
+        IWin32Window owner, SubjectReader reader, BskCli bsk,
+        string problemUrn, string problemTitle, string? problemArea)
+    {
+        using var dialog = new NewSubjectDialog(
+            reader, bsk, PilotVocab.Idea, null, null, null, problemArea,
+            new PresetLink(
+                PilotVocab.ResultsIn,
+                problemUrn,
+                $"{PilotVocab.Label(PilotVocab.Problem)}: {problemTitle}",
+                Incoming: true));
+        dialog.Text = "New Idea";
         return dialog.ShowDialog(owner) == DialogResult.OK ? dialog.CreatedSubject : null;
     }
 
@@ -242,6 +281,13 @@ public sealed class NewSubjectDialog : Form
         {
             var relation = PilotVocab.InferChildRelation(_currentType, _parentType ?? "") ?? "related";
             _parentHint.Text = $"Will be created under {_parentType} “{_parentTitle}” ({relation}).";
+            AddRow(stack, _parentHint);
+        }
+        else if (_presetLink is not null)
+        {
+            _parentHint.Text = _presetLink.Incoming
+                ? $"{_presetLink.Label} {_presetLink.Relation} this {PilotVocab.Label(_currentType)} on save."
+                : $"This {PilotVocab.Label(_currentType)} {_presetLink.Relation} {_presetLink.Label} on save.";
             AddRow(stack, _parentHint);
         }
 
@@ -335,7 +381,7 @@ public sealed class NewSubjectDialog : Form
         _tags.Height = 80;
         AddRow(stack, _tags);
         AddRow(stack, Ui.Heading("Relationships"));
-        _relationships.Height = 180;
+        _relationships.Height = 240;
         AddRow(stack, _relationships);
 
         _fieldsHost.Controls.Add(stack);
@@ -552,6 +598,8 @@ public sealed class NewSubjectDialog : Form
     }
 
     private readonly List<(string Key, string Value)> _attrs = [];
+
+    private sealed record PresetLink(string Relation, string OtherUrn, string Label, bool Incoming);
 
     private static TextBox Multiline(int height)
         => new()

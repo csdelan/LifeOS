@@ -51,13 +51,25 @@ internal static class BskWrites
         bsk.Run(args.ToArray());
     }
 
-    public static void ApplyLinks(BskCli bsk, string fromUrn, IEnumerable<(string Relation, string Target)> links)
+    public static void ApplyLinks(
+        BskCli bsk, string newUrn, IEnumerable<(string Relation, string OtherUrn, bool Incoming)> links)
     {
-        foreach (var (relation, target) in links)
+        foreach (var (relation, other, incoming) in links)
         {
-            if (target.Length > 0)
+            if (other.Length == 0)
             {
-                bsk.Run("link", fromUrn, relation, target);
+                continue;
+            }
+
+            // Incoming: existing item → new item (Problem results_in Idea).
+            // Outgoing: new item → existing item (the Relationships add-row default).
+            if (incoming)
+            {
+                bsk.Run("link", other, relation, newUrn);
+            }
+            else
+            {
+                bsk.Run("link", newUrn, relation, other);
             }
         }
     }

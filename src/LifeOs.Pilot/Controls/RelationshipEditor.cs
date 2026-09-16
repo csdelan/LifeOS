@@ -83,10 +83,44 @@ internal sealed class RelationshipEditor : UserControl
 
     protected override Size DefaultSize => new(420, 200);
 
-    public IReadOnlyList<(string Relation, string Target)> Pending
-        => _pending.Select(p => (p.Relation, p.Target)).ToList();
+    public IReadOnlyList<(string Relation, string OtherUrn, bool Incoming)> Pending
+        => _pending.Select(p => (p.Relation, p.OtherUrn, p.Incoming)).ToList();
 
     public event EventHandler? Changed;
+
+    /// <summary>
+    /// Pre-populate a deferred link shown in the create form. <paramref name="incoming"/>
+    /// means the existing item is the edge's <c>from</c> (e.g. Problem <c>results_in</c>
+    /// this new Idea); otherwise this new item is <c>from</c>.
+    /// </summary>
+    public void SeedPending(string relation, string otherUrn, string label, bool incoming = false)
+    {
+        if (_pending.Any(p => p.Relation == relation && p.OtherUrn == otherUrn))
+        {
+            ApplyPresetUi(relation, otherUrn);
+            Reload();
+            return;
+        }
+
+        _pending.Add(new PendingLink(relation, otherUrn, label, incoming));
+        ApplyPresetUi(relation, otherUrn);
+        Reload();
+    }
+
+    public void ApplyPresetUi(string relation, string otherUrn)
+    {
+        SelectRelation(relation);
+        _target.SelectUrn(otherUrn);
+    }
+
+    public void SelectRelation(string relation)
+    {
+        var index = _relation.FindStringExact(relation);
+        if (index >= 0)
+        {
+            _relation.SelectedIndex = index;
+        }
+    }
 
     private EdgeRow? SelectedRow => _list.SelectedItem as EdgeRow;
 
@@ -117,7 +151,10 @@ internal sealed class RelationshipEditor : UserControl
             for (var i = 0; i < _pending.Count; i++)
             {
                 var pending = _pending[i];
-                _list.Items.Add(new EdgeRow($"{pending.Relation} → {pending.Label} (pending save)") { PendingIndex = i });
+                var display = pending.Incoming
+                    ? $"{pending.Label} {pending.Relation} this (pending save)"
+                    : $"{pending.Relation} → {pending.Label} (pending save)";
+                _list.Items.Add(new EdgeRow(display) { PendingIndex = i });
             }
 
             if (_pending.Count == 0)
@@ -176,7 +213,14 @@ internal sealed class RelationshipEditor : UserControl
 
         if (_fromUrn is null)
         {
-            _pending.Add(new PendingLink(relation, target, label));
+            if (_pending.Any(p => p.Relation == relation && p.OtherUrn == target))
+            {
+                _target.ClearSelection();
+                Reload();
+                return;
+            }
+
+            _pending.Add(new PendingLink(relation, target, label, Incoming: false));
             _target.ClearSelection();
             Reload();
             Changed?.Invoke(this, EventArgs.Empty);
@@ -248,7 +292,7 @@ internal sealed class RelationshipEditor : UserControl
         }
     }
 
-    private sealed record PendingLink(string Relation, string Target, string Label);
+    private sealed record PendingLink(string Relation, string OtherUrn, string Label, bool Incoming);
 
     // A list row that carries what it takes to unlink the edge it displays. A
     // placeholder / error row leaves the edge fields null and is not Removable.
