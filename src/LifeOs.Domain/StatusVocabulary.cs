@@ -26,7 +26,7 @@ public static class StatusVocabulary
         [SubjectTypes.Task] = ["Not started", "In progress", "Waiting", "Completed", "Cancelled"],
         [SubjectTypes.Commitment] = ["Open", "Fulfilled", "Missed", "Cancelled"],
         [SubjectTypes.Decision] = ["Open", "Implementing", "Cancelled", "Closed"],
-        [SubjectTypes.Problem] = ["Open", "Working", "Resolved"],
+        [SubjectTypes.Problem] = ["Open", "Working", "Resolved", "Cancelled"],
         [SubjectTypes.Appointment] = ["Scheduled", "Completed", "Cancelled", "Missed"],
         [SubjectTypes.Idea] = ["New", "Promoted", "Rejected"],
     };
@@ -45,6 +45,26 @@ public static class StatusVocabulary
         "fulfilled", "missed", "promoted", "rejected",
     };
 
+    /// <summary>
+    /// The terminal status a <c>Drop</c> assigns per type — "resolved out as nothing /
+    /// not pursued" (inbox attention-vs-status, migration 0021 /
+    /// docs/pilot/inbox-attention-vs-status.md). Each is that type's own give-up
+    /// terminal: Goal/Project <c>Abandoned</c>, Idea <c>Rejected</c>, the rest
+    /// <c>Cancelled</c> (and never <c>Resolved</c>/<c>Completed</c>, which mean success).
+    /// A status-less type has none — its inbox items resolve by the attention marker.
+    /// </summary>
+    private static readonly Dictionary<string, string> DismissStatusByType = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [SubjectTypes.Goal] = "Abandoned",
+        [SubjectTypes.Project] = "Abandoned",
+        [SubjectTypes.Task] = "Cancelled",
+        [SubjectTypes.Commitment] = "Cancelled",
+        [SubjectTypes.Decision] = "Cancelled",
+        [SubjectTypes.Problem] = "Cancelled",
+        [SubjectTypes.Appointment] = "Cancelled",
+        [SubjectTypes.Idea] = "Rejected",
+    };
+
     /// <summary>The subject types that carry a status workflow.</summary>
     public static IReadOnlyCollection<string> StatusBearingTypes => ByType.Keys;
 
@@ -54,6 +74,14 @@ public static class StatusVocabulary
     /// </summary>
     public static IReadOnlyList<string> For(string type)
         => ByType.TryGetValue(type, out var statuses) ? statuses : [];
+
+    /// <summary>
+    /// The terminal status a <c>Drop</c> assigns to a subject of <paramref name="type"/>
+    /// ("it's nothing / not pursued"), or "" for a status-less type. Always a valid,
+    /// terminal member of the type's vocabulary.
+    /// </summary>
+    public static string DismissStatusFor(string type)
+        => DismissStatusByType.TryGetValue(type, out var status) ? status : "";
 
     /// <summary>
     /// True when <paramref name="status"/> is a terminal status (finished/dead).

@@ -21,15 +21,19 @@ public static class EventKinds
 }
 
 /// <summary>
-/// Triage marker states (INBOX-1). The newest marker per item wins: <c>flagged</c>
-/// means the item is in the inbox awaiting a decision; <c>dropped</c> ("nothing to
-/// do") and <c>filed</c> (kept as reference) both resolve it out.
+/// Triage marker states (INBOX-1). The newest marker per item wins, and it encodes
+/// <em>attention only</em> — the item's resolution lives in its Status, not here (see
+/// docs/pilot/inbox-attention-vs-status.md). <c>flagged</c> means the item is in the
+/// inbox awaiting a decision; <c>dismissed</c> resolves it out with no status change
+/// ("clarified, nothing to record"). Dropping a <em>subject</em> is a Status change,
+/// not a triage state; <c>dismissed</c> replaced the former <c>dropped</c>/<c>filed</c>
+/// states (0021) — historical markers of those names still fold correctly, since
+/// <c>v_inbox</c> keeps only <c>flagged</c>.
 /// </summary>
 public static class TriageStates
 {
     public const string Flagged = "flagged";
-    public const string Dropped = "dropped";
-    public const string Filed = "filed";
+    public const string Dismissed = "dismissed";
 
     /// <summary>Resolved by being promoted into a subject / into new work (CAP-6 / D4).</summary>
     public const string Promoted = "promoted";

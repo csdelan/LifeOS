@@ -90,6 +90,35 @@ public sealed class StatusVocabularyTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public void Problem_has_a_dismissed_terminal_distinct_from_resolved()
+    {
+        // Attention vs. status (0021): Drop-as-status needs an honest "it's nothing"
+        // target that is not Resolved ("solved"). Problem gains a terminal Cancelled.
+        Assert.True(StatusVocabulary.IsValid(SubjectTypes.Problem, "Cancelled"));
+        Assert.True(StatusVocabulary.IsTerminal("Cancelled"));
+        Assert.False(StatusVocabulary.IsTerminal("Working")); // still an active state
+    }
+
+    [Fact]
+    public void Every_dismiss_status_is_a_valid_terminal_of_its_type()
+    {
+        // Drop-as-status (0021): each status-bearing type maps to a "gave up / it's
+        // nothing" terminal that is a real, terminal member of its own vocabulary — and
+        // never a success terminal (Completed / Resolved).
+        foreach (var type in StatusVocabulary.StatusBearingTypes)
+        {
+            var dismiss = StatusVocabulary.DismissStatusFor(type);
+            Assert.False(string.IsNullOrEmpty(dismiss), $"{type} has no dismiss status");
+            Assert.True(StatusVocabulary.IsValid(type, dismiss), $"{dismiss} is not in {type}'s vocabulary");
+            Assert.True(StatusVocabulary.IsTerminal(dismiss), $"{dismiss} is not terminal");
+            Assert.NotEqual("Completed", dismiss);
+            Assert.NotEqual("Resolved", dismiss);
+        }
+
+        Assert.Empty(StatusVocabulary.DismissStatusFor(SubjectTypes.Value)); // status-less
+    }
+
+    [Fact]
     public void Status_less_types_have_no_vocabulary()
     {
         Assert.Empty(StatusVocabulary.For(SubjectTypes.Value));

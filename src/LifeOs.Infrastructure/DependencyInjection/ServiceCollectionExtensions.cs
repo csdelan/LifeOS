@@ -111,7 +111,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IEventReader>(),
             sp.GetRequiredService<IEventStore>(),
             sp.GetRequiredService<IClock>(),
-            sourceId));
+            sourceId,
+            sp.GetRequiredService<StatusService>()));
 
         // Operational services that work directly against the store.
         services.AddSingleton(_ => new MigrationRunner(connectionString));

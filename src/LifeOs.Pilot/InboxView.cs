@@ -8,10 +8,12 @@ namespace LifeOs.Pilot;
 /// <summary>
 /// Inbox — the clarify step. Lists items flagged for triage (INBOX-1's <c>v_inbox</c>:
 /// captured notes plus Ideas/Problems flagged on creation) and resolves each with a
-/// GTD decision: Promote it into tracked work, Relate a capture to the subject it
-/// concerns, File it as reference, or Drop it. Tagging/relating alone do not resolve
-/// (INBOX-4) — only Promote / File / Drop take an item out of the Inbox. Reads go
-/// through <see cref="SubjectReader"/>; writes shell out to <see cref="BskCli"/>.
+/// GTD decision on two axes (attention vs. status, 0021): Promote it into tracked work,
+/// Relate a capture to the subject it concerns, Dismiss it (attention-only clear, no
+/// status change), or Drop it (a subject's Status → its terminal "it's nothing"). Drop
+/// is subject-only; an event is cleared with Dismiss. Tagging/relating alone do not
+/// resolve (INBOX-4) — only Promote / Dismiss / Drop take an item out of the Inbox.
+/// Reads go through <see cref="SubjectReader"/>; writes shell out to <see cref="BskCli"/>.
 /// </summary>
 internal sealed class InboxView : UserControl, IPilotView
 {
@@ -26,7 +28,7 @@ internal sealed class InboxView : UserControl, IPilotView
     private readonly Button _refreshButton = new() { Text = "Refresh", AutoSize = true };
     private readonly Button _promoteButton = new() { Text = "Promote…", AutoSize = true, Enabled = false };
     private readonly Button _relateButton = new() { Text = "Relate to…", AutoSize = true, Enabled = false };
-    private readonly Button _fileButton = new() { Text = "File", AutoSize = true, Enabled = false };
+    private readonly Button _dismissButton = new() { Text = "Dismiss", AutoSize = true, Enabled = false };
     private readonly Button _dropButton = new() { Text = "Drop…", AutoSize = true, Enabled = false };
 
     private InboxItem? _current;
@@ -49,7 +51,7 @@ internal sealed class InboxView : UserControl, IPilotView
         _refreshButton.Click += (_, _) => LoadInbox();
         _promoteButton.Click += (_, _) => DoPromote();
         _relateButton.Click += (_, _) => DoRelate();
-        _fileButton.Click += (_, _) => DoResolve("file", "File");
+        _dismissButton.Click += (_, _) => DoResolve("dismiss", "Dismiss");
         _dropButton.Click += (_, _) => DoDrop();
 
         _status.AutoSize = true;
@@ -66,7 +68,7 @@ internal sealed class InboxView : UserControl, IPilotView
         };
         actions.Controls.Add(_promoteButton);
         actions.Controls.Add(_relateButton);
-        actions.Controls.Add(_fileButton);
+        actions.Controls.Add(_dismissButton);
         actions.Controls.Add(_dropButton);
 
         var right = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(6, 6, 16, 6) };
@@ -195,8 +197,10 @@ internal sealed class InboxView : UserControl, IPilotView
             var canWrite = _bsk is not null;
             _promoteButton.Enabled = canWrite;
             _relateButton.Enabled = canWrite && item.IsEvent; // relate a capture to a subject
-            _fileButton.Enabled = canWrite;
-            _dropButton.Enabled = canWrite;
+            _dismissButton.Enabled = canWrite; // attention-only clear, for subjects and events
+            // Drop is a Status verb (sets a terminal status), so only for subjects; an
+            // event has no status and is cleared with Dismiss instead (0021).
+            _dropButton.Enabled = canWrite && !item.IsEvent;
         }
     }
 
@@ -206,7 +210,7 @@ internal sealed class InboxView : UserControl, IPilotView
         _content.Clear();
         _promoteButton.Enabled = false;
         _relateButton.Enabled = false;
-        _fileButton.Enabled = false;
+        _dismissButton.Enabled = false;
         _dropButton.Enabled = false;
     }
 
@@ -328,15 +332,30 @@ internal sealed class InboxView : UserControl, IPilotView
         }
 
         // Drop requires confirmation (INBOX-4) — it is a deliberate "this is nothing".
+        // For a subject, Drop sets its Status to the type's dismiss terminal (0021); name
+        // that status so the user sees the resolution being recorded, not a silent removal.
+        var dismissStatus = _current.IsEvent ? "" : PilotVocab.DismissStatusFor(_current.SubjectType ?? "");
+        var prompt = dismissStatus.Length > 0
+            ? $"Drop this {_current.Kind}? Its status will be set to \"{dismissStatus}\" and it leaves the Inbox."
+            : "Drop this item out of the Inbox? It is kept in history but marked resolved.";
+
         var confirm = MessageBox.Show(
-            this, "Drop this item out of the Inbox? It is kept in history but marked resolved.",
-            "Confirm Drop", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+            this, prompt, "Confirm Drop", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
         if (confirm != DialogResult.OK)
         {
             return;
         }
 
-        Write("Drop failed", () => _bsk.Run("drop", _current.Ref));
+        Write("Drop failed", () =>
+        {
+            _bsk.Run("drop", _current.Ref);
+            // A subject Drop is a status change; fold it into subject_current so Browse and
+            // the other views show the new status (the Inbox itself reads a live view).
+            if (dismissStatus.Length > 0)
+            {
+                _bsk.Run("rebuild");
+            }
+        });
     }
 
     // Runs a write, refreshes the list on success, and surfaces a clean error otherwise.

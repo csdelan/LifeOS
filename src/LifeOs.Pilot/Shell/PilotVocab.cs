@@ -52,7 +52,7 @@ internal static class PilotVocab
         [Task] = ["Not started", "In progress", "Waiting", "Completed", "Cancelled"],
         [Commitment] = ["Open", "Fulfilled", "Missed", "Cancelled"],
         [Decision] = ["Open", "Implementing", "Cancelled", "Closed"],
-        [Problem] = ["Open", "Working", "Resolved"],
+        [Problem] = ["Open", "Working", "Resolved", "Cancelled"],
         [Appointment] = ["Scheduled", "Completed", "Cancelled", "Missed"],
         [Idea] = ["New", "Promoted", "Rejected"],
     };
@@ -63,6 +63,23 @@ internal static class PilotVocab
         "abandoned", "dropped", "archived", "superseded",
         "fulfilled", "missed", "promoted", "rejected",
     };
+
+    // The terminal status Drop assigns per type — mirror of StatusVocabulary.DismissStatusByType.
+    private static readonly Dictionary<string, string> DismissStatusByType = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [Goal] = "Abandoned",
+        [Project] = "Abandoned",
+        [Task] = "Cancelled",
+        [Commitment] = "Cancelled",
+        [Decision] = "Cancelled",
+        [Problem] = "Cancelled",
+        [Appointment] = "Cancelled",
+        [Idea] = "Rejected",
+    };
+
+    /// <summary>The status Drop assigns to a subject of this type, or "" if it has none.</summary>
+    public static string DismissStatusFor(string type)
+        => DismissStatusByType.TryGetValue(type, out var status) ? status : "";
 
     // (childType, parentType) → relation. Dominant hierarchy Value→Goal→Project→Task, plus Task under Goal.
     private static readonly Dictionary<(string Child, string Parent), string> ParentMap = new()

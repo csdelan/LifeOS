@@ -7,28 +7,32 @@ using Microsoft.Extensions.DependencyInjection;
 namespace LifeOs.Cli.Commands;
 
 /// <summary>
-/// <c>bsk flag &lt;item&gt;</c>, <c>bsk drop &lt;item&gt;</c>, <c>bsk file &lt;item&gt;</c>
-/// — the INBOX-1 triage marker. Flag puts an item (subject or event id) in the
-/// inbox; Drop resolves it as "nothing to do"; File resolves it as kept-for-
-/// reference. Each appends a <c>triage</c> event; the newest marker per item wins,
-/// and <c>v_inbox</c> lists the flagged ones. Confirmation for Drop is the UI's job.
+/// <c>bsk flag &lt;item&gt;</c>, <c>bsk drop &lt;item&gt;</c>, <c>bsk dismiss &lt;item&gt;</c>
+/// — the INBOX-1 triage actions on the two axes (attention vs. status, 0021). Flag puts
+/// an item (subject or event id) in the inbox. Dismiss clears it attention-only, with no
+/// status change. Drop resolves it as "it's nothing" — for a <em>subject</em> a Status
+/// change to the type's dismiss terminal (so the resolution lives in Status, not a triage
+/// state); an event has no status, so Drop degrades to Dismiss. Flag/Dismiss (and event
+/// Drop) append a <c>triage</c> event; the newest marker per item wins, and <c>v_inbox</c>
+/// lists the flagged, non-terminal, non-archived ones. Confirmation for Drop is the UI's job.
 /// </summary>
 internal static class TriageCommand
 {
     public static Command CreateFlag(Option<string?> connectionOption, Option<bool> jsonOption)
         => Build("flag", "Flag an item (subject or event id) into the inbox.",
-            TriageStates.Flagged, connectionOption, jsonOption);
+            (service, item, ct) => service.FlagAsync(item, ct), connectionOption, jsonOption);
 
     public static Command CreateDrop(Option<string?> connectionOption, Option<bool> jsonOption)
-        => Build("drop", "Resolve an inbox item as dropped (nothing to do).",
-            TriageStates.Dropped, connectionOption, jsonOption);
+        => Build("drop", "Drop an inbox item as \"it's nothing\" (a subject records this in its Status).",
+            (service, item, ct) => service.DropAsync(item, ct), connectionOption, jsonOption);
 
-    public static Command CreateFile(Option<string?> connectionOption, Option<bool> jsonOption)
-        => Build("file", "Resolve an inbox item as filed (kept as reference).",
-            TriageStates.Filed, connectionOption, jsonOption);
+    public static Command CreateDismiss(Option<string?> connectionOption, Option<bool> jsonOption)
+        => Build("dismiss", "Dismiss an inbox item attention-only, with no status change.",
+            (service, item, ct) => service.DismissAsync(item, ct), connectionOption, jsonOption);
 
     private static Command Build(
-        string name, string description, string state,
+        string name, string description,
+        Func<TriageService, string, CancellationToken, Task<TriageResult>> invoke,
         Option<string?> connectionOption, Option<bool> jsonOption)
     {
         var itemArgument = new Argument<string>("item")
@@ -49,21 +53,23 @@ internal static class TriageCommand
             {
                 await using var provider = Cli.BuildServices(connectionString);
                 var service = provider.GetRequiredService<TriageService>();
-                var result = state switch
-                {
-                    TriageStates.Flagged => await service.FlagAsync(item, cancellationToken),
-                    TriageStates.Dropped => await service.DropAsync(item, cancellationToken),
-                    _ => await service.FileAsync(item, cancellationToken)
-                };
+                var result = await invoke(service, item, cancellationToken);
 
                 if (asJson)
                 {
                     Cli.WriteJson(new
                     {
-                        triageEventId = result.EventId,
+                        eventId = result.EventId,
+                        eventKind = result.StatusChanged ? "state_change" : "triage",
                         item = new { kind = result.Item.IsEvent ? "event" : "subject", id = result.Item.Id },
                         state = result.State
                     });
+                }
+                else if (result.StatusChanged)
+                {
+                    // Drop on a subject rerouted to a Status change (0021).
+                    Console.WriteLine(
+                        $"Dropped {result.Item.Label} — status set to {result.State} (state_change {result.EventId}).");
                 }
                 else
                 {
