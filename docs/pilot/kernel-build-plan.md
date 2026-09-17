@@ -92,7 +92,9 @@ recurrence, adherence/occurrence projections, materialized occurrences).
 - **D1/Area** — item→Area as an `attributes.area` reference, kept **separate** from the
   existing `focus`/Season axis (overlap noted, not fused, in the Pilot).
 - **INBOX-1** — hybrid: explicit flag on entry + explicit Drop; promote/relate stay
-  untouched and count as resolution.
+  untouched and count as resolution. *(Refined post-plan by migration 0021: the Inbox is
+  attention-only and a subject's resolution lives in its Status — see
+  [inbox-attention-vs-status.md](inbox-attention-vs-status.md).)*
 
 ## Status
 

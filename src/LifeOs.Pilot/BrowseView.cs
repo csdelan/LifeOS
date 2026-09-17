@@ -39,7 +39,7 @@ internal sealed class BrowseView : UserControl, IPilotView
         Ui.ConfigureGrid(_grid);
         Ui.SelectRowOnRightClick(_grid);
         _grid.SelectionChanged += OnSubjectSelected;
-        _grid.ContextMenuStrip = BuildProblemIdeaMenu();
+        _grid.ContextMenuStrip = BuildSubjectContextMenu();
         _archived.CheckedChanged += (_, _) => LoadTypes();
 
         var newButton = Ui.Action("New…");
@@ -285,17 +285,91 @@ internal sealed class BrowseView : UserControl, IPilotView
         }
     }
 
-    private ContextMenuStrip BuildProblemIdeaMenu()
+    private ContextMenuStrip BuildSubjectContextMenu()
     {
         var menu = new ContextMenuStrip();
+
         var newIdea = new ToolStripMenuItem("New idea…");
         newIdea.Click += (_, _) => DoNewIdeaFromProblem();
         menu.Items.Add(newIdea);
+
+        var flag = new ToolStripMenuItem("Flag to Inbox");
+        flag.Click += (_, _) => DoFlagToInbox();
+        menu.Items.Add(flag);
+
         menu.Opening += (_, e) =>
         {
-            e.Cancel = _bsk is null || CurrentProblem() is null;
+            var hasSubject = _grid.CurrentRow?.DataBoundItem is SubjectListItem;
+            e.Cancel = _bsk is null || !hasSubject; // needs a writable connection and a selection
+            newIdea.Enabled = CurrentProblem() is not null; // spawn a solution idea — Problem only
+            flag.Enabled = hasSubject;                       // re-flag any subject for re-triage
         };
+
         return menu;
+    }
+
+    /// <summary>
+    /// Flags the selected subject into the Inbox for triage — the manual counterpart to
+    /// flag-on-capture, available on <em>any</em> subject not currently in the Inbox: one
+    /// never flagged (Goals/Projects/Tasks are not flagged on creation), one dismissed
+    /// earlier, or one resolved. Only a <em>resolved</em> subject needs special handling —
+    /// its terminal Status is hidden by the Inbox (0021), so offer to re-open it to the
+    /// type's default first, else the flag would surface nothing. Every other subject just
+    /// gets a flag and reappears.
+    /// </summary>
+    private void DoFlagToInbox()
+    {
+        if (_bsk is null)
+        {
+            Ui.WarnNoBsk(this);
+            return;
+        }
+
+        if (_grid.CurrentRow?.DataBoundItem is not SubjectListItem item)
+        {
+            return;
+        }
+
+        var reopenTo = PilotVocab.DefaultStatusFor(item.Type);
+        var mustReopen = PilotVocab.IsTerminal(item.DisplayStatus) && reopenTo.Length > 0;
+        if (mustReopen)
+        {
+            var ok = MessageBox.Show(
+                this,
+                $"“{item.Title}” is {item.DisplayStatus} (resolved). Re-open it to {reopenTo} and flag it into the Inbox?",
+                "Flag to Inbox", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
+            if (!ok)
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            if (mustReopen)
+            {
+                _bsk.Run("status", item.Urn, reopenTo);
+            }
+
+            _bsk.Run("flag", item.Urn);
+
+            if (mustReopen)
+            {
+                _bsk.Run("rebuild"); // fold the re-opened status so Browse reflects it
+            }
+        }
+        catch (BskException ex)
+        {
+            Ui.ShowError(this, "Flag to Inbox failed", ex);
+            return;
+        }
+
+        if (mustReopen)
+        {
+            Reload();
+        }
+
+        _status.Text = $"Flagged “{item.Title}” into the Inbox.";
     }
 
     private SubjectListItem? CurrentProblem()

@@ -1732,6 +1732,15 @@ Build:      built
   outcome) or **inferred** from promote/relate/drop? (Hybrid: explicit flag on entry +
   explicit Drop; promote/relate stay untouched and count as resolution.)
 
+**Update (2026-09-16 — attention vs. status, migration 0021):** the built model refines the
+above. The Inbox encodes **attention only**; an item's *resolution* lives in its **Status**,
+not in the triage marker. So `v_inbox` = flagged **AND non-terminal-status AND non-archived**,
+and the two exits split across the axes: **Dismiss** (the former "File" — an attention-only
+clear, no status change) and **Drop** (a *subject's* Status → its terminal "it's nothing";
+an event has no status, so Drop degrades to Dismiss). Re-flagging is manual, from **Browse →
+right-click → Flag to Inbox** (which re-opens a resolved subject first). Full reasoning:
+[inbox-attention-vs-status.md](inbox-attention-vs-status.md).
+
 
 ### INBOX-2 — Reaching Inbox Zero is a recurring commitment to myself
 Horizon:    Pilot phase 2
@@ -1849,6 +1858,12 @@ Build:      built
   The Pilot should not rely on an immediate Drop action followed only by Undo.
 - I should be able to organize the item first and then make the resolution decision without
   losing the selected item or the context I just added.
+
+**Update (2026-09-16 — 0021):** the standalone-reference resolution described here as **File**
+ships as **Dismiss** — an attention-only clear that resolves the item out with no status
+change (distinct from the GTD "File = relate" mapping in INBOX-1/INBOX-3). **Drop** now records
+"it's nothing" in the subject's **Status** (a terminal state) rather than a bare marker, and
+still confirms. See [inbox-attention-vs-status.md](inbox-attention-vs-status.md).
 
 **Ontology fit (Claude):**
 - Maps to: **Tag (GEN-1) and Relate (`bsk relate` / `link`) are organization, not

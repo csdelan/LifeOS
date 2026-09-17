@@ -134,10 +134,16 @@ Done (File → Dismiss):
   subject-only in the UI (disabled for events); an event is cleared with Dismiss. `bsk drop`
   on an event degrades gracefully to a dismiss.
 
-Not yet built:
+Done (re-flag):
 
-- [ ] Surface **re-flag** in the Pilot UI (a button over the existing `bsk flag` verb) so a
-  resolved subject can be pulled back into the inbox on demand.
+- [x] Surface **re-flag** in the Pilot UI as **Browse → right-click → Flag to Inbox** (over
+  the existing `bsk flag` verb), available on any subject. A resolved subject carries a
+  terminal Status that the Inbox hides, so re-flagging one offers to re-open it to the type's
+  default status first — otherwise the flag would surface nothing.
+
+All follow-ups from this note are now built. Related docs updated to match: `ui-refactor-plan.md`
+(verb table, `v_inbox`, current-state), `ui-requirements.md` (INBOX-1/INBOX-4 update notes),
+`kernel-build-plan.md` (INBOX-1 refinement note).
 
 ## Related note: "Promote" on a Problem
 

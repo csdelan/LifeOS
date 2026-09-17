@@ -72,7 +72,7 @@ the user think in storage terms; never bend the store to mirror a screen.
 | `tag <item> --add x --remove y` | Tags on a subject or event id (classification, not relations) |
 | `link <from> <relation> <to>` | subject→subject alignment edge (serves/results_in/supersedes) |
 | `relate <event-id> <subject> [--as concerns]` | event→subject edge (file a capture) |
-| `flag` / `drop` / `file <item>` | Inbox triage marker transitions (INBOX-1) |
+| `flag` / `drop` / `dismiss <item>` | Inbox triage on two axes (INBOX-1 / 0021): flag in; dismiss = attention-only clear; drop = a subject's Status → its terminal "it's nothing" (an event has no status, so drop degrades to dismiss) |
 | `recur <subject> --freq …` / `--clear` | Set structured recurrence (daily/weekly/interval/monthly/trigger) |
 | `adhere <habit> followed|partial|missed [--on date] [--note]` | Record a habit occurrence |
 | `involve <subject> <person> --role <role> [--remove]` | People-association (attendee/owner/assignee/waiting_for/involves) |
@@ -88,7 +88,7 @@ the user think in storage terms; never bend the store to mirror a screen.
 | `v_subject_relation` / `v_subject_event` | Alignment edges / event→subject edges, with urns+types |
 | `v_area` | Areas master list (name/description/notes) |
 | `v_item_tag` / `v_tag_universe` | Tag assignments / the live tag set + counts (autocomplete) |
-| `v_inbox` | Flagged-and-unresolved triage items (subjects + events), with content |
+| `v_inbox` | Flagged, non-terminal-status, non-archived triage items (subjects + events), with content (0021) |
 | `v_habit` | Habit fields (cue/routine/reward/start/end/allows_partial/recurrence) |
 | `v_habit_occurrence` / `v_habit_streak` | Derived occurrences (with state) / current streaks |
 | `v_person_association` | Who is involved in what, and in which role |
@@ -132,9 +132,11 @@ Helper SQL functions you may call in read queries: `bsk.is_archived(uuid)`,
 - `MainForm` — a `TabControl` shell with **Browse** and **Inbox** tabs (needs expanding to
   the full NAV-1 destination set + open-on-Dashboard + per-tab state).
 - `BrowseView` — 3-pane type-tree → subject list → detail, with New / Change status / Link /
-  Set dates (attributes) / Relate, all shelling out to `bsk`.
+  Set dates (attributes) / Relate, all shelling out to `bsk`. Right-click → **Flag to Inbox**
+  re-triages any subject (re-opens a resolved one first, 0021).
 - `InboxView` — **already cut over to `v_inbox`** (INBOX-1): lists flagged items (notes +
-  Ideas/Problems), with Promote / Relate (captures) / File / Drop.
+  Ideas/Problems), with Promote / Relate (captures) / Dismiss / Drop (0021: Drop is
+  subject-only and sets a terminal Status; Dismiss is the attention-only clear).
 - Dialogs: `InputDialog`, `LinkDialog`, `PromoteDialog`, `ValueDialog`, `AttributesDialog`.
 - `SubjectReader` (reads), `BskCli` (writes), `WindowPlacement` (persisted window state).
 
