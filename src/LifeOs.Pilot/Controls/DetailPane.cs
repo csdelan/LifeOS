@@ -561,11 +561,15 @@ internal sealed class DetailPane : UserControl
     }
 
     private static RichTextBox ReadOnlyBox()
-        => new()
+    {
+        var box = new RichTextBox
         {
             Dock = DockStyle.Fill,
             ReadOnly = true,
             BorderStyle = BorderStyle.None,
             Font = new Font(FontFamily.GenericMonospace, 9f)
         };
+        Ui.OpenDetectedLinks(box);
+        return box;
+    }
 }

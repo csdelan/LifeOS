@@ -46,6 +46,7 @@ internal sealed class InboxView : UserControl, IPilotView
         _content.ReadOnly = true;
         _content.BorderStyle = BorderStyle.None;
         _content.Font = new Font(FontFamily.GenericMonospace, 9.5f);
+        Ui.OpenDetectedLinks(_content);
 
         _newButton.Click += (_, _) => DoNewNote();
         _refreshButton.Click += (_, _) => LoadInbox();

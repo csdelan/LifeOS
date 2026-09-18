@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LifeOs.Pilot.Cli;
 
 namespace LifeOs.Pilot.Shell;
@@ -303,6 +304,38 @@ internal static class Ui
         catch (BskException ex)
         {
             ShowError(owner, caption, ex);
+        }
+    }
+
+    /// <summary>
+    /// RichTextBox auto-underlines URLs but does nothing on click unless
+    /// <see cref="RichTextBox.LinkClicked"/> is handled. Wire that once so
+    /// http(s) links open in the default browser.
+    /// </summary>
+    public static void OpenDetectedLinks(RichTextBox box)
+    {
+        box.DetectUrls = true;
+        box.LinkClicked -= OnRichTextLinkClicked;
+        box.LinkClicked += OnRichTextLinkClicked;
+    }
+
+    private static void OnRichTextLinkClicked(object? sender, LinkClickedEventArgs e)
+    {
+        if (!BrowserUrl.TryGet(e.LinkText, out var url))
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            if (sender is IWin32Window owner)
+            {
+                ShowError(owner, "Open link failed", ex);
+            }
         }
     }
 }

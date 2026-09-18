@@ -9,6 +9,14 @@
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
   </PropertyGroup>
 
+  <!--
+    WinForms-free Pilot helper compiled into the test assembly so URL filtering
+    can be asserted without a ProjectReference to the Windows-only Pilot exe.
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\src\LifeOs.Pilot\Shell\BrowserUrl.cs" Link="Pilot\BrowserUrl.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\LifeOs.Domain\LifeOs.Domain.csproj" />
     <ProjectReference Include="..\..\src\LifeOs.Application\LifeOs.Application.csproj" />
