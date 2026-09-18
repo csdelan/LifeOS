@@ -17,16 +17,17 @@ internal sealed class SubjectPicker : ComboBox
         Width = 280;
         IntegralHeight = false;
         DropDownWidth = 420;
+        MaxDropDownItems = 20;
         Reload();
     }
 
-    public void Reload(Guid excludeId = default)
+    public void Reload(Guid excludeId = default, string? type = null, bool includeArchived = false)
     {
         var selected = SelectedUrn;
         _items.Clear();
         try
         {
-            _items.AddRange(_reader.QuerySubjects(null).Where(s => s.Id != excludeId));
+            _items.AddRange(_reader.QuerySubjects(type, includeArchived).Where(s => s.Id != excludeId));
         }
         catch (Exception)
         {
@@ -35,10 +36,10 @@ internal sealed class SubjectPicker : ComboBox
 
         BeginUpdate();
         Items.Clear();
-        Items.Add("(choose an existing item…)");
+        Items.Add(Placeholder(type));
         foreach (var item in _items)
         {
-            Items.Add($"{PilotVocab.Label(item.Type)}: {item.Title}");
+            Items.Add(Display(item, type, includeArchived));
         }
 
         EndUpdate();
@@ -92,5 +93,18 @@ internal sealed class SubjectPicker : ComboBox
 
         var index = _items.FindIndex(s => s.Urn == urn);
         SelectedIndex = index >= 0 ? index + 1 : 0;
+    }
+
+    private static string Placeholder(string? type)
+        => string.IsNullOrEmpty(type)
+            ? "(choose an existing item…)"
+            : $"(choose {PilotVocab.Label(type)}…)";
+
+    private static string Display(SubjectListItem item, string? type, bool includeArchived)
+    {
+        var label = string.IsNullOrEmpty(type)
+            ? $"{PilotVocab.Label(item.Type)}: {item.Title}"
+            : item.Title;
+        return includeArchived && item.Archived ? $"{label} (archived)" : label;
     }
 }

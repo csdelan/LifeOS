@@ -15,20 +15,30 @@ internal sealed class RelationshipEditor : UserControl
     private readonly BskCli? _bsk;
     private readonly ListBox _list = new() { Dock = DockStyle.Fill, IntegralHeight = false };
     private readonly ComboBox _relation = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
+    private readonly ComboBox _targetType = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170 };
     private readonly SubjectPicker _target;
+    private readonly CheckBox _archived = new() { Text = "Archived", AutoSize = true, Padding = new Padding(8, 6, 4, 0) };
     private readonly Button _add = Ui.Action("Add");
     private readonly Button _remove = Ui.Action("Remove");
     private readonly Label _hint = new()
     {
         Dock = DockStyle.Top,
         AutoSize = true,
-        Text = "Pick an existing Goal, Identity Statement, Project, or other item. This is a link between two items, not a tag.",
+        Text = "Choose a type to filter, then pick an existing item. Archived items are hidden unless you check Archived. This is a link between two items, not a tag.",
         ForeColor = SystemColors.GrayText,
         Padding = new Padding(0, 0, 0, 4)
     };
     private string? _fromUrn;
     private Guid _fromId;
     private readonly List<PendingLink> _pending = [];
+
+    // Project/Task first — the usual link targets — then the rest of CreatableTypes.
+    private static readonly string[] LinkTargetTypes =
+    [
+        PilotVocab.Project, PilotVocab.Task, PilotVocab.Goal, PilotVocab.Value,
+        PilotVocab.Problem, PilotVocab.Decision, PilotVocab.Idea, PilotVocab.Person,
+        PilotVocab.Area, PilotVocab.Habit, PilotVocab.Appointment, PilotVocab.Commitment
+    ];
 
     public RelationshipEditor(SubjectReader reader, BskCli? bsk)
     {
@@ -37,6 +47,9 @@ internal sealed class RelationshipEditor : UserControl
         _target = new SubjectPicker(reader);
         _relation.Items.AddRange(PilotVocab.AlignmentRelations);
         _relation.SelectedIndex = 0;
+        FillTargetTypes();
+        _targetType.SelectedIndexChanged += (_, _) => RefreshTarget();
+        _archived.CheckedChanged += (_, _) => RefreshTarget();
         _add.Click += (_, _) => Add();
         _remove.Click += (_, _) => Remove();
         _remove.Enabled = false;
@@ -51,8 +64,10 @@ internal sealed class RelationshipEditor : UserControl
         };
         entry.Controls.Add(new Label { Text = "This item", AutoSize = true, Padding = new Padding(0, 6, 4, 0) });
         entry.Controls.Add(_relation);
-        entry.Controls.Add(new Label { Text = "this existing item:", AutoSize = true, Padding = new Padding(8, 6, 4, 0) });
+        entry.Controls.Add(new Label { Text = "this existing", AutoSize = true, Padding = new Padding(8, 6, 4, 0) });
+        entry.Controls.Add(_targetType);
         entry.Controls.Add(_target);
+        entry.Controls.Add(_archived);
         entry.Controls.Add(_add);
 
         var actions = new FlowLayoutPanel
@@ -110,6 +125,12 @@ internal sealed class RelationshipEditor : UserControl
     public void ApplyPresetUi(string relation, string otherUrn)
     {
         SelectRelation(relation);
+        // Any-type so a preset target is visible regardless of the last type filter.
+        if (_targetType.SelectedIndex != 0)
+        {
+            _targetType.SelectedIndex = 0;
+        }
+
         _target.SelectUrn(otherUrn);
     }
 
@@ -129,7 +150,7 @@ internal sealed class RelationshipEditor : UserControl
         _fromId = id;
         _fromUrn = urn;
         _pending.Clear();
-        _target.Reload(excludeId: id);
+        RefreshTarget();
         Reload();
     }
 
@@ -140,7 +161,7 @@ internal sealed class RelationshipEditor : UserControl
         _pending.Clear();
         _list.Items.Clear();
         _remove.Enabled = false;
-        _target.Reload();
+        RefreshTarget();
     }
 
     public void Reload()
@@ -290,6 +311,28 @@ internal sealed class RelationshipEditor : UserControl
         {
             Ui.ShowError(this, "Remove failed", ex);
         }
+    }
+
+    private void FillTargetTypes()
+    {
+        _targetType.DropDownWidth = 180;
+        _targetType.Items.Add(new TypeChoice(null, "item"));
+        foreach (var type in LinkTargetTypes)
+        {
+            _targetType.Items.Add(new TypeChoice(type, PilotVocab.Label(type)));
+        }
+
+        _targetType.SelectedIndex = 0;
+    }
+
+    private string? SelectedTargetType => (_targetType.SelectedItem as TypeChoice)?.Type;
+
+    private void RefreshTarget()
+        => _target.Reload(_fromId, SelectedTargetType, _archived.Checked);
+
+    private sealed record TypeChoice(string? Type, string Label)
+    {
+        public override string ToString() => Label;
     }
 
     private sealed record PendingLink(string Relation, string OtherUrn, string Label, bool Incoming);
