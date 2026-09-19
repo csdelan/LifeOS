@@ -118,6 +118,18 @@ This uses the local development connection string
 Override it with `--connection` or the `BSK_CONNECTION_STRING` environment
 variable.
 
+## Hosting on Supabase (staging)
+
+Local Docker is the **dev** database. A Supabase cloud project is the
+**staging** database, reachable from any computer. `bsk migrate` stays the
+single source of truth for schema everywhere — Supabase is just the Postgres
+host you point it at, so promoting is "run the same migrations against the
+staging connection string." GitHub Actions
+([`migrate-staging.yml`](.github/workflows/migrate-staging.yml)) applies them on
+merge to `main`; `scripts/migrate-staging.ps1` does the same by hand.
+
+Full setup and runbook: [`docs/pilot/supabase-hosting.md`](docs/pilot/supabase-hosting.md).
+
 ## Migrations
 
 Migrations are plain SQL under `db/migrations`, named `NNNN__name.sql` (e.g.

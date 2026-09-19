@@ -37,8 +37,14 @@ packages/
 # Local environment
 *.env
 .env
-.env.local
+.env.*
+!.env.example
 appsettings.*.local.json
+
+# Supabase CLI local state (schema stays owned by `bsk migrate`, not the CLI)
+supabase/.temp/
+supabase/.branches/
+.supabase/
 
 # OS
 .DS_Store
