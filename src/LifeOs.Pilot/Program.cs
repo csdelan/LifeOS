@@ -1,5 +1,6 @@
 using LifeOs.Pilot.Cli;
 using LifeOs.Pilot.Reader;
+using LifeOs.Pilot.Shell;
 
 namespace LifeOs.Pilot;
 
@@ -14,27 +15,36 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
 
+        // Point this process (and, by inheritance, the bsk child processes) at the
+        // remembered environment before anything reads a connection string.
+        var settings = EnvironmentSettings.Load(PilotPaths.Settings, PilotPaths.DefaultEnvFile());
+        var activation = EnvironmentActivator.Apply(settings.Environment, settings.EnvFilePath);
+
         var reader = new SubjectReader(ReaderConnectionString.Resolve());
 
-        // Writes shell out to bsk. If it can't be found the reader still works;
-        // the write buttons explain what to do.
+        // Writes shell out to bsk (which inherits our environment). Disabled when
+        // Staging has no owner credentials, or when bsk.exe can't be found — the
+        // write buttons then explain the read-only state.
         BskCli? bsk = null;
-        try
+        if (activation.WritesEnabled)
         {
-            bsk = BskCli.Locate();
-        }
-        catch (BskException)
-        {
-            // Left null on purpose — read-only mode until bsk is available.
+            try
+            {
+                bsk = BskCli.Locate();
+            }
+            catch (BskException)
+            {
+                // Left null on purpose — read-only mode until bsk is available.
+            }
         }
 
-        // Apply any pending migrations before the window opens. The pilot reads
-        // Postgres directly but never writes schema itself (bsk is the only writer),
-        // so a schema-touching migration that hasn't been applied makes reads that
-        // reference new columns fail. Running migrate here keeps the DB in step with
-        // the build. Best-effort: a failure warns but still opens the app (which
-        // already surfaces read errors), and read-only mode skips it entirely.
-        if (bsk is not null)
+        // Keep the LOCAL dev database in step with the build by applying pending
+        // migrations before the window opens (a schema-touching migration that
+        // hasn't been applied makes reads referencing new columns fail). The
+        // STAGING schema is owned by CI and scripts/migrate-staging.ps1, so the
+        // pilot never migrates it on launch. Best-effort: a failure warns but the
+        // app still opens (it already surfaces read errors).
+        if (bsk is not null && activation.Effective == PilotEnvironment.Dev)
         {
             try
             {
@@ -49,6 +59,11 @@ internal static class Program
             }
         }
 
-        Application.Run(new MainForm(reader, bsk));
+        if (activation.Warning is not null)
+        {
+            MessageBox.Show(activation.Warning, "Environment", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        Application.Run(new MainForm(reader, bsk, activation.Effective, settings));
     }
 }
