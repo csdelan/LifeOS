@@ -32,7 +32,7 @@ public sealed class NewSubjectDialog : Form
     private readonly TextBox _why = Multiline(150);
     private readonly TextBox _duration = new() { Width = 160, PlaceholderText = "e.g. 30m" };
     private readonly TextBox _cue = new() { Width = 460 };
-    private readonly TextBox _routine = Multiline(50);
+    private readonly TextBox _routine = Multiline(110);
     private readonly TextBox _reward = new() { Width = 460 };
     private readonly DateField _habitStart = new();
     private readonly DateField _habitEnd = new();
@@ -379,6 +379,7 @@ public sealed class NewSubjectDialog : Form
 
         AddRow(stack, Ui.Heading("Tags"));
         _tags.Height = 80;
+        _tags.Dock = DockStyle.Top;
         AddRow(stack, _tags);
         AddRow(stack, Ui.Heading("Relationships"));
         _relationships.Height = 240;
@@ -481,6 +482,7 @@ public sealed class NewSubjectDialog : Form
                 args.Add($"{key}={value}");
             }
 
+            _tags.CommitPending();
             var created = _bsk.RunJson<CreatedSubject>(args.ToArray());
             BskWrites.ApplyTags(_bsk, created.Urn, _tags.Tags);
             BskWrites.ApplyLinks(_bsk, created.Urn, _relationships.Pending);

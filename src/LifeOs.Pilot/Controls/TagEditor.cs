@@ -14,35 +14,54 @@ internal sealed class TagEditor : UserControl
     private readonly SubjectReader _reader;
     private readonly BskCli? _bsk;
     private readonly FlowLayoutPanel _chips = new() { AutoSize = true, WrapContents = true, Dock = DockStyle.Fill };
-    private readonly ComboBox _input = new() { Width = 180 };
+    // TextBox + CustomSource, not ComboBox + ListItems: with any existing
+    // universe entries, ComboBox autocomplete swallows keystrokes that don't
+    // continue a match, so a new tag like "newtag" arrives as "ne".
+    private readonly TextBox _input = new();
     private readonly Button _add = Ui.Action("Add tag");
     private readonly List<string> _tags = [];
     private string? _itemRef;
     private bool _suppress;
 
+    protected override Size DefaultSize => new(460, 80);
+
     public TagEditor(SubjectReader reader, BskCli? bsk)
     {
         _reader = reader;
         _bsk = bsk;
-        Height = 72;
+        Height = 80;
+        MinimumSize = new Size(240, 72);
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var entry = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Dock = DockStyle.Fill };
-        _input.DropDownStyle = ComboBoxStyle.DropDown;
+        var entry = new TableLayoutPanel
+        {
+            AutoSize = true,
+            ColumnCount = 2,
+            Dock = DockStyle.Fill,
+            Margin = Padding.Empty
+        };
+        entry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        entry.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _input.Dock = DockStyle.Fill;
+        _input.Margin = new Padding(0, 3, 6, 0);
         _input.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
-        _input.AutoCompleteSource = AutoCompleteSource.ListItems;
+        _input.AutoCompleteSource = AutoCompleteSource.CustomSource;
+        _input.AutoCompleteCustomSource = [];
+        _add.CausesValidation = false;
+        _add.Margin = new Padding(0);
         _add.Click += (_, _) => AddFromInput();
         _input.KeyDown += (_, e) =>
         {
             if (e.KeyCode == Keys.Enter)
             {
                 e.SuppressKeyPress = true;
+                e.Handled = true;
                 AddFromInput();
             }
         };
-        entry.Controls.Add(_input);
-        entry.Controls.Add(_add);
+        entry.Controls.Add(_input, 0, 0);
+        entry.Controls.Add(_add, 1, 0);
         root.Controls.Add(_chips, 0, 0);
         root.Controls.Add(entry, 0, 1);
         Controls.Add(root);
@@ -66,6 +85,27 @@ internal sealed class TagEditor : UserControl
 
     public void ClearDeferred() => Bind(null, []);
 
+    /// <summary>
+    /// Fold typed-but-not-added text into the tag list. The New dialog's Save is
+    /// the form AcceptButton, so Enter / click-Save can fire without Add.
+    /// </summary>
+    public void CommitPending() => AddFromInput();
+
+    /// <summary>
+    /// Enter in the entry box must add a tag, not click the parent form's Save.
+    /// ProcessCmdKey runs before Form.ProcessDialogKey (AcceptButton).
+    /// </summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.Enter && (_input.Focused || _add.Focused))
+        {
+            AddFromInput();
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
     private static string Normalize(string tag) => tag.Trim().ToLowerInvariant();
 
     private void ReloadUniverse()
@@ -73,8 +113,9 @@ internal sealed class TagEditor : UserControl
         try
         {
             var items = _reader.GetTagUniverse().Select(t => t.Tag).ToArray();
-            _input.Items.Clear();
-            _input.Items.AddRange(items);
+            var source = new AutoCompleteStringCollection();
+            source.AddRange(items);
+            _input.AutoCompleteCustomSource = source;
         }
         catch (Exception)
         {
