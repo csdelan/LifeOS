@@ -8,7 +8,8 @@ namespace LifeOs.Pilot.Views;
 
 /// <summary>
 /// TASKS-1: Overdue / Today / Upcoming / Unscheduled grouping, always-visible
-/// title-only quick entry, inline Complete / In progress, filters.
+/// title-only quick entry, filters. Status changes go through the selected
+/// Task's Change status… action (same as other types).
 /// </summary>
 internal sealed class TasksView : UserControl, IPilotView
 {
@@ -84,13 +85,6 @@ internal sealed class TasksView : UserControl, IPilotView
             }
         };
 
-        var complete = Ui.Action("Complete");
-        var progress = Ui.Action("In progress");
-        complete.Enabled = bsk is not null;
-        progress.Enabled = bsk is not null;
-        complete.Click += (_, _) => SetStatus("Completed");
-        progress.Click += (_, _) => SetStatus("In progress");
-
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical };
         split.Panel1.Controls.Add(_grid);
         split.Panel2.Controls.Add(_detail);
@@ -100,8 +94,6 @@ internal sealed class TasksView : UserControl, IPilotView
         banner.Controls.Add(new Label { Text = "Quick:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
         banner.Controls.Add(_quick);
         banner.Controls.Add(expand);
-        banner.Controls.Add(complete);
-        banner.Controls.Add(progress);
         banner.Controls.Add(_statusFilter);
         banner.Controls.Add(_areaFilter);
         banner.Controls.Add(_archived);
@@ -281,21 +273,6 @@ internal sealed class TasksView : UserControl, IPilotView
         {
             Ui.ShowError(this, "New Task failed", ex);
         }
-    }
-
-    private void SetStatus(string status)
-    {
-        if (_bsk is null || _grid.CurrentRow?.DataBoundItem is not TaskRow row)
-        {
-            return;
-        }
-
-        Ui.RunWrite(this, _bsk, "Status change failed", bsk =>
-        {
-            BskWrites.ChangeStatus(bsk, row.Urn, status);
-            Reload();
-            SelectSubject(row.Id);
-        });
     }
 
     private void OnSelect(object? sender, EventArgs e)

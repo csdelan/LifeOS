@@ -1,15 +1,19 @@
+using LifeOs.Pilot.Shell;
+
 namespace LifeOs.Pilot.Dialogs;
 
 /// <summary>
 /// Chooses the subject type and title to promote a capture into, for
 /// <c>bsk promote &lt;event-id&gt; &lt;type&gt; "title"</c>. Content-sized so nothing clips.
+/// Combo items show the GEN-11 UI labels; <see cref="SubjectType"/> is the kernel type.
 /// </summary>
 public sealed class PromoteDialog : Form
 {
     private static readonly string[] Types =
     [
-        "Project", "Idea", "Problem", "Task", "Goal",
-        "Decision", "Commitment", "Person", "Constraint", "Season", "Value"
+        PilotVocab.Project, PilotVocab.Idea, PilotVocab.Problem, PilotVocab.Task, PilotVocab.Goal,
+        PilotVocab.Decision, PilotVocab.Commitment, PilotVocab.Person, PilotVocab.Constraint,
+        PilotVocab.Season, PilotVocab.Value
     ];
 
     private readonly ComboBox _type = new();
@@ -46,7 +50,10 @@ public sealed class PromoteDialog : Form
 
         var typeLabel = new Label { Text = "Promote to type:", AutoSize = true, Margin = new Padding(0, 0, 0, 2) };
         _type.DropDownStyle = ComboBoxStyle.DropDownList;
-        _type.Items.AddRange(Types);
+        foreach (var type in Types)
+        {
+            _type.Items.Add(new TypeChoice(type, PilotVocab.Label(type)));
+        }
         _type.SelectedIndex = 0;
         _type.Width = 200;
         _type.Margin = new Padding(0, 0, 0, 10);
@@ -81,7 +88,12 @@ public sealed class PromoteDialog : Form
         CancelButton = cancel;
     }
 
-    public string SubjectType => _type.SelectedItem?.ToString() ?? "Project";
+    public string SubjectType => (_type.SelectedItem as TypeChoice)?.Type ?? PilotVocab.Project;
 
     public string TitleText => _title.Text.Trim();
+
+    private sealed record TypeChoice(string Type, string Label)
+    {
+        public override string ToString() => Label;
+    }
 }

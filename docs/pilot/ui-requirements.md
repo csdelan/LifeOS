@@ -944,8 +944,9 @@ Build:      built
   when I want to enter optional planning detail.
 - If inline creation fails, preserve the typed Title in place and show an actionable error
   without creating a duplicate Task.
-- Provide direct list actions to mark a Task **Completed** or **In progress** without opening
-  its editor. Apply the change immediately and preserve it in Task history.
+- Status changes happen through the selected Task's **Change status…** action (BROWSE-2 /
+  GEN-10), the same path as other types. Do not add shortcut Complete / In progress buttons
+  on the Tasks toolbar; they duplicate Change status… and mix item actions with list filters.
 - Include filters for **Status**, **Due date**, **Scheduled / Do date**, **Area**,
   **Goal / Project**, and **Tags**. Apply changes immediately and remember this tab's filter
   state following NAV-1.
@@ -958,8 +959,8 @@ Build:      built
 - Maps to: pure **reads** over Task subjects. The four groups are a derived projection over
   the two date attributes vs today — Overdue (incomplete, `due` < today), Today (`due` or
   `scheduled` = today), Upcoming (future `due` / `scheduled`), Unscheduled (neither) — with
-  "show once, first group wins" as app precedence. Inline quick-entry = `bsk new Task`; list
-  actions (Completed / In progress) = `state_change`.
+  "show once, first group wins" as app precedence. Inline quick-entry = `bsk new Task`;
+  status via Change status… = `state_change`.
 - Kernel delta: none — rides GEN-10's attribute keys, D7 status, Tags (GEN-1), Area (D1), and
   the alignment edges for the Goal / Project filter.
 - Implications: the groups are computed, not stored; Completed / Cancelled Tasks drop out of
