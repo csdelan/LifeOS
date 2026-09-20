@@ -1,39 +1,38 @@
-# Fly.io production app. Create the app and set runtime secrets yourself;
-# never put connection strings or ALLOWED_EMAILS here. See docs/pilot/deploy.md.
+# fly.toml app configuration file generated for lifeos-mz55-w on 2026-09-20T19:22:15Z
 #
-# Public SPA values (Supabase URL + anon key) are runtime secrets too:
-#   fly secrets set VITE_SUPABASE_URL=... VITE_SUPABASE_ANON_KEY=...
-# They are not Docker build-args. `fly deploy` from the dashboard works.
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "lifeos-mz55-w"
-primary_region = "sjc"
+app = 'lifeos-mz55-w'
+primary_region = 'sjc'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
-[build.args]
-  VITE_API_BASE_URL = "/"
+  [build.args]
+    VITE_API_BASE_URL = '/'
 
 [env]
-  ASPNETCORE_ENVIRONMENT = "Production"
-  Auth__Audience = "authenticated"
+  ASPNETCORE_ENVIRONMENT = 'Production'
+  Auth__Audience = 'authenticated'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
   [[http_service.checks]]
-    grace_period = "25s"
-    interval = "15s"
-    timeout = "5s"
-    method = "GET"
-    path = "/health"
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '25s'
+    method = 'GET'
+    path = '/health'
 
 [[vm]]
-  memory = "512mb"
-  cpu_kind = "shared"
+  memory = '512mb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 512
