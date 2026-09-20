@@ -20,6 +20,28 @@ internal static class Program
         var settings = EnvironmentSettings.Load(PilotPaths.Settings, PilotPaths.DefaultEnvFile());
         var activation = EnvironmentActivator.Apply(settings.Environment, settings.EnvFilePath);
 
+        // Failover: if we ended up on the local DEV database but it isn't reachable
+        // (e.g. a fresh machine with no local Postgres, or Docker not running), fall
+        // back to the STAGING .env when one is available, so the pilot can still open
+        // against Supabase instead of stalling on a dead local DB. The choice is not
+        // persisted — next launch tries DEV again in case the local DB is back up.
+        if (activation.Effective == PilotEnvironment.Dev
+            && !LocalDatabase.CanConnect(ReaderConnectionString.Resolve()))
+        {
+            var failover = EnvironmentActivator.Apply(PilotEnvironment.Staging, settings.EnvFilePath);
+            if (failover.Effective == PilotEnvironment.Staging)
+            {
+                activation = failover with
+                {
+                    Warning =
+                        "The local DEV database isn't reachable, so the pilot connected to STAGING "
+                        + $"(Supabase) using:\n{settings.EnvFilePath}\n\n"
+                        + (failover.Warning
+                            ?? "Switch back to DEV from the selector once your local database is running."),
+                };
+            }
+        }
+
         var reader = new SubjectReader(ReaderConnectionString.Resolve());
 
         // Writes shell out to bsk (which inherits our environment). Disabled when
