@@ -387,7 +387,15 @@ Build:      unmapped
 ### BROWSE-1 — I want an object graph view similar to Obsidian
 Horizon:    Production
 Definition: drafting
-Build:      unmapped
+Build:      building
+
+**Update (2026-09-20 — Production fast-tracked):** an Obsidian-style **Map** view shipped in the
+Production web UI against mock data — an alignment outline (tree over `serves` / `results_in`)
+plus a graph view, with a distinct node shell per subject type, Pilot-style relationship/type
+filters, and click-to-open detail. Build moves `unmapped → building`. Definition stays
+`drafting` (still Chris's to settle — the shipped prototype can inform it, and the "orphans
+only / omit orphans" filter is not yet confirmed built), so the Ontology fit remains pending
+per the handoff rule.
 
 **Workflow (Chris):**
 - Object graph very similar to obsidian
@@ -1430,7 +1438,14 @@ Build:      mapped
 ### CAP-2 — I want Voice mode for captures. 
 Horizon:    Pilot phase 2
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-09-20 — kernel landed):** the `voice` write path and managed binary-artifact
+storage shipped (`bsk voice`; migration 0022 `artifact_blob`, bytea + `IArtifactBlobStore`
+port), closing this requirement's two `needs-kernel` deltas. A mock-first voice capture also
+exists in the Production web UI (wired onto the quick-capture seam). Build moves
+`needs-kernel → building`: the kernel dependency is done, but the end-to-end voice-capture UI
+(live transcription, review mode, keep-audio) is not yet live in either surface.
 
 **Workflow (Chris):**
 - Alt+V is the system-wide hotkey for voice capture. It should remain available while the
@@ -1507,7 +1522,15 @@ Build:      mapped
 ### CAP-4 — I want to capture "documents" (represented as attachments)
 Horizon:    Pilot phase 2
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-09-20 — kernel landed):** managed binary-artifact storage and the `bsk attach`
+document/reference write path shipped (migration 0022 `artifact_blob`; note event + binary
+artifact, deduped by content hash, flagged to the Inbox per D4), closing this requirement's
+`needs-kernel` delta. A mock-first attachment capture also exists in the Production web UI
+(Inbox + subject Files). Build moves `needs-kernel → building`: the kernel + copy-into-managed-
+store semantics are done; the file-picker capture UI and OS-open-on-double-click are not yet
+live.
 
 **Workflow (Chris):**
 - Documents should be stored intact for later retrieval workflows
@@ -1663,6 +1686,11 @@ Build:      built
 Horizon:    Production
 Definition: active
 Build:      needs-kernel
+
+**Update (2026-09-20):** the shared managed binary-artifact storage this requirement depends
+on (also CAP-2 / CAP-4) has landed (migration 0022 `artifact_blob`), so inline-media storage is
+now available. Build stays `needs-kernel` because the rich-content format (markdown/HTML) and
+the rich-text journal editor itself are still unbuilt.
 
 **Workflow (Chris):**
 - Production Journal entries should support headings, lists, bold, italic, and hyperlinks.
@@ -2332,50 +2360,57 @@ mechanism, never inherited from a god-type.
 ## Kernel build backlog
 
 The roll-up of every `needs-kernel` delta above — the authoritative feeder for ontology
-work. One line per item; details live in the requirement.
+work. One line per item; details live in the requirement. **Sync (2026-09-20):** most items
+shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifact work
+(2026-09-20); each is tagged below and the few still open are gathered at the end.
 
 - **Triage marker primitive** (INBOX-1) — a flag that asserts inbox membership + a `Drop`
   outcome + a `v_inbox` projection (flagged AND not resolved). Source-agnostic; attaches to
-  subjects and events (D4).
+  subjects and events (D4). — **Shipped** (Phases 4–5; refined by the 0021 attention-vs-status model).
 - **Tag primitive** (GEN-1) — a tag store separate from relations + a `bsk tag` verb + a
-  live "tag universe" reader; reconcile with the existing reserved `focus` attribute.
+  live "tag universe" reader; reconcile with the existing reserved `focus` attribute. — **Shipped** (Phase 3).
 - **New subject types** — Area (GEN-2 / D1), Appointment (CAL-1 / D10), Habit (revised D2),
   Review (D3 / REVIEW-0): the pilot grows the model **11 → ~15 types**; plus master-list /
-  readers and `attributes.area` on items.
+  readers and `attributes.area` on items. — **Mostly shipped** (Area P4, Habit P9, Appointment P12 → 14 types); **Review still open**.
 - **Habit subject type** (GEN-3 / revised D2) — its own type composing the shared
-  adherence / recurrence mechanism, **no longer stored as a Commitment**.
+  adherence / recurrence mechanism, **no longer stored as a Commitment**. — **Shipped** (Phase 9).
 - **Per-type status vocabularies + terminal classification** (D7) — a documented status map
-  + an extended `is_terminal_status`.
+  + an extended `is_terminal_status`. — **Shipped** (Phase 1; Goal/Project "developing" → "New" rename 2026-09-20).
 - **Recurrence representation** (D8) — richer than `expected_cadence`; calendar-anchored
   patterns (every Sunday, last day of month) + intervals; shared by Habit / Appointment /
-  Commitment / Review.
+  Commitment / Review. — **Shipped** (Phase 8, migration 0016 `recurrence_occurrences`).
 - **Shared adherence + missed / backfill mechanism** (D8, was the "recurring engine") —
   `evidences` / `violates` events + missed-detection + correction, composed per-type with
-  per-type diagnostic framing.
+  per-type diagnostic framing. — **Partly shipped**: habit adherence + correction (Phases 9–10); **review scheduling / missed still open** (REVIEW-0).
 - **Universal archive / active flag** (D9) — cross-cutting hide-from-default-views flag;
-  reversible; never deletes; orthogonal to workflow status.
+  reversible; never deletes; orthogonal to workflow status. — **Shipped** (Phase 2).
 - **Capture bifurcation** (D4) — note / document / url as events; idea / problem as
-  subjects-on-capture; split the `promote` paths (event→subject vs subject→subject).
+  subjects-on-capture; split the `promote` paths (event→subject vs subject→subject). — **Shipped** (Phase 7; url flavor still rides a plain note).
 - **Atomic create-and-link + parent→child relation map** (GEN-7) — a one-transaction create +
   parent edge so parent-first creation is all-or-nothing (no orphan on failure); canonical
-  map: Goal→Value `serves`, Project→Goal `results_in`, Task→Project/Goal `serves`.
+  map: Goal→Value `serves`, Project→Goal `results_in`, Task→Project/Goal `serves`. — **Shipped** (Phase 6, `bsk new --parent`).
 - **Managed binary artifact storage** (CAP-2 / CAP-4 / JOURNAL-2) — blob / file storage for
-  audio, attachments, and inline media; today's artifact table holds text only.
+  audio, attachments, and inline media; today's artifact table holds text only. — **Shipped 2026-09-20** (migration 0022 `artifact_blob`, bytea + `IArtifactBlobStore` port, dedup by content hash).
 - **`voice` write path** (CAP-2) — a `bsk` verb that writes `voice` events (closes one of
-  the 4 unreachable event kinds).
+  the 4 unreachable event kinds). — **Shipped 2026-09-20** (`bsk voice`; `bsk attach` closes the document path, `bsk artifact get` exports bytes).
 - **Partial-credit adherence** (D2 / GEN-3) — a third state (**fixed half-credit**) beyond
-  `evidences` / `violates`, gated per-habit by `allows_partial`.
+  `evidences` / `violates`, gated per-habit by `allows_partial`. — **Shipped** (Phase 9).
 - **Habit occurrence + streak projection** (GEN-3) — a projection over recurrence +
-  adherence events; misses shown as a gentle streak break, excluded from the breach report.
+  adherence events; misses shown as a gentle streak break, excluded from the breach report. — **Shipped** (Phase 10, migration 0018 `v_habit_occurrence` / `v_habit_streak`).
 - **Review subject type + mutable-body edit trail** (D3 / REVIEW-0) — a body attribute with
-  each save appended as an edit event; scheduling / missed via the D8 mechanism.
+  each save appended as an edit event; scheduling / missed via the D8 mechanism. — **Open** (Reviews not yet built).
 - **D6 focus storage** (TODAY-1) — current Monthly + Weekly Primary-focus Goal pointers with
   change history (focus-set events or a lightweight Season); daily objectives stay app-local,
-  materializing into Inbox items only when unfinished.
+  materializing into Inbox items only when unfinished. — **Open**.
 - **Materialized recurring occurrences** (CAL-1 / D10) — each Appointment occurrence is its own
-  status-bearing record (unlike Habit's *projected* occurrences).
+  status-bearing record (unlike Habit's *projected* occurrences). — **Shipped** (Phase 12, migration 0020, `bsk materialize`).
 - **People-association link** — a non-alignment way to attach a `Person` (involves / attendee /
   owner / assignee / waiting-for), recurring across CAL-1, GEN-12, INBOX-3, GEN-10; lean: a
-  Person-ref attribute for the Pilot.
+  Person-ref attribute for the Pilot. — **Shipped** (Phase 11, `attributes.people`, `bsk involve`).
+
+**Still open:** the **Review** subject type + mutable-body edit trail and review
+scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1). Everything else above
+has shipped. The user-facing UIs for the shipped kernel bits still vary by surface — see each
+requirement's Build field (e.g. CAP-2 / CAP-4 are `building`: kernel done, capture UI pending).
 
 *(Prior mapping gaps already closed: the `concerns` write path — shipped as `bsk relate`.)*
