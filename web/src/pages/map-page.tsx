@@ -51,6 +51,7 @@ type MapStored = {
   orphans?: OrphanFilter;
   area?: string;
   colorByArea?: boolean;
+  expandAll?: boolean;
 };
 
 export function MapPage() {
@@ -71,8 +72,14 @@ export function MapPage() {
   const areasQuery = useAreas();
   const { setDirty, requestNavigation } = useDirty();
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded());
+  const [expandAll, setExpandAll] = useState(
+    () => Boolean(loadView<MapStored>("map", {}).expandAll),
+  );
   const [creating, setCreating] = useState<{ parentId: string } | null>(null);
   const pendingReveal = useRef<string | null>(null);
+  const skipExpandBootstrap = useRef(
+    loadView<MapStored>("map", {}).expandAll === false,
+  );
 
   useEffect(() => {
     saveExpanded(expanded);
@@ -88,8 +95,9 @@ export function MapPage() {
       orphans,
       area,
       colorByArea,
+      expandAll,
     } satisfies MapStored);
-  }, [archived, lens, selected, view, layout, orphans, area, colorByArea]);
+  }, [archived, lens, selected, view, layout, orphans, area, colorByArea, expandAll]);
 
   useEffect(() => {
     const stored = loadView<MapStored>("map", {});
@@ -115,14 +123,20 @@ export function MapPage() {
   }, []); // restore once
 
   useEffect(() => {
-    if (!data || expanded.size > 0) return;
+    if (!data || !expandAll) return;
+    setExpanded(collectNodeIds(data));
+  }, [data, expandAll]);
+
+  useEffect(() => {
+    if (!data || expandAll || skipExpandBootstrap.current || expanded.size > 0) return;
+    skipExpandBootstrap.current = true;
     const ids = new Set<string>();
     for (const n of data) {
       ids.add(n.id);
       for (const c of n.children) ids.add(c.id);
     }
     setExpanded(ids);
-  }, [data, expanded.size]);
+  }, [data, expandAll, expanded.size]);
 
   function select(id: string) {
     if (id === selected) return;
@@ -168,12 +182,21 @@ export function MapPage() {
   }, [selected, expanded]);
 
   function toggle(id: string) {
+    setExpandAll(false);
+    skipExpandBootstrap.current = true;
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  }
+
+  function onExpandAllChange(checked: boolean) {
+    setExpandAll(checked);
+    skipExpandBootstrap.current = !checked;
+    if (!data) return;
+    setExpanded(checked ? collectNodeIds(data) : new Set());
   }
 
   const selectedTitle = useMemo(() => {
@@ -338,6 +361,15 @@ export function MapPage() {
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+            <label className="mb-1 flex items-center gap-2 px-2 text-xs text-muted-foreground">
+              <Switch
+                size="sm"
+                checked={expandAll}
+                onCheckedChange={onExpandAllChange}
+                aria-label="Expand all"
+              />
+              Expand all
+            </label>
             {isLoading ? <TreeSkeleton /> : null}
             {isError ? (
               <EmptyState
@@ -578,4 +610,12 @@ function ancestorIds(nodes: AlignmentNode[], id: string, trail: string[] = []): 
     if (found) return found;
   }
   return null;
+}
+
+function collectNodeIds(nodes: AlignmentNode[], into: Set<string> = new Set()): Set<string> {
+  for (const n of nodes) {
+    into.add(n.id);
+    collectNodeIds(n.children, into);
+  }
+  return into;
 }
