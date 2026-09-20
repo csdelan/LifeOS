@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   useAlignmentEdges,
@@ -72,6 +72,7 @@ export function MapPage() {
   const { setDirty, requestNavigation } = useDirty();
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded());
   const [creating, setCreating] = useState<{ parentId: string } | null>(null);
+  const pendingReveal = useRef<string | null>(null);
 
   useEffect(() => {
     saveExpanded(expanded);
@@ -131,6 +132,40 @@ export function MapPage() {
       });
     });
   }
+
+  function navigateToParent(id: string) {
+    if (data) {
+      const ancestors = ancestorIds(data, id) ?? [];
+      if (ancestors.length > 0) {
+        setExpanded((prev) => {
+          const next = new Set(prev);
+          for (const a of ancestors) next.add(a);
+          return next;
+        });
+      }
+    }
+    pendingReveal.current = id;
+    select(id);
+    if (id === selected) {
+      requestAnimationFrame(() => {
+        if (pendingReveal.current !== id) return;
+        pendingReveal.current = null;
+        const el = document.querySelector(`[data-map-node="${CSS.escape(id)}"]`);
+        el?.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (!pendingReveal.current || pendingReveal.current !== selected) return;
+    const id = pendingReveal.current;
+    pendingReveal.current = null;
+    const frame = requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-map-node="${CSS.escape(id)}"]`);
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selected, expanded]);
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -328,6 +363,7 @@ export function MapPage() {
                 creating={creating}
                 onToggle={toggle}
                 onSelect={select}
+                onNavigateParent={navigateToParent}
                 onCreate={(node) => setCreating({ parentId: node.id })}
                 onCancelCreate={() => setCreating(null)}
               />
@@ -389,6 +425,7 @@ function MapBranch({
   creating,
   onToggle,
   onSelect,
+  onNavigateParent,
   onCreate,
   onCancelCreate,
 }: {
@@ -398,6 +435,7 @@ function MapBranch({
   creating: { parentId: string } | null;
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
+  onNavigateParent: (id: string) => void;
   onCreate: (node: AlignmentNode) => void;
   onCancelCreate: () => void;
 }) {
@@ -416,6 +454,7 @@ function MapBranch({
       extraParents={node.extraParents}
       onToggle={() => onToggle(node.id)}
       onSelect={() => onSelect(node.id)}
+      onNavigateParent={onNavigateParent}
       onCreateChild={canCreate ? () => onCreate(node) : undefined}
       creating={
         showCreate ? (
@@ -437,6 +476,7 @@ function MapBranch({
               creating={creating}
               onToggle={onToggle}
               onSelect={onSelect}
+              onNavigateParent={onNavigateParent}
               onCreate={onCreate}
               onCancelCreate={onCancelCreate}
             />
@@ -527,6 +567,15 @@ function findNode(nodes: AlignmentNode[], id: string): AlignmentNode | null {
     if (n.id === id) return n;
     const c = findNode(n.children, id);
     if (c) return c;
+  }
+  return null;
+}
+
+function ancestorIds(nodes: AlignmentNode[], id: string, trail: string[] = []): string[] | null {
+  for (const n of nodes) {
+    if (n.id === id) return trail;
+    const found = ancestorIds(n.children, id, [...trail, n.id]);
+    if (found) return found;
   }
   return null;
 }

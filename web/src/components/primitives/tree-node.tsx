@@ -1,8 +1,13 @@
-import { ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon, Link2Icon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DateChip } from "@/components/primitives/date-chip";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { TypeIcon } from "@/components/primitives/type-icon";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { SubjectListItem } from "@/lib/production-ui-types";
 import { defaultStatus } from "@/lib/production-ui-types";
 
@@ -15,6 +20,7 @@ export function TreeNode({
   extraParents,
   onToggle,
   onSelect,
+  onNavigateParent,
   onCreateChild,
   creating,
   children,
@@ -24,9 +30,10 @@ export function TreeNode({
   expanded?: boolean;
   expandable?: boolean;
   selected?: boolean;
-  extraParents?: { title: string }[];
+  extraParents?: { id: string; title: string }[];
   onToggle?: () => void;
   onSelect?: () => void;
+  onNavigateParent?: (id: string) => void;
   onCreateChild?: () => void;
   creating?: React.ReactNode;
   children?: React.ReactNode;
@@ -36,6 +43,7 @@ export function TreeNode({
   return (
     <div>
       <div
+        data-map-node={subject.id}
         className={cn(
           "group flex items-center gap-1 rounded-lg py-1 pr-2 text-sm transition-colors ease-hearth",
           selected && "bg-primary/8 ring-1 ring-primary/15",
@@ -70,6 +78,21 @@ export function TreeNode({
           </span>
           <span className="truncate font-medium">{subject.title}</span>
         </button>
+        {extraParents?.map((parent) => (
+          <Tooltip key={parent.id}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Navigate to ${parent.title}`}
+                className="flex size-5 shrink-0 items-center justify-center rounded-md text-yellow-400 hover:bg-yellow-400/15 hover:text-yellow-300"
+                onClick={() => onNavigateParent?.(parent.id)}
+              >
+                <Link2Icon className="size-3.5" strokeWidth={1.75} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Navigate to {parent.title}</TooltipContent>
+          </Tooltip>
+        ))}
         {onCreateChild ? (
           <button
             type="button"
@@ -81,11 +104,6 @@ export function TreeNode({
           >
             + {subject.type === "Task" ? "sibling" : "child"}
           </button>
-        ) : null}
-        {extraParents && extraParents.length > 0 ? (
-          <span className="hidden min-w-0 truncate text-[0.6875rem] text-muted-foreground sm:inline">
-            also under {extraParents.map((p) => p.title).join(", ")}
-          </span>
         ) : null}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <DateChip date={subject.due} />

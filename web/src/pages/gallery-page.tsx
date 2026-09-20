@@ -180,7 +180,7 @@ export function GalleryPage() {
                 depth={1}
                 expanded
                 expandable
-                extraParents={[{ title: "a Project somewhere" }]}
+                extraParents={[{ id: "gallery-parent", title: "a Project somewhere" }]}
               >
                 <TreeNode
                   subject={{ ...sample, type: "Task", title: "Polish the command center" }}
