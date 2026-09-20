@@ -62,34 +62,34 @@ export function TreeNode({
         </button>
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 py-0.5 text-left"
+          className="flex min-w-0 items-center gap-2 py-0.5 text-left"
           onClick={onSelect}
         >
           <span className={cn("w-4 shrink-0 text-center", typeTone(subject.type))} aria-hidden>
             {TYPE_GLYPH[subject.type]}
           </span>
           <span className="truncate font-medium">{subject.title}</span>
-          {extraParents && extraParents.length > 0 ? (
-            <span className="hidden truncate text-[0.6875rem] text-muted-foreground sm:inline">
-              also under {extraParents.map((p) => p.title).join(", ")}
-            </span>
-          ) : null}
         </button>
-        <div className="flex shrink-0 items-center gap-1.5">
+        {onCreateChild ? (
+          <button
+            type="button"
+            onClick={onCreateChild}
+            className={cn(
+              "shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
+              selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            )}
+          >
+            + {subject.type === "Task" ? "sibling" : "child"}
+          </button>
+        ) : null}
+        {extraParents && extraParents.length > 0 ? (
+          <span className="hidden min-w-0 truncate text-[0.6875rem] text-muted-foreground sm:inline">
+            also under {extraParents.map((p) => p.title).join(", ")}
+          </span>
+        ) : null}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <DateChip date={subject.due} />
           <StatusPill status={status} />
-          {onCreateChild ? (
-            <button
-              type="button"
-              onClick={onCreateChild}
-              className={cn(
-                "rounded-md px-1.5 py-0.5 text-[0.6875rem] text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
-                selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-              )}
-            >
-              + {subject.type === "Task" ? "sibling" : "child"}
-            </button>
-          ) : null}
         </div>
       </div>
       {creating}

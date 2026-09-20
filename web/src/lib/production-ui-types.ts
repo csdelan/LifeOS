@@ -49,6 +49,16 @@ export const CREATABLE_TYPES: SubjectType[] = [
   "Idea", "Person", "Area", "Habit", "Appointment", "Commitment",
 ];
 
+/**
+ * Types offered as `bsk link` targets in the relationship editor.
+ * Project/Task first — the usual link targets — then the rest of CREATABLE_TYPES.
+ */
+export const LINK_TARGET_TYPES: SubjectType[] = [
+  "Project", "Task", "Goal", "Value",
+  "Problem", "Decision", "Idea", "Person",
+  "Area", "Habit", "Appointment", "Commitment",
+];
+
 /** User-facing label for a subject type. */
 export function typeLabel(type: SubjectType): string {
   switch (type) {

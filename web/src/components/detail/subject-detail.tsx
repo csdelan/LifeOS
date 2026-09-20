@@ -6,8 +6,10 @@ import {
   LayoutListIcon,
   Link2Icon,
   TagIcon,
+  XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,8 +38,14 @@ import {
   useTagUniverse,
   useWrites,
 } from "@/lib/queries";
-import { STATUS_BY_TYPE, defaultStatus, pickApplicableAttrs } from "@/lib/production-ui-types";
-import type { Relation, SubjectType } from "@/lib/production-ui-types";
+import {
+  LINK_TARGET_TYPES,
+  STATUS_BY_TYPE,
+  defaultStatus,
+  pickApplicableAttrs,
+  typeLabel,
+} from "@/lib/production-ui-types";
+import type { Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { formatTimestamp } from "@/lib/dates";
 
 export function SubjectDetail({
@@ -207,8 +215,13 @@ export function SubjectDetail({
               </Button>
             )}
             {onClose ? (
-              <Button variant="ghost" size="sm" onClick={onClose}>
-                Close
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onClose}
+                aria-label="Close panel"
+              >
+                <XIcon />
               </Button>
             ) : null}
           </div>
@@ -419,12 +432,31 @@ function OverviewTab({
 
 function RelationshipsTab({ subjectId }: { subjectId: string }) {
   const { data, isLoading } = useRelations(subjectId);
-  const { data: subjects } = useSubjects();
-  const writes = useWrites();
   const [rel, setRel] = useState<Relation>("serves");
+  const [targetType, setTargetType] = useState<SubjectType | "any">("any");
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [to, setTo] = useState("");
+  const { data: subjects } = useSubjects(
+    targetType === "any" ? undefined : targetType,
+    includeArchived,
+  );
+  const writes = useWrites();
+
+  const options = useMemo(
+    () => (subjects ?? []).filter((s) => s.id !== subjectId),
+    [subjects, subjectId],
+  );
+
+  useEffect(() => {
+    if (to && !options.some((s) => s.id === to)) setTo("");
+  }, [to, options]);
 
   if (isLoading) return <ListSkeleton rows={4} />;
+
+  const typed = targetType !== "any";
+  const subjectPlaceholder = typed
+    ? `Choose ${typeLabel(targetType)}…`
+    : "Choose an existing item…";
 
   return (
     <div className="space-y-6">
@@ -465,9 +497,15 @@ function RelationshipsTab({ subjectId }: { subjectId: string }) {
       </section>
       <section>
         <h3 className="type-scale-section text-muted-foreground">Add relationship</h3>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <p className="mt-1 text-xs text-muted-foreground">
+          Choose a type to filter, then pick an existing item. Archived items are
+          hidden unless you check Archived. This is a link between two items, not a
+          tag.
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">This item</span>
           <Select value={rel} onValueChange={(v) => setRel(v as Relation)}>
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-32">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -476,21 +514,48 @@ function RelationshipsTab({ subjectId }: { subjectId: string }) {
               <SelectItem value="supersedes">supersedes</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={to} onValueChange={setTo}>
-            <SelectTrigger className="min-w-48 flex-1">
-              <SelectValue placeholder="Subject…" />
+          <span className="text-xs text-muted-foreground">this existing</span>
+          <Select
+            value={targetType}
+            onValueChange={(v) => setTargetType(v as SubjectType | "any")}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(subjects ?? [])
-                .filter((s) => s.id !== subjectId)
-                .slice(0, 40)
-                .map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.title}
-                  </SelectItem>
-                ))}
+              <SelectItem value="any">item</SelectItem>
+              {LINK_TARGET_TYPES.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {typeLabel(t)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+          <Select value={to} onValueChange={setTo}>
+            <SelectTrigger className="min-w-48 flex-1">
+              <SelectValue placeholder={subjectPlaceholder} />
+            </SelectTrigger>
+            <SelectContent>
+              {options.length === 0 ? (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                  No matching items.
+                </div>
+              ) : (
+                options.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {linkTargetLabel(s, typed, includeArchived)}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Checkbox
+              checked={includeArchived}
+              onCheckedChange={(v) => setIncludeArchived(v === true)}
+            />
+            Archived
+          </label>
           <Button
             size="sm"
             disabled={!to}
@@ -505,6 +570,11 @@ function RelationshipsTab({ subjectId }: { subjectId: string }) {
       </section>
     </div>
   );
+}
+
+function linkTargetLabel(item: SubjectListItem, typed: boolean, includeArchived: boolean) {
+  const label = typed ? item.title : `${typeLabel(item.type)}: ${item.title}`;
+  return includeArchived && item.archived ? `${label} (archived)` : label;
 }
 
 function TagsTab({ subjectId }: { subjectId: string }) {
