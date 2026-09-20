@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IClock, SystemClock>();
 
         services.AddSingleton<IArtifactStore>(_ => new NpgsqlArtifactStore(connectionString));
+        services.AddSingleton<IArtifactBlobStore>(_ => new NpgsqlArtifactBlobStore(connectionString));
         services.AddSingleton<IEventStore>(_ => new NpgsqlEventStore(connectionString));
         services.AddSingleton<IEventReader>(_ => new NpgsqlEventReader(connectionString));
         services.AddSingleton<ISubjectRepository>(_ => new NpgsqlSubjectRepository(connectionString));
@@ -37,6 +38,15 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IArtifactStore>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
+
+        // Binary captures (CAP-2 voice / CAP-4 attachments). The size guard is
+        // configurable via BSK_MAX_ARTIFACT_BYTES, defaulting to ArtifactLimits.DefaultMaxBytes.
+        var maxArtifactBytes = ResolveMaxArtifactBytes();
+        services.AddSingleton(sp => new AttachmentService(
+            sp.GetRequiredService<IArtifactBlobStore>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId,
+            maxArtifactBytes));
 
         services.AddSingleton(sp => new SubjectService(sp.GetRequiredService<ISubjectRepository>()));
 
@@ -124,5 +134,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(_ => new DiagnosticRunner(connectionString));
 
         return services;
+    }
+
+    /// <summary>
+    /// The binary-artifact size guard, from <c>BSK_MAX_ARTIFACT_BYTES</c> when it holds
+    /// a positive integer, otherwise <see cref="ArtifactLimits.DefaultMaxBytes"/>.
+    /// </summary>
+    private static long ResolveMaxArtifactBytes()
+    {
+        var configured = Environment.GetEnvironmentVariable("BSK_MAX_ARTIFACT_BYTES");
+        return long.TryParse(configured, out var bytes) && bytes > 0
+            ? bytes
+            : ArtifactLimits.DefaultMaxBytes;
     }
 }

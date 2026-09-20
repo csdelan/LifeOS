@@ -132,6 +132,18 @@ public static class PersonRoles
     public static readonly IReadOnlyList<string> All = [Attendee, Owner, Assignee, WaitingFor, Involves];
 }
 
+/// <summary>
+/// Guard rails for managed binary artifacts (CAP-2 / CAP-4). The kernel refuses a
+/// payload larger than the configured maximum before any bytes are written — a
+/// blunt safety valve, not a policy. The default suits personal audio notes and
+/// PDFs; a host can raise or lower it (see the composition root).
+/// </summary>
+public static class ArtifactLimits
+{
+    /// <summary>Default maximum binary payload size: 25 MiB.</summary>
+    public const long DefaultMaxBytes = 25L * 1024 * 1024;
+}
+
 /// <summary>Identifiers for where an event originated (the event's <c>source_id</c>).</summary>
 public static class KernelSources
 {

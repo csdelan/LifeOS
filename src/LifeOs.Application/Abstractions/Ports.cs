@@ -23,6 +23,40 @@ public interface IEventStore
     Task<Guid> AppendAsync(NewEvent newEvent, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Stores and retrieves an artifact's <em>binary</em> payload — the swap seam for
+/// where the bytes physically live. The default adapter stores them as Postgres
+/// <c>bytea</c> and writes the event + artifact + blob as one transaction, so the
+/// bytes commit atomically with their event and the append-only guarantee covers
+/// them. A future object-storage adapter (Supabase Storage / S3) implements this
+/// same interface — writing bytes to the object store and the artifact / blob-metadata
+/// / event rows to Postgres — with no change to anything above it and no schema churn.
+/// </summary>
+public interface IArtifactBlobStore
+{
+    /// <summary>
+    /// Writes an event, its artifact (text sidecar), and the binary payload as one
+    /// atomic unit, deduplicated by content hash: if an event already exists for
+    /// (<see cref="NewBinaryCapture.SourceId"/>, <see cref="NewBinaryCapture.Sha256"/>),
+    /// nothing is inserted and the pre-existing ids are returned with
+    /// <see cref="BinaryCaptureResult.Deduplicated"/> set.
+    /// </summary>
+    Task<BinaryCaptureResult> PutAsync(NewBinaryCapture capture, CancellationToken cancellationToken = default);
+
+    /// <summary>True when the artifact carries a binary payload.</summary>
+    Task<bool> ExistsAsync(Guid artifactId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads an artifact's bytes and metadata for export, or <c>null</c> when the
+    /// artifact has no binary payload. The supported way to get bytes back out
+    /// byte-for-byte (behind <c>bsk artifact get</c> and, later, the web API).
+    /// </summary>
+    Task<ArtifactBlob?> GetAsync(Guid artifactId, CancellationToken cancellationToken = default);
+
+    /// <summary>Reads an artifact's binary metadata without the bytes, or <c>null</c> when it has none.</summary>
+    Task<ArtifactBlobMetadata?> GetMetadataAsync(Guid artifactId, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Reads source events. Read-only; the source stream is never mutated.</summary>
 public interface IEventReader
 {
