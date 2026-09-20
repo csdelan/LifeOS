@@ -22,13 +22,15 @@ import type {
   JournalEntry,
   PersonRow,
   RelationEdge,
+  ReviewDoc,
   StatusHistoryEntry,
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
 } from "@/lib/production-ui-types";
+import { composeRecap, type RecapSection } from "@/lib/review-recap";
 import { tagUniverse, toRelationEdge } from "@/lib/mock/seed";
-import { getState as storeState } from "@/lib/mock/store";
+import { ensureReview, ensureReviewDocs, getState as storeState } from "@/lib/mock/store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 
@@ -64,6 +66,8 @@ export interface LifeOsReads {
   people(): Promise<PersonRow[]>;
   habits(): Promise<HabitRow[]>;
   occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]>;
+  reviews(opts?: { kind?: "daily" | "weekly"; date?: string }): Promise<ReviewDoc[]>;
+  recap(opts: { start: string; end: string; asOf: string }): Promise<RecapSection[]>;
   /**
    * Bulk alignment edges (serves / results_in / supersedes) for Map outline + graph.
    * // TODO(api): live GET /api/edges — already sketched in OpenAPI; confirm it returns
@@ -161,6 +165,27 @@ export const mockReads: LifeOsReads = {
       if (opts?.habitId && o.habitId !== opts.habitId) return false;
       if (opts?.on && o.occurrenceDate !== opts.on) return false;
       return true;
+    });
+  },
+
+  async reviews(opts?: { kind?: "daily" | "weekly"; date?: string }): Promise<ReviewDoc[]> {
+    await wait();
+    ensureReviewDocs();
+    if (opts?.kind && opts?.date) ensureReview(opts.kind, opts.date);
+    return storeState().reviews;
+  },
+
+  async recap(opts: { start: string; end: string; asOf: string }): Promise<RecapSection[]> {
+    await wait();
+    const s = storeState();
+    return composeRecap({
+      start: opts.start,
+      end: opts.end,
+      asOf: opts.asOf,
+      subjects: s.subjects,
+      history: s.history,
+      occurrences: s.occurrences,
+      inbox: s.inbox,
     });
   },
 

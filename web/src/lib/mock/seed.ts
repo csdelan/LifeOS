@@ -1,4 +1,4 @@
-import { addDays, nowIso, slugify, todayIso } from "@/lib/dates";
+import { addDays, nowIso, slugify, todayIso, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
 import type {
   AreaRow,
   ConcerningEvent,
@@ -10,6 +10,7 @@ import type {
   PersonRow,
   Relation,
   RelationEdge,
+  ReviewDoc,
   StatusHistoryEntry,
   SubjectDetail,
   SubjectListItem,
@@ -38,6 +39,7 @@ export interface MockState {
   occurrences: HabitOccurrenceRow[];
   people: PersonRow[];
   associations: PersonAssociationRow[];
+  reviews: ReviewDoc[];
   primaryFocus: { title: string; subjectId: string; kind: "goal" };
   objectives: { id: string; title: string; subjectId?: string }[];
 }
@@ -672,7 +674,7 @@ export function createSeed(): MockState {
     }),
   ];
 
-  const subjects = [...values, ...goals, ...projects, ...tasks, ...extras];
+  let subjects = [...values, ...goals, ...projects, ...tasks, ...extras];
 
   const details: Record<string, SubjectDetail> = {};
   for (const s of subjects) {
@@ -704,6 +706,118 @@ export function createSeed(): MockState {
   details["idea-winddown"].scope = "Phone lives in the kitchen after 9:30. Paper book, dim lights.";
   details["appt-run"].scope = "Easy conversational pace. Sam at the north gate, 7:00.";
   details["appt-dinner"].scope = "Maya cooking; Jonah sets the table. No laptops.";
+
+  function bag(id: string, attrs: Record<string, string>) {
+    const d = details[id];
+    if (!d) return;
+    details[id] = { ...d, attributes: JSON.stringify(attrs) };
+  }
+  bag("value-steward", {
+    statement: details["value-steward"].statement ?? "",
+    why_it_matters: "If the body fails, every other identity gets louder.",
+    notes: "Training, sleep, food.",
+  });
+  bag("value-father", {
+    statement: details["value-father"].statement ?? "",
+    why_it_matters: "Presence is the actual gift.",
+  });
+  bag("value-craft", {
+    statement: details["value-craft"].statement ?? "",
+    why_it_matters: "Tools that compound outlive a career.",
+  });
+  bag("value-trader", {
+    statement: details["value-trader"].statement ?? "",
+    why_it_matters: "Undefined risk is a story I tell myself.",
+  });
+  bag("value-honest", {
+    statement: details["value-honest"].statement ?? "",
+    why_it_matters: "The journal is where the unflattering truth lands first.",
+  });
+  bag("goal-half", {
+    desired_end_state: details["goal-half"].scope ?? "",
+    target_date: goals.find((g) => g.id === "goal-half")?.targetDate ?? "",
+    description: "A joyful half, not a heroics half.",
+    motivation: "Prove the body is an instrument, not a project.",
+  });
+  bag("goal-sleep", {
+    desired_end_state: details["goal-sleep"].scope ?? "",
+    target_date: goals.find((g) => g.id === "goal-sleep")?.targetDate ?? "",
+    motivation: "Mornings are for craft, not recovery theater.",
+  });
+  bag("goal-lifeos", {
+    desired_end_state: details["goal-lifeos"].scope ?? "",
+    target_date: goals.find((g) => g.id === "goal-lifeos")?.targetDate ?? "",
+    description: "Command center, not a wiki.",
+    motivation: "I want to live in the tool I am building.",
+  });
+  bag("proj-web", {
+    description: details["proj-web"].scope ?? "",
+    start_date: t(-20),
+    target_date: projects.find((p) => p.id === "proj-web")?.targetDate ?? "",
+    notes: "Tree-first, peek-not-route.",
+  });
+  bag("proj-base", {
+    description: "Aerobic base, easy long runs, no heroics.",
+    start_date: t(-40),
+    target_date: projects.find((p) => p.id === "proj-base")?.targetDate ?? "",
+  });
+  bag("task-longrun", {
+    description: "Easy conversational pace with Sam.",
+    due: today,
+    scheduled: today,
+    priority: "Medium",
+    estimated_duration: "90m",
+  });
+  bag("task-shoes", {
+    description: "Current pair is cooked.",
+    due: t(-2),
+    priority: "High",
+  });
+  bag("task-phone", {
+    description: "The experiment fails if the phone is on the nightstand.",
+    priority: "Medium",
+  });
+  bag("prob-sleep", {
+    description: details["prob-sleep"].scope ?? "",
+    date_identified: t(-30),
+    impact: "Split nights wreck the morning deep-work block.",
+  });
+  bag("dec-stack", {
+    description: details["dec-stack"].scope ?? "",
+    decision_date: t(-25),
+  });
+  bag("idea-desk", { description: "Lower back after long coding days is getting loud." });
+  bag("cmt-inbox", {
+    description: "Triage until empty or 15 minutes, each weekday.",
+    due: today,
+    recurrence: JSON.stringify({ kind: "weekly", weekdays: [1, 2, 3, 4, 5] }),
+  });
+  bag("person-maya", {
+    person_kind: "human",
+    role: "partner",
+    description: "Sees the whole board.",
+  });
+  bag("person-agent", {
+    person_kind: "ai",
+    role: "coding agent",
+    contact: "cursor",
+  });
+  bag("appt-run", {
+    date: today,
+    start: "07:00",
+    end: "08:00",
+    location: "North gate",
+    attendees: "person-sam",
+    all_day: "false",
+  });
+  bag("appt-dinner", {
+    date: today,
+    start: "18:30",
+    end: "20:00",
+    location: "Home",
+    attendees: "person-maya,person-jonah",
+    all_day: "false",
+  });
 
   const edges: CanonicalEdge[] = [
     // Health
@@ -1049,6 +1163,44 @@ export function createSeed(): MockState {
     habit.currentStreak = streak;
   }
 
+  const habitItems: SubjectListItem[] = habits.map((h, i) =>
+    item({
+      id: h.id,
+      short: `h1000${i + 1}`,
+      type: "Habit",
+      title: h.name,
+      archived: h.archived,
+      createdAt: h.createdAt,
+      ...areaOf(
+        h.id === "habit-journal" ? trading : h.id === "habit-inbox" ? dev : health,
+      ),
+      tags: h.id === "habit-journal" ? "trading,journal" : "health,habit",
+    }),
+  );
+  subjects = [...subjects, ...habitItems];
+  for (const s of habitItems) {
+    const h = habits.find((x) => x.id === s.id)!;
+    details[s.id] = detailFrom(s, {
+      attributes: JSON.stringify({
+        cue: h.cue ?? "",
+        routine: h.routine ?? "",
+        reward: h.reward ?? "",
+        start: h.startDate ?? "",
+        end: h.endDate ?? "",
+        allows_partial: h.allowsPartial ? "true" : "false",
+        recurrence: h.recurrence ?? "daily",
+      }),
+    });
+    tagsByItem[s.id] = s.tags ? s.tags.split(",").map((tag) => tag.trim()).filter(Boolean) : [];
+  }
+  edges.push(
+    { fromId: "habit-mobility", relation: "serves", toId: "goal-half" },
+    { fromId: "habit-mobility", relation: "serves", toId: "value-steward" },
+    { fromId: "habit-inbox", relation: "serves", toId: "value-craft" },
+    { fromId: "habit-stretch", relation: "serves", toId: "goal-sleep" },
+    { fromId: "habit-journal", relation: "serves", toId: "goal-journal" },
+  );
+
   const people: PersonRow[] = [
     {
       id: "person-maya",
@@ -1203,6 +1355,25 @@ export function createSeed(): MockState {
     },
   ];
 
+  const yesterday = addDays(today, -1);
+  const weekStart = startOfWeekSunday(today);
+  const weekEnd = endOfWeekSaturday(today);
+  const reviews: ReviewDoc[] = [
+    {
+      id: `review-daily-${yesterday}`,
+      kind: "daily",
+      date: yesterday,
+      weekStart,
+      weekEnd,
+      completedAt: isoAgo(18),
+      missed: false,
+      workedWell: "Easy long-run pace. The graph and the outline stayed the same data.",
+      differently: "Phone was still on the nightstand. Park it before the kettle.",
+      planning: "Keep LifeOS as primary focus. Finish Map graph. Long run stays easy.",
+      keepFocus: true,
+    },
+  ];
+
   return {
     subjects,
     details,
@@ -1217,6 +1388,7 @@ export function createSeed(): MockState {
     occurrences,
     people,
     associations,
+    reviews,
     primaryFocus: {
       title: "Ship LifeOS production UI",
       subjectId: "goal-lifeos",

@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type { Resolver } from "react-hook-form";
 import { toast } from "sonner";
 import {
   BookOpenIcon,
   HistoryIcon,
   LayoutListIcon,
   Link2Icon,
+  PlusIcon,
   TagIcon,
   XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -28,9 +30,16 @@ import { StatusPill } from "@/components/primitives/status-pill";
 import { Tag } from "@/components/primitives/tag";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { ListSkeleton } from "@/components/primitives/skeletons";
+import { SubjectTypeFields } from "@/components/create/subject-type-fields";
+import { useCreateActions } from "@/components/create/create-context";
+import { StreakGrid } from "@/components/habits/streak-grid";
+import { JournalEditor, looksLikeHtml } from "@/components/journal/journal-editor";
 import {
+  useHabits,
   useHistory,
   useJournal,
+  useListItem,
+  useOccurrences,
   useRelations,
   useSubject,
   useSubjectTags,
@@ -40,13 +49,23 @@ import {
 } from "@/lib/queries";
 import {
   LINK_TARGET_TYPES,
-  STATUS_BY_TYPE,
+  childTypesFor,
   defaultStatus,
-  pickApplicableAttrs,
+  inferChildRelation,
   typeLabel,
 } from "@/lib/production-ui-types";
 import type { Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { formatTimestamp } from "@/lib/dates";
+import { parseRecurrence } from "@/lib/recurrence";
+import {
+  attrsToWrite,
+  emptyFormValues,
+  formConfig,
+  formValuesFromDetail,
+  selectedParentIds,
+  subjectFormSchema,
+  type SubjectFormValues,
+} from "@/lib/subject-forms";
 
 export function SubjectDetail({
   subjectId,
@@ -58,46 +77,43 @@ export function SubjectDetail({
   onClose?: () => void;
 }) {
   const { data, isLoading, isError } = useSubject(subjectId);
+  const { data: list } = useListItem(subjectId);
+  const { data: rels } = useRelations(subjectId);
+  const { data: tags } = useSubjectTags(subjectId);
+  const { data: habits } = useHabits();
+  const { data: occurrences } = useOccurrences(subjectId);
   const [editing, setEditing] = useState(false);
   const writes = useWrites();
+  const { openNew } = useCreateActions();
 
-  const [statement, setStatement] = useState("");
-  const [scope, setScope] = useState("");
-  const [due, setDue] = useState("");
-  const [targetDate, setTargetDate] = useState("");
-  const [status, setStatus] = useState("");
+  const habit = useMemo(
+    () => (habits ?? []).find((h) => h.id === subjectId),
+    [habits, subjectId],
+  );
+
+  const form = useForm<SubjectFormValues>({
+    resolver: zodResolver(subjectFormSchema) as Resolver<SubjectFormValues>,
+    defaultValues: emptyFormValues("Task", "edit"),
+  });
 
   useEffect(() => {
-    if (!data) return;
-    const attrs = parseAttrBag(data.attributes);
-    setStatement(data.statement ?? attrs.statement ?? "");
-    setScope(
-      data.type === "Goal"
-        ? attrs.desired_end_state ?? data.scope ?? ""
-        : data.scope ?? attrs.description ?? "",
+    if (!data || editing) return;
+    const valueParent = (rels?.parents ?? []).find((p) => p.type === "Value");
+    const habitParents = (rels?.parents ?? [])
+      .filter((p) => p.type === "Goal" || p.type === "Value")
+      .map((p) => p.subjectId);
+    form.reset(
+      formValuesFromDetail(data, {
+        list,
+        habit,
+        parentId: valueParent?.subjectId,
+        parents: habitParents,
+        tags: (tags ?? []).join(", "),
+      }),
     );
-    setDue(data.due ?? attrs.due ?? "");
-    setTargetDate(data.targetDate ?? attrs.target_date ?? "");
-    setStatus(data.status || defaultStatus(data.type));
-    setEditing(false);
-  }, [data]);
+  }, [data, list, habit, rels, tags, editing, form]);
 
-  const dirty = useMemo(() => {
-    if (!data || !editing) return false;
-    const attrs = parseAttrBag(data.attributes);
-    const originalScope =
-      data.type === "Goal"
-        ? attrs.desired_end_state ?? data.scope ?? ""
-        : data.scope ?? attrs.description ?? "";
-    return (
-      statement !== (data.statement ?? attrs.statement ?? "") ||
-      scope !== originalScope ||
-      due !== (data.due ?? attrs.due ?? "") ||
-      targetDate !== (data.targetDate ?? attrs.target_date ?? "") ||
-      status !== (data.status || defaultStatus(data.type))
-    );
-  }, [data, editing, statement, scope, due, targetDate, status]);
-
+  const dirty = editing && form.formState.isDirty;
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -128,52 +144,63 @@ export function SubjectDetail({
   }
 
   const subject = data;
-  const statuses = STATUS_BY_TYPE[subject.type];
+  const cfg = formConfig(subject.type);
+  const childTypes = childTypesFor(subject.type);
 
-  async function save() {
-    if (subject.type === "Goal" && status === "Active" && !targetDate) {
+  async function save(values: SubjectFormValues) {
+    if (subject.type === "Goal" && values.status === "Active" && !values.attrs.target_date) {
       toast.error("A Goal needs a target date before it can be Active.");
       return;
     }
-    const raw: Record<string, string> = {};
-    if (subject.type === "Value") {
-      raw.statement = statement;
-    } else if (subject.type === "Goal") {
-      raw.desired_end_state = scope;
-      raw.target_date = targetDate;
-    } else if (subject.type === "Project") {
-      raw.description = scope;
-      raw.target_date = targetDate;
-    } else if (subject.type === "Task") {
-      raw.description = scope;
-      raw.due = due;
-    } else if (subject.type === "Constraint") {
-      raw.scope = scope;
-    } else {
-      raw.description = scope;
+    if (subject.type === "Habit" && selectedParentIds(values).length < 1) {
+      toast.error("A Habit needs at least one Goal or Identity Statement.");
+      return;
     }
-    const attrs = pickApplicableAttrs(subject.type, raw);
+    const attrs = attrsToWrite(subject.type, values);
     if (Object.keys(attrs).length > 0) {
       await writes.setAttributes(subject.id, attrs);
     }
-    const nextStatus = status || defaultStatus(subject.type);
+    const nextStatus = values.status || defaultStatus(subject.type);
     if (nextStatus && nextStatus !== (subject.status || defaultStatus(subject.type))) {
       await writes.setStatus(subject.id, nextStatus);
+    }
+    if (subject.type === "Habit" && values.attrs.recurrence) {
+      await writes.recur(subject.id, parseRecurrence(values.attrs.recurrence));
+    }
+    if (subject.type === "Habit") {
+      const existing = new Set((rels?.parents ?? []).map((p) => p.subjectId));
+      for (const pid of selectedParentIds(values)) {
+        if (existing.has(pid)) continue;
+        await writes.link(subject.id, "serves", pid);
+      }
+    }
+    if (subject.type === "Goal" && values.parent) {
+      const existing = new Set((rels?.parents ?? []).map((p) => p.subjectId));
+      if (!existing.has(values.parent)) {
+        await writes.link(subject.id, inferChildRelation("Goal", "Value") ?? "serves", values.parent);
+      }
+    }
+    if (subject.type === "Commitment" && values.person) {
+      await writes.involve(subject.id, values.person, "involves");
     }
     setEditing(false);
   }
 
   function cancel() {
-    const attrs = parseAttrBag(subject.attributes);
-    setStatement(subject.statement ?? attrs.statement ?? "");
-    setScope(
-      subject.type === "Goal"
-        ? attrs.desired_end_state ?? subject.scope ?? ""
-        : subject.scope ?? attrs.description ?? "",
+    if (!data) return;
+    const valueParent = (rels?.parents ?? []).find((p) => p.type === "Value");
+    const habitParents = (rels?.parents ?? [])
+      .filter((p) => p.type === "Goal" || p.type === "Value")
+      .map((p) => p.subjectId);
+    form.reset(
+      formValuesFromDetail(data, {
+        list,
+        habit,
+        parentId: valueParent?.subjectId,
+        parents: habitParents,
+        tags: (tags ?? []).join(", "),
+      }),
     );
-    setDue(subject.due ?? attrs.due ?? "");
-    setTargetDate(subject.targetDate ?? attrs.target_date ?? "");
-    setStatus(subject.status || defaultStatus(subject.type));
     setEditing(false);
   }
 
@@ -188,7 +215,11 @@ export function SubjectDetail({
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <StatusPill status={subject.status || defaultStatus(subject.type) || null} />
               <DateChip
-                date={subject.type === "Goal" || subject.type === "Project" ? subject.targetDate : subject.due}
+                date={
+                  subject.type === "Goal" || subject.type === "Project"
+                    ? subject.targetDate
+                    : subject.due
+                }
                 kind={subject.type === "Goal" || subject.type === "Project" ? "target" : "due"}
               />
               {subject.areaName ? (
@@ -199,13 +230,27 @@ export function SubjectDetail({
               ) : null}
             </div>
           </div>
-          <div className="flex shrink-0 gap-1.5">
+          <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+            {childTypes.length > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  openNew({
+                    parent: { id: subject.id, title: subject.title, type: subject.type },
+                    type: childTypes[0],
+                  })
+                }
+              >
+                <PlusIcon /> Child
+              </Button>
+            ) : null}
             {editing ? (
               <>
                 <Button variant="outline" size="sm" onClick={cancel}>
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => void save()} disabled={!dirty}>
+                <Button size="sm" onClick={() => void form.handleSubmit((v) => void save(v))()} disabled={!dirty}>
                   Save
                 </Button>
               </>
@@ -216,7 +261,7 @@ export function SubjectDetail({
             )}
             {onClose ? (
               <Button
-                variant="ghost"
+                variant="destructive"
                 size="icon-sm"
                 onClick={onClose}
                 aria-label="Close panel"
@@ -250,25 +295,50 @@ export function SubjectDetail({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <TabsContent value="overview">
-            <OverviewTab
-              type={subject.type}
-              editing={editing}
-              statement={statement}
-              scope={scope}
-              due={due}
-              targetDate={targetDate}
-              status={status}
-              urn={subject.urn}
-              setStatement={setStatement}
-              setScope={setScope}
-              setDue={setDue}
-              setTargetDate={setTargetDate}
-              setStatus={setStatus}
-              statuses={statuses}
-              archived={subject.archived}
-              onArchive={() => void writes.archive(subject.id)}
-              onRestore={() => void writes.restore(subject.id)}
-            />
+            <div className="space-y-5">
+              <SubjectTypeFields form={form} editing={editing} />
+              {subject.type === "Habit" ? (
+                <StreakGrid
+                  occurrences={occurrences ?? []}
+                  recurrence={habit?.recurrence ?? form.watch("attrs.recurrence")}
+                  startDate={habit?.startDate}
+                  endDate={habit?.endDate}
+                  allowsPartial={habit?.allowsPartial ?? true}
+                  onRecord={(date, state, note) =>
+                    void writes.adhere(subject.id, state, { on: date, note })
+                  }
+                />
+              ) : null}
+              <Field label="URN">
+                <code className="text-[0.75rem] text-muted-foreground">{subject.urn}</code>
+              </Field>
+              {cfg.canArchive ? (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="type-scale-section text-muted-foreground">Archive</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      LifeOS archives, never deletes.
+                    </p>
+                    <div className="mt-2">
+                      {subject.archived ? (
+                        <Button variant="outline" size="sm" onClick={() => void writes.restore(subject.id)}>
+                          Restore
+                        </Button>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => void writes.archive(subject.id)}>
+                          Archive
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Areas are permanent — they are not archived or deleted.
+                </p>
+              )}
+            </div>
           </TabsContent>
           <TabsContent value="relationships">
             <RelationshipsTab subjectId={subject.id} />
@@ -284,148 +354,6 @@ export function SubjectDetail({
           </TabsContent>
         </div>
       </Tabs>
-    </div>
-  );
-}
-
-function OverviewTab({
-  type,
-  editing,
-  statement,
-  scope,
-  due,
-  targetDate,
-  status,
-  urn,
-  setStatement,
-  setScope,
-  setDue,
-  setTargetDate,
-  setStatus,
-  statuses,
-  archived,
-  onArchive,
-  onRestore,
-}: {
-  type: SubjectType;
-  editing: boolean;
-  statement: string;
-  scope: string;
-  due: string;
-  targetDate: string;
-  status: string;
-  urn: string;
-  setStatement: (v: string) => void;
-  setScope: (v: string) => void;
-  setDue: (v: string) => void;
-  setTargetDate: (v: string) => void;
-  setStatus: (v: string) => void;
-  statuses?: string[];
-  archived: boolean;
-  onArchive: () => void;
-  onRestore: () => void;
-}) {
-  return (
-    <div className="space-y-5">
-      {type === "Value" ? (
-        <Field label="Identity statement">
-          {editing ? (
-            <Textarea value={statement} onChange={(e) => setStatement(e.target.value)} />
-          ) : (
-            <p className="font-heading text-lg italic text-foreground/90">
-              {statement || "No statement yet."}
-            </p>
-          )}
-        </Field>
-      ) : (
-        <Field label={type === "Goal" ? "Desired end state" : "Description"}>
-          {editing ? (
-            <Textarea value={scope} onChange={(e) => setScope(e.target.value)} />
-          ) : (
-            <p className="text-sm text-foreground/85">{scope || "—"}</p>
-          )}
-        </Field>
-      )}
-
-      {statuses && statuses.length > 0 ? (
-        <Field label="Status">
-          {editing ? (
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                {statuses.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <StatusPill status={status || null} />
-          )}
-        </Field>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          {type === "Value"
-            ? "Identity Statements have no status — they simply are."
-            : "This type has no status workflow."}
-        </p>
-      )}
-
-      {type === "Goal" || type === "Project" ? (
-        <Field label="Target date">
-          {editing ? (
-            <Input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className="w-48" />
-          ) : targetDate ? (
-            <DateChip date={targetDate} kind="target" />
-          ) : (
-            <span className="text-sm text-muted-foreground">None</span>
-          )}
-        </Field>
-      ) : type === "Task" ? (
-        <Field label="Due date">
-          {editing ? (
-            <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="w-48" />
-          ) : due ? (
-            <DateChip date={due} kind="due" />
-          ) : (
-            <span className="text-sm text-muted-foreground">None</span>
-          )}
-        </Field>
-      ) : type !== "Value" && type !== "Person" && type !== "Area" && type !== "Habit" ? (
-        <Field label="Due date">
-          {editing ? (
-            <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="w-48" />
-          ) : due ? (
-            <DateChip date={due} kind="due" />
-          ) : (
-            <span className="text-sm text-muted-foreground">None</span>
-          )}
-        </Field>
-      ) : null}
-
-      <Field label="URN">
-        <code className="text-[0.75rem] text-muted-foreground">{urn}</code>
-      </Field>
-
-      <Separator />
-      <div>
-        <p className="type-scale-section text-muted-foreground">Archive</p>
-        <p className="mt-1 text-sm text-muted-foreground">LifeOS archives, never deletes.</p>
-        <div className="mt-2">
-          {archived ? (
-            <Button variant="outline" size="sm" onClick={onRestore}>
-              Restore
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" onClick={onArchive}>
-              Archive
-            </Button>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
@@ -458,6 +386,8 @@ function RelationshipsTab({ subjectId }: { subjectId: string }) {
     ? `Choose ${typeLabel(targetType)}…`
     : "Choose an existing item…";
 
+  const grouped = groupByType(data?.children ?? []);
+
   return (
     <div className="space-y-6">
       <section className="rounded-xl bg-muted/40 p-3">
@@ -482,15 +412,23 @@ function RelationshipsTab({ subjectId }: { subjectId: string }) {
       <section className="rounded-xl bg-muted/40 p-3">
         <h3 className="type-scale-section text-muted-foreground">Children</h3>
         {data?.children.length ? (
-          <ul className="mt-2 space-y-1">
-            {data.children.map((e) => (
-              <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
-                <TypeBadge type={e.type} />
-                <span>{e.title}</span>
-                <span className="text-[0.6875rem] text-muted-foreground">{e.relation}</span>
-              </li>
+          <div className="mt-2 space-y-3">
+            {Object.entries(grouped).map(([type, rows]) => (
+              <div key={type}>
+                <p className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">
+                  {typeLabel(type as SubjectType)}
+                </p>
+                <ul className="space-y-1">
+                  {rows.map((e) => (
+                    <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
+                      <TypeBadge type={e.type} />
+                      <span>{e.title}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         ) : (
           <p className="mt-2 text-sm text-muted-foreground">No children yet.</p>
         )}
@@ -572,6 +510,14 @@ function RelationshipsTab({ subjectId }: { subjectId: string }) {
   );
 }
 
+function groupByType<T extends { type: SubjectType }>(rows: T[]): Record<string, T[]> {
+  const out: Record<string, T[]> = {};
+  for (const row of rows) {
+    (out[row.type] ??= []).push(row);
+  }
+  return out;
+}
+
 function linkTargetLabel(item: SubjectListItem, typed: boolean, includeArchived: boolean) {
   const label = typed ? item.title : `${typeLabel(item.type)}: ${item.title}`;
   return includeArchived && item.archived ? `${label} (archived)` : label;
@@ -631,46 +577,46 @@ function TagsTab({ subjectId }: { subjectId: string }) {
 }
 
 function JournalTab({ subjectId }: { subjectId: string }) {
-  const { data } = useJournal(subjectId);
+  const { data, isLoading } = useJournal(subjectId);
   const writes = useWrites();
-  const [text, setText] = useState("");
+  const [composing, setComposing] = useState(false);
 
   return (
     <div className="space-y-4">
-      <form
-        className="space-y-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!text.trim()) return;
-          void writes.appendJournal(subjectId, text.trim());
-          setText("");
-        }}
-      >
-        <Label htmlFor="journal">Append an entry</Label>
-        <Textarea
-          id="journal"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Plain text for this pass — rich journals come later."
-        />
-        <Button type="submit" size="sm" disabled={!text.trim()}>
-          Append
-        </Button>
-      </form>
-      <Separator />
-      {(data ?? []).length === 0 ? (
-        <EmptyState title="No journal yet" description="Entries are append-only." />
-      ) : (
+      {isLoading ? <ListSkeleton rows={3} /> : null}
+      {!isLoading && (data ?? []).length === 0 ? (
+        <EmptyState title="No journal yet" description="Entries are append-only. A correction is a new entry." />
+      ) : !isLoading ? (
         <ol className="space-y-3">
-          {data!.map((e) => (
+          {[...(data ?? [])].reverse().map((e) => (
             <li key={e.eventId} className="rounded-lg bg-muted/50 px-3 py-2">
               <p className="text-[0.6875rem] text-muted-foreground">
                 {formatTimestamp(e.occurredAt)}
               </p>
-              <p className="mt-1 text-sm">{e.content}</p>
+              {looksLikeHtml(e.content) ? (
+                <div
+                  className="journal-prose mt-1 text-sm"
+                  dangerouslySetInnerHTML={{ __html: e.content }}
+                />
+              ) : (
+                <p className="mt-1 whitespace-pre-wrap text-sm">{e.content}</p>
+              )}
             </li>
           ))}
         </ol>
+      ) : null}
+      <Separator />
+      {composing ? (
+        <JournalEditor
+          onAppend={(html) => {
+            void writes.appendJournal(subjectId, html);
+            setComposing(false);
+          }}
+        />
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => setComposing(true)}>
+          Append
+        </Button>
       )}
     </div>
   );
@@ -699,20 +645,6 @@ function HistoryTab({ subjectId }: { subjectId: string }) {
       ))}
     </ol>
   );
-}
-
-function parseAttrBag(raw?: string | null): Record<string, string> {
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(parsed)) {
-      if (typeof v === "string") out[k] = v;
-    }
-    return out;
-  } catch {
-    return {};
-  }
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

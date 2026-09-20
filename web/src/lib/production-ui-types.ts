@@ -123,15 +123,15 @@ export const ATTR_KEYS_BY_TYPE: Record<SubjectType, readonly string[]> = {
   Value: ["statement", "why_it_matters", "notes"],
   Goal: ["desired_end_state", "target_date", "description", "motivation"],
   Project: ["description", "start_date", "target_date", "notes"],
-  Task: ["description", "due", "scheduled", "estimated_duration"],
+  Task: ["description", "due", "scheduled", "estimated_duration", "priority"],
   Problem: ["description", "date_identified", "impact"],
   Decision: ["description", "decision_date"],
   Person: ["role", "description", "contact", "notes", "person_kind"],
   Area: ["description", "notes"],
-  Habit: ["cue", "routine", "reward", "start", "end", "allows_partial"],
-  Appointment: ["date", "start", "end", "location", "meeting_link", "notes", "all_day"],
+  Habit: ["cue", "routine", "reward", "start", "end", "allows_partial", "recurrence"],
+  Appointment: ["date", "start", "end", "location", "meeting_link", "notes", "all_day", "recurrence", "attendees"],
   Idea: ["description", "notes"],
-  Commitment: ["description", "notes"],
+  Commitment: ["description", "notes", "due", "recurrence"],
   Constraint: ["scope", "limit", "notes"],
   Season: ["focus", "ends", "notes"],
 };
@@ -163,6 +163,35 @@ export type PersonRole = (typeof PERSON_ROLES)[number];
 
 /** Habit occurrence / adherence states (GEN-3). */
 export type AdherenceState = "unrecorded" | "followed" | "partial" | "not_followed";
+
+/** Recurrence for Habits, Commitments, Appointments (app-layer; kernel TBD). */
+export type RecurrenceKind = "daily" | "weekly" | "interval";
+export interface RecurrenceSpec {
+  kind: RecurrenceKind;
+  /** weekly: 0 = Sunday … 6 = Saturday. Empty / omitted = every day. */
+  weekdays?: number[];
+  /** interval: every N days (from start). */
+  intervalDays?: number;
+}
+
+/** Review working document (REVIEW-1/2). Mock-only until the kernel ships D3. */
+export type ReviewKind = "daily" | "weekly";
+export interface ReviewBody {
+  workedWell: string;
+  differently: string;
+  planning: string;
+  keepFocus: boolean;
+}
+export interface ReviewDoc extends ReviewBody {
+  id: string;
+  kind: ReviewKind;
+  /** Daily: the calendar day. Weekly: the Sunday the week starts. */
+  date: string;
+  weekStart: string;
+  weekEnd: string;
+  completedAt?: string | null;
+  missed: boolean;
+}
 
 /** Inbox item kinds — an event (raw capture) or a subject (Idea/Problem flagged). */
 export type ItemKind = "event" | "subject";
@@ -303,6 +332,7 @@ export interface HabitOccurrenceRow {
   occurrenceDate: string;   // "YYYY-MM-DD"
   state: AdherenceState;
   allowsPartial: boolean;
+  note?: string | null;
 }
 
 export interface AppointmentRow {
@@ -389,7 +419,12 @@ export interface LifeOsWriteClient {
   drop(item: string): Promise<void>;                                            // subject → terminal status
   adhere(habit: string, state: "followed" | "partial" | "missed",
          opts?: { on?: string; note?: string }): Promise<void>;
+  /** Set structured recurrence on a Habit (GEN-3). */
+  recur(habit: string, spec: RecurrenceSpec): Promise<void>;
   involve(subject: string, person: string, role: PersonRole, remove?: boolean): Promise<void>;
   appendJournal(subject: string, text: string): Promise<void>;
   capture(text: string): Promise<void>;                                         // note event → inbox
+  /** Mock-only until Review subjects (D3) exist. */
+  saveReview(id: string, body: ReviewBody): Promise<void>;
+  completeReview(id: string): Promise<void>;
 }

@@ -72,6 +72,47 @@ export function relativeDayLabel(iso: string, today = todayIso()): string {
   return formatDay(iso);
 }
 
+export function localDateFromTimestamp(iso: string): string {
+  const dt = new Date(iso);
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const day = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function weekdayIndex(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).getDay();
+}
+
+/** Sunday-start week (REVIEW-2). */
+export function startOfWeekSunday(iso: string): string {
+  return addDays(iso, -weekdayIndex(iso));
+}
+
+export function endOfWeekSaturday(iso: string): string {
+  return addDays(startOfWeekSunday(iso), 6);
+}
+
+export function startOfMonth(iso: string): string {
+  const [y, m] = iso.split("-").map(Number);
+  return `${y}-${String(m).padStart(2, "0")}-01`;
+}
+
+export function addMonths(iso: string, months: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1 + months, d);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+export function daysInMonth(iso: string): number {
+  const [y, m] = iso.split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
 export function slugify(title: string): string {
   const slug = title
     .toLowerCase()

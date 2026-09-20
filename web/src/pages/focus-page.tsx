@@ -1,14 +1,14 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { CheckIcon, CircleDashedIcon, MinusIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { ListRow } from "@/components/primitives/list-row";
 import { CardSkeleton, ListSkeleton } from "@/components/primitives/skeletons";
+import { AdherenceButtons } from "@/components/habits/adherence-buttons";
+import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
+import { cn } from "@/lib/utils";
 import { useDashboard, useWrites } from "@/lib/queries";
 import { todayIso } from "@/lib/dates";
-import type { AdherenceState } from "@/lib/production-ui-types";
-import { cn } from "@/lib/utils";
 
 export function FocusPage() {
   const { data, isLoading, isError } = useDashboard();
@@ -100,8 +100,8 @@ export function FocusPage() {
           <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="type-scale-section text-attention">Due & overdue</h2>
-              <Link to="/map" search={{ lens: "Task" }} className="text-xs text-muted-foreground hover:text-foreground">
-                Open in Map
+              <Link to="/tasks" className="text-xs text-muted-foreground hover:text-foreground">
+                Open Tasks
               </Link>
             </div>
             {overdue.length === 0 && dueToday.length === 0 ? (
@@ -135,19 +135,33 @@ export function FocusPage() {
           </section>
 
           <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
-            <h2 className="type-scale-section mb-3 text-muted-foreground">Today's habits</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="type-scale-section text-muted-foreground">Today's habits</h2>
+              <Link to="/habits" className="text-xs text-muted-foreground hover:text-foreground">
+                Open Habits
+              </Link>
+            </div>
             <ul className="space-y-2">
               {data.todayHabits.map((h) => (
                 <li
                   key={h.habitId}
-                  className="flex items-center justify-between rounded-lg px-2 py-1.5"
+                  className={cn(
+                    "flex items-center justify-between rounded-lg px-2 py-1.5",
+                    HABIT_STATE_ROW[h.state],
+                  )}
                 >
-                  <div>
+                  <button
+                    type="button"
+                    className="text-left"
+                    onClick={() =>
+                      void navigate({ to: "/habits", search: { selected: h.habitId } })
+                    }
+                  >
                     <p className="text-sm font-medium">{h.habitName}</p>
                     <p className="text-[0.6875rem] text-muted-foreground">
                       {h.state === "unrecorded" ? "Unrecorded" : h.state.replace("_", " ")}
                     </p>
-                  </div>
+                  </button>
                   <AdherenceButtons
                     state={h.state}
                     allowsPartial={h.allowsPartial}
@@ -211,71 +225,5 @@ export function FocusPage() {
         ) : null}
       </div>
     </div>
-  );
-}
-
-function AdherenceButtons({
-  state,
-  allowsPartial,
-  onPick,
-}: {
-  state: AdherenceState;
-  allowsPartial: boolean;
-  onPick: (s: "followed" | "partial" | "not_followed") => void;
-}) {
-  return (
-    <div className="flex gap-1">
-      <HabitBtn
-        label="Followed"
-        active={state === "followed"}
-        onClick={() => onPick("followed")}
-      >
-        <CheckIcon className="size-3.5" />
-      </HabitBtn>
-      {allowsPartial ? (
-        <HabitBtn
-          label="Partial"
-          active={state === "partial"}
-          onClick={() => onPick("partial")}
-        >
-          <MinusIcon className="size-3.5" />
-        </HabitBtn>
-      ) : null}
-      <HabitBtn
-        label="Not followed"
-        active={state === "not_followed"}
-        onClick={() => onPick("not_followed")}
-      >
-        <CircleDashedIcon className="size-3.5" />
-      </HabitBtn>
-    </div>
-  );
-}
-
-function HabitBtn({
-  children,
-  label,
-  active,
-  onClick,
-}: {
-  children: React.ReactNode;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className={cn(
-        "flex size-7 items-center justify-center rounded-md border text-muted-foreground transition-colors",
-        active
-          ? "border-primary bg-primary/12 text-primary"
-          : "border-transparent hover:bg-muted",
-      )}
-    >
-      {children}
-    </button>
   );
 }

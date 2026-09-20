@@ -13,10 +13,13 @@ import {
   archiveSubject,
   byRef,
   captureNote,
+  completeReviewDoc,
   createSubject,
   flagItem,
   involvePerson,
   removeInbox,
+  saveReviewBody,
+  setHabitRecurrence,
   setStatus,
   setTags,
 } from "@/lib/mock/store";
@@ -142,7 +145,7 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
 
     async adhere(habit, state, opts) {
       await wait();
-      adhereHabit(habit, state, opts?.on);
+      adhereHabit(habit, state, opts?.on, opts?.note);
       notify(
         state === "followed"
           ? "Marked followed"
@@ -150,6 +153,13 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
             ? "Partial credit"
             : "Marked missed",
       );
+      bump();
+    },
+
+    async recur(habit, spec) {
+      await wait();
+      setHabitRecurrence(habit, spec);
+      notify("Recurrence saved");
       bump();
     },
 
@@ -170,6 +180,20 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       await wait();
       captureNote(text);
       notify("Captured to Inbox");
+      bump();
+    },
+
+    async saveReview(id, body) {
+      await wait();
+      saveReviewBody(id, body);
+      notify("Review saved");
+      bump();
+    },
+
+    async completeReview(id) {
+      await wait();
+      completeReviewDoc(id);
+      notify("Review complete");
       bump();
     },
   };

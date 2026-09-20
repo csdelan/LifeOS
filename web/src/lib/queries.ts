@@ -10,6 +10,7 @@ import { mapForestStatus, type DashboardRead, type MapLens } from "@/lib/derive"
 import type { LifeOsReads } from "@/lib/mock/api";
 import type {
   AdherenceState,
+  HabitOccurrenceRow,
   InboxItem,
   LifeOsWriteClient,
   NewSubjectRequest,
@@ -33,6 +34,9 @@ export const qk = {
   areas: ["areas"] as const,
   people: ["people"] as const,
   habits: ["habits"] as const,
+  occurrences: ["occurrences"] as const,
+  reviews: ["reviews"] as const,
+  recap: ["recap"] as const,
   dashboard: ["dashboard"] as const,
   forest: (archived: boolean, lens: MapLens) =>
     ["forest", archived, lens] as const,
@@ -74,6 +78,9 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         qk.listItem(subject),
         qk.subjects,
         qk.dashboard,
+        qk.habits,
+        qk.areas,
+        qk.people,
         ["forest"],
         ["edges"],
       ]);
@@ -167,12 +174,17 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     },
 
     async adhere(habit, state, opts) {
-      optimisticAdhere(qc, habit, state === "missed" ? "not_followed" : state);
+      optimisticAdhere(qc, habit, state === "missed" ? "not_followed" : state, opts?.on);
       try {
         await client.adhere(habit, state, opts);
       } finally {
-        await invalidate(qc, [qk.habits, qk.dashboard]);
+        await invalidate(qc, [qk.habits, qk.occurrences, qk.dashboard]);
       }
+    },
+
+    async recur(habit, spec) {
+      await client.recur(habit, spec);
+      await invalidate(qc, [qk.habits, qk.subject(habit), qk.dashboard]);
     },
 
     async involve(subject, person, role, remove) {
@@ -188,6 +200,16 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async capture(text) {
       await client.capture(text);
       await invalidate(qc, [qk.inbox, qk.dashboard]);
+    },
+
+    async saveReview(id, body) {
+      await client.saveReview(id, body);
+      await invalidate(qc, [qk.reviews]);
+    },
+
+    async completeReview(id) {
+      await client.completeReview(id);
+      await invalidate(qc, [qk.reviews]);
     },
   };
 }
@@ -231,15 +253,31 @@ function optimisticAdhere(
   qc: QueryClient,
   habit: string,
   state: Exclude<AdherenceState, "unrecorded">,
+  on?: string,
 ) {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, "0");
+  const d = String(today.getDate()).padStart(2, "0");
+  const date = on ?? `${y}-${m}-${d}`;
   qc.setQueryData<DashboardRead>(qk.dashboard, (old) => {
     if (!old) return old;
     return {
       ...old,
       todayHabits: old.todayHabits.map((h) =>
-        h.habitId === habit || h.habitUrn === habit ? { ...h, state } : h,
+        (h.habitId === habit || h.habitUrn === habit) && h.occurrenceDate === date
+          ? { ...h, state }
+          : h,
       ),
     };
+  });
+  qc.setQueriesData<HabitOccurrenceRow[]>({ queryKey: qk.occurrences }, (old) => {
+    if (!old) return old;
+    return old.map((o) =>
+      (o.habitId === habit || o.habitUrn === habit) && o.occurrenceDate === date
+        ? { ...o, state }
+        : o,
+    );
   });
 }
 
@@ -344,6 +382,34 @@ export function useAlignmentEdges(includeArchived: boolean) {
   return useQuery({
     queryKey: qk.edges(includeArchived),
     queryFn: () => reads.edges({ includeArchived }),
+  });
+}
+
+export function useHabits() {
+  return useQuery({
+    queryKey: qk.habits,
+    queryFn: () => reads.habits(),
+  });
+}
+
+export function useOccurrences(habitId?: string) {
+  return useQuery({
+    queryKey: [...qk.occurrences, habitId ?? "all"],
+    queryFn: () => reads.occurrences(habitId ? { habitId } : undefined),
+  });
+}
+
+export function useReviews(kind?: "daily" | "weekly", date?: string) {
+  return useQuery({
+    queryKey: [...qk.reviews, kind ?? "all", date ?? ""],
+    queryFn: () => reads.reviews(kind && date ? { kind, date } : undefined),
+  });
+}
+
+export function useRecap(start: string, end: string, asOf: string) {
+  return useQuery({
+    queryKey: [...qk.recap, start, end, asOf],
+    queryFn: () => reads.recap({ start, end, asOf }),
   });
 }
 

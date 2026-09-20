@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useDirty } from "@/components/shell/app-shell";
+import { PeekPanel } from "@/components/shell/panels";
 import { loadExpanded, saveExpanded, loadView, saveView } from "@/lib/view-state";
 import { MapIcon } from "lucide-react";
 
@@ -334,25 +335,19 @@ export function MapPage() {
           </div>
         )}
       </div>
-      <aside
-        className={`shrink-0 overflow-hidden border-l bg-card shadow-(--shadow-peek) transition-[width] duration-200 ease-hearth ${
-          selected ? "w-[26rem]" : "w-0 border-l-0"
-        }`}
-      >
+      <PeekPanel open={!!selected}>
         {selected ? (
-          <div className="h-full w-[26rem]">
-            <SubjectDetail
-              subjectId={selected}
-              onDirtyChange={setDirty}
-              onClose={() =>
-                requestNavigation(() =>
-                  void navigate({ search: (prev) => ({ ...prev, selected: undefined }) }),
-                )
-              }
-            />
-          </div>
+          <SubjectDetail
+            subjectId={selected}
+            onDirtyChange={setDirty}
+            onClose={() =>
+              requestNavigation(() =>
+                void navigate({ search: (prev) => ({ ...prev, selected: undefined }) }),
+              )
+            }
+          />
         ) : null}
-      </aside>
+      </PeekPanel>
     </div>
   );
 }

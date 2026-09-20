@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { relativeDayLabel, todayIso } from "@/lib/dates";
+import { formatDay, relativeDayLabel, todayIso } from "@/lib/dates";
 
 export function DateChip({
   date,
@@ -19,7 +19,9 @@ export function DateChip({
       ? `Do ${relativeDayLabel(date, today)}`
       : kind === "target"
         ? `Target ${relativeDayLabel(date, today)}`
-        : relativeDayLabel(date, today);
+        : kind === "plain"
+          ? formatDay(date)
+          : relativeDayLabel(date, today);
 
   return (
     <span

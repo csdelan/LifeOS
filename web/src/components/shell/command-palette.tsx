@@ -15,9 +15,11 @@ import {
   CompassIcon,
   InboxIcon,
   LayoutDashboardIcon,
+  ListTodoIcon,
   MapIcon,
   MoonIcon,
   PlusIcon,
+  RepeatIcon,
   SparklesIcon,
   SunIcon,
   UsersIcon,
@@ -30,10 +32,12 @@ export function CommandPalette({
   open,
   onOpenChange,
   onNew,
+  onCapture,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNew: () => void;
+  onCapture: () => void;
 }) {
   const navigate = useNavigate();
   const { setTheme, theme } = useTheme();
@@ -58,6 +62,12 @@ export function CommandPalette({
           </CommandItem>
           <CommandItem onSelect={() => go("/map")}>
             <MapIcon /> Map
+          </CommandItem>
+          <CommandItem onSelect={() => go("/tasks")}>
+            <ListTodoIcon /> Tasks
+          </CommandItem>
+          <CommandItem onSelect={() => go("/habits")}>
+            <RepeatIcon /> Habits
           </CommandItem>
           <CommandItem onSelect={() => go("/vision")}>
             <EyeIcon /> Vision
@@ -84,6 +94,15 @@ export function CommandPalette({
             }}
           >
             <PlusIcon /> New subject <CommandShortcut>⌘N</CommandShortcut>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              onOpenChange(false);
+              onCapture();
+            }}
+          >
+            Capture note / idea / problem
+            <CommandShortcut>Alt+N</CommandShortcut>
           </CommandItem>
           <CommandItem
             onSelect={() => {

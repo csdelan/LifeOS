@@ -14,9 +14,11 @@ import {
   CompassIcon,
   InboxIcon,
   LayoutDashboardIcon,
+  ListTodoIcon,
   MapIcon,
   MoonIcon,
   PlusIcon,
+  RepeatIcon,
   SparklesIcon,
   SunIcon,
   UsersIcon,
@@ -24,7 +26,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/shell/command-palette";
+import { ResizeHandle, usePersistedWidth } from "@/components/shell/panels";
 import { NewSubjectDialog } from "@/components/create/new-subject-dialog";
+import { QuickCaptureDialog } from "@/components/create/quick-capture-dialog";
+import { CreateActions, type CreateOpts } from "@/components/create/create-context";
 import { useInbox } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import {
@@ -52,6 +57,8 @@ const NAV = [
   { to: "/", label: "Focus", icon: LayoutDashboardIcon },
   { to: "/inbox", label: "Inbox", icon: InboxIcon },
   { to: "/map", label: "Map", icon: MapIcon },
+  { to: "/tasks", label: "Tasks", icon: ListTodoIcon },
+  { to: "/habits", label: "Habits", icon: RepeatIcon },
   { to: "/vision", label: "Vision", icon: EyeIcon },
   { to: "/reviews", label: "Reviews", icon: ClipboardCheckIcon },
   { to: "/people", label: "People", icon: UsersIcon },
@@ -60,12 +67,18 @@ const NAV = [
 
 export function AppShell() {
   const [palette, setPalette] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [createOpts, setCreateOpts] = useState<CreateOpts | null>(null);
+  const [capturing, setCapturing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const pendingNav = useRef<(() => void) | null>(null);
   const { theme, setTheme } = useTheme();
   const { data: inbox } = useInbox();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { width: navWidth, onPointerDown: onNavPointerDown } = usePersistedWidth(
+    "layout.navWidth",
+    248,
+    { min: 176, max: 400 },
+  );
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -76,7 +89,11 @@ export function AppShell() {
       }
       if (meta && e.key.toLowerCase() === "n") {
         e.preventDefault();
-        setCreating(true);
+        setCreateOpts({});
+      }
+      if (e.altKey && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        setCapturing(true);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -113,10 +130,20 @@ export function AppShell() {
   const setDirtyStable = useCallback((v: boolean) => setDirty(v), []);
   void setDirtyStable;
 
+  const createActions = useMemo(
+    () => ({
+      openNew: (opts?: CreateOpts) => setCreateOpts(opts ?? {}),
+      openCapture: () => setCapturing(true),
+    }),
+    [],
+  );
+
   return (
     <DirtyCtx.Provider value={ctx}>
+      <CreateActions.Provider value={createActions}>
       <div className="flex h-svh overflow-hidden bg-background">
-        <aside className="flex w-[15.5rem] shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
+      <aside className="relative flex shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground" style={{ width: navWidth }}>
+          <ResizeHandle edge="end" onPointerDown={onNavPointerDown} />
           <div className="flex items-center gap-2 px-4 py-4">
             <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-heading text-lg">
               ⌘
@@ -167,8 +194,15 @@ export function AppShell() {
               <SparklesIcon className="size-4" /> Gallery
             </Link>
             <div className="flex gap-1">
-              <Button className="flex-1" size="sm" onClick={() => setCreating(true)}>
+              <Button className="flex-1" size="sm" onClick={() => setCreateOpts({})}>
                 <PlusIcon /> New
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCapturing(true)}
+              >
+                Capture
               </Button>
               <Button
                 variant="outline"
@@ -195,8 +229,22 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
-      <CommandPalette open={palette} onOpenChange={setPalette} onNew={() => setCreating(true)} />
-      <NewSubjectDialog open={creating} onOpenChange={setCreating} />
+      <CommandPalette
+        open={palette}
+        onOpenChange={setPalette}
+        onNew={() => setCreateOpts({})}
+        onCapture={() => setCapturing(true)}
+      />
+      <NewSubjectDialog
+        open={createOpts !== null}
+        onOpenChange={(o) => {
+          if (!o) setCreateOpts(null);
+        }}
+        initialType={createOpts?.type}
+        initialParent={createOpts?.parent}
+        initialTitle={createOpts?.title}
+      />
+      <QuickCaptureDialog open={capturing} onOpenChange={setCapturing} />
       <AlertDialog open={stayOpen} onOpenChange={setStayOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -231,6 +279,7 @@ export function AppShell() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </CreateActions.Provider>
     </DirtyCtx.Provider>
   );
 }

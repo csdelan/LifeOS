@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { Resolver } from "react-hook-form";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -21,126 +20,111 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CREATABLE_TYPES, STATUS_BY_TYPE, defaultStatus, pickApplicableAttrs, typeLabel } from "@/lib/production-ui-types";
-import type { NewSubjectRequest, SubjectType } from "@/lib/production-ui-types";
-import { useAreas, useCreateSubject, useSubjects, useWrites } from "@/lib/queries";
 import { Separator } from "@/components/ui/separator";
+import { SubjectTypeFields } from "@/components/create/subject-type-fields";
+import {
+  CREATABLE_TYPES,
+  childTypesFor,
+  defaultStatus,
+  inferChildRelation,
+  typeLabel,
+} from "@/lib/production-ui-types";
+import type { NewSubjectRequest, SubjectType } from "@/lib/production-ui-types";
+import { parseRecurrence } from "@/lib/recurrence";
+import { useCreateSubject, useSubjects, useWrites } from "@/lib/queries";
+import {
+  attrsToWrite,
+  emptyFormValues,
+  formConfig,
+  selectedParentIds,
+  subjectFormSchema,
+  type SubjectFormValues,
+} from "@/lib/subject-forms";
 
-const schema = z
-  .object({
-    type: z.string(),
-    title: z.string().min(1, "Title is required"),
-    statement: z.string().optional(),
-    why: z.string().optional(),
-    desiredEndState: z.string().optional(),
-    targetDate: z.string().optional(),
-    area: z.string().optional(),
-    status: z.string().optional(),
-    description: z.string().optional(),
-    motivation: z.string().optional(),
-    due: z.string().optional(),
-    scheduled: z.string().optional(),
-    parent: z.string().optional(),
-    tags: z.string().optional(),
-    personKind: z.string().optional(),
-    cue: z.string().optional(),
-    routine: z.string().optional(),
-    date: z.string().optional(),
-  })
-  .superRefine((val, ctx) => {
-    if (val.type === "Goal" && val.status === "Active" && !val.targetDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["targetDate"],
-        message: "A Goal cannot become Active without a target date.",
-      });
-    }
-    if (val.type === "Goal" && !val.parent) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["parent"],
-        message: "Connect this Goal to an Identity Statement.",
-      });
-    }
-  });
-
-type FormValues = z.infer<typeof schema>;
+export type CreateParent = { id: string; title: string; type: SubjectType };
 
 export function NewSubjectDialog({
   open,
   onOpenChange,
   initialType,
   initialParent,
+  initialTitle,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialType?: SubjectType;
-  initialParent?: { id: string; title: string };
+  initialParent?: CreateParent;
+  initialTitle?: string;
 }) {
   const create = useCreateSubject();
   const writes = useWrites();
-  const { data: areas } = useAreas();
-  const { data: values } = useSubjects("Value");
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      type: initialType ?? "Task",
-      title: "",
-      status: defaultStatus(initialType ?? "Task"),
-      parent: initialParent?.id ?? "",
-      personKind: "human",
-    },
+  const { data: allSubjects } = useSubjects();
+  const childTypes = initialParent ? childTypesFor(initialParent.type) : [];
+  const typeChoices = childTypes.length > 0 ? childTypes : CREATABLE_TYPES;
+  const startType = (
+    initialType && typeChoices.includes(initialType) ? initialType : typeChoices[0]
+  ) as SubjectType;
+
+  const form = useForm<SubjectFormValues>({
+    resolver: zodResolver(subjectFormSchema) as Resolver<SubjectFormValues>,
+    defaultValues: seedValues(startType, initialParent, initialTitle),
   });
 
-  const type = form.watch("type") as SubjectType;
+  const type = form.watch("type");
+  const cfg = formConfig(type);
 
   useEffect(() => {
     if (!open) return;
-    form.reset({
-      type: initialType ?? "Task",
-      title: "",
-      status: defaultStatus(initialType ?? "Task"),
-      parent: initialParent?.id ?? "",
-      personKind: "human",
-    });
-  }, [open, initialType, initialParent, form]);
+    form.reset(seedValues(startType, initialParent, initialTitle));
+  }, [open, startType, initialParent, initialTitle, form]);
 
-  async function onSubmit(values: FormValues) {
-    const t = values.type as SubjectType;
+  async function onSubmit(values: SubjectFormValues) {
+    const t = values.type;
+    const parents = selectedParentIds(values);
+    const primaryParent = initialParent?.id || values.parent || parents[0];
+    const parentType =
+      initialParent?.type ||
+      allSubjects?.find((s) => s.id === primaryParent)?.type;
+    const relation =
+      primaryParent && parentType ? inferChildRelation(t, parentType) : undefined;
+    const attrs = attrsToWrite(t, values, { omitEmpty: true });
     const req: NewSubjectRequest = {
       type: t,
-      title: values.title,
+      title: values.title.trim(),
       area: values.area || undefined,
-      parent: values.parent || undefined,
-      attrs: {},
+      parent: primaryParent || undefined,
+      relation,
+      attrs,
     };
-    const attrs: Record<string, string> = {};
-    if (values.statement) attrs.statement = values.statement;
-    if (values.why) attrs.why_it_matters = values.why;
-    if (values.desiredEndState) attrs.desired_end_state = values.desiredEndState;
-    if (values.targetDate) attrs.target_date = values.targetDate;
-    if (values.description) attrs.description = values.description;
-    if (values.motivation) attrs.motivation = values.motivation;
-    if (values.due) attrs.due = values.due;
-    if (values.scheduled) attrs.scheduled = values.scheduled;
-    if (values.cue) attrs.cue = values.cue;
-    if (values.routine) attrs.routine = values.routine;
-    if (values.date) attrs.date = values.date;
-    if (t === "Person" && values.personKind) attrs.person_kind = values.personKind;
-    req.attrs = pickApplicableAttrs(t, attrs);
     const created = await create.mutateAsync(req);
     const initialStatus = values.status || defaultStatus(t);
     if (initialStatus && initialStatus !== defaultStatus(t)) {
       await writes.setStatus(created.id, initialStatus);
     }
-    if (values.tags?.trim()) {
+    if (t === "Habit" && attrs.recurrence) {
+      await writes.recur(created.id, parseRecurrence(attrs.recurrence));
+    }
+    if (values.tags.trim()) {
       const tags = values.tags.split(",").map((x) => x.trim()).filter(Boolean);
       if (tags.length) await writes.tag(created.id, { add: tags });
     }
+    if (t === "Habit") {
+      for (const pid of parents) {
+        if (pid === primaryParent) continue;
+        const other = inferChildRelation(t, "Goal") ?? "serves";
+        await writes.link(created.id, other, pid);
+      }
+    }
+    if (t === "Commitment" && values.person) {
+      await writes.involve(created.id, values.person, "involves");
+    }
+    if (t === "Appointment" && attrs.attendees) {
+      for (const pid of attrs.attendees.split(",").map((x) => x.trim()).filter(Boolean)) {
+        await writes.involve(created.id, pid, "attendee");
+      }
+    }
     onOpenChange(false);
   }
-
-  const statuses = STATUS_BY_TYPE[type];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -148,8 +132,8 @@ export function NewSubjectDialog({
         <DialogHeader>
           <DialogTitle>New {typeLabel(type)}</DialogTitle>
           <DialogDescription>
-            Type-specific create. Attributes are filtered to this type; due and target
-            date stay independent.
+            Type-specific create. Attributes are filtered to this type; due and scheduled
+            stay independent.
             {initialParent ? ` Child of ${initialParent.title}.` : null}
           </DialogDescription>
         </DialogHeader>
@@ -157,34 +141,47 @@ export function NewSubjectDialog({
           className="space-y-4"
           onSubmit={form.handleSubmit((v) => void onSubmit(v))}
         >
-          <div className="space-y-1.5">
-            <Label>Type</Label>
-            <Select
-              value={type}
-              onValueChange={(v) => {
-                form.setValue("type", v);
-                form.setValue("status", defaultStatus(v as SubjectType));
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CREATABLE_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {typeLabel(t)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {typeChoices.length > 1 ? (
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Select
+                value={type}
+                onValueChange={(v) => {
+                  const next = v as SubjectType;
+                  const prev = form.getValues();
+                  const keep = attrsToWrite(next, { ...prev, type: next }, { omitEmpty: true });
+                  form.reset({
+                    ...emptyFormValues(next, "create"),
+                    title: prev.title,
+                    tags: prev.tags,
+                    parent: prev.parent,
+                    parents: prev.parents,
+                    person: prev.person,
+                    area: prev.area,
+                    attrs: { ...emptyFormValues(next).attrs, ...keep },
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {typeChoices.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {typeLabel(t)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           <div className="space-y-1.5">
-            <Label htmlFor="title">Title</Label>
+            <Label htmlFor="title">{cfg.titleLabel}</Label>
             <Input
               id="title"
               autoFocus
-              placeholder={type === "Task" ? "Title, then Enter" : "Title"}
+              placeholder={cfg.titlePlaceholder ?? cfg.titleLabel}
               {...form.register("title")}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && type === "Task" && !e.shiftKey) {
@@ -198,169 +195,17 @@ export function NewSubjectDialog({
             ) : null}
           </div>
 
-          {type === "Value" ? (
-            <>
-              <Field label="Statement">
-                <Textarea placeholder="I'm the type of person who…" {...form.register("statement")} />
-              </Field>
-              <Field label="Why it matters">
-                <Textarea {...form.register("why")} />
-              </Field>
-            </>
-          ) : null}
-
-          {type === "Goal" ? (
-            <>
-              <Field label="Desired end state">
-                <Textarea {...form.register("desiredEndState")} />
-              </Field>
-              <Field label="Identity Statement">
-                <Select
-                  value={form.watch("parent") ?? ""}
-                  onValueChange={(v) => form.setValue("parent", v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Serves…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(values ?? []).map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {form.formState.errors.parent ? (
-                  <p className="text-xs text-destructive">{form.formState.errors.parent.message}</p>
-                ) : null}
-              </Field>
-              <Field label="Target date">
-                <Input type="date" {...form.register("targetDate")} />
-                {form.formState.errors.targetDate ? (
-                  <p className="text-xs text-destructive">
-                    {form.formState.errors.targetDate.message}
-                  </p>
-                ) : null}
-              </Field>
-              <Field label="Motivation">
-                <Textarea {...form.register("motivation")} />
-              </Field>
-            </>
-          ) : null}
-
-          {type === "Project" ? (
-            <>
-              <Field label="Description / scope">
-                <Textarea {...form.register("description")} />
-              </Field>
-              <Field label="Target date">
-                <Input type="date" {...form.register("targetDate")} />
-              </Field>
-            </>
-          ) : null}
-
-          {type === "Task" ? (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Due date">
-                <Input type="date" {...form.register("due")} />
-              </Field>
-              <Field label="Scheduled / do date">
-                <Input type="date" {...form.register("scheduled")} />
-              </Field>
-            </div>
-          ) : null}
-
-          {type === "Person" ? (
-            <Field label="Kind">
-              <Select
-                value={form.watch("personKind") ?? "human"}
-                onValueChange={(v) => form.setValue("personKind", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="human">Human</SelectItem>
-                  <SelectItem value="ai">AI agent</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          ) : null}
-
-          {type === "Habit" ? (
-            <>
-              <Field label="Cue">
-                <Input {...form.register("cue")} />
-              </Field>
-              <Field label="Routine">
-                <Input {...form.register("routine")} />
-              </Field>
-            </>
-          ) : null}
-
-          {type === "Appointment" ? (
-            <Field label="Date">
-              <Input type="date" {...form.register("date")} />
-            </Field>
-          ) : null}
-
-          {(type === "Problem" || type === "Decision" || type === "Idea" || type === "Commitment") && (
-            <Field label="Description">
-              <Textarea {...form.register("description")} />
-            </Field>
-          )}
-
-          {statuses && statuses.length > 0 ? (
-            <Field label="Status">
-              <Select
-                value={form.watch("status") ?? defaultStatus(type)}
-                onValueChange={(v) => form.setValue("status", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {statuses.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          ) : null}
-
-          {type !== "Area" ? (
-            <Field label="Area">
-              <Select
-                value={form.watch("area") ?? ""}
-                onValueChange={(v) => form.setValue("area", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Optional" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(areas ?? []).map((a) => (
-                    <SelectItem key={a.id} value={a.urn}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          ) : (
-            <Field label="Description">
-              <Textarea {...form.register("description")} />
-            </Field>
-          )}
+          <SubjectTypeFields form={form} editing />
 
           <Separator />
-          <Field label="Tags (comma-separated, optional)">
-            <Input placeholder="health, focus" {...form.register("tags")} />
+          <div className="space-y-1.5">
+            <Label htmlFor="tags">Tags (comma-separated, optional)</Label>
+            <Input id="tags" placeholder="health, focus" {...form.register("tags")} />
             <p className="text-xs text-muted-foreground">
-              Tags classify. Relationships are assigned separately.
+              Tags classify. Relationships are assigned separately — the parent above is a
+              relationship, not a tag.
             </p>
-          </Field>
+          </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -376,11 +221,16 @@ export function NewSubjectDialog({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
-    </div>
-  );
+function seedValues(
+  type: SubjectType,
+  parent?: CreateParent,
+  title?: string,
+): SubjectFormValues {
+  const base = emptyFormValues(type, "create");
+  return {
+    ...base,
+    title: title ?? "",
+    parent: parent?.id ?? "",
+    parents: parent ? [parent.id] : [],
+  };
 }

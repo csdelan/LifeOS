@@ -5,6 +5,7 @@ import {
   type AlignmentEdge,
 } from "@/lib/derive";
 import { api, unwrap } from "@/lib/live/http";
+import type { RecapSection } from "@/lib/review-recap";
 import type { LifeOsReads } from "@/lib/mock/api";
 import type {
   AreaRow,
@@ -14,6 +15,7 @@ import type {
   JournalEntry,
   PersonRow,
   RelationEdge,
+  ReviewDoc,
   StatusHistoryEntry,
   SubjectDetail,
   SubjectListItem,
@@ -126,6 +128,17 @@ export const liveReads: LifeOsReads = {
       }),
     );
     return asType<HabitOccurrenceRow[]>(data);
+  },
+
+  async reviews(opts) {
+    // TODO(api): Review documents (D3) are not on the live API yet.
+    void opts;
+    return asType<ReviewDoc[]>([]);
+  },
+
+  async recap() {
+    // TODO(api): recap is a composed read over the day's/week's events.
+    return asType<RecapSection[]>([]);
   },
 
   async edges(opts) {

@@ -8,6 +8,8 @@ import { AppShell } from "@/components/shell/app-shell";
 import { FocusPage } from "@/pages/focus-page";
 import { InboxPage } from "@/pages/inbox-page";
 import { MapPage } from "@/pages/map-page";
+import { TasksPage } from "@/pages/tasks-page";
+import { HabitsPage } from "@/pages/habits-page";
 import { VisionPage } from "@/pages/vision-page";
 import { ReviewsPage } from "@/pages/reviews-page";
 import { PeoplePage } from "@/pages/people-page";
@@ -30,6 +32,19 @@ export type MapSearch = {
 
 export type InboxSearch = {
   item?: string;
+};
+
+export type TasksSearch = {
+  selected?: string;
+};
+
+export type HabitsSearch = {
+  selected?: string;
+};
+
+export type ReviewsSearch = {
+  kind?: "daily" | "weekly";
+  date?: string;
 };
 
 function ErrorView({ error }: ErrorComponentProps) {
@@ -99,9 +114,31 @@ const visionRoute = createRoute({
   component: VisionPage,
 });
 
+const tasksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/tasks",
+  validateSearch: (search: Record<string, unknown>): TasksSearch => ({
+    selected: typeof search.selected === "string" ? search.selected : undefined,
+  }),
+  component: TasksPage,
+});
+
+const habitsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/habits",
+  validateSearch: (search: Record<string, unknown>): HabitsSearch => ({
+    selected: typeof search.selected === "string" ? search.selected : undefined,
+  }),
+  component: HabitsPage,
+});
+
 const reviewsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/reviews",
+  validateSearch: (search: Record<string, unknown>): ReviewsSearch => ({
+    kind: search.kind === "weekly" || search.kind === "daily" ? search.kind : undefined,
+    date: typeof search.date === "string" ? search.date : undefined,
+  }),
   component: ReviewsPage,
 });
 
@@ -127,6 +164,8 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   inboxRoute,
   mapRoute,
+  tasksRoute,
+  habitsRoute,
   visionRoute,
   reviewsRoute,
   peopleRoute,

@@ -112,5 +112,20 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       await unwrap(api().POST("/api/capture", { body: { text } }));
       notify("Captured to Inbox");
     },
+
+    async recur(_habit, _spec) {
+      // TODO(api): POST /api/habits/{id}/recur — kernel has no recurrence verb yet.
+      toast.error("Recurrence is not on the live API yet.");
+    },
+
+    async saveReview(_id, _body) {
+      // TODO(api): Review subjects (D3) are not on the live API yet.
+      toast.error("Reviews are mock-only until the kernel ships.");
+    },
+
+    async completeReview(_id) {
+      // TODO(api): POST /api/reviews/{id}/complete
+      toast.error("Reviews are mock-only until the kernel ships.");
+    },
   };
 }
