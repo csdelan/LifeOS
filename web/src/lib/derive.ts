@@ -146,6 +146,8 @@ export function deriveDashboard(input: {
   habits: HabitRow[];
   occurrences: HabitOccurrenceRow[];
   today: string;
+  primaryFocus?: { title: string; subjectId: string; kind: "goal" };
+  objectives?: { id: string; title: string; subjectId?: string }[];
 }): DashboardRead {
   const { subjects, edges, inboxCount, habits, occurrences, today } = input;
   const openTasks = subjects.filter(
@@ -186,10 +188,11 @@ export function deriveDashboard(input: {
     .map((p) => ({ id: p.id, title: p.title, subjectId: p.id }));
 
   return {
-    primaryFocus: primary
+    primaryFocus: input.primaryFocus ?? (primary
       ? { title: primary.title, subjectId: primary.id, kind: "goal" }
-      : { title: "No active goal yet", subjectId: "", kind: "goal" },
-    objectives,
+      : { title: "No active goal yet", subjectId: "", kind: "goal" }),
+    objectives:
+      input.objectives && input.objectives.length > 0 ? input.objectives : objectives,
     dueAndOverdue,
     nextActions,
     inboxCount,

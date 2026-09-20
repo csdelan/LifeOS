@@ -1,0 +1,63 @@
+.lifeos-graph {
+  --xy-background-color: transparent;
+  --xy-node-border-radius: var(--radius-xl);
+  --xy-node-boxshadow-hover: var(--shadow-lift);
+  --xy-node-boxshadow-selected: var(--shadow-lift);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--muted);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: var(--shadow-lift);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-background-color: color-mix(in oklch, var(--foreground) 12%, transparent);
+  --xy-minimap-node-background-color: var(--muted);
+  --xy-minimap-node-stroke-color: var(--border);
+  --xy-attribution-background-color: color-mix(in oklch, var(--card) 80%, transparent);
+  --xy-attribution-color: var(--muted-foreground);
+  --xy-edge-stroke: color-mix(in oklch, var(--foreground) 28%, transparent);
+  --xy-edge-stroke-selected: var(--primary);
+}
+
+.lifeos-graph .react-flow__renderer,
+.lifeos-graph .react-flow__pane,
+.lifeos-graph .react-flow__viewport {
+  cursor: grab;
+}
+
+.lifeos-graph .react-flow__node {
+  transition: opacity 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lifeos-graph .react-flow__edge {
+  transition: opacity 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lifeos-graph .react-flow__node.dimmed {
+  opacity: 0.16;
+}
+
+.lifeos-graph .react-flow__edge.dimmed {
+  opacity: 0.1;
+}
+
+.lifeos-graph .react-flow__edge-text {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.lifeos-graph .react-flow__controls {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.lifeos-graph .react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.lifeos-graph .react-flow__attribution {
+  font-size: 9px;
+}

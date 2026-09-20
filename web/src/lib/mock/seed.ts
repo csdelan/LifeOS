@@ -50,6 +50,11 @@ function makeUrn(type: SubjectType, title: string, short: string): string {
   return `urn:bsk:${type.toLowerCase()}:${slugify(title)}-${short}`;
 }
 
+function weekday(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).getDay();
+}
+
 function item(
   partial: Omit<SubjectListItem, "archived" | "createdAt" | "urn"> & {
     archived?: boolean;
@@ -86,6 +91,10 @@ function detailFrom(s: SubjectListItem, extra: Partial<SubjectDetail> = {}): Sub
   };
 }
 
+function areaOf(a: AreaRow) {
+  return { area: a.urn, areaName: a.name };
+}
+
 export function createSeed(): MockState {
   const today = todayIso();
   const t = (offset: number) => addDays(today, offset);
@@ -96,7 +105,7 @@ export function createSeed(): MockState {
       urn: "urn:bsk:area:health-a10001",
       name: "Health",
       description: "Body as the instrument of a long life.",
-      notes: "Training, sleep, food.",
+      notes: "Training, sleep, food. If this slips, everything else gets louder.",
       createdAt: isoAgo(800),
     },
     {
@@ -104,6 +113,7 @@ export function createSeed(): MockState {
       urn: "urn:bsk:area:family-a10002",
       name: "Family",
       description: "Being present with the people I love.",
+      notes: "Maya, Jonah, Mom. Presence over logistics — but logistics make presence possible.",
       createdAt: isoAgo(800),
     },
     {
@@ -111,6 +121,7 @@ export function createSeed(): MockState {
       urn: "urn:bsk:area:dev-career-a10003",
       name: "Dev Career",
       description: "Building tools that compound.",
+      notes: "LifeOS is the current craft. Deep work in the morning block.",
       createdAt: isoAgo(800),
     },
     {
@@ -118,9 +129,11 @@ export function createSeed(): MockState {
       urn: "urn:bsk:area:trading-a10004",
       name: "Trading",
       description: "A durable practice, not a thrill.",
+      notes: "Defined risk, written process, no heroics.",
       createdAt: isoAgo(800),
     },
   ];
+  const [health, family, dev, trading] = areas;
 
   const values: SubjectListItem[] = [
     item({
@@ -128,27 +141,44 @@ export function createSeed(): MockState {
       short: "v10001",
       type: "Value",
       title: "Steward of my health",
-      area: areas[0].urn,
-      areaName: "Health",
-      tags: "health,identity",
+      ...areaOf(health),
+      tags: "health,identity,body",
+      createdAt: isoAgo(900),
     }),
     item({
       id: "value-father",
       short: "v10002",
       type: "Value",
-      title: "Present father",
-      area: areas[1].urn,
-      areaName: "Family",
-      tags: "family,identity",
+      title: "Present with my family",
+      ...areaOf(family),
+      tags: "family,identity,presence",
+      createdAt: isoAgo(880),
     }),
     item({
       id: "value-craft",
       short: "v10003",
       type: "Value",
       title: "Craftsman of systems",
-      area: areas[2].urn,
-      areaName: "Dev Career",
-      tags: "craft,identity",
+      ...areaOf(dev),
+      tags: "craft,identity,career",
+      createdAt: isoAgo(860),
+    }),
+    item({
+      id: "value-trader",
+      short: "v10004",
+      type: "Value",
+      title: "I take only defined risk",
+      ...areaOf(trading),
+      tags: "trading,identity,risk",
+      createdAt: isoAgo(840),
+    }),
+    item({
+      id: "value-honest",
+      short: "v10005",
+      type: "Value",
+      title: "I tell myself the truth",
+      tags: "identity,honesty,journal",
+      createdAt: isoAgo(820),
     }),
   ];
 
@@ -160,9 +190,18 @@ export function createSeed(): MockState {
       title: "Run a half-marathon",
       status: "Active",
       targetDate: t(56),
-      area: areas[0].urn,
-      areaName: "Health",
-      tags: "health,endurance",
+      ...areaOf(health),
+      tags: "health,endurance,running",
+    }),
+    item({
+      id: "goal-sleep",
+      short: "g10006",
+      type: "Goal",
+      title: "Sleep through the night",
+      status: "Active",
+      targetDate: t(28),
+      ...areaOf(health),
+      tags: "health,sleep,recovery",
     }),
     item({
       id: "goal-lifeos",
@@ -171,9 +210,8 @@ export function createSeed(): MockState {
       title: "Ship LifeOS production UI",
       status: "Active",
       targetDate: t(40),
-      area: areas[2].urn,
-      areaName: "Dev Career",
-      tags: "lifeos,focus",
+      ...areaOf(dev),
+      tags: "lifeos,focus,career",
     }),
     item({
       id: "goal-camp",
@@ -182,9 +220,18 @@ export function createSeed(): MockState {
       title: "Family camping weekend",
       status: "New",
       targetDate: t(20),
-      area: areas[1].urn,
-      areaName: "Family",
-      tags: "family,outdoors",
+      ...areaOf(family),
+      tags: "family,outdoors,kids",
+    }),
+    item({
+      id: "goal-dinners",
+      short: "g10007",
+      type: "Goal",
+      title: "Sunday table, every week",
+      status: "Active",
+      targetDate: t(90),
+      ...areaOf(family),
+      tags: "family,presence,food",
     }),
     item({
       id: "goal-journal",
@@ -193,9 +240,8 @@ export function createSeed(): MockState {
       title: "Trading journal discipline",
       status: "Active",
       targetDate: t(90),
-      area: areas[3].urn,
-      areaName: "Trading",
-      tags: "trading,craft",
+      ...areaOf(trading),
+      tags: "trading,craft,journal",
     }),
     item({
       id: "goal-archived",
@@ -204,9 +250,9 @@ export function createSeed(): MockState {
       title: "Learn Italian (paused)",
       status: "Abandoned",
       archived: true,
-      area: areas[1].urn,
-      areaName: "Family",
-      tags: "learning",
+      ...areaOf(family),
+      tags: "learning,family",
+      createdAt: isoAgo(2000),
     }),
   ];
 
@@ -218,9 +264,18 @@ export function createSeed(): MockState {
       title: "12-week base build",
       status: "Active",
       targetDate: t(56),
-      area: areas[0].urn,
-      areaName: "Health",
-      tags: "health,training",
+      ...areaOf(health),
+      tags: "health,training,running",
+    }),
+    item({
+      id: "proj-sleep",
+      short: "p10006",
+      type: "Project",
+      title: "Wind-down environment",
+      status: "Active",
+      targetDate: t(21),
+      ...areaOf(health),
+      tags: "health,sleep,home",
     }),
     item({
       id: "proj-web",
@@ -229,9 +284,8 @@ export function createSeed(): MockState {
       title: "Production web UI — first pass",
       status: "Active",
       targetDate: t(14),
-      area: areas[2].urn,
-      areaName: "Dev Career",
-      tags: "lifeos,deep-work",
+      ...areaOf(dev),
+      tags: "lifeos,deep-work,prototype",
     }),
     item({
       id: "proj-camp",
@@ -240,9 +294,17 @@ export function createSeed(): MockState {
       title: "Camping logistics",
       status: "New",
       targetDate: t(18),
-      area: areas[1].urn,
-      areaName: "Family",
-      tags: "family,home",
+      ...areaOf(family),
+      tags: "family,home,outdoors",
+    }),
+    item({
+      id: "proj-dinners",
+      short: "p10007",
+      type: "Project",
+      title: "Sunday dinner ritual",
+      status: "Active",
+      ...areaOf(family),
+      tags: "family,food,presence",
     }),
     item({
       id: "proj-trades",
@@ -250,9 +312,18 @@ export function createSeed(): MockState {
       type: "Project",
       title: "Daily trade review",
       status: "Active",
-      area: areas[3].urn,
-      areaName: "Trading",
-      tags: "trading",
+      ...areaOf(trading),
+      tags: "trading,process",
+    }),
+    item({
+      id: "proj-playbook",
+      short: "p10008",
+      type: "Project",
+      title: "Written risk playbook",
+      status: "Active",
+      targetDate: t(35),
+      ...areaOf(trading),
+      tags: "trading,risk,process",
     }),
     item({
       id: "proj-standalone",
@@ -260,9 +331,19 @@ export function createSeed(): MockState {
       type: "Project",
       title: "Kitchen drawer rebuild",
       status: "New",
-      area: areas[1].urn,
-      areaName: "Family",
-      tags: "home",
+      ...areaOf(family),
+      tags: "home,kitchen",
+    }),
+    item({
+      id: "proj-archived",
+      short: "p10009",
+      type: "Project",
+      title: "Newsletter reboot",
+      status: "Abandoned",
+      archived: true,
+      ...areaOf(dev),
+      tags: "career,writing",
+      createdAt: isoAgo(1600),
     }),
   ];
 
@@ -275,9 +356,8 @@ export function createSeed(): MockState {
       status: "Not started",
       due: today,
       scheduled: today,
-      area: areas[0].urn,
-      areaName: "Health",
-      tags: "health,endurance",
+      ...areaOf(health),
+      tags: "health,endurance,running",
     }),
     item({
       id: "task-shoes",
@@ -286,9 +366,8 @@ export function createSeed(): MockState {
       title: "Buy race shoes",
       status: "Not started",
       due: t(-2),
-      area: areas[0].urn,
-      areaName: "Health",
-      tags: "health",
+      ...areaOf(health),
+      tags: "health,gear",
     }),
     item({
       id: "task-nutrition",
@@ -297,9 +376,27 @@ export function createSeed(): MockState {
       title: "Write race-day nutrition plan",
       status: "In progress",
       due: t(5),
-      area: areas[0].urn,
-      areaName: "Health",
-      tags: "health,planning",
+      ...areaOf(health),
+      tags: "health,planning,nutrition",
+    }),
+    item({
+      id: "task-phone",
+      short: "t10010",
+      type: "Task",
+      title: "Park the phone in the kitchen at 9:30",
+      status: "Not started",
+      ...areaOf(health),
+      tags: "health,sleep,home",
+    }),
+    item({
+      id: "task-caffeine",
+      short: "t10011",
+      type: "Task",
+      title: "Cut caffeine after 1pm this week",
+      status: "In progress",
+      due: t(4),
+      ...areaOf(health),
+      tags: "health,sleep,caffeine",
     }),
     item({
       id: "task-scaffold",
@@ -308,8 +405,7 @@ export function createSeed(): MockState {
       title: "Scaffold Focus screen",
       status: "In progress",
       scheduled: today,
-      area: areas[2].urn,
-      areaName: "Dev Career",
+      ...areaOf(dev),
       tags: "lifeos,deep-work",
     }),
     item({
@@ -319,9 +415,19 @@ export function createSeed(): MockState {
       title: "Mirror production-ui-types.ts",
       status: "Completed",
       due: t(-1),
-      area: areas[2].urn,
-      areaName: "Dev Career",
+      ...areaOf(dev),
       tags: "lifeos",
+    }),
+    item({
+      id: "task-graph",
+      short: "t10012",
+      type: "Task",
+      title: "Ship the Map graph view",
+      status: "In progress",
+      due: t(3),
+      scheduled: today,
+      ...areaOf(dev),
+      tags: "lifeos,deep-work,prototype",
     }),
     item({
       id: "task-campground",
@@ -330,20 +436,8 @@ export function createSeed(): MockState {
       title: "Reserve campground",
       status: "Not started",
       due: t(2),
-      area: areas[1].urn,
-      areaName: "Family",
-      tags: "family",
-    }),
-    item({
-      id: "task-trades",
-      short: "t10007",
-      type: "Task",
-      title: "Review last week's trades",
-      status: "Not started",
-      due: today,
-      area: areas[3].urn,
-      areaName: "Trading",
-      tags: "trading",
+      ...areaOf(family),
+      tags: "family,outdoors",
     }),
     item({
       id: "task-callmom",
@@ -352,9 +446,38 @@ export function createSeed(): MockState {
       title: "Call Mom after dinner",
       status: "Not started",
       scheduled: today,
-      area: areas[1].urn,
-      areaName: "Family",
+      ...areaOf(family),
       tags: "family",
+    }),
+    item({
+      id: "task-menu",
+      short: "t10013",
+      type: "Task",
+      title: "Plan Sunday menu with Jonah",
+      status: "Not started",
+      due: t(6),
+      ...areaOf(family),
+      tags: "family,food,kids",
+    }),
+    item({
+      id: "task-trades",
+      short: "t10007",
+      type: "Task",
+      title: "Review last week's trades",
+      status: "Not started",
+      due: today,
+      ...areaOf(trading),
+      tags: "trading,journal",
+    }),
+    item({
+      id: "task-playbook",
+      short: "t10014",
+      type: "Task",
+      title: "Write the three hard rules",
+      status: "Waiting",
+      due: t(8),
+      ...areaOf(trading),
+      tags: "trading,risk,planning",
     }),
     item({
       id: "task-orphan",
@@ -363,7 +486,18 @@ export function createSeed(): MockState {
       title: "Return library books",
       status: "Not started",
       due: t(3),
-      tags: "home",
+      tags: "home,books",
+    }),
+    item({
+      id: "task-archived",
+      short: "t10015",
+      type: "Task",
+      title: "Order Italian workbook",
+      status: "Cancelled",
+      archived: true,
+      ...areaOf(family),
+      tags: "learning",
+      createdAt: isoAgo(1800),
     }),
   ];
 
@@ -374,9 +508,8 @@ export function createSeed(): MockState {
       type: "Idea",
       title: "Standing desk experiment",
       status: "New",
-      area: areas[2].urn,
-      areaName: "Dev Career",
-      tags: "health,home",
+      ...areaOf(dev),
+      tags: "health,home,career",
     }),
     item({
       id: "idea-cookbook",
@@ -384,18 +517,25 @@ export function createSeed(): MockState {
       type: "Idea",
       title: "Family cookbook",
       status: "New",
-      area: areas[1].urn,
-      areaName: "Family",
-      tags: "family",
+      ...areaOf(family),
+      tags: "family,food",
+    }),
+    item({
+      id: "idea-winddown",
+      short: "i10003",
+      type: "Idea",
+      title: "Wind-down without screens",
+      status: "Promoted",
+      ...areaOf(health),
+      tags: "health,sleep",
     }),
     item({
       id: "prob-sleep",
       short: "r10001",
       type: "Problem",
       title: "How do I sleep through the night?",
-      status: "Open",
-      area: areas[0].urn,
-      areaName: "Health",
+      status: "Working",
+      ...areaOf(health),
       tags: "health,sleep",
     }),
     item({
@@ -404,9 +544,18 @@ export function createSeed(): MockState {
       type: "Decision",
       title: "React + Vite for Production UI",
       status: "Implementing",
-      area: areas[2].urn,
-      areaName: "Dev Career",
+      ...areaOf(dev),
+      tags: "lifeos,career",
+    }),
+    item({
+      id: "dec-blazor",
+      short: "d10002",
+      type: "Decision",
+      title: "Blazor for Production UI",
+      status: "Closed",
+      ...areaOf(dev),
       tags: "lifeos",
+      createdAt: isoAgo(400),
     }),
     item({
       id: "cmt-inbox",
@@ -414,9 +563,16 @@ export function createSeed(): MockState {
       type: "Commitment",
       title: "Reach Inbox Zero each weekday",
       status: "Open",
-      area: areas[2].urn,
-      areaName: "Dev Career",
-      tags: "focus",
+      ...areaOf(dev),
+      tags: "focus,process",
+    }),
+    item({
+      id: "cns-kernel",
+      short: "k10001",
+      type: "Constraint",
+      title: "Write path stays in LifeOs.Application",
+      ...areaOf(dev),
+      tags: "lifeos,architecture",
     }),
     item({
       id: "person-maya",
@@ -424,8 +580,8 @@ export function createSeed(): MockState {
       type: "Person",
       title: "Maya",
       personKind: "human",
-      area: areas[1].urn,
-      areaName: "Family",
+      ...areaOf(family),
+      tags: "family,partner",
     }),
     item({
       id: "person-mom",
@@ -433,8 +589,26 @@ export function createSeed(): MockState {
       type: "Person",
       title: "Mom",
       personKind: "human",
-      area: areas[1].urn,
-      areaName: "Family",
+      ...areaOf(family),
+      tags: "family",
+    }),
+    item({
+      id: "person-jonah",
+      short: "ppl004",
+      type: "Person",
+      title: "Jonah",
+      personKind: "human",
+      ...areaOf(family),
+      tags: "family,kids",
+    }),
+    item({
+      id: "person-sam",
+      short: "ppl005",
+      type: "Person",
+      title: "Sam",
+      personKind: "human",
+      ...areaOf(health),
+      tags: "health,running",
     }),
     item({
       id: "person-agent",
@@ -442,8 +616,59 @@ export function createSeed(): MockState {
       type: "Person",
       title: "Cursor Grok",
       personKind: "ai",
-      area: areas[2].urn,
-      areaName: "Dev Career",
+      ...areaOf(dev),
+      tags: "career,agents",
+    }),
+    item({
+      id: "person-compass",
+      short: "ppl006",
+      type: "Person",
+      title: "Compass",
+      personKind: "ai",
+      ...areaOf(dev),
+      tags: "career,agents,planning",
+    }),
+    item({
+      id: "appt-run",
+      short: "ap1001",
+      type: "Appointment",
+      title: "Park loop with Sam",
+      status: "Scheduled",
+      due: today,
+      scheduled: today,
+      ...areaOf(health),
+      tags: "health,running",
+    }),
+    item({
+      id: "appt-dinner",
+      short: "ap1002",
+      type: "Appointment",
+      title: "Family dinner",
+      status: "Scheduled",
+      due: today,
+      scheduled: today,
+      ...areaOf(family),
+      tags: "family,food",
+    }),
+    item({
+      id: "appt-camp",
+      short: "ap1003",
+      type: "Appointment",
+      title: "Campground office call",
+      status: "Scheduled",
+      due: t(2),
+      ...areaOf(family),
+      tags: "family,outdoors",
+    }),
+    item({
+      id: "appt-premarket",
+      short: "ap1004",
+      type: "Appointment",
+      title: "Pre-market review",
+      status: "Scheduled",
+      due: t(1),
+      ...areaOf(trading),
+      tags: "trading,process",
     }),
   ];
 
@@ -459,35 +684,77 @@ export function createSeed(): MockState {
     "I'm the type of person who is fully there when I'm with my family.";
   details["value-craft"].statement =
     "I'm the type of person who builds tools that compound.";
+  details["value-trader"].statement =
+    "I'm the type of person who risks only what I've defined in writing.";
+  details["value-honest"].statement =
+    "I'm the type of person who tells myself the unflattering truth before anyone else has to.";
   details["goal-half"].scope = "Finish a half-marathon without injury, joyfully.";
-  details["proj-web"].scope = "A design-forward look-and-feel prototype against mock data.";
+  details["goal-sleep"].scope = "Wake once or not at all; feel recovered before the kettle boils.";
+  details["goal-lifeos"].scope = "A design-forward production UI that a real person would live in.";
+  details["goal-camp"].scope = "One unhurried weekend outside, with Jonah in the water.";
+  details["goal-dinners"].scope = "Sunday evening at the table, phones away, every week.";
+  details["goal-journal"].scope = "Every session written before the next one begins.";
+  details["proj-web"].scope = "A look-and-feel prototype against mock data, tree-first, peek-not-route.";
+  details["proj-sleep"].scope = "Make the last hour of the day boring on purpose.";
+  details["proj-playbook"].scope = "Three hard rules on one page. If it isn't written, it isn't a rule.";
+  details["dec-stack"].scope = "React + TypeScript + Vite. Kernel stays C#.";
+  details["dec-blazor"].scope = "Superseded: sharing C# types was not worth the UI ceiling.";
+  details["cns-kernel"].scope = "The browser never writes the store. Application services are the only write path.";
+  details["prob-sleep"].scope = "3:40am wakeups, four nights out of seven. Caffeine and screens are the suspects.";
+  details["idea-winddown"].scope = "Phone lives in the kitchen after 9:30. Paper book, dim lights.";
+  details["appt-run"].scope = "Easy conversational pace. Sam at the north gate, 7:00.";
+  details["appt-dinner"].scope = "Maya cooking; Jonah sets the table. No laptops.";
 
   const edges: CanonicalEdge[] = [
+    // Health
     { fromId: "goal-half", relation: "serves", toId: "value-steward" },
-    { fromId: "goal-lifeos", relation: "serves", toId: "value-craft" },
-    { fromId: "goal-camp", relation: "serves", toId: "value-father" },
-    { fromId: "goal-journal", relation: "serves", toId: "value-craft" },
+    { fromId: "goal-sleep", relation: "serves", toId: "value-steward" },
     { fromId: "proj-base", relation: "results_in", toId: "goal-half" },
-    { fromId: "proj-web", relation: "results_in", toId: "goal-lifeos" },
-    { fromId: "proj-camp", relation: "results_in", toId: "goal-camp" },
-    { fromId: "proj-trades", relation: "results_in", toId: "goal-journal" },
+    { fromId: "proj-sleep", relation: "results_in", toId: "goal-sleep" },
     { fromId: "task-longrun", relation: "serves", toId: "proj-base" },
     { fromId: "task-shoes", relation: "serves", toId: "proj-base" },
     { fromId: "task-nutrition", relation: "serves", toId: "proj-base" },
     { fromId: "task-nutrition", relation: "serves", toId: "goal-half" },
+    { fromId: "task-phone", relation: "serves", toId: "proj-sleep" },
+    { fromId: "task-caffeine", relation: "serves", toId: "proj-sleep" },
+    { fromId: "prob-sleep", relation: "serves", toId: "value-steward" },
+    { fromId: "idea-winddown", relation: "serves", toId: "prob-sleep" },
+    { fromId: "proj-sleep", relation: "results_in", toId: "idea-winddown" },
+    // Family
+    { fromId: "goal-camp", relation: "serves", toId: "value-father" },
+    { fromId: "goal-dinners", relation: "serves", toId: "value-father" },
+    { fromId: "proj-camp", relation: "results_in", toId: "goal-camp" },
+    { fromId: "proj-dinners", relation: "results_in", toId: "goal-dinners" },
+    { fromId: "task-campground", relation: "serves", toId: "proj-camp" },
+    { fromId: "task-callmom", relation: "serves", toId: "goal-camp" },
+    { fromId: "task-menu", relation: "serves", toId: "proj-dinners" },
+    { fromId: "task-archived", relation: "serves", toId: "goal-archived" },
+    // Dev career
+    { fromId: "goal-lifeos", relation: "serves", toId: "value-craft" },
+    { fromId: "proj-web", relation: "results_in", toId: "goal-lifeos" },
+    { fromId: "proj-web", relation: "serves", toId: "dec-stack" },
     { fromId: "task-scaffold", relation: "serves", toId: "proj-web" },
     { fromId: "task-types", relation: "serves", toId: "proj-web" },
-    { fromId: "task-campground", relation: "serves", toId: "proj-camp" },
-    { fromId: "task-trades", relation: "serves", toId: "proj-trades" },
-    { fromId: "task-callmom", relation: "serves", toId: "goal-camp" },
+    { fromId: "task-graph", relation: "serves", toId: "proj-web" },
+    { fromId: "task-graph", relation: "serves", toId: "goal-lifeos" },
     { fromId: "cmt-inbox", relation: "serves", toId: "value-craft" },
     { fromId: "dec-stack", relation: "results_in", toId: "goal-lifeos" },
+    { fromId: "dec-stack", relation: "serves", toId: "cns-kernel" },
+    { fromId: "dec-stack", relation: "supersedes", toId: "dec-blazor" },
+    { fromId: "goal-lifeos", relation: "serves", toId: "value-honest" },
+    // Trading
+    { fromId: "goal-journal", relation: "serves", toId: "value-trader" },
+    { fromId: "goal-journal", relation: "serves", toId: "value-honest" },
+    { fromId: "proj-trades", relation: "results_in", toId: "goal-journal" },
+    { fromId: "proj-playbook", relation: "results_in", toId: "goal-journal" },
+    { fromId: "task-trades", relation: "serves", toId: "proj-trades" },
+    { fromId: "task-playbook", relation: "serves", toId: "proj-playbook" },
   ];
 
   const tagsByItem: Record<string, string[]> = {};
   for (const s of subjects) {
     tagsByItem[s.id] = s.tags
-      ? s.tags.split(",").map((t) => t.trim()).filter(Boolean)
+      ? s.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
       : [];
   }
 
@@ -496,14 +763,39 @@ export function createSeed(): MockState {
       {
         eventId: "j-1",
         occurredAt: isoAgo(48),
-        content: "Week 4 long run felt easy at conversational pace. Keep the shoes search honest — current pair is cooked.",
+        content:
+          "Week 4 long run felt easy at conversational pace. Keep the shoes search honest — current pair is cooked.",
+      },
+      {
+        eventId: "j-1b",
+        occurredAt: isoAgo(120),
+        content: "Sam asked if Saturday can start at 7 instead of 6:30. Yes. Joy > heroics.",
+      },
+    ],
+    "goal-lifeos": [
+      {
+        eventId: "j-4",
+        occurredAt: isoAgo(4),
+        content:
+          "The graph has to be the same data as the outline or it will lie. Layered first, force as a second lens.",
+      },
+      {
+        eventId: "j-4b",
+        occurredAt: isoAgo(22),
+        content: "Primary focus stays this until the first-pass UI is something I'd actually live in.",
       },
     ],
     "proj-web": [
       {
         eventId: "j-2",
         occurredAt: isoAgo(6),
-        content: "First-pass UI should feel like a command center, not a wiki. Tree-first, peek-not-route.",
+        content:
+          "First-pass UI should feel like a command center, not a wiki. Tree-first, peek-not-route. The graph has to be the same data as the outline or it will lie.",
+      },
+      {
+        eventId: "j-2b",
+        occurredAt: isoAgo(28),
+        content: "Blazor would have shared types. It would also have capped the graph. Closed that door on purpose.",
       },
     ],
     "prob-sleep": [
@@ -511,6 +803,11 @@ export function createSeed(): MockState {
         eventId: "j-3",
         occurredAt: isoAgo(30),
         content: "Woke at 3:40 again. Caffeine after 1pm is still the likely culprit.",
+      },
+      {
+        eventId: "j-3b",
+        occurredAt: isoAgo(78),
+        content: "Phone was on the nightstand. That's the experiment failing, not the body.",
       },
     ],
   };
@@ -520,6 +817,14 @@ export function createSeed(): MockState {
       { id: "h-1", status: "New", occurredAt: isoAgo(900) },
       { id: "h-2", status: "Active", occurredAt: isoAgo(720) },
     ],
+    "goal-lifeos": [
+      { id: "h-7", status: "New", occurredAt: isoAgo(200) },
+      { id: "h-8", status: "Active", occurredAt: isoAgo(160) },
+    ],
+    "goal-sleep": [
+      { id: "h-9", status: "New", occurredAt: isoAgo(140) },
+      { id: "h-10", status: "Active", occurredAt: isoAgo(90) },
+    ],
     "task-scaffold": [
       { id: "h-3", status: "Not started", occurredAt: isoAgo(20) },
       { id: "h-4", status: "In progress", occurredAt: isoAgo(4) },
@@ -527,6 +832,27 @@ export function createSeed(): MockState {
     "task-types": [
       { id: "h-5", status: "Not started", occurredAt: isoAgo(30) },
       { id: "h-6", status: "Completed", occurredAt: isoAgo(8) },
+    ],
+    "task-graph": [
+      { id: "h-11", status: "Not started", occurredAt: isoAgo(16) },
+      { id: "h-12", status: "In progress", occurredAt: isoAgo(3) },
+    ],
+    "prob-sleep": [
+      { id: "h-13", status: "Open", occurredAt: isoAgo(200) },
+      { id: "h-14", status: "Working", occurredAt: isoAgo(72) },
+    ],
+    "dec-stack": [
+      { id: "h-15", status: "Open", occurredAt: isoAgo(180) },
+      { id: "h-16", status: "Implementing", occurredAt: isoAgo(150) },
+    ],
+    "dec-blazor": [
+      { id: "h-17", status: "Open", occurredAt: isoAgo(400) },
+      { id: "h-18", status: "Cancelled", occurredAt: isoAgo(160) },
+      { id: "h-19", status: "Closed", occurredAt: isoAgo(158) },
+    ],
+    "proj-web": [
+      { id: "h-20", status: "New", occurredAt: isoAgo(170) },
+      { id: "h-21", status: "Active", occurredAt: isoAgo(150) },
     ],
   };
 
@@ -537,6 +863,14 @@ export function createSeed(): MockState {
         occurredAt: isoAgo(26),
         eventId: "e-1",
         content: "Resting HR trending down this week.",
+      },
+    ],
+    "prob-sleep": [
+      {
+        kind: "observation",
+        occurredAt: isoAgo(10),
+        eventId: "e-2",
+        content: "Woke at 3:38. Phone was not in the kitchen.",
       },
     ],
   };
@@ -553,7 +887,7 @@ export function createSeed(): MockState {
       itemId: "inbox-2",
       itemKind: "subject",
       triagedAt: isoAgo(10),
-      subjectUrn: extras[1].urn,
+      subjectUrn: extras.find((x) => x.id === "idea-cookbook")?.urn,
       subjectType: "Idea",
       subjectTitle: "Family cookbook",
     },
@@ -561,7 +895,7 @@ export function createSeed(): MockState {
       itemId: "inbox-3",
       itemKind: "subject",
       triagedAt: isoAgo(18),
-      subjectUrn: extras[2].urn,
+      subjectUrn: extras.find((x) => x.id === "prob-sleep")?.urn,
       subjectType: "Problem",
       subjectTitle: "How do I sleep through the night?",
     },
@@ -579,6 +913,27 @@ export function createSeed(): MockState {
       eventKind: "note",
       eventContent: "Ask Maya if Sunday dinner can move so the long run isn't rushed.",
     },
+    {
+      itemId: "inbox-6",
+      itemKind: "event",
+      triagedAt: isoAgo(80),
+      eventKind: "note",
+      eventContent: "Refinance? Rates moved. Don't decide from a headline — park it.",
+    },
+    {
+      itemId: "inbox-7",
+      itemKind: "event",
+      triagedAt: isoAgo(34),
+      eventKind: "observation",
+      eventContent: "Evening stretch has been unrecorded more nights than not. The cue isn't firing.",
+    },
+    {
+      itemId: "inbox-8",
+      itemKind: "event",
+      triagedAt: isoAgo(52),
+      eventKind: "note",
+      eventContent: "Jonah asked to go fishing on the camping trip. Pack the cheap rods.",
+    },
   ];
 
   const habits: HabitRow[] = [
@@ -594,8 +949,8 @@ export function createSeed(): MockState {
       recurrence: "daily",
       archived: false,
       createdAt: isoAgo(800),
-      currentStreak: 12,
-      lastState: "followed",
+      currentStreak: 0,
+      lastState: "unrecorded",
     },
     {
       id: "habit-inbox",
@@ -609,8 +964,8 @@ export function createSeed(): MockState {
       recurrence: "daily",
       archived: false,
       createdAt: isoAgo(400),
-      currentStreak: 4,
-      lastState: "followed",
+      currentStreak: 0,
+      lastState: "unrecorded",
     },
     {
       id: "habit-stretch",
@@ -625,34 +980,74 @@ export function createSeed(): MockState {
       currentStreak: 0,
       lastState: "unrecorded",
     },
+    {
+      id: "habit-journal",
+      urn: "urn:bsk:habit:trade-journal-h10004",
+      name: "Trade journal",
+      cue: "Session closed",
+      routine: "Write the plan vs. the tape, three lines minimum",
+      reward: "Tomorrow's self has a chance",
+      startDate: t(-60),
+      allowsPartial: true,
+      recurrence: "weekdays",
+      archived: false,
+      createdAt: isoAgo(500),
+      currentStreak: 0,
+      lastState: "unrecorded",
+    },
   ];
 
   const occurrences: HabitOccurrenceRow[] = [
-    {
-      habitId: "habit-mobility",
-      habitUrn: habits[0].urn,
-      habitName: "Morning mobility",
-      occurrenceDate: today,
-      state: "unrecorded",
-      allowsPartial: true,
-    },
-    {
-      habitId: "habit-inbox",
-      habitUrn: habits[1].urn,
-      habitName: "Inbox Zero pass",
-      occurrenceDate: today,
-      state: "unrecorded",
-      allowsPartial: true,
-    },
-    {
-      habitId: "habit-stretch",
-      habitUrn: habits[2].urn,
-      habitName: "Evening stretch",
-      occurrenceDate: today,
-      state: "unrecorded",
-      allowsPartial: true,
-    },
+    ...habitDays(habits[0], today, 24, (ago) => {
+      if (ago === 0) return "unrecorded";
+      if (ago <= 12) return "followed";
+      if (ago === 13) return "partial";
+      if (ago === 14) return "not_followed";
+      return ago % 6 === 0 ? "partial" : "followed";
+    }),
+    ...habitDays(habits[1], today, 24, (ago) => {
+      if (ago === 0) return "unrecorded";
+      if (ago <= 4) return "followed";
+      if (ago === 5) return "not_followed";
+      if (ago === 8) return "partial";
+      return ago % 5 === 0 ? "not_followed" : "followed";
+    }),
+    ...habitDays(habits[2], today, 21, (ago) => {
+      if (ago === 0) return "unrecorded";
+      if (ago === 2) return "unrecorded";
+      if (ago === 5) return "followed";
+      if (ago === 9) return "partial";
+      return ago % 3 === 0 ? "partial" : "not_followed";
+    }),
+    ...habitDays(
+      habits[3],
+      today,
+      28,
+      (ago) => {
+        if (ago === 0) return "unrecorded";
+        if (ago <= 3) return "followed";
+        if (ago === 6) return "not_followed";
+        if (ago === 11) return "partial";
+        return ago % 7 === 0 ? "not_followed" : "followed";
+      },
+      { weekdaysOnly: true },
+    ),
   ];
+
+  for (const habit of habits) {
+    const mine = occurrences
+      .filter((o) => o.habitId === habit.id)
+      .sort((a, b) => b.occurrenceDate.localeCompare(a.occurrenceDate));
+    const todayRow = mine.find((o) => o.occurrenceDate === today);
+    habit.lastState = todayRow?.state ?? mine[0]?.state ?? "unrecorded";
+    let streak = 0;
+    for (const row of mine) {
+      if (row.occurrenceDate === today) continue;
+      if (row.state === "followed") streak += 1;
+      else break;
+    }
+    habit.currentStreak = streak;
+  }
 
   const people: PersonRow[] = [
     {
@@ -668,6 +1063,23 @@ export function createSeed(): MockState {
       urn: "urn:bsk:person:mom-ppl002",
       title: "Mom",
       personKind: "human",
+      role: "family",
+      archived: false,
+    },
+    {
+      id: "person-jonah",
+      urn: "urn:bsk:person:jonah-ppl004",
+      title: "Jonah",
+      personKind: "human",
+      role: "son",
+      archived: false,
+    },
+    {
+      id: "person-sam",
+      urn: "urn:bsk:person:sam-ppl005",
+      title: "Sam",
+      personKind: "human",
+      role: "running partner",
       archived: false,
     },
     {
@@ -678,28 +1090,116 @@ export function createSeed(): MockState {
       role: "coding agent",
       archived: false,
     },
+    {
+      id: "person-compass",
+      urn: "urn:bsk:person:compass-ppl006",
+      title: "Compass",
+      personKind: "ai",
+      role: "planning agent",
+      archived: false,
+    },
   ];
 
   const associations: PersonAssociationRow[] = [
     {
       subjectId: "goal-camp",
-      subjectUrn: goals[2].urn,
+      subjectUrn: goals.find((g) => g.id === "goal-camp")!.urn,
       subjectType: "Goal",
-      subjectTitle: goals[2].title,
+      subjectTitle: "Family camping weekend",
       role: "involves",
       personId: "person-maya",
       personUrn: people[0].urn,
       personName: "Maya",
     },
     {
+      subjectId: "goal-camp",
+      subjectUrn: goals.find((g) => g.id === "goal-camp")!.urn,
+      subjectType: "Goal",
+      subjectTitle: "Family camping weekend",
+      role: "involves",
+      personId: "person-jonah",
+      personUrn: people[2].urn,
+      personName: "Jonah",
+    },
+    {
       subjectId: "proj-web",
-      subjectUrn: projects[1].urn,
+      subjectUrn: projects.find((p) => p.id === "proj-web")!.urn,
       subjectType: "Project",
-      subjectTitle: projects[1].title,
+      subjectTitle: "Production web UI — first pass",
       role: "assignee",
       personId: "person-agent",
-      personUrn: people[2].urn,
+      personUrn: people[4].urn,
       personName: "Cursor Grok",
+    },
+    {
+      subjectId: "task-graph",
+      subjectUrn: tasks.find((x) => x.id === "task-graph")!.urn,
+      subjectType: "Task",
+      subjectTitle: "Ship the Map graph view",
+      role: "assignee",
+      personId: "person-agent",
+      personUrn: people[4].urn,
+      personName: "Cursor Grok",
+    },
+    {
+      subjectId: "task-longrun",
+      subjectUrn: tasks.find((x) => x.id === "task-longrun")!.urn,
+      subjectType: "Task",
+      subjectTitle: "Long run Saturday",
+      role: "involves",
+      personId: "person-sam",
+      personUrn: people[3].urn,
+      personName: "Sam",
+    },
+    {
+      subjectId: "appt-run",
+      subjectUrn: extras.find((x) => x.id === "appt-run")!.urn,
+      subjectType: "Appointment",
+      subjectTitle: "Park loop with Sam",
+      role: "attendee",
+      personId: "person-sam",
+      personUrn: people[3].urn,
+      personName: "Sam",
+    },
+    {
+      subjectId: "appt-dinner",
+      subjectUrn: extras.find((x) => x.id === "appt-dinner")!.urn,
+      subjectType: "Appointment",
+      subjectTitle: "Family dinner",
+      role: "attendee",
+      personId: "person-maya",
+      personUrn: people[0].urn,
+      personName: "Maya",
+    },
+    {
+      subjectId: "appt-dinner",
+      subjectUrn: extras.find((x) => x.id === "appt-dinner")!.urn,
+      subjectType: "Appointment",
+      subjectTitle: "Family dinner",
+      role: "attendee",
+      personId: "person-jonah",
+      personUrn: people[2].urn,
+      personName: "Jonah",
+    },
+    {
+      subjectId: "task-callmom",
+      subjectUrn: tasks.find((x) => x.id === "task-callmom")!.urn,
+      subjectType: "Task",
+      subjectTitle: "Call Mom after dinner",
+      role: "involves",
+      personId: "person-mom",
+      personUrn: people[1].urn,
+      personName: "Mom",
+    },
+    {
+      subjectId: "goal-lifeos",
+      subjectUrn: goals.find((g) => g.id === "goal-lifeos")!.urn,
+      subjectType: "Goal",
+      subjectTitle: "Ship LifeOS production UI",
+      role: "involves",
+      personId: "person-compass",
+      personUrn: people[5].urn,
+      personName: "Compass",
     },
   ];
 
@@ -723,11 +1223,37 @@ export function createSeed(): MockState {
       kind: "goal",
     },
     objectives: [
-      { id: "obj-1", title: "Land the Map outline with inline create", subjectId: "proj-web" },
+      { id: "obj-1", title: "Land the Map graph beside the outline", subjectId: "task-graph" },
       { id: "obj-2", title: "Clear Inbox before noon" },
       { id: "obj-3", title: "Long run, easy pace", subjectId: "task-longrun" },
     ],
   };
+}
+
+function habitDays(
+  habit: HabitRow,
+  today: string,
+  span: number,
+  stateAt: (daysAgo: number) => HabitOccurrenceRow["state"],
+  opts?: { weekdaysOnly?: boolean },
+): HabitOccurrenceRow[] {
+  const rows: HabitOccurrenceRow[] = [];
+  for (let ago = span - 1; ago >= 0; ago--) {
+    const occurrenceDate = addDays(today, -ago);
+    if (opts?.weekdaysOnly) {
+      const day = weekday(occurrenceDate);
+      if (day === 0 || day === 6) continue;
+    }
+    rows.push({
+      habitId: habit.id,
+      habitUrn: habit.urn,
+      habitName: habit.name,
+      occurrenceDate,
+      state: stateAt(ago),
+      allowsPartial: habit.allowsPartial,
+    });
+  }
+  return rows;
 }
 
 export function toRelationEdge(

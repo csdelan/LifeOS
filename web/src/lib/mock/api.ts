@@ -64,6 +64,11 @@ export interface LifeOsReads {
   people(): Promise<PersonRow[]>;
   habits(): Promise<HabitRow[]>;
   occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]>;
+  /**
+   * Bulk alignment edges (serves / results_in / supersedes) for Map outline + graph.
+   * // TODO(api): live GET /api/edges — already sketched in OpenAPI; confirm it returns
+   * the full graph (not per-subject) before relying on it in live mode.
+   */
   edges(opts?: { includeArchived?: boolean }): Promise<AlignmentEdge[]>;
   dashboard(): Promise<DashboardRead>;
   alignmentForest(opts?: {
@@ -178,6 +183,8 @@ export const mockReads: LifeOsReads = {
       habits: s.habits,
       occurrences: s.occurrences,
       today: todayIso(),
+      primaryFocus: s.primaryFocus,
+      objectives: s.objectives,
     });
   },
 

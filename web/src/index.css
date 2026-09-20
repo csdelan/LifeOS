@@ -102,6 +102,9 @@
   --type-task: oklch(0.4 0.04 70);
   --type-idea: oklch(0.55 0.12 85);
   --type-problem: oklch(0.55 0.14 25);
+  --type-decision: oklch(0.46 0.1 230);
+  --type-commitment: oklch(0.48 0.08 200);
+  --type-constraint: oklch(0.42 0.04 60);
 }
 
 .dark {
@@ -148,6 +151,9 @@
   --type-task: oklch(0.82 0.03 85);
   --type-idea: oklch(0.8 0.1 85);
   --type-problem: oklch(0.76 0.12 25);
+  --type-decision: oklch(0.76 0.08 230);
+  --type-commitment: oklch(0.78 0.07 200);
+  --type-constraint: oklch(0.78 0.03 70);
 }
 
 @layer base {

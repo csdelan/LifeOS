@@ -36,6 +36,12 @@ export function typeTone(type: SubjectType): string {
       return "text-[var(--type-idea)]";
     case "Problem":
       return "text-[var(--type-problem)]";
+    case "Decision":
+      return "text-[var(--type-decision)]";
+    case "Commitment":
+      return "text-[var(--type-commitment)]";
+    case "Constraint":
+      return "text-[var(--type-constraint)]";
     default:
       return "text-muted-foreground";
   }
@@ -55,8 +61,38 @@ export function typeSurface(type: SubjectType): string {
       return "bg-[var(--type-idea)]/12 text-[var(--type-idea)]";
     case "Problem":
       return "bg-[var(--type-problem)]/12 text-[var(--type-problem)]";
+    case "Decision":
+      return "bg-[var(--type-decision)]/12 text-[var(--type-decision)]";
+    case "Commitment":
+      return "bg-[var(--type-commitment)]/12 text-[var(--type-commitment)]";
     default:
       return "bg-muted text-muted-foreground";
+  }
+}
+
+/** CSS accent for graph nodes and MiniMap chips. */
+export function typeAccent(type: SubjectType): string {
+  switch (type) {
+    case "Value":
+      return "var(--type-value)";
+    case "Goal":
+      return "var(--type-goal)";
+    case "Project":
+      return "var(--type-project)";
+    case "Task":
+      return "var(--type-task)";
+    case "Idea":
+      return "var(--type-idea)";
+    case "Problem":
+      return "var(--type-problem)";
+    case "Decision":
+      return "var(--type-decision)";
+    case "Commitment":
+      return "var(--type-commitment)";
+    case "Constraint":
+      return "var(--type-constraint)";
+    default:
+      return "var(--muted-foreground)";
   }
 }
 

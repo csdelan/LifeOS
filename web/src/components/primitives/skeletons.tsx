@@ -41,3 +41,18 @@ export function CardSkeleton() {
     </div>
   );
 }
+
+export function GraphSkeleton() {
+  return (
+    <div className="flex h-full min-h-[22rem] items-center justify-center">
+      <div className="grid grid-cols-3 gap-6 opacity-70">
+        <Skeleton className="h-16 w-44 rounded-xl" />
+        <Skeleton className="h-16 w-48 rounded-xl" />
+        <Skeleton className="h-16 w-40 rounded-xl" />
+        <Skeleton className="col-start-2 h-16 w-52 rounded-xl" />
+        <Skeleton className="h-16 w-44 rounded-xl" />
+        <Skeleton className="h-16 w-36 rounded-xl" />
+      </div>
+    </div>
+  );
+}

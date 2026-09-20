@@ -36,6 +36,7 @@ export const qk = {
   dashboard: ["dashboard"] as const,
   forest: (archived: boolean, lens: MapLens) =>
     ["forest", archived, lens] as const,
+  edges: (archived: boolean) => ["edges", archived] as const,
 };
 
 function invalidate(qc: QueryClient, keys: readonly (readonly unknown[])[]) {
@@ -56,13 +57,13 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
               : req.type === "Habit"
                 ? [qk.habits]
                 : [];
-      await invalidate(qc, [qk.subjects, qk.dashboard, ["forest"], ...extra]);
+      await invalidate(qc, [qk.subjects, qk.dashboard, ["forest"], ["edges"], ...extra]);
       return created;
     },
 
     async promote(source, type, title) {
       const created = await client.promote(source, type, title);
-      await invalidate(qc, [qk.inbox, qk.subjects, qk.dashboard, ["forest"]]);
+      await invalidate(qc, [qk.inbox, qk.subjects, qk.dashboard, ["forest"], ["edges"]]);
       return created;
     },
 
@@ -74,6 +75,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         qk.subjects,
         qk.dashboard,
         ["forest"],
+        ["edges"],
       ]);
     },
 
@@ -90,6 +92,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
           qk.dashboard,
           qk.inbox,
           ["forest"],
+          ["edges"],
         ]);
       }
     },
@@ -103,6 +106,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         qk.dashboard,
         qk.inbox,
         ["forest"],
+        ["edges"],
       ]);
     },
 
@@ -114,6 +118,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         qk.subjects,
         qk.dashboard,
         ["forest"],
+        ["edges"],
       ]);
     },
 
@@ -128,6 +133,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         qk.relations(from),
         qk.relations(to),
         ["forest"],
+        ["edges"],
         qk.dashboard,
       ]);
     },
@@ -156,7 +162,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       try {
         await client.drop(item);
       } finally {
-        await invalidate(qc, [qk.inbox, qk.dashboard, qk.subjects, ["forest"]]);
+        await invalidate(qc, [qk.inbox, qk.dashboard, qk.subjects, ["forest"], ["edges"]]);
       }
     },
 
@@ -331,6 +337,13 @@ export function useAlignmentForest(includeArchived: boolean, lens: MapLens) {
   return useQuery({
     queryKey: qk.forest(includeArchived, lens),
     queryFn: () => reads.alignmentForest({ includeArchived, lens }),
+  });
+}
+
+export function useAlignmentEdges(includeArchived: boolean) {
+  return useQuery({
+    queryKey: qk.edges(includeArchived),
+    queryFn: () => reads.edges({ includeArchived }),
   });
 }
 

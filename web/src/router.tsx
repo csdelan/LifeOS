@@ -14,12 +14,18 @@ import { PeoplePage } from "@/pages/people-page";
 import { AreasPage } from "@/pages/areas-page";
 import { GalleryPage } from "@/pages/gallery-page";
 import type { MapLens } from "@/lib/derive";
+import type { GraphLayoutKind, MapViewMode, OrphanFilter } from "@/lib/graph-model";
 import { Button } from "@/components/ui/button";
 
 export type MapSearch = {
   selected?: string;
   lens?: MapLens;
   archived?: boolean;
+  view?: MapViewMode;
+  layout?: GraphLayoutKind;
+  orphans?: OrphanFilter;
+  area?: string;
+  colorByArea?: boolean;
 };
 
 export type InboxSearch = {
@@ -69,6 +75,20 @@ const mapRoute = createRoute({
         : "all",
     archived:
       search.archived === true || search.archived === "true" || search.archived === "1",
+    view: search.view === "graph" || search.view === "outline" ? search.view : undefined,
+    layout:
+      search.layout === "force" || search.layout === "layered" ? search.layout : undefined,
+    orphans:
+      search.orphans === "only" || search.orphans === "hide" || search.orphans === "all"
+        ? search.orphans
+        : undefined,
+    area: typeof search.area === "string" && search.area.length > 0 ? search.area : undefined,
+    colorByArea:
+      search.colorByArea === undefined
+        ? undefined
+        : search.colorByArea === true ||
+          search.colorByArea === "true" ||
+          search.colorByArea === "1",
   }),
   component: MapPage,
 });

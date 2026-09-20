@@ -1,15 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import {
+  useAlignmentEdges,
+  useAlignmentForest,
+  useAreas,
+  useCreateSubject,
+  useSubjects,
+} from "@/lib/queries";
+import type { AlignmentEdge, AlignmentNode, MapLens } from "@/lib/derive";
+import type { GraphLayoutKind, MapViewMode, OrphanFilter } from "@/lib/graph-model";
 import { childTypesFor, inferChildRelation, typeLabel } from "@/lib/production-ui-types";
-import type { SubjectType } from "@/lib/production-ui-types";
-import { useAlignmentForest, useCreateSubject } from "@/lib/queries";
-import type { AlignmentNode, MapLens } from "@/lib/derive";
+import type { AreaRow, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { TreeNode } from "@/components/primitives/tree-node";
-import { TreeSkeleton } from "@/components/primitives/skeletons";
+import { TreeSkeleton, GraphSkeleton } from "@/components/primitives/skeletons";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { SubjectDetail } from "@/components/detail/subject-detail";
+import { AlignmentGraph } from "@/components/graph/alignment-graph";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useDirty } from "@/components/shell/app-shell";
 import { loadExpanded, saveExpanded, loadView, saveView } from "@/lib/view-state";
 import { MapIcon } from "lucide-react";
@@ -21,13 +37,37 @@ const LENSES: { id: MapLens; label: string }[] = [
   { id: "Task", label: "Tasks" },
 ];
 
+const EMPTY_SUBJECTS: SubjectListItem[] = [];
+const EMPTY_EDGES: AlignmentEdge[] = [];
+const EMPTY_AREAS: AreaRow[] = [];
+
+type MapStored = {
+  archived?: boolean;
+  lens?: MapLens;
+  selected?: string;
+  view?: MapViewMode;
+  layout?: GraphLayoutKind;
+  orphans?: OrphanFilter;
+  area?: string;
+  colorByArea?: boolean;
+};
+
 export function MapPage() {
   const search = useSearch({ from: "/map" });
   const navigate = useNavigate({ from: "/map" });
   const archived = Boolean(search.archived);
   const lens = (search.lens ?? "all") as MapLens;
   const selected = search.selected as string | undefined;
+  const view: MapViewMode = search.view === "graph" ? "graph" : "outline";
+  const layout: GraphLayoutKind = search.layout === "force" ? "force" : "layered";
+  const orphans: OrphanFilter =
+    search.orphans === "only" || search.orphans === "hide" ? search.orphans : "all";
+  const area = search.area;
+  const colorByArea = Boolean(search.colorByArea);
   const { data, isLoading, isError } = useAlignmentForest(archived, lens);
+  const subjectsQuery = useSubjects(undefined, archived);
+  const edgesQuery = useAlignmentEdges(archived);
+  const areasQuery = useAreas();
   const { setDirty, requestNavigation } = useDirty();
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded());
   const [creating, setCreating] = useState<{ parentId: string } | null>(null);
@@ -37,21 +77,39 @@ export function MapPage() {
   }, [expanded]);
 
   useEffect(() => {
-    saveView("map", { archived, lens, selected });
-  }, [archived, lens, selected]);
+    saveView("map", {
+      archived,
+      lens,
+      selected,
+      view,
+      layout,
+      orphans,
+      area,
+      colorByArea,
+    } satisfies MapStored);
+  }, [archived, lens, selected, view, layout, orphans, area, colorByArea]);
 
   useEffect(() => {
-    const stored = loadView<{ archived?: boolean; lens?: MapLens; selected?: string }>("map", {});
-    if (!search.selected && stored.selected) {
-      void navigate({
-        search: {
-          selected: stored.selected,
-          lens: (search.lens as MapLens) ?? stored.lens ?? "all",
-          archived: search.archived ?? stored.archived ?? false,
-        },
-        replace: true,
-      });
+    const stored = loadView<MapStored>("map", {});
+    const patch: MapStored = {};
+    if (!search.selected && stored.selected) patch.selected = stored.selected;
+    if (!search.view && stored.view) patch.view = stored.view;
+    if (!search.layout && stored.layout) patch.layout = stored.layout;
+    if (!search.orphans && stored.orphans) patch.orphans = stored.orphans;
+    if (!search.area && stored.area) patch.area = stored.area;
+    if (search.colorByArea === undefined && stored.colorByArea) {
+      patch.colorByArea = stored.colorByArea;
     }
+    if (Object.keys(patch).length === 0) return;
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        ...patch,
+        lens: (search.lens as MapLens) ?? stored.lens ?? "all",
+        archived: search.archived ?? stored.archived ?? false,
+      }),
+      replace: true,
+    });
   }, []); // restore once
 
   useEffect(() => {
@@ -89,87 +147,192 @@ export function MapPage() {
   }, [data, selected]);
   void selectedTitle;
 
+  const graphLoading =
+    subjectsQuery.isLoading || edgesQuery.isLoading || areasQuery.isLoading;
+  const graphError = subjectsQuery.isError || edgesQuery.isError;
+
   return (
     <div className="flex h-full min-h-0">
       <div
         className="flex min-w-0 flex-1 flex-col"
         onKeyDown={(e) => {
-          if (!selected) return;
+          if (view !== "outline" || !selected) return;
           if (e.key === "Enter" && !(e.target instanceof HTMLInputElement)) {
             e.preventDefault();
             setCreating({ parentId: selected });
           }
         }}
       >
-        <header className="flex items-center justify-between gap-3 border-b px-6 py-3">
-          <div>
-            <h1 className="font-heading text-2xl">Map</h1>
-            <p className="text-xs text-muted-foreground">
-              Alignment graph as an outline. A node may appear under more than one parent.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-lg bg-muted p-0.5">
-              {LENSES.map((l) => (
-                <button
-                  key={l.id}
-                  type="button"
-                  onClick={() =>
-                    void navigate({ search: (prev) => ({ ...prev, lens: l.id }) })
-                  }
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                    lens === l.id ? "bg-background shadow-sm" : "text-muted-foreground"
-                  }`}
-                >
-                  {l.label}
-                </button>
-              ))}
+        <header className="flex flex-col gap-2 border-b px-6 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h1 className="font-heading text-2xl">Map</h1>
+              <p className="text-xs text-muted-foreground">
+                {view === "graph"
+                  ? "Alignment graph. Area colors grouping, never edges."
+                  : "Alignment graph as an outline. A node may appear under more than one parent."}
+              </p>
             </div>
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={archived}
-                onChange={(e) =>
-                  void navigate({ search: (prev) => ({ ...prev, archived: e.target.checked }) })
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Segmented
+                ariaLabel="Map view"
+                value={view}
+                options={[
+                  { id: "outline", label: "Outline" },
+                  { id: "graph", label: "Graph" },
+                ]}
+                onChange={(id) =>
+                  void navigate({ search: (prev) => ({ ...prev, view: id }) })
                 }
               />
-              Archived
-            </label>
+              <Segmented
+                ariaLabel="Type lens"
+                value={lens}
+                options={LENSES}
+                onChange={(id) =>
+                  void navigate({ search: (prev) => ({ ...prev, lens: id }) })
+                }
+              />
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={archived}
+                  onChange={(e) =>
+                    void navigate({
+                      search: (prev) => ({ ...prev, archived: e.target.checked }),
+                    })
+                  }
+                />
+                Archived
+              </label>
+            </div>
           </div>
+          {view === "graph" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Segmented
+                ariaLabel="Graph layout"
+                value={layout}
+                options={[
+                  { id: "layered", label: "Layered" },
+                  { id: "force", label: "Force" },
+                ]}
+                onChange={(id) =>
+                  void navigate({ search: (prev) => ({ ...prev, layout: id }) })
+                }
+              />
+              <Segmented
+                ariaLabel="Orphan filter"
+                value={orphans}
+                options={[
+                  { id: "all", label: "All" },
+                  { id: "hide", label: "Hide orphans" },
+                  { id: "only", label: "Orphans" },
+                ]}
+                onChange={(id) =>
+                  void navigate({ search: (prev) => ({ ...prev, orphans: id }) })
+                }
+              />
+              <Select
+                value={area ?? "all"}
+                onValueChange={(value) =>
+                  void navigate({
+                    search: (prev) => ({
+                      ...prev,
+                      area: value === "all" ? undefined : value,
+                    }),
+                  })
+                }
+              >
+                <SelectTrigger size="sm" className="h-7 min-w-36">
+                  <SelectValue placeholder="Area" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All areas</SelectItem>
+                  {(areasQuery.data ?? []).map((a) => (
+                    <SelectItem key={a.id} value={a.urn}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Switch
+                  size="sm"
+                  checked={colorByArea}
+                  onCheckedChange={(checked) =>
+                    void navigate({
+                      search: (prev) => ({ ...prev, colorByArea: checked }),
+                    })
+                  }
+                />
+                Color by Area
+              </label>
+            </div>
+          ) : null}
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-          {isLoading ? <TreeSkeleton /> : null}
-          {isError ? (
-            <EmptyState
-              tone="error"
-              icon={MapIcon}
-              title="Map failed to load"
-              description="This is not an empty graph — the reader never returned."
-            />
-          ) : null}
-          {data && data.length === 0 ? (
-            <EmptyState
-              icon={MapIcon}
-              title="Nothing on the map"
-              description="Create an Identity Statement to grow the alignment graph from."
-            />
-          ) : null}
-          {data?.map((n) => (
-            <MapBranch
-              key={n.instanceKey}
-              node={n}
-              expanded={expanded}
-              selected={selected}
-              creating={creating}
-              onToggle={toggle}
-              onSelect={select}
-              onCreate={(node) =>
-                setCreating({ parentId: node.id })
-              }
-              onCancelCreate={() => setCreating(null)}
-            />
-          ))}
-        </div>
+        {view === "graph" ? (
+          <div className="min-h-0 flex-1">
+            {graphLoading ? (
+              <div className="h-full p-6">
+                <GraphSkeleton />
+              </div>
+            ) : null}
+            {graphError ? (
+              <EmptyState
+                tone="error"
+                icon={MapIcon}
+                title="Graph failed to load"
+                description="This is not an empty graph — the reader never returned."
+              />
+            ) : null}
+            {!graphLoading && !graphError ? (
+              <AlignmentGraph
+                subjects={subjectsQuery.data ?? EMPTY_SUBJECTS}
+                edges={edgesQuery.data ?? EMPTY_EDGES}
+                areas={areasQuery.data ?? EMPTY_AREAS}
+                lens={lens}
+                orphans={orphans}
+                area={area}
+                colorByArea={colorByArea}
+                layout={layout}
+                selected={selected}
+                onSelect={select}
+              />
+            ) : null}
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+            {isLoading ? <TreeSkeleton /> : null}
+            {isError ? (
+              <EmptyState
+                tone="error"
+                icon={MapIcon}
+                title="Map failed to load"
+                description="This is not an empty graph — the reader never returned."
+              />
+            ) : null}
+            {data && data.length === 0 ? (
+              <EmptyState
+                icon={MapIcon}
+                title="Nothing on the map"
+                description="Create an Identity Statement to grow the alignment graph from."
+              />
+            ) : null}
+            {data?.map((n) => (
+              <MapBranch
+                key={n.instanceKey}
+                node={n}
+                expanded={expanded}
+                selected={selected}
+                creating={creating}
+                onToggle={toggle}
+                onSelect={select}
+                onCreate={(node) => setCreating({ parentId: node.id })}
+                onCancelCreate={() => setCreating(null)}
+              />
+            ))}
+          </div>
+        )}
       </div>
       <aside
         className={`shrink-0 overflow-hidden border-l bg-card shadow-(--shadow-peek) transition-[width] duration-200 ease-hearth ${
@@ -190,6 +353,36 @@ export function MapPage() {
           </div>
         ) : null}
       </aside>
+    </div>
+  );
+}
+
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+}: {
+  value: T;
+  options: { id: T; label: string }[];
+  onChange: (id: T) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div role="group" aria-label={ariaLabel} className="flex rounded-lg bg-muted p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          aria-pressed={value === o.id}
+          onClick={() => onChange(o.id)}
+          className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+            value === o.id ? "bg-background shadow-sm" : "text-muted-foreground"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -277,9 +470,7 @@ function InlineCreate({
   async function save() {
     if (!title.trim()) return;
     const parentRef = isSibling ? parent.parentId : parent.id;
-    const parentType = isSibling
-      ? undefined
-      : parent.subject.type;
+    const parentType = isSibling ? undefined : parent.subject.type;
     const relation =
       parentRef && parentType ? inferChildRelation(type, parentType) : undefined;
     await create.mutateAsync({

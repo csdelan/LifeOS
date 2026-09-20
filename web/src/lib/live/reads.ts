@@ -129,6 +129,9 @@ export const liveReads: LifeOsReads = {
   },
 
   async edges(opts) {
+    // TODO(api): GET /api/edges is the bulk alignment-edge read for BROWSE-1.
+    // Confirm it returns serves / results_in / supersedes for every subject (not a
+    // per-subject walk). Do not add a second graph-specific store.
     const data = await unwrap(
       api().GET("/api/edges", {
         params: { query: { includeArchived: opts?.includeArchived } },
