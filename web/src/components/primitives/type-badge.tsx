@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
-import { typeTone, TYPE_GLYPH, typeLabel } from "@/lib/subject-meta";
+import { typeTone, typeLabel } from "@/lib/subject-meta";
 import type { SubjectType } from "@/lib/production-ui-types";
+import { TypeIcon } from "@/components/primitives/type-icon";
 
 export function TypeBadge({
   type,
@@ -19,7 +20,7 @@ export function TypeBadge({
         className,
       )}
     >
-      {withGlyph ? <span aria-hidden>{TYPE_GLYPH[type]}</span> : null}
+      {withGlyph ? <TypeIcon type={type} className="size-3" /> : null}
       {typeLabel(type)}
     </span>
   );

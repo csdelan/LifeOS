@@ -2,7 +2,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DateChip } from "@/components/primitives/date-chip";
 import { StatusPill } from "@/components/primitives/status-pill";
-import { TYPE_GLYPH, typeTone } from "@/lib/subject-meta";
+import { TypeIcon } from "@/components/primitives/type-icon";
 import type { SubjectListItem } from "@/lib/production-ui-types";
 import { defaultStatus } from "@/lib/production-ui-types";
 
@@ -65,8 +65,8 @@ export function TreeNode({
           className="flex min-w-0 items-center gap-2 py-0.5 text-left"
           onClick={onSelect}
         >
-          <span className={cn("w-4 shrink-0 text-center", typeTone(subject.type))} aria-hidden>
-            {TYPE_GLYPH[subject.type]}
+          <span className="flex w-4 shrink-0 items-center justify-center" aria-hidden>
+            <TypeIcon type={subject.type} className="size-3.5" />
           </span>
           <span className="truncate font-medium">{subject.title}</span>
         </button>

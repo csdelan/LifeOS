@@ -61,3 +61,188 @@
 .lifeos-graph .react-flow__attribution {
   font-size: 9px;
 }
+
+/* Transparent xyflow chrome — the shell inside .lifeos-node is the card. */
+.lifeos-graph .react-flow__node-subject {
+  background: transparent;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/*
+ * Per-type graph shells. `--node-accent` is the type color, or the area
+ * color when Color by area is on. Shape/texture still follows data-type.
+ * Edit the matching `[data-type="…"]` block; backdrops are in node-backdrop.tsx.
+ */
+.lifeos-node {
+  --node-accent: var(--muted-foreground);
+  height: 100%;
+  width: 100%;
+}
+
+.lifeos-node__shell {
+  position: relative;
+  display: flex;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: color-mix(in oklch, var(--node-accent) 11%, var(--card));
+  box-shadow: var(--shadow-lift);
+  color: var(--node-accent);
+  outline: 1px solid color-mix(in oklch, var(--node-accent) 28%, var(--border));
+  outline-offset: -1px;
+}
+
+.lifeos-node.is-selected .lifeos-node__shell {
+  outline: 2px solid color-mix(in oklch, var(--primary) 70%, var(--node-accent));
+  outline-offset: 1px;
+}
+
+.lifeos-node__art {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  color: var(--node-accent);
+}
+
+.lifeos-node__body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.lifeos-node[data-type="Value"] .lifeos-node__shell {
+  background: color-mix(in oklch, var(--node-accent) 16%, var(--card));
+  clip-path: polygon(
+    10px 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    10px 100%,
+    0 calc(100% - 10px),
+    0 10px
+  );
+  outline: none;
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--node-accent) 40%, var(--border));
+}
+
+.lifeos-node[data-type="Value"] .lifeos-node__body {
+  padding-inline: 1.05rem;
+}
+
+.lifeos-node[data-type="Value"].is-selected .lifeos-node__shell {
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 70%, var(--node-accent));
+}
+
+.lifeos-node[data-type="Goal"] .lifeos-node__shell {
+  overflow: visible;
+  border-radius: 1.35rem;
+  background: color-mix(in oklch, var(--node-accent) 12%, var(--card));
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--node-accent) 32%, var(--border)),
+    0 0 0 5px color-mix(in oklch, var(--node-accent) 8%, transparent),
+    var(--shadow-lift);
+  outline: none;
+}
+
+.lifeos-node[data-type="Project"] .lifeos-node__shell {
+  border-radius: 0.4rem 0.7rem 0.55rem 0.55rem;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--node-accent) 22%, var(--card)) 0 11px,
+      color-mix(in oklch, var(--node-accent) 9%, var(--card)) 11px 100%
+    );
+}
+
+.lifeos-node[data-type="Task"] .lifeos-node__shell {
+  border-radius: 0.3rem 0.85rem 0.85rem 0.3rem;
+  background: color-mix(in oklch, var(--node-accent) 6%, var(--card));
+  box-shadow: inset 4px 0 0 var(--node-accent), var(--shadow-lift);
+  outline-color: color-mix(in oklch, var(--node-accent) 18%, var(--border));
+}
+
+.lifeos-node[data-type="Problem"] .lifeos-node__shell {
+  border-radius: 0.7rem 0 0.7rem 0.7rem;
+  background: color-mix(in oklch, var(--node-accent) 13%, var(--card));
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+}
+
+.lifeos-node[data-type="Idea"] .lifeos-node__shell {
+  overflow: visible;
+  border-radius: 1.6rem 0.7rem 1.6rem 0.7rem;
+  background: color-mix(in oklch, var(--node-accent) 15%, var(--card));
+  box-shadow:
+    0 0 18px -6px color-mix(in oklch, var(--node-accent) 45%, transparent),
+    var(--shadow-lift);
+}
+
+.lifeos-node[data-type="Decision"] .lifeos-node__shell {
+  border-radius: 0.65rem;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--node-accent) 7%, var(--card)) 0 50%,
+    color-mix(in oklch, var(--node-accent) 16%, var(--card)) 50% 100%
+  );
+}
+
+.lifeos-node[data-type="Commitment"] .lifeos-node__shell {
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--node-accent) 11%, var(--card));
+}
+
+.lifeos-node[data-type="Constraint"] .lifeos-node__shell {
+  border-radius: 0.15rem;
+  outline-width: 1.5px;
+  outline-color: color-mix(in oklch, var(--node-accent) 45%, var(--border));
+  background: color-mix(in oklch, var(--node-accent) 8%, var(--card));
+}
+
+.lifeos-node[data-type="Person"] .lifeos-node__shell {
+  border-radius: 1.15rem 1.7rem 1.15rem 1.7rem;
+  background: color-mix(in oklch, var(--node-accent) 12%, var(--card));
+}
+
+.lifeos-node[data-type="Area"] .lifeos-node__shell {
+  border-radius: 1.55rem / 1.15rem;
+  background: color-mix(in oklch, var(--node-accent) 11%, var(--card));
+}
+
+.lifeos-node[data-type="Area"] .lifeos-node__body,
+.lifeos-node[data-type="Commitment"] .lifeos-node__body {
+  padding-inline: 1.15rem;
+}
+
+.lifeos-node[data-type="Habit"] .lifeos-node__shell {
+  border-radius: 1.1rem;
+  outline-style: dashed;
+  outline-width: 1.5px;
+  background: color-mix(in oklch, var(--node-accent) 10%, var(--card));
+}
+
+.lifeos-node[data-type="Appointment"] .lifeos-node__shell {
+  border-radius: 0.55rem;
+  background:
+    linear-gradient(
+      180deg,
+      var(--node-accent) 0 11px,
+      color-mix(in oklch, var(--node-accent) 8%, var(--card)) 11px 100%
+    );
+}
+
+.lifeos-node[data-type="Appointment"] .lifeos-node__body {
+  padding-top: 0.7rem;
+}
+
+.lifeos-node[data-type="Season"] .lifeos-node__shell {
+  border-radius: 1.8rem 0.55rem 1.4rem 0.9rem;
+  background: color-mix(in oklch, var(--node-accent) 12%, var(--card));
+}

@@ -139,7 +139,7 @@ export function estimateNodeSize(
     292,
     Math.max(196, 168 + Math.min(title.length, 32) * 3.1 + Math.min(degree, 6) * 8),
   );
-  return { width, height: 72 };
+  return { width, height: 84 };
 }
 
 export const AREA_PALETTE = [

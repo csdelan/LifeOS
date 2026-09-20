@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { toast } from "sonner";
 import { InboxIcon, SparklesIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,29 @@ import { TypeBadge } from "@/components/primitives/type-badge";
 import { CardSkeleton, ListSkeleton, TreeSkeleton } from "@/components/primitives/skeletons";
 import { SubjectDetail } from "@/components/detail/subject-detail";
 import { todayIso, addDays } from "@/lib/dates";
-import type { SubjectListItem } from "@/lib/production-ui-types";
+import type { SubjectListItem, SubjectType } from "@/lib/production-ui-types";
+import { typeLabel } from "@/lib/production-ui-types";
+import { typeAccent } from "@/lib/subject-meta";
+import { NodeBackdrop } from "@/components/graph/node-backdrop";
+import { TypeIcon } from "@/components/primitives/type-icon";
+import "@/components/graph/graph.css";
+
+const GALLERY_TYPES: SubjectType[] = [
+  "Value",
+  "Goal",
+  "Project",
+  "Task",
+  "Problem",
+  "Idea",
+  "Decision",
+  "Commitment",
+  "Constraint",
+  "Person",
+  "Area",
+  "Habit",
+  "Appointment",
+  "Season",
+];
 
 const sample: SubjectListItem = {
   id: "gallery-task",
@@ -81,10 +104,9 @@ export function GalleryPage() {
 
         <Section title="Tag · StatusPill · DateChip · TypeBadge">
           <div className="flex flex-wrap items-center gap-2">
-            <TypeBadge type="Value" />
-            <TypeBadge type="Goal" />
-            <TypeBadge type="Project" />
-            <TypeBadge type="Task" />
+            {GALLERY_TYPES.map((type) => (
+              <TypeBadge key={type} type={type} />
+            ))}
             <StatusPill status="Active" />
             <StatusPill status="In progress" />
             <StatusPill status="Waiting" />
@@ -96,6 +118,44 @@ export function GalleryPage() {
             <Tag onRemove={() => toast("Removed")}>focus</Tag>
             <Badge>Badge</Badge>
             <Switch defaultChecked />
+          </div>
+        </Section>
+
+        <Section title="Graph node shells">
+          <p className="mb-3 text-sm text-muted-foreground">
+            First-pass per-type cards. Edit shells in{" "}
+            <code className="text-xs">graph.css</code>, watermarks in{" "}
+            <code className="text-xs">node-backdrop.tsx</code>, icons in{" "}
+            <code className="text-xs">type-icon.tsx</code>.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {GALLERY_TYPES.map((type) => (
+              <div
+                key={type}
+                className="lifeos-node"
+                data-type={type}
+                style={
+                  {
+                    "--node-accent": typeAccent(type),
+                    width: 220,
+                    height: 84,
+                  } as CSSProperties
+                }
+              >
+                <div className="lifeos-node__shell">
+                  <div className="lifeos-node__art">
+                    <NodeBackdrop type={type} />
+                  </div>
+                  <div className="lifeos-node__body">
+                    <span className="flex items-center gap-1.5">
+                      <TypeIcon type={type} className="size-3.5" />
+                      <TypeBadge type={type} withGlyph={false} />
+                    </span>
+                    <p className="truncate text-sm font-medium text-foreground">{typeLabel(type)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </Section>
 

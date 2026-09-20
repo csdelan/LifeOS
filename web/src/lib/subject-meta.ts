@@ -3,22 +3,7 @@ import { typeLabel } from "@/lib/production-ui-types";
 
 export { typeLabel };
 
-export const TYPE_GLYPH: Record<SubjectType, string> = {
-  Value: "◈",
-  Goal: "◎",
-  Problem: "?",
-  Project: "▣",
-  Task: "•",
-  Commitment: "↔",
-  Decision: "⊃",
-  Idea: "✧",
-  Person: "☺",
-  Constraint: "⊓",
-  Season: "◐",
-  Area: "◻",
-  Habit: "↻",
-  Appointment: "◷",
-};
+/** Icons live in `components/primitives/type-icon.tsx` (Lucide). */
 
 export const ALIGNMENT_TYPES: SubjectType[] = ["Value", "Goal", "Project", "Task"];
 
@@ -42,6 +27,16 @@ export function typeTone(type: SubjectType): string {
       return "text-[var(--type-commitment)]";
     case "Constraint":
       return "text-[var(--type-constraint)]";
+    case "Person":
+      return "text-[var(--type-person)]";
+    case "Area":
+      return "text-[var(--type-area)]";
+    case "Season":
+      return "text-[var(--type-season)]";
+    case "Habit":
+      return "text-[var(--type-habit)]";
+    case "Appointment":
+      return "text-[var(--type-appointment)]";
     default:
       return "text-muted-foreground";
   }
@@ -65,6 +60,18 @@ export function typeSurface(type: SubjectType): string {
       return "bg-[var(--type-decision)]/12 text-[var(--type-decision)]";
     case "Commitment":
       return "bg-[var(--type-commitment)]/12 text-[var(--type-commitment)]";
+    case "Constraint":
+      return "bg-[var(--type-constraint)]/12 text-[var(--type-constraint)]";
+    case "Person":
+      return "bg-[var(--type-person)]/12 text-[var(--type-person)]";
+    case "Area":
+      return "bg-[var(--type-area)]/12 text-[var(--type-area)]";
+    case "Season":
+      return "bg-[var(--type-season)]/12 text-[var(--type-season)]";
+    case "Habit":
+      return "bg-[var(--type-habit)]/12 text-[var(--type-habit)]";
+    case "Appointment":
+      return "bg-[var(--type-appointment)]/12 text-[var(--type-appointment)]";
     default:
       return "bg-muted text-muted-foreground";
   }
@@ -91,6 +98,16 @@ export function typeAccent(type: SubjectType): string {
       return "var(--type-commitment)";
     case "Constraint":
       return "var(--type-constraint)";
+    case "Person":
+      return "var(--type-person)";
+    case "Area":
+      return "var(--type-area)";
+    case "Season":
+      return "var(--type-season)";
+    case "Habit":
+      return "var(--type-habit)";
+    case "Appointment":
+      return "var(--type-appointment)";
     default:
       return "var(--muted-foreground)";
   }
