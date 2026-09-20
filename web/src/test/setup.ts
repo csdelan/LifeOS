@@ -37,3 +37,16 @@ if (!window.matchMedia) {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
+
+if (typeof URL.createObjectURL !== "function") {
+  const urls = new Map<string, Blob>();
+  let n = 0;
+  URL.createObjectURL = (blob: Blob) => {
+    const url = `blob:mock-${n++}`;
+    urls.set(url, blob);
+    return url;
+  };
+  URL.revokeObjectURL = (url: string) => {
+    urls.delete(url);
+  };
+}

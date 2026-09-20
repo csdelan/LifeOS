@@ -113,6 +113,20 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       notify("Captured to Inbox");
     },
 
+    async captureDocument(_req) {
+      // TODO(api): multipart POST /api/capture/document — kernel `bsk attach`.
+      void _req;
+      toast.error("Document capture is not on the live API yet.");
+      throw new Error("Document capture is not on the live API yet.");
+    },
+
+    async captureVoice(_req) {
+      // TODO(api): multipart POST /api/capture/voice — kernel `bsk voice`.
+      void _req;
+      toast.error("Voice capture is not on the live API yet.");
+      throw new Error("Voice capture is not on the live API yet.");
+    },
+
     async recur(_habit, _spec) {
       // TODO(api): POST /api/habits/{id}/recur — kernel has no recurrence verb yet.
       toast.error("Recurrence is not on the live API yet.");

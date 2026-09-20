@@ -8,6 +8,7 @@ import {
   HistoryIcon,
   LayoutListIcon,
   Link2Icon,
+  PaperclipIcon,
   PlusIcon,
   TagIcon,
   XIcon,
@@ -32,6 +33,7 @@ import { TypeBadge } from "@/components/primitives/type-badge";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { SubjectTypeFields } from "@/components/create/subject-type-fields";
 import { useCreateActions } from "@/components/create/create-context";
+import { AttachmentChip } from "@/components/artifacts/attachment-chip";
 import { StreakGrid } from "@/components/habits/streak-grid";
 import { JournalEditor, looksLikeHtml } from "@/components/journal/journal-editor";
 import {
@@ -42,6 +44,7 @@ import {
   useOccurrences,
   useRelations,
   useSubject,
+  useSubjectFiles,
   useSubjectTags,
   useSubjects,
   useTagUniverse,
@@ -81,6 +84,7 @@ export function SubjectDetail({
   const { data: list } = useListItem(subjectId);
   const { data: rels } = useRelations(subjectId);
   const { data: tags } = useSubjectTags(subjectId);
+  const { data: files } = useSubjectFiles(subjectId);
   const { data: habits } = useHabits();
   const { data: occurrences } = useOccurrences(subjectId);
   const [editing, setEditing] = useState(false);
@@ -298,6 +302,26 @@ export function SubjectDetail({
           <TabsContent value="overview">
             <div className="space-y-5">
               <SubjectTypeFields form={form} editing={editing} />
+              {(files ?? []).length > 0 ? (
+                <section>
+                  <p className="type-scale-section text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5">
+                      <PaperclipIcon className="size-3.5" aria-hidden />
+                      Files
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Related documents and kept audio. Open plays the managed copy.
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {(files ?? []).map((file) => (
+                      <li key={file.id}>
+                        <AttachmentChip artifact={file} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
               {subject.type === "Habit" ? (
                 <StreakGrid
                   occurrences={occurrences ?? []}

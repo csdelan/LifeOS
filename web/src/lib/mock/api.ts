@@ -16,6 +16,7 @@ import {
 } from "@/lib/derive";
 import type {
   AreaRow,
+  ArtifactRecord,
   HabitOccurrenceRow,
   HabitRow,
   InboxItem,
@@ -30,7 +31,13 @@ import type {
 } from "@/lib/production-ui-types";
 import { composeRecap, type RecapSection } from "@/lib/review-recap";
 import { tagUniverse, toRelationEdge } from "@/lib/mock/seed";
-import { ensureReview, ensureReviewDocs, getState as storeState } from "@/lib/mock/store";
+import {
+  ensureReview,
+  ensureReviewDocs,
+  filesForSubject,
+  getArtifact,
+  getState as storeState,
+} from "@/lib/mock/store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 
@@ -62,6 +69,21 @@ export interface LifeOsReads {
   journal(id: string): Promise<JournalEntry[]>;
   history(id: string): Promise<StatusHistoryEntry[]>;
   inbox(): Promise<InboxItem[]>;
+  /**
+   * Artifact metadata (no payload).
+   * // TODO(api): GET /api/artifacts/{id} from `bsk.v_artifact`.
+   */
+  artifact(id: string): Promise<ArtifactRecord | null>;
+  /**
+   * URL that streams the managed bytes.
+   * Mock: the retained object URL. // TODO(api): kernel bytes-fetch / `bsk artifact get`.
+   */
+  artifactBytesUrl(id: string): Promise<string | null>;
+  /**
+   * Binary artifacts related onto a subject (the Files section).
+   * // TODO(api): GET /api/subjects/{id}/files
+   */
+  subjectFiles(subjectId: string): Promise<ArtifactRecord[]>;
   areas(): Promise<AreaRow[]>;
   people(): Promise<PersonRow[]>;
   habits(): Promise<HabitRow[]>;
@@ -142,6 +164,22 @@ export const mockReads: LifeOsReads = {
     return [...storeState().inbox].sort((a, b) =>
       b.triagedAt.localeCompare(a.triagedAt),
     );
+  },
+
+  async artifact(id: string): Promise<ArtifactRecord | null> {
+    await wait();
+    return getArtifact(id) ?? null;
+  },
+
+  async artifactBytesUrl(id: string): Promise<string | null> {
+    await wait();
+    // TODO(api): stream from the kernel's bytes-fetch / export path.
+    return getArtifact(id)?.bytesUrl ?? null;
+  },
+
+  async subjectFiles(subjectId: string): Promise<ArtifactRecord[]> {
+    await wait();
+    return filesForSubject(subjectId);
   },
 
   async areas(): Promise<AreaRow[]> {

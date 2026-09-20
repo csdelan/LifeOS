@@ -2,7 +2,7 @@
 [Bb]in/
 [Oo]bj/
 [Oo]ut/
-artifacts/
+/artifacts/
 
 # .NET / Visual Studio
 .vs/

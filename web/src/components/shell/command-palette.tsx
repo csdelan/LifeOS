@@ -17,6 +17,7 @@ import {
   LayoutDashboardIcon,
   ListTodoIcon,
   MapIcon,
+  MicIcon,
   MoonIcon,
   PlusIcon,
   RepeatIcon,
@@ -33,11 +34,13 @@ export function CommandPalette({
   onOpenChange,
   onNew,
   onCapture,
+  onVoice,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNew: () => void;
   onCapture: () => void;
+  onVoice: () => void;
 }) {
   const navigate = useNavigate();
   const { setTheme, theme } = useTheme();
@@ -103,6 +106,15 @@ export function CommandPalette({
           >
             Capture note / idea / problem
             <CommandShortcut>Alt+N</CommandShortcut>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              onOpenChange(false);
+              onVoice();
+            }}
+          >
+            <MicIcon /> Voice capture
+            <CommandShortcut>Alt+V</CommandShortcut>
           </CommandItem>
           <CommandItem
             onSelect={() => {

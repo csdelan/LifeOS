@@ -9,6 +9,7 @@ import type { RecapSection } from "@/lib/review-recap";
 import type { LifeOsReads } from "@/lib/mock/api";
 import type {
   AreaRow,
+  ArtifactRecord,
   HabitOccurrenceRow,
   HabitRow,
   InboxItem,
@@ -99,6 +100,24 @@ export const liveReads: LifeOsReads = {
   async inbox() {
     const data = await unwrap(api().GET("/api/inbox"));
     return asType<InboxItem[]>(data);
+  },
+
+  async artifact(_id) {
+    // TODO(api): GET /api/artifacts/{id} — metadata from `bsk.v_artifact`.
+    void _id;
+    return asType<ArtifactRecord | null>(null);
+  },
+
+  async artifactBytesUrl(id) {
+    // TODO(api): stream from the kernel's bytes-fetch / `bsk artifact get` export path.
+    void id;
+    return null;
+  },
+
+  async subjectFiles(_subjectId) {
+    // TODO(api): GET /api/subjects/{id}/files — artifacts related onto the subject.
+    void _subjectId;
+    return asType<ArtifactRecord[]>([]);
   },
 
   async areas() {

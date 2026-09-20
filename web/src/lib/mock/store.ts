@@ -1,6 +1,15 @@
+import {
+  objectUrlFor,
+  revokeIfBlobUrl,
+} from "@/lib/artifacts";
+import { deriveTitle } from "@/lib/capture";
 import { nowIso, slugify, todayIso, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
 import type {
+  ArtifactRecord,
+  BinaryCaptureResult,
+  CaptureKind,
   CreatedSubject,
+  EventRelation,
   NewSubjectRequest,
   RecurrenceSpec,
   Relation,
@@ -31,8 +40,15 @@ function emit() {
 }
 
 export function resetStore() {
+  revokeArtifacts(state);
   state = createSeed();
   emit();
+}
+
+function revokeArtifacts(s: MockState) {
+  for (const artifact of Object.values(s.artifacts)) {
+    revokeIfBlobUrl(artifact.bytesUrl);
+  }
 }
 
 export function byId(id: string): SubjectListItem | undefined {
@@ -420,17 +436,301 @@ export function dropInboxItem(itemRef: string) {
 }
 
 export function captureNote(text: string) {
+  const eventId = newId();
+  const occurredAt = nowIso();
+  state.events = [
+    { id: eventId, kind: "note", content: text, occurredAt },
+    ...state.events,
+  ];
   state.inbox = [
     {
-      itemId: newId(),
+      itemId: eventId,
       itemKind: "event",
-      triagedAt: nowIso(),
+      triagedAt: occurredAt,
       eventKind: "note",
       eventContent: text,
     },
     ...state.inbox,
   ];
   emit();
+}
+
+function putArtifact(opts: {
+  eventId: string;
+  eventKind: string;
+  blob: Blob;
+  filename: string;
+  contentType: string;
+  durationSeconds?: number | null;
+  sha256?: string | null;
+}): ArtifactRecord {
+  const id = newId();
+  const record: ArtifactRecord = {
+    id,
+    eventId: opts.eventId,
+    eventKind: opts.eventKind,
+    filename: opts.filename,
+    contentType: opts.contentType || opts.blob.type || "application/octet-stream",
+    byteSize: opts.blob.size,
+    sha256: opts.sha256 ?? null,
+    hasBytes: true,
+    bytesUrl: objectUrlFor(opts.blob),
+    durationSeconds: opts.durationSeconds ?? null,
+  };
+  state.artifacts = { ...state.artifacts, [id]: record };
+  return record;
+}
+
+function addEventRelation(eventId: string, subjectId: string, relation: EventRelation = "concerns") {
+  const exists = state.eventRelations.some(
+    (r) => r.eventId === eventId && r.subjectId === subjectId && r.relation === relation,
+  );
+  if (exists) return;
+  state.eventRelations = [...state.eventRelations, { eventId, subjectId, relation }];
+  const event = state.events.find((e) => e.id === eventId);
+  if (!event) return;
+  const row = {
+    kind: event.kind,
+    occurredAt: event.occurredAt,
+    eventId: event.id,
+    content: event.content,
+  };
+  state.concerning[subjectId] = [row, ...(state.concerning[subjectId] ?? [])];
+}
+
+export function relateEvent(eventId: string, subjectRef: string, as?: EventRelation) {
+  const subject = byRef(subjectRef);
+  if (subject) {
+    const event = state.events.find((e) => e.id === eventId);
+    const inbox = state.inbox.find((i) => i.itemId === eventId);
+    if (!event && inbox) {
+      state.events = [
+        {
+          id: eventId,
+          kind: inbox.eventKind ?? "note",
+          content: inbox.eventContent ?? null,
+          occurredAt: inbox.triagedAt,
+          artifactId: inbox.attachment?.id,
+        },
+        ...state.events,
+      ];
+      if (inbox.attachment) {
+        state.artifacts = {
+          ...state.artifacts,
+          [inbox.attachment.id]: { ...inbox.attachment, eventId },
+        };
+      }
+    }
+    addEventRelation(eventId, subject.id, as ?? "concerns");
+  }
+  removeInbox(eventId);
+}
+
+export function getArtifact(id: string): ArtifactRecord | undefined {
+  return state.artifacts[id] ?? Object.values(state.artifacts).find((a) => a.eventId === id);
+}
+
+export function filesForSubject(subjectRef: string): ArtifactRecord[] {
+  const subject = byRef(subjectRef);
+  if (!subject) return [];
+  const eventIds = new Set(
+    state.eventRelations.filter((r) => r.subjectId === subject.id).map((r) => r.eventId),
+  );
+  return Object.values(state.artifacts).filter(
+    (a) => a.hasBytes && (eventIds.has(a.eventId) || eventIds.has(a.id)),
+  );
+}
+
+export function captureDocument(req: {
+  file: File;
+  description: string;
+  type: CaptureKind;
+  sha256?: string | null;
+}): BinaryCaptureResult {
+  const description = req.description.trim();
+  const occurredAt = nowIso();
+  const eventId = newId();
+  const filename = req.file.name || "attachment";
+  const contentType = req.file.type || "application/octet-stream";
+  const artifact = putArtifact({
+    eventId,
+    eventKind: "note",
+    blob: req.file,
+    filename,
+    contentType,
+    sha256: req.sha256,
+  });
+  state.events = [
+    {
+      id: eventId,
+      kind: "note",
+      content: description || filename,
+      occurredAt,
+      artifactId: artifact.id,
+    },
+    ...state.events,
+  ];
+
+  if (req.type === "Idea" || req.type === "Problem") {
+    const title = description ? deriveTitle(description) : filename;
+    const created = createSubject({
+      type: req.type,
+      title,
+      attrs: {
+        description: description || filename,
+        ...(req.type === "Problem" ? { date_identified: todayIso() } : {}),
+      },
+    });
+    addEventRelation(eventId, created.id);
+    state.inbox = state.inbox.map((item) =>
+      item.subjectUrn === created.urn
+        ? {
+            ...item,
+            eventKind: "note",
+            eventContent: description || filename,
+            attachment: artifact,
+          }
+        : item,
+    );
+    emit();
+    return {
+      eventId,
+      artifactId: artifact.id,
+      kind: "note",
+      filename,
+      contentType,
+      byteSize: artifact.byteSize,
+      sha256: artifact.sha256,
+      subject: created,
+    };
+  }
+
+  state.inbox = [
+    {
+      itemId: eventId,
+      itemKind: "event",
+      triagedAt: occurredAt,
+      eventKind: "note",
+      eventContent: description || filename,
+      attachment: artifact,
+    },
+    ...state.inbox,
+  ];
+  emit();
+  return {
+    eventId,
+    artifactId: artifact.id,
+    kind: "note",
+    filename,
+    contentType,
+    byteSize: artifact.byteSize,
+    sha256: artifact.sha256,
+  };
+}
+
+export function captureVoice(req: {
+  audioBlob: Blob;
+  transcript: string;
+  type: CaptureKind;
+  keepAudio: boolean;
+  durationSeconds?: number;
+  sha256?: string | null;
+  filename?: string;
+  contentType?: string;
+}): BinaryCaptureResult {
+  const transcript = req.transcript.trim();
+  const needsTranscription = !transcript;
+  const retainAudio = req.keepAudio || needsTranscription;
+  const occurredAt = nowIso();
+  const eventId = newId();
+  const contentType = req.contentType || req.audioBlob.type || "audio/webm";
+  const filename = req.filename || `voice-${occurredAt.slice(0, 19).replace(/[:T]/g, "-")}.${
+    contentType.includes("mp4") ? "m4a" : contentType.includes("wav") ? "wav" : "webm"
+  }`;
+
+  let artifact: ArtifactRecord | undefined;
+  if (retainAudio) {
+    artifact = putArtifact({
+      eventId,
+      eventKind: "voice",
+      blob: req.audioBlob,
+      filename,
+      contentType,
+      durationSeconds: req.durationSeconds ?? null,
+      sha256: req.sha256,
+    });
+  }
+
+  state.events = [
+    {
+      id: eventId,
+      kind: "voice",
+      content: transcript || null,
+      occurredAt,
+      artifactId: artifact?.id,
+    },
+    ...state.events,
+  ];
+
+  if (req.type === "Idea" || req.type === "Problem") {
+    const title = transcript ? deriveTitle(transcript) : "Needs transcription";
+    const created = createSubject({
+      type: req.type,
+      title,
+      attrs: {
+        description: transcript || "Needs transcription.",
+        ...(req.type === "Problem" ? { date_identified: todayIso() } : {}),
+      },
+    });
+    addEventRelation(eventId, created.id);
+    state.inbox = state.inbox.map((item) =>
+      item.subjectUrn === created.urn
+        ? {
+            ...item,
+            eventKind: "voice",
+            eventContent: transcript || null,
+            attachment: artifact ?? null,
+            needsTranscription,
+          }
+        : item,
+    );
+    emit();
+    return {
+      eventId,
+      artifactId: artifact?.id ?? null,
+      kind: "voice",
+      filename: artifact?.filename,
+      contentType: artifact?.contentType,
+      byteSize: artifact?.byteSize,
+      sha256: artifact?.sha256,
+      subject: created,
+      needsTranscription,
+    };
+  }
+
+  state.inbox = [
+    {
+      itemId: eventId,
+      itemKind: "event",
+      triagedAt: occurredAt,
+      eventKind: "voice",
+      eventContent: transcript || null,
+      attachment: artifact ?? null,
+      needsTranscription,
+    },
+    ...state.inbox,
+  ];
+  emit();
+  return {
+    eventId,
+    artifactId: artifact?.id ?? null,
+    kind: "voice",
+    filename: artifact?.filename,
+    contentType: artifact?.contentType,
+    byteSize: artifact?.byteSize,
+    sha256: artifact?.sha256,
+    needsTranscription,
+  };
 }
 
 export function adhereHabit(

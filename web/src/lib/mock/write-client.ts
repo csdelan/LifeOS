@@ -5,6 +5,7 @@ import type {
   NewSubjectRequest,
 } from "@/lib/production-ui-types";
 import { inferChildRelation } from "@/lib/production-ui-types";
+import { extensionForMime, sha256Hex } from "@/lib/artifacts";
 import {
   addEdge,
   adhereHabit,
@@ -12,12 +13,15 @@ import {
   applyAttrs,
   archiveSubject,
   byRef,
+  captureDocument,
   captureNote,
+  captureVoice,
   completeReviewDoc,
   createSubject,
   dropInboxItem,
   flagItem,
   involvePerson,
+  relateEvent,
   removeInbox,
   saveReviewBody,
   setHabitRecurrence,
@@ -102,9 +106,9 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       bump();
     },
 
-    async relate(eventId, subject) {
+    async relate(eventId, subject, as) {
       await wait();
-      removeInbox(eventId);
+      relateEvent(eventId, subject, as);
       const target = byRef(subject);
       notify(target ? `Related to ${target.title}` : "Related");
       bump();
@@ -169,6 +173,33 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       captureNote(text);
       notify("Captured to Inbox");
       bump();
+    },
+
+    async captureDocument(req) {
+      await wait();
+      // TODO(api): multipart upload to the kernel's attach write path (`bsk attach`).
+      const sha256 = (await sha256Hex(req.file)) ?? null;
+      const result = captureDocument({ ...req, sha256 });
+      notify("Captured to Inbox");
+      bump();
+      return result;
+    },
+
+    async captureVoice(req) {
+      await wait();
+      // TODO(api): multipart upload to the kernel's voice write path (`bsk voice`).
+      const keep = req.keepAudio || !req.transcript.trim();
+      const sha256 = keep ? (await sha256Hex(req.audioBlob)) ?? null : null;
+      const ext = extensionForMime(req.audioBlob.type || "audio/webm");
+      const result = captureVoice({
+        ...req,
+        sha256,
+        contentType: req.audioBlob.type || "audio/webm",
+        filename: `voice.${ext}`,
+      });
+      notify("Captured to Inbox");
+      bump();
+      return result;
     },
 
     async saveReview(id, body) {

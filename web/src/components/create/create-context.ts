@@ -10,9 +10,11 @@ export type CreateOpts = {
 export const CreateActions = createContext<{
   openNew: (opts?: CreateOpts) => void;
   openCapture: () => void;
+  openVoice: () => void;
 }>({
   openNew: () => {},
   openCapture: () => {},
+  openVoice: () => {},
 });
 
 export function useCreateActions() {

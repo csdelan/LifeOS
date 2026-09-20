@@ -33,6 +33,8 @@ export const qk = {
   journal: (id: string) => ["journal", id] as const,
   history: (id: string) => ["history", id] as const,
   inbox: ["inbox"] as const,
+  artifact: (id: string) => ["artifact", id] as const,
+  files: (id: string) => ["files", id] as const,
   areas: ["areas"] as const,
   people: ["people"] as const,
   habits: ["habits"] as const,
@@ -149,7 +151,12 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
 
     async relate(eventId, subject, as) {
       await client.relate(eventId, subject, as);
-      await invalidate(qc, [qk.inbox, qk.journal(subject), qk.relations(subject)]);
+      await invalidate(qc, [
+        qk.inbox,
+        qk.journal(subject),
+        qk.relations(subject),
+        qk.files(subject),
+      ]);
     },
 
     async flag(item) {
@@ -202,6 +209,26 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async capture(text) {
       await client.capture(text);
       await invalidate(qc, [qk.inbox, qk.dashboard]);
+    },
+
+    async captureDocument(req) {
+      const result = await client.captureDocument(req);
+      const extra = [
+        ...(req.type === "Idea" || req.type === "Problem" ? [qk.subjects] : []),
+        ...(result.subject ? [qk.files(result.subject.id)] : []),
+      ];
+      await invalidate(qc, [qk.inbox, qk.dashboard, ...extra]);
+      return result;
+    },
+
+    async captureVoice(req) {
+      const result = await client.captureVoice(req);
+      const extra = [
+        ...(req.type === "Idea" || req.type === "Problem" ? [qk.subjects] : []),
+        ...(result.subject ? [qk.files(result.subject.id)] : []),
+      ];
+      await invalidate(qc, [qk.inbox, qk.dashboard, ...extra]);
+      return result;
     },
 
     async saveReview(id, body) {
@@ -349,6 +376,22 @@ export function useInbox() {
   return useQuery({
     queryKey: qk.inbox,
     queryFn: () => reads().inbox(),
+  });
+}
+
+export function useArtifact(id: string | undefined) {
+  return useQuery({
+    queryKey: qk.artifact(id ?? ""),
+    queryFn: () => reads().artifact(id!),
+    enabled: !!id,
+  });
+}
+
+export function useSubjectFiles(id: string | undefined) {
+  return useQuery({
+    queryKey: qk.files(id ?? ""),
+    queryFn: () => reads().subjectFiles(id!),
+    enabled: !!id,
   });
 }
 

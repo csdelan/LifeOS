@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { DateChip } from "@/components/primitives/date-chip";
+import { AttachmentChip } from "@/components/artifacts/attachment-chip";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { ListRow } from "@/components/primitives/list-row";
 import { StatusPill } from "@/components/primitives/status-pill";
@@ -190,6 +191,20 @@ export function GalleryPage() {
               </TreeNode>
             </TreeNode>
           </div>
+        </Section>
+
+        <Section title="Attachment">
+          <AttachmentChip
+            artifact={{
+              id: "gallery-art",
+              eventId: "gallery-evt",
+              eventKind: "note",
+              filename: "comcast-statement-aug.pdf",
+              contentType: "application/pdf",
+              byteSize: 48211,
+              hasBytes: true,
+            }}
+          />
         </Section>
 
         <Section title="EmptyState">

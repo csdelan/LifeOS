@@ -31,8 +31,11 @@ import { EmptyState } from "@/components/primitives/empty-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { Tag } from "@/components/primitives/tag";
 import { TypeBadge } from "@/components/primitives/type-badge";
+import { AttachmentChip } from "@/components/artifacts/attachment-chip";
+import { Badge } from "@/components/ui/badge";
 import { CREATABLE_TYPES, typeLabel } from "@/lib/production-ui-types";
 import type { InboxItem, SubjectType } from "@/lib/production-ui-types";
+import { inboxItemBody, inboxItemTitle } from "@/lib/capture";
 import { useInbox, useSubjects, useWrites } from "@/lib/queries";
 import { formatTimestamp } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -48,6 +51,14 @@ import {
 
 function inboxRef(item: InboxItem): string {
   return item.itemKind === "event" ? item.itemId : (item.subjectUrn ?? item.itemId);
+}
+
+function inboxKindLabel(item: InboxItem): string {
+  if (item.itemKind === "subject") return typeLabel(item.subjectType ?? "Idea");
+  if (item.needsTranscription) return "voice · needs transcription";
+  if (item.eventKind === "voice") return "voice";
+  if (item.attachment) return "document";
+  return item.eventKind ?? "note";
 }
 
 export function InboxPage() {
@@ -114,19 +125,16 @@ export function InboxPage() {
         accessorKey: "preview",
         header: "Item",
         cell: ({ row }) => (
-          <div>
-            <p className="truncate text-sm font-medium">
-              {row.original.subjectTitle ??
-                row.original.eventContent ??
-                "Untitled capture"}
-            </p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{inboxItemTitle(row.original)}</p>
             <p className="text-[0.6875rem] text-muted-foreground">
-              {row.original.itemKind === "subject"
-                ? typeLabel(row.original.subjectType ?? "Idea")
-                : row.original.eventKind}
+              {inboxKindLabel(row.original)}
               {" · "}
               {formatTimestamp(row.original.triagedAt)}
             </p>
+            {row.original.attachment ? (
+              <AttachmentChip artifact={row.original.attachment} compact />
+            ) : null}
           </div>
         ),
       },
@@ -284,14 +292,12 @@ function InboxPreview({
   const writes = useWrites();
   const { data: subjects } = useSubjects();
   const [promoteType, setPromoteType] = useState<SubjectType>("Task");
-  const [promoteTitle, setPromoteTitle] = useState(
-    item.subjectTitle ?? item.eventContent?.slice(0, 80) ?? "",
-  );
+  const [promoteTitle, setPromoteTitle] = useState(inboxItemTitle(item));
   const [relateTo, setRelateTo] = useState("");
   const [tag, setTag] = useState("");
 
   useEffect(() => {
-    setPromoteTitle(item.subjectTitle ?? item.eventContent?.slice(0, 80) ?? "");
+    setPromoteTitle(inboxItemTitle(item));
   }, [item]);
 
   return (
@@ -302,16 +308,25 @@ function InboxPreview({
         </Button>
       ) : null}
       <div>
-        {item.subjectType ? <TypeBadge type={item.subjectType} /> : (
-          <span className="text-xs text-muted-foreground">{item.eventKind} capture</span>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {item.subjectType ? <TypeBadge type={item.subjectType} /> : (
+            <span className="text-xs text-muted-foreground">{inboxKindLabel(item)} capture</span>
+          )}
+          {item.needsTranscription ? (
+            <Badge variant="outline">Needs transcription</Badge>
+          ) : null}
+        </div>
         <h2 className="mt-1 font-heading text-3xl leading-tight">
-          {item.subjectTitle ?? "Captured note"}
+          {inboxItemTitle(item)}
         </h2>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">
-          {item.eventContent ??
-            "A flagged subject. Organize it, then decide — tagging does not clear the Inbox."}
+          {inboxItemBody(item)}
         </p>
+        {item.attachment ? (
+          <div className="mt-3">
+            <AttachmentChip artifact={item.attachment} />
+          </div>
+        ) : null}
         <p className="mt-2 text-xs text-muted-foreground">
           Flagged {formatTimestamp(item.triagedAt)}
         </p>

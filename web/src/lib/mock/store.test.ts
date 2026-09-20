@@ -3,9 +3,13 @@ import {
   addEdge,
   adhereHabit,
   byId,
+  captureDocument,
+  captureVoice,
   createSubject,
   dropInboxItem,
+  filesForSubject,
   getState,
+  relateEvent,
   resetStore,
   setStatus,
   setTags,
@@ -72,5 +76,61 @@ describe("mock store reducers", () => {
     addEdge("task-longrun", "serves", "proj-base");
     addEdge("task-longrun", "serves", "proj-base");
     expect(getState().edges.length).toBe(n);
+  });
+
+  it("captures a document into Inbox with artifact metadata", () => {
+    const file = new File(["statement"], "comcast.pdf", { type: "application/pdf" });
+    const result = captureDocument({ file, description: "Disputed charge", type: "Note" });
+    expect(result.kind).toBe("note");
+    const item = getState().inbox.find((i) => i.itemId === result.eventId);
+    expect(item?.attachment?.filename).toBe("comcast.pdf");
+    expect(item?.eventContent).toBe("Disputed charge");
+  });
+
+  it("retains voice audio when the transcript is empty", () => {
+    const blob = new Blob(["aaaa"], { type: "audio/webm" });
+    const result = captureVoice({
+      audioBlob: blob,
+      transcript: "  ",
+      type: "Note",
+      keepAudio: false,
+      durationSeconds: 9,
+    });
+    expect(result.needsTranscription).toBe(true);
+    expect(result.artifactId).toBeTruthy();
+    const item = getState().inbox.find((i) => i.itemId === result.eventId);
+    expect(item?.needsTranscription).toBe(true);
+    expect(item?.attachment?.hasBytes).toBe(true);
+  });
+
+  it("discards voice audio after a successful transcript-only submit", () => {
+    const blob = new Blob(["aaaa"], { type: "audio/webm" });
+    const result = captureVoice({
+      audioBlob: blob,
+      transcript: "Park the phone in the kitchen.",
+      type: "Note",
+      keepAudio: false,
+    });
+    expect(result.artifactId ?? null).toBeNull();
+    const item = getState().inbox.find((i) => i.itemId === result.eventId);
+    expect(item?.eventKind).toBe("voice");
+    expect(item?.eventContent).toContain("Park the phone");
+    expect(item?.attachment ?? null).toBeNull();
+  });
+
+  it("seeds a filed document onto the base-build project", () => {
+    const files = filesForSubject("proj-base");
+    expect(files.some((f) => f.filename === "week-4-base-build.txt")).toBe(true);
+    expect(getState().inbox.some((i) => i.itemId === "inbox-doc-1")).toBe(true);
+    expect(getState().inbox.some((i) => i.needsTranscription)).toBe(true);
+  });
+
+  it("files a related document onto the subject's Files list", () => {
+    const file = new File(["notes"], "week-4.txt", { type: "text/plain" });
+    const created = captureDocument({ file, description: "Week 4 notes", type: "Note" });
+    relateEvent(created.eventId, "proj-base");
+    const files = filesForSubject("proj-base");
+    expect(files.some((f) => f.filename === "week-4.txt")).toBe(true);
+    expect(getState().inbox.some((i) => i.itemId === created.eventId)).toBe(false);
   });
 });

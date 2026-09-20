@@ -17,6 +17,7 @@ import {
   ListTodoIcon,
   MapIcon,
   MenuIcon,
+  MicIcon,
   MoonIcon,
   PenLineIcon,
   PlusIcon,
@@ -32,6 +33,7 @@ import { CommandPalette } from "@/components/shell/command-palette";
 import { ResizeHandle, usePersistedWidth } from "@/components/shell/panels";
 import { NewSubjectDialog } from "@/components/create/new-subject-dialog";
 import { QuickCaptureDialog } from "@/components/create/quick-capture-dialog";
+import { VoiceCaptureDialog } from "@/components/create/voice-capture-dialog";
 import { CreateActions, type CreateOpts } from "@/components/create/create-context";
 import { useInbox } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -79,6 +81,7 @@ export function AppShell() {
   const [palette, setPalette] = useState(false);
   const [createOpts, setCreateOpts] = useState<CreateOpts | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const [voice, setVoice] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const pendingNav = useRef<(() => void) | null>(null);
@@ -109,6 +112,10 @@ export function AppShell() {
       if (e.altKey && e.key.toLowerCase() === "n") {
         e.preventDefault();
         setCapturing(true);
+      }
+      if (e.altKey && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        setVoice(true);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -147,6 +154,7 @@ export function AppShell() {
     () => ({
       openNew: (opts?: CreateOpts) => setCreateOpts(opts ?? {}),
       openCapture: () => setCapturing(true),
+      openVoice: () => setVoice(true),
     }),
     [],
   );
@@ -157,6 +165,7 @@ export function AppShell() {
       inboxCount={inbox?.length}
       onNew={() => setCreateOpts({})}
       onCapture={() => setCapturing(true)}
+      onVoice={() => setVoice(true)}
       onPalette={() => setPalette(true)}
       theme={resolvedTheme}
       onToggleTheme={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
@@ -199,6 +208,14 @@ export function AppShell() {
           >
             <PenLineIcon />
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Voice capture"
+            onClick={() => setVoice(true)}
+          >
+            <MicIcon />
+          </Button>
           <Button size="icon" aria-label="New subject" onClick={() => setCreateOpts({})}>
             <PlusIcon />
           </Button>
@@ -233,6 +250,7 @@ export function AppShell() {
         onOpenChange={setPalette}
         onNew={() => setCreateOpts({})}
         onCapture={() => setCapturing(true)}
+        onVoice={() => setVoice(true)}
       />
       <NewSubjectDialog
         open={createOpts !== null}
@@ -244,6 +262,7 @@ export function AppShell() {
         initialTitle={createOpts?.title}
       />
       <QuickCaptureDialog open={capturing} onOpenChange={setCapturing} />
+      <VoiceCaptureDialog open={voice} onOpenChange={setVoice} />
       <AlertDialog open={stayOpen} onOpenChange={setStayOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -288,6 +307,7 @@ function NavBody({
   inboxCount,
   onNew,
   onCapture,
+  onVoice,
   onPalette,
   theme,
   onToggleTheme,
@@ -296,6 +316,7 @@ function NavBody({
   inboxCount?: number;
   onNew: () => void;
   onCapture: () => void;
+  onVoice: () => void;
   onPalette: () => void;
   theme?: string;
   onToggleTheme: () => void;
@@ -362,6 +383,14 @@ function NavBody({
           </Button>
           <Button variant="outline" size="sm" onClick={onCapture}>
             Capture
+          </Button>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Voice capture"
+            onClick={onVoice}
+          >
+            <MicIcon />
           </Button>
           <Button
             variant="outline"

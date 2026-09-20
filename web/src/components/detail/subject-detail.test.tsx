@@ -23,7 +23,7 @@ function renderDetail(id: string) {
     <QueryClientProvider client={client}>
       <TooltipProvider>
         <CreateActions.Provider
-          value={{ openNew: () => {}, openCapture: () => {} }}
+          value={{ openNew: () => {}, openCapture: () => {}, openVoice: () => {} }}
         >
           <SubjectDetail subjectId={id} />
         </CreateActions.Provider>

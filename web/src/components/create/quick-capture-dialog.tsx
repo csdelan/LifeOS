@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,14 +8,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { AttachmentPicker, oversizedFile } from "@/components/artifacts/attachment-picker";
+import { CaptureKindTabs } from "@/components/create/capture-kind-tabs";
+import { formatBytes, MAX_ARTIFACT_BYTES } from "@/lib/artifacts";
 import { useCreateSubject, useWrites } from "@/lib/queries";
 import { deriveTitle } from "@/lib/capture";
 import { todayIso } from "@/lib/dates";
-import { cn } from "@/lib/utils";
-import { useState } from "react";
-
-const KINDS = ["Note", "Idea", "Problem"] as const;
-type CaptureKind = (typeof KINDS)[number];
+import type { CaptureKind } from "@/lib/production-ui-types";
 
 export function QuickCaptureDialog({
   open,
@@ -26,21 +25,36 @@ export function QuickCaptureDialog({
 }) {
   const [kind, setKind] = useState<CaptureKind>("Note");
   const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const writes = useWrites();
   const create = useCreateSubject();
-  const pending = create.isPending;
+  const [pending, setPending] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
+
+  function reset() {
+    setText("");
+    setKind("Note");
+    setFile(null);
+    setError(null);
+  }
 
   async function submit() {
     const body = text.trim();
-    if (!body) {
-      setError("Write something first.");
+    if (oversizedFile(file)) {
+      setError(`That file is larger than ${formatBytes(MAX_ARTIFACT_BYTES)}.`);
+      return;
+    }
+    if (!body && !file) {
+      setError("Write something first, or attach a file.");
       return;
     }
     setError(null);
+    setPending(true);
     try {
-      if (kind === "Note") {
+      if (file) {
+        await writes.captureDocument({ file, description: body, type: kind });
+      } else if (kind === "Note") {
         await writes.capture(body);
       } else if (kind === "Idea") {
         await create.mutateAsync({
@@ -55,11 +69,12 @@ export function QuickCaptureDialog({
           attrs: { description: body, date_identified: todayIso() },
         });
       }
-      setText("");
-      setKind("Note");
+      reset();
       onOpenChange(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Capture failed. Retry without retyping.");
+    } finally {
+      setPending(false);
     }
   }
 
@@ -67,11 +82,7 @@ export function QuickCaptureDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) {
-          setText("");
-          setKind("Note");
-          setError(null);
-        }
+        if (!next) reset();
         onOpenChange(next);
       }}
     >
@@ -82,43 +93,16 @@ export function QuickCaptureDialog({
             Lands in Inbox. Enter submits. Escape discards. Ctrl+Enter for a new line.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex gap-1" role="tablist" aria-label="Capture type">
-          {KINDS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              role="tab"
-              aria-selected={kind === k}
-              tabIndex={0}
-              onClick={() => setKind(k)}
-              className={cn(
-                "min-h-11 rounded-md px-2.5 py-1 text-sm md:min-h-0",
-                kind === k ? "bg-primary/12 font-medium text-primary" : "text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {k}
-            </button>
-          ))}
-        </div>
+        <CaptureKindTabs value={kind} onChange={setKind} disabled={pending} />
         <Textarea
           ref={box}
           autoFocus
           rows={5}
           value={text}
           placeholder={
-            kind === "Note"
-              ? "A note…"
-              : kind === "Idea"
-                ? "An idea…"
-                : "A problem…"
+            kind === "Note" ? "A note…" : kind === "Idea" ? "An idea…" : "A problem…"
           }
-          aria-label={
-            kind === "Note"
-              ? "Note"
-              : kind === "Idea"
-                ? "Idea"
-                : "Problem"
-          }
+          aria-label={kind === "Note" ? "Note" : kind === "Idea" ? "Idea" : "Problem"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -139,13 +123,21 @@ export function QuickCaptureDialog({
             }
           }}
         />
+        <AttachmentPicker
+          file={file}
+          onChange={(next) => {
+            setFile(next);
+            if (oversizedFile(next)) {
+              setError(`That file is larger than ${formatBytes(MAX_ARTIFACT_BYTES)}.`);
+            } else if (error?.includes("larger than")) {
+              setError(null);
+            }
+          }}
+          disabled={pending}
+        />
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
         <div className="flex justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Discard
           </Button>
           <Button type="button" onClick={() => void submit()} disabled={pending}>

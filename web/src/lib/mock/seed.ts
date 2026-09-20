@@ -1,7 +1,10 @@
 import { addDays, nowIso, slugify, todayIso, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
+import { dataUrlFor, silentWavDataUrl } from "@/lib/artifacts";
 import type {
   AreaRow,
+  ArtifactRecord,
   ConcerningEvent,
+  EventRelation,
   HabitOccurrenceRow,
   HabitRow,
   InboxItem,
@@ -19,6 +22,20 @@ import type {
 } from "@/lib/production-ui-types";
 import { defaultStatus } from "@/lib/production-ui-types";
 
+export interface MockEvent {
+  id: string;
+  kind: string;
+  content: string | null;
+  occurredAt: string;
+  artifactId?: string | null;
+}
+
+export interface MockEventRelation {
+  eventId: string;
+  subjectId: string;
+  relation: EventRelation;
+}
+
 export interface CanonicalEdge {
   fromId: string;
   relation: Relation;
@@ -33,6 +50,9 @@ export interface MockState {
   journals: Record<string, JournalEntry[]>;
   history: Record<string, StatusHistoryEntry[]>;
   concerning: Record<string, ConcerningEvent[]>;
+  events: MockEvent[];
+  artifacts: Record<string, ArtifactRecord>;
+  eventRelations: MockEventRelation[];
   inbox: InboxItem[];
   areas: AreaRow[];
   habits: HabitRow[];
@@ -1050,6 +1070,133 @@ export function createSeed(): MockState {
     },
   ];
 
+  // Option-B seed: object URL + metadata (not real kernel bytes). Inbox + one filed file.
+  const events: MockEvent[] = [];
+  const artifacts: Record<string, ArtifactRecord> = {};
+  const eventRelations: MockEventRelation[] = [];
+
+  const docText = "%PDF-1.4\nDisputed Comcast charge — August statement, account 4421.\n";
+  artifacts["art-doc-inbox"] = {
+    id: "art-doc-inbox",
+    eventId: "inbox-doc-1",
+    eventKind: "note",
+    filename: "comcast-statement-aug.pdf",
+    contentType: "application/pdf",
+    byteSize: docText.length,
+    sha256: "aa".repeat(32),
+    hasBytes: true,
+    bytesUrl: dataUrlFor(docText, "application/pdf"),
+  };
+  events.push({
+    id: "inbox-doc-1",
+    kind: "note",
+    content: "Disputed Comcast charge reference statement",
+    occurredAt: isoAgo(0.5),
+    artifactId: "art-doc-inbox",
+  });
+  inbox.push({
+    itemId: "inbox-doc-1",
+    itemKind: "event",
+    triagedAt: isoAgo(0.5),
+    eventKind: "note",
+    eventContent: "Disputed Comcast charge reference statement",
+    attachment: artifacts["art-doc-inbox"],
+  });
+
+  const voiceUrl = silentWavDataUrl();
+  artifacts["art-voice-inbox"] = {
+    id: "art-voice-inbox",
+    eventId: "inbox-voice-1",
+    eventKind: "voice",
+    filename: "voice-standing-desk.wav",
+    contentType: "audio/wav",
+    byteSize: 44,
+    sha256: "bb".repeat(32),
+    hasBytes: true,
+    bytesUrl: voiceUrl,
+    durationSeconds: 42,
+  };
+  events.push({
+    id: "inbox-voice-1",
+    kind: "voice",
+    content: "Maybe a standing desk this month. Lower back after long coding days is getting loud.",
+    occurredAt: isoAgo(0.3),
+    artifactId: "art-voice-inbox",
+  });
+  inbox.push({
+    itemId: "inbox-voice-1",
+    itemKind: "event",
+    triagedAt: isoAgo(0.3),
+    eventKind: "voice",
+    eventContent:
+      "Maybe a standing desk this month. Lower back after long coding days is getting loud.",
+    attachment: artifacts["art-voice-inbox"],
+  });
+
+  artifacts["art-voice-needs"] = {
+    id: "art-voice-needs",
+    eventId: "inbox-voice-2",
+    eventKind: "voice",
+    filename: "voice-needs-transcription.wav",
+    contentType: "audio/wav",
+    byteSize: 44,
+    sha256: "cc".repeat(32),
+    hasBytes: true,
+    bytesUrl: silentWavDataUrl(),
+    durationSeconds: 18,
+  };
+  events.push({
+    id: "inbox-voice-2",
+    kind: "voice",
+    content: "",
+    occurredAt: isoAgo(0.2),
+    artifactId: "art-voice-needs",
+  });
+  inbox.push({
+    itemId: "inbox-voice-2",
+    itemKind: "event",
+    triagedAt: isoAgo(0.2),
+    eventKind: "voice",
+    eventContent: null,
+    attachment: artifacts["art-voice-needs"],
+    needsTranscription: true,
+  });
+
+  const filedText =
+    "Week 4 base-build notes: easy long run, shoes are cooked, keep the pace conversational.\n";
+  artifacts["art-doc-filed"] = {
+    id: "art-doc-filed",
+    eventId: "event-doc-filed",
+    eventKind: "note",
+    filename: "week-4-base-build.txt",
+    contentType: "text/plain",
+    byteSize: filedText.length,
+    sha256: "dd".repeat(32),
+    hasBytes: true,
+    bytesUrl: dataUrlFor(filedText, "text/plain"),
+  };
+  events.push({
+    id: "event-doc-filed",
+    kind: "note",
+    content: "Week 4 training notes — shoes, pace, and the Saturday long run.",
+    occurredAt: isoAgo(26),
+    artifactId: "art-doc-filed",
+  });
+  eventRelations.push({
+    eventId: "event-doc-filed",
+    subjectId: "proj-base",
+    relation: "concerns",
+  });
+  concerning["proj-base"] = [
+    ...(concerning["proj-base"] ?? []),
+    {
+      kind: "note",
+      occurredAt: isoAgo(26),
+      eventId: "event-doc-filed",
+      content: "Week 4 training notes — shoes, pace, and the Saturday long run.",
+    },
+  ];
+
   const habits: HabitRow[] = [
     {
       id: "habit-mobility",
@@ -1382,6 +1529,9 @@ export function createSeed(): MockState {
     journals,
     history,
     concerning,
+    events,
+    artifacts,
+    eventRelations,
     inbox,
     areas,
     habits,

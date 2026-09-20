@@ -292,6 +292,66 @@ export interface InboxItem {
   subjectTitle?: string | null;
   eventKind?: string | null;
   eventContent?: string | null;
+  /** Present when the capture carries a managed binary artifact (CAP-2 / CAP-4). */
+  attachment?: ArtifactRecord | null;
+  /** Empty/failed transcription — audio was retained for later processing (CAP-2). */
+  needsTranscription?: boolean;
+}
+
+/**
+ * Metadata for a managed binary artifact (`bsk.v_artifact` / `artifact_blob`).
+ * Bytes are not inlined — fetch them via `LifeOsReads.artifactBytesUrl`.
+ */
+export interface ArtifactRecord {
+  id: string;
+  eventId: string;
+  /** The referencing event's kind (`note` for documents, `voice` for audio). */
+  eventKind: string;
+  filename?: string | null;
+  contentType: string;
+  byteSize: number;
+  sha256?: string | null;
+  hasBytes: boolean;
+  /**
+   * Mock: an object URL for the retained blob.
+   * Live: leave unset and resolve through `artifactBytesUrl`.
+   */
+  bytesUrl?: string | null;
+  /** App-side duration for voice captures; the kernel does not store this. */
+  durationSeconds?: number | null;
+}
+
+/** Note / Idea / Problem selector shared by quick capture and voice (CAP-1 / D4). */
+export const CAPTURE_KINDS = ["Note", "Idea", "Problem"] as const;
+export type CaptureKind = (typeof CAPTURE_KINDS)[number];
+
+export interface CaptureDocumentRequest {
+  file: File;
+  description: string;
+  type: CaptureKind;
+}
+
+export interface CaptureVoiceRequest {
+  audioBlob: Blob;
+  transcript: string;
+  type: CaptureKind;
+  keepAudio: boolean;
+  /** Elapsed recording time, used for the Inbox duration chip. */
+  durationSeconds?: number;
+}
+
+/** Outcome of a document or voice capture (mirrors kernel `AttachmentResult` + D4). */
+export interface BinaryCaptureResult {
+  eventId: string;
+  artifactId?: string | null;
+  kind: string;
+  filename?: string | null;
+  contentType?: string | null;
+  byteSize?: number;
+  sha256?: string | null;
+  /** Present when type is Idea or Problem — those become subjects immediately (D4). */
+  subject?: CreatedSubject | null;
+  needsTranscription?: boolean;
 }
 
 export interface AreaRow {
@@ -424,6 +484,18 @@ export interface LifeOsWriteClient {
   involve(subject: string, person: string, role: PersonRole, remove?: boolean): Promise<void>;
   appendJournal(subject: string, text: string): Promise<void>;
   capture(text: string): Promise<void>;                                         // note event → inbox
+  /**
+   * Document / attachment capture (CAP-4). Note → `note` event + binary artifact;
+   * Idea / Problem → durable subject (D4) with the file related onto it.
+   * // TODO(api): multipart POST to the kernel attach write path.
+   */
+  captureDocument(req: CaptureDocumentRequest): Promise<BinaryCaptureResult>;
+  /**
+   * Voice capture (CAP-2). Note → `voice` event + transcript (+ audio if kept);
+   * Idea / Problem → durable subject (D4). Empty transcript forces audio retention.
+   * // TODO(api): multipart POST to the kernel voice write path.
+   */
+  captureVoice(req: CaptureVoiceRequest): Promise<BinaryCaptureResult>;
   /** Mock-only until Review subjects (D3) exist. */
   saveReview(id: string, body: ReviewBody): Promise<void>;
   completeReview(id: string): Promise<void>;
