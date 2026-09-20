@@ -97,7 +97,10 @@ edge foreign keys) are summarized on the arrows rather than drawn per-row.*
 
 **Source** is the append-only truth: raw captured `artifact` content and the `event`
 stream that references it. It is never mutated — UPDATE and DELETE are denied by trigger at
-the database level.
+the database level. An artifact carries text `content` and, when the capture is binary
+(a voice recording, a PDF, an image), a **binary payload** in `bsk.artifact_blob` (Postgres
+`bytea` + metadata, keyed 1:1 to the artifact); the bytes are append-only too. See
+[binary-artifacts.md](pilot/binary-artifacts.md).
 
 **Subject** is the interpreted layer: the durable *things* a life is organized around
 (Goals, Projects, Commitments, People…) and the typed edges between them. Subjects are
@@ -207,8 +210,9 @@ The ontology is not just a vocabulary — it is a set of rules that hold *regard
 is writing*, enforced as close to the data as possible. These are the epic invariants; the
 migrations cite them by number.
 
-1. **Append-only source** (inv. 3, 5). `event` and `artifact` reject UPDATE and DELETE via
-   a database trigger. The past is physically un-rewritable.
+1. **Append-only source** (inv. 3, 5). `event`, `artifact`, and `artifact_blob` (an
+   artifact's binary payload) reject UPDATE and DELETE via a database trigger. The past —
+   text *and* bytes — is physically un-rewritable.
 2. **Every fact carries provenance** (inv. 4), and derived facts must cite their sources
    (`event_derived_has_sources` CHECK).
 3. **Promotion never mutates the capture** (inv. 5). Turning a captured thought into a
@@ -322,6 +326,7 @@ doesn't, we learn that cheaply — which is the point.
 | --- | --- |
 | Schema namespace, layering | `db/migrations/0001__baseline.sql`, `0004__subject_current.sql` |
 | Source tables + append-only triggers | `db/migrations/0002__source_tables.sql` |
+| Binary artifact payloads (bytea, append-only, `v_artifact`) | `db/migrations/0022__artifact_blob.sql`, `docs/pilot/binary-artifacts.md` |
 | Subjects + subject→subject edges | `db/migrations/0003__subject_relation.sql` |
 | Event→subject edges (design correction) | `db/migrations/0007__subject_event.sql` |
 | Reader role, flattened views, indexes | `db/migrations/0005__reader_and_indexes.sql` |

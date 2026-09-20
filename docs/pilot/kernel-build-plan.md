@@ -68,7 +68,11 @@ recurrence, adherence/occurrence projections, materialized occurrences).
 
 - Review type + D3 mutable-body edit trail + review scheduling/missed via the D8 mechanism (REVIEW-0/1/2)
 - D6 focus storage (Monthly/Weekly Goal pointers as change-events; daily objectives app-local)
-- Managed binary artifact storage (CAP-2/4, JOURNAL-2) → then `voice` write path (CAP-2)
+- ~~Managed binary artifact storage (CAP-2/4, JOURNAL-2) → then `voice` write path (CAP-2)~~
+  **Done** (migration 0022, `IArtifactBlobStore` + Postgres `bytea` adapter, `bsk attach` /
+  `bsk voice` / `bsk artifact get`). Bytes live in `bsk.artifact_blob` (append-only), behind a
+  swappable port so object storage can be added later without schema churn. JOURNAL-2 inline
+  media (Production) reuses this same infra. See [binary-artifacts.md](binary-artifacts.md).
 - INBOX-2 (still `drafting`, unmapped)
 - **Vocabulary single-source (production, behind the REST API).** Today the status vocabulary
   is authored in the Domain ontology (`StatusVocabulary`) and hand-mirrored into the Pilot
@@ -110,3 +114,6 @@ recurrence, adherence/occurrence projections, materialized occurrences).
 - [x] Phase 10 — Habit occurrence + streak projection
 - [x] Phase 11 — People-association link
 - [x] Phase 12 — Appointment type + materialized occurrences
+- [x] Band E — Managed binary artifact storage + `voice` write path (CAP-2 / CAP-4; migration
+  0022). Bytes as Postgres `bytea` behind the `IArtifactBlobStore` port; `bsk attach`, `bsk voice`
+  (closes the unreachable `voice` kind), `bsk artifact get`. Design note: [binary-artifacts.md](binary-artifacts.md).
