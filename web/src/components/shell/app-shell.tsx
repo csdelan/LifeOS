@@ -15,6 +15,7 @@ import {
   InboxIcon,
   LayoutDashboardIcon,
   ListTodoIcon,
+  LogOutIcon,
   MapIcon,
   MenuIcon,
   MicIcon,
@@ -29,13 +30,23 @@ import {
   EyeIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { ResizeHandle, usePersistedWidth } from "@/components/shell/panels";
 import { NewSubjectDialog } from "@/components/create/new-subject-dialog";
 import { QuickCaptureDialog } from "@/components/create/quick-capture-dialog";
 import { VoiceCaptureDialog } from "@/components/create/voice-capture-dialog";
 import { CreateActions, type CreateOpts } from "@/components/create/create-context";
-import { useInbox } from "@/lib/queries";
+import { useAuth } from "@/components/auth/auth-provider";
+import { isLiveApi } from "@/lib/api-base";
+import { useInbox, useMe } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -87,6 +98,8 @@ export function AppShell() {
   const pendingNav = useRef<(() => void) | null>(null);
   const { resolvedTheme, setTheme } = useTheme();
   const { data: inbox } = useInbox();
+  const { data: me } = useMe();
+  const { signOut } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { width: navWidth, onPointerDown: onNavPointerDown } = usePersistedWidth(
     "layout.navWidth",
@@ -169,6 +182,8 @@ export function AppShell() {
       onPalette={() => setPalette(true)}
       theme={resolvedTheme}
       onToggleTheme={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      accountEmail={isLiveApi() ? me?.email : undefined}
+      onSignOut={() => void signOut()}
     />
   );
 
@@ -311,6 +326,8 @@ function NavBody({
   onPalette,
   theme,
   onToggleTheme,
+  accountEmail,
+  onSignOut,
 }: {
   pathname: string;
   inboxCount?: number;
@@ -320,6 +337,8 @@ function NavBody({
   onPalette: () => void;
   theme?: string;
   onToggleTheme: () => void;
+  accountEmail?: string;
+  onSignOut: () => void;
 }) {
   return (
     <>
@@ -423,6 +442,29 @@ function NavBody({
             ⌘K
           </kbd>
         </button>
+        {accountEmail ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-muted-foreground hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring/50 md:min-h-0"
+                aria-label={`Signed in as ${accountEmail}`}
+              >
+                <span className="min-w-0 flex-1 truncate">{accountEmail}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel className="truncate font-normal">
+                {accountEmail}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onSignOut}>
+                <LogOutIcon />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
     </>
   );

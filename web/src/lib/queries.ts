@@ -1,3 +1,7 @@
+/**
+ * TanStack Query hooks. Live reads/writes go through `lib/live/http.ts`, which
+ * attaches `Authorization: Bearer` from the Supabase session (refreshed on expiry).
+ */
 import {
   useMutation,
   useQuery,
@@ -5,8 +9,10 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { isLiveApi } from "@/lib/api-base";
 import { createWriteClient, getReads } from "@/lib/client";
 import { mapForestStatus, type DashboardRead, type MapLens } from "@/lib/derive";
+import { fetchMe, meQueryKey } from "@/lib/me";
 import type { LifeOsReads } from "@/lib/mock/api";
 import type {
   AdherenceState,
@@ -24,6 +30,7 @@ function reads(): LifeOsReads {
 }
 
 export const qk = {
+  me: meQueryKey,
   subjects: ["subjects"] as const,
   subject: (id: string) => ["subject", id] as const,
   listItem: (id: string) => ["list-item", id] as const,
@@ -455,6 +462,14 @@ export function useRecap(start: string, end: string, asOf: string) {
   return useQuery({
     queryKey: [...qk.recap, start, end, asOf],
     queryFn: () => reads().recap({ start, end, asOf }),
+  });
+}
+
+export function useMe() {
+  return useQuery({
+    queryKey: qk.me,
+    queryFn: fetchMe,
+    enabled: isLiveApi(),
   });
 }
 

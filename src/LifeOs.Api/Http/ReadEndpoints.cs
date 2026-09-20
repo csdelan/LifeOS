@@ -1,3 +1,4 @@
+using LifeOs.Api.Auth;
 using LifeOs.Api.Read;
 
 namespace LifeOs.Api.Http;
@@ -12,7 +13,9 @@ public static class ReadEndpoints
 {
     public static void MapReadEndpoints(this WebApplication app)
     {
-        var api = app.MapGroup("/api").WithTags("Reads");
+        var api = app.MapGroup("/api")
+            .WithTags("Reads")
+            .RequireAuthorization(AuthServiceCollectionExtensions.AllowlistedUserPolicy);
 
         api.MapGet("/subjects", ListSubjects).WithName("ListSubjects")
             .Produces<IReadOnlyList<SubjectListItem>>();

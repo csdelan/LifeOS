@@ -25,38 +25,42 @@ public static class Program
 
         builder.Services.AddLifeOsKernel(ownerConnectionString, KernelSources.Api);
         builder.Services.AddSingleton(new SubjectReader(readerConnectionString));
+        builder.Services.AddLifeOsAuth(builder.Configuration);
 
         builder.Services.AddOpenApi();
         builder.Services.AddProblemDetails();
+
+        var spaOrigins = SpaCors.ResolveOrigins(builder.Configuration);
+        if (spaOrigins.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "Cors:AllowedOrigins (or CORS_ALLOWED_ORIGINS) must list the SPA origin(s).");
+        }
+
         builder.Services.AddCors(options =>
         {
-            options.AddPolicy("vite", policy =>
-                policy.SetIsOriginAllowed(static origin =>
-                    {
-                        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
-                        {
-                            return false;
-                        }
-
-                        return uri.Host is "localhost" or "127.0.0.1";
-                    })
+            options.AddPolicy(SpaCors.PolicyName, policy =>
+                policy.WithOrigins(spaOrigins)
                     .AllowAnyHeader()
-                    .AllowAnyMethod());
+                    .AllowAnyMethod()
+                    .AllowCredentials());
         });
 
         var app = builder.Build();
 
         app.UseKernelExceptionHandler();
-        app.UseCors("vite");
-        app.UseMiddleware<AuthSeamMiddleware>();
+        app.UseCors(SpaCors.PolicyName);
+        app.UseAuthentication();
+        app.UseAuthorization();
 
-        app.MapOpenApi();
+        app.MapOpenApi().AllowAnonymous();
         app.UseSwaggerUI(options =>
         {
             options.SwaggerEndpoint("/openapi/v1.json", "LifeOS API");
             options.RoutePrefix = "swagger";
         });
 
+        app.MapAuthEndpoints();
         app.MapReadEndpoints();
         app.MapWriteEndpoints();
 

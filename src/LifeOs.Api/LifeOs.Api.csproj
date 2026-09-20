@@ -3,6 +3,7 @@
   <PropertyGroup>
     <RootNamespace>LifeOs.Api</RootNamespace>
     <IsPackable>false</IsPackable>
+    <UserSecretsId>lifeos-api-a4e7c1d8-9b2f-4c6a-8e31-5d9f0b7a2c14</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,6 +14,7 @@
   <ItemGroup>
     <PackageReference Include="Dapper" />
     <PackageReference Include="Npgsql" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
   </ItemGroup>

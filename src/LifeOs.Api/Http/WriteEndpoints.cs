@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
+using LifeOs.Api.Auth;
 using LifeOs.Api.Read;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Capture;
@@ -25,7 +26,9 @@ public static class WriteEndpoints
 
     public static void MapWriteEndpoints(this WebApplication app)
     {
-        var api = app.MapGroup("/api").WithTags("Writes");
+        var api = app.MapGroup("/api")
+            .WithTags("Writes")
+            .RequireAuthorization(AuthServiceCollectionExtensions.AllowlistedUserPolicy);
 
         api.MapPost("/subjects", NewSubject).WithName("NewSubject")
             .Produces<CreatedSubject>().Produces<ApiError>(StatusCodes.Status400BadRequest);

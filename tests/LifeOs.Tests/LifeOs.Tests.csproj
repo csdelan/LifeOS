@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\LifeOs.Application\LifeOs.Application.csproj" />
     <ProjectReference Include="..\..\src\LifeOs.Infrastructure\LifeOs.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\LifeOs.Cli\LifeOs.Cli.csproj" />
+    <ProjectReference Include="..\..\src\LifeOs.Api\LifeOs.Api.csproj" />
   </ItemGroup>
 
   <!--
@@ -36,7 +37,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Testcontainers.PostgreSql" />

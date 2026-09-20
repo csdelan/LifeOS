@@ -241,6 +241,8 @@ built (they are thin, but on the governed path).
   it; `bsk` CLI retained as a second adapter.
 - **No PostgREST** for the app's data API.
 - **Supabase** for Postgres + Auth + (later) Storage only.
+- **Auth:** Supabase Auth (Google) in the browser; `LifeOs.Api` validates the JWT
+  (JWKS, with optional legacy HS256) and restricts access to `ALLOWED_EMAILS`.
 - **Single repo**, web app under `web/`.
 - Navigation: **streamlined, tree-first** (alignment outline replaces per-type tabs);
   create-child-in-place; inline detail peek.
@@ -248,7 +250,6 @@ built (they are thin, but on the governed path).
 
 **Open (decide before/at build time):**
 
-- Auth details: Supabase Auth vs Clerk/Auth0/cookie (small, swappable).
 - Hosting target (Azure Container Apps vs Fly.io; SPA host).
 - Graph library once BROWSE-1 is built for real (React Flow vs Cytoscape/Sigma), driven by
   graph size.

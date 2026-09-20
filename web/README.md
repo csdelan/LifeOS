@@ -57,8 +57,57 @@ uses). It reads **only** via `SELECT` over `bsk.v_*` as the `bsk_reader` role.
    Types land in `src/api/schema.d.ts`. Vocabulary helpers (`STATUS_BY_TYPE`,
    `pickApplicableAttrs`, …) stay in `src/lib/production-ui-types.ts`.
 
-Auth is a marked `TODO(auth)` seam on the API — local/dev requests are unauthenticated
-this pass.
+## Auth (Google + allowlist)
+
+Live mode is a **private single-user app**. The browser signs in with Google via
+Supabase Auth; `LifeOs.Api` validates the JWT on every request and rejects anyone
+whose verified email is not in `ALLOWED_EMAILS` (403). Mock mode (`VITE_API_BASE_URL`
+unset) still skips sign-in.
+
+**Never commit real secrets.** Local API values go in user-secrets; the SPA uses
+`web/.env.local` (gitignored). Deployment uses the platform env / secret store.
+
+### Web (`web/.env.local`, from `.env.example`)
+
+| Variable | Purpose |
+|---|---|
+| `VITE_API_BASE_URL` | LifeOs.Api origin, e.g. `http://localhost:5280`. Unset = mock mode, no auth. |
+| `VITE_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon key (public by design; the API still enforces the allowlist) |
+
+Copy `web/.env.example` to `web/.env.local` and fill in the three values.
+
+Enable **Google** under Supabase → Authentication → Providers. Add the SPA origin
+(`http://localhost:5173` for local Vite) to Auth → URL configuration (Site URL and
+Redirect URLs).
+
+### API (user-secrets locally)
+
+From the repo root:
+
+```
+dotnet user-secrets --project src/LifeOs.Api set "Auth:Issuer" "https://<project-ref>.supabase.co/auth/v1"
+dotnet user-secrets --project src/LifeOs.Api set "Auth:Audience" "authenticated"
+dotnet user-secrets --project src/LifeOs.Api set "Auth:JwksUrl" "https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json"
+dotnet user-secrets --project src/LifeOs.Api set "ALLOWED_EMAILS" "you@gmail.com"
+```
+
+Optional legacy HS256 fallback (Dashboard → Settings → API → JWT Secret), only if
+the project still signs with the shared secret:
+
+```
+dotnet user-secrets --project src/LifeOs.Api set "Auth:JwtSecret" "<jwt-secret>"
+```
+
+Equivalent environment variables (deployment): `Auth__Issuer`, `Auth__Audience`,
+`Auth__JwksUrl`, `Auth__JwtSecret`, `ALLOWED_EMAILS`. CORS origins default to local
+Vite (`http://localhost:5173`); override with `Cors__AllowedOrigins__0` /
+`CORS_ALLOWED_ORIGINS`.
+
+The API will not start until issuer, audience, a signing source (JWKS and/or JWT
+secret), and at least one allowed email are set. OpenAPI at `/openapi/v1.json`
+stays unauthenticated so `npm run gen:api` still works; every `/api/*` route
+requires an allowlisted user.
 
 ## What this pass includes
 
@@ -71,6 +120,7 @@ this pass.
   (tags and relationships kept visually separate)
 - Focus dashboard and Inbox keyboard triage (↑/↓, Enter; Promote / Relate / Dismiss / Drop)
 - Live/mock swap behind `VITE_API_BASE_URL`; forest/dashboard composition in `src/lib/derive.ts`
+- Google sign-in via Supabase Auth; API JWT validation + email allowlist
 
 ## Layout
 
@@ -83,6 +133,9 @@ web/src/
   lib/mock/                    in-memory store, generators, write client
   lib/live/                    OpenAPI-fetch reads + writes
   lib/queries.ts               TanStack Query hooks + targeted invalidation
+  lib/supabase.ts              Supabase browser client (live mode)
+  lib/auth-token.ts            Bearer token + refresh for API calls
+  components/auth/             sign-in / allowlist gate
   components/ui/               shadcn/ui (Radix) primitives
   components/primitives/       LifeOS design-system widgets
   components/detail/           reusable SubjectDetail peek
@@ -96,5 +149,6 @@ web/src/
 
 ## Non-goals (left as seams)
 
-BROWSE-1 graph view, rich-text journals, appointments calendar, real Supabase Auth,
-binary artifact storage.
+BROWSE-1 graph view, rich-text journals, appointments calendar,
+binary artifact storage. Auth is single Google user + allowlist — no roles,
+orgs, or password/email sign-in.
