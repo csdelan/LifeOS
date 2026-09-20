@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -40,7 +41,8 @@ import {
 const DirtyCtx = createContext<{
   dirty: boolean;
   setDirty: (v: boolean) => void;
-}>({ dirty: false, setDirty: () => {} });
+  requestNavigation: (proceed: () => void) => void;
+}>({ dirty: false, setDirty: () => {}, requestNavigation: (proceed) => proceed() });
 
 export function useDirty() {
   return useContext(DirtyCtx);
@@ -60,6 +62,7 @@ export function AppShell() {
   const [palette, setPalette] = useState(false);
   const [creating, setCreating] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const pendingNav = useRef<(() => void) | null>(null);
   const { theme, setTheme } = useTheme();
   const { data: inbox } = useInbox();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -91,7 +94,22 @@ export function AppShell() {
     if (blocker.status === "blocked") setStayOpen(true);
   }, [blocker.status]);
 
-  const ctx = useMemo(() => ({ dirty, setDirty }), [dirty]);
+  const requestNavigation = useCallback(
+    (proceed: () => void) => {
+      if (!dirty) {
+        proceed();
+        return;
+      }
+      pendingNav.current = proceed;
+      setStayOpen(true);
+    },
+    [dirty],
+  );
+
+  const ctx = useMemo(
+    () => ({ dirty, setDirty, requestNavigation }),
+    [dirty, requestNavigation],
+  );
   const setDirtyStable = useCallback((v: boolean) => setDirty(v), []);
   void setDirtyStable;
 
@@ -191,6 +209,7 @@ export function AppShell() {
             <AlertDialogCancel
               onClick={() => {
                 setStayOpen(false);
+                pendingNav.current = null;
                 if (blocker.status === "blocked") blocker.reset?.();
               }}
             >
@@ -199,9 +218,12 @@ export function AppShell() {
             <AlertDialogAction
               variant="outline"
               onClick={() => {
+                const next = pendingNav.current;
+                pendingNav.current = null;
                 setDirty(false);
                 setStayOpen(false);
                 if (blocker.status === "blocked") blocker.proceed?.();
+                else next?.();
               }}
             >
               Discard

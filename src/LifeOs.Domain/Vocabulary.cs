@@ -137,4 +137,7 @@ public static class KernelSources
 {
     /// <summary>Events written by the <c>bsk</c> command-line interface.</summary>
     public const string Cli = "cli";
+
+    /// <summary>Events written by the ASP.NET Core API (the web door into Application).</summary>
+    public const string Api = "api";
 }

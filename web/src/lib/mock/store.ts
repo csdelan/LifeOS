@@ -87,6 +87,7 @@ export function createSubject(req: NewSubjectRequest): CreatedSubject {
     area: list.area,
     areaName: list.areaName,
     due: list.due,
+    targetDate: list.targetDate,
     statement: attrs.statement,
     scope: attrs.scope ?? attrs.description,
     attributes: JSON.stringify(attrs),
@@ -138,13 +139,12 @@ export function applyAttrs(subjectId: string, attrs: Record<string, string>) {
     if (key === "scheduled") next.scheduled = value;
     if (key === "target_date") next.targetDate = value;
     if (key === "statement") nextDetail.statement = value;
-    if (key === "scope" || key === "description") nextDetail.scope = value;
-    if (key === "title") {
-      next.title = value;
-      nextDetail.title = value;
+    if (key === "scope" || key === "description" || key === "desired_end_state") {
+      nextDetail.scope = value;
     }
   }
-  nextDetail.due = next.due ?? next.targetDate ?? nextDetail.due;
+  nextDetail.due = next.due ?? null;
+  nextDetail.targetDate = next.targetDate ?? null;
   nextDetail.attributes = JSON.stringify({
     ...(safeAttrs(detail.attributes)),
     ...Object.fromEntries(Object.entries(attrs).filter(([, v]) => v !== "")),

@@ -103,6 +103,46 @@ export function inferChildRelation(child: SubjectType, parent: SubjectType): Rel
   return PARENT_MAP.find((m) => m.child === child && m.parent === parent)?.relation;
 }
 
+/**
+ * Attribute keys the UI may send through `setAttributes` for each type.
+ * Cross-cutting: `area`, `expected_cadence`, `next_review_at` (not on Area).
+ * `due` (Task) and `target_date` (Goal/Project) are independent (GEN-10).
+ * Title is a first-class column and status moves only by event — never attributes.
+ */
+export const ATTR_KEYS_BY_TYPE: Record<SubjectType, readonly string[]> = {
+  Value: ["statement", "why_it_matters", "notes"],
+  Goal: ["desired_end_state", "target_date", "description", "motivation"],
+  Project: ["description", "start_date", "target_date", "notes"],
+  Task: ["description", "due", "scheduled", "estimated_duration"],
+  Problem: ["description", "date_identified", "impact"],
+  Decision: ["description", "decision_date"],
+  Person: ["role", "description", "contact", "notes", "person_kind"],
+  Area: ["description", "notes"],
+  Habit: ["cue", "routine", "reward", "start", "end", "allows_partial"],
+  Appointment: ["date", "start", "end", "location", "meeting_link", "notes", "all_day"],
+  Idea: ["description", "notes"],
+  Commitment: ["description", "notes"],
+  Constraint: ["scope", "limit", "notes"],
+  Season: ["focus", "ends", "notes"],
+};
+
+const CROSS_CUTTING = ["area", "expected_cadence", "next_review_at"] as const;
+
+export function pickApplicableAttrs(
+  type: SubjectType,
+  attrs: Record<string, string>,
+): Record<string, string> {
+  const allowed = new Set<string>(ATTR_KEYS_BY_TYPE[type]);
+  if (type !== "Area") {
+    for (const key of CROSS_CUTTING) allowed.add(key);
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(attrs)) {
+    if (allowed.has(key)) out[key] = value;
+  }
+  return out;
+}
+
 export function childTypesFor(parent: SubjectType): SubjectType[] {
   return [...new Set(PARENT_MAP.filter((m) => m.parent === parent).map((m) => m.child))];
 }
@@ -156,6 +196,7 @@ export interface SubjectDetail {
   title: string;
   status?: string | null;
   due?: string | null;
+  targetDate?: string | null;  // independent of due (GEN-10)
   expectedCadence?: string | null;
   nextReviewAt?: string | null;
   scope?: string | null;

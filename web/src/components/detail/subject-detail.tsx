@@ -36,7 +36,7 @@ import {
   useTagUniverse,
   useWrites,
 } from "@/lib/queries";
-import { STATUS_BY_TYPE, defaultStatus } from "@/lib/production-ui-types";
+import { STATUS_BY_TYPE, defaultStatus, pickApplicableAttrs } from "@/lib/production-ui-types";
 import type { Relation, SubjectType } from "@/lib/production-ui-types";
 import { formatTimestamp } from "@/lib/dates";
 
@@ -53,32 +53,42 @@ export function SubjectDetail({
   const [editing, setEditing] = useState(false);
   const writes = useWrites();
 
-  const [title, setTitle] = useState("");
   const [statement, setStatement] = useState("");
   const [scope, setScope] = useState("");
   const [due, setDue] = useState("");
+  const [targetDate, setTargetDate] = useState("");
   const [status, setStatus] = useState("");
 
   useEffect(() => {
     if (!data) return;
-    setTitle(data.title);
-    setStatement(data.statement ?? "");
-    setScope(data.scope ?? "");
-    setDue(data.due ?? "");
+    const attrs = parseAttrBag(data.attributes);
+    setStatement(data.statement ?? attrs.statement ?? "");
+    setScope(
+      data.type === "Goal"
+        ? attrs.desired_end_state ?? data.scope ?? ""
+        : data.scope ?? attrs.description ?? "",
+    );
+    setDue(data.due ?? attrs.due ?? "");
+    setTargetDate(data.targetDate ?? attrs.target_date ?? "");
     setStatus(data.status || defaultStatus(data.type));
     setEditing(false);
   }, [data]);
 
   const dirty = useMemo(() => {
     if (!data || !editing) return false;
+    const attrs = parseAttrBag(data.attributes);
+    const originalScope =
+      data.type === "Goal"
+        ? attrs.desired_end_state ?? data.scope ?? ""
+        : data.scope ?? attrs.description ?? "";
     return (
-      title !== data.title ||
-      statement !== (data.statement ?? "") ||
-      scope !== (data.scope ?? "") ||
-      due !== (data.due ?? "") ||
+      statement !== (data.statement ?? attrs.statement ?? "") ||
+      scope !== originalScope ||
+      due !== (data.due ?? attrs.due ?? "") ||
+      targetDate !== (data.targetDate ?? attrs.target_date ?? "") ||
       status !== (data.status || defaultStatus(data.type))
     );
-  }, [data, editing, title, statement, scope, due, status]);
+  }, [data, editing, statement, scope, due, targetDate, status]);
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -96,7 +106,7 @@ export function SubjectDetail({
       <EmptyState
         tone="error"
         title="Couldn't load this subject"
-        description="The mock reader failed. Retry from the Map."
+        description="The reader failed. Retry from the Map."
       />
     );
   }
@@ -113,17 +123,31 @@ export function SubjectDetail({
   const statuses = STATUS_BY_TYPE[subject.type];
 
   async function save() {
-    if (subject.type === "Goal" && status === "Active" && !due) {
+    if (subject.type === "Goal" && status === "Active" && !targetDate) {
       toast.error("A Goal needs a target date before it can be Active.");
       return;
     }
-    await writes.setAttributes(subject.id, {
-      title,
-      statement,
-      description: scope,
-      due,
-      target_date: due,
-    });
+    const raw: Record<string, string> = {};
+    if (subject.type === "Value") {
+      raw.statement = statement;
+    } else if (subject.type === "Goal") {
+      raw.desired_end_state = scope;
+      raw.target_date = targetDate;
+    } else if (subject.type === "Project") {
+      raw.description = scope;
+      raw.target_date = targetDate;
+    } else if (subject.type === "Task") {
+      raw.description = scope;
+      raw.due = due;
+    } else if (subject.type === "Constraint") {
+      raw.scope = scope;
+    } else {
+      raw.description = scope;
+    }
+    const attrs = pickApplicableAttrs(subject.type, raw);
+    if (Object.keys(attrs).length > 0) {
+      await writes.setAttributes(subject.id, attrs);
+    }
     const nextStatus = status || defaultStatus(subject.type);
     if (nextStatus && nextStatus !== (subject.status || defaultStatus(subject.type))) {
       await writes.setStatus(subject.id, nextStatus);
@@ -132,10 +156,15 @@ export function SubjectDetail({
   }
 
   function cancel() {
-    setTitle(subject.title);
-    setStatement(subject.statement ?? "");
-    setScope(subject.scope ?? "");
-    setDue(subject.due ?? "");
+    const attrs = parseAttrBag(subject.attributes);
+    setStatement(subject.statement ?? attrs.statement ?? "");
+    setScope(
+      subject.type === "Goal"
+        ? attrs.desired_end_state ?? subject.scope ?? ""
+        : subject.scope ?? attrs.description ?? "",
+    );
+    setDue(subject.due ?? attrs.due ?? "");
+    setTargetDate(subject.targetDate ?? attrs.target_date ?? "");
     setStatus(subject.status || defaultStatus(subject.type));
     setEditing(false);
   }
@@ -146,20 +175,13 @@ export function SubjectDetail({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <TypeBadge type={subject.type} />
-            {editing ? (
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="mt-2 h-9 font-heading text-lg"
-              />
-            ) : (
-              <h2 className="mt-1 font-heading text-2xl leading-tight">{subject.title}</h2>
-            )}
+            {/* TODO: title rename is not in Application — bsk set only patches attributes. */}
+            <h2 className="mt-1 font-heading text-2xl leading-tight">{subject.title}</h2>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <StatusPill status={subject.status || defaultStatus(subject.type) || null} />
               <DateChip
-                date={subject.due}
-                kind={subject.type === "Goal" ? "target" : "due"}
+                date={subject.type === "Goal" || subject.type === "Project" ? subject.targetDate : subject.due}
+                kind={subject.type === "Goal" || subject.type === "Project" ? "target" : "due"}
               />
               {subject.areaName ? (
                 <span className="text-[0.75rem] text-muted-foreground">{subject.areaName}</span>
@@ -221,11 +243,13 @@ export function SubjectDetail({
               statement={statement}
               scope={scope}
               due={due}
+              targetDate={targetDate}
               status={status}
               urn={subject.urn}
               setStatement={setStatement}
               setScope={setScope}
               setDue={setDue}
+              setTargetDate={setTargetDate}
               setStatus={setStatus}
               statuses={statuses}
               archived={subject.archived}
@@ -257,11 +281,13 @@ function OverviewTab({
   statement,
   scope,
   due,
+  targetDate,
   status,
   urn,
   setStatement,
   setScope,
   setDue,
+  setTargetDate,
   setStatus,
   statuses,
   archived,
@@ -273,11 +299,13 @@ function OverviewTab({
   statement: string;
   scope: string;
   due: string;
+  targetDate: string;
   status: string;
   urn: string;
   setStatement: (v: string) => void;
   setScope: (v: string) => void;
   setDue: (v: string) => void;
+  setTargetDate: (v: string) => void;
   setStatus: (v: string) => void;
   statuses?: string[];
   archived: boolean;
@@ -333,12 +361,32 @@ function OverviewTab({
         </p>
       )}
 
-      {type !== "Value" && type !== "Person" && type !== "Area" && type !== "Habit" ? (
-        <Field label={type === "Goal" || type === "Project" ? "Target date" : "Due date"}>
+      {type === "Goal" || type === "Project" ? (
+        <Field label="Target date">
+          {editing ? (
+            <Input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className="w-48" />
+          ) : targetDate ? (
+            <DateChip date={targetDate} kind="target" />
+          ) : (
+            <span className="text-sm text-muted-foreground">None</span>
+          )}
+        </Field>
+      ) : type === "Task" ? (
+        <Field label="Due date">
           {editing ? (
             <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="w-48" />
           ) : due ? (
-            <DateChip date={due} kind={type === "Goal" ? "target" : "due"} />
+            <DateChip date={due} kind="due" />
+          ) : (
+            <span className="text-sm text-muted-foreground">None</span>
+          )}
+        </Field>
+      ) : type !== "Value" && type !== "Person" && type !== "Area" && type !== "Habit" ? (
+        <Field label="Due date">
+          {editing ? (
+            <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="w-48" />
+          ) : due ? (
+            <DateChip date={due} kind="due" />
           ) : (
             <span className="text-sm text-muted-foreground">None</span>
           )}
@@ -581,6 +629,20 @@ function HistoryTab({ subjectId }: { subjectId: string }) {
       ))}
     </ol>
   );
+}
+
+function parseAttrBag(raw?: string | null): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === "string") out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

@@ -38,6 +38,10 @@ import { formatTimestamp } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { saveView } from "@/lib/view-state";
 
+function inboxRef(item: InboxItem): string {
+  return item.itemKind === "event" ? item.itemId : (item.subjectUrn ?? item.itemId);
+}
+
 export function InboxPage() {
   const { data, isLoading, isError } = useInbox();
   const search = useSearch({ from: "/inbox" });
@@ -86,7 +90,7 @@ export function InboxPage() {
         e.preventDefault();
         if (focusAction === "drop") setDropOpen(true);
         if (focusAction === "dismiss" && selected) {
-          void writes.dismiss(selected.itemId).then(afterResolve);
+          void writes.dismiss(inboxRef(selected)).then(afterResolve);
         }
       }
     }
@@ -183,7 +187,7 @@ export function InboxPage() {
             item={selected}
             focusAction={focusAction}
             setFocusAction={setFocusAction}
-            onDismiss={() => void writes.dismiss(selected.itemId).then(afterResolve)}
+            onDismiss={() => void writes.dismiss(inboxRef(selected)).then(afterResolve)}
             onDrop={() => setDropOpen(true)}
             onPromoted={afterResolve}
             onRelated={afterResolve}
@@ -206,7 +210,7 @@ export function InboxPage() {
             <AlertDialogAction
               variant="destructive"
               onClick={() => {
-                if (selected) void writes.drop(selected.itemId).then(afterResolve);
+                if (selected) void writes.drop(inboxRef(selected)).then(afterResolve);
               }}
             >
               Drop
@@ -276,7 +280,7 @@ function InboxPreview({
           onSubmit={(e) => {
             e.preventDefault();
             if (!tag.trim()) return;
-            void writes.tag(item.itemId, { add: [tag.trim()] });
+            void writes.tag(inboxRef(item), { add: [tag.trim()] });
             toast.message("Tagged — still in Inbox");
             setTag("");
           }}
@@ -320,7 +324,7 @@ function InboxPreview({
               size="sm"
               onClick={() =>
                 void writes
-                  .promote(item.itemId, promoteType, promoteTitle || "Untitled")
+                  .promote(inboxRef(item), promoteType, promoteTitle || "Untitled")
                   .then(onPromoted)
               }
             >

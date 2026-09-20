@@ -21,9 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CREATABLE_TYPES, STATUS_BY_TYPE, defaultStatus, typeLabel } from "@/lib/production-ui-types";
+import { CREATABLE_TYPES, STATUS_BY_TYPE, defaultStatus, pickApplicableAttrs, typeLabel } from "@/lib/production-ui-types";
 import type { NewSubjectRequest, SubjectType } from "@/lib/production-ui-types";
-import { useAreas, useCreateSubject, useSubjects } from "@/lib/queries";
+import { useAreas, useCreateSubject, useSubjects, useWrites } from "@/lib/queries";
 import { Separator } from "@/components/ui/separator";
 
 const schema = z
@@ -78,6 +78,7 @@ export function NewSubjectDialog({
   initialParent?: { id: string; title: string };
 }) {
   const create = useCreateSubject();
+  const writes = useWrites();
   const { data: areas } = useAreas();
   const { data: values } = useSubjects("Value");
   const form = useForm<FormValues>({
@@ -115,7 +116,7 @@ export function NewSubjectDialog({
     };
     const attrs: Record<string, string> = {};
     if (values.statement) attrs.statement = values.statement;
-    if (values.why) attrs.why = values.why;
+    if (values.why) attrs.why_it_matters = values.why;
     if (values.desiredEndState) attrs.desired_end_state = values.desiredEndState;
     if (values.targetDate) attrs.target_date = values.targetDate;
     if (values.description) attrs.description = values.description;
@@ -125,13 +126,16 @@ export function NewSubjectDialog({
     if (values.cue) attrs.cue = values.cue;
     if (values.routine) attrs.routine = values.routine;
     if (values.date) attrs.date = values.date;
-    if (values.personKind) attrs.person_kind = values.personKind;
-    if (values.status && values.status !== defaultStatus(t)) attrs.status = values.status;
-    req.attrs = attrs;
+    if (t === "Person" && values.personKind) attrs.person_kind = values.personKind;
+    req.attrs = pickApplicableAttrs(t, attrs);
     const created = await create.mutateAsync(req);
+    const initialStatus = values.status || defaultStatus(t);
+    if (initialStatus && initialStatus !== defaultStatus(t)) {
+      await writes.setStatus(created.id, initialStatus);
+    }
     if (values.tags?.trim()) {
-      // tags after create via write client — create mutation already toasts
-      void created;
+      const tags = values.tags.split(",").map((x) => x.trim()).filter(Boolean);
+      if (tags.length) await writes.tag(created.id, { add: tags });
     }
     onOpenChange(false);
   }
@@ -144,7 +148,8 @@ export function NewSubjectDialog({
         <DialogHeader>
           <DialogTitle>New {typeLabel(type)}</DialogTitle>
           <DialogDescription>
-            Type-specific create. Save is a single mock write.
+            Type-specific create. Attributes are filtered to this type; due and target
+            date stay independent.
             {initialParent ? ` Child of ${initialParent.title}.` : null}
           </DialogDescription>
         </DialogHeader>
@@ -248,7 +253,7 @@ export function NewSubjectDialog({
               <Field label="Description / scope">
                 <Textarea {...form.register("description")} />
               </Field>
-              <Field label="Target / due date">
+              <Field label="Target date">
                 <Input type="date" {...form.register("targetDate")} />
               </Field>
             </>

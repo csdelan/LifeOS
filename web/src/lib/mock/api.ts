@@ -1,13 +1,19 @@
 /**
  * Mock LifeOS read surface.
  *
- * This is the swap seam: replace these fetchers with the OpenAPI-generated
- * LifeOs.Api client. Return shapes stay exactly the types in
- * `production-ui-types.ts`. Writes go through `LifeOsWriteClient`.
+ * This is the swap seam: `lib/client.ts` selects mock vs live from
+ * `VITE_API_BASE_URL`. Return shapes stay the types in `production-ui-types.ts`.
+ * Forest / dashboard composition lives in `lib/derive.ts` so it is shared with live.
  */
 
 import { todayIso } from "@/lib/dates";
-import { isTerminal } from "@/lib/production-ui-types";
+import {
+  buildAlignmentForest,
+  deriveDashboard,
+  type AlignmentEdge,
+  type DashboardRead,
+  type MapLens,
+} from "@/lib/derive";
 import type {
   AreaRow,
   HabitOccurrenceRow,
@@ -23,37 +29,14 @@ import type {
 } from "@/lib/production-ui-types";
 import { tagUniverse, toRelationEdge } from "@/lib/mock/seed";
 import { getState as storeState } from "@/lib/mock/store";
-import { ALIGNMENT_TYPES } from "@/lib/subject-meta";
+
+export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 
 const wait = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 
 export interface SubjectRelations {
   parents: RelationEdge[];
   children: RelationEdge[];
-}
-
-export interface DashboardRead {
-  primaryFocus: { title: string; subjectId: string; kind: "goal" };
-  objectives: { id: string; title: string; subjectId?: string }[];
-  dueAndOverdue: SubjectListItem[];
-  nextActions: SubjectListItem[];
-  inboxCount: number;
-  todayHabits: HabitOccurrenceRow[];
-  activeGoals: SubjectListItem[];
-  activeProjects: SubjectListItem[];
-}
-
-export type MapLens = "all" | "Goal" | "Project" | "Task";
-
-export interface AlignmentNode {
-  id: string;
-  instanceKey: string;
-  subject: SubjectListItem;
-  relationToParent: RelationEdge["relation"] | null;
-  parentId: string | null;
-  extraParents: { id: string; title: string; type: SubjectListItem["type"] }[];
-  children: AlignmentNode[];
-  depth: number;
 }
 
 function listOf(type?: SubjectListItem["type"], includeArchived = false): SubjectListItem[] {
@@ -64,7 +47,32 @@ function listOf(type?: SubjectListItem["type"], includeArchived = false): Subjec
   });
 }
 
-export const lifeOsReads = {
+export interface LifeOsReads {
+  listSubjects(opts?: {
+    type?: SubjectListItem["type"];
+    includeArchived?: boolean;
+  }): Promise<SubjectListItem[]>;
+  getSubject(id: string): Promise<SubjectDetail | null>;
+  getListItem(id: string): Promise<SubjectListItem | null>;
+  relations(id: string): Promise<SubjectRelations>;
+  tags(id: string): Promise<string[]>;
+  tagUniverse(): Promise<TagUniverseItem[]>;
+  journal(id: string): Promise<JournalEntry[]>;
+  history(id: string): Promise<StatusHistoryEntry[]>;
+  inbox(): Promise<InboxItem[]>;
+  areas(): Promise<AreaRow[]>;
+  people(): Promise<PersonRow[]>;
+  habits(): Promise<HabitRow[]>;
+  occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]>;
+  edges(opts?: { includeArchived?: boolean }): Promise<AlignmentEdge[]>;
+  dashboard(): Promise<DashboardRead>;
+  alignmentForest(opts?: {
+    includeArchived?: boolean;
+    lens?: MapLens;
+  }): Promise<import("@/lib/derive").AlignmentNode[]>;
+}
+
+export const mockReads: LifeOsReads = {
   async listSubjects(opts?: {
     type?: SubjectListItem["type"];
     includeArchived?: boolean;
@@ -142,129 +150,46 @@ export const lifeOsReads = {
     return storeState().habits;
   },
 
+  async occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]> {
+    await wait();
+    return storeState().occurrences.filter((o) => {
+      if (opts?.habitId && o.habitId !== opts.habitId) return false;
+      if (opts?.on && o.occurrenceDate !== opts.on) return false;
+      return true;
+    });
+  },
+
+  async edges(opts?: { includeArchived?: boolean }): Promise<AlignmentEdge[]> {
+    await wait();
+    const s = storeState();
+    const allowed = new Set(
+      s.subjects.filter((x) => opts?.includeArchived || !x.archived).map((x) => x.id),
+    );
+    return s.edges.filter((e) => allowed.has(e.fromId) && allowed.has(e.toId));
+  },
+
   async dashboard(): Promise<DashboardRead> {
     await wait();
     const s = storeState();
-    const today = todayIso();
-    const openTasks = s.subjects.filter(
-      (x) => x.type === "Task" && !x.archived && !isTerminal(x.status),
-    );
-    const dueAndOverdue = openTasks
-      .filter((x) => (x.due && x.due <= today) || x.scheduled === today)
-      .sort((a, b) => (a.due ?? a.scheduled ?? "").localeCompare(b.due ?? b.scheduled ?? ""));
-    const overdueIds = new Set(dueAndOverdue.map((x) => x.id));
-    const nextActions = openTasks
-      .filter((x) => !overdueIds.has(x.id) && x.status === "In progress")
-      .slice(0, 4);
-    return {
-      primaryFocus: s.primaryFocus,
-      objectives: s.objectives,
-      dueAndOverdue,
-      nextActions,
+    return deriveDashboard({
+      subjects: s.subjects,
+      edges: s.edges,
       inboxCount: s.inbox.length,
-      todayHabits: s.occurrences.filter((o) => o.occurrenceDate === today),
-      activeGoals: s.subjects.filter(
-        (x) => x.type === "Goal" && x.status === "Active" && !x.archived,
-      ),
-      activeProjects: s.subjects.filter(
-        (x) => x.type === "Project" && x.status === "Active" && !x.archived,
-      ),
-    };
+      habits: s.habits,
+      occurrences: s.occurrences,
+      today: todayIso(),
+    });
   },
 
   async alignmentForest(opts?: {
     includeArchived?: boolean;
     lens?: MapLens;
-  }): Promise<AlignmentNode[]> {
+  }) {
     await wait();
-    return buildForest(opts?.includeArchived ?? false, opts?.lens ?? "all");
+    const s = storeState();
+    return buildAlignmentForest(s.subjects, s.edges, opts);
   },
 };
 
-function buildForest(includeArchived: boolean, lens: MapLens): AlignmentNode[] {
-  const s = storeState();
-  const subjects = s.subjects.filter((x) => includeArchived || !x.archived);
-  const by = new Map(subjects.map((x) => [x.id, x]));
-  const childrenOf = new Map<string, { childId: string; relation: RelationEdge["relation"] }[]>();
-  const parentsOf = new Map<string, { parentId: string; relation: RelationEdge["relation"] }[]>();
-
-  for (const e of s.edges) {
-    if (!by.has(e.fromId) || !by.has(e.toId)) continue;
-    const kids = childrenOf.get(e.toId) ?? [];
-    kids.push({ childId: e.fromId, relation: e.relation });
-    childrenOf.set(e.toId, kids);
-    const pars = parentsOf.get(e.fromId) ?? [];
-    pars.push({ parentId: e.toId, relation: e.relation });
-    parentsOf.set(e.fromId, pars);
-  }
-
-  const childIds = new Set(s.edges.filter((e) => by.has(e.fromId) && by.has(e.toId)).map((e) => e.fromId));
-
-  const roots = subjects.filter((x) => {
-    if (x.type === "Value") return true;
-    if (ALIGNMENT_TYPES.includes(x.type) && !childIds.has(x.id)) return true;
-    return false;
-  });
-
-  // Keep Values first, then unaligned work.
-  roots.sort((a, b) => {
-    const rank = (t: SubjectListItem) =>
-      t.type === "Value" ? 0 : t.type === "Goal" ? 1 : t.type === "Project" ? 2 : 3;
-    return rank(a) - rank(b) || a.title.localeCompare(b.title);
-  });
-
-  const walk = (
-    id: string,
-    parentId: string | null,
-    relation: RelationEdge["relation"] | null,
-    depth: number,
-    path: Set<string>,
-  ): AlignmentNode | null => {
-    const subject = by.get(id);
-    if (!subject) return null;
-    if (path.has(id)) return null;
-    const nextPath = new Set(path);
-    nextPath.add(id);
-    const extra = (parentsOf.get(id) ?? [])
-      .filter((p) => p.parentId !== parentId)
-      .map((p) => {
-        const parent = by.get(p.parentId);
-        return parent
-          ? { id: parent.id, title: parent.title, type: parent.type }
-          : null;
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null);
-
-    const kids = (childrenOf.get(id) ?? [])
-      .map((c) => walk(c.childId, id, c.relation, depth + 1, nextPath))
-      .filter((n): n is AlignmentNode => n !== null);
-
-    return {
-      id,
-      instanceKey: `${parentId ?? "root"}:${id}`,
-      subject,
-      relationToParent: relation,
-      parentId,
-      extraParents: extra,
-      children: kids,
-      depth,
-    };
-  };
-
-  const forest = roots
-    .map((r) => walk(r.id, null, null, 0, new Set()))
-    .filter((n): n is AlignmentNode => n !== null);
-
-  if (lens === "all") return forest;
-  return filterLens(forest, lens);
-}
-
-function filterLens(nodes: AlignmentNode[], lens: MapLens): AlignmentNode[] {
-  const keep = (n: AlignmentNode): AlignmentNode | null => {
-    const kids = n.children.map(keep).filter((x): x is AlignmentNode => x !== null);
-    const selfMatch = n.subject.type === lens || n.subject.type === "Value";
-    if (!selfMatch && kids.length === 0) return null;
-    return { ...n, children: kids };
-  };
-  return nodes.map(keep).filter((x): x is AlignmentNode => x !== null);
-}
+/** @deprecated Prefer importing from `@/lib/client`. Kept so existing mock imports keep working. */
+export const lifeOsReads = mockReads;

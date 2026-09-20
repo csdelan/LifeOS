@@ -3,7 +3,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { childTypesFor, inferChildRelation, typeLabel } from "@/lib/production-ui-types";
 import type { SubjectType } from "@/lib/production-ui-types";
 import { useAlignmentForest, useCreateSubject } from "@/lib/queries";
-import type { AlignmentNode, MapLens } from "@/lib/mock/api";
+import type { AlignmentNode, MapLens } from "@/lib/derive";
 import { TreeNode } from "@/components/primitives/tree-node";
 import { TreeSkeleton } from "@/components/primitives/skeletons";
 import { EmptyState } from "@/components/primitives/empty-state";
@@ -28,7 +28,7 @@ export function MapPage() {
   const lens = (search.lens ?? "all") as MapLens;
   const selected = search.selected as string | undefined;
   const { data, isLoading, isError } = useAlignmentForest(archived, lens);
-  const { setDirty } = useDirty();
+  const { setDirty, requestNavigation } = useDirty();
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded());
   const [creating, setCreating] = useState<{ parentId: string } | null>(null);
 
@@ -65,8 +65,11 @@ export function MapPage() {
   }, [data, expanded.size]);
 
   function select(id: string) {
-    void navigate({
-      search: (prev) => ({ ...prev, selected: id }),
+    if (id === selected) return;
+    requestNavigation(() => {
+      void navigate({
+        search: (prev) => ({ ...prev, selected: id }),
+      });
     });
   }
 
@@ -179,7 +182,9 @@ export function MapPage() {
               subjectId={selected}
               onDirtyChange={setDirty}
               onClose={() =>
-                void navigate({ search: (prev) => ({ ...prev, selected: undefined }) })
+                requestNavigation(() =>
+                  void navigate({ search: (prev) => ({ ...prev, selected: undefined }) }),
+                )
               }
             />
           </div>

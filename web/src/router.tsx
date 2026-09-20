@@ -13,7 +13,7 @@ import { ReviewsPage } from "@/pages/reviews-page";
 import { PeoplePage } from "@/pages/people-page";
 import { AreasPage } from "@/pages/areas-page";
 import { GalleryPage } from "@/pages/gallery-page";
-import type { MapLens } from "@/lib/mock/api";
+import type { MapLens } from "@/lib/derive";
 import { Button } from "@/components/ui/button";
 
 export type MapSearch = {

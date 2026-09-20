@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gen:api": "npx --yes openapi-typescript@7 http://localhost:5280/openapi/v1.json -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
@@ -36,6 +37,7 @@
     "cn": "^0.3.0",
     "lucide-react": "^1.47.0",
     "next-themes": "^0.4.6",
+    "openapi-fetch": "^0.15.0",
     "radix-ui": "^1.6.7",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
