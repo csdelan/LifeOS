@@ -39,6 +39,16 @@ public sealed class AttributeService(SubjectService subjects, ISubjectRepository
                 throw new ArgumentException("An attribute key must not be blank.", nameof(assignments));
             }
 
+            // `title` is a first-class column, not an attribute. Writing it here would
+            // silently create a shadow `title` key that is never read, so redirect to
+            // the verb that actually changes it (keeps `set` = attributes only).
+            if (string.Equals(key, "title", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException(
+                    "Title is not an attribute — use `bsk rename` to change a subject's title.",
+                    nameof(assignments));
+            }
+
             if (string.IsNullOrWhiteSpace(assignment.Value))
             {
                 removed.Add(key);

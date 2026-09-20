@@ -160,6 +160,35 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
         }
     }
 
+    public async Task<bool> RenameAsync(
+        Guid id, string newTitle, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        // Only the title column changes. The URN is left untouched, so no stored
+        // reference is affected — edges and tags key on id, and the URN string is
+        // unchanged; the slug it embeds is a birth-time convenience, not identity.
+        try
+        {
+            var affected = await connection.ExecuteAsync(new CommandDefinition(
+                "UPDATE bsk.subject SET title = @Title WHERE id = @Id;",
+                new { Id = id, Title = newTitle }, cancellationToken: cancellationToken));
+
+            return affected > 0;
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // Renaming a reuse-by-title subject (e.g. a Problem) onto an existing title
+            // trips subject_reuse_title_key. Read the type back so the message names it,
+            // then translate to the application concept (as CreateAsync does).
+            var type = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+                "SELECT type FROM bsk.subject WHERE id = @Id;",
+                new { Id = id }, cancellationToken: cancellationToken));
+            throw new DuplicateSubjectException(type ?? "subject", newTitle, ex);
+        }
+    }
+
     public async Task<string?> GetAttributeValueAsync(
         Guid id, string key, CancellationToken cancellationToken = default)
     {

@@ -50,6 +50,10 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>()));
 
+        services.AddSingleton(sp => new RenameService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>()));
+
         services.AddSingleton(sp => new RecurrenceService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>()));

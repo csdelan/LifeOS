@@ -14,6 +14,7 @@ internal sealed class SubjectEditDialog : Form
     private readonly BskCli _bsk;
     private readonly string _urn;
     private readonly string _type;
+    private readonly string _originalTitle;
     private readonly TextBox _title;
     private readonly Dictionary<string, Control> _fields = new(StringComparer.Ordinal);
     private readonly AreaSelector? _area;
@@ -28,6 +29,7 @@ internal sealed class SubjectEditDialog : Form
         _bsk = bsk;
         _urn = subject.Urn;
         _type = subject.Type;
+        _originalTitle = subject.Title;
         var attrs = DetailPane.ParseAttrs(subject.Attributes).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
 
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -151,7 +153,9 @@ internal sealed class SubjectEditDialog : Form
             AddLabeled(stack, "Recurrence:", _recurrence);
         }
 
-        _title.ReadOnly = true; // title is a first-class column; bsk set only patches attributes
+        // Title is editable: it is renamed through the dedicated `bsk rename` verb on
+        // save (bsk set patches attributes only). The URN stays fixed, so renaming
+        // never breaks a link.
         var save = new Button { Text = "Save", AutoSize = true };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
         save.Click += (_, _) => DoSave();
@@ -166,8 +170,24 @@ internal sealed class SubjectEditDialog : Form
 
     private void DoSave()
     {
+        var newTitle = _title.Text.Trim();
+        if (newTitle.Length == 0)
+        {
+            MessageBox.Show(this, "Title is required.", "Edit", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _title.Focus();
+            return;
+        }
+
         try
         {
+            // Rename first (its own verb — bsk set is attributes only), so a reuse-by-title
+            // conflict (e.g. renaming a Problem onto an existing title) aborts the save
+            // before any attribute write. Skipped when the title is unchanged.
+            if (!string.Equals(newTitle, _originalTitle, StringComparison.Ordinal))
+            {
+                _bsk.Run("rename", _urn, newTitle);
+            }
+
             var values = new Dictionary<string, string?>();
             foreach (var (key, control) in _fields)
             {

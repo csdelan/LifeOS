@@ -67,6 +67,26 @@ public sealed class AttributeServiceTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Set_rejects_title_and_points_at_rename()
+    {
+        await using var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var attributes = provider.GetRequiredService<AttributeService>();
+
+        var subject = await subjects.CreateAsync(
+            SubjectTypes.Task, $"no shadow title {Guid.NewGuid():N}", cancellationToken: Ct);
+
+        // Title is a column, not an attribute: `set title=` would write a shadow key
+        // that is never read, so it is refused with a pointer to `bsk rename`.
+        var ex = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await attributes.SetAsync(subject.Urn, [new AttributeAssignment("title", "sneaky")], Ct));
+        Assert.Contains("rename", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+        // Nothing was written under the shadow key.
+        Assert.Null(await ReadAttribute(subject.Id, "title"));
+    }
+
+    [Fact]
     public async Task Set_on_an_unknown_subject_is_an_error()
     {
         await using var provider = Provider();

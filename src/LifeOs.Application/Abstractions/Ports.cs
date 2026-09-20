@@ -87,6 +87,17 @@ public interface ISubjectRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Changes a subject's <c>title</c> in place. Only the title column is touched:
+    /// the URN is an immutable handle (its slug is a birth-time convenience), and
+    /// edges/tags reference the subject by <c>id</c>, so a rename never breaks a link.
+    /// Returns whether a row was affected (<c>false</c> = no such subject). Renaming a
+    /// reuse-by-title subject (e.g. a Problem) onto a title that already exists trips
+    /// the store's uniqueness guarantee, surfaced as <see cref="DuplicateSubjectException"/>.
+    /// </summary>
+    Task<bool> RenameAsync(
+        Guid id, string newTitle, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Reads a single top-level attribute value as text (<c>attributes-&gt;&gt;key</c>),
     /// or <c>null</c> when the subject or the key is absent.
     /// </summary>

@@ -113,9 +113,10 @@ Helper SQL functions you may call in read queries: `bsk.is_archived(uuid)`,
   valid child types (Value→Goal→Project→Task; Task also under Goal), inferring the relation
   and using `bsk new --parent` so it's atomic (no orphan on failure).
 - **BROWSE-2 — read-only-first detail:** selecting an item shows it read-only; editing is an
-  explicit opt-in with explicit **Save/Cancel** (no per-field autosave). Dirty-nav prompt
-  (Save/Discard/Cancel) when leaving with unsaved edits. Detail sections where applicable:
-  Overview, Relationships, Tags, Journal, History.
+  explicit opt-in with explicit **Save/Cancel** (no per-field autosave). The title is editable
+  and saved via `bsk rename` (the URN is immutable, so a rename never breaks a link); other
+  fields via `bsk set`. Dirty-nav prompt (Save/Discard/Cancel) when leaving with unsaved edits.
+  Detail sections where applicable: Overview, Relationships, Tags, Journal, History.
 - **GEN-1 — Tags ≠ Relationships.** Keep them visually and conceptually separate everywhere:
   "Tag" (classification, `bsk tag`, autocomplete over `v_tag_universe`) vs "Relate to"
   (`bsk link`/`relate`). Adding either during Inbox triage does **not** resolve the item

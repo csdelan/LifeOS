@@ -456,8 +456,11 @@ Build:      built
   categories, OR within a category** — is straightforward SQL.
 - Context-sensitive columns = different projections for subjects vs events (a subject list
   shows Title / Status / Due / Area / Tags; an event list shows event-appropriate fields).
-- Edit mode (read-only-first, explicit Save / Cancel) writes through `bsk`: attribute changes
-  via `bsk set`, status via `state_change`. The dirty-nav prompt is pure app state.
+- Edit mode (read-only-first, explicit Save / Cancel) writes through `bsk`: the title via
+  `bsk rename` (a first-class column, so not settable through `bsk set`; the URN is left
+  unchanged, so a rename never breaks a link), other attribute changes via `bsk set`, and
+  status via `state_change`. Renaming a reuse-by-title type (e.g. a Problem) onto an existing
+  title is rejected. The dirty-nav prompt is pure app state.
 - Kernel delta: none beyond Tags (GEN-1) and Area (GEN-2); the detail sections (Overview /
   Relationships / Tags / Journal / History) each read an existing edge / event source.
 - Open decisions: none blocking — this rides on GEN-1 and GEN-2 landing.
