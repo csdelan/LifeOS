@@ -15,7 +15,7 @@ export function HabitsPage() {
   const search = useSearch({ from: "/habits" });
   const navigate = useNavigate({ from: "/habits" });
   const selected = search.selected;
-  const { data, isLoading } = useHabits();
+  const { data, isLoading, isError } = useHabits();
   const { data: dash } = useDashboard();
   const writes = useWrites();
   const { setDirty, requestNavigation } = useDirty();
@@ -27,7 +27,7 @@ export function HabitsPage() {
   return (
     <div className="flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="shrink-0 border-b px-6 py-4">
+        <header className="shrink-0 border-b px-4 py-4 md:px-6">
           <p className="type-scale-section text-primary">Habits</p>
           <h1 className="font-heading text-2xl">Cue, routine, streak</h1>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -37,6 +37,14 @@ export function HabitsPage() {
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {isLoading ? <ListSkeleton rows={6} /> : null}
+          {isError ? (
+            <EmptyState
+              tone="error"
+              icon={RepeatIcon}
+              title="Habits failed to load"
+              description="This is not an empty list — the reader never returned."
+            />
+          ) : null}
           {habits.length === 0 && !isLoading ? (
             <EmptyState
               icon={RepeatIcon}
@@ -58,7 +66,7 @@ export function HabitsPage() {
                   >
                     <button
                       type="button"
-                      className="min-w-0 flex-1 text-left"
+                      className="min-h-11 min-w-0 flex-1 text-left"
                       onClick={() =>
                         requestNavigation(() =>
                           void navigate({ search: { selected: h.id } }),
@@ -90,7 +98,15 @@ export function HabitsPage() {
           </ul>
         </div>
       </div>
-      <PeekPanel open={!!selected}>
+      <PeekPanel
+        open={!!selected}
+        title="Habit detail"
+        onClose={() =>
+          requestNavigation(() =>
+            void navigate({ search: { selected: undefined } }),
+          )
+        }
+      >
         {selected ? (
           <SubjectDetail
             subjectId={selected}

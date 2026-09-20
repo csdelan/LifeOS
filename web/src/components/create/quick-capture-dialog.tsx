@@ -92,7 +92,7 @@ export function QuickCaptureDialog({
               tabIndex={0}
               onClick={() => setKind(k)}
               className={cn(
-                "rounded-md px-2.5 py-1 text-sm",
+                "min-h-11 rounded-md px-2.5 py-1 text-sm md:min-h-0",
                 kind === k ? "bg-primary/12 font-medium text-primary" : "text-muted-foreground hover:bg-muted",
               )}
             >
@@ -111,6 +111,13 @@ export function QuickCaptureDialog({
               : kind === "Idea"
                 ? "An idea…"
                 : "A problem…"
+          }
+          aria-label={
+            kind === "Note"
+              ? "Note"
+              : kind === "Idea"
+                ? "Idea"
+                : "Problem"
           }
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {

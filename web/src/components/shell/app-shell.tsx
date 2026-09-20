@@ -16,9 +16,12 @@ import {
   LayoutDashboardIcon,
   ListTodoIcon,
   MapIcon,
+  MenuIcon,
   MoonIcon,
+  PenLineIcon,
   PlusIcon,
   RepeatIcon,
+  SearchIcon,
   SparklesIcon,
   SunIcon,
   UsersIcon,
@@ -42,6 +45,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const DirtyCtx = createContext<{
   dirty: boolean;
@@ -69,9 +79,10 @@ export function AppShell() {
   const [palette, setPalette] = useState(false);
   const [createOpts, setCreateOpts] = useState<CreateOpts | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const pendingNav = useRef<(() => void) | null>(null);
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const { data: inbox } = useInbox();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { width: navWidth, onPointerDown: onNavPointerDown } = usePersistedWidth(
@@ -79,6 +90,10 @@ export function AppShell() {
     248,
     { min: 176, max: 400 },
   );
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -127,8 +142,6 @@ export function AppShell() {
     () => ({ dirty, setDirty, requestNavigation }),
     [dirty, requestNavigation],
   );
-  const setDirtyStable = useCallback((v: boolean) => setDirty(v), []);
-  void setDirtyStable;
 
   const createActions = useMemo(
     () => ({
@@ -138,96 +151,82 @@ export function AppShell() {
     [],
   );
 
+  const nav = (
+    <NavBody
+      pathname={pathname}
+      inboxCount={inbox?.length}
+      onNew={() => setCreateOpts({})}
+      onCapture={() => setCapturing(true)}
+      onPalette={() => setPalette(true)}
+      theme={resolvedTheme}
+      onToggleTheme={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+    />
+  );
+
   return (
     <DirtyCtx.Provider value={ctx}>
       <CreateActions.Provider value={createActions}>
-      <div className="flex h-svh overflow-hidden bg-background">
-      <aside className="relative flex shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground" style={{ width: navWidth }}>
-          <ResizeHandle edge="end" onPointerDown={onNavPointerDown} />
-          <div className="flex items-center gap-2 px-4 py-4">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-heading text-lg">
-              ⌘
-            </span>
-            <div>
-              <p className="font-heading text-lg leading-none">LifeOS</p>
-              <p className="text-[0.6875rem] text-muted-foreground">Command center</p>
-            </div>
-          </div>
-          <nav className="flex flex-1 flex-col gap-0.5 px-2">
-            {NAV.map((item) => {
-              const active =
-                item.to === "/"
-                  ? pathname === "/"
-                  : pathname === item.to || pathname.startsWith(item.to + "/");
-              const Icon = item.icon;
-              const count = item.to === "/inbox" ? inbox?.length : undefined;
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition-colors ease-hearth",
-                    active
-                      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground opacity-70 hover:bg-sidebar-accent hover:opacity-100",
-                  )}
-                >
-                  <Icon className="size-4" />
-                  {item.label}
-                  {typeof count === "number" && count > 0 ? (
-                    <span className="ml-auto rounded-full bg-attention/15 px-1.5 text-[0.6875rem] font-medium text-attention">
-                      {count}
-                    </span>
-                  ) : null}
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="space-y-1 border-t p-2">
-            <Link
-              to="/gallery"
-              className={cn(
-                "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent",
-                pathname === "/gallery" && "bg-sidebar-accent text-foreground",
-              )}
-            >
-              <SparklesIcon className="size-4" /> Gallery
-            </Link>
-            <div className="flex gap-1">
-              <Button className="flex-1" size="sm" onClick={() => setCreateOpts({})}>
-                <PlusIcon /> New
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCapturing(true)}
-              >
-                Capture
-              </Button>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                aria-label="Toggle theme"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              >
-                {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-              </Button>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPalette(true)}
-              className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent"
-            >
-              Command palette
-              <kbd className="rounded border bg-background px-1.5 py-0.5 font-sans text-[0.625rem]">
-                ⌘K
-              </kbd>
-            </button>
-          </div>
-        </aside>
-        <main className="min-w-0 flex-1 overflow-hidden">
-          <Outlet />
-        </main>
+      <div className="flex h-svh flex-col overflow-hidden bg-background md:flex-row">
+      <a href="#main" className="skip-link">
+        Skip to main content
+      </a>
+      <header className="flex shrink-0 items-center gap-2 border-b bg-sidebar px-2 py-1.5 md:hidden">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Open navigation"
+          aria-expanded={navOpen}
+          aria-controls="mobile-nav"
+          onClick={() => setNavOpen(true)}
+        >
+          <MenuIcon />
+        </Button>
+        <p className="font-heading text-lg leading-none">LifeOS</p>
+        <div className="ml-auto flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Command palette"
+            onClick={() => setPalette(true)}
+          >
+            <SearchIcon />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Quick capture"
+            onClick={() => setCapturing(true)}
+          >
+            <PenLineIcon />
+          </Button>
+          <Button size="icon" aria-label="New subject" onClick={() => setCreateOpts({})}>
+            <PlusIcon />
+          </Button>
+        </div>
+      </header>
+      <aside
+        className="relative hidden shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground md:flex"
+        style={{ width: navWidth }}
+      >
+        <ResizeHandle edge="end" onPointerDown={onNavPointerDown} />
+        {nav}
+      </aside>
+      <Sheet open={navOpen} onOpenChange={setNavOpen}>
+        <SheetContent
+          id="mobile-nav"
+          side="left"
+          className="w-[min(20rem,92vw)] gap-0 p-0 sm:max-w-none data-[side=left]:w-[min(20rem,92vw)] data-[side=left]:sm:max-w-none"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Navigation</SheetTitle>
+            <SheetDescription>Primary destinations in LifeOS</SheetDescription>
+          </SheetHeader>
+          <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">{nav}</div>
+        </SheetContent>
+      </Sheet>
+      <main id="main" className="min-w-0 flex-1 overflow-hidden" tabIndex={-1}>
+        <Outlet />
+      </main>
       </div>
       <CommandPalette
         open={palette}
@@ -281,5 +280,121 @@ export function AppShell() {
       </AlertDialog>
       </CreateActions.Provider>
     </DirtyCtx.Provider>
+  );
+}
+
+function NavBody({
+  pathname,
+  inboxCount,
+  onNew,
+  onCapture,
+  onPalette,
+  theme,
+  onToggleTheme,
+}: {
+  pathname: string;
+  inboxCount?: number;
+  onNew: () => void;
+  onCapture: () => void;
+  onPalette: () => void;
+  theme?: string;
+  onToggleTheme: () => void;
+}) {
+  return (
+    <>
+      <div className="flex items-center gap-2 px-4 py-4">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-primary font-heading text-lg text-primary-foreground">
+          ⌘
+        </span>
+        <div>
+          <p className="font-heading text-lg leading-none">LifeOS</p>
+          <p className="text-[0.6875rem] text-muted-foreground">Command center</p>
+        </div>
+      </div>
+      <nav className="flex flex-1 flex-col gap-0.5 px-2" aria-label="Primary">
+        {NAV.map((item) => {
+          const active =
+            item.to === "/"
+              ? pathname === "/"
+              : pathname === item.to || pathname.startsWith(item.to + "/");
+          const Icon = item.icon;
+          const count = item.to === "/inbox" ? inboxCount : undefined;
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex min-h-11 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition-colors ease-hearth md:min-h-0",
+                active
+                  ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground opacity-70 hover:bg-sidebar-accent hover:opacity-100",
+              )}
+            >
+              <Icon className="size-4" aria-hidden />
+              {item.label}
+              {typeof count === "number" && count > 0 ? (
+                <span
+                  className="ml-auto rounded-full bg-attention/15 px-1.5 text-[0.6875rem] font-medium text-attention"
+                  aria-label={`${count} inbox items`}
+                >
+                  {count}
+                </span>
+              ) : null}
+            </Link>
+          );
+        })}
+      </nav>
+      <div className="space-y-1 border-t p-2">
+        <Link
+          to="/gallery"
+          aria-current={pathname === "/gallery" ? "page" : undefined}
+          className={cn(
+            "flex min-h-11 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent md:min-h-0",
+            pathname === "/gallery" && "bg-sidebar-accent text-foreground",
+          )}
+        >
+          <SparklesIcon className="size-4" aria-hidden /> Gallery
+        </Link>
+        <div className="hidden gap-1 md:flex">
+          <Button className="flex-1" size="sm" onClick={onNew}>
+            <PlusIcon /> New
+          </Button>
+          <Button variant="outline" size="sm" onClick={onCapture}>
+            Capture
+          </Button>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            onClick={onToggleTheme}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </Button>
+        </div>
+        <div className="flex gap-1 md:hidden">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            onClick={onToggleTheme}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+            Theme
+          </Button>
+        </div>
+        <button
+          type="button"
+          onClick={onPalette}
+          className="flex min-h-11 w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring/50 md:min-h-0"
+        >
+          Command palette
+          <kbd className="hidden rounded border bg-background px-1.5 py-0.5 font-sans text-[0.625rem] md:inline">
+            ⌘K
+          </kbd>
+        </button>
+      </div>
+    </>
   );
 }

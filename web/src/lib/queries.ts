@@ -19,7 +19,9 @@ import type {
   SubjectType,
 } from "@/lib/production-ui-types";
 
-const reads: LifeOsReads = getReads();
+function reads(): LifeOsReads {
+  return getReads();
+}
 
 export const qk = {
   subjects: ["subjects"] as const,
@@ -284,14 +286,14 @@ function optimisticAdhere(
 export function useSubjects(type?: SubjectType, includeArchived = false) {
   return useQuery({
     queryKey: [...qk.subjects, type ?? "all", includeArchived],
-    queryFn: () => reads.listSubjects({ type, includeArchived }),
+    queryFn: () => reads().listSubjects({ type, includeArchived }),
   });
 }
 
 export function useSubject(id: string | undefined) {
   return useQuery({
     queryKey: qk.subject(id ?? ""),
-    queryFn: () => reads.getSubject(id!),
+    queryFn: () => reads().getSubject(id!),
     enabled: !!id,
   });
 }
@@ -299,7 +301,7 @@ export function useSubject(id: string | undefined) {
 export function useListItem(id: string | undefined) {
   return useQuery({
     queryKey: qk.listItem(id ?? ""),
-    queryFn: () => reads.getListItem(id!),
+    queryFn: () => reads().getListItem(id!),
     enabled: !!id,
   });
 }
@@ -307,7 +309,7 @@ export function useListItem(id: string | undefined) {
 export function useRelations(id: string | undefined) {
   return useQuery({
     queryKey: qk.relations(id ?? ""),
-    queryFn: () => reads.relations(id!),
+    queryFn: () => reads().relations(id!),
     enabled: !!id,
   });
 }
@@ -315,7 +317,7 @@ export function useRelations(id: string | undefined) {
 export function useSubjectTags(id: string | undefined) {
   return useQuery({
     queryKey: qk.tags(id ?? ""),
-    queryFn: () => reads.tags(id!),
+    queryFn: () => reads().tags(id!),
     enabled: !!id,
   });
 }
@@ -323,14 +325,14 @@ export function useSubjectTags(id: string | undefined) {
 export function useTagUniverse() {
   return useQuery({
     queryKey: qk.tagUniverse,
-    queryFn: () => reads.tagUniverse(),
+    queryFn: () => reads().tagUniverse(),
   });
 }
 
 export function useJournal(id: string | undefined) {
   return useQuery({
     queryKey: qk.journal(id ?? ""),
-    queryFn: () => reads.journal(id!),
+    queryFn: () => reads().journal(id!),
     enabled: !!id,
   });
 }
@@ -338,7 +340,7 @@ export function useJournal(id: string | undefined) {
 export function useHistory(id: string | undefined) {
   return useQuery({
     queryKey: qk.history(id ?? ""),
-    queryFn: () => reads.history(id!),
+    queryFn: () => reads().history(id!),
     enabled: !!id,
   });
 }
@@ -346,70 +348,70 @@ export function useHistory(id: string | undefined) {
 export function useInbox() {
   return useQuery({
     queryKey: qk.inbox,
-    queryFn: () => reads.inbox(),
+    queryFn: () => reads().inbox(),
   });
 }
 
 export function useAreas() {
   return useQuery({
     queryKey: qk.areas,
-    queryFn: () => reads.areas(),
+    queryFn: () => reads().areas(),
   });
 }
 
 export function usePeople() {
   return useQuery({
     queryKey: qk.people,
-    queryFn: () => reads.people(),
+    queryFn: () => reads().people(),
   });
 }
 
 export function useDashboard() {
   return useQuery({
     queryKey: qk.dashboard,
-    queryFn: () => reads.dashboard(),
+    queryFn: () => reads().dashboard(),
   });
 }
 
 export function useAlignmentForest(includeArchived: boolean, lens: MapLens) {
   return useQuery({
     queryKey: qk.forest(includeArchived, lens),
-    queryFn: () => reads.alignmentForest({ includeArchived, lens }),
+    queryFn: () => reads().alignmentForest({ includeArchived, lens }),
   });
 }
 
 export function useAlignmentEdges(includeArchived: boolean) {
   return useQuery({
     queryKey: qk.edges(includeArchived),
-    queryFn: () => reads.edges({ includeArchived }),
+    queryFn: () => reads().edges({ includeArchived }),
   });
 }
 
 export function useHabits() {
   return useQuery({
     queryKey: qk.habits,
-    queryFn: () => reads.habits(),
+    queryFn: () => reads().habits(),
   });
 }
 
 export function useOccurrences(habitId?: string) {
   return useQuery({
     queryKey: [...qk.occurrences, habitId ?? "all"],
-    queryFn: () => reads.occurrences(habitId ? { habitId } : undefined),
+    queryFn: () => reads().occurrences(habitId ? { habitId } : undefined),
   });
 }
 
 export function useReviews(kind?: "daily" | "weekly", date?: string) {
   return useQuery({
     queryKey: [...qk.reviews, kind ?? "all", date ?? ""],
-    queryFn: () => reads.reviews(kind && date ? { kind, date } : undefined),
+    queryFn: () => reads().reviews(kind && date ? { kind, date } : undefined),
   });
 }
 
 export function useRecap(start: string, end: string, asOf: string) {
   return useQuery({
     queryKey: [...qk.recap, start, end, asOf],
-    queryFn: () => reads.recap({ start, end, asOf }),
+    queryFn: () => reads().recap({ start, end, asOf }),
   });
 }
 

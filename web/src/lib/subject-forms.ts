@@ -14,6 +14,11 @@ import type {
 
 export const NONE = "__none__";
 
+/** Read-only until Edit; Save is enabled only while the form is dirty. */
+export function isDetailDirty(editing: boolean, formIsDirty: boolean): boolean {
+  return editing && formIsDirty;
+}
+
 export type FieldKind =
   | "text"
   | "textarea"

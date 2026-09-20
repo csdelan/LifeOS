@@ -18,6 +18,7 @@ export function EmptyState({
 }) {
   return (
     <div
+      role={tone === "error" ? "alert" : "status"}
       className={cn(
         "flex flex-col items-center justify-center rounded-xl px-6 py-12 text-center",
         tone === "error" && "bg-destructive/6",

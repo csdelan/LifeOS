@@ -46,7 +46,7 @@ export function TasksPage() {
   const search = useSearch({ from: "/tasks" });
   const navigate = useNavigate({ from: "/tasks" });
   const selected = search.selected;
-  const { data, isLoading } = useSubjects("Task", true);
+  const { data, isLoading, isError } = useSubjects("Task", true);
   const { data: allSubjects } = useSubjects(undefined, true);
   const { data: edges } = useAlignmentEdges(true);
   const { data: areas } = useAreas();
@@ -139,7 +139,7 @@ export function TasksPage() {
   return (
     <div className="flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="shrink-0 border-b px-6 py-4">
+        <header className="shrink-0 border-b px-4 py-4 md:px-6">
           <p className="type-scale-section text-primary">Tasks</p>
           <h1 className="font-heading text-2xl">Working view</h1>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -158,6 +158,7 @@ export function TasksPage() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="New task — Enter to create"
+              aria-label="New task title"
               className="flex-1"
             />
             <Button type="submit" size="sm" disabled={!draft.trim() || create.isPending}>
@@ -240,6 +241,14 @@ export function TasksPage() {
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {isLoading ? <ListSkeleton rows={8} /> : null}
+          {isError ? (
+            <EmptyState
+              tone="error"
+              icon={ListTodoIcon}
+              title="Tasks failed to load"
+              description="This is not an empty list — the reader never returned."
+            />
+          ) : null}
           {!isLoading && filtered.length === 0 ? (
             <EmptyState
               icon={ListTodoIcon}
@@ -267,7 +276,15 @@ export function TasksPage() {
           )}
         </div>
       </div>
-      <PeekPanel open={!!selected}>
+      <PeekPanel
+        open={!!selected}
+        title="Task detail"
+        onClose={() =>
+          requestNavigation(() =>
+            void navigate({ search: { selected: undefined } }),
+          )
+        }
+      >
         {selected ? (
           <SubjectDetail
             subjectId={selected}

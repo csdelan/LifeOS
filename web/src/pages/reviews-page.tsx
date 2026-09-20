@@ -27,7 +27,7 @@ export function ReviewsPage() {
   const kind: ReviewKind = search.kind === "weekly" ? "weekly" : "daily";
   const today = todayIso();
   const date = search.date ?? (kind === "weekly" ? startOfWeekSunday(today) : today);
-  const { data, isLoading } = useReviews(kind, date);
+  const { data, isLoading, isError } = useReviews(kind, date);
   const writes = useWrites();
   const { setDirty } = useDirty();
 
@@ -48,7 +48,7 @@ export function ReviewsPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-6 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 md:px-6">
         <p className="type-scale-section text-primary">Reviews</p>
         <h1 className="type-scale-display mt-1">Look back, then look ahead</h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -57,11 +57,12 @@ export function ReviewsPage() {
         </p>
 
         <div className="mt-6 flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg bg-muted p-0.5">
+          <div className="flex rounded-lg bg-muted p-0.5" role="group" aria-label="Review kind">
             <button
               type="button"
+              aria-pressed={kind === "daily"}
               className={cn(
-                "rounded-md px-3 py-1 text-sm",
+                "min-h-11 rounded-md px-3 py-1 text-sm md:min-h-0",
                 kind === "daily" ? "bg-background shadow-sm" : "text-muted-foreground",
               )}
               onClick={() => go("daily", today)}
@@ -70,8 +71,9 @@ export function ReviewsPage() {
             </button>
             <button
               type="button"
+              aria-pressed={kind === "weekly"}
               className={cn(
-                "rounded-md px-3 py-1 text-sm",
+                "min-h-11 rounded-md px-3 py-1 text-sm md:min-h-0",
                 kind === "weekly" ? "bg-background shadow-sm" : "text-muted-foreground",
               )}
               onClick={() => go("weekly", startOfWeekSunday(today))}
@@ -101,6 +103,14 @@ export function ReviewsPage() {
         </div>
 
         {isLoading ? <ListSkeleton rows={8} /> : null}
+        {isError ? (
+          <EmptyState
+            tone="error"
+            icon={ClipboardCheckIcon}
+            title="Reviews failed to load"
+            description="This is not an empty review — the reader never returned."
+          />
+        ) : null}
         {!isLoading && !doc ? (
           <EmptyState
             icon={ClipboardCheckIcon}
@@ -205,7 +215,7 @@ function ReviewEditor({
                 <li key={d.id}>
                   <button
                     type="button"
-                    className="text-sm text-primary hover:underline"
+                    className="min-h-11 text-sm text-primary hover:underline"
                     onClick={() => onOpenDaily(d.date)}
                   >
                     {formatDayFull(d.date)}
@@ -228,12 +238,22 @@ function ReviewEditor({
       <section className="space-y-4">
         <h2 className="font-heading text-xl">Reflection</h2>
         <div className="space-y-1.5">
-          <Label>What worked well?</Label>
-          <Textarea value={workedWell} onChange={(e) => setWorkedWell(e.target.value)} rows={4} />
+          <Label htmlFor="review-worked-well">What worked well?</Label>
+          <Textarea
+            id="review-worked-well"
+            value={workedWell}
+            onChange={(e) => setWorkedWell(e.target.value)}
+            rows={4}
+          />
         </div>
         <div className="space-y-1.5">
-          <Label>What do I want to do differently?</Label>
-          <Textarea value={differently} onChange={(e) => setDifferently(e.target.value)} rows={4} />
+          <Label htmlFor="review-differently">What do I want to do differently?</Label>
+          <Textarea
+            id="review-differently"
+            value={differently}
+            onChange={(e) => setDifferently(e.target.value)}
+            rows={4}
+          />
         </div>
       </section>
 
@@ -245,8 +265,13 @@ function ReviewEditor({
             <p className="font-heading text-xl">{dash?.primaryFocus.title ?? "—"}</p>
             <p className="text-xs text-muted-foreground">Keeping it is an explicit choice.</p>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <Switch checked={keepFocus} onCheckedChange={setKeepFocus} />
+          <label className="flex min-h-11 items-center gap-2 text-sm md:min-h-0">
+            <Switch
+              id="keep-focus"
+              checked={keepFocus}
+              onCheckedChange={setKeepFocus}
+              aria-label="Keep primary focus"
+            />
             Keep focus
           </label>
         </div>
@@ -258,8 +283,9 @@ function ReviewEditor({
           </ul>
         ) : null}
         <div className="space-y-1.5">
-          <Label>Next projects / tasks</Label>
+          <Label htmlFor="review-planning">Next projects / tasks</Label>
           <Textarea
+            id="review-planning"
             value={planning}
             onChange={(e) => setPlanning(e.target.value)}
             rows={5}

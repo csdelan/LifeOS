@@ -17,7 +17,7 @@ export function FocusPage() {
 
   if (isLoading) {
     return (
-      <div className="h-full overflow-y-auto px-8 py-8">
+      <div className="h-full overflow-y-auto px-4 py-8 md:px-8">
         <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
           <CardSkeleton />
           <CardSkeleton />
@@ -44,7 +44,7 @@ export function FocusPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-5xl px-8 py-8">
+      <div className="mx-auto max-w-5xl px-4 py-8 md:px-8">
         <p className="type-scale-section text-primary">Today</p>
         <h1 className="type-scale-display mt-1">What deserves attention</h1>
         <p className="mt-2 max-w-xl text-muted-foreground">
@@ -152,7 +152,7 @@ export function FocusPage() {
                 >
                   <button
                     type="button"
-                    className="text-left"
+                    className="min-h-11 text-left"
                     onClick={() =>
                       void navigate({ to: "/habits", search: { selected: h.habitId } })
                     }
@@ -197,15 +197,19 @@ export function FocusPage() {
           </section>
           <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
             <h2 className="type-scale-section mb-3 text-muted-foreground">Active projects</h2>
-            {data.activeProjects.map((p) => (
-              <ListRow
-                key={p.id}
-                item={p}
-                onSelect={() =>
-                  void navigate({ to: "/map", search: { selected: p.id } })
-                }
-              />
-            ))}
+            {data.activeProjects.length === 0 ? (
+              <EmptyState title="No active projects" className="py-6" />
+            ) : (
+              data.activeProjects.map((p) => (
+                <ListRow
+                  key={p.id}
+                  item={p}
+                  onSelect={() =>
+                    void navigate({ to: "/map", search: { selected: p.id } })
+                  }
+                />
+              ))
+            )}
           </section>
         </div>
 

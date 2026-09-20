@@ -4,7 +4,7 @@ import type {
   LifeOsWriteClient,
   NewSubjectRequest,
 } from "@/lib/production-ui-types";
-import { inferChildRelation, isTerminal } from "@/lib/production-ui-types";
+import { inferChildRelation } from "@/lib/production-ui-types";
 import {
   addEdge,
   adhereHabit,
@@ -15,6 +15,7 @@ import {
   captureNote,
   completeReviewDoc,
   createSubject,
+  dropInboxItem,
   flagItem,
   involvePerson,
   removeInbox,
@@ -125,20 +126,7 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
 
     async drop(item) {
       await wait();
-      const row = getState().inbox.find((i) => i.itemId === item);
-      if (row?.itemKind === "subject" && row.subjectUrn) {
-        const subject = byRef(row.subjectUrn);
-        if (subject) {
-          const terminal =
-            subject.type === "Idea"
-              ? "Rejected"
-              : subject.type === "Problem"
-                ? "Cancelled"
-                : "Cancelled";
-          if (!isTerminal(subject.status)) setStatus(subject.id, terminal);
-        }
-      }
-      removeInbox(item);
+      dropInboxItem(item);
       notify("Dropped");
       bump();
     },

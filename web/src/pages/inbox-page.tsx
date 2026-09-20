@@ -37,6 +37,14 @@ import { useInbox, useSubjects, useWrites } from "@/lib/queries";
 import { formatTimestamp } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { saveView } from "@/lib/view-state";
+import { useIsDesktop } from "@/lib/media-query";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 function inboxRef(item: InboxItem): string {
   return item.itemKind === "event" ? item.itemId : (item.subjectUrn ?? item.itemId);
@@ -46,8 +54,9 @@ export function InboxPage() {
   const { data, isLoading, isError } = useInbox();
   const search = useSearch({ from: "/inbox" });
   const navigate = useNavigate({ from: "/inbox" });
-  const selectedId = (search.item as string | undefined) ?? data?.[0]?.itemId;
-  const selected = data?.find((i) => i.itemId === selectedId) ?? data?.[0];
+  const isDesktop = useIsDesktop();
+  const selectedId = search.item ?? (isDesktop ? data?.[0]?.itemId : undefined);
+  const selected = data?.find((i) => i.itemId === selectedId);
   const writes = useWrites();
   const [dropOpen, setDropOpen] = useState(false);
   const [focusAction, setFocusAction] = useState<"promote" | "relate" | "dismiss" | "drop">(
@@ -78,6 +87,7 @@ export function InboxPage() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (dropOpen) return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         move(1);
@@ -133,7 +143,7 @@ export function InboxPage() {
 
   return (
     <div className="flex h-full min-h-0">
-      <div className="flex w-[22rem] shrink-0 flex-col border-r">
+      <div className="flex min-w-0 w-full shrink-0 flex-col border-r md:w-[22rem]">
         <header className="border-b px-4 py-3">
           <h1 className="font-heading text-2xl">Inbox</h1>
           <p className="text-xs text-muted-foreground">
@@ -157,31 +167,32 @@ export function InboxPage() {
               description="Nothing needs a decision. That's the point."
             />
           ) : null}
-          <table className="w-full table-fixed">
-            <tbody>
-              {table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
+          <ul className="divide-y divide-border/60">
+            {table.getRowModel().rows.map((row) => (
+              <li key={row.id}>
+                <button
+                  type="button"
                   onClick={() => select(row.original.itemId)}
+                  aria-current={selected?.itemId === row.original.itemId ? "true" : undefined}
                   className={cn(
-                    "cursor-pointer border-b border-border/60",
+                    "flex min-h-11 w-full cursor-pointer px-4 py-3 text-left focus-visible:ring-2 focus-visible:ring-ring/50",
                     selected?.itemId === row.original.itemId
                       ? "bg-primary/8"
                       : "hover:bg-muted/50",
                   )}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-2.5">
+                    <div key={cell.id} className="min-w-0 flex-1">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
+                    </div>
                   ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
-      <div className="min-w-0 flex-1 overflow-y-auto p-6">
+      <div className="hidden min-w-0 flex-1 overflow-y-auto p-6 md:block">
         {selected ? (
           <InboxPreview
             item={selected}
@@ -196,6 +207,35 @@ export function InboxPage() {
           <EmptyState title="Select an item" description="Preview and triage open here." />
         )}
       </div>
+      <Sheet
+        open={!isDesktop && !!search.item && !!selected}
+        onOpenChange={(next) => {
+          if (!next) void navigate({ search: {} });
+        }}
+      >
+        <SheetContent
+          side="right"
+          showCloseButton={false}
+          className="h-full w-full gap-0 overflow-y-auto p-6 sm:max-w-none data-[side=right]:w-full data-[side=right]:sm:max-w-none"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Inbox item</SheetTitle>
+            <SheetDescription>Triage this capture. Close returns to the list.</SheetDescription>
+          </SheetHeader>
+          {selected ? (
+            <InboxPreview
+              item={selected}
+              focusAction={focusAction}
+              setFocusAction={setFocusAction}
+              onDismiss={() => void writes.dismiss(inboxRef(selected)).then(afterResolve)}
+              onDrop={() => setDropOpen(true)}
+              onPromoted={afterResolve}
+              onRelated={afterResolve}
+              onBack={() => void navigate({ search: {} })}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
       <AlertDialog open={dropOpen} onOpenChange={setDropOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -230,6 +270,7 @@ function InboxPreview({
   onDrop,
   onPromoted,
   onRelated,
+  onBack,
 }: {
   item: InboxItem;
   focusAction: "promote" | "relate" | "dismiss" | "drop";
@@ -238,6 +279,7 @@ function InboxPreview({
   onDrop: () => void;
   onPromoted: () => void;
   onRelated: () => void;
+  onBack?: () => void;
 }) {
   const writes = useWrites();
   const { data: subjects } = useSubjects();
@@ -254,6 +296,11 @@ function InboxPreview({
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
+      {onBack ? (
+        <Button variant="ghost" className="-ml-2" onClick={onBack}>
+          Back to list
+        </Button>
+      ) : null}
       <div>
         {item.subjectType ? <TypeBadge type={item.subjectType} /> : (
           <span className="text-xs text-muted-foreground">{item.eventKind} capture</span>
@@ -285,7 +332,12 @@ function InboxPreview({
             setTag("");
           }}
         >
-          <Input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Add tag" />
+          <Input
+            value={tag}
+            onChange={(e) => setTag(e.target.value)}
+            placeholder="Add tag"
+            aria-label="Add tag"
+          />
           <Button type="submit" variant="outline" size="sm">
             Tag
           </Button>
@@ -304,7 +356,7 @@ function InboxPreview({
         >
           <div className="flex flex-wrap gap-2">
             <Select value={promoteType} onValueChange={(v) => setPromoteType(v as SubjectType)}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-40" aria-label="Promote to type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -319,6 +371,7 @@ function InboxPreview({
               value={promoteTitle}
               onChange={(e) => setPromoteTitle(e.target.value)}
               className="flex-1"
+              aria-label="Promote title"
             />
             <Button
               size="sm"
@@ -341,7 +394,7 @@ function InboxPreview({
         >
           <div className="flex gap-2">
             <Select value={relateTo} onValueChange={setRelateTo}>
-              <SelectTrigger className="flex-1">
+              <SelectTrigger className="flex-1" aria-label="Relate to subject">
                 <SelectValue placeholder="Subject…" />
               </SelectTrigger>
               <SelectContent>

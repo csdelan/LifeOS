@@ -58,7 +58,7 @@ const sample: SubjectListItem = {
 export function GalleryPage() {
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-5xl space-y-10 px-8 py-10">
+      <div className="mx-auto max-w-5xl space-y-10 px-4 py-10 md:px-8">
         <header>
           <p className="type-scale-section text-primary">Design system</p>
           <h1 className="type-scale-display mt-1">Kitchen sink</h1>
@@ -117,7 +117,7 @@ export function GalleryPage() {
             <Tag>health</Tag>
             <Tag onRemove={() => toast("Removed")}>focus</Tag>
             <Badge>Badge</Badge>
-            <Switch defaultChecked />
+            <Switch defaultChecked aria-label="Example switch" />
           </div>
         </Section>
 
@@ -167,7 +167,7 @@ export function GalleryPage() {
         </Section>
 
         <Section title="TreeNode">
-          <div className="rounded-xl bg-card p-2 ring-1 ring-foreground/10">
+          <div className="rounded-xl bg-card p-2 ring-1 ring-foreground/10" role="tree" aria-label="Example outline">
             <TreeNode
               subject={{ ...sample, type: "Value", title: "Craftsman of systems", status: null, due: null }}
               depth={0}
@@ -239,7 +239,7 @@ export function GalleryPage() {
         </Section>
 
         <Section title="Input">
-          <Input placeholder="Quick capture…" className="max-w-sm" />
+          <Input placeholder="Quick capture…" className="max-w-sm" aria-label="Example input" />
         </Section>
       </div>
     </div>

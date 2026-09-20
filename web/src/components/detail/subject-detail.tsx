@@ -62,6 +62,7 @@ import {
   emptyFormValues,
   formConfig,
   formValuesFromDetail,
+  isDetailDirty,
   selectedParentIds,
   subjectFormSchema,
   type SubjectFormValues,
@@ -113,7 +114,7 @@ export function SubjectDetail({
     );
   }, [data, list, habit, rels, tags, editing, form]);
 
-  const dirty = editing && form.formState.isDirty;
+  const dirty = isDetailDirty(editing, form.formState.isDirty);
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -275,7 +276,7 @@ export function SubjectDetail({
 
       <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col gap-0">
         <div className="shrink-0 border-b px-5">
-          <TabsList variant="line" className="w-full justify-start">
+          <TabsList variant="line" className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="overview">
               <LayoutListIcon /> Overview
             </TabsTrigger>
@@ -443,7 +444,7 @@ function RelationshipsTab({ subjectId }: { subjectId: string }) {
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">This item</span>
           <Select value={rel} onValueChange={(v) => setRel(v as Relation)}>
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-32" aria-label="Relation">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -457,7 +458,7 @@ function RelationshipsTab({ subjectId }: { subjectId: string }) {
             value={targetType}
             onValueChange={(v) => setTargetType(v as SubjectType | "any")}
           >
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-44" aria-label="Target type">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -470,7 +471,7 @@ function RelationshipsTab({ subjectId }: { subjectId: string }) {
             </SelectContent>
           </Select>
           <Select value={to} onValueChange={setTo}>
-            <SelectTrigger className="min-w-48 flex-1">
+            <SelectTrigger className="min-w-48 flex-1" aria-label="Target subject">
               <SelectValue placeholder={subjectPlaceholder} />
             </SelectTrigger>
             <SelectContent>
@@ -562,6 +563,7 @@ function TagsTab({ subjectId }: { subjectId: string }) {
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Add a tag"
           list={`tag-universe-${subjectId}`}
+          aria-label="Add a tag"
         />
         <datalist id={`tag-universe-${subjectId}`}>
           {(universe ?? []).map((t) => (

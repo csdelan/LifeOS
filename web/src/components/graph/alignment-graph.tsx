@@ -35,6 +35,8 @@ import {
 } from "@/lib/graph-model";
 import type { AlignmentEdge, MapLens } from "@/lib/derive";
 import type { AreaRow, Relation, SubjectListItem } from "@/lib/production-ui-types";
+import { typeLabel } from "@/lib/production-ui-types";
+import { motionMs } from "@/lib/media-query";
 import { typeAccent } from "@/lib/subject-meta";
 
 const nodeTypes = { subject: SubjectGraphNode };
@@ -136,6 +138,9 @@ function GraphCanvas({
           colorByArea,
           areaColor: areaAccent(n.subject.area, areas),
         },
+        ariaLabel: `${n.subject.title}, ${typeLabel(n.subject.type)}${
+          n.subject.status ? `, ${n.subject.status}` : ""
+        }`,
         style: { width: size.width, height: size.height },
         selected: n.subject.id === selected,
       };
@@ -218,7 +223,8 @@ function GraphCanvas({
   }, [colorByArea, areas, selected, setNodes]);
 
   useEffect(() => {
-    const neighbors = neighborSet(hovered, edgesRef.current);
+    const highlight = hovered ?? selected ?? null;
+    const neighbors = neighborSet(highlight, edgesRef.current);
     setNodes((nds) => {
       let changed = false;
       const next = nds.map((n) => {
@@ -232,25 +238,28 @@ function GraphCanvas({
     setRfEdges((eds) => {
       let changed = false;
       const next = eds.map((e) => {
-        const className = dimClass(!!hovered && e.source !== hovered && e.target !== hovered);
+        const className = dimClass(
+          !!highlight && e.source !== highlight && e.target !== highlight,
+        );
         if (e.className === className) return e;
         changed = true;
         return { ...e, className };
       });
       return changed ? next : eds;
     });
-  }, [hovered, setNodes, setRfEdges]);
+  }, [hovered, selected, setNodes, setRfEdges]);
 
   useEffect(() => {
     if (!laidOut || model.nodes.length === 0) return;
     const frame = requestAnimationFrame(() => {
-      void fitView({ padding: 0.18, duration: 220 });
+      void fitView({ padding: 0.18, duration: motionMs(220) });
     });
     return () => cancelAnimationFrame(frame);
   }, [laidOut, layoutKey, fitView, model.nodes.length]);
 
   const onNodeClick: NodeMouseHandler<SubjectFlowNode> = useCallback(
     (_event, node) => {
+      setHovered(node.id);
       onSelect(node.id);
     },
     [onSelect],
@@ -258,7 +267,7 @@ function GraphCanvas({
 
   const onNodeDoubleClick: NodeMouseHandler<SubjectFlowNode> = useCallback(
     (_event, node) => {
-      void fitView({ nodes: [{ id: node.id }], padding: 0.5, duration: 280 });
+      void fitView({ nodes: [{ id: node.id }], padding: 0.5, duration: motionMs(280) });
     },
     [fitView],
   );
@@ -299,7 +308,6 @@ function GraphCanvas({
   return (
     <ReactFlow
       className="lifeos-graph h-full"
-
       nodes={nodes}
       edges={rfEdges}
       onNodesChange={onNodesChange}
@@ -310,11 +318,16 @@ function GraphCanvas({
       onNodeDoubleClick={onNodeDoubleClick}
       onNodeMouseEnter={(_, node) => setHovered(node.id)}
       onNodeMouseLeave={() => setHovered(null)}
+      onPaneClick={() => setHovered(null)}
       nodesConnectable={false}
       edgesReconnectable={false}
       zoomOnDoubleClick={false}
+      panOnDrag
+      zoomOnPinch
+      panOnScroll={false}
       minZoom={0.2}
       maxZoom={1.75}
+      aria-label="Alignment graph. Use Outline view for an accessible equivalent."
       attributionPosition="bottom-left"
       defaultEdgeOptions={{
         interactionWidth: 16,

@@ -10,7 +10,7 @@ import type {
   SubjectListItem,
   SubjectType,
 } from "@/lib/production-ui-types";
-import { defaultStatus } from "@/lib/production-ui-types";
+import { defaultStatus, isTerminal } from "@/lib/production-ui-types";
 import { applyStreakToHabit } from "@/lib/habit-streak";
 import { createSeed, type CanonicalEdge, type MockState } from "@/lib/mock/seed";
 
@@ -392,6 +392,30 @@ export function flagItem(itemRef: string) {
 
 export function removeInbox(itemId: string) {
   state.inbox = state.inbox.filter((i) => i.itemId !== itemId);
+  emit();
+}
+
+/** Drop: subjects move to a terminal status; events are dismissed. Not a delete. */
+export function dropInboxItem(itemRef: string) {
+  const row = state.inbox.find(
+    (i) => i.itemId === itemRef || i.subjectUrn === itemRef,
+  );
+  if (row?.itemKind === "subject" && row.subjectUrn) {
+    const subject = byRef(row.subjectUrn);
+    if (subject && !isTerminal(subject.status)) {
+      const terminal =
+        subject.type === "Idea"
+          ? "Rejected"
+          : subject.type === "Problem"
+            ? "Cancelled"
+            : "Cancelled";
+      setStatus(subject.id, terminal);
+    }
+  }
+  const id = row?.itemId ?? itemRef;
+  state.inbox = state.inbox.filter(
+    (i) => i.itemId !== id && i.subjectUrn !== itemRef,
+  );
   emit();
 }
 

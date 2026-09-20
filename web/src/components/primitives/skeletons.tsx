@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function ListSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2" role="status" aria-label="Loading" aria-busy="true">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-2">
           <Skeleton className="size-4 rounded-full" />
@@ -19,7 +19,7 @@ export function ListSkeleton({ rows = 5 }: { rows?: number }) {
 
 export function TreeSkeleton() {
   return (
-    <div className="space-y-2 py-2">
+    <div className="space-y-2 py-2" role="status" aria-label="Loading outline" aria-busy="true">
       <Skeleton className="h-7 w-48" />
       <Skeleton className="ml-6 h-7 w-64" />
       <Skeleton className="ml-12 h-7 w-56" />
@@ -33,7 +33,12 @@ export function TreeSkeleton() {
 
 export function CardSkeleton() {
   return (
-    <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+    <div
+      className="rounded-xl bg-card p-4 ring-1 ring-foreground/10"
+      role="status"
+      aria-label="Loading"
+      aria-busy="true"
+    >
       <Skeleton className="mb-3 h-3 w-24" />
       <Skeleton className="h-6 w-3/4" />
       <Skeleton className="mt-3 h-3 w-full" />
@@ -44,7 +49,12 @@ export function CardSkeleton() {
 
 export function GraphSkeleton() {
   return (
-    <div className="flex h-full min-h-[22rem] items-center justify-center">
+    <div
+      className="flex h-full min-h-[22rem] items-center justify-center"
+      role="status"
+      aria-label="Loading graph"
+      aria-busy="true"
+    >
       <div className="grid grid-cols-3 gap-6 opacity-70">
         <Skeleton className="h-16 w-44 rounded-xl" />
         <Skeleton className="h-16 w-48 rounded-xl" />

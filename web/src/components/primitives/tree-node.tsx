@@ -39,13 +39,19 @@ export function TreeNode({
   children?: React.ReactNode;
 }) {
   const status = subject.status || defaultStatus(subject.type) || null;
+  const createLabel = subject.type === "Task" ? "sibling" : "child";
 
   return (
-    <div>
+    <div
+      role="treeitem"
+      aria-expanded={expandable ? Boolean(expanded) : undefined}
+      aria-selected={Boolean(selected)}
+      aria-level={depth + 1}
+    >
       <div
         data-map-node={subject.id}
         className={cn(
-          "group flex items-center gap-1 rounded-lg py-1 pr-2 text-sm transition-colors ease-hearth",
+          "group flex min-h-11 items-center gap-1 rounded-lg py-1 pr-2 text-sm transition-colors ease-hearth md:min-h-0",
           selected && "bg-primary/8 ring-1 ring-primary/15",
           !selected && "hover:bg-muted/60",
         )}
@@ -54,11 +60,12 @@ export function TreeNode({
         <button
           type="button"
           className={cn(
-            "flex size-5 items-center justify-center rounded-md text-muted-foreground",
+            "flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50 md:size-5",
             expandable ? "hover:bg-muted" : "opacity-0",
           )}
-          aria-label={expanded ? "Collapse" : "Expand"}
+          aria-label={expanded ? `Collapse ${subject.title}` : `Expand ${subject.title}`}
           disabled={!expandable}
+          tabIndex={expandable ? 0 : -1}
           onClick={onToggle}
         >
           <ChevronRightIcon
@@ -70,7 +77,7 @@ export function TreeNode({
         </button>
         <button
           type="button"
-          className="flex min-w-0 items-center gap-2 py-0.5 text-left"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 py-0.5 text-left focus-visible:ring-2 focus-visible:ring-ring/50 md:min-h-0"
           onClick={onSelect}
         >
           <span className="flex w-4 shrink-0 items-center justify-center" aria-hidden>
@@ -84,7 +91,7 @@ export function TreeNode({
               <button
                 type="button"
                 aria-label={`Navigate to ${parent.title}`}
-                className="flex size-5 shrink-0 items-center justify-center rounded-md text-yellow-400 hover:bg-yellow-400/15 hover:text-yellow-300"
+                className="flex size-11 shrink-0 items-center justify-center rounded-md text-yellow-700 hover:bg-yellow-400/15 hover:text-yellow-800 focus-visible:ring-2 focus-visible:ring-ring/50 md:size-5 dark:text-yellow-400 dark:hover:text-yellow-300"
                 onClick={() => onNavigateParent?.(parent.id)}
               >
                 <Link2Icon className="size-3.5" strokeWidth={1.75} />
@@ -97,21 +104,26 @@ export function TreeNode({
           <button
             type="button"
             onClick={onCreateChild}
+            aria-label={`Add ${createLabel} under ${subject.title}`}
             className={cn(
-              "shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
-              selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+              "min-h-11 shrink-0 rounded-md px-2 text-[0.6875rem] text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 md:min-h-0 md:px-1.5 md:py-0.5",
+              selected ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100",
             )}
           >
-            + {subject.type === "Task" ? "sibling" : "child"}
+            + {createLabel}
           </button>
         ) : null}
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">
           <DateChip date={subject.due} />
           <StatusPill status={status} />
         </div>
       </div>
       {creating}
-      {expanded ? children : null}
+      {expanded ? (
+        <div role="group" aria-label={`Children of ${subject.title}`}>
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -143,7 +143,7 @@ export function NewSubjectDialog({
         >
           {typeChoices.length > 1 ? (
             <div className="space-y-1.5">
-              <Label>Type</Label>
+              <Label htmlFor="create-type">Type</Label>
               <Select
                 value={type}
                 onValueChange={(v) => {
@@ -162,7 +162,7 @@ export function NewSubjectDialog({
                   });
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="create-type" aria-label="Subject type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

@@ -52,13 +52,13 @@ export function StreakGrid({
       <div className="mb-2 flex items-center justify-between">
         <p className="type-scale-section text-muted-foreground">Streak</p>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="xs" onClick={() => setMonth(addMonths(month, -1))}>
+          <Button variant="ghost" size="xs" aria-label="Previous month" onClick={() => setMonth(addMonths(month, -1))}>
             Prev
           </Button>
           <span className="min-w-28 text-center text-xs font-medium">
             {formatMonth(month)}
           </span>
-          <Button variant="ghost" size="xs" onClick={() => setMonth(addMonths(month, 1))}>
+          <Button variant="ghost" size="xs" aria-label="Next month" onClick={() => setMonth(addMonths(month, 1))}>
             Next
           </Button>
         </div>
@@ -129,7 +129,7 @@ function DayCell({
         disabled={future}
         aria-label={`${formatDay(iso)}: ${state.replace("_", " ")}`}
         className={cn(
-          "flex aspect-square items-center justify-center rounded-md text-[0.6875rem] font-medium tabular-nums",
+          "flex aspect-square min-h-11 min-w-11 items-center justify-center rounded-md text-[0.6875rem] font-medium tabular-nums",
           HABIT_STATE_SURFACE[state],
           !expected && "opacity-40",
           future && "cursor-not-allowed opacity-30",

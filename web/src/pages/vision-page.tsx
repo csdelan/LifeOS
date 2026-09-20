@@ -6,14 +6,14 @@ import { useSubjects } from "@/lib/queries";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 
 export function VisionPage() {
-  const { data, isLoading } = useSubjects("Value");
+  const { data, isLoading, isError } = useSubjects("Value");
   const { data: goals } = useSubjects("Goal");
   const navigate = useNavigate();
   const longTerm = (goals ?? []).filter((g) => !g.archived);
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-10">
+      <div className="mx-auto max-w-3xl px-4 py-10 md:px-8">
         <p className="type-scale-section text-primary">Vision</p>
         <h1 className="type-scale-display mt-1">Who I'm becoming</h1>
         <p className="mt-2 text-muted-foreground">
@@ -21,11 +21,20 @@ export function VisionPage() {
           Not a mood board — alignment.
         </p>
         {isLoading ? <ListSkeleton /> : null}
+        {isError ? (
+          <EmptyState
+            tone="error"
+            icon={EyeIcon}
+            title="Vision failed to load"
+            description="This is not an empty vision — the reader never returned."
+          />
+        ) : null}
         <div className="mt-8 space-y-8">
           {(data ?? []).map((v) => (
-            <article
+            <button
               key={v.id}
-              className="cursor-pointer rounded-xl bg-card p-5 ring-1 ring-foreground/10 transition-shadow hover:shadow-(--shadow-lift)"
+              type="button"
+              className="w-full cursor-pointer rounded-xl bg-card p-5 text-left ring-1 ring-foreground/10 transition-shadow hover:shadow-(--shadow-lift) focus-visible:ring-2 focus-visible:ring-ring/50"
               onClick={() => void navigate({ to: "/map", search: { selected: v.id } })}
             >
               <TypeBadge type="Value" />
@@ -33,7 +42,7 @@ export function VisionPage() {
               <p className="mt-2 text-sm text-muted-foreground">
                 {v.areaName ?? "Whole life"}
               </p>
-            </article>
+            </button>
           ))}
         </div>
         <section className="mt-12">
@@ -43,7 +52,7 @@ export function VisionPage() {
               <li key={g.id}>
                 <button
                   type="button"
-                  className="text-left text-sm hover:text-primary"
+                  className="min-h-11 text-left text-sm hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50"
                   onClick={() => void navigate({ to: "/map", search: { selected: g.id } })}
                 >
                   {g.title}

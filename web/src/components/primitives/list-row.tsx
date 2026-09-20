@@ -24,7 +24,7 @@ export function ListRow({
       type="button"
       onClick={onSelect}
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ease-hearth",
+        "flex min-h-11 w-full flex-wrap items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ease-hearth md:flex-nowrap",
         "hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/40",
         selected && "bg-primary/8 ring-1 ring-primary/20",
         className,
@@ -44,7 +44,7 @@ export function ListRow({
           ) : null}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
         {trailing}
         <DateChip date={item.due} kind="due" />
         {item.scheduled && item.scheduled !== item.due ? (

@@ -97,7 +97,7 @@ function FieldBlock({
       <Field label={field.label} required={field.required} error={error} hint={field.hint}>
         {editing ? (
           <Select value={status} onValueChange={(v) => form.setValue("status", v, { shouldDirty: true })}>
-            <SelectTrigger>
+            <SelectTrigger aria-label={field.label}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -125,7 +125,7 @@ function FieldBlock({
             value={areaSelectValue(area)}
             onValueChange={(v) => form.setValue("area", v === NONE ? "" : v, { shouldDirty: true })}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={field.label}>
               <SelectValue placeholder="Optional" />
             </SelectTrigger>
             <SelectContent>
@@ -157,7 +157,7 @@ function FieldBlock({
             value={parent || NONE}
             onValueChange={(v) => form.setValue("parent", v === NONE ? "" : v, { shouldDirty: true })}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={field.label}>
               <SelectValue placeholder="Optional" />
             </SelectTrigger>
             <SelectContent>
@@ -235,7 +235,7 @@ function FieldBlock({
             value={person || NONE}
             onValueChange={(v) => form.setValue("person", v === NONE ? "" : v, { shouldDirty: true })}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={field.label}>
               <SelectValue placeholder="Optional" />
             </SelectTrigger>
             <SelectContent>
@@ -341,7 +341,7 @@ function FieldBlock({
             value={attr || field.options?.[0]?.value}
             onValueChange={(v) => form.setValue(`attrs.${field.key}`, v, { shouldDirty: true })}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={field.label}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -365,6 +365,7 @@ function FieldBlock({
         {editing ? (
           <Textarea
             placeholder={field.placeholder}
+            aria-label={field.label}
             value={attr}
             onChange={(e) => form.setValue(`attrs.${field.key}`, e.target.value, { shouldDirty: true })}
           />
@@ -384,6 +385,7 @@ function FieldBlock({
           <Input
             type="date"
             className="w-48"
+            aria-label={field.label}
             value={attr}
             onChange={(e) => form.setValue(`attrs.${field.key}`, e.target.value, { shouldDirty: true })}
           />
@@ -414,6 +416,7 @@ function FieldBlock({
           <Input
             type="time"
             className="w-36"
+            aria-label={field.label}
             value={attr}
             onChange={(e) => form.setValue(`attrs.${field.key}`, e.target.value, { shouldDirty: true })}
           />
@@ -429,6 +432,7 @@ function FieldBlock({
       {editing ? (
         <Input
           placeholder={field.placeholder}
+          aria-label={field.label}
           value={attr}
           onChange={(e) => form.setValue(`attrs.${field.key}`, e.target.value, { shouldDirty: true })}
         />

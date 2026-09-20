@@ -64,12 +64,12 @@ function HabitBtn({
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}
-      className={cn(
-        "flex size-7 items-center justify-center rounded-md border transition-colors",
-        active
-          ? HABIT_STATE_SURFACE[tone]
-          : "border-transparent text-muted-foreground hover:bg-muted",
-      )}
+        className={cn(
+          "flex size-11 items-center justify-center rounded-md border transition-colors md:size-7",
+          active
+            ? HABIT_STATE_SURFACE[tone]
+            : "border-transparent text-muted-foreground hover:bg-muted",
+        )}
     >
       {children}
     </button>

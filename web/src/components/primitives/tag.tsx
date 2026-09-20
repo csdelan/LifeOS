@@ -23,7 +23,7 @@ export function Tag({
         <button
           type="button"
           onClick={onRemove}
-          className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="Remove tag"
         >
           <XIcon className="size-3" />

@@ -204,8 +204,6 @@ export function MapPage() {
     const found = findNode(data, selected);
     return found?.subject.title ?? null;
   }, [data, selected]);
-  void selectedTitle;
-
   const graphLoading =
     subjectsQuery.isLoading || edgesQuery.isLoading || areasQuery.isLoading;
   const graphError = subjectsQuery.isError || edgesQuery.isError;
@@ -222,17 +220,17 @@ export function MapPage() {
           }
         }}
       >
-        <header className="flex flex-col gap-2 border-b px-6 py-3">
-          <div className="flex items-center justify-between gap-3">
+        <header className="flex flex-col gap-2 border-b px-4 py-3 md:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="font-heading text-2xl">Map</h1>
               <p className="text-xs text-muted-foreground">
                 {view === "graph"
-                  ? "Alignment graph. Area colors grouping, never edges."
+                  ? "Alignment graph. Area colors grouping, never edges. Outline is the accessible equivalent."
                   : "Alignment graph as an outline. A node may appear under more than one parent."}
               </p>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               <Segmented
                 ariaLabel="Map view"
                 value={view}
@@ -252,8 +250,9 @@ export function MapPage() {
                   void navigate({ search: (prev) => ({ ...prev, lens: id }) })
                 }
               />
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <label className="flex min-h-11 items-center gap-1.5 text-xs text-muted-foreground md:min-h-0">
                 <input
+                  id="map-archived"
                   type="checkbox"
                   checked={archived}
                   onChange={(e) =>
@@ -302,7 +301,7 @@ export function MapPage() {
                   })
                 }
               >
-                <SelectTrigger size="sm" className="h-7 min-w-36">
+                <SelectTrigger size="sm" className="h-7 min-w-36" aria-label="Filter by area">
                   <SelectValue placeholder="Area" />
                 </SelectTrigger>
                 <SelectContent>
@@ -314,7 +313,7 @@ export function MapPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <label className="flex min-h-11 items-center gap-2 text-xs text-muted-foreground md:min-h-0">
                 <Switch
                   size="sm"
                   checked={colorByArea}
@@ -323,6 +322,7 @@ export function MapPage() {
                       search: (prev) => ({ ...prev, colorByArea: checked }),
                     })
                   }
+                  aria-label="Color by Area"
                 />
                 Color by Area
               </label>
@@ -345,7 +345,12 @@ export function MapPage() {
               />
             ) : null}
             {!graphLoading && !graphError ? (
-              <AlignmentGraph
+              <>
+                <p className="sr-only">
+                  The graph is a visual enhancement. Switch to Outline view for a fully
+                  keyboard and screen-reader accessible map.
+                </p>
+                <AlignmentGraph
                 subjects={subjectsQuery.data ?? EMPTY_SUBJECTS}
                 edges={edgesQuery.data ?? EMPTY_EDGES}
                 areas={areasQuery.data ?? EMPTY_AREAS}
@@ -357,6 +362,7 @@ export function MapPage() {
                 selected={selected}
                 onSelect={select}
               />
+              </>
             ) : null}
           </div>
         ) : (
@@ -386,24 +392,34 @@ export function MapPage() {
                 description="Create an Identity Statement to grow the alignment graph from."
               />
             ) : null}
-            {data?.map((n) => (
-              <MapBranch
-                key={n.instanceKey}
-                node={n}
-                expanded={expanded}
-                selected={selected}
-                creating={creating}
-                onToggle={toggle}
-                onSelect={select}
-                onNavigateParent={navigateToParent}
-                onCreate={(node) => setCreating({ parentId: node.id })}
-                onCancelCreate={() => setCreating(null)}
-              />
-            ))}
+            <div role="tree" aria-label="Alignment outline">
+              {data?.map((n) => (
+                <MapBranch
+                  key={n.instanceKey}
+                  node={n}
+                  expanded={expanded}
+                  selected={selected}
+                  creating={creating}
+                  onToggle={toggle}
+                  onSelect={select}
+                  onNavigateParent={navigateToParent}
+                  onCreate={(node) => setCreating({ parentId: node.id })}
+                  onCancelCreate={() => setCreating(null)}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
-      <PeekPanel open={!!selected}>
+      <PeekPanel
+        open={!!selected}
+        title={selectedTitle ?? "Subject detail"}
+        onClose={() =>
+          requestNavigation(() =>
+            void navigate({ search: (prev) => ({ ...prev, selected: undefined }) }),
+          )
+        }
+      >
         {selected ? (
           <SubjectDetail
             subjectId={selected}
@@ -432,14 +448,14 @@ function Segmented<T extends string>({
   ariaLabel: string;
 }) {
   return (
-    <div role="group" aria-label={ariaLabel} className="flex rounded-lg bg-muted p-0.5">
+    <div role="group" aria-label={ariaLabel} className="flex flex-wrap rounded-lg bg-muted p-0.5">
       {options.map((o) => (
         <button
           key={o.id}
           type="button"
           aria-pressed={value === o.id}
           onClick={() => onChange(o.id)}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+          className={`min-h-11 rounded-md px-2.5 py-1 text-xs font-medium focus-visible:ring-2 focus-visible:ring-ring/50 md:min-h-0 ${
             value === o.id ? "bg-background shadow-sm" : "text-muted-foreground"
           }`}
         >
@@ -550,14 +566,14 @@ function InlineCreate({
   }
 
   return (
-    <div className="flex items-center gap-2 py-1 pr-2" style={{ paddingLeft: 8 + depth * 18 }}>
+    <div className="flex flex-wrap items-center gap-2 py-1 pr-2" style={{ paddingLeft: 8 + depth * 18 }}>
       <div className="flex gap-1">
         {types.map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setType(t)}
-            className={`rounded-md px-1.5 py-0.5 text-[0.6875rem] ${
+            className={`min-h-11 rounded-md px-1.5 py-0.5 text-[0.6875rem] md:min-h-0 ${
               type === t ? "bg-primary/12 text-primary" : "text-muted-foreground"
             }`}
           >
@@ -569,6 +585,7 @@ function InlineCreate({
         autoFocus
         value={title}
         placeholder={isSibling ? "New sibling…" : `New ${typeLabel(type).toLowerCase()}…`}
+        aria-label={isSibling ? "New sibling title" : `New ${typeLabel(type)} title`}
         className="h-7"
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
