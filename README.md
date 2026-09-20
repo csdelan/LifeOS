@@ -72,15 +72,19 @@ identity, choices, attention, and life.
 ```
 db/migrations/       Versioned SQL migrations, named NNNN__name.sql
 src/
-  LifeOs.Domain          Domain model (entities, rules) — filled in by later issues
+  LifeOs.Domain          Domain model (entities, rules)
   LifeOs.Application      Transport-neutral application services
   LifeOs.Infrastructure   Npgsql + Dapper data access and the migration runner
   LifeOs.Cli              The `bsk` executable (System.CommandLine)
+  LifeOs.Api              ASP.NET Core door into Application (serves the SPA in prod)
+web/                      React + Vite SPA
 tests/
   LifeOs.Tests            xUnit v3 + Testcontainers integration tests
-run.ps1              Build the solution (and optionally run `bsk`)
-test.ps1             Run the test suite
-docker-compose.yml   Local persistent Postgres for interactive use
+Dockerfile               Multi-stage image: SPA + API
+fly.toml / fly.staging.toml
+run.ps1                  Build the solution (and optionally run `bsk`)
+test.ps1                 Run the test suite
+docker-compose.yml       Local persistent Postgres for interactive use
 ```
 
 The layers depend inward only: `Cli → Infrastructure → Application → Domain`.
@@ -125,10 +129,15 @@ Local Docker is the **dev** database. A Supabase cloud project is the
 single source of truth for schema everywhere — Supabase is just the Postgres
 host you point it at, so promoting is "run the same migrations against the
 staging connection string." GitHub Actions
-([`migrate-staging.yml`](.github/workflows/migrate-staging.yml)) applies them on
-merge to `main`; `scripts/migrate-staging.ps1` does the same by hand.
+([`migrate-staging.yml`](.github/workflows/migrate-staging.yml) for a manual
+staging apply; [`deploy.yml`](.github/workflows/deploy.yml) on merge to `main`)
+runs `bsk migrate` then deploys. Production is a second Supabase project gated
+by a required reviewer — see [`docs/pilot/deploy.md`](docs/pilot/deploy.md).
+`scripts/migrate-staging.ps1` / `scripts/migrate-production.ps1` do the same
+schema apply by hand.
 
-Full setup and runbook: [`docs/pilot/supabase-hosting.md`](docs/pilot/supabase-hosting.md).
+Full database setup: [`docs/pilot/supabase-hosting.md`](docs/pilot/supabase-hosting.md).
+Production cutover (Fly, secrets, OAuth): [`docs/pilot/deploy.md`](docs/pilot/deploy.md).
 
 ## Migrations
 

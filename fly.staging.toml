@@ -1,0 +1,32 @@
+# Fly.io staging app. Same image layout as production; different Supabase
+# project and secrets. See docs/pilot/deploy.md.
+
+app = "lifeos-staging"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ASPNETCORE_ENVIRONMENT = "Production"
+  Auth__Audience = "authenticated"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "25s"
+    interval = "15s"
+    timeout = "5s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

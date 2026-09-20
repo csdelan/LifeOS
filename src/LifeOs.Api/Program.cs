@@ -1,10 +1,5 @@
 using Dapper;
-using LifeOs.Api.Auth;
-using LifeOs.Api.Http;
-using LifeOs.Api.Read;
-using LifeOs.Domain;
-using LifeOs.Infrastructure;
-using LifeOs.Infrastructure.DependencyInjection;
+using LifeOs.Api.Hosting;
 
 namespace LifeOs.Api;
 
@@ -17,53 +12,11 @@ public static class Program
         DefaultTypeMap.MatchNamesWithUnderscores = true;
 
         var builder = WebApplication.CreateBuilder(args);
-
-        var ownerConnectionString = KernelConnectionString.Resolve(
-            builder.Configuration["ConnectionStrings:Owner"]);
-        var readerConnectionString = ReaderConnectionString.Resolve(
-            builder.Configuration["ConnectionStrings:Reader"]);
-
-        builder.Services.AddLifeOsKernel(ownerConnectionString, KernelSources.Api);
-        builder.Services.AddSingleton(new SubjectReader(readerConnectionString));
-        builder.Services.AddLifeOsAuth(builder.Configuration);
-
-        builder.Services.AddOpenApi();
-        builder.Services.AddProblemDetails();
-
-        var spaOrigins = SpaCors.ResolveOrigins(builder.Configuration);
-        if (spaOrigins.Length == 0)
-        {
-            throw new InvalidOperationException(
-                "Cors:AllowedOrigins (or CORS_ALLOWED_ORIGINS) must list the SPA origin(s).");
-        }
-
-        builder.Services.AddCors(options =>
-        {
-            options.AddPolicy(SpaCors.PolicyName, policy =>
-                policy.WithOrigins(spaOrigins)
-                    .AllowAnyHeader()
-                    .AllowAnyMethod()
-                    .AllowCredentials());
-        });
+        ApiHost.BindListenPort(builder);
+        ApiHost.ConfigureServices(builder);
 
         var app = builder.Build();
-
-        app.UseKernelExceptionHandler();
-        app.UseCors(SpaCors.PolicyName);
-        app.UseAuthentication();
-        app.UseAuthorization();
-
-        app.MapOpenApi().AllowAnonymous();
-        app.UseSwaggerUI(options =>
-        {
-            options.SwaggerEndpoint("/openapi/v1.json", "LifeOS API");
-            options.RoutePrefix = "swagger";
-        });
-
-        app.MapAuthEndpoints();
-        app.MapReadEndpoints();
-        app.MapWriteEndpoints();
-
+        ApiHost.ConfigurePipeline(app);
         app.Run();
     }
 }

@@ -45,7 +45,6 @@ public static class ReadEndpoints
             .Produces<IReadOnlyList<HabitOccurrenceRow>>();
         api.MapGet("/edges", GetEdges).WithName("GetAlignmentEdges")
             .Produces<IReadOnlyList<AlignmentEdge>>();
-        api.MapGet("/health", () => Results.Ok(new { ok = true })).WithName("Health").ExcludeFromDescription();
     }
 
     private static IResult ListSubjects(SubjectReader reader, string? type, bool includeArchived = false)

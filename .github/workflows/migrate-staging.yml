@@ -1,50 +1,19 @@
 name: Migrate staging (Supabase)
 
-# Promotes the Life Kernel schema to the Supabase staging database by running
-# `bsk migrate` — the exact runner used locally. `bsk migrate` is the single
-# source of truth for schema; this workflow only points it at staging. It is
-# idempotent (already-applied migrations are skipped) and rejects any migration
-# whose SQL changed after it was applied, so re-runs are safe.
-#
-# Setup (one-time): create a GitHub Environment named "staging" with a secret
-# BSK_CONNECTION_STRING holding the Supabase *session pooler* connection string
-# (port 5432, IPv4-friendly — GitHub runners are IPv4 only). See
-# docs/pilot/supabase-hosting.md.
+# Manual / compatibility entry point. Merge-to-main promotions now go through
+# .github/workflows/deploy.yml (migrate, then Fly deploy). This workflow still
+# runs `bsk migrate` against the `staging` GitHub Environment on demand.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'db/migrations/**'
-      - 'src/LifeOs.Infrastructure/**'
-      - 'src/LifeOs.Cli/**'
-      - '.github/workflows/migrate-staging.yml'
   workflow_dispatch: {}
 
-# Never let two migration runs race the same database.
-concurrency:
-  group: migrate-staging
-  cancel-in-progress: false
+permissions:
+  contents: read
 
 jobs:
   migrate:
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - name: Check out
-        uses: actions/checkout@v4
-
-      - name: Set up .NET (from global.json)
-        uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: global.json
-
-      - name: Apply migrations to staging
-        env:
-          BSK_CONNECTION_STRING: ${{ secrets.BSK_CONNECTION_STRING }}
-        run: |
-          if [ -z "$BSK_CONNECTION_STRING" ]; then
-            echo "::error::BSK_CONNECTION_STRING is not set for the 'staging' environment. Add it under Settings -> Environments -> staging -> Secrets."
-            exit 1
-          fi
-          dotnet run --project src/LifeOs.Cli/LifeOs.Cli.csproj --configuration Release -- migrate --json
+    uses: ./.github/workflows/migrate.yml
+    with:
+      environment: staging
+      deploy: false
+    secrets: inherit

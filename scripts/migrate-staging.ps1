@@ -14,7 +14,8 @@
     after it was applied is rejected rather than silently re-run. Use this to
     promote schema to staging by hand (e.g. the very first apply, or from a
     machine that isn't CI). GitHub Actions runs the same command on merge to
-    main — see .github/workflows/migrate-staging.yml.
+    main — see .github/workflows/deploy.yml. For production, use
+    scripts/migrate-production.ps1 or the gated `production` environment job.
 
 .EXAMPLE
     ./scripts/migrate-staging.ps1

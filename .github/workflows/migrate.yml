@@ -1,0 +1,101 @@
+name: Release environment
+
+# Reusable job: apply schema with `bsk migrate` (the only schema authority),
+# then optionally build and deploy the Fly app. Staging and production both
+# use this workflow. Production is gated by the GitHub Environment reviewer.
+#
+# Order is migrate-then-deploy on purpose. The running API never migrates.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub Environment (staging or production)
+        required: true
+        type: string
+      deploy:
+        description: After migrating, deploy the Fly app for this environment
+        required: false
+        type: boolean
+        default: false
+      fly_config:
+        description: fly.toml path used when deploy is true
+        required: false
+        type: string
+        default: fly.toml
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment to migrate
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+      deploy:
+        description: Also deploy the Fly app after migrating
+        required: false
+        type: boolean
+        default: false
+      fly_config:
+        description: fly.toml path (fly.staging.toml or fly.toml)
+        required: false
+        type: string
+        default: fly.toml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up .NET (from global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Apply migrations with bsk migrate
+        env:
+          BSK_CONNECTION_STRING: ${{ secrets.BSK_CONNECTION_STRING }}
+        run: |
+          if [ -z "$BSK_CONNECTION_STRING" ]; then
+            echo "::error::BSK_CONNECTION_STRING is not set for the '${{ inputs.environment }}' environment. Add the Supabase session-pooler (port 5432) owner connection string under Settings → Environments → ${{ inputs.environment }} → Secrets."
+            exit 1
+          fi
+          dotnet run --project src/LifeOs.Cli/LifeOs.Cli.csproj --configuration Release -- migrate --json
+
+      - name: Set up flyctl
+        if: ${{ inputs.deploy }}
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly
+        if: ${{ inputs.deploy }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::FLY_API_TOKEN is not set. Add it as a repository secret (or on the '${{ inputs.environment }}' environment)."
+            exit 1
+          fi
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Set VITE_SUPABASE_URL (Environment variable) and VITE_SUPABASE_ANON_KEY (Environment secret) for '${{ inputs.environment }}'. These are the public Supabase URL and anon key baked into the SPA. Never use the service-role key."
+            exit 1
+          fi
+          flyctl deploy \
+            --config "${{ inputs.fly_config }}" \
+            --remote-only \
+            --build-arg "VITE_SUPABASE_URL=${VITE_SUPABASE_URL}" \
+            --build-arg "VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}" \
+            --build-arg "VITE_API_BASE_URL=/"

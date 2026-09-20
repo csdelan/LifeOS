@@ -71,7 +71,7 @@ unset) still skips sign-in.
 
 | Variable | Purpose |
 |---|---|
-| `VITE_API_BASE_URL` | LifeOs.Api origin, e.g. `http://localhost:5280`. Unset = mock mode, no auth. |
+| `VITE_API_BASE_URL` | LifeOs.Api origin, e.g. `http://localhost:5280`. Unset = mock mode, no auth. Production image uses `/` (same origin). |
 | `VITE_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon key (public by design; the API still enforces the allowlist) |
 
@@ -100,14 +100,17 @@ dotnet user-secrets --project src/LifeOs.Api set "Auth:JwtSecret" "<jwt-secret>"
 ```
 
 Equivalent environment variables (deployment): `Auth__Issuer`, `Auth__Audience`,
-`Auth__JwksUrl`, `Auth__JwtSecret`, `ALLOWED_EMAILS`. CORS origins default to local
-Vite (`http://localhost:5173`); override with `Cors__AllowedOrigins__0` /
-`CORS_ALLOWED_ORIGINS`.
+`Auth__JwksUrl`, `Auth__JwtSecret`, `ALLOWED_EMAILS`. Local Vite needs CORS
+(`appsettings.Development.json` lists `http://localhost:5173`). Production serves
+the SPA from the API (same origin) and leaves CORS empty. Never set a wildcard
+origin. See [docs/pilot/deploy.md](../docs/pilot/deploy.md).
 
 The API will not start until issuer, audience, a signing source (JWKS and/or JWT
-secret), and at least one allowed email are set. OpenAPI at `/openapi/v1.json`
-stays unauthenticated so `npm run gen:api` still works; every `/api/*` route
-requires an allowlisted user.
+secret), and at least one allowed email are set. Outside Development it also
+refuses to start without `BSK_CONNECTION_STRING` and `BSK_READER_CONNECTION_STRING`.
+OpenAPI at `/openapi/v1.json` is Development-only (anonymous for `npm run gen:api`);
+every `/api/*` route requires an allowlisted user. `/health` and `/health/ready`
+are anonymous.
 
 ## What this pass includes
 

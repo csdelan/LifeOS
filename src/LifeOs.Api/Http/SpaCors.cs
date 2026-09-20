@@ -33,6 +33,18 @@ public static class SpaCors
             .ToArray();
     }
 
+    /// <summary>
+    /// Empty origins means same-origin (no CORS middleware). Wildcards are rejected.
+    /// </summary>
+    public static void EnsureSafe(IReadOnlyList<string> origins)
+    {
+        if (origins.Any(static origin => origin.Contains('*')))
+        {
+            throw new InvalidOperationException(
+                "CORS origins must be explicit allowlisted URLs. Wildcard origins are not allowed.");
+        }
+    }
+
     private static IEnumerable<string> Split(string value)
         => value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }

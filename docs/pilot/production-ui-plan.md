@@ -116,7 +116,7 @@ the .NET API, which validates it against Supabase's public keys (JWKS).
 | **Forms (GEN-6)** | **React Hook Form + Zod** | Type-specific create forms; app-layer gates (e.g. Goal needs target_date to activate) live in Zod |
 | **Command palette / keyboard** | **cmdk** + global hotkey | INBOX-3 keyboard triage, global New, quick capture |
 | **Auth** | **Supabase Auth** (JWT validated by the .NET API) | Already on Supabase; small, swappable decision |
-| **Hosting** | API container (Azure Container Apps / Fly.io); SPA on Cloudflare Pages or served by the API | Supabase stays the DB |
+| **Hosting** | Fly.io one-container (SPA served by the API, same origin) | No CORS; portable Dockerfile (Azure Container Apps is the fallback). See [deploy.md](deploy.md) |
 
 ## 3. Frontend framework decision
 
@@ -243,6 +243,8 @@ built (they are thin, but on the governed path).
 - **Supabase** for Postgres + Auth + (later) Storage only.
 - **Auth:** Supabase Auth (Google) in the browser; `LifeOs.Api` validates the JWT
   (JWKS, with optional legacy HS256) and restricts access to `ALLOWED_EMAILS`.
+- **Hosting:** Fly.io one-container (SPA served by the API, same origin). Portable
+  Dockerfile; Azure Container Apps is the fallback. Runbook: [deploy.md](deploy.md).
 - **Single repo**, web app under `web/`.
 - Navigation: **streamlined, tree-first** (alignment outline replaces per-type tabs);
   create-child-in-place; inline detail peek.
@@ -250,7 +252,6 @@ built (they are thin, but on the governed path).
 
 **Open (decide before/at build time):**
 
-- Hosting target (Azure Container Apps vs Fly.io; SPA host).
 - Graph library once BROWSE-1 is built for real (React Flow vs Cytoscape/Sigma), driven by
   graph size.
 - Read endpoint shaping: reuse `SubjectReader` view-SQL verbatim vs promote some reads into

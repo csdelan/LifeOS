@@ -171,13 +171,16 @@ locally, commit, open a PR. On merge to `main`, CI applies it to staging.
 
 ---
 
-## Going to production later
+## Going to production
 
-Repeat the setup for a second Supabase project (e.g. `lifeos-prod`), add a
-`production` GitHub Environment with its own `BSK_CONNECTION_STRING` secret and a
-**required reviewer**, and add a second job (or a tag/manual trigger) to the
-workflow that targets it. The schema path is identical — only the target
-database and the gate change.
+Production is a **second** Supabase project plus a Fly.io app. Schema is still
+`bsk migrate` only — CI applies it under a `production` GitHub Environment with
+a **required reviewer**, then deploys the image. The API never migrates on
+startup.
+
+Full architecture, env vars, pipeline, rollback, and the manual checklist
+(prod project, `bsk_reader` password, Fly secrets, GitHub Environment, Google
+OAuth / Supabase URL config): **[deploy.md](deploy.md)**.
 
 ## Gotchas
 

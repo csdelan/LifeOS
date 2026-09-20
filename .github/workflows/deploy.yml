@@ -1,0 +1,44 @@
+name: Deploy
+
+# On merge to main (and v* tags): test, then migrate+deploy staging automatically,
+# then migrate+deploy production behind the `production` GitHub Environment
+# required reviewer. Schema is applied with `bsk migrate` before the new image
+# goes live. The API never migrates on startup.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  staging:
+    name: Staging migrate and deploy
+    needs: ci
+    uses: ./.github/workflows/migrate.yml
+    with:
+      environment: staging
+      deploy: true
+      fly_config: fly.staging.toml
+    secrets: inherit
+
+  production:
+    name: Production migrate and deploy
+    needs: [ci, staging]
+    uses: ./.github/workflows/migrate.yml
+    with:
+      environment: production
+      deploy: true
+      fly_config: fly.toml
+    secrets: inherit
