@@ -154,6 +154,8 @@ public sealed class ApiHostTests
         ["ALLOWED_EMAILS"] = Allowed,
         ["ConnectionStrings:Owner"] = Unreachable,
         ["ConnectionStrings:Reader"] = Unreachable,
+        ["VITE_SUPABASE_URL"] = "https://placeholder.supabase.co",
+        ["VITE_SUPABASE_ANON_KEY"] = "placeholder-anon-key",
     };
 
     private static async Task<TestHost> StartAsync(

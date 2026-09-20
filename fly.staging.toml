@@ -7,6 +7,9 @@ primary_region = "sjc"
 [build]
   dockerfile = "Dockerfile"
 
+[build.args]
+  VITE_API_BASE_URL = "/"
+
 [env]
   ASPNETCORE_ENVIRONMENT = "Production"
   Auth__Audience = "authenticated"

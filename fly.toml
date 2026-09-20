@@ -1,11 +1,18 @@
 # Fly.io production app. Create the app and set runtime secrets yourself;
 # never put connection strings or ALLOWED_EMAILS here. See docs/pilot/deploy.md.
+#
+# Public SPA values (Supabase URL + anon key) are runtime secrets too:
+#   fly secrets set VITE_SUPABASE_URL=... VITE_SUPABASE_ANON_KEY=...
+# They are not Docker build-args. `fly deploy` from the dashboard works.
 
-app = "lifeos"
+app = "lifeos-mz55-w"
 primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"
+
+[build.args]
+  VITE_API_BASE_URL = "/"
 
 [env]
   ASPNETCORE_ENVIRONMENT = "Production"

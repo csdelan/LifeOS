@@ -1,8 +1,8 @@
 name: CI
 
 # PR gate: test the kernel, build the SPA, build the deployable image (no push).
-# Does not migrate and does not deploy. The image is built with placeholder
-# public VITE_* values so the Dockerfile is exercised without baking secrets.
+# Does not migrate and does not deploy. The image does not need Supabase
+# public values at build time; those are runtime env / Fly secrets.
 
 on:
   pull_request:
@@ -78,6 +78,4 @@ jobs:
           push: false
           tags: lifeos:ci
           build-args: |
-            VITE_SUPABASE_URL=https://placeholder.supabase.co
-            VITE_SUPABASE_ANON_KEY=placeholder-anon-key
             VITE_API_BASE_URL=/

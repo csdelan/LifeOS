@@ -92,7 +92,8 @@ export function AuthConfigError() {
       <h1 className="mt-6 font-heading text-3xl">Missing Auth configuration</h1>
       <p className="mt-2 max-w-md text-center text-sm text-muted-foreground">
         Live mode needs <code className="font-mono text-xs">VITE_SUPABASE_URL</code> and{" "}
-        <code className="font-mono text-xs">VITE_SUPABASE_ANON_KEY</code> in the environment.
+        <code className="font-mono text-xs">VITE_SUPABASE_ANON_KEY</code> (local Vite env, or{" "}
+        <code className="font-mono text-xs">fly secrets set</code> on the API container).
       </p>
     </AuthChrome>
   );

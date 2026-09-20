@@ -82,20 +82,11 @@ jobs:
         if: ${{ inputs.deploy }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$FLY_API_TOKEN" ]; then
             echo "::error::FLY_API_TOKEN is not set. Add it as a repository secret (or on the '${{ inputs.environment }}' environment)."
             exit 1
           fi
-          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
-            echo "::error::Set VITE_SUPABASE_URL (Environment variable) and VITE_SUPABASE_ANON_KEY (Environment secret) for '${{ inputs.environment }}'. These are the public Supabase URL and anon key baked into the SPA. Never use the service-role key."
-            exit 1
-          fi
           flyctl deploy \
             --config "${{ inputs.fly_config }}" \
-            --remote-only \
-            --build-arg "VITE_SUPABASE_URL=${VITE_SUPABASE_URL}" \
-            --build-arg "VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}" \
-            --build-arg "VITE_API_BASE_URL=/"
+            --remote-only

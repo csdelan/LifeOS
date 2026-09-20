@@ -35,6 +35,9 @@ This app serves private life data. The process **will not start** if:
 - `BSK_CONNECTION_STRING` or `BSK_READER_CONNECTION_STRING` is missing
   outside Development
 - CORS is configured with a wildcard origin
+- `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` is missing outside Development
+  (public anon values, injected into the SPA at process start — never the
+  service-role key)
 
 Do not ship a pipeline that sets dummy allowlists, disables JWT validation, or
 points production at the local Docker defaults. `/health` and `/health/ready`
@@ -59,17 +62,12 @@ only — never commit real values.
 | `Auth__JwksUrl` | `https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json` |
 | `Auth__JwtSecret` | Optional legacy HS256 fallback. Leave unset when JWKS works. |
 | `ALLOWED_EMAILS` | Comma-separated Google accounts that may use the app |
+| `VITE_SUPABASE_URL` | Public Supabase project URL, e.g. `https://<project-ref>.supabase.co`. Written into `/public-config.js` at startup so Fly dashboard deploys do not need Docker build-args. |
+| `VITE_SUPABASE_ANON_KEY` | Supabase **anon** key (public by design). **Never** the service-role key. |
 | `CORS_ALLOWED_ORIGINS` | Only if the SPA is *not* same-origin. Omit in production. |
 | `PORT` | Listen port. Fly sets this; the API honors it. Container default is `8080`. |
 
-SPA public values are **Docker build-args** (baked into the JS bundle; they are
-not server secrets):
-
-| Build-arg | Production value |
-|---|---|
-| `VITE_SUPABASE_URL` | `https://<prod-project-ref>.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key (public by design). **Never** the service-role key. |
-| `VITE_API_BASE_URL` | `/` (same origin). The client uses `window.location.origin`. |
+Same-origin API base is `/` (the client uses `window.location.origin`). Optional Docker build-arg `VITE_API_BASE_URL=/` is already the image default.
 
 Templates: [`.env.example`](../../.env.example), `src/LifeOs.Api/appsettings.json`,
 [`web/.env.example`](../../web/.env.example).
@@ -92,10 +90,10 @@ then deploy in that same job, so a new image cannot go live ahead of schema.
 Redeploy the previous Fly image; do **not** reverse migrations.
 
 ```powershell
-fly releases --app lifeos
-fly deploy --app lifeos --image registry.fly.io/lifeos:<previous-tag>
+fly releases --app lifeos-mz55-w
+fly deploy --app lifeos-mz55-w --image registry.fly.io/lifeos-mz55-w:<previous-tag>
 # or:
-fly releases rollback --app lifeos
+fly releases rollback --app lifeos-mz55-w
 ```
 
 Kernel migrations are **forward-only**. An image rollback leaves any already-applied
@@ -143,7 +141,7 @@ Install [flyctl](https://fly.io/docs/flyctl/install/), then:
 
 ```powershell
 fly auth login
-fly apps create lifeos
+fly apps create lifeos-mz55-w
 fly apps create lifeos-staging
 ```
 
@@ -155,20 +153,22 @@ Set **runtime** secrets on each app (prod values shown; repeat for
 `lifeos-staging` with the staging project):
 
 ```powershell
-fly secrets set --app lifeos `
+fly secrets set --app lifeos-mz55-w `
   BSK_CONNECTION_STRING="Host=...;Port=5432;...;SSL Mode=Require;Trust Server Certificate=true" `
   BSK_READER_CONNECTION_STRING="Host=...;Username=bsk_reader.<ref>;..." `
   Auth__Issuer="https://<prod-ref>.supabase.co/auth/v1" `
   Auth__Audience="authenticated" `
   Auth__JwksUrl="https://<prod-ref>.supabase.co/auth/v1/.well-known/jwks.json" `
-  ALLOWED_EMAILS="you@gmail.com"
+  ALLOWED_EMAILS="you@gmail.com" `
+  VITE_SUPABASE_URL="https://<prod-ref>.supabase.co" `
+  VITE_SUPABASE_ANON_KEY="<anon-key-not-service-role>"
 ```
 
 Never put these in git, `fly.toml`, or GitHub Actions logs. `fly secrets set`
 restarts machines.
 
 Optional: `fly certs add your.domain` if you later want a custom hostname (not
-required; `https://lifeos.fly.dev` is enough for the first cutover).
+required; `https://lifeos-mz55-w.fly.dev` is enough for the first cutover).
 
 ### 3. GitHub Environments
 
@@ -177,11 +177,10 @@ required; `https://lifeos.fly.dev` is enough for the first cutover).
 2. **New environment → `production`**. Add yourself as a **required reviewer**.
    Add secret `BSK_CONNECTION_STRING` for the **prod** owner session-pooler
    string.
-3. On **each** environment also set:
-   - Variable `VITE_SUPABASE_URL`
-   - Secret `VITE_SUPABASE_ANON_KEY` (anon key, not service role)
-4. Repository (or environment) secret `FLY_API_TOKEN` from
+3. Repository (or environment) secret `FLY_API_TOKEN` from
    `fly tokens create deploy` (or an org token that can deploy both apps).
+   Public SPA values (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) live on
+   Fly as secrets (step 2), not in GitHub.
 
 Without the production reviewer, a merge to `main` could promote schema and a
 new image unattended. Keep the reviewer.
@@ -210,9 +209,9 @@ For **each** Supabase project (staging and prod):
 3. Wait for CI and staging deploy to go green.
 4. GitHub will wait on the `production` environment **after staging has
    migrated and deployed**. Review the commit, then approve. That job runs
-   `bsk migrate` against prod, then `flyctl deploy` with prod `VITE_*`
-   build-args.
-5. Open `https://lifeos.fly.dev` (or your app name):
+   `bsk migrate` against prod, then `flyctl deploy`. The SPA reads Supabase
+   public values from Fly secrets at runtime (`/public-config.js`).
+5. Open `https://lifeos-mz55-w.fly.dev` (or your app hostname):
    - `/health` and `/health/ready` are green
    - the SPA loads from that origin
    - Google sign-in works
@@ -226,11 +225,7 @@ Local check of the image against **staging** secrets (never prod) before the
 first cutover:
 
 ```powershell
-docker build `
-  --build-arg VITE_SUPABASE_URL=https://<staging-ref>.supabase.co `
-  --build-arg VITE_SUPABASE_ANON_KEY=<staging-anon-key> `
-  --build-arg VITE_API_BASE_URL=/ `
-  -t lifeos:local .
+docker build -t lifeos:local .
 
 docker run --rm -p 8080:8080 `
   -e BSK_CONNECTION_STRING="<staging owner session-pooler>" `
@@ -239,6 +234,8 @@ docker run --rm -p 8080:8080 `
   -e Auth__Audience=authenticated `
   -e Auth__JwksUrl=https://<staging-ref>.supabase.co/auth/v1/.well-known/jwks.json `
   -e ALLOWED_EMAILS=you@gmail.com `
+  -e VITE_SUPABASE_URL=https://<staging-ref>.supabase.co `
+  -e VITE_SUPABASE_ANON_KEY=<staging-anon-key> `
   lifeos:local
 ```
 

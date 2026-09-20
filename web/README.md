@@ -103,7 +103,9 @@ Equivalent environment variables (deployment): `Auth__Issuer`, `Auth__Audience`,
 `Auth__JwksUrl`, `Auth__JwtSecret`, `ALLOWED_EMAILS`. Local Vite needs CORS
 (`appsettings.Development.json` lists `http://localhost:5173`). Production serves
 the SPA from the API (same origin) and leaves CORS empty. Never set a wildcard
-origin. See [docs/pilot/deploy.md](../docs/pilot/deploy.md).
+origin. On Fly, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` with
+`fly secrets set` (the API writes `/public-config.js` at startup). See
+[docs/pilot/deploy.md](../docs/pilot/deploy.md).
 
 The API will not start until issuer, audience, a signing source (JWKS and/or JWT
 secret), and at least one allowed email are set. Outside Development it also

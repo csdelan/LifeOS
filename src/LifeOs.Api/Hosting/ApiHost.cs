@@ -96,6 +96,8 @@ public static class ApiHost
         }
 
         app.UseSecurityHeaders();
+        var spaPublic = SpaPublicConfig.Resolve(app.Configuration, app.Environment);
+        SpaPublicConfig.Write(app.Environment.WebRootPath, spaPublic.ApiBaseUrl, spaPublic.SupabaseUrl, spaPublic.SupabaseAnonKey);
         app.UseSpaStaticFiles();
 
         var spaOrigins = SpaCors.ResolveOrigins(app.Configuration);

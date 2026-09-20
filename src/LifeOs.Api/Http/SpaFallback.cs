@@ -16,7 +16,8 @@ public static class SpaFallback
             OnPrepareResponse = ctx =>
             {
                 var path = ctx.Context.Request.Path.Value ?? "";
-                if (path.EndsWith("/index.html", StringComparison.OrdinalIgnoreCase))
+                if (path.EndsWith("/index.html", StringComparison.OrdinalIgnoreCase)
+                    || path.EndsWith("/public-config.js", StringComparison.OrdinalIgnoreCase))
                 {
                     ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
                     return;
