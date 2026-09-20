@@ -1305,6 +1305,66 @@ Build:      built
   ordered-list setting) — a "view-ordering" question that may recur.
 
 
+### GEN-17 — Combine in-system relations and external links in one "Connections" section
+Horizon:    Production
+Definition: active
+Build:      mapped
+
+**Workflow (Chris):**
+- On an item's detail pane, present a single section that groups the two ways an item is
+  connected to other things: **relationships to other LifeOS subjects** (internal) and
+  **external URL links** (outward). They answer the same question — "what is this connected
+  to?" — so I want them under one heading rather than scattered.
+- Name the section for the container, not for either half — e.g. **Connections** — with two
+  clearly-labeled subsections beneath it: **Relationships** (in-system) and **Links**
+  (external). Order relationships first, links second.
+- The **Relationships** subsection is the existing relation edges to other subjects (the
+  `serves` / `results_in` / `supersedes` graph).
+- The **Links** subsection is a list of external URLs. Each entry has a **name** and a
+  **URL** (plus an optional **type** hint like `notion`, `supabase`, `github`). It must
+  support **multiple entries** on one item — e.g. a "Notion" link and a separate "Supabase
+  project" link on the same Project.
+- Keep the two subsections visually and conceptually distinct, the same discipline GEN-1
+  applies to Tags vs Relations. A URL is not "serving" anything, and the UI must never let
+  that blur: adding a *relationship* opens a subject picker + relation-type choice; adding a
+  *link* is just name + URL + optional type — no picker, no graph.
+- Adding, editing, and removing links is available at creation and later, the same as Tags
+  and Relationships (GEN-6 / GEN-7).
+- Activating a link opens it in the OS default browser (same behavior as CAP-5).
+- People-association is **not** part of this section — it stays its own thing (GEN-15).
+
+**Ontology fit (Claude):**
+- Maps to: two existing primitives shown together, plus one new attribute. **Relationships**
+  = `bsk.subject_relation` edges (read through `v_subject_relation`), unchanged. **Links** =
+  a new **`attributes.references[]`** array on the subject — a list of `{ "type", "name",
+  "url" }` objects. This is a *soft-reference property*, mirroring the People-association
+  (`attributes.people[]`, migration 0019): stored in the typed-jsonb subject table, owned by
+  the parent item, stateless, and supporting several entries per item. **Zero DDL.**
+- **Boundary vs CAP-4 / CAP-5 (the other "reference item"):** those are *captures* — an
+  event + artifact that enters the Inbox and can be promoted/related as a standalone item
+  with its own identity. `attributes.references[]` is the opposite shape: an **inert property
+  of an existing subject**, a pinned link in that item's detail pane, never an Inbox capture.
+  The same URL on two items is two independent copies here, by design.
+- Kernel delta: **none for storage** — writing `attributes.references[]` rides the existing
+  `bsk set` write path. *Optional, non-blocking:* a `bsk.v_reference` flattening view
+  (parallel to `v_person_association`) if reverse lookup is ever wanted — "every item that
+  links to this URL" or "every item with a `supabase` link" — for a UI list or a diagnostic.
+- Implications & constraints: combining the *presentation* is fine; combining the *primitives*
+  is not. Relations are typed, directional, provenanced edges that are load-bearing for the
+  alignment graph and diagnostics; references are inert external pointers that drive nothing.
+  The shared "Connections" header must keep the two subsections unmistakably separate — the
+  same reason GEN-1 keeps Tag and Relate distinct. A `references[]` entry has **no identity
+  of its own**; if reuse-by-identity ever matters ("what all points at this URL?"), that is
+  the signal to promote references to a first-class `Reference` **subject** (with a URN and
+  `concerns` edges) — the same "earn your table" path Problem took.
+- Open decisions: (1) **`type` as open free-text string vs a controlled `ReferenceTypes`
+  enum + CHECK** — start open (it's a rendering hint, not an invariant that keeps the record
+  honest); graduate to an enum only if a subtype must *drive behavior* (special opener,
+  link-rot checking). (2) Whether to later let a captured URL (CAP-5) be *attached into* an
+  item's `references[]`, unifying capture-then-pin. (3) Whether People-association eventually
+  joins the same "Connections" umbrella or stays separate (lean: separate).
+
+
 ### CAL-1 — Appointments support manual calendar-style scheduling
 Horizon:    Pilot
 Definition: active
@@ -1565,7 +1625,16 @@ live.
 ### CAP-5 — I want to capture URL reference
 Horizon:    Pilot phase 2
 Definition: active
-Build:      needs-kernel
+Build:      mapped
+
+**Update (2026-09-20 — resolved via GEN-17):** a URL reference is **not** its own subject and
+is not captured as a standalone item. It is added to an **existing durable subject** as an
+`attributes.references[]` entry — the **Links** subsection of that subject's Connections
+section (see GEN-17). This resolves the old "distinct `url` flavor vs note-with-url-attribute"
+open decision — it is neither; it is a property on a subject — and supersedes the "enter the
+Inbox as its own item" workflow bullet below. Because the link rides the existing `bsk set`
+write path with no schema change, the D4 `url`-flavor kernel work is no longer needed and
+Build moves `needs-kernel → mapped`.
 
 **Workflow (Chris):**
 - Capture and retain the live URL as a reference item.
@@ -1580,12 +1649,18 @@ Build:      needs-kernel
 
 
 **Ontology fit (Claude):**
-- Maps to (D4): a **`url` / reference flavor** — the live URL (+ optional description) stored
-  as plain-text artifact content. The lightest reference type: no snapshot (deferred), no
-  binary storage, so **no new infra** unlike CAP-4.
-- Kernel delta: just the D4 reference flavor; opening in the default browser is app-side.
-- Implications: shares the one capture / reference model; enters the inbox like any capture.
-- Open decisions: a distinct `url` flavor vs a plain note carrying a `url` attribute.
+- Maps to (GEN-17): an **`attributes.references[]` entry** on an existing durable subject —
+  `{ "type": "url", "name", "url" }` — *not* its own subject and *not* a standalone capture
+  artifact. The lightest reference type: no snapshot (deferred), no binary storage, no new
+  subject, so **no new infra** unlike CAP-4.
+- Kernel delta: **none** — writing the link rides the existing `bsk set` write path (the old
+  D4 `url`-flavor artifact is no longer used); opening in the default browser is app-side.
+- Implications: a URL reference belongs *to* a subject as an inert property; it does not enter
+  the Inbox on its own (that was the pre-GEN-17 model). It has no identity of its own — see
+  GEN-17 for when a link would instead earn a first-class `Reference` subject.
+- Open decisions: resolved — see the GEN-17 update above (URL references are a subject
+  property, not a subject or a standalone capture). The remaining sub-question is deferred to
+  GEN-17: `type` as an open string vs a controlled enum.
 
 
 ### CAP-6 — Ideas remain lightweight until promoted or rejected
