@@ -20,6 +20,7 @@ GitHub Actions
   PR:     test + web build + docker build (no push)
   main:   bsk migrate (staging) → fly deploy staging
           bsk migrate (production, required reviewer) → fly deploy production
+          (production is skipped until the repo variable DEPLOY_PRODUCTION=true)
 ```
 
 Same origin means no CORS in production. Bearer tokens stay on the app origin.
@@ -77,10 +78,11 @@ Templates: [`.env.example`](../../.env.example), `src/LifeOs.Api/appsettings.jso
 | Workflow | Trigger | What it does |
 |---|---|---|
 | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | pull request | `dotnet` tests (`test.ps1` equivalent), web lint/test/build, `docker build` with placeholder VITE_* (no push) |
-| [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) | merge to `main`, tag `v*` | CI, then staging migrate+deploy, then production migrate+deploy |
+| [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) | merge to `main`, tag `v*` | CI, then staging migrate+deploy, then production migrate+deploy (skipped unless repo variable `DEPLOY_PRODUCTION` is `true`) |
 | [`.github/workflows/migrate.yml`](../../.github/workflows/migrate.yml) | reusable + manual dispatch | `bsk migrate` against the chosen GitHub Environment; optional `flyctl deploy` **after** migrate |
 
-Staging uses GitHub Environment `staging` and [`fly.staging.toml`](../../fly.staging.toml).
+Staging uses GitHub Environment `staging` and [`fly.staging.toml`](../../fly.staging.toml)
+(Fly app `lifeos-mz55-staging`; plain `lifeos-staging` is someone else's app).
 Production uses GitHub Environment `production` (required reviewer) and
 [`fly.toml`](../../fly.toml). Approving the production job runs migrate and
 then deploy in that same job, so a new image cannot go live ahead of schema.
@@ -109,117 +111,99 @@ problem.
   connection fails. Do not use this as the Fly machine check (a brief DB blip
   would take the machine out of rotation).
 
-## Manual steps (Chris only)
+## First deploy: staging (Chris only)
 
-CI cannot create cloud accounts or OAuth clients. Do these once per environment
-before the first deploy. Staging may already exist from
-[supabase-hosting.md](supabase-hosting.md); production is a **second** Supabase
-project.
+Staging is the existing Supabase project (`lifeos`, us-west-2) served by the
+Fly app `lifeos-mz55-staging`. Production stays off until
+[Production later](#production-later). CI cannot sign in to Fly or Supabase for
+you, so these steps are yours; the script does the wiring in between.
 
-### 1. Production Supabase project
+1. **Use the anon key in the SPA.** `VITE_SUPABASE_ANON_KEY` in
+   `web/.env.local` must be the public **anon** key (Supabase → Project
+   Settings → API Keys → `anon` `public`), never `service_role`. That value is
+   served to every browser. `fly-setup.ps1` refuses a `service_role` or
+   `sb_secret_` key.
+2. **Install flyctl and sign in** (open a new terminal after installing so
+   `fly` is on PATH):
 
-1. [Supabase dashboard](https://supabase.com/dashboard) → **New project** (e.g.
-   `lifeos-prod`), region near the Fly region (`sjc` in `fly.toml` unless you
-   change it). Save the database password.
-2. **Connect → Session pooler** (port 5432). Translate the URI to Npgsql form as
-   in `.env.example` (`SSL Mode=Require;Trust Server Certificate=true`).
-3. Apply schema with the same runner as staging — either
-   `./scripts/migrate-production.ps1` (loads `.env.prod`, git-ignored) or the
-   gated `production` GitHub Action after step 3 below.
-4. Reset `bsk_reader` on **prod** (migration `0005` still has the public local-dev
-   password). SQL Editor:
+   ```powershell
+   pwsh -Command "iwr https://fly.io/install.ps1 -useb | iex"
+   fly auth login
+   ```
+
+3. **Run the setup script** from the repo root:
+
+   ```powershell
+   ./scripts/fly-setup.ps1
+   ```
+
+   It reads the app name from `fly.staging.toml`, the connection strings from
+   `.env`, the Supabase URL/anon key from `web/.env.local`, and
+   `ALLOWED_EMAILS` from the API user-secrets. It checks that they all name the
+   same Supabase project, shows what it will do, and asks before it:
+   - creates the Fly app if it does not exist,
+   - imports the seven runtime secrets (`fly secrets import --stage`; values go
+     over stdin, never a command line),
+   - sets `BSK_CONNECTION_STRING` and `FLY_API_TOKEN` (a deploy token scoped to
+     this one app) on the `staging` GitHub Environment.
+
+   Re-running is safe. If the app name is taken, change `app =` in
+   `fly.staging.toml` and re-run.
+4. **Allow the Fly origin to receive sign-ins.** Supabase → Authentication →
+   URL Configuration → Redirect URLs: add `https://lifeos-mz55-staging.fly.dev`.
+   Keep `http://localhost:5173` there for local Vite. Google Cloud Console needs
+   no change: Google returns to the Supabase callback, which is already
+   registered, and Supabase then redirects to an origin on this list.
+5. **Deploy:** `gh workflow run deploy.yml` (or push to `main`). The run
+   migrates staging, deploys, and skips production. Then open
+   `https://lifeos-mz55-staging.fly.dev`:
+   - `/health` and `/health/ready` are green
+   - Google sign-in returns to the Fly origin and the allowlisted account can
+     read and write
+   - a request to `/api/*` with no bearer token is 401; a non-allowlisted
+     Google account is 403
+   - Fly logs show no `bsk migrate` on boot
+
+## Production later
+
+Production is a **second** Supabase project. (When you get here, the
+alternative is to promote the current project to production and create a fresh
+staging project instead. Decide then.) Once per production setup:
+
+1. [Supabase dashboard](https://supabase.com/dashboard) → **New project**,
+   region `us-west-2` to sit near Fly `sjc`. Save the database password.
+2. Put its session-pooler owner and reader strings, its URL and anon key, and
+   `ALLOWED_EMAILS` in `.env.prod` (git-ignored). Apply schema with
+   `./scripts/migrate-production.ps1`, then reset `bsk_reader` (migration `0005`
+   ships the public local-dev password):
 
    ```sql
    alter role bsk_reader with password '<a-strong-random-password>';
    ```
 
-   Reader pooler username: `bsk_reader.<prod-project-ref>`.
+3. Supabase → Authentication → Providers → Google: enable it with the same
+   Google OAuth client, and add the new project's callback
+   `https://<prod-ref>.supabase.co/auth/v1/callback` to that client's
+   authorized redirect URIs in Google Cloud Console. Turn off open sign-ups
+   (the API allowlist is the real gate; this is defense in depth).
+4. GitHub → Settings → Environments → `production`: add yourself as a
+   **required reviewer**. Without it, a merge promotes schema and an image to
+   production unattended.
+5. Run the setup script for production:
 
-### 2. Fly apps and secrets
+   ```powershell
+   ./scripts/fly-setup.ps1 -FlyConfig fly.toml -GitHubEnvironment production -EnvFile .env.prod
+   ```
 
-Install [flyctl](https://fly.io/docs/flyctl/install/), then:
+6. Supabase (prod) → URL Configuration: Site URL and Redirect URLs =
+   `https://lifeos-mz55-w.fly.dev`.
+7. Turn the production job on: `gh variable set DEPLOY_PRODUCTION --body true`.
+   The next merge waits for your approval after staging, then migrates and
+   deploys production in one job. Run the same checks as staging step 5.
 
-```powershell
-fly auth login
-fly apps create lifeos-mz55-w
-fly apps create lifeos-staging
-```
+Optional: `fly certs add your.domain` for a custom hostname.
 
-If those names are taken, change `app =` in `fly.toml` / `fly.staging.toml` to
-match whatever you created. Pick `primary_region` to match the Supabase region
-when you can.
-
-Set **runtime** secrets on each app (prod values shown; repeat for
-`lifeos-staging` with the staging project):
-
-```powershell
-fly secrets set --app lifeos-mz55-w `
-  BSK_CONNECTION_STRING="Host=...;Port=5432;...;SSL Mode=Require;Trust Server Certificate=true" `
-  BSK_READER_CONNECTION_STRING="Host=...;Username=bsk_reader.<ref>;..." `
-  Auth__Issuer="https://<prod-ref>.supabase.co/auth/v1" `
-  Auth__Audience="authenticated" `
-  Auth__JwksUrl="https://<prod-ref>.supabase.co/auth/v1/.well-known/jwks.json" `
-  ALLOWED_EMAILS="you@gmail.com" `
-  VITE_SUPABASE_URL="https://<prod-ref>.supabase.co" `
-  VITE_SUPABASE_ANON_KEY="<anon-key-not-service-role>"
-```
-
-Never put these in git, `fly.toml`, or GitHub Actions logs. `fly secrets set`
-restarts machines.
-
-Optional: `fly certs add your.domain` if you later want a custom hostname (not
-required; `https://lifeos-mz55-w.fly.dev` is enough for the first cutover).
-
-### 3. GitHub Environments
-
-1. **Settings → Environments → `staging`** (may already exist) with secret
-   `BSK_CONNECTION_STRING` (staging owner session-pooler string).
-2. **New environment → `production`**. Add yourself as a **required reviewer**.
-   Add secret `BSK_CONNECTION_STRING` for the **prod** owner session-pooler
-   string.
-3. Repository (or environment) secret `FLY_API_TOKEN` from
-   `fly tokens create deploy` (or an org token that can deploy both apps).
-   Public SPA values (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) live on
-   Fly as secrets (step 2), not in GitHub.
-
-Without the production reviewer, a merge to `main` could promote schema and a
-new image unattended. Keep the reviewer.
-
-### 4. Google OAuth and Supabase Auth URL config
-
-For **each** Supabase project (staging and prod):
-
-1. Google Cloud Console → OAuth 2.0 Client (Web) → Authorized JavaScript
-   origins **and** redirect URIs: add the Fly origin,
-   `https://<app>.fly.dev`, plus the Supabase callback
-   `https://<project-ref>.supabase.co/auth/v1/callback`.
-2. Supabase → Authentication → URL configuration:
-   - Site URL = `https://<app>.fly.dev`
-   - Additional redirect URLs: that same origin (and `http://localhost:5173`
-     on staging if you still use Vite locally)
-3. Authentication → Providers → Google: enabled. **Disable** open sign-ups
-   (Authentication → Providers / settings: reject identities that are not
-   invited, or turn off "Allow new users" if the dashboard still offers it).
-   The API allowlist is the real gate; closing sign-ups is defense in depth.
-
-### 5. First production cutover
-
-1. Finish steps 1–4. Confirm staging already migrates on merge.
-2. Merge to `main` (or run **Actions → Deploy → Run workflow**).
-3. Wait for CI and staging deploy to go green.
-4. GitHub will wait on the `production` environment **after staging has
-   migrated and deployed**. Review the commit, then approve. That job runs
-   `bsk migrate` against prod, then `flyctl deploy`. The SPA reads Supabase
-   public values from Fly secrets at runtime (`/public-config.js`).
-5. Open `https://lifeos-mz55-w.fly.dev` (or your app hostname):
-   - `/health` and `/health/ready` are green
-   - the SPA loads from that origin
-   - Google sign-in works
-   - the allowlisted account can read and write
-   - a non-allowlisted Google account is 403 on `/api/*`
-   - a request with no bearer token is 401
-6. Confirm the running app did not apply migrations (no `bsk migrate` in Fly
-   logs on boot; schema history only changes during the GitHub migrate step).
+## Local image check
 
 Local check of the image against **staging** secrets (never prod) before the
 first cutover:

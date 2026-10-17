@@ -84,7 +84,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           if [ -z "$FLY_API_TOKEN" ]; then
-            echo "::error::FLY_API_TOKEN is not set. Add it as a repository secret (or on the '${{ inputs.environment }}' environment)."
+            echo "::error::FLY_API_TOKEN is not set on the '${{ inputs.environment }}' environment. Run scripts/fly-setup.ps1 for this environment (it mints an app-scoped deploy token and stores it here)."
             exit 1
           fi
           flyctl deploy \

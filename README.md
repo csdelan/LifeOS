@@ -134,7 +134,8 @@ staging apply; [`deploy.yml`](.github/workflows/deploy.yml) on merge to `main`)
 runs `bsk migrate` then deploys. Production is a second Supabase project gated
 by a required reviewer — see [`docs/pilot/deploy.md`](docs/pilot/deploy.md).
 `scripts/migrate-staging.ps1` / `scripts/migrate-production.ps1` do the same
-schema apply by hand.
+schema apply by hand. `scripts/fly-setup.ps1` creates a Fly app, loads its
+runtime secrets, and gives GitHub Actions the deploy token for it.
 
 Full database setup: [`docs/pilot/supabase-hosting.md`](docs/pilot/supabase-hosting.md).
 Production cutover (Fly, secrets, OAuth): [`docs/pilot/deploy.md`](docs/pilot/deploy.md).

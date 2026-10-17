@@ -4,6 +4,11 @@ name: Deploy
 # then migrate+deploy production behind the `production` GitHub Environment
 # required reviewer. Schema is applied with `bsk migrate` before the new image
 # goes live. The API never migrates on startup.
+#
+# Production is skipped (not failed) until the repository variable
+# DEPLOY_PRODUCTION is "true". Set it only once the production Supabase project,
+# Fly app secrets, environment secrets and required reviewer all exist
+# (docs/pilot/deploy.md, "Production later").
 
 on:
   push:
@@ -36,6 +41,7 @@ jobs:
   production:
     name: Production migrate and deploy
     needs: [ci, staging]
+    if: ${{ vars.DEPLOY_PRODUCTION == 'true' }}
     uses: ./.github/workflows/migrate.yml
     with:
       environment: production

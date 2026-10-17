@@ -1,7 +1,11 @@
 # Fly.io staging app. Same image layout as production; different Supabase
 # project and secrets. See docs/pilot/deploy.md.
+#
+# Fly app names are global. `lifeos-staging` belongs to someone else, so this
+# uses the same suffix Fly generated for the production app. Create the app and
+# load its secrets with scripts/fly-setup.ps1 (it reads the name from here).
 
-app = "lifeos-staging"
+app = "lifeos-mz55-staging"
 primary_region = "sjc"
 
 [build]
