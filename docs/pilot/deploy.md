@@ -150,10 +150,19 @@ you, so these steps are yours; the script does the wiring in between.
    Re-running is safe. If the app name is taken, change `app =` in
    `fly.staging.toml` and re-run.
 4. **Allow the Fly origin to receive sign-ins.** Supabase → Authentication →
-   URL Configuration → Redirect URLs: add `https://lifeos-mz55-staging.fly.dev`.
-   Keep `http://localhost:5173` there for local Vite. Google Cloud Console needs
-   no change: Google returns to the Supabase callback, which is already
-   registered, and Supabase then redirects to an origin on this list.
+   URL Configuration:
+   - **Site URL** = `https://lifeos-mz55-staging.fly.dev` (no trailing slash).
+     Supabase accepts any return address on the Site URL's host.
+   - **Redirect URLs** includes `http://localhost:5173`, so local Vite keeps
+     working.
+   - Save each field.
+
+   The SPA asks to return to `window.location.origin` (no trailing slash).
+   Redirect URLs entries must match it exactly: `https://host/` or
+   `https://host/**` does not match `https://host`. When nothing matches,
+   Supabase silently sends the browser to the Site URL instead, which shows up
+   as "localhost refused to connect". Google Cloud Console needs no change:
+   Google returns to the Supabase callback, which is already registered.
 5. **Deploy:** `gh workflow run deploy.yml` (or push to `main`). The run
    migrates staging, deploys, and skips production. Then open
    `https://lifeos-mz55-staging.fly.dev`:

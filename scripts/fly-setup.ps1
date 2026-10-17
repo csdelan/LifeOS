@@ -232,5 +232,6 @@ $token = $null
 
 Write-Host ''
 Write-Host 'Done. Remaining by hand:' -ForegroundColor Green
-Write-Host "  1. Supabase ($ref) -> Authentication -> URL Configuration -> Redirect URLs: add https://$app.fly.dev"
+Write-Host "  1. Supabase ($ref) -> Authentication -> URL Configuration: Site URL = https://$app.fly.dev (no trailing slash);"
+Write-Host "     keep http://localhost:5173 under Redirect URLs for local Vite."
 Write-Host "  2. Deploy: gh workflow run deploy.yml   (or push to main), then open https://$app.fly.dev"
