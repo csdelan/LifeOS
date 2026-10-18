@@ -60,6 +60,11 @@ export function TasksPage() {
   const entryRef = useRef<HTMLInputElement>(null);
   const today = todayIso();
 
+  // A saved tag filter whose tag was renamed (or is no longer used) falls back to
+  // "Any tag" rather than silently hiding every task.
+  const tagFilter =
+    filters.tag && tags && !tags.some((t) => t.tag === filters.tag) ? "" : filters.tag;
+
   useEffect(() => {
     saveView("tasks", filters);
   }, [filters]);
@@ -90,12 +95,12 @@ export function TasksPage() {
       rows = rows.filter((t) => (t.status || defaultStatus("Task")) === filters.status);
     }
     if (filters.area) rows = rows.filter((t) => t.area === filters.area);
-    if (filters.tag) {
+    if (tagFilter) {
       rows = rows.filter((t) =>
         (t.tags ?? "")
           .split(",")
           .map((x) => x.trim())
-          .includes(filters.tag),
+          .includes(tagFilter),
       );
     }
     if (filters.parent) {
@@ -109,7 +114,7 @@ export function TasksPage() {
     if (filters.scheduled === "upcoming") rows = rows.filter((t) => t.scheduled && t.scheduled > today);
     if (filters.scheduled === "none") rows = rows.filter((t) => !t.scheduled);
     return rows;
-  }, [data, filters, parentOf, today]);
+  }, [data, filters, tagFilter, parentOf, today]);
 
   const grouped = groupTasks(filtered, today);
 
@@ -230,7 +235,7 @@ export function TasksPage() {
             />
             <FilterSelect
               label="Tag"
-              value={filters.tag || NONE}
+              value={tagFilter || NONE}
               onChange={(tag) => setFilters((f) => ({ ...f, tag: tag === NONE ? "" : tag }))}
               options={[
                 { value: NONE, label: "Any tag" },

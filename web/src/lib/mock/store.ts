@@ -15,6 +15,8 @@ import type {
   NewSubjectRequest,
   RecurrenceSpec,
   Relation,
+  RenamedSubject,
+  RenamedTag,
   ReviewBody,
   ReviewDoc,
   SubjectDetail,
@@ -366,6 +368,100 @@ export function setTags(itemRef: string, add: string[] = [], remove: string[] = 
     );
   }
   emit();
+}
+
+/**
+ * Rename a subject, as `bsk rename` does: the urn stays, the title changes. The live
+ * reader joins titles on read, but the mock copies them into several rows, so each
+ * copy is patched here. A series rename also renames its upcoming occurrences that
+ * still carry the old title. Like the kernel, two Problems may not share a title.
+ */
+export function renameSubject(subjectRef: string, rawTitle: string): RenamedSubject {
+  const item = byRef(subjectRef);
+  if (!item) throw new Error(`No subject matches '${subjectRef}'.`);
+  const title = rawTitle.trim().split(/\s+/).join(" ");
+  if (!title) throw new Error("A new title is required.");
+  const previousTitle = item.title;
+  if (title === previousTitle) {
+    return { id: item.id, title, previousTitle, changed: false, occurrencesRenamed: 0 };
+  }
+  if (
+    item.type === "Problem" &&
+    state.subjects.some((s) => s.type === "Problem" && s.id !== item.id && s.title === title)
+  ) {
+    throw new Error(`A Problem subject titled '${title}' already exists.`);
+  }
+
+  const today = todayIso();
+  const occurrenceIds =
+    item.type === "Appointment"
+      ? state.subjects
+          .filter(
+            (s) =>
+              s.type === "Appointment" &&
+              s.title === previousTitle &&
+              safeAttrs(state.details[s.id]?.attributes).series === item.urn &&
+              (s.due ?? "") >= today,
+          )
+          .map((s) => s.id)
+      : [];
+  for (const id of [item.id, ...occurrenceIds]) retitle(id, title);
+  emit();
+  return { id: item.id, title, previousTitle, changed: true, occurrencesRenamed: occurrenceIds.length };
+}
+
+function retitle(id: string, title: string) {
+  const item = byId(id);
+  if (!item) return;
+  state.subjects = state.subjects.map((s) => {
+    if (s.id === id) return { ...s, title };
+    // Items filed under a renamed Area show its new name.
+    if (item.type === "Area" && s.area === item.urn) return { ...s, areaName: title };
+    return s;
+  });
+  for (const [key, detail] of Object.entries(state.details)) {
+    if (key === id) state.details[key] = { ...detail, title };
+    else if (item.type === "Area" && detail.area === item.urn) state.details[key] = { ...detail, areaName: title };
+  }
+  syncSpecial(id);
+  state.occurrences = state.occurrences.map((o) => (o.habitId === id ? { ...o, habitName: title } : o));
+  state.inbox = state.inbox.map((i) => (i.subjectUrn === item.urn ? { ...i, subjectTitle: title } : i));
+  state.resolved = state.resolved.map((r) =>
+    r.row.subjectUrn === item.urn ? { ...r, row: { ...r.row, subjectTitle: title } } : r,
+  );
+  state.associations = state.associations.map((a) => ({
+    ...a,
+    subjectTitle: a.subjectId === id ? title : a.subjectTitle,
+    personName: a.personId === id ? title : a.personName,
+  }));
+  if (state.primaryFocus.subjectId === id) state.primaryFocus = { ...state.primaryFocus, title };
+}
+
+/**
+ * Rename a tag on every item, as `bsk rename-tag` does. An item that already has the
+ * new tag keeps one copy (a merge). Renaming a tag nothing carries is an error.
+ */
+export function renameTag(rawFrom: string, rawTo: string): RenamedTag {
+  const from = rawFrom.trim().toLowerCase();
+  const to = rawTo.trim().toLowerCase();
+  if (!from || !to) throw new Error("Both the tag and its new name are required.");
+  if (from === to) return { from, to, renamed: 0, merged: 0 };
+
+  let renamed = 0;
+  let merged = 0;
+  for (const [key, tags] of Object.entries(state.tagsByItem)) {
+    if (!tags.includes(from)) continue;
+    if (tags.includes(to)) merged++;
+    else renamed++;
+    state.tagsByItem[key] = [...new Set(tags.map((t) => (t === from ? to : t)))].sort();
+  }
+  if (renamed + merged === 0) throw new Error(`No item is tagged '${from}'.`);
+
+  state.subjects = state.subjects.map((s) =>
+    state.tagsByItem[s.id] ? { ...s, tags: state.tagsByItem[s.id].join(", ") || null } : s,
+  );
+  emit();
+  return { from, to, renamed, merged };
 }
 
 export function appendJournal(subject: string, text: string) {

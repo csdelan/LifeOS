@@ -10,8 +10,14 @@ namespace LifeOs.Application.Subjects;
 /// convenience, and edges/tags reference the subject by id, so a rename never breaks
 /// a link. Renaming a reuse-by-title subject (e.g. a Problem) onto a title that
 /// already exists surfaces <see cref="DuplicateSubjectException"/>.
+/// <para>
+/// Renaming a recurring Appointment series also renames its upcoming materialized
+/// occurrences that still carry the series' old title (each copied it when it was
+/// created); past occurrences and ones renamed individually keep their own titles.
+/// </para>
 /// </summary>
-public sealed class RenameService(SubjectService subjects, ISubjectRepository repository)
+public sealed class RenameService(
+    SubjectService subjects, ISubjectRepository repository, IAppointmentRepository appointments, IClock clock)
 {
     /// <summary>
     /// Renames the subject named by <paramref name="reference"/> (urn, short id, or
@@ -34,17 +40,30 @@ public sealed class RenameService(SubjectService subjects, ISubjectRepository re
         // against the subject's own row, and repeated saves stay cheap.
         if (string.Equals(cleanTitle, subject.Title, StringComparison.Ordinal))
         {
-            return new RenameResult(subject, subject.Title, Changed: false);
+            return new RenameResult(subject, subject.Title, Changed: false, OccurrencesRenamed: 0);
         }
 
-        var updated = await repository.RenameAsync(subject.Id, cleanTitle, cancellationToken);
+        bool updated;
+        var occurrencesRenamed = 0;
+        if (subject.Type == SubjectTypes.Appointment)
+        {
+            var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+            (updated, occurrencesRenamed) = await appointments.RenameWithUpcomingOccurrencesAsync(
+                subject.Id, subject.Urn, subject.Title, cleanTitle, today, cancellationToken);
+        }
+        else
+        {
+            updated = await repository.RenameAsync(subject.Id, cleanTitle, cancellationToken);
+        }
+
         if (!updated)
         {
             // The subject resolved a moment ago; a missing row now is a real fault.
             throw new SubjectNotFoundException(reference);
         }
 
-        return new RenameResult(subject with { Title = cleanTitle }, subject.Title, Changed: true);
+        return new RenameResult(
+            subject with { Title = cleanTitle }, subject.Title, Changed: true, occurrencesRenamed);
     }
 
     // Trim and collapse internal whitespace runs to a single space (as SubjectService does),
@@ -55,6 +74,7 @@ public sealed class RenameService(SubjectService subjects, ISubjectRepository re
 
 /// <summary>
 /// The outcome of a rename: the subject carrying its (new) title, the title it had
-/// before, and whether anything actually changed.
+/// before, whether anything actually changed, and — for an Appointment series — how
+/// many upcoming occurrences took the new title with it.
 /// </summary>
-public sealed record RenameResult(SubjectRef Subject, string PreviousTitle, bool Changed);
+public sealed record RenameResult(SubjectRef Subject, string PreviousTitle, bool Changed, int OccurrencesRenamed);

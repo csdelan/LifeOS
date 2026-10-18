@@ -3,7 +3,10 @@ import { api, unwrap } from "@/lib/live/http";
 import type {
   CreatedSubject,
   LifeOsWriteClient,
+  RenamedSubject,
+  RenamedTag,
 } from "@/lib/production-ui-types";
+import { renamedMessage } from "@/lib/production-ui-types";
 
 function notify(message: string) {
   toast.success(message);
@@ -30,6 +33,14 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       notify("Saved");
     },
 
+    async rename(subject, title) {
+      const renamed = (await unwrap(
+        api().POST("/api/rename", { body: { subject, title } }),
+      )) as unknown as RenamedSubject;
+      if (renamed.changed) notify(renamedMessage(renamed));
+      return renamed;
+    },
+
     async setStatus(subject, status) {
       await unwrap(api().POST("/api/status", { body: { subject, status } }));
       notify(`Status → ${status}`);
@@ -51,6 +62,14 @@ export function createLiveWriteClient(): LifeOsWriteClient {
           body: { item, add: opts.add, remove: opts.remove },
         }),
       );
+    },
+
+    async renameTag(from, to) {
+      const renamed = (await unwrap(
+        api().POST("/api/rename-tag", { body: { from, to } }),
+      )) as unknown as RenamedTag;
+      if (renamed.renamed + renamed.merged > 0) notify(`Renamed #${renamed.from} → #${renamed.to}`);
+      return renamed;
     },
 
     async link(from, relation, to) {

@@ -68,6 +68,20 @@ export function typeLabel(type: SubjectType): string {
   }
 }
 
+/**
+ * The short id a person sees and types (`bsk status a1b2c3 …`): the trailing token
+ * of the URN. The URN's slug is the item's name at birth and never follows a rename,
+ * so the UI shows only this permanent part. The kernel mints hex; the mock mints
+ * base-36, so any 4–12 character token that is hex or carries a digit counts. A URN
+ * without one falls back to its whole tail.
+ */
+export function shortIdOf(urn: string): string {
+  const tail = urn.slice(urn.lastIndexOf(":") + 1);
+  const token = tail.slice(tail.lastIndexOf("-") + 1);
+  const isShortId = /^[0-9a-f]{4,12}$/i.test(token) || /^(?=.*\d)[0-9a-z]{4,12}$/i.test(token);
+  return isShortId ? token : tail;
+}
+
 /** Per-type status vocabularies (D7). Status moves only by state_change events. */
 export const STATUS_BY_TYPE: Partial<Record<SubjectType, string[]>> = {
   Goal:        ["New", "Active", "Completed", "Abandoned"],
@@ -464,6 +478,32 @@ export interface CreatedSubject {
   title: string;
 }
 
+/** Result of `rename`. The URN never changes, so only titles come back. */
+export interface RenamedSubject {
+  id: string;
+  title: string;
+  previousTitle: string;
+  changed: boolean;
+  /** Appointment series: upcoming occurrences that still had the old title and took the new one. */
+  occurrencesRenamed: number;
+}
+
+/** Toast text for a rename; mentions series occurrences that followed it. */
+export function renamedMessage(renamed: RenamedSubject): string {
+  const n = renamed.occurrencesRenamed;
+  return n > 0
+    ? `Renamed to ${renamed.title} (and ${n} upcoming occurrence${n === 1 ? "" : "s"})`
+    : `Renamed to ${renamed.title}`;
+}
+
+/** Result of `renameTag`. `merged` counts items that already carried the new tag. */
+export interface RenamedTag {
+  from: string;
+  to: string;
+  renamed: number;
+  merged: number;
+}
+
 export interface NewSubjectRequest {
   type: SubjectType;
   title: string;
@@ -486,10 +526,14 @@ export interface LifeOsWriteClient {
   /** source = event id (capture→subject) or subject ref (Idea→work via results_in). */
   promote(source: string, type: SubjectType, title: string): Promise<CreatedSubject>;
   setAttributes(subject: string, attrs: Record<string, string>): Promise<void>; // "" removes a key
+  /** Change the title (urn unchanged). A series rename carries to its upcoming occurrences. */
+  rename(subject: string, title: string): Promise<RenamedSubject>;
   setStatus(subject: string, status: string): Promise<void>;                    // state_change
   archive(subject: string): Promise<void>;
   restore(subject: string): Promise<void>;
   tag(item: string, opts: { add?: string[]; remove?: string[] }): Promise<void>;
+  /** Rename a tag on every item; renaming onto an existing tag merges the two. */
+  renameTag(from: string, to: string): Promise<RenamedTag>;
   link(from: string, relation: Relation, to: string): Promise<void>;            // subject→subject
   relate(eventId: string, subject: string, as?: EventRelation): Promise<void>;  // event→subject
   flag(item: string): Promise<void>;                                            // (re-)enter inbox

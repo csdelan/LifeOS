@@ -3,6 +3,7 @@ import {
   defaultStatus,
   inferChildRelation,
   isTerminal,
+  shortIdOf,
 } from "@/lib/production-ui-types";
 
 describe("status folding + defaultStatus", () => {
@@ -29,5 +30,18 @@ describe("inferChildRelation", () => {
     expect(inferChildRelation("Task", "Project")).toBe("serves");
     expect(inferChildRelation("Task", "Goal")).toBe("serves");
     expect(inferChildRelation("Habit", "Goal")).toBeUndefined();
+  });
+});
+
+describe("shortIdOf", () => {
+  it("takes the trailing hex token the kernel mints onto a URN", () => {
+    expect(shortIdOf("urn:bsk:goal:get-fit-a1b2c3")).toBe("a1b2c3");
+    expect(shortIdOf("urn:bsk:task:7f3a9c")).toBe("7f3a9c");
+    // The mock mints base-36 ids.
+    expect(shortIdOf("urn:bsk:goal:ship-lifeos-g10002")).toBe("g10002");
+  });
+
+  it("falls back to the whole tail when there is no short id", () => {
+    expect(shortIdOf("urn:bsk:project:life-kernel")).toBe("life-kernel");
   });
 });

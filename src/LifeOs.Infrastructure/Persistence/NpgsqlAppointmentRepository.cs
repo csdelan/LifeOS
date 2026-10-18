@@ -43,4 +43,34 @@ public sealed class NpgsqlAppointmentRepository(string connectionString) : IAppo
             cancellationToken: cancellationToken));
         return dates.Select(d => DateOnly.ParseExact(d, "yyyy-MM-dd")).ToList();
     }
+
+    public async Task<(bool Updated, int OccurrencesRenamed)> RenameWithUpcomingOccurrencesAsync(
+        Guid id, string urn, string previousTitle, string newTitle, DateOnly fromDate,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var updated = await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE bsk.subject SET title = @newTitle WHERE id = @id;",
+            new { id, newTitle }, transaction, cancellationToken: cancellationToken));
+
+        // Only occurrences that still match the old series title follow it, so one
+        // renamed by hand keeps its own name; past dates keep the name they happened under.
+        var occurrences = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE bsk.subject
+            SET title = @newTitle
+            WHERE type = 'Appointment'
+              AND attributes->>'series' = @urn
+              AND title = @previousTitle
+              AND bsk.try_to_date(attributes->>'date') >= @fromDate::date;
+            """,
+            new { urn, previousTitle, newTitle, fromDate = fromDate.ToString("yyyy-MM-dd") },
+            transaction, cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return (updated > 0, occurrences);
+    }
 }

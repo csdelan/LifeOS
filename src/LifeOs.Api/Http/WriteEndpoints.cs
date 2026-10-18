@@ -36,6 +36,9 @@ public static class WriteEndpoints
             .Produces<CreatedSubject>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/attributes", SetAttributes).WithName("SetAttributes")
             .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
+        api.MapPost("/rename", Rename).WithName("Rename")
+            .Produces<RenamedSubject>().Produces<ApiError>(StatusCodes.Status400BadRequest)
+            .Produces<ApiError>(StatusCodes.Status409Conflict);
         api.MapPost("/status", SetStatus).WithName("SetStatus")
             .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/archive", Archive).WithName("Archive")
@@ -44,6 +47,8 @@ public static class WriteEndpoints
             .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/tag", Tag).WithName("Tag")
             .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
+        api.MapPost("/rename-tag", RenameTag).WithName("RenameTag")
+            .Produces<RenamedTag>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/link", Link).WithName("Link")
             .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/relate", Relate).WithName("Relate")
@@ -173,6 +178,28 @@ public static class WriteEndpoints
         return Results.Ok();
     }
 
+    private static async Task<IResult> Rename(
+        RenameBody body,
+        RenameService rename,
+        SubjectReader reader,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(body.Subject) || string.IsNullOrWhiteSpace(body.Title))
+        {
+            return Results.BadRequest(new ApiError("subject and title are required."));
+        }
+
+        var result = await rename.RenameAsync(ResolveWriteRef(body.Subject, reader), body.Title, cancellationToken);
+        return Results.Ok(new RenamedSubject
+        {
+            Id = result.Subject.Id,
+            Title = result.Subject.Title,
+            PreviousTitle = result.PreviousTitle,
+            Changed = result.Changed,
+            OccurrencesRenamed = result.OccurrencesRenamed
+        });
+    }
+
     private static async Task<IResult> SetStatus(
         StatusBody body,
         StatusService status,
@@ -236,6 +263,26 @@ public static class WriteEndpoints
             body.Remove ?? [],
             cancellationToken);
         return Results.Ok();
+    }
+
+    private static async Task<IResult> RenameTag(
+        RenameTagBody body,
+        TagService tags,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(body.From) || string.IsNullOrWhiteSpace(body.To))
+        {
+            return Results.BadRequest(new ApiError("from and to are required."));
+        }
+
+        var result = await tags.RenameAsync(body.From, body.To, cancellationToken);
+        return Results.Ok(new RenamedTag
+        {
+            From = result.From,
+            To = result.To,
+            Renamed = result.Renamed,
+            Merged = result.Merged
+        });
     }
 
     private static async Task<IResult> Link(
@@ -507,6 +554,18 @@ public sealed class SetAttributesBody
 {
     public string Subject { get; set; } = "";
     public Dictionary<string, string> Attrs { get; set; } = new();
+}
+
+public sealed class RenameBody
+{
+    public string Subject { get; set; } = "";
+    public string Title { get; set; } = "";
+}
+
+public sealed class RenameTagBody
+{
+    public string From { get; set; } = "";
+    public string To { get; set; } = "";
 }
 
 public sealed class StatusBody

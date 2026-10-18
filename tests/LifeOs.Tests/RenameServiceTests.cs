@@ -8,6 +8,12 @@ using Npgsql;
 
 namespace LifeOs.Tests;
 
+/// <summary>A clock pinned to one instant, so "upcoming" is deterministic.</summary>
+file sealed class FixedClock(DateTimeOffset now) : IClock
+{
+    public DateTimeOffset UtcNow => now;
+}
+
 /// <summary>
 /// <c>bsk rename</c>'s service: changing a subject's title after creation. The title
 /// is a first-class column (not settable via <c>bsk set</c>); a rename changes only
@@ -128,6 +134,58 @@ public sealed class RenameServiceTests(PostgresFixture postgres)
 
         Assert.True(result.Changed);
         Assert.Equal(shared, await ReadTitle(second.Id));
+    }
+
+    [Fact]
+    public async Task Renaming_a_series_renames_upcoming_occurrences_that_still_carry_its_title()
+    {
+        await using var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var appointments = provider.GetRequiredService<AppointmentService>();
+        // "Today" is 2026-01-15: the 19th and 26th are upcoming, the 5th and 12th are past.
+        var rename = new RenameService(
+            subjects,
+            provider.GetRequiredService<ISubjectRepository>(),
+            provider.GetRequiredService<IAppointmentRepository>(),
+            new FixedClock(new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero)));
+        var ns = Guid.NewGuid().ToString("N");
+
+        var series = await subjects.CreateAsync(
+            SubjectTypes.Appointment, $"Standup {ns}",
+            attributesJson: """{"start_date":"2026-01-01","start":"09:00","recurrence":{"freq":"weekly","on":["mon"]}}""",
+            cancellationToken: Ct);
+        await appointments.MaterializeAsync(series.Urn, new DateOnly(2026, 1, 31), Ct);
+
+        // One upcoming occurrence was renamed by hand; it must keep its own title.
+        var offsiteId = await OccurrenceId(series.Urn, "2026-01-26");
+        await rename.RenameAsync(await UrnOf(offsiteId), $"Offsite {ns}", Ct);
+
+        var result = await rename.RenameAsync(series.Urn, $"Team sync {ns}", Ct);
+
+        Assert.True(result.Changed);
+        Assert.Equal(1, result.OccurrencesRenamed);
+        Assert.Equal($"Team sync {ns}", await ReadTitle(series.Id));
+        Assert.Equal($"Standup {ns}", await ReadTitle(await OccurrenceId(series.Urn, "2026-01-05")));
+        Assert.Equal($"Standup {ns}", await ReadTitle(await OccurrenceId(series.Urn, "2026-01-12")));
+        Assert.Equal($"Team sync {ns}", await ReadTitle(await OccurrenceId(series.Urn, "2026-01-19")));
+        Assert.Equal($"Offsite {ns}", await ReadTitle(offsiteId));
+    }
+
+    private async Task<Guid> OccurrenceId(string seriesUrn, string date)
+    {
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync(Ct);
+        return await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
+            "SELECT id FROM bsk.subject WHERE attributes->>'series' = @seriesUrn AND attributes->>'date' = @date;",
+            new { seriesUrn, date }, cancellationToken: Ct));
+    }
+
+    private async Task<string> UrnOf(Guid id)
+    {
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync(Ct);
+        return await connection.ExecuteScalarAsync<string>(new CommandDefinition(
+            "SELECT urn FROM bsk.subject WHERE id = @id;", new { id }, cancellationToken: Ct)) ?? "";
     }
 
     [Fact]

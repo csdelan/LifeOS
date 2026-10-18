@@ -37,6 +37,34 @@ public sealed class TagService(SubjectService subjects, IEventReader events, ITa
         return new TagResult(item, toAdd, toRemove, added, removed);
     }
 
+    /// <summary>
+    /// Renames a tag on every item that carries it (<c>bsk rename-tag</c>). A tag has
+    /// no identity beyond its text, so a rename relabels each use; renaming onto a tag
+    /// that already exists merges the two, and an item carrying both keeps one. Both
+    /// names are normalized first, so a case-only change is a no-op.
+    /// </summary>
+    public async Task<TagRenameResult> RenameAsync(
+        string oldTag, string newTag, CancellationToken cancellationToken = default)
+    {
+        var from = Tags.Normalize(oldTag) ?? throw new ArgumentException("The tag to rename is required.", nameof(oldTag));
+        var to = Tags.Normalize(newTag) ?? throw new ArgumentException("A new tag name is required.", nameof(newTag));
+
+        if (string.Equals(from, to, StringComparison.Ordinal))
+        {
+            return new TagRenameResult(from, to, Renamed: 0, Merged: 0);
+        }
+
+        var (renamed, merged) = await tags.RenameAsync(from, to, cancellationToken);
+        if (renamed == 0 && merged == 0)
+        {
+            // Nothing carries the old tag — almost always a typo, so say so rather than
+            // reporting a silent success.
+            throw new InvalidOperationException($"No item is tagged '{from}'.");
+        }
+
+        return new TagRenameResult(from, to, renamed, merged);
+    }
+
     private async Task<TaggedItem> ResolveItemAsync(string reference, CancellationToken cancellationToken)
     {
         // A bare uuid is treated as an event id when it names a real event; this is
@@ -57,6 +85,12 @@ public sealed class TagService(SubjectService subjects, IEventReader events, ITa
 
 /// <summary>The item that was tagged — a subject or an event — and a label for output.</summary>
 public sealed record TaggedItem(bool IsEvent, Guid Id, string Label);
+
+/// <summary>
+/// The outcome of a tag rename: the normalized names, how many uses were relabelled,
+/// and how many were folded into an item's existing copy of the new tag.
+/// </summary>
+public sealed record TagRenameResult(string From, string To, int Renamed, int Merged);
 
 /// <summary>The outcome of a tag operation: what was requested and what changed.</summary>
 public sealed record TagResult(

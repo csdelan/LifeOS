@@ -228,3 +228,21 @@ public sealed class CreatedSubject
     public string Type { get; set; } = "";
     public string Title { get; set; } = "";
 }
+
+public sealed class RenamedSubject
+{
+    public Guid Id { get; set; }
+    public string Title { get; set; } = "";
+    public string PreviousTitle { get; set; } = "";
+    public bool Changed { get; set; }
+    /// <summary>For an Appointment series: upcoming occurrences that took the new title.</summary>
+    public int OccurrencesRenamed { get; set; }
+}
+
+public sealed class RenamedTag
+{
+    public string From { get; set; } = "";
+    public string To { get; set; } = "";
+    public int Renamed { get; set; }
+    public int Merged { get; set; }
+}

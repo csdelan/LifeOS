@@ -111,6 +111,95 @@ public sealed class TagServiceTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Rename_relabels_the_tag_on_every_subject_and_event()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var capture = provider.GetRequiredService<CaptureService>();
+        var tags = provider.GetRequiredService<TagService>();
+        var uniq = Guid.NewGuid().ToString("N")[..8];
+        var oldTag = $"markets-{uniq}";
+        var newTag = $"trading-{uniq}";
+
+        var subject = await subjects.CreateAsync(SubjectTypes.Task, $"rename a {uniq}", cancellationToken: Ct);
+        var captured = await capture.CaptureNoteAsync($"rename capture {uniq}", Ct);
+        await tags.ApplyAsync(subject.Urn, [oldTag, "keep"], [], Ct);
+        await tags.ApplyAsync(captured.EventId.ToString(), [oldTag], [], Ct);
+
+        // Input is normalized, so a mixed-case rename still finds the stored tag.
+        var result = await tags.RenameAsync(oldTag.ToUpperInvariant(), $" {newTag} ", Ct);
+
+        Assert.Equal(oldTag, result.From);
+        Assert.Equal(newTag, result.To);
+        Assert.Equal(2, result.Renamed);
+        Assert.Equal(0, result.Merged);
+
+        await using var connection = await OpenAsync();
+        Assert.Equal(["keep", newTag], await TagsForSubjectAsync(connection, subject.Id));
+        var eventTags = (await connection.QueryAsync<string>(new CommandDefinition(
+            "SELECT tag FROM bsk.item_tag WHERE event_id = @id;",
+            new { id = captured.EventId }, cancellationToken: Ct))).ToList();
+        Assert.Equal([newTag], eventTags);
+        var oldLeft = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.item_tag WHERE tag = @oldTag;", new { oldTag }, cancellationToken: Ct));
+        Assert.Equal(0, oldLeft);
+    }
+
+    [Fact]
+    public async Task Renaming_onto_an_existing_tag_merges_them()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var tags = provider.GetRequiredService<TagService>();
+        var uniq = Guid.NewGuid().ToString("N")[..8];
+        var oldTag = $"fitness-{uniq}";
+        var newTag = $"health-{uniq}";
+
+        var both = await subjects.CreateAsync(SubjectTypes.Task, $"merge both {uniq}", cancellationToken: Ct);
+        var onlyOld = await subjects.CreateAsync(SubjectTypes.Task, $"merge old {uniq}", cancellationToken: Ct);
+        await tags.ApplyAsync(both.Urn, [oldTag, newTag], [], Ct);
+        await tags.ApplyAsync(onlyOld.Urn, [oldTag], [], Ct);
+
+        var result = await tags.RenameAsync(oldTag, newTag, Ct);
+
+        // The item carrying both keeps one copy; the other is relabelled.
+        Assert.Equal(1, result.Renamed);
+        Assert.Equal(1, result.Merged);
+
+        await using var connection = await OpenAsync();
+        Assert.Equal([newTag], await TagsForSubjectAsync(connection, both.Id));
+        Assert.Equal([newTag], await TagsForSubjectAsync(connection, onlyOld.Id));
+        var universe = await connection.ExecuteScalarAsync<long?>(new CommandDefinition(
+            "SELECT item_count FROM bsk.v_tag_universe WHERE tag = @newTag;", new { newTag }, cancellationToken: Ct));
+        Assert.Equal(2, universe);
+    }
+
+    [Fact]
+    public async Task Renaming_a_tag_to_the_same_normalized_name_is_a_no_op()
+    {
+        var provider = Provider();
+        var tags = provider.GetRequiredService<TagService>();
+
+        // Tags are stored lowercased, so a case-only change has nothing to do.
+        var result = await tags.RenameAsync("Reading", " reading ", Ct);
+
+        Assert.Equal(0, result.Renamed);
+        Assert.Equal(0, result.Merged);
+    }
+
+    [Fact]
+    public async Task Renaming_a_tag_nothing_carries_is_an_error()
+    {
+        var provider = Provider();
+        var tags = provider.GetRequiredService<TagService>();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await tags.RenameAsync($"no-such-tag-{Guid.NewGuid():N}", "anything", Ct));
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await tags.RenameAsync("something", "   ", Ct));
+    }
+
+    [Fact]
     public async Task Applying_no_tags_is_rejected()
     {
         var provider = Provider();

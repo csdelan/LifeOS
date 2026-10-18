@@ -120,6 +120,64 @@ public sealed class WriteEndpointsTests(PostgresFixture postgres)
         Assert.Null(await FindOrNullAsync(host.Client, "/api/inbox/resolved", text));
     }
 
+    [Fact]
+    public async Task A_subject_renamed_by_id_reads_back_with_its_new_title_and_old_urn()
+    {
+        await using var host = await StartAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var goal = await PostSubjectAsync(host.Client, new { type = SubjectTypes.Goal, title = $"get fit {ns}" });
+
+        var response = await host.Client.PostAsJsonAsync(
+            "/api/rename", new { subject = goal.Id.ToString(), title = $"  run a   marathon {ns} " }, Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var renamed = await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        Assert.Equal($"run a marathon {ns}", renamed.GetProperty("title").GetString());
+        Assert.Equal($"get fit {ns}", renamed.GetProperty("previousTitle").GetString());
+        Assert.True(renamed.GetProperty("changed").GetBoolean());
+
+        var detail = await host.Client.GetFromJsonAsync<JsonElement>($"/api/subjects/{goal.Id}", Ct);
+        Assert.Equal($"run a marathon {ns}", detail.GetProperty("title").GetString());
+        Assert.Equal(goal.Urn, detail.GetProperty("urn").GetString());
+    }
+
+    [Fact]
+    public async Task Renaming_a_problem_onto_another_problems_title_is_a_409()
+    {
+        await using var host = await StartAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        await PostSubjectAsync(host.Client, new { type = SubjectTypes.Problem, title = $"sleep {ns}" });
+        var other = await PostSubjectAsync(host.Client, new { type = SubjectTypes.Problem, title = $"energy {ns}" });
+
+        var response = await host.Client.PostAsJsonAsync(
+            "/api/rename", new { subject = other.Id.ToString(), title = $"sleep {ns}" }, Ct);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("error").GetString()));
+    }
+
+    [Fact]
+    public async Task A_renamed_tag_reads_back_under_its_new_name()
+    {
+        await using var host = await StartAsync();
+        var ns = Guid.NewGuid().ToString("N")[..8];
+        var task = await PostSubjectAsync(host.Client, new { type = SubjectTypes.Task, title = $"tagged {ns}" });
+        await PostOkAsync(host.Client, "/api/tag", new { item = task.Id.ToString(), add = new[] { $"old-{ns}" } });
+
+        var response = await host.Client.PostAsJsonAsync("/api/rename-tag", new { from = $"old-{ns}", to = $"New-{ns}" }, Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var renamed = await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        Assert.Equal($"new-{ns}", renamed.GetProperty("to").GetString());
+        Assert.Equal(1, renamed.GetProperty("renamed").GetInt32());
+
+        var tags = await host.Client.GetFromJsonAsync<string[]>($"/api/subjects/{task.Id}/tags", Ct) ?? [];
+        Assert.Equal([$"new-{ns}"], tags);
+
+        // A tag nothing carries is a readable 400, not a silent success.
+        var missing = await host.Client.PostAsJsonAsync("/api/rename-tag", new { from = $"old-{ns}", to = "x" }, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+    }
+
     private static string[] Tags(JsonElement row)
         => row.GetProperty("tags").EnumerateArray().Select(t => t.GetString()!).ToArray();
 

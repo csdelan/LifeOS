@@ -12,6 +12,8 @@ import {
   getState,
   relateEvent,
   removeInbox,
+  renameSubject,
+  renameTag,
   resetStore,
   setStatus,
   setTags,
@@ -176,5 +178,68 @@ describe("mock store reducers", () => {
     const files = filesForSubject("proj-base");
     expect(files.some((f) => f.filename === "week-4.txt")).toBe(true);
     expect(getState().inbox.some((i) => i.itemId === created.eventId)).toBe(false);
+  });
+});
+
+describe("mock rename parity", () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  it("renames a habit everywhere the mock copied its name, keeping the urn", () => {
+    const habit = createSubject({ type: "Habit", title: "Stretch" });
+    const result = renameSubject(habit.id, "  Morning   stretch ");
+
+    expect(result).toMatchObject({ changed: true, previousTitle: "Stretch", title: "Morning stretch" });
+    expect(byId(habit.id)?.title).toBe("Morning stretch");
+    expect(byId(habit.id)?.urn).toBe(habit.urn);
+    expect(getState().details[habit.id]?.title).toBe("Morning stretch");
+    expect(getState().habits.find((h) => h.id === habit.id)?.name).toBe("Morning stretch");
+    expect(getState().occurrences.find((o) => o.habitId === habit.id)?.habitName).toBe("Morning stretch");
+    expect(getState().inbox.some((i) => i.subjectTitle === "Stretch")).toBe(false);
+  });
+
+  it("shows a renamed Area's new name on the items filed under it", () => {
+    const area = createSubject({ type: "Area", title: "Hobbies" });
+    const task = createSubject({ type: "Task", title: "Restring guitar", area: area.urn });
+    renameSubject(area.id, "Music");
+
+    expect(byId(task.id)?.areaName).toBe("Music");
+    expect(getState().details[task.id]?.areaName).toBe("Music");
+    expect(getState().areas.find((a) => a.id === area.id)?.name).toBe("Music");
+  });
+
+  it("refuses to give a Problem another Problem's title", () => {
+    const problem = createSubject({ type: "Problem", title: "Why am I tired?" });
+    expect(() => renameSubject(problem.id, "How do I sleep through the night?")).toThrow(/already exists/);
+    expect(byId(problem.id)?.title).toBe("Why am I tired?");
+  });
+
+  it("carries a series rename to upcoming occurrences that still have the old title", () => {
+    const series = createSubject({ type: "Appointment", title: "Dentist" });
+    const past = createSubject({ type: "Appointment", title: "Dentist", attrs: { series: series.urn, date: "2020-01-01" } });
+    const upcoming = createSubject({ type: "Appointment", title: "Dentist", attrs: { series: series.urn, date: "2999-01-01" } });
+    const custom = createSubject({ type: "Appointment", title: "Dentist (kids)", attrs: { series: series.urn, date: "2999-02-01" } });
+
+    const result = renameSubject(series.id, "Dr. Lee – cleaning");
+
+    expect(result.occurrencesRenamed).toBe(1);
+    expect(byId(upcoming.id)?.title).toBe("Dr. Lee – cleaning");
+    expect(byId(past.id)?.title).toBe("Dentist");
+    expect(byId(custom.id)?.title).toBe("Dentist (kids)");
+  });
+
+  it("renames a tag on every item and merges where the new name already exists", () => {
+    const before = Object.values(getState().tagsByItem);
+    const both = before.filter((t) => t.includes("sleep") && t.includes("health")).length;
+    const onlySleep = before.filter((t) => t.includes("sleep") && !t.includes("health")).length;
+
+    const result = renameTag("Sleep", "health");
+
+    expect(result).toEqual({ from: "sleep", to: "health", renamed: onlySleep, merged: both });
+    expect(Object.values(getState().tagsByItem).some((t) => t.includes("sleep"))).toBe(false);
+    expect(getState().tagsByItem["prob-sleep"]).toEqual(["health"]);
+    expect(byId("prob-sleep")?.tags).toBe("health");
+    expect(() => renameTag("sleep", "rest")).toThrow(/No item is tagged/);
   });
 });

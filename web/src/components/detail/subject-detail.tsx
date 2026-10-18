@@ -55,6 +55,7 @@ import {
   childTypesFor,
   defaultStatus,
   inferChildRelation,
+  shortIdOf,
   typeLabel,
 } from "@/lib/production-ui-types";
 import type { Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
@@ -161,6 +162,17 @@ export function SubjectDetail({
       toast.error("A Habit needs at least one Goal or Identity Statement.");
       return;
     }
+    // Rename first, so a refused rename (two Problems can't share a title) stops the
+    // save before any other field changes — the same order the Pilot's Edit uses.
+    const nextTitle = values.title.trim().split(/\s+/).join(" ");
+    if (nextTitle && nextTitle !== subject.title) {
+      try {
+        await writes.rename(subject.id, nextTitle);
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : "Could not rename.");
+        return;
+      }
+    }
     const attrs = attrsToWrite(subject.type, values);
     if (Object.keys(attrs).length > 0) {
       await writes.setAttributes(subject.id, attrs);
@@ -213,10 +225,23 @@ export function SubjectDetail({
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b px-5 py-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <TypeBadge type={subject.type} />
-            {/* TODO: title rename is not in Application — bsk set only patches attributes. */}
-            <h2 className="mt-1 font-heading text-2xl leading-tight">{subject.title}</h2>
+            {editing ? (
+              <div className="mt-1 space-y-1">
+                <Input
+                  aria-label={cfg.titleLabel}
+                  aria-invalid={form.formState.errors.title ? true : undefined}
+                  className="h-auto py-0.5 font-heading text-2xl leading-tight md:text-2xl"
+                  {...form.register("title")}
+                />
+                {form.formState.errors.title ? (
+                  <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
+                ) : null}
+              </div>
+            ) : (
+              <h2 className="mt-1 font-heading text-2xl leading-tight">{subject.title}</h2>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <StatusPill status={subject.status || defaultStatus(subject.type) || null} />
               <DateChip
@@ -334,8 +359,8 @@ export function SubjectDetail({
                   }
                 />
               ) : null}
-              <Field label="URN">
-                <code className="text-[0.75rem] text-muted-foreground">{subject.urn}</code>
+              <Field label="ID">
+                <code className="text-[0.75rem] text-muted-foreground">{shortIdOf(subject.urn)}</code>
               </Field>
               {cfg.canArchive ? (
                 <>
@@ -553,6 +578,24 @@ function TagsTab({ subjectId }: { subjectId: string }) {
   const { data: universe } = useTagUniverse();
   const writes = useWrites();
   const [draft, setDraft] = useState("");
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const usedOn = (universe ?? []).find((u) => u.tag === renaming)?.itemCount;
+
+  async function submitRename() {
+    if (!renaming) return;
+    const next = renameDraft.trim();
+    if (!next || next.toLowerCase() === renaming) {
+      setRenaming(null);
+      return;
+    }
+    try {
+      await writes.renameTag(renaming, next);
+      setRenaming(null);
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : "Could not rename the tag.");
+    }
+  }
 
   return (
     <div className="space-y-4 rounded-xl border border-dashed border-border p-3">
@@ -567,12 +610,51 @@ function TagsTab({ subjectId }: { subjectId: string }) {
           <p className="text-sm text-muted-foreground">No tags yet.</p>
         ) : (
           (tags ?? []).map((t) => (
-            <Tag key={t} onRemove={() => void writes.tag(subjectId, { remove: [t] })}>
+            <Tag
+              key={t}
+              onRename={() => {
+                setRenaming(t);
+                setRenameDraft(t);
+              }}
+              onRemove={() => void writes.tag(subjectId, { remove: [t] })}
+            >
               {t}
             </Tag>
           ))
         )}
       </div>
+      {renaming ? (
+        <form
+          className="space-y-2 rounded-lg border border-border p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submitRename();
+          }}
+        >
+          <p className="text-sm">
+            Rename <span className="font-medium">#{renaming}</span> everywhere it's used
+            {usedOn ? ` (${usedOn} item${usedOn === 1 ? "" : "s"})` : ""}.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              autoFocus
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              aria-label="New tag name"
+              list={`tag-universe-${subjectId}`}
+            />
+            <Button type="submit" size="sm">
+              Rename
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setRenaming(null)}>
+              Cancel
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            If the new name is already a tag, the two merge into one.
+          </p>
+        </form>
+      ) : null}
       <form
         className="flex gap-2"
         onSubmit={(e) => {

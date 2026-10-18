@@ -292,6 +292,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["Rename"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/status": {
         parameters: {
             query?: never;
@@ -350,6 +366,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["Tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rename-tag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RenameTag"];
         delete?: never;
         options?: never;
         head?: never;
@@ -648,6 +680,31 @@ export interface components {
             /** Format: uuid */
             subjectId?: string;
             title?: null | string;
+        };
+        RenameBody: {
+            subject?: string;
+            title?: string;
+        };
+        RenameTagBody: {
+            from?: string;
+            to?: string;
+        };
+        RenamedSubject: {
+            /** Format: uuid */
+            id?: string;
+            title?: string;
+            previousTitle?: string;
+            changed?: boolean;
+            /** Format: int32 */
+            occurrencesRenamed?: number | string;
+        };
+        RenamedTag: {
+            from?: string;
+            to?: string;
+            /** Format: int32 */
+            renamed?: number | string;
+            /** Format: int32 */
+            merged?: number | string;
         };
         ResolvedInboxItem: {
             /** Format: uuid */
@@ -1212,6 +1269,48 @@ export interface operations {
             };
         };
     };
+    Rename: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenamedSubject"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     SetStatus: {
         parameters: {
             query?: never;
@@ -1324,6 +1423,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    RenameTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameTagBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenamedTag"];
+                };
             };
             /** @description Bad Request */
             400: {

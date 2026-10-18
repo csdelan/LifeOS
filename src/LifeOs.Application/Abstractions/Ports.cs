@@ -148,6 +148,18 @@ public interface IAppointmentRepository
 {
     Task<IReadOnlyList<DateOnly>> PendingOccurrenceDatesAsync(
         Guid seriesId, string seriesUrn, DateOnly through, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Renames an Appointment and, in the same transaction, the occurrences it has
+    /// materialized that are dated on or after <paramref name="fromDate"/> and still
+    /// carry <paramref name="previousTitle"/> (each occurrence copied the series title
+    /// when it was created). Past occurrences and ones renamed individually keep their
+    /// titles. For a one-time appointment or an occurrence nothing else matches.
+    /// Returns whether the appointment existed and how many occurrences followed it.
+    /// </summary>
+    Task<(bool Updated, int OccurrencesRenamed)> RenameWithUpcomingOccurrencesAsync(
+        Guid id, string urn, string previousTitle, string newTitle, DateOnly fromDate,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>Creates directed subject → subject edges in <c>bsk.subject_relation</c>.</summary>
@@ -221,4 +233,13 @@ public interface ITagRepository
     Task<int> CopyToSubjectAsync(
         bool fromIsEvent, Guid fromItemId, Guid toSubjectId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Renames a tag everywhere it is used, in one transaction. An item that already
+    /// carries <paramref name="newTag"/> keeps that row and drops the old one, so
+    /// renaming onto an existing tag merges the two. Returns how many rows were
+    /// relabelled and how many were folded into an existing tag.
+    /// </summary>
+    Task<(int Renamed, int Merged)> RenameAsync(
+        string oldTag, string newTag, CancellationToken cancellationToken = default);
 }

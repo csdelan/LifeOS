@@ -11,7 +11,8 @@ namespace LifeOs.Cli.Commands;
 /// edges and tags reference the subject by id, so a rename never breaks a link.
 /// Renaming a reuse-by-title subject (e.g. a Problem) onto a title that already
 /// exists is rejected. Title is a first-class column, so it is not settable through
-/// <c>bsk set</c> (attributes only) — this is its own verb.
+/// <c>bsk set</c> (attributes only) — this is its own verb. Renaming an Appointment
+/// series carries the new title to its upcoming occurrences that still had the old one.
 /// </summary>
 internal static class RenameCommand
 {
@@ -51,13 +52,18 @@ internal static class RenameCommand
                         type = result.Subject.Type,
                         title = result.Subject.Title,
                         previousTitle = result.PreviousTitle,
-                        changed = result.Changed
+                        changed = result.Changed,
+                        occurrencesRenamed = result.OccurrencesRenamed
                     });
                 }
                 else if (result.Changed)
                 {
                     Console.WriteLine(
                         $"Renamed {result.Subject.Urn}: \"{result.PreviousTitle}\" → \"{result.Subject.Title}\".");
+                    if (result.OccurrencesRenamed > 0)
+                    {
+                        Console.WriteLine($"  {result.OccurrencesRenamed} upcoming occurrence(s) renamed with it.");
+                    }
                 }
                 else
                 {

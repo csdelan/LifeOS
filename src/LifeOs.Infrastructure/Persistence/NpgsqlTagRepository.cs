@@ -86,6 +86,35 @@ public sealed class NpgsqlTagRepository(string connectionString) : ITagRepositor
             cancellationToken: cancellationToken));
     }
 
+    public async Task<(int Renamed, int Merged)> RenameAsync(
+        string oldTag, string newTag, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // Items already carrying the new tag keep that row; their old row goes, or the
+        // relabel below would trip the per-item unique index.
+        const string merge = """
+            DELETE FROM bsk.item_tag o
+            WHERE o.tag = @OldTag
+              AND EXISTS (
+                  SELECT 1 FROM bsk.item_tag n
+                  WHERE n.tag = @NewTag
+                    AND n.subject_id IS NOT DISTINCT FROM o.subject_id
+                    AND n.event_id   IS NOT DISTINCT FROM o.event_id);
+            """;
+        var merged = await connection.ExecuteAsync(new CommandDefinition(
+            merge, new { OldTag = oldTag, NewTag = newTag }, transaction, cancellationToken: cancellationToken));
+
+        var renamed = await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE bsk.item_tag SET tag = @NewTag WHERE tag = @OldTag;",
+            new { OldTag = oldTag, NewTag = newTag }, transaction, cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return (renamed, merged);
+    }
+
     private static object Parameters(bool isEvent, Guid itemId, IReadOnlyCollection<string> tags) => new
     {
         SubjectId = isEvent ? (Guid?)null : itemId,

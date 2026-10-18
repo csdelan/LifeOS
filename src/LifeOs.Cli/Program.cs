@@ -44,6 +44,7 @@ rootCommand.Subcommands.Add(InvolveCommand.Create(connectionOption, jsonOption))
 rootCommand.Subcommands.Add(MaterializeCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(RelateCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(TagCommand.Create(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(RenameTagCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(TriageCommand.CreateFlag(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(TriageCommand.CreateDrop(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(TriageCommand.CreateDismiss(connectionOption, jsonOption));

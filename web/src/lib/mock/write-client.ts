@@ -4,7 +4,7 @@ import type {
   LifeOsWriteClient,
   NewSubjectRequest,
 } from "@/lib/production-ui-types";
-import { inferChildRelation } from "@/lib/production-ui-types";
+import { inferChildRelation, renamedMessage } from "@/lib/production-ui-types";
 import { extensionForMime, sha256Hex } from "@/lib/artifacts";
 import {
   addEdge,
@@ -23,6 +23,8 @@ import {
   involvePerson,
   relateEvent,
   removeInbox,
+  renameSubject,
+  renameTag,
   saveReviewBody,
   setHabitRecurrence,
   setStatus,
@@ -72,6 +74,14 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       bump();
     },
 
+    async rename(subject, title) {
+      await wait();
+      const renamed = renameSubject(subject, title);
+      if (renamed.changed) notify(renamedMessage(renamed));
+      bump();
+      return renamed;
+    },
+
     async setStatus(subject, status) {
       await wait();
       setStatus(subject, status);
@@ -97,6 +107,14 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       await wait();
       setTags(item, opts.add, opts.remove);
       bump();
+    },
+
+    async renameTag(from, to) {
+      await wait();
+      const renamed = renameTag(from, to);
+      if (renamed.renamed + renamed.merged > 0) notify(`Renamed #${renamed.from} → #${renamed.to}`);
+      bump();
+      return renamed;
     },
 
     async link(from, relation, to) {

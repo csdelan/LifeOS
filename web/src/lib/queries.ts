@@ -99,6 +99,14 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       ]);
     },
 
+    async rename(subject, title) {
+      const renamed = await client.rename(subject, title);
+      // Titles show up in nearly every read (lists, relations, inbox rows, people,
+      // habits, the graph), so refresh everything rather than chase each copy.
+      if (renamed.changed) await qc.invalidateQueries();
+      return renamed;
+    },
+
     async setStatus(subject, status) {
       optimisticStatus(qc, subject, status);
       try {
@@ -145,6 +153,13 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async tag(item, opts) {
       await client.tag(item, opts);
       await invalidate(qc, [qk.tags(item), qk.tagUniverse, qk.subjects, qk.inbox]);
+    },
+
+    async renameTag(from, to) {
+      const renamed = await client.renameTag(from, to);
+      // Every item's tag list may have changed, and the tag-universe counts with it.
+      await invalidate(qc, [["tags"], qk.tagUniverse, qk.subjects, qk.inbox]);
+      return renamed;
     },
 
     async link(from, relation, to) {
