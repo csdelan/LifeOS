@@ -3,7 +3,6 @@ import {
   Background,
   BackgroundVariant,
   Controls,
-  MarkerType,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
@@ -20,6 +19,8 @@ import "@xyflow/react/dist/style.css";
 import "./graph.css";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { GraphSkeleton } from "@/components/primitives/skeletons";
+import { FloatingEdge } from "@/components/graph/floating-edge";
+import { toFlowEdge } from "@/components/graph/flow-edges";
 import {
   SubjectGraphNode,
   type SubjectFlowNode,
@@ -34,24 +35,13 @@ import {
   type OrphanFilter,
 } from "@/lib/graph-model";
 import type { AlignmentEdge, MapLens } from "@/lib/derive";
-import type { AreaRow, Relation, SubjectListItem } from "@/lib/production-ui-types";
+import type { AreaRow, SubjectListItem } from "@/lib/production-ui-types";
 import { typeLabel } from "@/lib/production-ui-types";
 import { motionMs } from "@/lib/media-query";
 import { typeAccent } from "@/lib/subject-meta";
 
 const nodeTypes = { subject: SubjectGraphNode };
-
-const RELATION_LABEL: Record<Relation, string> = {
-  serves: "serves",
-  results_in: "results in",
-  supersedes: "supersedes",
-};
-
-function relationStroke(relation: Relation): string {
-  if (relation === "serves") return "var(--type-goal)";
-  if (relation === "results_in") return "var(--type-project)";
-  return "var(--attention)";
-}
+const edgeTypes = { floating: FloatingEdge };
 
 function neighborSet(id: string | null, edges: Edge[]): Set<string> | null {
   if (!id) return null;
@@ -146,30 +136,7 @@ function GraphCanvas({
       };
     });
 
-    const nextEdges: Edge[] = model.edges.map((e) => ({
-      id: e.id,
-      // Parent → child so layered DOWN is Value → Goal → Project → Task.
-      source: e.toId,
-      target: e.fromId,
-      type: layout === "layered" ? "smoothstep" : "default",
-      label: RELATION_LABEL[e.relation],
-      selectable: false,
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 14,
-        height: 14,
-        color: relationStroke(e.relation),
-      },
-      style: {
-        stroke: relationStroke(e.relation),
-        strokeWidth: e.relation === "supersedes" ? 1.6 : 1.25,
-        strokeDasharray: e.relation === "supersedes" ? "5 4" : undefined,
-      },
-      labelStyle: { fontSize: 10, fill: "var(--muted-foreground)" },
-      labelBgStyle: { fill: "var(--card)", fillOpacity: 0.92 },
-      labelBgPadding: [3, 5] as [number, number],
-      labelBgBorderRadius: 6,
-    }));
+    const nextEdges: Edge[] = model.edges.map((e) => toFlowEdge(e, layout));
 
     void layoutAlignmentGraph(
       nextNodes.map((n) => ({
@@ -307,12 +274,13 @@ function GraphCanvas({
 
   return (
     <ReactFlow
-      className="lifeos-graph h-full"
+      className={`lifeos-graph h-full${layout === "force" ? " is-force" : ""}`}
       nodes={nodes}
       edges={rfEdges}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       colorMode={colorMode}
       onNodeClick={onNodeClick}
       onNodeDoubleClick={onNodeDoubleClick}

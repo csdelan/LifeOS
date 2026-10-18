@@ -48,6 +48,11 @@
   opacity: 0.1;
 }
 
+/* Force edges attach to the card border, not the top/bottom handles. */
+.lifeos-graph.is-force .react-flow__handle {
+  visibility: hidden;
+}
+
 .lifeos-graph .react-flow__edge-text {
   font-size: 10px;
   letter-spacing: 0.02em;
