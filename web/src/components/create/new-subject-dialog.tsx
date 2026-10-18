@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { Resolver } from "react-hook-form";
+import type { FieldErrors, Resolver } from "react-hook-form";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +30,7 @@ import {
   inferChildRelation,
   typeLabel,
 } from "@/lib/production-ui-types";
-import type { NewSubjectRequest, SubjectType } from "@/lib/production-ui-types";
+import type { CreatedSubject, NewSubjectRequest, SubjectType } from "@/lib/production-ui-types";
 import { parseRecurrence } from "@/lib/recurrence";
 import { useCreateSubject, useSubjects, useWrites } from "@/lib/queries";
 import {
@@ -72,21 +73,34 @@ export function NewSubjectDialog({
 
   const type = form.watch("type");
   const cfg = formConfig(type);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     form.reset(seedValues(startType, initialParent, initialTitle));
+    setSubmitError(null);
   }, [open, startType, initialParent, initialTitle, form]);
 
+  // The dialog scrolls, so a field error can sit out of view; repeat it by Save.
+  function onInvalid(errors: FieldErrors<SubjectFormValues>) {
+    const messages = collectMessages(errors);
+    setSubmitError(messages.length ? messages.join(" ") : "Check the highlighted fields.");
+  }
+
   async function onSubmit(values: SubjectFormValues) {
+    setSubmitError(null);
     const t = values.type;
     const parents = selectedParentIds(values);
     const primaryParent = initialParent?.id || values.parent || parents[0];
     const parentType =
       initialParent?.type ||
       allSubjects?.find((s) => s.id === primaryParent)?.type;
+    // Habit → Goal / Identity Statement has no canonical pair; it serves, as the
+    // extra parents linked below do.
     const relation =
-      primaryParent && parentType ? inferChildRelation(t, parentType) : undefined;
+      primaryParent && parentType
+        ? (inferChildRelation(t, parentType) ?? (t === "Habit" ? "serves" : undefined))
+        : undefined;
     const attrs = attrsToWrite(t, values, { omitEmpty: true });
     const req: NewSubjectRequest = {
       type: t,
@@ -96,7 +110,31 @@ export function NewSubjectDialog({
       relation,
       attrs,
     };
-    const created = await create.mutateAsync(req);
+    let created: CreatedSubject;
+    try {
+      created = await create.mutateAsync(req);
+    } catch (err) {
+      setSubmitError(errorMessage(err, `Could not create the ${typeLabel(t)}.`));
+      return;
+    }
+    // The subject exists now; a failed follow-up must not leave the dialog open,
+    // or a second Save would create a duplicate.
+    try {
+      await applyFollowUps(created, values, t, attrs, parents, primaryParent);
+    } catch (err) {
+      toast.error(`Created ${created.title}, but not every detail saved: ${errorMessage(err, "unknown error")}`);
+    }
+    onOpenChange(false);
+  }
+
+  async function applyFollowUps(
+    created: CreatedSubject,
+    values: SubjectFormValues,
+    t: SubjectType,
+    attrs: Record<string, string>,
+    parents: string[],
+    primaryParent: string | undefined,
+  ) {
     const initialStatus = values.status || defaultStatus(t);
     if (initialStatus && initialStatus !== defaultStatus(t)) {
       await writes.setStatus(created.id, initialStatus);
@@ -123,7 +161,6 @@ export function NewSubjectDialog({
         await writes.involve(created.id, pid, "attendee");
       }
     }
-    onOpenChange(false);
   }
 
   return (
@@ -139,7 +176,7 @@ export function NewSubjectDialog({
         </DialogHeader>
         <form
           className="space-y-4"
-          onSubmit={form.handleSubmit((v) => void onSubmit(v))}
+          onSubmit={(e) => void form.handleSubmit(onSubmit, onInvalid)(e)}
         >
           {typeChoices.length > 1 ? (
             <div className="space-y-1.5">
@@ -186,7 +223,7 @@ export function NewSubjectDialog({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && type === "Task" && !e.shiftKey) {
                   e.preventDefault();
-                  void form.handleSubmit((v) => void onSubmit(v))();
+                  void form.handleSubmit(onSubmit, onInvalid)();
                 }
               }}
             />
@@ -207,18 +244,41 @@ export function NewSubjectDialog({
             </p>
           </div>
 
+          {submitError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {submitError}
+            </p>
+          ) : null}
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? "Creating…" : "Save"}
+            <Button type="submit" disabled={form.formState.isSubmitting}>
+              {form.formState.isSubmitting ? "Creating…" : "Save"}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
   );
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+function collectMessages(errors: unknown): string[] {
+  if (!errors || typeof errors !== "object") return [];
+  const out: string[] = [];
+  for (const [key, value] of Object.entries(errors as Record<string, unknown>)) {
+    // `ref` is the field's DOM node; walking it would recurse through React internals.
+    if (key === "ref" || !value || typeof value !== "object") continue;
+    const message = (value as { message?: unknown }).message;
+    if (typeof message === "string" && message) out.push(message);
+    else out.push(...collectMessages(value));
+  }
+  return [...new Set(out)];
 }
 
 function seedValues(

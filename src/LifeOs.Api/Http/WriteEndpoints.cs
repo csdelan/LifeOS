@@ -69,6 +69,7 @@ public static class WriteEndpoints
         SubjectService subjects,
         ChildCreationService children,
         TriageService triage,
+        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Type) || string.IsNullOrWhiteSpace(body.Title))
@@ -95,7 +96,7 @@ public static class WriteEndpoints
         if (!string.IsNullOrWhiteSpace(body.Parent))
         {
             var childLink = await children.CreateChildAsync(
-                canonicalType, body.Title, body.Parent, body.Relation,
+                canonicalType, body.Title, ResolveWriteRef(body.Parent, reader), body.Relation,
                 attributes.ToJsonString(), cancellationToken);
             created = childLink.Child;
         }

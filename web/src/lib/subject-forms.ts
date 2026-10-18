@@ -102,6 +102,13 @@ export const subjectFormSchema = z
         message: "Human or AI is required",
       });
     }
+    if (type === "Value" && val.mode === "create" && !val.attrs.statement?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["attrs", "statement"],
+        message: "An Identity Statement needs its statement.",
+      });
+    }
     if (type === "Goal" && val.status === "Active" && !val.attrs.target_date) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -245,6 +252,7 @@ const CONFIG: Partial<Record<SubjectType, TypeFormConfig>> = {
         key: "statement",
         label: "Statement",
         kind: "textarea",
+        required: true,
         placeholder: "I'm the type of person who…",
       },
       { key: "why_it_matters", label: "Why it matters", kind: "textarea" },
