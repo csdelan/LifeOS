@@ -60,7 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(async () => {
     const { error } = await getSupabase().auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin },
+      // Signing out of LifeOS leaves Google signed in; without the chooser Google
+      // silently reuses that account, so a wrong (non-allowlisted) one can't be swapped.
+      options: { redirectTo: window.location.origin, queryParams: { prompt: "select_account" } },
     });
     if (error) throw error;
   }, []);
