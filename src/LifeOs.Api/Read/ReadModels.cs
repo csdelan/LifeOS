@@ -102,6 +102,31 @@ public sealed class InboxItem
     public string? SubjectTitle { get; set; }
     public string? EventKind { get; set; }
     public string? EventContent { get; set; }
+    /// <summary>The item's own tags — on the event for a raw capture, on the subject otherwise.</summary>
+    public string[] Tags { get; set; } = [];
+}
+
+/// <summary>
+/// An item that was triaged and has left the inbox, from <c>bsk.v_inbox_resolved</c>.
+/// <see cref="Resolution"/> is the newest triage state (<c>dismissed</c>, <c>promoted</c>,
+/// legacy <c>filed</c>/<c>dropped</c>) or <c>status</c> when a terminal Status cleared it.
+/// </summary>
+public sealed class ResolvedInboxItem
+{
+    public Guid ItemId { get; set; }
+    public string ItemKind { get; set; } = "";
+    public DateTime TriagedAt { get; set; }
+    public string Resolution { get; set; } = "";
+    public DateTime ResolvedAt { get; set; }
+    public string? SubjectStatus { get; set; }
+    /// <summary>True when the subject must be re-opened before a re-flag can surface it.</summary>
+    public bool SubjectStatusTerminal { get; set; }
+    public string? SubjectUrn { get; set; }
+    public string? SubjectType { get; set; }
+    public string? SubjectTitle { get; set; }
+    public string? EventKind { get; set; }
+    public string? EventContent { get; set; }
+    public string[] Tags { get; set; } = [];
 }
 
 public sealed class AreaRow

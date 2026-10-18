@@ -92,6 +92,67 @@ public sealed class WriteEndpointsTests(PostgresFixture postgres)
         Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("error").GetString()));
     }
 
+    [Fact]
+    public async Task A_captured_note_shows_its_tags_and_comes_back_from_resolved()
+    {
+        // The web Inbox's round trip: capture → tag (read back on the inbox row) →
+        // dismiss (now under /inbox/resolved, tags intact) → flag (Back to Inbox).
+        await using var host = await StartAsync();
+        var text = $"a note to come back to {Guid.NewGuid():N}";
+
+        await PostOkAsync(host.Client, "/api/capture", new { text });
+        var row = await FindAsync(host.Client, "/api/inbox", text);
+        var id = row.GetProperty("itemId").GetString()!;
+
+        await PostOkAsync(host.Client, "/api/tag", new { item = id, add = new[] { "Errand", "home" } });
+        row = await FindAsync(host.Client, "/api/inbox", text);
+        Assert.Equal(["errand", "home"], Tags(row));
+
+        await PostOkAsync(host.Client, "/api/dismiss", new { item = id });
+        Assert.Null(await FindOrNullAsync(host.Client, "/api/inbox", text));
+        var resolved = await FindAsync(host.Client, "/api/inbox/resolved", text);
+        Assert.Equal("dismissed", resolved.GetProperty("resolution").GetString());
+        Assert.False(resolved.GetProperty("subjectStatusTerminal").GetBoolean());
+        Assert.Equal(["errand", "home"], Tags(resolved));
+
+        await PostOkAsync(host.Client, "/api/flag", new { item = id });
+        Assert.NotNull(await FindOrNullAsync(host.Client, "/api/inbox", text));
+        Assert.Null(await FindOrNullAsync(host.Client, "/api/inbox/resolved", text));
+    }
+
+    private static string[] Tags(JsonElement row)
+        => row.GetProperty("tags").EnumerateArray().Select(t => t.GetString()!).ToArray();
+
+    private static async Task PostOkAsync(HttpClient client, string path, object body)
+    {
+        var response = await client.PostAsJsonAsync(path, body, Ct);
+        var text = await response.Content.ReadAsStringAsync(Ct);
+        Assert.True(response.IsSuccessStatusCode, $"POST {path} → {(int)response.StatusCode}: {text}");
+    }
+
+    private static async Task<JsonElement> FindAsync(HttpClient client, string path, string content)
+    {
+        var row = await FindOrNullAsync(client, path, content);
+        Assert.True(row.HasValue, $"No row in {path} with content '{content}'.");
+        return row.Value;
+    }
+
+    private static async Task<JsonElement?> FindOrNullAsync(HttpClient client, string path, string content)
+    {
+        // The test database is shared, so ask for the widest page of resolved rows.
+        var url = path.EndsWith("/resolved", StringComparison.Ordinal) ? $"{path}?limit=200" : path;
+        var rows = await client.GetFromJsonAsync<JsonElement>(url, Ct);
+        foreach (var row in rows.EnumerateArray())
+        {
+            if (row.GetProperty("eventContent").GetString() == content)
+            {
+                return row;
+            }
+        }
+
+        return null;
+    }
+
     private sealed record Created(Guid Id, string Urn);
 
     private static async Task<Created> PostSubjectAsync(HttpClient client, object body)
@@ -118,6 +179,10 @@ public sealed class WriteEndpointsTests(PostgresFixture postgres)
 
     private async Task<TestHost> StartAsync()
     {
+        // Program.Main sets this before building the host; the read endpoints need it
+        // to map snake_case columns (item_id -> ItemId).
+        DefaultTypeMap.MatchNamesWithUnderscores = true;
+
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             EnvironmentName = "Development",

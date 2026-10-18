@@ -213,4 +213,12 @@ public interface ITagRepository
     Task<int> RemoveAsync(
         bool isEvent, Guid itemId, IReadOnlyCollection<string> tags,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Copies every tag on the source item onto a subject (promotion carries tags to the
+    /// new subject); returns how many were newly added. The source keeps its tags.
+    /// </summary>
+    Task<int> CopyToSubjectAsync(
+        bool fromIsEvent, Guid fromItemId, Guid toSubjectId,
+        CancellationToken cancellationToken = default);
 }

@@ -40,6 +40,8 @@ export const qk = {
   journal: (id: string) => ["journal", id] as const,
   history: (id: string) => ["history", id] as const,
   inbox: ["inbox"] as const,
+  // Nested under ["inbox"], so every Inbox invalidation refreshes it too.
+  inboxResolved: ["inbox", "resolved"] as const,
   artifact: (id: string) => ["artifact", id] as const,
   files: (id: string) => ["files", id] as const,
   areas: ["areas"] as const,
@@ -142,7 +144,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
 
     async tag(item, opts) {
       await client.tag(item, opts);
-      await invalidate(qc, [qk.tags(item), qk.tagUniverse, qk.subjects]);
+      await invalidate(qc, [qk.tags(item), qk.tagUniverse, qk.subjects, qk.inbox]);
     },
 
     async link(from, relation, to) {
@@ -383,6 +385,14 @@ export function useInbox() {
   return useQuery({
     queryKey: qk.inbox,
     queryFn: () => reads().inbox(),
+  });
+}
+
+export function useResolvedInbox(enabled = true) {
+  return useQuery({
+    queryKey: qk.inboxResolved,
+    queryFn: () => reads().inboxResolved(),
+    enabled,
   });
 }
 

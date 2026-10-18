@@ -32,6 +32,8 @@ export type MapSearch = {
 
 export type InboxSearch = {
   item?: string;
+  /** "resolved" lists items that have left the Inbox; absent is the live queue. */
+  view?: "resolved";
 };
 
 export type TasksSearch = {
@@ -75,6 +77,7 @@ const inboxRoute = createRoute({
   path: "/inbox",
   validateSearch: (search: Record<string, unknown>): InboxSearch => ({
     item: typeof search.item === "string" ? search.item : undefined,
+    view: search.view === "resolved" ? "resolved" : undefined,
   }),
   component: InboxPage,
 });

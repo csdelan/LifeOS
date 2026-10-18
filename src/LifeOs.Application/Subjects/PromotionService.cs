@@ -11,9 +11,11 @@ namespace LifeOs.Application.Subjects;
 /// append-only trigger. There is deliberately no <c>promoted_from</c> edge — that
 /// would be a second, competing representation of the same fact the column already
 /// holds. The source subject (e.g. the Problem an <c>idea_session</c> is about)
-/// stays reachable through the source event's payload.
+/// stays reachable through the source event's payload. The source's tags are copied
+/// onto the new subject, so classification done during triage follows the item.
 /// </summary>
-public sealed class PromotionService(SubjectService subjects, IEventReader events, StatusService status)
+public sealed class PromotionService(
+    SubjectService subjects, IEventReader events, StatusService status, ITagRepository tags)
 {
     public async Task<PromotionResult> PromoteAsync(
         Guid eventId, string type, string title, CancellationToken cancellationToken = default)
@@ -24,6 +26,7 @@ public sealed class PromotionService(SubjectService subjects, IEventReader event
         // origin_event_id anchors the new subject to its source without touching it.
         var subject = await subjects.CreateAsync(
             type, title, originEventId: source.Id, cancellationToken: cancellationToken);
+        await tags.CopyToSubjectAsync(fromIsEvent: true, source.Id, subject.Id, cancellationToken);
 
         return new PromotionResult(subject, source.Id);
     }
@@ -44,6 +47,7 @@ public sealed class PromotionService(SubjectService subjects, IEventReader event
 
         var (target, edgeId) = await subjects.CreateWithIncomingEdgeAsync(
             targetType, targetTitle, "{}", SubjectRelations.ResultsIn, source.Id, cancellationToken);
+        await tags.CopyToSubjectAsync(fromIsEvent: false, source.Id, target.Id, cancellationToken);
 
         // An Idea that has been acted on is Promoted (CAP-6); leave other types alone.
         if (source.Type == SubjectTypes.Idea)

@@ -8,12 +8,16 @@ import {
   createSubject,
   dropInboxItem,
   filesForSubject,
+  flagItem,
   getState,
   relateEvent,
+  removeInbox,
   resetStore,
   setStatus,
   setTags,
 } from "@/lib/mock/store";
+import { mockReads } from "@/lib/mock/api";
+import { createMockWriteClient } from "@/lib/mock/write-client";
 
 describe("mock store reducers", () => {
   beforeEach(() => {
@@ -62,6 +66,46 @@ describe("mock store reducers", () => {
     dropInboxItem("inbox-1");
     expect(getState().inbox.some((i) => i.itemId === "inbox-1")).toBe(false);
     expect(getState().subjects.length).toBe(subjects);
+  });
+
+  it("keeps a dismissed item under Resolved and restores it on flag", async () => {
+    setTags("inbox-1", ["desk"]);
+    removeInbox("inbox-1");
+    expect(getState().inbox.some((i) => i.itemId === "inbox-1")).toBe(false);
+
+    const resolved = await mockReads.inboxResolved();
+    const row = resolved.find((r) => r.itemId === "inbox-1");
+    expect(row?.resolution).toBe("dismissed");
+    expect(row?.tags).toEqual(["desk"]);
+
+    flagItem("inbox-1");
+    const inbox = await mockReads.inbox();
+    expect(inbox.find((i) => i.itemId === "inbox-1")?.eventContent).toMatch(/standing desk/);
+    expect((await mockReads.inboxResolved()).some((r) => r.itemId === "inbox-1")).toBe(false);
+  });
+
+  it("lists a dropped subject as resolved by its terminal status", async () => {
+    dropInboxItem("inbox-2");
+    const row = (await mockReads.inboxResolved()).find((r) => r.itemId === "inbox-2");
+    expect(row?.resolution).toBe("status");
+    expect(row?.subjectStatus).toBe("Rejected");
+    expect(row?.subjectStatusTerminal).toBe(true);
+  });
+
+  it("shows a subject inbox row's own tags", async () => {
+    const urn = getState().inbox.find((i) => i.itemId === "inbox-2")?.subjectUrn;
+    setTags(urn!, ["Garden"]);
+    const row = (await mockReads.inbox()).find((i) => i.itemId === "inbox-2");
+    expect(row?.tags).toEqual(["family", "food", "garden"]);
+  });
+
+  it("carries a capture's tags onto the subject it is promoted to", async () => {
+    setTags("inbox-5", ["family"]);
+    const created = await createMockWriteClient().promote("inbox-5", "Task", "Ask Maya about dinner");
+    expect(getState().tagsByItem[created.id]).toEqual(["family"]);
+    expect(
+      (await mockReads.inboxResolved()).find((r) => r.itemId === "inbox-5")?.resolution,
+    ).toBe("promoted");
   });
 
   it("does not resolve Inbox when tagging", () => {

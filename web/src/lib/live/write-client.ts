@@ -74,7 +74,7 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async dismiss(item) {
       await unwrap(api().POST("/api/dismiss", { body: { item } }));
-      notify("Dismissed");
+      // No toast here: the Inbox shows "Dismissed" with an Undo action.
     },
 
     async drop(item) {

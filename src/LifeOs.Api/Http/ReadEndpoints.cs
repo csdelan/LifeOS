@@ -35,6 +35,8 @@ public static class ReadEndpoints
             .Produces<IReadOnlyList<TagUniverseItem>>();
         api.MapGet("/inbox", GetInbox).WithName("GetInbox")
             .Produces<IReadOnlyList<InboxItem>>();
+        api.MapGet("/inbox/resolved", GetResolvedInbox).WithName("GetResolvedInbox")
+            .Produces<IReadOnlyList<ResolvedInboxItem>>();
         api.MapGet("/areas", GetAreas).WithName("GetAreas")
             .Produces<IReadOnlyList<AreaRow>>();
         api.MapGet("/people", GetPeople).WithName("GetPeople")
@@ -83,6 +85,9 @@ public static class ReadEndpoints
 
     private static IResult GetInbox(SubjectReader reader)
         => Results.Ok(reader.GetInbox());
+
+    private static IResult GetResolvedInbox(SubjectReader reader, int limit = 50)
+        => Results.Ok(reader.GetResolvedInbox(Math.Clamp(limit, 1, 200)));
 
     private static IResult GetAreas(SubjectReader reader)
         => Results.Ok(reader.GetAreas());

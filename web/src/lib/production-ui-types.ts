@@ -296,6 +296,24 @@ export interface InboxItem {
   attachment?: ArtifactRecord | null;
   /** Empty/failed transcription — audio was retained for later processing (CAP-2). */
   needsTranscription?: boolean;
+  /** The item's own tags: on the event for a raw capture, on the subject otherwise. */
+  tags?: string[];
+}
+
+/**
+ * How an item left the Inbox: its newest triage state, or `status` when a terminal
+ * Status cleared a still-flagged subject (Drop). `filed` / `dropped` are retired
+ * states that older items may still carry.
+ */
+export type InboxResolution = "dismissed" | "promoted" | "status" | "filed" | "dropped";
+
+/** An item that was triaged and has left the Inbox (`bsk.v_inbox_resolved`). */
+export interface ResolvedInboxItem extends InboxItem {
+  resolution: InboxResolution;
+  resolvedAt: string;
+  subjectStatus?: string | null;
+  /** The subject must be re-opened before Back to Inbox can surface it. */
+  subjectStatusTerminal?: boolean;
 }
 
 /**

@@ -164,6 +164,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inbox/resolved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetResolvedInbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/areas": {
         parameters: {
             query?: never;
@@ -565,6 +581,7 @@ export interface components {
             subjectTitle?: null | string;
             eventKind?: null | string;
             eventContent?: null | string;
+            tags?: string[];
         };
         InvolveBody: {
             subject?: string;
@@ -631,6 +648,24 @@ export interface components {
             /** Format: uuid */
             subjectId?: string;
             title?: null | string;
+        };
+        ResolvedInboxItem: {
+            /** Format: uuid */
+            itemId?: string;
+            itemKind?: string;
+            /** Format: date-time */
+            triagedAt?: string;
+            resolution?: string;
+            /** Format: date-time */
+            resolvedAt?: string;
+            subjectStatus?: null | string;
+            subjectStatusTerminal?: boolean;
+            subjectUrn?: null | string;
+            subjectType?: null | string;
+            subjectTitle?: null | string;
+            eventKind?: null | string;
+            eventContent?: null | string;
+            tags?: string[];
         };
         SetAttributesBody: {
             subject?: string;
@@ -977,6 +1012,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxItem"][];
+                };
+            };
+        };
+    };
+    GetResolvedInbox: {
+        parameters: {
+            query?: {
+                limit?: number | string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedInboxItem"][];
                 };
             };
         };

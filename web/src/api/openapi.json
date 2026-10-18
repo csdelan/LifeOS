@@ -10,6 +10,26 @@
     }
   ],
   "paths": {
+    "/api/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "GetMe",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/subjects": {
       "get": {
         "tags": [
@@ -327,6 +347,44 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/InboxItem"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inbox/resolved": {
+      "get": {
+        "tags": [
+          "Reads"
+        ],
+        "operationId": "GetResolvedInbox",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ResolvedInboxItem"
                   }
                 }
               }
@@ -1260,6 +1318,12 @@
               "null",
               "string"
             ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -1325,6 +1389,17 @@
             "type": "string"
           },
           "to": {
+            "type": "string"
+          }
+        }
+      },
+      "MeResponse": {
+        "required": [
+          "email"
+        ],
+        "type": "object",
+        "properties": {
+          "email": {
             "type": "string"
           }
         }
@@ -1450,6 +1525,74 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ResolvedInboxItem": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "itemKind": {
+            "type": "string"
+          },
+          "triagedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolution": {
+            "type": "string"
+          },
+          "resolvedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subjectStatus": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "subjectStatusTerminal": {
+            "type": "boolean"
+          },
+          "subjectUrn": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "subjectType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "subjectTitle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "eventKind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "eventContent": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -1745,6 +1888,9 @@
     }
   },
   "tags": [
+    {
+      "name": "Auth"
+    },
     {
       "name": "Reads"
     },

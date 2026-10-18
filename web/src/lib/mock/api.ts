@@ -23,15 +23,18 @@ import type {
   JournalEntry,
   PersonRow,
   RelationEdge,
+  ResolvedInboxItem,
   ReviewDoc,
   StatusHistoryEntry,
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
 } from "@/lib/production-ui-types";
+import { isTerminal } from "@/lib/production-ui-types";
 import { composeRecap, type RecapSection } from "@/lib/review-recap";
 import { tagUniverse, toRelationEdge } from "@/lib/mock/seed";
 import {
+  byUrn,
   ensureReview,
   ensureReviewDocs,
   filesForSubject,
@@ -46,6 +49,17 @@ const wait = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 export interface SubjectRelations {
   parents: RelationEdge[];
   children: RelationEdge[];
+}
+
+/** An Inbox row's own tags: keyed by subject id for a subject, by event id otherwise. */
+function inboxTags(row: InboxItem): string[] {
+  const key =
+    row.itemKind === "subject"
+      ? row.subjectUrn
+        ? byUrn(row.subjectUrn)?.id
+        : undefined
+      : row.itemId;
+  return key ? (storeState().tagsByItem[key] ?? []) : [];
 }
 
 function listOf(type?: SubjectListItem["type"], includeArchived = false): SubjectListItem[] {
@@ -69,6 +83,8 @@ export interface LifeOsReads {
   journal(id: string): Promise<JournalEntry[]>;
   history(id: string): Promise<StatusHistoryEntry[]>;
   inbox(): Promise<InboxItem[]>;
+  /** Items that left the Inbox, most recently resolved first (Back to Inbox). */
+  inboxResolved(): Promise<ResolvedInboxItem[]>;
   /**
    * Artifact metadata (no payload).
    * // TODO(api): GET /api/artifacts/{id} from `bsk.v_artifact`.
@@ -161,9 +177,29 @@ export const mockReads: LifeOsReads = {
 
   async inbox(): Promise<InboxItem[]> {
     await wait();
-    return [...storeState().inbox].sort((a, b) =>
-      b.triagedAt.localeCompare(a.triagedAt),
-    );
+    return [...storeState().inbox]
+      .sort((a, b) => b.triagedAt.localeCompare(a.triagedAt))
+      .map((row) => ({ ...row, tags: inboxTags(row) }));
+  },
+
+  async inboxResolved(): Promise<ResolvedInboxItem[]> {
+    await wait();
+    return [...storeState().resolved]
+      .sort((a, b) => b.resolvedAt.localeCompare(a.resolvedAt))
+      .flatMap(({ row, resolution, resolvedAt }) => {
+        const subject = row.subjectUrn ? byUrn(row.subjectUrn) : undefined;
+        if (subject?.archived) return [];
+        return [
+          {
+            ...row,
+            tags: inboxTags(row),
+            resolution,
+            resolvedAt,
+            subjectStatus: subject?.status ?? null,
+            subjectStatusTerminal: isTerminal(subject?.status),
+          },
+        ];
+      });
   },
 
   async artifact(id: string): Promise<ArtifactRecord | null> {

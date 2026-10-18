@@ -208,4 +208,92 @@ public sealed class TriageServiceTests(PostgresFixture postgres)
         await using var connection = await OpenAsync();
         Assert.True(await InInboxAsync(connection, captured.EventId));
     }
+
+    // ---------------------------------------------------------------------------
+    // v_inbox_resolved (0023): the way back to an item that has left the inbox.
+    // ---------------------------------------------------------------------------
+
+    private sealed record ResolvedRow(string Resolution, string? SubjectStatus, bool SubjectStatusTerminal);
+
+    private async Task<ResolvedRow?> ResolvedAsync(NpgsqlConnection connection, Guid itemId)
+        => await connection.QuerySingleOrDefaultAsync<ResolvedRow>(new CommandDefinition(
+            """
+            SELECT resolution, subject_status AS SubjectStatus,
+                   subject_status_terminal AS SubjectStatusTerminal
+            FROM bsk.v_inbox_resolved WHERE item_id = @id;
+            """,
+            new { id = itemId }, cancellationToken: Ct));
+
+    [Fact]
+    public async Task A_dismissed_capture_is_listed_as_resolved_until_it_is_flagged_again()
+    {
+        var provider = Provider();
+        var capture = provider.GetRequiredService<CaptureService>();
+        var triage = provider.GetRequiredService<TriageService>();
+
+        var captured = await capture.CaptureNoteAsync($"dismissed note {Guid.NewGuid():N}", Ct);
+        await triage.FlagItemAsync(isEvent: true, captured.EventId, Ct);
+
+        await using var connection = await OpenAsync();
+        Assert.Null(await ResolvedAsync(connection, captured.EventId)); // still flagged
+
+        await triage.DismissAsync(captured.EventId.ToString(), Ct);
+        var row = await ResolvedAsync(connection, captured.EventId);
+        Assert.NotNull(row);
+        Assert.Equal(TriageStates.Dismissed, row.Resolution);
+        Assert.False(row.SubjectStatusTerminal);
+
+        // Back to Inbox is a plain re-flag: it moves from one view to the other.
+        await triage.FlagAsync(captured.EventId.ToString(), Ct);
+        Assert.Null(await ResolvedAsync(connection, captured.EventId));
+        Assert.True(await InInboxAsync(connection, captured.EventId));
+    }
+
+    [Fact]
+    public async Task A_dropped_subject_is_resolved_by_status_and_says_it_must_be_reopened()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var triage = provider.GetRequiredService<TriageService>();
+        var status = provider.GetRequiredService<StatusService>();
+
+        var subject = await subjects.CreateAsync(
+            SubjectTypes.Idea, $"dropped idea {Guid.NewGuid():N}", cancellationToken: Ct);
+        await triage.FlagAsync(subject.Urn, Ct);
+        await triage.DropAsync(subject.Urn, Ct);
+
+        await using var connection = await OpenAsync();
+        var row = await ResolvedAsync(connection, subject.Id);
+        Assert.NotNull(row);
+        Assert.Equal("status", row.Resolution);
+        Assert.Equal("Rejected", row.SubjectStatus);
+        Assert.True(row.SubjectStatusTerminal);
+
+        // A bare re-flag cannot surface a finished subject; re-opening it does.
+        await triage.FlagAsync(subject.Urn, Ct);
+        Assert.False(await InInboxAsync(connection, subject.Id));
+        await status.ChangeStatusAsync(subject.Urn, "New", Ct);
+        Assert.True(await InInboxAsync(connection, subject.Id));
+        Assert.Null(await ResolvedAsync(connection, subject.Id));
+    }
+
+    [Fact]
+    public async Task An_archived_subject_is_hidden_from_the_resolved_list()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var triage = provider.GetRequiredService<TriageService>();
+        var archive = provider.GetRequiredService<ArchiveService>();
+
+        var subject = await subjects.CreateAsync(
+            SubjectTypes.Problem, $"archived resolved {Guid.NewGuid():N}", cancellationToken: Ct);
+        await triage.FlagAsync(subject.Urn, Ct);
+        await triage.DismissAsync(subject.Urn, Ct);
+
+        await using var connection = await OpenAsync();
+        Assert.NotNull(await ResolvedAsync(connection, subject.Id));
+
+        await archive.ArchiveAsync(subject.Urn, Ct);
+        Assert.Null(await ResolvedAsync(connection, subject.Id));
+    }
 }

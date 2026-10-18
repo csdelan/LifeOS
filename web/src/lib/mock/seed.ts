@@ -8,6 +8,7 @@ import type {
   HabitOccurrenceRow,
   HabitRow,
   InboxItem,
+  InboxResolution,
   JournalEntry,
   PersonAssociationRow,
   PersonRow,
@@ -36,6 +37,13 @@ export interface MockEventRelation {
   relation: EventRelation;
 }
 
+/** An Inbox row that was resolved, kept whole so Back to Inbox can restore it. */
+export interface MockResolvedRow {
+  row: InboxItem;
+  resolution: InboxResolution;
+  resolvedAt: string;
+}
+
 export interface CanonicalEdge {
   fromId: string;
   relation: Relation;
@@ -54,6 +62,8 @@ export interface MockState {
   artifacts: Record<string, ArtifactRecord>;
   eventRelations: MockEventRelation[];
   inbox: InboxItem[];
+  /** Rows that left the Inbox, newest first — mirrors `bsk.v_inbox_resolved`. */
+  resolved: MockResolvedRow[];
   areas: AreaRow[];
   habits: HabitRow[];
   occurrences: HabitOccurrenceRow[];
@@ -1070,6 +1080,20 @@ export function createSeed(): MockState {
     },
   ];
 
+  const resolved: MockResolvedRow[] = [
+    {
+      row: {
+        itemId: "inbox-old-1",
+        itemKind: "event",
+        triagedAt: isoAgo(120),
+        eventKind: "note",
+        eventContent: "Look into a cheaper phone plan before the family one renews in March.",
+      },
+      resolution: "dismissed",
+      resolvedAt: isoAgo(96),
+    },
+  ];
+
   // Option-B seed: object URL + metadata (not real kernel bytes). Inbox + one filed file.
   const events: MockEvent[] = [];
   const artifacts: Record<string, ArtifactRecord> = {};
@@ -1533,6 +1557,7 @@ export function createSeed(): MockState {
     artifacts,
     eventRelations,
     inbox,
+    resolved,
     areas,
     habits,
     occurrences,

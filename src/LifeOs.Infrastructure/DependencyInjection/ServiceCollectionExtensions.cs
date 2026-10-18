@@ -83,7 +83,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new PromotionService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventReader>(),
-            sp.GetRequiredService<StatusService>()));
+            sp.GetRequiredService<StatusService>(),
+            sp.GetRequiredService<ITagRepository>()));
 
         services.AddSingleton(sp => new DecisionService(
             sp.GetRequiredService<SubjectService>(),

@@ -10,6 +10,8 @@ import type {
   CaptureKind,
   CreatedSubject,
   EventRelation,
+  InboxItem,
+  InboxResolution,
   NewSubjectRequest,
   RecurrenceSpec,
   Relation,
@@ -352,8 +354,9 @@ export function setTags(itemRef: string, add: string[] = [], remove: string[] = 
   const item = byRef(itemRef);
   const key = item?.id ?? itemRef;
   const current = new Set(state.tagsByItem[key] ?? []);
-  for (const t of add) current.add(t.trim());
-  for (const t of remove) current.delete(t.trim());
+  // Normalized like the kernel (Tags.Normalize): trimmed and lowercased.
+  for (const t of add) current.add(t.trim().toLowerCase());
+  for (const t of remove) current.delete(t.trim().toLowerCase());
   state.tagsByItem[key] = [...current].filter(Boolean).sort();
   if (item) {
     state.subjects = state.subjects.map((s) =>
@@ -373,12 +376,38 @@ export function appendJournal(subject: string, text: string) {
   emit();
 }
 
+/** The row an item ref names: its row id, or the subject's urn / id. */
+function rowFor<T extends InboxItem>(rows: T[], itemRef: string): T | undefined {
+  const subject = byRef(itemRef);
+  return rows.find(
+    (i) =>
+      i.itemId === itemRef ||
+      (i.subjectUrn != null && (i.subjectUrn === itemRef || i.subjectUrn === subject?.urn)),
+  );
+}
+
+/** Moves an Inbox row onto the resolved list (mirrors `bsk.v_inbox_resolved`). */
+function resolveInbox(itemRef: string, resolution: InboxResolution) {
+  const row = rowFor(state.inbox, itemRef);
+  if (!row) return;
+  state.inbox = state.inbox.filter((i) => i !== row);
+  state.resolved = [
+    { row, resolution, resolvedAt: nowIso() },
+    ...state.resolved.filter((r) => r.row.itemId !== row.itemId),
+  ];
+}
+
 export function flagItem(itemRef: string) {
   const subject = byRef(itemRef);
-  const already = state.inbox.some(
-    (i) => i.itemId === itemRef || i.subjectUrn === subject?.urn,
-  );
-  if (already) return;
+  if (rowFor(state.inbox, itemRef)) return;
+  // Back to Inbox: a resolved row comes back whole, as a fresh flag.
+  const resolved = state.resolved.find((r) => rowFor([r.row], itemRef));
+  if (resolved) {
+    state.resolved = state.resolved.filter((r) => r !== resolved);
+    state.inbox = [{ ...resolved.row, triagedAt: nowIso() }, ...state.inbox];
+    emit();
+    return;
+  }
   if (subject) {
     state.inbox = [
       {
@@ -406,17 +435,16 @@ export function flagItem(itemRef: string) {
   emit();
 }
 
-export function removeInbox(itemId: string) {
-  state.inbox = state.inbox.filter((i) => i.itemId !== itemId);
+export function removeInbox(itemRef: string, resolution: InboxResolution = "dismissed") {
+  resolveInbox(itemRef, resolution);
   emit();
 }
 
 /** Drop: subjects move to a terminal status; events are dismissed. Not a delete. */
 export function dropInboxItem(itemRef: string) {
-  const row = state.inbox.find(
-    (i) => i.itemId === itemRef || i.subjectUrn === itemRef,
-  );
-  if (row?.itemKind === "subject" && row.subjectUrn) {
+  const row = rowFor(state.inbox, itemRef);
+  if (!row) return;
+  if (row.itemKind === "subject" && row.subjectUrn) {
     const subject = byRef(row.subjectUrn);
     if (subject && !isTerminal(subject.status)) {
       const terminal =
@@ -427,11 +455,10 @@ export function dropInboxItem(itemRef: string) {
             : "Cancelled";
       setStatus(subject.id, terminal);
     }
+    resolveInbox(row.itemId, "status");
+  } else {
+    resolveInbox(row.itemId, "dismissed");
   }
-  const id = row?.itemId ?? itemRef;
-  state.inbox = state.inbox.filter(
-    (i) => i.itemId !== id && i.subjectUrn !== itemRef,
-  );
   emit();
 }
 

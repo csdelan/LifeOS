@@ -217,12 +217,39 @@ public sealed class SubjectReader(string connectionString)
         using var db = Open();
         return db.Query<InboxItem>(
             """
-            SELECT item_id, item_kind, triaged_at,
-                   subject_urn, subject_type, subject_title,
-                   event_kind, event_content
-            FROM bsk.v_inbox
-            ORDER BY triaged_at DESC
+            SELECT i.item_id, i.item_kind, i.triaged_at,
+                   i.subject_urn, i.subject_type, i.subject_title,
+                   i.event_kind, i.event_content,
+                   ARRAY(SELECT t.tag FROM bsk.v_item_tag t
+                         WHERE t.item_kind = i.item_kind AND t.item_id = i.item_id
+                         ORDER BY t.tag) AS tags
+            FROM bsk.v_inbox i
+            ORDER BY i.triaged_at DESC
             """).AsList();
+    }
+
+    /// <summary>
+    /// Items that have left the inbox, most recently resolved first — the way back to
+    /// a dismissed capture. Capped at <paramref name="limit"/> rows.
+    /// </summary>
+    public IReadOnlyList<ResolvedInboxItem> GetResolvedInbox(int limit)
+    {
+        using var db = Open();
+        return db.Query<ResolvedInboxItem>(
+            """
+            SELECT r.item_id, r.item_kind, r.triaged_at,
+                   r.resolution, r.resolved_at,
+                   r.subject_status, r.subject_status_terminal,
+                   r.subject_urn, r.subject_type, r.subject_title,
+                   r.event_kind, r.event_content,
+                   ARRAY(SELECT t.tag FROM bsk.v_item_tag t
+                         WHERE t.item_kind = r.item_kind AND t.item_id = r.item_id
+                         ORDER BY t.tag) AS tags
+            FROM bsk.v_inbox_resolved r
+            ORDER BY r.resolved_at DESC
+            LIMIT @limit
+            """,
+            new { limit }).AsList();
     }
 
     public int GetInboxCount()

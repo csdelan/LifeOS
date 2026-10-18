@@ -88,6 +88,52 @@ public sealed class PromotionServiceTests(PostgresFixture postgres)
         Assert.Equal(0, edges);
     }
 
+    private async Task<List<string>> TagsAsync(string column, Guid id)
+    {
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync(Ct);
+        return (await connection.QueryAsync<string>(new CommandDefinition(
+            $"SELECT tag FROM bsk.item_tag WHERE {column} = @id ORDER BY tag;",
+            new { id }, cancellationToken: Ct))).ToList();
+    }
+
+    [Fact]
+    public async Task Promoting_a_tagged_capture_carries_its_tags_to_the_new_subject()
+    {
+        var provider = Provider();
+        var capture = provider.GetRequiredService<CaptureService>();
+        var tags = provider.GetRequiredService<TagService>();
+        var promotion = provider.GetRequiredService<PromotionService>();
+
+        var source = await capture.CaptureNoteAsync($"a tagged thought {Guid.NewGuid():N}", Ct);
+        await tags.ApplyAsync(source.EventId.ToString(), ["errand", "Home"], [], Ct);
+
+        var result = await promotion.PromoteAsync(
+            source.EventId, SubjectTypes.Task, $"the errand {Guid.NewGuid():N}", Ct);
+
+        Assert.Equal(["errand", "home"], await TagsAsync("subject_id", result.Subject.Id));
+        // The capture keeps its own classification; promotion copies, it does not move.
+        Assert.Equal(["errand", "home"], await TagsAsync("event_id", source.EventId));
+    }
+
+    [Fact]
+    public async Task Promoting_a_tagged_idea_carries_its_tags_to_the_new_work()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var tags = provider.GetRequiredService<TagService>();
+        var promotion = provider.GetRequiredService<PromotionService>();
+
+        var idea = await subjects.CreateAsync(
+            SubjectTypes.Idea, $"a tagged idea {Guid.NewGuid():N}", cancellationToken: Ct);
+        await tags.ApplyAsync(idea.Urn, ["garden"], [], Ct);
+
+        var result = await promotion.PromoteSubjectAsync(
+            idea.Urn, SubjectTypes.Project, $"the garden project {Guid.NewGuid():N}", Ct);
+
+        Assert.Equal(["garden"], await TagsAsync("subject_id", result.Target.Id));
+    }
+
     [Fact]
     public async Task Promoting_from_an_unknown_event_is_an_error()
     {

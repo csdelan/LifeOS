@@ -58,6 +58,34 @@ public sealed class NpgsqlTagRepository(string connectionString) : ITagRepositor
             sql, Parameters(isEvent, itemId, tags), cancellationToken: cancellationToken));
     }
 
+    public async Task<int> CopyToSubjectAsync(
+        bool fromIsEvent, Guid fromItemId, Guid toSubjectId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        // One set-based copy; the per-item unique index makes it idempotent.
+        const string sql = """
+            INSERT INTO bsk.item_tag (subject_id, tag)
+            SELECT @ToSubjectId, it.tag
+            FROM bsk.item_tag it
+            WHERE it.subject_id IS NOT DISTINCT FROM @SubjectId
+              AND it.event_id   IS NOT DISTINCT FROM @EventId
+            ON CONFLICT DO NOTHING;
+            """;
+
+        return await connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                ToSubjectId = toSubjectId,
+                SubjectId = fromIsEvent ? (Guid?)null : fromItemId,
+                EventId = fromIsEvent ? fromItemId : (Guid?)null
+            },
+            cancellationToken: cancellationToken));
+    }
+
     private static object Parameters(bool isEvent, Guid itemId, IReadOnlyCollection<string> tags) => new
     {
         SubjectId = isEvent ? (Guid?)null : itemId,

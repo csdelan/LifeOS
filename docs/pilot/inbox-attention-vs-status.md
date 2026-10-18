@@ -141,6 +141,18 @@ Done (re-flag):
   terminal Status that the Inbox hides, so re-flagging one offers to re-open it to the type's
   default status first — otherwise the flag would surface nothing.
 
+Done (web Resolved view, migration [0023](../../db/migrations/0023__inbox_resolved.sql)):
+
+- [x] `bsk.v_inbox_resolved` is the complement of `v_inbox`: every triaged item that has
+  left the inbox (newest marker not `flagged`, or a terminal Status), minus archived
+  subjects. Served at `GET /api/inbox/resolved`. This is the only surface a dismissed
+  raw note capture has, since an event is not a subject and appears nowhere else.
+- [x] The web Inbox has **Open / Resolved** views. A resolved item offers **Back to Inbox**
+  (re-flag; re-opens a terminal-status subject to its default status first, as the Pilot
+  does), and Dismiss shows an **Undo** toast (re-flag).
+- [x] Inbox rows carry the item's own tags (event tags for a raw capture), so tagging during
+  triage is visible, and promotion copies the source's tags onto the new subject.
+
 All follow-ups from this note are now built. Related docs updated to match: `ui-refactor-plan.md`
 (verb table, `v_inbox`, current-state), `ui-requirements.md` (INBOX-1/INBOX-4 update notes),
 `kernel-build-plan.md` (INBOX-1 refinement note).

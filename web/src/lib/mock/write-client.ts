@@ -55,9 +55,11 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
 
     async promote(source, type, title) {
       await wait();
-      const inbox = getState().inbox.find((i) => i.itemId === source);
       const created = createSubject({ type, title });
-      if (inbox) removeInbox(source);
+      // Promotion carries the source's tags onto the new subject (as the kernel does).
+      const carried = getState().tagsByItem[byRef(source)?.id ?? source] ?? [];
+      if (carried.length) setTags(created.id, carried);
+      removeInbox(source, "promoted");
       notify(`Promoted to ${type}`);
       bump();
       return created;
@@ -124,7 +126,7 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async dismiss(item) {
       await wait();
       removeInbox(item);
-      notify("Dismissed");
+      // No toast here: the Inbox shows "Dismissed" with an Undo action.
       bump();
     },
 

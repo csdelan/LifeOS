@@ -16,6 +16,7 @@ import type {
   JournalEntry,
   PersonRow,
   RelationEdge,
+  ResolvedInboxItem,
   ReviewDoc,
   StatusHistoryEntry,
   SubjectDetail,
@@ -100,6 +101,11 @@ export const liveReads: LifeOsReads = {
   async inbox() {
     const data = await unwrap(api().GET("/api/inbox"));
     return asType<InboxItem[]>(data);
+  },
+
+  async inboxResolved() {
+    const data = await unwrap(api().GET("/api/inbox/resolved"));
+    return asType<ResolvedInboxItem[]>(data);
   },
 
   async artifact(_id) {
