@@ -6,6 +6,8 @@ test.describe("golden paths", () => {
     await page.getByRole("button", { name: "New" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByRole("textbox", { name: "Title" }).fill("I finish what I start");
+    // An Identity Statement needs its statement (subject-forms).
+    await page.getByRole("textbox", { name: "Statement" }).fill("I'm the type of person who ships.");
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 10_000 });
   });
