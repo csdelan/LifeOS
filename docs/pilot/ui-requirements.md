@@ -65,6 +65,7 @@ requirements cluster and the ID says where it lives:
 | `DASHBOARD-` | Dashboard view |
 | `TASKS-` | Tasks working view |
 | `CAL-` | Calendar / Appointments |
+| `REWARD-` | Rewards: currencies, redeeming, reward history |
 | `NAV-` | Navigation shell |
 | `GEN-` | Cross-cutting conventions **and** per-subject-type object specs (Goals, Projects, Tasks, Identity Statements, Commitments, Decisions, Problems, People, Vision, …) |
 
@@ -2326,6 +2327,205 @@ Build:      mapped
 
 
 
+### REWARD-1 — Completing work earns a pre-set bounty in six currencies
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "I would like to add Currencies to tasks, habits, projects, goals. When completing
+  something, I get a pre-defined set of rewards that accrue just like an RPG game."
+  (2026-10-20)
+- Six currencies to start:
+  - **Coins** — redeemed toward savings goals.
+  - **Freedom** — redeemed for entertainment minutes: games, movies, etc.
+  - **Gems** — earned for significant accomplishments like completing a project or goal;
+    redeemed for significant events like vacations or road trips.
+  - **Karma** — reserved for "good deed" rewards.
+  - **XP** — overall experience points; not spent for now, though "levels" may come later.
+  - **Resolve** — tracked, not spent: overcoming fear, procrastination, resistance.
+- I set the bounty on each item myself, in every currency. A good deed, or a task I'm
+  resisting, simply carries Karma or Resolve in its bounty.
+- Forms start from a default bounty for the item's type, which I edit or clear. An item I
+  never priced (quick entry) pays that default.
+- The bounty is visible on the item before I do it.
+- Completing a Task, Project or Goal pays its bounty. Cancelling or abandoning pays nothing.
+- No penalties for now: missing or abandoning something costs nothing. A penalty could be
+  added later as a negative currency event.
+- Spendable: Coins, Freedom, Gems, Karma. XP and Resolve are tracked only.
+- The wallet starts at zero on launch day; nothing completed before then pays.
+  (Decisions 2026-10-20.)
+
+**Ontology fit (Claude):**
+- Maps to (D11): every earn is a `ledger` event with `derived` provenance whose
+  `derived_from` cites the completion `state_change` that caused it, plus a `concerns` edge to
+  the item, so "why did I get these coins?" is always answered by the record.
+- The bounty is `attributes.bounty`, a map of trigger → amounts
+  (`{"completed": {"xp": 10, "coins": 2}}`). Unset = the current type default; `{}` = pays
+  nothing. It is not `attributes.reward`, which a Habit already uses for its cue / routine /
+  reward loop.
+- Honest undo: the engine reconciles. It works out from the record which awards the item
+  *should* hold (is it Completed now?), compares that with what the ledger has paid under each
+  award key, and appends only the difference. Reopen → a reversal; complete again → paid once.
+  It is presence-based, so editing a bounty after it paid never re-prices a past earn.
+- Kernel delta: `ledger` event kind; a `Currencies` vocabulary (key, label, spendable) in
+  Domain, validated app-side as D7 does for statuses, so a new currency is one line rather
+  than a migration; `BountyDefaults`; `RewardService.ReconcileAsync` hooked into
+  `StatusService` (so the web, `bsk status` and the timer's Complete all pay the same way);
+  `v_reward_due` (which awards the record says are due), `v_ledger`, `v_wallet`;
+  `bsk bounty`, `bsk wallet`, `bsk rewards reconcile`.
+- Implications: a penalty later is just a ledger entry with negative amounts, with no schema
+  change. A one-time `open` ledger entry is the launch start line: triggers before it never pay.
+- Open decisions: a UI for editing the type defaults (v1 keeps them in code).
+
+
+### REWARD-2 — Habits pay per day, at streak milestones, and when established
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "When I successfully complete 1 instance of a habit, I get a small reward of some type.
+  And when I 'complete' a habit successfully (meaning it is established as a new habit), I
+  get another reward." (2026-10-20)
+- Each followed day pays the habit's per-day bounty; partial credit pays half.
+- Streak milestones of 7, 30 and 100 in a row each pay a bonus, with a celebration. The bonus
+  amounts start from defaults and are editable per habit like any bounty.
+- Each habit has an establishment target (default: followed 80% of the time over 60 days),
+  editable per habit. When the target is met, LifeOS suggests "Mark established?". The habit
+  is established, and pays its establishment bounty, only when I confirm. I can decline and
+  keep building.
+- An established habit **graduates**: it leaves daily tracking.
+- Correcting a day (GEN-5) corrects its reward too. A day changed from followed to missed
+  gives that day's reward back; a backfilled followed day pays.
+
+**Ontology fit (Claude):**
+- Maps to: Habit gains a status vocabulary (D7): **Building → Established | Abandoned**.
+  Building is the default, and existing habits with no status read as Building. Established
+  and Abandoned are terminal, so a graduated habit drops out of default views and
+  `v_habit_occurrence` stops expanding occurrences after the date it graduated. Moving it back
+  to Building resumes tracking and reverses the establishment award.
+- Awards are keyed so corrections reconcile cleanly: `day:<habit>:<date>:followed|partial`,
+  `streak_<n>:<habit>:<run start>`, `established:<habit>`. A correction that splits a run
+  reverses the milestone it no longer earns; one that merges runs pays the milestone it now does.
+- Kernel delta: Habit status vocab and `established` in `is_terminal_status` (plus the Pilot
+  vocab mirror); `attributes.establish_target` `{min_adherence, window_days}`;
+  `v_habit_establishment` (progress and target met; partial counts half); the habit rows of
+  `v_reward_due`; reconcile hooked into `AdherenceService`. Habit bounty triggers:
+  `followed`, `streak_7`, `streak_30`, `streak_100`, `established`.
+- Implications: the suggestion is read-only (a "Ready to establish" badge), never an
+  automatic status change. With a 60-day target, the 100-day milestone is reachable only by
+  declining the suggestion and building on.
+- Open decisions: none blocking.
+
+
+### REWARD-3 — A Redeem page spends currencies on rewards and logs why
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "I would like a redeem page where I can actually redeem currencies for rewards... and it
+  will log these redemption events along with my comments on what it is for." (2026-10-20)
+- A Rewards tab shows my wallet: the balance of every currency.
+- A catalog of rewards I define with a price, e.g. "Movie night — 120 Freedom", "Road
+  trip — 5 Gems". Freedom is minutes: 1 Freedom = 1 minute of entertainment. I can change the
+  amount when redeeming (45 minutes of gaming = 45 Freedom), or redeem without a catalog item.
+- Coins are real money at a rate I set (e.g. $0.50 per coin). Redeeming coins into a savings
+  goal ("Vacation fund") means I actually move that many dollars there; the log records the
+  coins, the dollars and the rate. A savings goal shows progress toward its target.
+- Every redemption is logged with my comment on what it was for. The comment is required
+  when there is no catalog item.
+- No overdraft: Redeem is blocked until my balance covers it. XP and Resolve cannot be
+  redeemed.
+- Catalog rewards can be renamed or archived like anything else.
+
+**Ontology fit (Claude):**
+- Maps to: a new **`Reward`** subject type (status-less and archivable; the 15th type) for
+  catalog entries. `attributes.kind` is `instant` (with `price`: currency → amount) or
+  `savings` (with `target_usd`).
+- A redemption is a `declared` `ledger` event with negative amounts, the note, and a
+  `concerns` edge to the Reward when there is one. Savings deposits also carry `dollars` and
+  the `coin_rate` in force, so a later rate change never rewrites one. Savings progress is the
+  sum of deposits concerning that goal (`v_reward`).
+- Kernel delta: the `Reward` type (migration + `Vocabulary`); `v_reward`; redeem in
+  `RewardService`, with the balance check and the write under one wallet-wide advisory lock so
+  two windows can't overspend; `bsk redeem`. Coin rate: app configuration
+  (`Rewards:CoinValueUsd`, default 0.50), stamped onto each deposit.
+- Implications: "Reward", the catalog type, is unrelated to a Habit's `reward` attribute (the
+  habit-loop text).
+- Open decisions: a UI-editable coin rate (v1 keeps it in configuration); linking a savings
+  goal to a LifeOS Goal.
+
+
+### REWARD-4 — Earning and redeeming give immediate, celebratory feedback
+Horizon:    Pilot
+Definition: active
+Build:      mapped
+
+**Workflow (Chris):**
+- "Give a positive sound feedback and maybe throw in a quick celebrate animation for
+  dopamine feedback." (2026-10-20)
+- Every earn: a small chime and a toast showing what I just earned ("+10 XP +2 🪙").
+- Redemptions, Gem awards, streak milestones and establishing a habit: a full celebration
+  with confetti and a fanfare.
+- One mute switch for sound. Motion respects the system's reduced-motion setting.
+
+**Ontology fit (Claude):**
+- Maps to: pure UI. The write endpoints that can earn (status, adhere, the timer's Complete)
+  return the ledger entries the write produced, and the client celebrates from those. Nothing
+  new is stored.
+- Kernel delta: none beyond REWARD-1's reconcile result reaching the API response.
+- Implications: sounds are synthesized in the browser (Web Audio), so there are no audio
+  assets to license. The mute choice is a per-device preference (browser storage), not data.
+- Open decisions: none blocking.
+
+
+### REWARD-5 — A rewards history shows what I earned and spent by day, week and month
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "Some way to track how much rewards I earn over time... sort of like a report or calendar
+  view where I can see what rewards I earn each day/week/month, etc. I'm thinking this could
+  also be tracked via events (ie both earning and spending currencies are events)."
+  (2026-10-20)
+- A month calendar with each day's earnings.
+- Week and month views comparing earned vs. spent for each currency.
+- The ledger behind any day: each entry, what it was for, and a link to the item that earned
+  it or the reward it bought.
+
+**Ontology fit (Claude):**
+- Maps to: read-only folds over the `ledger` events (D11). `v_ledger` has one row per entry ×
+  currency; week and month are roll-ups of the daily totals. Every row links to its item or
+  Reward through the entry's `concerns` edge.
+- Kernel delta: `v_ledger` (rewards plan R1), plus a daily-totals read on the API that buckets
+  by the viewer's time zone (`occurred_at AT TIME ZONE <tz>`). The database runs in UTC, so an
+  evening completion would otherwise land on tomorrow.
+- Implications: reversals and corrections appear as their own entries on the day they
+  happened, so a past day's history never silently changes.
+- Open decisions: none blocking.
+
+
+### REWARD-6 — Tracked currencies chart my life balance
+Horizon:    Someday Maybe
+Definition: drafting
+Build:      unmapped
+
+**Workflow (Chris):**
+- "I'm thinking of having certain 'Currencies' actually be more like 'XP' which isn't
+  spendable but can be tracked over time and showed in either a horizontal bar visual control
+  or compared against each other in a Radar/Spider chart to view my life balance."
+  (2026-10-20)
+- A future feature: today the only tracked (unspendable) currencies are XP and Resolve.
+
+**Ontology fit (Claude):**
+- _pending_ (held under the handoff rule). REWARD-1 doesn't block it: currencies are data with
+  a spendable / tracked flag, so new tracked currencies can be added without a migration.
+
+
+
 ---
 
 ## Cross-cutting ontology decisions
@@ -2460,6 +2660,20 @@ Scheduled / Completed / Cancelled / Missed), unlike Habit's **projected** occurr
 Two different recurrence-instance models under one roof — deliberate, recorded here so it
 isn't an accident.
 
+**D11 — Rewards are an append-only ledger; balances and reports are derived (REWARD-1..5,
+2026-10-20).** Every earn, reversal and redemption is a `ledger` event carrying signed
+amounts per currency. Earns and reversals are `derived` and cite the event that caused them in
+`derived_from`, which is the job the provenance rule was built for. Redemptions are
+`declared`, with Chris's note. Balances, daily history and "what the record says is due" are
+read-only views; nothing else is stored. The engine **reconciles rather than reacts**: for
+each item it compares the awards the record says are due with what the ledger has paid under
+each award key, and appends only the difference. Undo, corrections and re-completion all
+follow from that, and a missed write is healed by the next reconcile. Currencies are
+vocabulary data (key, label, spendable), validated app-side as D7 does for statuses, so adding
+one costs no migration. That covers a penalty later, or REWARD-6's tracked life-balance
+currencies. The catalog of things to redeem is its own `Reward` subject type. Design and build
+order: [rewards-plan.md](rewards-plan.md).
+
 ### Method for the Habit ↔ Commitment discrepancy
 
 "Habit" (UI concept) and "Commitment" (storage type) are deliberately decoupled — Chris
@@ -2526,9 +2740,21 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 - **People-association link** — a non-alignment way to attach a `Person` (involves / attendee /
   owner / assignee / waiting-for), recurring across CAL-1, GEN-12, INBOX-3, GEN-10; lean: a
   Person-ref attribute for the Pilot. — **Shipped** (Phase 11, `attributes.people`, `bsk involve`).
+- **Currency ledger + wallet** (REWARD-1 / REWARD-5 / D11) — `ledger` event kind, a currency
+  vocabulary with a spendable flag, `v_ledger` / `v_wallet` / daily totals, `bsk wallet`. —
+  **Open** (rewards plan R1).
+- **Bounties + reconcile engine** (REWARD-1 / REWARD-2) — `attributes.bounty`, type defaults,
+  `v_reward_due`, `RewardService` reconcile hooked into status changes and habit adherence,
+  `bsk bounty` / `bsk rewards reconcile`. — **Open** (R2–R3).
+- **Habit lifecycle** (REWARD-2) — Habit status vocab Building → Established | Abandoned,
+  `established` terminal, graduation ends occurrence expansion, establishment target +
+  `v_habit_establishment`. — **Open** (R3).
+- **Reward catalog type + redemption** (REWARD-3) — `Reward` subject type (the 15th), `v_reward`
+  with savings progress, no-overdraft redeem under a wallet lock, `bsk redeem`. — **Open** (R4).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
-scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1). Everything else above
+scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **rewards ledger**
+(REWARD-1..5, sequenced in [rewards-plan.md](rewards-plan.md)). Everything else above
 has shipped. The user-facing UIs for the shipped kernel bits still vary by surface — see each
 requirement's Build field (e.g. CAP-2 / CAP-4 are `building`: kernel done, capture UI pending).
 

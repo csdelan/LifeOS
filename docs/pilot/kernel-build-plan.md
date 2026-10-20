@@ -117,3 +117,6 @@ recurrence, adherence/occurrence projections, materialized occurrences).
 - [x] Band E — Managed binary artifact storage + `voice` write path (CAP-2 / CAP-4; migration
   0022). Bytes as Postgres `bytea` behind the `IArtifactBlobStore` port; `bsk attach`, `bsk voice`
   (closes the unreachable `voice` kind), `bsk artifact get`. Design note: [binary-artifacts.md](binary-artifacts.md).
+- [ ] Band F — Rewards (REWARD-1..5 / D11): currency ledger, bounties + reconcile engine, Habit
+  lifecycle, `Reward` catalog type, then the web Rewards tab. Sequenced as R1–R7 in its own
+  plan: [rewards-plan.md](rewards-plan.md).
