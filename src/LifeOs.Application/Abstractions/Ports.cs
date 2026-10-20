@@ -249,10 +249,39 @@ public interface ILedgerRepository
     /// Appends ledger entries, each event with its edges, as one transaction under the
     /// wallet lock. If a <see cref="LedgerWrite.GuardBalance"/> entry would leave any of
     /// its currencies below zero, nothing is written and
-    /// <see cref="InsufficientBalanceException"/> is thrown. Returns the new event ids.
+    /// <see cref="InsufficientBalanceException"/> is thrown. If an entry's
+    /// <see cref="LedgerWrite.AwardKey"/> is no longer in its
+    /// <see cref="LedgerWrite.ExpectPaid"/> state, nothing is written and
+    /// <see cref="LedgerConflictException"/> is thrown. Returns the new event ids.
     /// </summary>
     Task<IReadOnlyList<Guid>> AppendAsync(
         IReadOnlyList<LedgerWrite> writes, CancellationToken cancellationToken = default);
+
+    /// <summary>The awards <c>bsk.v_reward_due</c> says the subject is due right now.</summary>
+    Task<IReadOnlyList<DueAward>> GetDueAsync(Guid subjectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every award the record supports for the subject, whatever the wallet's start line
+    /// (<c>bsk.v_reward_trigger</c>) — read only to open the wallet at the first trigger
+    /// it pays.
+    /// </summary>
+    Task<IReadOnlyList<DueAward>> GetTriggersAsync(Guid subjectId, CancellationToken cancellationToken = default);
+
+    /// <summary>The awards the ledger currently holds for the subject (keys that net to non-zero).</summary>
+    Task<IReadOnlyList<PaidAward>> GetPaidAsync(Guid subjectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every subject reconcile could change: those with an award due, and those with an
+    /// award paid — the sweep behind <c>bsk rewards reconcile</c>.
+    /// </summary>
+    Task<IReadOnlyList<SubjectRef>> GetReconcileCandidatesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The newest non-ledger event about the subject (a status change, an adherence
+    /// recording, a timer action), or <c>null</c> — what a reversal cites when no
+    /// triggering write is at hand.
+    /// </summary>
+    Task<Guid?> GetLatestSubjectEventAsync(Guid subjectId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

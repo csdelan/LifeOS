@@ -35,7 +35,7 @@ internal static class WalletCommand
 
                 Console.WriteLine(wallet.OpenedAt is { } openedAt
                     ? $"Wallet — opened {RewardOutput.Stamp(openedAt)}"
-                    : "Wallet — not opened yet (bsk wallet open)");
+                    : "Wallet — not opened yet; it opens at the first completion that pays (or bsk wallet open)");
                 foreach (var line in wallet.Lines)
                 {
                     var tracked = line.Currency.Spendable ? "" : "   tracked";

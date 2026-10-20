@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 
 namespace LifeOs.Application.Subjects;
@@ -9,8 +10,15 @@ namespace LifeOs.Application.Subjects;
 /// (<c>bsk status</c>). Status is never edited directly: this writes an event and
 /// nothing else — the <c>subject_current</c> projection reflects it only after a
 /// rebuild folds the event in (epic invariant 8).
+/// <para>
+/// Every status change then reconciles the subject's rewards (REWARD-2, rewards plan
+/// §3.3): completing a Task, Project or Goal earns its bounty, and moving it off
+/// Completed gives that back. This covers <c>bsk status</c>, the web's Change status and
+/// the timer's Complete, which all come through here.
+/// </para>
 /// </summary>
-public sealed class StatusService(SubjectService subjects, IEventStore events, IClock clock, string sourceId)
+public sealed class StatusService(
+    SubjectService subjects, IEventStore events, RewardService rewards, IClock clock, string sourceId)
 {
     public async Task<StatusResult> ChangeStatusAsync(
         string reference, string newStatus, CancellationToken cancellationToken = default)
@@ -35,9 +43,13 @@ public sealed class StatusService(SubjectService subjects, IEventStore events, I
             PayloadJson: payload);
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);
-        return new StatusResult(eventId, subject, status);
+        var awards = await rewards.ReconcileAsync(subject, eventId, cancellationToken);
+        return new StatusResult(eventId, subject, status, awards);
     }
 }
 
-/// <summary>The outcome of a status change: the state_change event and the subject.</summary>
-public sealed record StatusResult(Guid EventId, SubjectRef Subject, string Status);
+/// <summary>
+/// The outcome of a status change: the state_change event, the subject, and any ledger
+/// entries it earned or reversed.
+/// </summary>
+public sealed record StatusResult(Guid EventId, SubjectRef Subject, string Status, IReadOnlyList<Award> Awards);

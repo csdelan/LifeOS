@@ -7,11 +7,14 @@ namespace LifeOs.Infrastructure.Persistence;
 
 /// <summary>
 /// The rewards ledger (REWARD-1 / D11). Reads go through the <c>bsk.v_ledger</c> /
-/// <c>bsk.v_wallet</c> folds and <c>bsk.ledger_opened_at()</c> (migration 0025). Every
-/// write takes one transaction-scoped advisory lock shared by all ledger writes, inserts
-/// each entry's event and edges, and — for a guarded entry (a redemption) — re-reads the
-/// balances it touched before committing, so two redemptions racing from two windows
-/// cannot together overspend.
+/// <c>bsk.v_wallet</c> folds and <c>bsk.ledger_opened_at()</c> (migration 0025), and
+/// reconcile's reads through <c>bsk.v_reward_due</c> / <c>bsk.v_reward_trigger</c>
+/// (migration 0026). Every write takes one transaction-scoped advisory lock shared by
+/// all ledger writes, re-checks that each earn or reversal's award is still in the state
+/// reconcile saw, inserts each entry's event and edges, and — for a guarded entry (a
+/// redemption) — re-reads the balances it touched before committing, so two
+/// redemptions racing from two windows cannot together overspend, and two reconciles
+/// racing on one item cannot both pay it.
 /// </summary>
 public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRepository
 {
@@ -46,6 +49,16 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
         WHERE w.balance < 0
         GROUP BY w.currency, w.balance
         ORDER BY w.currency;
+        """;
+
+    // Whether an award key currently nets to non-zero in any currency — i.e. is paid.
+    private const string IsPaidSql = """
+        SELECT EXISTS (
+            SELECT 1
+            FROM bsk.v_ledger
+            WHERE award_key = @key
+            GROUP BY currency
+            HAVING sum(amount) <> 0);
         """;
 
     public async Task<IReadOnlyList<WalletBalance>> GetBalancesAsync(CancellationToken cancellationToken = default)
@@ -143,6 +156,21 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await LockAsync(connection, transaction, cancellationToken);
 
+        foreach (var write in writes)
+        {
+            if (write is not { AwardKey: { } awardKey, ExpectPaid: { } expectPaid })
+            {
+                continue;
+            }
+
+            var paid = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+                IsPaidSql, new { key = awardKey }, transaction: transaction, cancellationToken: cancellationToken));
+            if (paid != expectPaid)
+            {
+                throw new LedgerConflictException(awardKey);
+            }
+        }
+
         var ids = new List<Guid>(writes.Count);
         var guarded = new List<Guid>();
         foreach (var write in writes)
@@ -181,6 +209,119 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
 
         await transaction.CommitAsync(cancellationToken);
         return ids;
+    }
+
+    public Task<IReadOnlyList<DueAward>> GetDueAsync(Guid subjectId, CancellationToken cancellationToken = default)
+        => GetAwardsAsync("bsk.v_reward_due", subjectId, cancellationToken);
+
+    public Task<IReadOnlyList<DueAward>> GetTriggersAsync(Guid subjectId, CancellationToken cancellationToken = default)
+        => GetAwardsAsync("bsk.v_reward_trigger", subjectId, cancellationToken);
+
+    public async Task<IReadOnlyList<PaidAward>> GetPaidAsync(Guid subjectId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var rows = await connection.QueryAsync<PaidRow>(new CommandDefinition(
+            """
+            SELECT event_id AS eventid, occurred_at AS occurredat, recorded_at AS recordedat,
+                   award_key AS awardkey, trigger, currency, amount
+            FROM bsk.v_ledger
+            WHERE subject_id = @subjectId
+              AND award_key IS NOT NULL;
+            """,
+            new { subjectId },
+            cancellationToken: cancellationToken));
+
+        // Net each key per currency; a key that nets to zero everywhere is not paid.
+        return rows
+            .GroupBy(r => r.AwardKey)
+            .Select(key =>
+            {
+                var net = key
+                    .GroupBy(r => r.Currency)
+                    .Select(c => (Currency: c.Key, Net: c.Sum(r => r.Amount)))
+                    .Where(c => c.Net != 0)
+                    .OrderBy(c => DisplayOrder(c.Currency))
+                    .ThenBy(c => c.Currency, StringComparer.Ordinal)
+                    .ToDictionary(c => c.Currency, c => c.Net);
+                var last = key
+                    .OrderByDescending(r => r.OccurredAt)
+                    .ThenByDescending(r => r.RecordedAt)
+                    .ThenByDescending(r => r.EventId)
+                    .First();
+                return new PaidAward(key.Key, last.Trigger, net, last.EventId);
+            })
+            .Where(award => award.Net.Count > 0)
+            .OrderBy(award => award.AwardKey, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<SubjectRef>> GetReconcileCandidatesAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var rows = await connection.QueryAsync<SubjectRow>(new CommandDefinition(
+            """
+            SELECT s.id, s.urn, s.type, s.title
+            FROM bsk.subject s
+            WHERE s.id IN (
+                SELECT subject_id FROM bsk.v_reward_due
+                UNION
+                SELECT subject_id FROM bsk.v_ledger
+                WHERE award_key IS NOT NULL AND subject_id IS NOT NULL)
+            ORDER BY s.urn;
+            """,
+            cancellationToken: cancellationToken));
+        return rows.Select(r => new SubjectRef(r.Id, r.Urn, r.Type, r.Title)).ToList();
+    }
+
+    public async Task<Guid?> GetLatestSubjectEventAsync(Guid subjectId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        // Events name their subject either in the payload (state_change, archive_change)
+        // or through an event -> subject edge (adherence, timer, activity).
+        return await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition(
+            """
+            SELECT x.id
+            FROM (
+                SELECT e.id, e.occurred_at, e.recorded_at
+                FROM bsk.event e
+                WHERE e.kind <> 'ledger'
+                  AND e.payload->>'subject_id' = @subjectId::text
+                UNION
+                SELECT e.id, e.occurred_at, e.recorded_at
+                FROM bsk.subject_event se
+                JOIN bsk.event e ON e.id = se.event_id
+                WHERE se.subject_id = @subjectId
+                  AND e.kind <> 'ledger'
+            ) x
+            ORDER BY x.occurred_at DESC, x.recorded_at DESC, x.id DESC
+            LIMIT 1;
+            """,
+            new { subjectId },
+            cancellationToken: cancellationToken));
+    }
+
+    private async Task<IReadOnlyList<DueAward>> GetAwardsAsync(
+        string view, Guid subjectId, CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var rows = await connection.QueryAsync<AwardRow>(new CommandDefinition(
+            $"""
+            SELECT award_key AS awardkey, trigger, source_event_ids AS sourceeventids,
+                   triggered_at AS triggeredat
+            FROM {view}
+            WHERE subject_id = @subjectId
+            ORDER BY award_key;
+            """,
+            new { subjectId },
+            cancellationToken: cancellationToken));
+        return rows
+            .Select(r => new DueAward(r.AwardKey, r.Trigger, r.SourceEventIds, AsUtc(r.TriggeredAt)!.Value))
+            .ToList();
     }
 
     private static Task LockAsync(
@@ -280,6 +421,33 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
         public string? Note { get; set; }
         public decimal? Dollars { get; set; }
         public decimal? CoinRate { get; set; }
+    }
+
+    private sealed class AwardRow
+    {
+        public string AwardKey { get; set; } = "";
+        public string Trigger { get; set; } = "";
+        public Guid[] SourceEventIds { get; set; } = [];
+        public DateTime TriggeredAt { get; set; }
+    }
+
+    private sealed class PaidRow
+    {
+        public Guid EventId { get; set; }
+        public DateTime OccurredAt { get; set; }
+        public DateTime RecordedAt { get; set; }
+        public string AwardKey { get; set; } = "";
+        public string? Trigger { get; set; }
+        public string Currency { get; set; } = "";
+        public long Amount { get; set; }
+    }
+
+    private sealed class SubjectRow
+    {
+        public Guid Id { get; set; }
+        public string Urn { get; set; } = "";
+        public string Type { get; set; } = "";
+        public string Title { get; set; } = "";
     }
 
     private sealed class OverdrawnRow

@@ -44,14 +44,14 @@ public sealed class NeglectDiagnosticTests(PostgresFixture postgres)
     }
 
     private async Task<Guid> InsertConcerningEventAsync(
-        NpgsqlConnection connection, Guid subjectId, DateTimeOffset occurredAt)
+        NpgsqlConnection connection, Guid subjectId, DateTimeOffset occurredAt, string kind = "journal")
     {
         var eventId = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
             """
             INSERT INTO bsk.event (kind, provenance, occurred_at, source_id)
-            VALUES ('journal', 'declared', @occurredAt, 'test') RETURNING id;
+            VALUES (@kind, 'declared', @occurredAt, 'test') RETURNING id;
             """,
-            new { occurredAt }, cancellationToken: Ct));
+            new { kind, occurredAt }, cancellationToken: Ct));
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
@@ -118,6 +118,21 @@ public sealed class NeglectDiagnosticTests(PostgresFixture postgres)
         await InsertConcerningEventAsync(connection, subject, DateTimeOffset.UtcNow.AddDays(-2));
 
         Assert.Null(await FindAsync(subject));
+    }
+
+    [Fact]
+    public async Task A_rewards_ledger_entry_is_not_activity()
+    {
+        // An earn or reversal concerns the item it paid for, but bookkeeping is not
+        // tending: it must not reset the neglect clock (rewards plan R2).
+        await using var connection = await OpenAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var subject = await InsertSubjectAsync(
+            connection, "Commitment", ns, new { expected_cadence = "weekly" },
+            DateTimeOffset.UtcNow.AddDays(-30));
+        await InsertConcerningEventAsync(connection, subject, DateTimeOffset.UtcNow.AddDays(-1), kind: "ledger");
+
+        Assert.NotNull(await FindAsync(subject));
     }
 
     [Fact]

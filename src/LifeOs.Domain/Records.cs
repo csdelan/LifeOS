@@ -127,5 +127,30 @@ public sealed record LedgerEntry(
 /// A ledger entry to append: its event and <c>event → subject</c> edges. When
 /// <see cref="GuardBalance"/> is set (a redemption), the write is refused if it would
 /// leave any of its currencies below zero — there is no overdraft (REWARD-3).
+/// <para>
+/// An earn or reversal names its <see cref="AwardKey"/> and whether that award must
+/// still be paid (<see cref="ExpectPaid"/>) when the write lands, so two reconciles
+/// racing on one item cannot both pay it or both give it back.
+/// </para>
 /// </summary>
-public sealed record LedgerWrite(NewEvent Event, IReadOnlyList<SubjectEventEdge> Edges, bool GuardBalance);
+public sealed record LedgerWrite(
+    NewEvent Event,
+    IReadOnlyList<SubjectEventEdge> Edges,
+    bool GuardBalance,
+    string? AwardKey = null,
+    bool? ExpectPaid = null);
+
+/// <summary>
+/// An award <c>bsk.v_reward_due</c> says an item is due (rewards plan §3.2): its key,
+/// its trigger, the events that make it due (cited by the earn), and when it became due.
+/// </summary>
+public sealed record DueAward(
+    string AwardKey, string Trigger, IReadOnlyList<Guid> SourceEventIds, DateTimeOffset TriggeredAt);
+
+/// <summary>
+/// An award the ledger currently holds for an item: its key, its trigger, what it nets
+/// to per currency (never all zero — a key that nets to zero is not paid), and its
+/// newest ledger entry.
+/// </summary>
+public sealed record PaidAward(
+    string AwardKey, string? Trigger, IReadOnlyDictionary<string, long> Net, Guid LastEventId);

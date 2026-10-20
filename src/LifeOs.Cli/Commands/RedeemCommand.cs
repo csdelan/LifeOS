@@ -1,5 +1,4 @@
 using System.CommandLine;
-using System.Globalization;
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 using LifeOs.Infrastructure;
@@ -40,7 +39,7 @@ internal static class RedeemCommand
 
             return Cli.RunAsync(asJson, async () =>
             {
-                var amounts = ParseAmounts(amountTexts);
+                var amounts = RewardOutput.ParseAmounts(amountTexts, "redeem expects currency=amount, e.g. freedom=45");
 
                 await using var provider = Cli.BuildServices(connectionString);
                 var redemption = await provider.GetRequiredService<RewardService>()
@@ -68,28 +67,5 @@ internal static class RedeemCommand
         });
 
         return command;
-    }
-
-    private static Dictionary<string, long> ParseAmounts(IEnumerable<string> pairs)
-    {
-        var amounts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in pairs)
-        {
-            var separator = pair.IndexOf('=');
-            if (separator <= 0
-                || !long.TryParse(pair[(separator + 1)..].Trim(), NumberStyles.AllowLeadingSign,
-                    CultureInfo.InvariantCulture, out var amount))
-            {
-                throw new ArgumentException($"redeem expects currency=amount, e.g. freedom=45; got '{pair}'.");
-            }
-
-            var key = pair[..separator].Trim();
-            if (!amounts.TryAdd(key, amount))
-            {
-                throw new ArgumentException($"'{key}' is listed twice.");
-            }
-        }
-
-        return amounts;
     }
 }

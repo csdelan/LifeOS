@@ -70,7 +70,8 @@ cadenced AS (
       AND NOT bsk.is_archived(s.id)
 ),
 -- The single most recent concerning event per subject, for the staleness clock
--- and the evidence row.
+-- and the evidence row. Rewards ledger entries (migration 0025) concern the item
+-- that earned them but are bookkeeping, not tending, so they never reset the clock.
 last_concern AS (
     SELECT DISTINCT ON (se.subject_id)
         se.subject_id,
@@ -79,6 +80,7 @@ last_concern AS (
     FROM bsk.subject_event se
     JOIN bsk.event e ON e.id = se.event_id
     WHERE se.relation = 'concerns'
+      AND e.kind <> 'ledger'
     ORDER BY se.subject_id, e.occurred_at DESC, e.recorded_at DESC, e.id DESC
 ),
 neglected AS (

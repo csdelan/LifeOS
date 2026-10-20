@@ -2742,10 +2742,12 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   Person-ref attribute for the Pilot. — **Shipped** (Phase 11, `attributes.people`, `bsk involve`).
 - **Currency ledger + wallet** (REWARD-1 / REWARD-5 / D11) — `ledger` event kind, a currency
   vocabulary with a spendable flag, `v_ledger` / `v_wallet` / daily totals, `bsk wallet`. —
-  **Open** (rewards plan R1).
+  **Shipped** except daily totals (rewards plan R1, migration 0025, `bsk wallet` / `bsk ledger`
+  / `bsk redeem`; daily totals come with R5 / R7).
 - **Bounties + reconcile engine** (REWARD-1 / REWARD-2) — `attributes.bounty`, type defaults,
   `v_reward_due`, `RewardService` reconcile hooked into status changes and habit adherence,
-  `bsk bounty` / `bsk rewards reconcile`. — **Open** (R2–R3).
+  `bsk bounty` / `bsk rewards reconcile`. — **Shipped** for Tasks, Projects and Goals (R2,
+  migration 0026); the habit triggers and the adherence hook come with R3.
 - **Habit lifecycle** (REWARD-2) — Habit status vocab Building → Established | Abandoned,
   `established` terminal, graduation ends occurrence expansion, establishment target +
   `v_habit_establishment`. — **Open** (R3).

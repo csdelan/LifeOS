@@ -30,34 +30,42 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
     }
 
     /// <summary>
-    /// Earns <paramref name="amounts"/> the way the reconcile engine (rewards plan R2)
-    /// will: a derived ledger entry that cites the completion that caused it and
-    /// concerns the completed item.
+    /// Earns exactly <paramref name="amounts"/> the way Chris does: a Task priced with
+    /// that bounty, completed through <see cref="StatusService"/>, whose reconcile writes
+    /// the earn (opening the wallet first if this is the first completion that pays).
     /// </summary>
-    private async Task<Guid> EarnAsync(
-        ServiceProvider provider, IReadOnlyDictionary<string, long> amounts, DateTimeOffset? at = null)
+    private async Task<Guid> EarnAsync(ServiceProvider provider, IReadOnlyDictionary<string, long> amounts)
     {
+        var bounty = JsonSerializer.Serialize(new
+        {
+            bounty = new Dictionary<string, IReadOnlyDictionary<string, long>> { [BountyTriggers.Completed] = amounts }
+        });
         var task = await provider.GetRequiredService<SubjectService>()
-            .CreateAsync(SubjectTypes.Task, $"rewarded task {Guid.NewGuid():N}", cancellationToken: Ct);
+            .CreateAsync(SubjectTypes.Task, $"rewarded task {Guid.NewGuid():N}", bounty, cancellationToken: Ct);
         var completed = await provider.GetRequiredService<StatusService>()
             .ChangeStatusAsync(task.Urn, "Completed", Ct);
 
-        var when = at ?? DateTimeOffset.UtcNow;
-        var payload = JsonSerializer.Serialize(new
-        {
-            entry = LedgerEntries.Earn,
-            amounts,
-            award_key = $"completed:{task.Id}",
-            trigger = "completed",
-            subject_id = task.Id.ToString()
-        });
+        return Assert.Single(completed.Awards).EventId;
+    }
+
+    /// <summary>
+    /// Appends a bare earn dated <paramref name="at"/> straight to the ledger — no item,
+    /// no award key — for reads over a stretch of the past no completion can reach.
+    /// </summary>
+    private async Task<Guid> AppendEarnAtAsync(
+        ServiceProvider provider, IReadOnlyDictionary<string, long> amounts, DateTimeOffset at)
+    {
+        var cause = await provider.GetRequiredService<IEventStore>().AppendAsync(
+            new NewEvent(EventKinds.Note, Provenances.Declared, at, DateTimeOffset.UtcNow, KernelSources.Cli,
+                PayloadJson: """{"text":"a ledger read test"}"""),
+            Ct);
         var earn = new NewEvent(
-            EventKinds.Ledger, Provenances.Derived, when, DateTimeOffset.UtcNow, KernelSources.Cli,
-            PayloadJson: payload, DerivedFrom: [completed.EventId]);
+            EventKinds.Ledger, Provenances.Derived, at, DateTimeOffset.UtcNow, KernelSources.Cli,
+            PayloadJson: JsonSerializer.Serialize(new { entry = LedgerEntries.Earn, amounts }),
+            DerivedFrom: [cause]);
 
         var ids = await provider.GetRequiredService<ILedgerRepository>().AppendAsync(
-            [new LedgerWrite(earn, [new SubjectEventEdge(task.Id, SubjectEventRelations.Concerns, Provenances.Derived)], GuardBalance: false)],
-            Ct);
+            [new LedgerWrite(earn, [], GuardBalance: false)], Ct);
         return ids[0];
     }
 
@@ -147,6 +155,7 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
         Assert.Equal(LedgerEntries.Earn, entry.Entry);
         Assert.Equal(Provenances.Derived, entry.Provenance);
         Assert.Equal("completed", entry.Trigger);
+        Assert.StartsWith("completed:", entry.AwardKey);
         Assert.Equal(SubjectTypes.Task, entry.Subject?.Type);
         // Amounts come back in display order: Coins before XP.
         Assert.Equal(new[] { Currencies.Coins, Currencies.Xp }, entry.Amounts.Keys);
@@ -290,9 +299,9 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
         var (rewards, _, provider) = Build();
         // A stretch of the past no other test writes to.
         var t0 = new DateTimeOffset(2001, 3, 1, 9, 0, 0, TimeSpan.Zero);
-        var first = await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Xp] = 1 }, t0);
-        var second = await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Xp] = 2 }, t0.AddHours(1));
-        await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Xp] = 3 }, t0.AddHours(2));
+        var first = await AppendEarnAtAsync(provider, new Dictionary<string, long> { [Currencies.Xp] = 1 }, t0);
+        var second = await AppendEarnAtAsync(provider, new Dictionary<string, long> { [Currencies.Xp] = 2 }, t0.AddHours(1));
+        await AppendEarnAtAsync(provider, new Dictionary<string, long> { [Currencies.Xp] = 3 }, t0.AddHours(2));
 
         // The end is exclusive: the entry at t0 + 2h falls outside.
         var inRange = await rewards.GetLedgerAsync(t0, t0.AddHours(2), cancellationToken: Ct);

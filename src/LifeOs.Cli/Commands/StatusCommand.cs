@@ -8,7 +8,9 @@ namespace LifeOs.Cli.Commands;
 /// <summary>
 /// <c>bsk status &lt;subject&gt; &lt;new-status&gt;</c> — change a subject's status by
 /// appending a <c>state_change</c> event. The projection is derived: the new status
-/// shows up after the next <c>bsk rebuild</c>, never by a direct write.
+/// shows up after the next <c>bsk rebuild</c>, never by a direct write. Completing a
+/// Task, Project or Goal earns its bounty, and moving it off Completed reverses that;
+/// those ledger entries are printed too.
 /// </summary>
 internal static class StatusCommand
 {
@@ -46,7 +48,8 @@ internal static class StatusCommand
                     {
                         eventId = result.EventId,
                         subject = new { result.Subject.Urn, result.Subject.Type },
-                        status = result.Status
+                        status = result.Status,
+                        awards = RewardOutput.AwardsJson(result.Awards)
                     });
                 }
                 else
@@ -54,6 +57,7 @@ internal static class StatusCommand
                     Console.WriteLine(
                         $"Recorded status '{result.Status}' for {result.Subject.Urn} " +
                         $"(state_change {result.EventId}); run `bsk rebuild` to refresh the projection.");
+                    RewardOutput.WriteAwards(result.Awards);
                 }
 
                 return 0;

@@ -6,7 +6,8 @@ doc). The requirements say *what*; this doc says *how* and *in what order*, writ
 agent with no session context can pick up any phase.
 
 **Scope agreed with Chris on 2026-10-20.** The rules in §1 are his answers to the design
-questions. R0 (the requirements and this plan) and R1 (the ledger) are done; R2–R7 are open.
+questions. R0 (the requirements and this plan), R1 (the ledger) and R2 (earning on work) are
+done; R3–R7 are open.
 
 ## 0. Read these first
 
@@ -97,18 +98,31 @@ milestone, that fact is the day that reached n.
 
 ### 3.3 Reconcile, not react
 
-`RewardService.ReconcileAsync(subjectId)`:
+`RewardService.ReconcileAsync(subject, causeEventId?)`:
 
-1. Take the subject's advisory lock.
-2. Read the subject's due keys from `v_reward_due`. SQL decides *which* awards are due, as a
+1. Read the subject's due keys from `v_reward_due`. SQL decides *which* awards are due, as a
    pure function of the record.
-3. Read the net paid per key from `v_ledger`.
-4. **Due, net zero** → append an `earn`, priced now from `attributes.bounty[trigger]`, or
+2. Read the net paid per key from `v_ledger`.
+3. **Due, net zero** → append an `earn`, priced now from `attributes.bounty[trigger]`, or
    `BountyDefaults` when unset. Pricing happens in C#, so SQL never duplicates the defaults.
-5. **Not due, net non-zero** → append a `reversal` of exactly the net.
-6. **Due and already paid** → nothing. Reconcile is presence-based, so a bounty edited after
+   The earn is dated at the trigger, so a sweep that heals it later still files it on the
+   right day. A trigger priced to pay nothing (`{}`) writes nothing; if it is given a price
+   later, the next reconcile of that item pays it.
+4. **Not due, net non-zero** → append a `reversal` of exactly the net, citing the cause (or,
+   in a sweep, the item's newest event).
+5. **Due and already paid** → nothing. Reconcile is presence-based, so a bounty edited after
    payment never re-prices a past earn.
+6. Append everything in one transaction under the wallet lock. Each earn and reversal names
+   its award key and whether it expects that key unpaid or paid; if another reconcile changed
+   it first, nothing is written and reconcile re-reads and retries (up to three attempts).
+   Two windows completing the same item can't both pay it.
 7. Return the entries written; the API turns them into REWARD-4's toast.
+
+**Opening the wallet.** Before any `open` entry exists, nothing is due. A cause (a status
+change) that makes an award pay opens the wallet itself, dated at that trigger
+(`v_reward_trigger` is the same rows without the start-line filter), then pays it. A change
+that pays nothing, a trigger priced at `{}`, and a sweep never open it, so history from before
+launch stays unpaid. `bsk wallet open` still opens it by hand.
 
 Hooks:
 
@@ -118,8 +132,11 @@ Hooks:
 
 Each reconciles the affected subject after its write. Reconcile is idempotent, so a crash
 between the trigger and the reconcile is healed by the next reconcile of that subject. It can
-also be healed by `bsk rewards reconcile`, which sweeps every subject with triggers since
-`open`.
+also be healed by `bsk rewards reconcile [--subject <ref>]`, which sweeps every subject with an
+award due or paid.
+
+Ledger entries `concern` the item they paid for, but they are bookkeeping, not tending: the
+neglect diagnostic ignores them, so a reversal never resets an item's neglect clock.
 
 Read current status from the live fold `bsk_derived.subject_current_source`, as the API's
 `SubjectReader` does. Never use the materialized `subject_current`, which lags until
@@ -140,8 +157,15 @@ Read current status from the live fold `bsk_derived.subject_current_source`, as 
 - A missing trigger → the type default. An explicit `{}` → pays nothing.
 - It is named `bounty` because a Habit's `attributes.reward` is already the cue / routine /
   reward text (`v_habit.reward`).
-- It is written by `bsk bounty <subject> --on <trigger> xp=10 coins=2 [--clear]` and by
-  `POST /api/bounty`.
+- It is written by `bsk bounty <subject> [--on <trigger>] xp=10 karma=3` and by
+  `POST /api/bounty`. The CLI sets currencies on what the trigger pays now (its default when
+  never priced): `karma=3` adds Karma, `xp=0` drops XP. `--nothing` stores `{}`; `--clear`
+  puts the trigger (or, without `--on`, every trigger) back on the default. With no amounts it
+  shows each trigger's price and whether it is the default. `--on` may be left out when the
+  type pays on one trigger.
+- Reading is lenient: a bounty in another shape, an unknown currency or an amount that isn't
+  a whole number above zero is skipped (the trigger then pays the default or what remains),
+  so a hand-edited bounty never fails a status change. `BountyService` is the strict writer.
 - Forms show the type default and save only what Chris changes, so later retuning of a default
   still reaches items he never priced.
 
@@ -203,7 +227,8 @@ Karma and Resolve default to 0; Chris adds them per item.
 |---|---|
 | `v_ledger` | One row per ledger entry × currency: event id, occurred_at, entry, currency, amount, award_key, trigger, the item or Reward (id, urn, type, title), note, dollars, provenance. |
 | `v_wallet` | Per currency: earned, reversed, spent, balance. |
-| `v_reward_due` | (subject_id, award_key, trigger, triggering event ids). |
+| `v_reward_trigger` | Every award the record supports, whatever the start line: subject_id, subject_type, award_key, trigger, source_event_ids, triggered_at. |
+| `v_reward_due` | `v_reward_trigger` rows on or after `bsk.ledger_opened_at()`. |
 | `v_habit_establishment` | Per habit: window, adherence, target_met. |
 | `v_reward` | The catalog plus savings progress. |
 | API | `GET /api/wallet`, `GET /api/ledger?from&to`, `GET /api/ledger/daily?from&to&tz`, `GET /api/rewards`, `POST /api/redeem`, `POST /api/bounty`. |
@@ -270,7 +295,17 @@ number from 0025.
   dated at the first trigger it pays, when no opening exists. Only redemptions are guarded,
   so reversing something already spent can take a balance below zero, and the wallet shows
   that as it is.
-- [ ] R2 — Bounties + earning on work
+- [x] R2 — Bounties + earning on work (migration 0026). `v_reward_trigger` / `v_reward_due`
+  (Task / Project / Goal `completed`); `BountyTriggers`, `BountyDefaults`, `AwardKeys` in
+  Domain; `Bounty` (lenient read) and `BountyService` (strict write); `RewardService`
+  reconcile and sweep, with award-state checks under the wallet lock; `StatusService` reconciles
+  after every status change, so `bsk status`, the web and the timer's Complete all earn, and
+  `StatusResult` / `TimerResult` carry the awards; `bsk bounty`, `bsk rewards reconcile`;
+  `bsk status` / `bsk timer` print what they earned. The neglect diagnostic now ignores ledger
+  entries. Notes for R3: add the habit rows to `v_reward_trigger` (and the triggers to
+  `BountyTriggers` / `BountyDefaults` — the drift test checks they match), and call
+  `ReconcileAsync(habit, adherenceEventId)` from `AdherenceService`. The API's `awards` on
+  responses is still R5.
 - [ ] R3 — Habit lifecycle + habit earning
 - [ ] R4 — Reward catalog
 - [ ] R5 — Wallet + Redeem page

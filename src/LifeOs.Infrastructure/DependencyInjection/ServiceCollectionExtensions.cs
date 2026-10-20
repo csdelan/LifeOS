@@ -76,6 +76,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new StatusService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventStore>(),
+            sp.GetRequiredService<RewardService>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
 
@@ -117,8 +118,13 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(sp => new RewardService(
             sp.GetRequiredService<ILedgerRepository>(),
+            sp.GetRequiredService<ISubjectRepository>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
+
+        services.AddSingleton(sp => new BountyService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>()));
 
         services.AddSingleton(sp => new RelateService(
             sp.GetRequiredService<SubjectService>(),

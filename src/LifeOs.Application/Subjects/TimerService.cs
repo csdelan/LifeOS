@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 
 namespace LifeOs.Application.Subjects;
@@ -75,7 +76,7 @@ public sealed class TimerService(
         await timers.AppendAsync(writes, cancellationToken);
 
         var snapshot = await timers.GetAsync(task.Id, cancellationToken) ?? Never(task);
-        return new TimerResult(task, snapshot, paused, Completed: false);
+        return new TimerResult(task, snapshot, paused, Completed: false, Awards: []);
     }
 
     /// <summary>
@@ -92,10 +93,10 @@ public sealed class TimerService(
                 [Write(task.Id, TimerActions.Stop, current, clock.UtcNow)], cancellationToken);
         }
 
-        await status.ChangeStatusAsync(task.Urn, CompletedStatus, cancellationToken);
+        var completed = await status.ChangeStatusAsync(task.Urn, CompletedStatus, cancellationToken);
 
         var snapshot = await timers.GetAsync(task.Id, cancellationToken) ?? Never(task);
-        return new TimerResult(task, snapshot, [], Completed: true);
+        return new TimerResult(task, snapshot, [], Completed: true, completed.Awards);
     }
 
     private async Task<SubjectRef> ResolveTaskAsync(string reference, CancellationToken cancellationToken)
@@ -156,7 +157,9 @@ public sealed class TimerService(
 
 /// <summary>
 /// The outcome of a timer action: the task, its timer afterwards, any other timers the
-/// action paused (starting one pauses the running one), and whether the task was completed.
+/// action paused (starting one pauses the running one), whether the task was completed,
+/// and what completing it earned.
 /// </summary>
 public sealed record TimerResult(
-    SubjectRef Task, TimerSnapshot Timer, IReadOnlyList<SubjectRef> Paused, bool Completed);
+    SubjectRef Task, TimerSnapshot Timer, IReadOnlyList<SubjectRef> Paused, bool Completed,
+    IReadOnlyList<Award> Awards);
