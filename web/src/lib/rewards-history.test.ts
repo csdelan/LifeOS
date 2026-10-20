@@ -41,8 +41,11 @@ const row = (
 };
 
 describe("periods", () => {
-  it("weeks start on Sunday and months on the 1st; each ends where the next begins", () => {
-    expect(weekPeriod("2026-10-14")).toEqual({ kind: "week", start: "2026-10-11", end: "2026-10-18" });
+  it("weeks run Monday to Sunday and months start on the 1st; each ends where the next begins", () => {
+    expect(weekPeriod("2026-10-14")).toEqual({ kind: "week", start: "2026-10-12", end: "2026-10-19" });
+    // Sunday closes its week; Monday starts the next.
+    expect(weekPeriod("2026-10-18").start).toBe("2026-10-12");
+    expect(weekPeriod("2026-10-19").start).toBe("2026-10-19");
     expect(monthPeriod("2026-12-31")).toEqual({ kind: "month", start: "2026-12-01", end: "2027-01-01" });
     expect(dayPeriod("2026-10-31")).toEqual({ kind: "day", start: "2026-10-31", end: "2026-11-01" });
   });
@@ -50,7 +53,7 @@ describe("periods", () => {
   it("charts 8 weeks or 6 months, oldest first, ending on the one holding the anchor", () => {
     const weeks = periodsEnding("week", "2026-10-14");
     expect(weeks).toHaveLength(8);
-    expect([weeks[0].start, weeks.at(-1)!.start]).toEqual(["2026-08-23", "2026-10-11"]);
+    expect([weeks[0].start, weeks.at(-1)!.start]).toEqual(["2026-08-24", "2026-10-12"]);
     expect(periodsEnding("month", "2026-03-31").map((m) => m.start)).toEqual([
       "2025-10-01",
       "2025-11-01",
@@ -69,24 +72,27 @@ describe("periods", () => {
   it("reads one range covering the month and both charts", () => {
     expect(historyRange("2026-10-01", "2026-10-20")).toEqual({ from: "2026-05-01", to: "2026-11-01" });
     // September's last week runs into October, so the read runs to that week's end.
-    expect(historyRange("2026-09-01", "2026-10-20")).toEqual({ from: "2026-04-01", to: "2026-10-04" });
+    expect(historyRange("2026-09-01", "2026-10-20")).toEqual({ from: "2026-04-01", to: "2026-10-05" });
   });
 
-  it("lays a month out Sunday first, padded to whole weeks", () => {
+  it("lays a month out Monday first, padded to whole weeks", () => {
+    // October 1, 2026 is a Thursday.
     const october = monthCells("2026-10-01");
     expect(october).toHaveLength(35);
-    expect(october.slice(0, 5)).toEqual([null, null, null, null, "2026-10-01"]);
-    expect(october.at(-1)).toBe("2026-10-31");
-    expect(monthCells("2026-02-01")).toHaveLength(28);
+    expect(october.slice(0, 4)).toEqual([null, null, null, "2026-10-01"]);
+    expect(october.slice(-2)).toEqual(["2026-10-31", null]);
+    // February 2027 starts on a Monday and fills four rows exactly.
+    expect(monthCells("2027-02-01")).toHaveLength(28);
   });
 });
 
 describe("totals", () => {
+  // The week of Oct 14 runs Mon Oct 12 to Sun Oct 18.
   const days = [
-    day("2026-10-10", { xp: 5 }),
-    day("2026-10-11", { xp: 10, coins: 2 }, { xp: 3 }),
-    day("2026-10-17", { xp: 1 }, {}, { freedom: 45 }),
-    day("2026-10-18", { xp: 50 }),
+    day("2026-10-11", { xp: 5 }),
+    day("2026-10-12", { xp: 10, coins: 2 }, { xp: 3 }),
+    day("2026-10-18", { xp: 1 }, {}, { freedom: 45 }),
+    day("2026-10-19", { xp: 50 }),
   ];
 
   it("rolls the days inside a period up, in display order", () => {

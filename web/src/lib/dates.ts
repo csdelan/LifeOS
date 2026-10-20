@@ -90,6 +90,11 @@ export function startOfWeekSunday(iso: string): string {
   return addDays(iso, -weekdayIndex(iso));
 }
 
+/** Monday-start week (Monday to Sunday): the rewards history's week. */
+export function startOfWeekMonday(iso: string): string {
+  return addDays(iso, -((weekdayIndex(iso) + 6) % 7));
+}
+
 export function endOfWeekSaturday(iso: string): string {
   return addDays(startOfWeekSunday(iso), 6);
 }

@@ -15,7 +15,7 @@ import {
   formatDayFull,
   localDateFromTimestamp,
   startOfMonth,
-  startOfWeekSunday,
+  startOfWeekMonday,
   weekdayIndex,
 } from "@/lib/dates";
 import type { Amounts, LedgerDay, LedgerEntryKind, LedgerRow } from "@/lib/production-ui-types";
@@ -60,9 +60,12 @@ export function dayPeriod(date: string): Period {
   return { kind: "day", start: date, end: addDays(date, 1) };
 }
 
-/** The Sunday-start week holding `date` (REVIEW-2's week). */
+/**
+ * The Monday-to-Sunday week holding `date`. (The weekly review, REVIEW-2, keeps its own
+ * Sunday-start week: Sunday is review day, but the week itself runs Monday to Sunday.)
+ */
 export function weekPeriod(date: string): Period {
-  const start = startOfWeekSunday(date);
+  const start = startOfWeekMonday(date);
   return { kind: "week", start, end: addDays(start, 7) };
 }
 
@@ -136,11 +139,14 @@ export function historyRange(month: string, today: string): { from: string; to: 
   return { from: starts[0], to: ends.at(-1)! };
 }
 
-/** The month's calendar, Sunday first: blanks before the 1st and after the last day. */
+/**
+ * The month's calendar, Monday first so each row is one of the chart's weeks: blanks before
+ * the 1st and after the last day.
+ */
 export function monthCells(month: string): (string | null)[] {
   const first = startOfMonth(month);
   const cells: (string | null)[] = [
-    ...Array.from({ length: weekdayIndex(first) }, () => null),
+    ...Array.from({ length: (weekdayIndex(first) + 6) % 7 }, () => null),
     ...Array.from({ length: daysInMonth(first) }, (_, i) => addDays(first, i)),
   ];
   while (cells.length % 7 !== 0) cells.push(null);

@@ -44,7 +44,7 @@ import { loadView, saveView } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 
 const VIEW_KEY = "rewards.history";
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const EMPTY_DAY: Pick<LedgerDay, "earned" | "reversed" | "spent"> = { earned: {}, reversed: {}, spent: {} };
 
 /** Sequential heat for the calendar: one hue, more is darker (level 0 is no fill). */

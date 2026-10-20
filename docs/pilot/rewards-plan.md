@@ -433,7 +433,8 @@ number from 0025.
   (`/rewards?view=history`, plus `selected` for the detail peek); "See all history" on Recent
   activity opens it. History reads one daily range covering the month and both charts
   (`lib/rewards-history.ts` `historyRange`), so switching weeks / months never waits.
-  - A month calendar (Sunday first) for one currency at a time, shaded by what each day earned
+  - A month calendar (Monday first: weeks run Monday to Sunday, Chris's official week, though
+    the weekly review keeps its Sunday-start week) for one currency at a time, shaded by what each day earned
     net of what it gave back (one hue, four steps), with spending below; future days are
     disabled and each day says its totals in words.
   - Earned-vs-spent bars for the last 8 weeks or 6 months (tracked currencies show earned
