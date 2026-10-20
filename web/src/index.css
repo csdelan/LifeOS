@@ -110,6 +110,7 @@
   --type-season: oklch(0.48 0.08 130);
   --type-habit: oklch(0.44 0.07 155);
   --type-appointment: oklch(0.5 0.1 35);
+  --type-reward: oklch(0.53 0.13 60);
 }
 
 .dark {
@@ -164,6 +165,7 @@
   --type-season: oklch(0.8 0.07 130);
   --type-habit: oklch(0.78 0.07 155);
   --type-appointment: oklch(0.8 0.08 45);
+  --type-reward: oklch(0.8 0.11 65);
 }
 
 @layer base {

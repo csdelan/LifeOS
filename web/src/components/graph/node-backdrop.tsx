@@ -204,6 +204,14 @@ const TYPE_BACKDROPS: Record<SubjectType, (uid: string) => ReactNode> = {
       )}
     </>
   ),
+  Reward: () => (
+    <>
+      <rect x="206" y="34" width="60" height="36" rx="4" fill="currentColor" opacity="0.12" />
+      <rect x="200" y="22" width="72" height="14" rx="3" fill="none" stroke="currentColor" strokeWidth="1.4" opacity="0.22" />
+      <rect x="232" y="22" width="8" height="48" fill="currentColor" opacity="0.18" />
+      <path d="M236 22c-10-14-26-10-20 0M236 22c10-14 26-10 20 0" fill="none" stroke="currentColor" strokeWidth="1.4" opacity="0.26" />
+    </>
+  ),
   Season: () => (
     <>
       <path

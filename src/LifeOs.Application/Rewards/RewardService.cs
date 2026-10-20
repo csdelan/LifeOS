@@ -1,5 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 
 namespace LifeOs.Application.Rewards;
@@ -11,9 +13,13 @@ namespace LifeOs.Application.Rewards;
 /// currency; balances and history are folds over those events, so nothing is mutated
 /// and every figure traces back to the entries behind it.
 /// <para>
-/// A redemption is <c>declared</c> with a note saying what it was for, may only spend
-/// spendable currencies (XP and Resolve are tracked, never spent), and is refused if it
-/// would take a balance below zero — there is no overdraft.
+/// A redemption is <c>declared</c>, may only spend spendable currencies (XP and Resolve
+/// are tracked, never spent), and is refused if it would take a balance below zero —
+/// there is no overdraft. It is either against a catalog Reward (REWARD-3) — an instant
+/// reward at its price, or Coins deposited into a savings goal — or a custom one whose
+/// note says what it was for. Coins are real money: every redemption that spends them
+/// records the dollars moved at the configured rate (<see cref="CoinValueUsd"/>), so a
+/// later rate change never rewrites a past deposit.
 /// </para>
 /// <para>
 /// Earning is reconciled, not reacted to (rewards plan §3.3): <see cref="ReconcileAsync"/>
@@ -25,18 +31,29 @@ namespace LifeOs.Application.Rewards;
 /// </para>
 /// </summary>
 public sealed class RewardService(
-    ILedgerRepository ledger, ISubjectRepository subjects, IClock clock, string sourceId)
+    ILedgerRepository ledger, ISubjectRepository subjects, SubjectService resolver, IClock clock,
+    string sourceId, decimal coinValueUsd = CoinRates.DefaultUsd)
 {
     // A reconcile that loses a race on an award re-reads and tries again; two retries
     // are plenty for one person's windows racing.
     private const int ReconcileAttempts = 3;
+
+    private static readonly JsonSerializerOptions OmitNulls = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    /// <summary>What a Coin is worth in dollars, as configured (<see cref="CoinRates.ConfigurationKey"/>).</summary>
+    public decimal CoinValueUsd { get; } = coinValueUsd > 0
+        ? coinValueUsd
+        : throw new ArgumentOutOfRangeException(nameof(coinValueUsd), coinValueUsd, "A Coin must be worth more than $0.");
 
     /// <summary>Every currency's totals, in display order, plus when the wallet opened.</summary>
     public async Task<Wallet> GetWalletAsync(CancellationToken cancellationToken = default)
     {
         var openedAt = await ledger.GetOpenedAtAsync(cancellationToken);
         var balances = await ledger.GetBalancesAsync(cancellationToken);
-        return new Wallet(openedAt, Lines(balances));
+        return new Wallet(openedAt, Lines(balances), CoinValueUsd);
     }
 
     /// <summary>
@@ -83,27 +100,91 @@ public sealed class RewardService(
 
     /// <summary>
     /// Spends <paramref name="amounts"/> (currency key → a whole number above zero) on
-    /// something described by <paramref name="note"/>. Refused, with nothing written,
-    /// when a currency is unknown or tracked, an amount is not positive, the note is
-    /// blank, or any balance would go below zero.
+    /// something described by <paramref name="note"/> — a custom redemption, with no
+    /// catalog Reward. Refused, with nothing written, when a currency is unknown or
+    /// tracked, an amount is not positive, the note is blank, or any balance would go
+    /// below zero.
     /// </summary>
-    public async Task<Redemption> RedeemAsync(
+    public Task<Redemption> RedeemAsync(
         IReadOnlyDictionary<string, long> amounts, string? note,
         CancellationToken cancellationToken = default)
+        => RedeemAsync(reward: null, amounts, note, cancellationToken);
+
+    /// <summary>
+    /// Redeems against the catalog Reward named by <paramref name="reward"/> (urn, short id
+    /// or title), or — when it is null — makes a custom redemption that needs a note.
+    /// <list type="bullet">
+    /// <item>An instant reward costs its catalog price; <paramref name="amounts"/>, when
+    /// given, override it for this redemption.</item>
+    /// <item>A savings goal takes the Coins in <paramref name="amounts"/> as a deposit,
+    /// and only Coins.</item>
+    /// </list>
+    /// The note is optional against a Reward. Refused, with nothing written, for anything
+    /// that isn't a Reward, an archived Reward, an instant reward with no price and no
+    /// amounts, invalid amounts, or a spend any balance can't cover.
+    /// </summary>
+    public async Task<Redemption> RedeemAsync(
+        string? reward, IReadOnlyDictionary<string, long>? amounts, string? note,
+        CancellationToken cancellationToken = default)
     {
-        var spend = NormalizeSpend(amounts);
-        var trimmedNote = note?.Trim();
-        if (string.IsNullOrEmpty(trimmedNote))
+        var trimmedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (string.IsNullOrWhiteSpace(reward))
         {
-            throw new ArgumentException("Say what this redemption is for: a note is required.");
+            if (amounts is null || amounts.Count == 0)
+            {
+                throw new ArgumentException("Say what to redeem, e.g. freedom=45.");
+            }
+
+            var spend = RewardPrice.Normalize(amounts);
+            if (trimmedNote is null)
+            {
+                throw new ArgumentException("Say what this redemption is for: a note is required.");
+            }
+
+            return await WriteRedemptionAsync(null, spend, trimmedNote, cancellationToken);
         }
 
-        var payload = JsonSerializer.Serialize(new
+        var subject = await resolver.ResolveAsync(reward, cancellationToken);
+        if (subject.Type != SubjectTypes.Reward)
         {
-            entry = LedgerEntries.Redeem,
-            amounts = spend.ToDictionary(kv => kv.Key, kv => -kv.Value),
-            note = trimmedNote
-        });
+            throw new InvalidOperationException(
+                $"'{subject.Title}' is a {subject.Type}, not a Reward; redeem against a Reward, or give a note instead.");
+        }
+
+        var item = await ledger.GetCatalogRewardAsync(subject.Id, cancellationToken)
+                   ?? throw new SubjectNotFoundException(subject.Urn);
+        if (item.Archived)
+        {
+            throw new InvalidOperationException($"'{subject.Title}' is archived; restore it to redeem against it.");
+        }
+
+        var cost = item.Kind == RewardKinds.Savings ? DepositFor(item, amounts) : CostOf(item, amounts);
+        return await WriteRedemptionAsync(subject, cost, trimmedNote, cancellationToken);
+    }
+
+    private async Task<Redemption> WriteRedemptionAsync(
+        SubjectRef? reward, Dictionary<string, long> spend, string? note, CancellationToken cancellationToken)
+    {
+        // Coins are real money: stamp what this moved and the rate it moved at.
+        decimal? dollars = null;
+        decimal? rate = null;
+        if (spend.TryGetValue(Currencies.Coins, out var coins))
+        {
+            rate = CoinValueUsd;
+            dollars = CoinRates.Dollars(coins, CoinValueUsd);
+        }
+
+        var payload = JsonSerializer.Serialize(
+            new
+            {
+                entry = LedgerEntries.Redeem,
+                amounts = spend.ToDictionary(kv => kv.Key, kv => -kv.Value),
+                subject_id = reward?.Id.ToString(),
+                note,
+                dollars,
+                coin_rate = rate
+            },
+            OmitNulls);
 
         var now = clock.UtcNow;
         var redeemEvent = new NewEvent(
@@ -113,11 +194,50 @@ public sealed class RewardService(
             RecordedAt: now,
             SourceId: sourceId,
             PayloadJson: payload);
+        IReadOnlyList<SubjectEventEdge> edges = reward is null
+            ? []
+            : [new SubjectEventEdge(reward.Id, SubjectEventRelations.Concerns, Provenances.Declared)];
 
         var ids = await ledger.AppendAsync(
-            [new LedgerWrite(redeemEvent, [], GuardBalance: true)], cancellationToken);
+            [new LedgerWrite(redeemEvent, edges, GuardBalance: true)], cancellationToken);
 
-        return new Redemption(ids[0], spend, trimmedNote, await GetWalletAsync(cancellationToken));
+        var item = reward is null ? null : await ledger.GetCatalogRewardAsync(reward.Id, cancellationToken);
+        return new Redemption(
+            ids[0], spend, note, dollars, rate, item, await GetWalletAsync(cancellationToken));
+    }
+
+    /// <summary>A deposit into a savings goal: Coins, and only Coins.</summary>
+    private static Dictionary<string, long> DepositFor(
+        CatalogReward item, IReadOnlyDictionary<string, long>? amounts)
+    {
+        if (amounts is null || amounts.Count == 0)
+        {
+            throw new ArgumentException(
+                $"Say how many Coins to put toward '{item.Reward.Title}', e.g. coins=50.");
+        }
+
+        var deposit = RewardPrice.Normalize(amounts);
+        if (deposit.Keys.Any(k => k != Currencies.Coins))
+        {
+            throw new ArgumentException($"'{item.Reward.Title}' is a savings goal: only Coins go toward it.");
+        }
+
+        return deposit;
+    }
+
+    /// <summary>An instant reward's cost: the amounts given, else its catalog price.</summary>
+    private static Dictionary<string, long> CostOf(
+        CatalogReward item, IReadOnlyDictionary<string, long>? amounts)
+    {
+        if (amounts is { Count: > 0 })
+        {
+            return RewardPrice.Normalize(amounts);
+        }
+
+        return item.Price.Count > 0
+            ? new Dictionary<string, long>(item.Price)
+            : throw new ArgumentException(
+                $"'{item.Reward.Title}' has no price yet: say what it costs this time, e.g. freedom=45, or give it a price.");
     }
 
     /// <summary>
@@ -297,43 +417,6 @@ public sealed class RewardService(
         => Bounty.Parse(await subjects.GetAttributeValueAsync(subject.Id, Bounty.AttributeKey, cancellationToken));
 
     /// <summary>
-    /// Validates a spend and returns it keyed by canonical currency key, in display order.
-    /// </summary>
-    private static Dictionary<string, long> NormalizeSpend(IReadOnlyDictionary<string, long>? amounts)
-    {
-        if (amounts is null || amounts.Count == 0)
-        {
-            throw new ArgumentException("Say what to redeem, e.g. freedom=45.");
-        }
-
-        var byKey = new Dictionary<string, long>();
-        foreach (var (key, amount) in amounts)
-        {
-            var currency = Currencies.Find(key) ?? throw new ArgumentException(
-                $"Unknown currency '{key}'. Expected one of: {string.Join(", ", Currencies.All.Select(c => c.Key))}.");
-
-            if (!currency.Spendable)
-            {
-                throw new ArgumentException($"{currency.Label} is tracked, not spent; it can't be redeemed.");
-            }
-
-            if (amount <= 0)
-            {
-                throw new ArgumentException($"Redeem a whole number of {currency.Label} above zero; got {amount}.");
-            }
-
-            if (!byKey.TryAdd(currency.Key, amount))
-            {
-                throw new ArgumentException($"{currency.Label} is listed twice.");
-            }
-        }
-
-        return Currencies.All
-            .Where(c => byKey.ContainsKey(c.Key))
-            .ToDictionary(c => c.Key, c => byKey[c.Key]);
-    }
-
-    /// <summary>
     /// One line per known currency in display order, zero where the ledger never touched
     /// it, then any currency the ledger holds that the vocabulary no longer names — kept
     /// visible rather than silently dropped.
@@ -360,8 +443,11 @@ public sealed class RewardService(
 /// <summary>One currency in the wallet: its totals and balance.</summary>
 public sealed record WalletLine(Currency Currency, long Earned, long Reversed, long Spent, long Balance);
 
-/// <summary>The wallet: when it opened (null before launch) and every currency's line, in display order.</summary>
-public sealed record Wallet(DateTimeOffset? OpenedAt, IReadOnlyList<WalletLine> Lines)
+/// <summary>
+/// The wallet: when it opened (null before launch), every currency's line in display
+/// order, and what a Coin is worth in dollars.
+/// </summary>
+public sealed record Wallet(DateTimeOffset? OpenedAt, IReadOnlyList<WalletLine> Lines, decimal CoinValueUsd)
 {
     /// <summary>The balance of <paramref name="currency"/>, or 0 when the wallet has never held it.</summary>
     public long BalanceOf(string currency)
@@ -380,6 +466,11 @@ public sealed record Award(
 /// <summary>When the wallet opened, and whether this call opened it.</summary>
 public sealed record WalletOpening(DateTimeOffset OpenedAt, bool Created);
 
-/// <summary>A redemption: its ledger event, what was spent (positive amounts), the note, and the wallet afterwards.</summary>
+/// <summary>
+/// A redemption: its ledger event, what was spent (positive amounts), the note (optional
+/// against a Reward), the dollars and coin rate stamped when it spent Coins, the catalog
+/// Reward as it stands afterwards (null for a custom redemption), and the wallet afterwards.
+/// </summary>
 public sealed record Redemption(
-    Guid EventId, IReadOnlyDictionary<string, long> Amounts, string Note, Wallet Wallet);
+    Guid EventId, IReadOnlyDictionary<string, long> Amounts, string? Note, decimal? Dollars,
+    decimal? CoinRate, CatalogReward? Reward, Wallet Wallet);

@@ -1,5 +1,6 @@
 using System.CommandLine;
 using LifeOs.Application.Rewards;
+using LifeOs.Domain;
 using LifeOs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -39,7 +40,10 @@ internal static class WalletCommand
                 foreach (var line in wallet.Lines)
                 {
                     var tracked = line.Currency.Spendable ? "" : "   tracked";
-                    Console.WriteLine($"  {line.Currency.Label,-10}{line.Balance,8}{tracked}");
+                    var worth = line.Currency.Key == Currencies.Coins
+                        ? $"   {RewardOutput.Usd(CoinRates.Dollars(line.Balance, wallet.CoinValueUsd))} at {RewardOutput.Usd(wallet.CoinValueUsd)} a coin"
+                        : "";
+                    Console.WriteLine($"  {line.Currency.Label,-10}{line.Balance,8}{tracked}{worth}");
                 }
 
                 return 0;

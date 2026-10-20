@@ -20,7 +20,7 @@
 // Vocabulary (interim mirror of PilotVocab / the Domain). Presentation-facing.
 // ---------------------------------------------------------------------------
 
-/** The subject types (11 core + Area, Habit, Appointment). */
+/** The subject types (11 core + Area, Habit, Appointment, Reward). */
 export type SubjectType =
   | "Value"        // shown as "Identity Statement"
   | "Goal"
@@ -35,7 +35,8 @@ export type SubjectType =
   | "Season"
   | "Area"
   | "Habit"
-  | "Appointment";
+  | "Appointment"
+  | "Reward";      // a reward catalog entry (REWARD-3); not offered by global New
 
 /** Alignment-graph edge relations (subject → subject). */
 export type Relation = "serves" | "results_in" | "supersedes";

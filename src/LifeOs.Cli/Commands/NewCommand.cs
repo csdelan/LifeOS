@@ -20,14 +20,14 @@ internal static class NewCommand
         SubjectTypes.Value, SubjectTypes.Goal, SubjectTypes.Problem, SubjectTypes.Project,
         SubjectTypes.Task, SubjectTypes.Commitment, SubjectTypes.Decision, SubjectTypes.Idea,
         SubjectTypes.Person, SubjectTypes.Constraint, SubjectTypes.Season, SubjectTypes.Area,
-        SubjectTypes.Habit, SubjectTypes.Appointment
+        SubjectTypes.Habit, SubjectTypes.Appointment, SubjectTypes.Reward
     ];
 
     public static Command Create(Option<string?> connectionOption, Option<bool> jsonOption)
     {
         var typeArgument = new Argument<string>("type")
         {
-            Description = "The subject type to create (one of the eleven, e.g. Goal, Constraint, Season)."
+            Description = "The subject type to create (e.g. Goal, Task, Habit, Reward)."
         };
         var titleArgument = new Argument<string>("title") { Description = "The subject's title." };
 

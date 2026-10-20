@@ -1,5 +1,6 @@
 using Dapper;
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 using Npgsql;
 
@@ -9,7 +10,8 @@ namespace LifeOs.Infrastructure.Persistence;
 /// The rewards ledger (REWARD-1 / D11). Reads go through the <c>bsk.v_ledger</c> /
 /// <c>bsk.v_wallet</c> folds and <c>bsk.ledger_opened_at()</c> (migration 0025), and
 /// reconcile's reads through <c>bsk.v_reward_due</c> / <c>bsk.v_reward_trigger</c>
-/// (migration 0026). Every write takes one transaction-scoped advisory lock shared by
+/// (migration 0026), and the reward catalog through <c>bsk.v_reward</c> (migration 0028).
+/// Every write takes one transaction-scoped advisory lock shared by
 /// all ledger writes, re-checks that each earn or reversal's award is still in the state
 /// reconcile saw, inserts each entry's event and edges, and — for a guarded entry (a
 /// redemption) — re-reads the balances it touched before committing, so two
@@ -49,6 +51,16 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
         WHERE w.balance < 0
         GROUP BY w.currency, w.balance
         ORDER BY w.currency;
+        """;
+
+    // The catalog columns, aliased to CatalogRow's property names (no underscore
+    // matching in the CLI host). price is read as text and parsed leniently in C#.
+    private const string CatalogSql = """
+        SELECT id, urn, name, kind, price::text AS pricejson, target_usd AS targetusd,
+               redemptions, coins_redeemed AS coinsredeemed, dollars_redeemed AS dollarsredeemed,
+               last_redeemed_at AS lastredeemedat, percent_of_target AS percentoftarget,
+               remaining_usd AS remainingusd, description, archived
+        FROM bsk.v_reward
         """;
 
     // Whether an award key currently nets to non-zero in any currency — i.e. is paid.
@@ -304,6 +316,36 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
             cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyList<CatalogReward>> GetCatalogAsync(
+        bool includeArchived, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var rows = await connection.QueryAsync<CatalogRow>(new CommandDefinition(
+            $"""
+            {CatalogSql}
+            WHERE @includeArchived OR NOT archived
+            ORDER BY lower(name), urn;
+            """,
+            new { includeArchived },
+            cancellationToken: cancellationToken));
+        return rows.Select(ToCatalogReward).ToList();
+    }
+
+    public async Task<CatalogReward?> GetCatalogRewardAsync(Guid rewardId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var row = await connection.QuerySingleOrDefaultAsync<CatalogRow>(new CommandDefinition(
+            $"""
+            {CatalogSql}
+            WHERE id = @rewardId;
+            """,
+            new { rewardId },
+            cancellationToken: cancellationToken));
+        return row is null ? null : ToCatalogReward(row);
+    }
+
     private async Task<IReadOnlyList<DueAward>> GetAwardsAsync(
         string view, Guid subjectId, CancellationToken cancellationToken)
     {
@@ -382,6 +424,21 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
             first.CoinRate);
     }
 
+    private static CatalogReward ToCatalogReward(CatalogRow row)
+        => new(
+            new SubjectRef(row.Id, row.Urn, SubjectTypes.Reward, row.Name),
+            row.Kind,
+            RewardPrice.Parse(row.PriceJson),
+            row.TargetUsd,
+            row.Redemptions,
+            row.CoinsRedeemed,
+            row.DollarsRedeemed,
+            AsUtc(row.LastRedeemedAt),
+            row.PercentOfTarget,
+            row.RemainingUsd,
+            row.Description,
+            row.Archived);
+
     private static int DisplayOrder(string currency)
     {
         for (var i = 0; i < Currencies.All.Count; i++)
@@ -448,6 +505,24 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
         public string Urn { get; set; } = "";
         public string Type { get; set; } = "";
         public string Title { get; set; } = "";
+    }
+
+    private sealed class CatalogRow
+    {
+        public Guid Id { get; set; }
+        public string Urn { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Kind { get; set; } = "";
+        public string? PriceJson { get; set; }
+        public decimal? TargetUsd { get; set; }
+        public long Redemptions { get; set; }
+        public long CoinsRedeemed { get; set; }
+        public decimal DollarsRedeemed { get; set; }
+        public DateTime? LastRedeemedAt { get; set; }
+        public decimal? PercentOfTarget { get; set; }
+        public decimal? RemainingUsd { get; set; }
+        public string? Description { get; set; }
+        public bool Archived { get; set; }
     }
 
     private sealed class OverdrawnRow

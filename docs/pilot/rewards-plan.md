@@ -6,8 +6,8 @@ doc). The requirements say *what*; this doc says *how* and *in what order*, writ
 agent with no session context can pick up any phase.
 
 **Scope agreed with Chris on 2026-10-20.** The rules in §1 are his answers to the design
-questions. R0 (the requirements and this plan), R1 (the ledger), R2 (earning on work) and R3
-(habit earning) are done; R4–R7 are open.
+questions. R0 (the requirements and this plan), R1 (the ledger), R2 (earning on work), R3
+(habit earning) and R4 (the reward catalog) are done; R5–R7 are open.
 
 ## 0. Read these first
 
@@ -232,6 +232,26 @@ Karma and Resolve default to 0; Chris adds them per item.
   - For a savings deposit, it stamps `coin_rate` and `dollars`. The rate comes from
     configuration: `Rewards:CoinValueUsd`, default 0.50.
 - `bsk redeem [<reward>] coins=100 --note "…"`.
+- Built (0028):
+  - An instant reward costs its catalog price; amounts given override it for that one
+    redemption (45 minutes of gaming). A savings goal takes Coins only, and needs the amount.
+    An instant reward with no price needs amounts. An archived Reward refuses redemptions.
+  - The note is optional against a Reward and required without one.
+  - Every redemption that spends Coins stamps `dollars` and `coin_rate`, not only savings
+    deposits: Coins are real money wherever they go, so the log always says what money moved.
+    `v_reward` sums those stamped dollars, so a rate change never moves a goal's progress.
+  - The redeem entry names the Reward in its payload `subject_id` and has a declared
+    `concerns` edge to it.
+  - The rate: the API reads `Rewards:CoinValueUsd` from its configuration (environment
+    `Rewards__CoinValueUsd`); `bsk` reads the same environment variable. Blank means $0.50; a
+    value that isn't a dollar amount above zero fails startup rather than mis-pricing deposits.
+    `Wallet.CoinValueUsd` carries it to readers; `bsk wallet` shows the Coins' dollar value.
+  - Catalog verbs: `bsk rewards list [--archived]`, `bsk rewards add <title> [currency=n…]
+    [--savings [--target <usd>]] [--description …]`, `bsk rewards price <reward> currency=n…`
+    (replaces the price), `bsk rewards target <reward> <usd> | --clear`. Rename and archive
+    are the ordinary verbs. `RewardCatalogService` is the strict writer; reading a hand-edited
+    price or target is lenient (a text target like "$1,250.50" reads; a price keeps only
+    spendable whole amounts above zero).
 
 ### 3.7 Reads
 
@@ -242,7 +262,7 @@ Karma and Resolve default to 0; Chris adds them per item.
 | `v_reward_trigger` | Every award the record supports, whatever the start line: subject_id, subject_type, award_key, trigger, source_event_ids, triggered_at. |
 | `v_reward_due` | `v_reward_trigger` rows on or after `bsk.ledger_opened_at()`. |
 | `v_habit_establishment` | Per Building habit: min_adherence, window_days, window_start, followed / partial / missed / concluded, adherence, age_days, target_met. |
-| `v_reward` | The catalog plus savings progress. |
+| `v_reward` | Per Reward: name, kind (instant unless savings), price, target_usd, redemptions, coins_redeemed, dollars_redeemed, last_redeemed_at, percent_of_target and remaining_usd (savings goals with a target), description, notes, archived. |
 | API | `GET /api/wallet`, `GET /api/ledger?from&to`, `GET /api/ledger/daily?from&to&tz`, `GET /api/rewards`, `POST /api/redeem`, `POST /api/bounty`. |
 
 - **Time zones:** daily totals bucket by `occurred_at AT TIME ZONE @tz`, using the browser's
@@ -329,7 +349,14 @@ number from 0025.
   still treat Habit as status-less; add the Habit vocabulary and `established` with the
   "Ready to establish" badge. The Pilot already offers Change status on habits. Graduated
   habits already drop off the web's Today list, because their occurrences stop.
-- [ ] R4 — Reward catalog
+- [x] R4 — Reward catalog (migration 0028). The `Reward` subject type (Domain, the API and
+  `bsk new` type lists, and the web's `SubjectType` with an icon, colour and graph backdrop,
+  so a Reward reaching the UI renders; it is not in global New); `v_reward`;
+  `RewardService.RedeemAsync(reward?, amounts, note)` with the coin rate stamped;
+  `RewardCatalogService` and the `bsk rewards list / add / price / target` verbs. Notes for R5:
+  the catalog reads are `ILedgerRepository.GetCatalogAsync` / `GetCatalogRewardAsync`; the web's
+  `ATTR_KEYS_BY_TYPE.Reward` leaves out `price`, an object the rewards endpoints write; a
+  redemption returns the Reward's progress afterwards for the dialog.
 - [ ] R5 — Wallet + Redeem page
 - [ ] R6 — Earning in the UI
 - [ ] R7 — History + report

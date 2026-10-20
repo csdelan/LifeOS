@@ -282,6 +282,16 @@ public interface ILedgerRepository
     /// triggering write is at hand.
     /// </summary>
     Task<Guid?> GetLatestSubjectEventAsync(Guid subjectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The reward catalog (<c>bsk.v_reward</c>, REWARD-3) by name, with what has been
+    /// redeemed against each Reward; archived Rewards only when asked.
+    /// </summary>
+    Task<IReadOnlyList<CatalogReward>> GetCatalogAsync(
+        bool includeArchived, CancellationToken cancellationToken = default);
+
+    /// <summary>One Reward's catalog row, archived or not, or <c>null</c> when no Reward has that id.</summary>
+    Task<CatalogReward?> GetCatalogRewardAsync(Guid rewardId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

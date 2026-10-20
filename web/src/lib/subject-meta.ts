@@ -37,6 +37,8 @@ export function typeTone(type: SubjectType): string {
       return "text-[var(--type-habit)]";
     case "Appointment":
       return "text-[var(--type-appointment)]";
+    case "Reward":
+      return "text-[var(--type-reward)]";
     default:
       return "text-muted-foreground";
   }
@@ -72,6 +74,8 @@ export function typeSurface(type: SubjectType): string {
       return "bg-[var(--type-habit)]/12 text-[var(--type-habit)]";
     case "Appointment":
       return "bg-[var(--type-appointment)]/12 text-[var(--type-appointment)]";
+    case "Reward":
+      return "bg-[var(--type-reward)]/12 text-[var(--type-reward)]";
     default:
       return "bg-muted text-muted-foreground";
   }
@@ -108,6 +112,8 @@ export function typeAccent(type: SubjectType): string {
       return "var(--type-habit)";
     case "Appointment":
       return "var(--type-appointment)";
+    case "Reward":
+      return "var(--type-reward)";
     default:
       return "var(--muted-foreground)";
   }

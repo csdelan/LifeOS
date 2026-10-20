@@ -40,6 +40,7 @@ const GALLERY_TYPES: SubjectType[] = [
   "Habit",
   "Appointment",
   "Season",
+  "Reward",
 ];
 
 const sample: SubjectListItem = {

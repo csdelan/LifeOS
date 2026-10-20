@@ -76,6 +76,12 @@ public static class SubjectTypes
 
     /// <summary>A calendar appointment; occurrences are materialized subjects (CAL-1 / D10, migration 0020).</summary>
     public const string Appointment = "Appointment";
+
+    /// <summary>
+    /// A reward catalog entry — a priced treat or a savings goal currency is redeemed
+    /// against. Status-less; archive it to retire it (REWARD-3, migration 0028).
+    /// </summary>
+    public const string Reward = "Reward";
 }
 
 /// <summary>

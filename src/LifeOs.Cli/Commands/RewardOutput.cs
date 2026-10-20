@@ -7,8 +7,9 @@ namespace LifeOs.Cli.Commands;
 /// <summary>
 /// Shared formatting for the rewards verbs (<c>wallet</c>, <c>ledger</c>, <c>redeem</c>,
 /// <c>bounty</c>, <c>rewards</c>) and the verbs that can earn (<c>status</c>,
-/// <c>timer</c>): amounts read "+10 XP, +2 Coins" / "−45 Freedom", and every verb's
-/// <c>--json</c> carries the wallet and awards in the same shape.
+/// <c>timer</c>): amounts read "+10 XP, +2 Coins" / "−45 Freedom", money reads "$1,250.00",
+/// and every verb's <c>--json</c> carries the wallet, awards and catalog rewards in the
+/// same shape.
 /// </summary>
 internal static class RewardOutput
 {
@@ -17,10 +18,14 @@ internal static class RewardOutput
         => string.Join(", ", amounts.Select(kv =>
             $"{(signed && kv.Value > 0 ? "+" : "")}{kv.Value} {Currencies.LabelFor(kv.Key)}"));
 
+    /// <summary>Dollars to the cent: <c>$1,250.00</c>.</summary>
+    public static string Usd(decimal value) => "$" + value.ToString("#,0.00", CultureInfo.InvariantCulture);
+
     /// <summary>The wallet as JSON-ready data.</summary>
     public static object WalletJson(Wallet wallet) => new
     {
         openedAt = wallet.OpenedAt,
+        coinValueUsd = wallet.CoinValueUsd,
         balances = wallet.Lines.Select(l => new
         {
             currency = l.Currency.Key,
@@ -52,6 +57,48 @@ internal static class RewardOutput
             var verb = award.Entry == LedgerEntries.Reversal ? "Reversed" : "Earned";
             Console.WriteLine($"{verb} {Amounts(award.Amounts)} ({award.Trigger}: {award.Subject.Title}).");
         }
+    }
+
+    /// <summary>A catalog Reward as JSON-ready data.</summary>
+    public static object RewardJson(CatalogReward reward) => new
+    {
+        id = reward.Reward.Id,
+        urn = reward.Reward.Urn,
+        name = reward.Reward.Title,
+        kind = reward.Kind,
+        price = reward.Price,
+        targetUsd = reward.TargetUsd,
+        redemptions = reward.Redemptions,
+        coinsRedeemed = reward.CoinsRedeemed,
+        dollarsRedeemed = reward.DollarsRedeemed,
+        lastRedeemedAt = reward.LastRedeemedAt,
+        percentOfTarget = reward.PercentOfTarget,
+        remainingUsd = reward.RemainingUsd,
+        description = reward.Description,
+        archived = reward.Archived
+    };
+
+    /// <summary>
+    /// What a Reward costs or how far a savings goal has got: "costs 120 Freedom", or
+    /// "$45.00 saved of $500.00 (9%), $455.00 to go".
+    /// </summary>
+    public static string Describe(CatalogReward reward)
+    {
+        if (reward.Kind != RewardKinds.Savings)
+        {
+            return reward.Price.Count == 0 ? "no price yet" : $"costs {Amounts(reward.Price, signed: false)}";
+        }
+
+        var saved = $"{Usd(reward.DollarsRedeemed)} saved";
+        if (reward is not { TargetUsd: { } target, PercentOfTarget: { } percent })
+        {
+            return saved;
+        }
+
+        var progress = $"{saved} of {Usd(target)} ({percent.ToString("0.#", CultureInfo.InvariantCulture)}%)";
+        return reward.RemainingUsd is { } remaining && remaining > 0
+            ? $"{progress}, {Usd(remaining)} to go"
+            : $"{progress} — target reached";
     }
 
     /// <summary>A local-time stamp for a ledger line: <c>2026-10-20 14:03</c>.</summary>

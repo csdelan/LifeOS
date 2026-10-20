@@ -1,3 +1,4 @@
+using System.Globalization;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Capture;
 using LifeOs.Application.Rewards;
@@ -15,12 +16,24 @@ namespace LifeOs.Infrastructure.DependencyInjection;
 /// Composition root: registers the application services and their Postgres-backed
 /// implementations against a single connection string. This is the only place
 /// wiring lives; the CLI and any future host build on it.
+/// <para>
+/// <c>coinValueUsd</c> is what a reward Coin is worth in dollars. A host with
+/// configuration passes its <c>Rewards:CoinValueUsd</c>; otherwise it comes from the
+/// <c>Rewards__CoinValueUsd</c> environment variable (the same setting, as ASP.NET names it
+/// there), else <see cref="CoinRates.DefaultUsd"/>.
+/// </para>
 /// </summary>
 public static class ServiceCollectionExtensions
 {
+    /// <summary>The environment variable that carries <see cref="CoinRates.ConfigurationKey"/>.</summary>
+    public const string CoinValueVariable = "Rewards__CoinValueUsd";
+
     public static IServiceCollection AddLifeOsKernel(
-        this IServiceCollection services, string connectionString, string sourceId = KernelSources.Cli)
+        this IServiceCollection services, string connectionString, string sourceId = KernelSources.Cli,
+        decimal? coinValueUsd = null)
     {
+        var coinValue = coinValueUsd ?? ParseCoinValueUsd(Environment.GetEnvironmentVariable(CoinValueVariable));
+
         services.AddSingleton<IClock, SystemClock>();
 
         services.AddSingleton<IArtifactStore>(_ => new NpgsqlArtifactStore(connectionString));
@@ -120,8 +133,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new RewardService(
             sp.GetRequiredService<ILedgerRepository>(),
             sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IClock>(),
-            sourceId));
+            sourceId,
+            coinValue));
+
+        services.AddSingleton(sp => new RewardCatalogService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<ILedgerRepository>()));
 
         services.AddSingleton(sp => new BountyService(
             sp.GetRequiredService<SubjectService>(),
@@ -159,6 +179,26 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(_ => new DiagnosticRunner(connectionString));
 
         return services;
+    }
+
+    /// <summary>
+    /// A configured coin value: <see cref="CoinRates.DefaultUsd"/> when blank, otherwise a
+    /// dollar amount above zero. Anything else fails loudly — Coins are real money, so a
+    /// typo must not silently fall back to the default.
+    /// </summary>
+    public static decimal ParseCoinValueUsd(string? configured)
+    {
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            return CoinRates.DefaultUsd;
+        }
+
+        return decimal.TryParse(
+                   configured.Trim().TrimStart('$'), NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
+               && value > 0
+            ? value
+            : throw new InvalidOperationException(
+                $"{CoinRates.ConfigurationKey} must be a dollar amount above zero, e.g. 0.50; got '{configured}'.");
     }
 
     /// <summary>

@@ -154,3 +154,26 @@ public sealed record DueAward(
 /// </summary>
 public sealed record PaidAward(
     string AwardKey, string? Trigger, IReadOnlyDictionary<string, long> Net, Guid LastEventId);
+
+/// <summary>
+/// One Reward as <c>bsk.v_reward</c> reads it (REWARD-3): its kind
+/// (<see cref="RewardKinds"/>), an instant reward's price (spendable currencies only, in
+/// display order; empty when it has none), a savings goal's target, and what has been
+/// redeemed against it. <see cref="DollarsRedeemed"/> sums the dollars stamped on each
+/// redemption, so a savings goal's progress never moves when the coin rate does.
+/// <see cref="PercentOfTarget"/> and <see cref="RemainingUsd"/> are set only for a
+/// savings goal with a target.
+/// </summary>
+public sealed record CatalogReward(
+    SubjectRef Reward,
+    string Kind,
+    IReadOnlyDictionary<string, long> Price,
+    decimal? TargetUsd,
+    long Redemptions,
+    long CoinsRedeemed,
+    decimal DollarsRedeemed,
+    DateTimeOffset? LastRedeemedAt,
+    decimal? PercentOfTarget,
+    decimal? RemainingUsd,
+    string? Description,
+    bool Archived);

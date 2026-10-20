@@ -20,7 +20,7 @@
 // Vocabulary (interim mirror of PilotVocab / the Domain). Presentation-facing.
 // ---------------------------------------------------------------------------
 
-/** The subject types (11 core + Area, Habit, Appointment). */
+/** The subject types (11 core + Area, Habit, Appointment, Reward). */
 export type SubjectType =
   | "Value"        // shown as "Identity Statement"
   | "Goal"
@@ -35,7 +35,8 @@ export type SubjectType =
   | "Season"
   | "Area"
   | "Habit"
-  | "Appointment";
+  | "Appointment"
+  | "Reward";      // a reward catalog entry (REWARD-3); not offered by global New
 
 /** Alignment-graph edge relations (subject → subject). */
 export type Relation = "serves" | "results_in" | "supersedes";
@@ -148,6 +149,8 @@ export const ATTR_KEYS_BY_TYPE: Record<SubjectType, readonly string[]> = {
   Commitment: ["description", "notes", "due", "recurrence"],
   Constraint: ["scope", "limit", "notes"],
   Season: ["focus", "ends", "notes"],
+  // The price ({currency: n}) is an object the rewards API writes, not a string attribute.
+  Reward: ["kind", "target_usd", "description", "notes"],
 };
 
 const CROSS_CUTTING = ["area", "expected_cadence", "next_review_at"] as const;

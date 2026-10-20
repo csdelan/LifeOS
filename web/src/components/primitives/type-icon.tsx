@@ -12,6 +12,7 @@ import {
   CompassIcon,
   FingerprintIcon,
   FolderKanbanIcon,
+  GiftIcon,
   HandshakeIcon,
   LeafIcon,
   LightbulbIcon,
@@ -41,6 +42,7 @@ export const TYPE_ICONS: Record<SubjectType, LucideIcon> = {
   Habit: RepeatIcon,
   Appointment: CalendarDaysIcon,
   Season: LeafIcon,
+  Reward: GiftIcon,
 };
 
 export function TypeIcon({

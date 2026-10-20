@@ -89,6 +89,11 @@ internal static class LedgerCommand
                         about += $" — {e.Note}";
                     }
 
+                    if (e.Dollars is { } dollars)
+                    {
+                        about += $" [{RewardOutput.Usd(dollars)}]";
+                    }
+
                     Console.WriteLine(
                         $"{RewardOutput.Stamp(e.OccurredAt)}  {e.Entry,-9} {RewardOutput.Amounts(e.Amounts),-28} {about}");
                 }

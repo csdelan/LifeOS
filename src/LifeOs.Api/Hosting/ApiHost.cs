@@ -46,7 +46,11 @@ public static class ApiHost
         var owner = ApiConnections.ResolveOwner(builder.Configuration, builder.Environment);
         var reader = ApiConnections.ResolveReader(builder.Configuration, builder.Environment);
         builder.Services.AddSingleton(new ApiConnectionStrings(owner, reader));
-        builder.Services.AddLifeOsKernel(owner, KernelSources.Api);
+        // Coins are real money (REWARD-3): Rewards:CoinValueUsd, default $0.50; a bad value
+        // fails startup rather than mis-pricing deposits.
+        builder.Services.AddLifeOsKernel(
+            owner, KernelSources.Api,
+            ServiceCollectionExtensions.ParseCoinValueUsd(builder.Configuration[CoinRates.ConfigurationKey]));
         builder.Services.AddSingleton(new SubjectReader(reader));
 
         // Fail closed: missing issuer/audience/JWKS-or-secret/ALLOWED_EMAILS throws.

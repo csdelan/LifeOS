@@ -2754,7 +2754,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   `v_habit_establishment`. — **Shipped** (R3, migration 0027; the "Ready to establish" badge
   is R6).
 - **Reward catalog type + redemption** (REWARD-3) — `Reward` subject type (the 15th), `v_reward`
-  with savings progress, no-overdraft redeem under a wallet lock, `bsk redeem`. — **Open** (R4).
+  with savings progress, no-overdraft redeem under a wallet lock, `bsk redeem`. — **Shipped**
+  (R4, migration 0028; `bsk rewards list / add / price / target`; the Redeem page is R5).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **rewards ledger**
