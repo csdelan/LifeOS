@@ -1,5 +1,6 @@
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Capture;
+using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.Diagnostics;
@@ -33,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITagRepository>(_ => new NpgsqlTagRepository(connectionString));
         services.AddSingleton<IAppointmentRepository>(_ => new NpgsqlAppointmentRepository(connectionString));
         services.AddSingleton<ITimerRepository>(_ => new NpgsqlTimerRepository(connectionString));
+        services.AddSingleton<ILedgerRepository>(_ => new NpgsqlLedgerRepository(connectionString));
 
         services.AddSingleton(sp => new CaptureService(
             sp.GetRequiredService<IEventStore>(),
@@ -110,6 +112,11 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ITimerRepository>(),
             sp.GetRequiredService<StatusService>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
+
+        services.AddSingleton(sp => new RewardService(
+            sp.GetRequiredService<ILedgerRepository>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
 

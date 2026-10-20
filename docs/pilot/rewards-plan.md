@@ -6,7 +6,7 @@ doc). The requirements say *what*; this doc says *how* and *in what order*, writ
 agent with no session context can pick up any phase.
 
 **Scope agreed with Chris on 2026-10-20.** The rules in §1 are his answers to the design
-questions. R0 (the requirements and this plan) is done; R1–R7 are open.
+questions. R0 (the requirements and this plan) and R1 (the ledger) are done; R2–R7 are open.
 
 ## 0. Read these first
 
@@ -261,7 +261,15 @@ number from 0025.
 ## Status
 
 - [x] R0 — Requirements (REWARD-1..6, D11) + this plan
-- [ ] R1 — Ledger + wallet
+- [x] R1 — Ledger + wallet (migration 0025). `ledger` event kind; `v_ledger`, `v_wallet`,
+  `bsk.ledger_opened_at()`; `Currencies` / `LedgerEntries` in Domain; `RewardService` (wallet,
+  ledger, open, custom redeem) over `NpgsqlLedgerRepository`, whose writes share one
+  advisory lock and re-check every currency a redemption touches before committing;
+  `bsk wallet`, `bsk wallet open`, `bsk ledger`, `bsk redeem`. Notes for R2: for now the
+  wallet is opened explicitly by `bsk wallet open`; R2's reconcile should open it itself,
+  dated at the first trigger it pays, when no opening exists. Only redemptions are guarded,
+  so reversing something already spent can take a balance below zero, and the wallet shows
+  that as it is.
 - [ ] R2 — Bounties + earning on work
 - [ ] R3 — Habit lifecycle + habit earning
 - [ ] R4 — Reward catalog

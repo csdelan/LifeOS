@@ -97,3 +97,35 @@ public sealed record TimerWrite(Guid SubjectId, string ExpectedState, NewEvent E
 /// <summary>An artifact's binary metadata without the bytes — for list/metadata reads.</summary>
 public sealed record ArtifactBlobMetadata(
     Guid ArtifactId, string ContentType, long ByteSize, string Sha256, string? Filename);
+
+/// <summary>
+/// One currency's totals as <c>bsk.v_wallet</c> folds them (REWARD-1 / D11). Earned,
+/// reversed and spent are positive totals; <see cref="Balance"/> is the signed sum of
+/// every ledger entry in that currency.
+/// </summary>
+public sealed record WalletBalance(string Currency, long Earned, long Reversed, long Spent, long Balance);
+
+/// <summary>
+/// One ledger entry as <c>bsk.v_ledger</c> reads it (REWARD-5): what it was
+/// (<see cref="LedgerEntries"/>), its signed amounts per currency, and what it concerns —
+/// the item that earned it, or the reward it bought.
+/// </summary>
+public sealed record LedgerEntry(
+    Guid EventId,
+    DateTimeOffset OccurredAt,
+    string Entry,
+    string Provenance,
+    IReadOnlyDictionary<string, long> Amounts,
+    string? Trigger,
+    string? AwardKey,
+    SubjectRef? Subject,
+    string? Note,
+    decimal? Dollars,
+    decimal? CoinRate);
+
+/// <summary>
+/// A ledger entry to append: its event and <c>event → subject</c> edges. When
+/// <see cref="GuardBalance"/> is set (a redemption), the write is refused if it would
+/// leave any of its currencies below zero — there is no overdraft (REWARD-3).
+/// </summary>
+public sealed record LedgerWrite(NewEvent Event, IReadOnlyList<SubjectEventEdge> Edges, bool GuardBalance);

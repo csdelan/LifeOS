@@ -217,6 +217,45 @@ public interface ITimerRepository
 }
 
 /// <summary>
+/// Reads and appends the rewards ledger (REWARD-1 / D11). Nothing about a wallet is
+/// stored except its append-only <c>ledger</c> events; balances and history are folded
+/// by <c>bsk.v_wallet</c> / <c>bsk.v_ledger</c>. Every write is serialized under one
+/// wallet-wide lock, so a balance check and the redemption it guards cannot interleave
+/// with another write.
+/// </summary>
+public interface ILedgerRepository
+{
+    /// <summary>The totals of every currency the ledger has touched; untouched currencies have no row.</summary>
+    Task<IReadOnlyList<WalletBalance>> GetBalancesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The entries that carry amounts, newest first, optionally within
+    /// [<paramref name="from"/>, <paramref name="to"/>) and capped at <paramref name="limit"/>.
+    /// </summary>
+    Task<IReadOnlyList<LedgerEntry>> GetEntriesAsync(
+        DateTimeOffset? from, DateTimeOffset? to, int? limit, CancellationToken cancellationToken = default);
+
+    /// <summary>When the wallet was opened (its earliest <c>open</c> entry), or <c>null</c> before launch.</summary>
+    Task<DateTimeOffset?> GetOpenedAtAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes <paramref name="openEvent"/> unless the wallet is already open, under the
+    /// wallet lock. Returns when the wallet opened and whether this call opened it.
+    /// </summary>
+    Task<(DateTimeOffset OpenedAt, bool Created)> OpenAsync(
+        NewEvent openEvent, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Appends ledger entries, each event with its edges, as one transaction under the
+    /// wallet lock. If a <see cref="LedgerWrite.GuardBalance"/> entry would leave any of
+    /// its currencies below zero, nothing is written and
+    /// <see cref="InsufficientBalanceException"/> is thrown. Returns the new event ids.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> AppendAsync(
+        IReadOnlyList<LedgerWrite> writes, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Creates <c>event → subject</c> edges (concerns/evidences/violates) for events that
 /// already exist — the write path behind <c>bsk relate</c>. Distinct from
 /// <see cref="IActivityWriter"/>, which writes a new event and its edges together.

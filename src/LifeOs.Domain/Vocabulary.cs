@@ -18,6 +18,12 @@ public static class EventKinds
 
     /// <summary>Inbox triage marker, folded by <c>v_inbox</c> (INBOX-1, migration 0015).</summary>
     public const string Triage = "triage";
+
+    /// <summary>
+    /// A rewards ledger entry — an earn, reversal or redemption of currencies, folded by
+    /// <c>v_ledger</c> / <c>v_wallet</c> (REWARD-1 / D11, migration 0025).
+    /// </summary>
+    public const string Ledger = "ledger";
 }
 
 /// <summary>

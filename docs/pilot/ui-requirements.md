@@ -2330,7 +2330,7 @@ Build:      mapped
 ### REWARD-1 — Completing work earns a pre-set bounty in six currencies
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
 
 **Workflow (Chris):**
 - "I would like to add Currencies to tasks, habits, projects, goals. When completing
@@ -2422,7 +2422,7 @@ Build:      needs-kernel
 ### REWARD-3 — A Redeem page spends currencies on rewards and logs why
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
 
 **Workflow (Chris):**
 - "I would like a redeem page where I can actually redeem currencies for rewards... and it
@@ -2484,7 +2484,7 @@ Build:      mapped
 ### REWARD-5 — A rewards history shows what I earned and spent by day, week and month
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
 
 **Workflow (Chris):**
 - "Some way to track how much rewards I earn over time... sort of like a report or calendar
