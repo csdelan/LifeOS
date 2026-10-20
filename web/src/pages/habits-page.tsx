@@ -4,11 +4,15 @@ import { EmptyState } from "@/components/primitives/empty-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { SubjectDetail } from "@/components/detail/subject-detail";
 import { AdherenceButtons } from "@/components/habits/adherence-buttons";
+import { ReadyToEstablish } from "@/components/habits/establish-dialog";
+import { BountyChip } from "@/components/rewards/bounty-chip";
 import { useDirty } from "@/components/shell/app-shell";
 import { PeekPanel } from "@/components/shell/panels";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
 import { useDashboard, useHabits, useWrites } from "@/lib/queries";
 import { todayIso } from "@/lib/dates";
+import { habitStage, isReadyToEstablish } from "@/lib/establish";
+import type { HabitOccurrenceRow, HabitRow } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
 
 export function HabitsPage() {
@@ -23,6 +27,13 @@ export function HabitsPage() {
   const todayById = new Map((dash?.todayHabits ?? []).map((h) => [h.habitId, h]));
 
   const habits = (data ?? []).filter((h) => !h.archived);
+  // Graduated habits leave daily tracking (REWARD-2); abandoned ones stop too.
+  const building = habits.filter((h) => habitStage(h) === "building");
+  const established = habits.filter((h) => habitStage(h) === "established");
+  const abandoned = habits.filter((h) => habitStage(h) === "abandoned");
+
+  const select = (id: string) =>
+    requestNavigation(() => void navigate({ search: { selected: id } }));
 
   return (
     <div className="flex h-full min-h-0">
@@ -35,7 +46,7 @@ export function HabitsPage() {
             from missed.
           </p>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4">
           {isLoading ? <ListSkeleton rows={6} /> : null}
           {isError ? (
             <EmptyState
@@ -52,50 +63,36 @@ export function HabitsPage() {
               description="Create a Habit from New and relate it to a Goal or Identity Statement."
             />
           ) : null}
-          <ul className="space-y-2">
-            {habits.map((h) => {
-              const todayRow = todayById.get(h.id);
-              return (
-                <li key={h.id}>
-                  <div
-                    className={cn(
-                      "flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 ring-1 ring-foreground/10",
-                      todayRow ? HABIT_STATE_ROW[todayRow.state] : null,
-                      selected === h.id && "bg-primary/8 ring-primary/20",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      className="min-h-11 min-w-0 flex-1 text-left"
-                      onClick={() =>
-                        requestNavigation(() =>
-                          void navigate({ search: { selected: h.id } }),
-                        )
-                      }
-                    >
-                      <p className="truncate text-sm font-medium">{h.name}</p>
-                      <p className="text-[0.6875rem] text-muted-foreground">
-                        Streak {h.currentStreak}
-                        {h.lastState ? ` · ${h.lastState.replace("_", " ")}` : ""}
-                        {h.cue ? ` · Cue: ${h.cue}` : ""}
-                      </p>
-                    </button>
-                    {todayRow ? (
-                      <AdherenceButtons
-                        state={todayRow.state}
-                        allowsPartial={todayRow.allowsPartial}
-                        onPick={(s) =>
-                          void writes.adhere(h.id, s === "not_followed" ? "missed" : s, {
-                            on: today,
-                          })
-                        }
-                      />
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          {building.length > 0 ? (
+            <ul className="space-y-2" aria-label="Building">
+              {building.map((h) => (
+                <HabitItem
+                  key={h.id}
+                  habit={h}
+                  today={todayById.get(h.id)}
+                  selected={selected === h.id}
+                  onSelect={() => select(h.id)}
+                  onPick={(s) =>
+                    void writes.adhere(h.id, s === "not_followed" ? "missed" : s, { on: today })
+                  }
+                />
+              ))}
+            </ul>
+          ) : null}
+          <GraduatedSection
+            title="Established"
+            hint="Graduated: no longer tracked daily. Their history stays."
+            habits={established}
+            selected={selected}
+            onSelect={select}
+          />
+          <GraduatedSection
+            title="Abandoned"
+            hint="No longer tracked. What their days earned stays earned."
+            habits={abandoned}
+            selected={selected}
+            onSelect={select}
+          />
         </div>
       </div>
       <PeekPanel
@@ -120,5 +117,89 @@ export function HabitsPage() {
         ) : null}
       </PeekPanel>
     </div>
+  );
+}
+
+function HabitItem({
+  habit: h,
+  today,
+  selected,
+  onSelect,
+  onPick,
+}: {
+  habit: HabitRow;
+  today?: HabitOccurrenceRow;
+  selected: boolean;
+  onSelect: () => void;
+  onPick: (s: "followed" | "partial" | "not_followed") => void;
+}) {
+  return (
+    <li>
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2.5 ring-1 ring-foreground/10 sm:flex-nowrap",
+          today ? HABIT_STATE_ROW[today.state] : null,
+          selected && "bg-primary/8 ring-primary/20",
+        )}
+      >
+        <button type="button" className="min-h-11 min-w-0 flex-1 text-left" onClick={onSelect}>
+          <p className="truncate text-sm font-medium">{h.name}</p>
+          <p className="text-[0.6875rem] text-muted-foreground">
+            Streak {h.currentStreak}
+            {h.lastState ? ` · ${h.lastState.replace("_", " ")}` : ""}
+            {h.cue ? ` · Cue: ${h.cue}` : ""}
+          </p>
+        </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {isReadyToEstablish(h) ? <ReadyToEstablish habit={h} /> : null}
+          <BountyChip amounts={h.bounty} suffix="a day" />
+          {today ? (
+            <AdherenceButtons state={today.state} allowsPartial={today.allowsPartial} onPick={onPick} />
+          ) : null}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function GraduatedSection({
+  title,
+  hint,
+  habits,
+  selected,
+  onSelect,
+}: {
+  title: string;
+  hint: string;
+  habits: HabitRow[];
+  selected?: string;
+  onSelect: (id: string) => void;
+}) {
+  if (habits.length === 0) return null;
+  const headingId = `habits-${title.toLowerCase()}`;
+  return (
+    <section aria-labelledby={headingId}>
+      <h2 id={headingId} className="type-scale-section text-muted-foreground">
+        {title}
+      </h2>
+      <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+      <ul className="mt-2 space-y-2">
+        {habits.map((h) => (
+          <li key={h.id}>
+            <button
+              type="button"
+              onClick={() => onSelect(h.id)}
+              className={cn(
+                "min-h-11 w-full rounded-xl px-3 py-2.5 text-left ring-1 ring-foreground/10 hover:bg-muted/70",
+                selected === h.id && "bg-primary/8 ring-primary/20",
+              )}
+            >
+              <p className="truncate text-sm font-medium">{h.name}</p>
+              {h.cue ? <p className="text-[0.6875rem] text-muted-foreground">Cue: {h.cue}</p> : null}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

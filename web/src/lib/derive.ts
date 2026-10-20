@@ -208,7 +208,8 @@ export function todayHabitRows(
   today: string,
 ): HabitOccurrenceRow[] {
   return habits
-    .filter((h) => !h.archived)
+    // A graduated (or abandoned) habit has left daily tracking.
+    .filter((h) => !h.archived && !isTerminal(h.status))
     .map((h) => {
       const recorded = occurrences.find(
         (o) => o.habitId === h.id && o.occurrenceDate === today,

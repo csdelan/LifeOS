@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { api, unwrap } from "@/lib/live/http";
 import type {
+  BountyResult,
   CreatedSubject,
   LifeOsWriteClient,
   Redemption,
@@ -11,7 +12,14 @@ import type {
 } from "@/lib/production-ui-types";
 import { renamedMessage } from "@/lib/production-ui-types";
 import { normalizeTimer } from "@/lib/live/reads";
-import { normalizeRedemption, normalizeReward, redemptionMessage } from "@/lib/rewards";
+import {
+  normalizeAwards,
+  normalizeBountyResult,
+  normalizeRedemption,
+  normalizeReward,
+  normalizeTimerAwards,
+  redemptionMessage,
+} from "@/lib/rewards";
 
 function notify(message: string) {
   toast.success(message);
@@ -47,8 +55,9 @@ export function createLiveWriteClient(): LifeOsWriteClient {
     },
 
     async setStatus(subject, status) {
-      await unwrap(api().POST("/api/status", { body: { subject, status } }));
+      const earned = await unwrap(api().POST("/api/status", { body: { subject, status } }));
       notify(`Status → ${status}`);
+      return normalizeAwards(earned);
     },
 
     async archive(subject) {
@@ -107,7 +116,7 @@ export function createLiveWriteClient(): LifeOsWriteClient {
     },
 
     async adhere(habit, state, opts) {
-      await unwrap(
+      const earned = await unwrap(
         api().POST("/api/adhere", {
           body: { habit, state, on: opts?.on, note: opts?.note },
         }),
@@ -119,13 +128,14 @@ export function createLiveWriteClient(): LifeOsWriteClient {
             ? "Partial credit"
             : "Marked missed",
       );
+      return normalizeAwards(earned);
     },
 
     async timer(task, action) {
       const result = (await unwrap(
         api().POST("/api/timer", { body: { task, action } }),
       )) as unknown as TimerActionResult;
-      return { ...result, timer: normalizeTimer(result.timer) };
+      return normalizeTimerAwards({ ...result, timer: normalizeTimer(result.timer) });
     },
 
     async involve(subject, person, role, remove) {
@@ -207,6 +217,14 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       );
       notify(targetUsd === null ? "Target removed" : "Target saved");
       return row;
+    },
+
+    async setBounty(req) {
+      const result = normalizeBountyResult(
+        (await unwrap(api().POST("/api/bounty", { body: req }))) as unknown as BountyResult,
+      );
+      notify("Bounty saved");
+      return result;
     },
   };
 }

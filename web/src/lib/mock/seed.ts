@@ -1665,13 +1665,14 @@ function seedLedger(): MockLedgerEntry[] {
   }
   entries.push(
     {
+      // Mobility's run of followed days began 12 days ago; its 7th day paid the milestone.
       id: "ledger-streak",
-      occurredAt: isoAgo(24 * 3 - 1.5),
+      occurredAt: isoAgo(24 * 6 - 1.5),
       entry: "earn",
       provenance: "derived",
       amounts: { xp: 25, coins: 5, freedom: 15 },
       trigger: "streak_7",
-      awardKey: `streak_7:habit-mobility:${addDays(todayIso(), -9)}`,
+      awardKey: `streak_7:habit-mobility:${addDays(todayIso(), -12)}`,
       subjectId: "habit-mobility",
     },
     {

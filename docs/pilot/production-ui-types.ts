@@ -69,14 +69,16 @@ export const STATUS_BY_TYPE: Partial<Record<SubjectType, string[]>> = {
   Problem:     ["Open", "Working", "Resolved", "Cancelled"],
   Appointment: ["Scheduled", "Completed", "Cancelled", "Missed"],
   Idea:        ["New", "Promoted", "Rejected"],
-  // Value (Identity Statement), Area, Habit, Person: no status workflow.
+  // Established graduates a Habit: it leaves daily tracking (REWARD-2).
+  Habit:       ["Building", "Established", "Abandoned"],
+  // Value (Identity Statement), Area, Person: no status workflow.
 };
 
 /** Statuses that drop an item from default views (terminal). */
 export const TERMINAL_STATUSES = new Set([
   "done", "completed", "resolved", "closed", "cancelled",
   "abandoned", "dropped", "archived", "superseded",
-  "fulfilled", "missed", "promoted", "rejected",
+  "fulfilled", "missed", "promoted", "rejected", "established",
 ]);
 
 export function isTerminal(status?: string | null): boolean {

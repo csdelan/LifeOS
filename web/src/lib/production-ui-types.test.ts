@@ -11,13 +11,15 @@ describe("status folding + defaultStatus", () => {
     expect(defaultStatus("Task")).toBe("Not started");
     expect(defaultStatus("Goal")).toBe("New");
     expect(defaultStatus("Value")).toBe("");
-    expect(defaultStatus("Habit")).toBe("");
+    expect(defaultStatus("Habit")).toBe("Building");
+    expect(defaultStatus("Area")).toBe("");
   });
 
   it("treats completed / cancelled / abandoned as terminal", () => {
     expect(isTerminal("Completed")).toBe(true);
     expect(isTerminal("cancelled")).toBe(true);
     expect(isTerminal("Abandoned")).toBe(true);
+    expect(isTerminal("Established")).toBe(true);
     expect(isTerminal("In progress")).toBe(false);
     expect(isTerminal(null)).toBe(false);
   });

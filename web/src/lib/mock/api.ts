@@ -17,6 +17,7 @@ import {
 import type {
   AreaRow,
   ArtifactRecord,
+  BountyTypeDefaults,
   HabitOccurrenceRow,
   HabitRow,
   InboxItem,
@@ -36,18 +37,22 @@ import type {
 } from "@/lib/production-ui-types";
 import { isTerminal } from "@/lib/production-ui-types";
 import { composeRecap, type RecapSection } from "@/lib/review-recap";
+import { BOUNTY_DEFAULTS } from "@/lib/bounty";
 import { tagUniverse, toRelationEdge } from "@/lib/mock/seed";
 import {
   byUrn,
+  detailWithBounty,
   ensureReview,
   ensureReviewDocs,
   filesForSubject,
   getArtifact,
   getState as storeState,
   listTimers,
+  mockHabits,
   mockLedger,
   mockRewards,
   mockWallet,
+  withBounty,
 } from "@/lib/mock/store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
@@ -71,11 +76,13 @@ function inboxTags(row: InboxItem): string[] {
 }
 
 function listOf(type?: SubjectListItem["type"], includeArchived = false): SubjectListItem[] {
-  return storeState().subjects.filter((s) => {
-    if (!includeArchived && s.archived) return false;
-    if (type && s.type !== type) return false;
-    return true;
-  });
+  return storeState()
+    .subjects.filter((s) => {
+      if (!includeArchived && s.archived) return false;
+      if (type && s.type !== type) return false;
+      return true;
+    })
+    .map(withBounty);
 }
 
 export interface LifeOsReads {
@@ -120,6 +127,8 @@ export interface LifeOsReads {
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /** The reward catalog (REWARD-3), with each Reward's redemptions and savings progress. */
   rewards(opts?: { includeArchived?: boolean }): Promise<RewardRow[]>;
+  /** What each trigger of each earning type pays by default (REWARD-2). */
+  bountyDefaults(): Promise<BountyTypeDefaults[]>;
   reviews(opts?: { kind?: "daily" | "weekly"; date?: string }): Promise<ReviewDoc[]>;
   recap(opts: { start: string; end: string; asOf: string }): Promise<RecapSection[]>;
   /**
@@ -146,12 +155,14 @@ export const mockReads: LifeOsReads = {
 
   async getSubject(id: string): Promise<SubjectDetail | null> {
     await wait();
-    return storeState().details[id] ?? null;
+    const detail = storeState().details[id];
+    return detail ? detailWithBounty(detail) : null;
   },
 
   async getListItem(id: string): Promise<SubjectListItem | null> {
     await wait();
-    return storeState().subjects.find((s) => s.id === id) ?? null;
+    const item = storeState().subjects.find((s) => s.id === id);
+    return item ? withBounty(item) : null;
   },
 
   async relations(id: string): Promise<SubjectRelations> {
@@ -246,7 +257,7 @@ export const mockReads: LifeOsReads = {
 
   async habits(): Promise<HabitRow[]> {
     await wait();
-    return storeState().habits;
+    return mockHabits();
   },
 
   async occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]> {
@@ -276,6 +287,11 @@ export const mockReads: LifeOsReads = {
   async rewards(opts?: { includeArchived?: boolean }): Promise<RewardRow[]> {
     await wait();
     return mockRewards(opts?.includeArchived);
+  },
+
+  async bountyDefaults(): Promise<BountyTypeDefaults[]> {
+    await wait();
+    return BOUNTY_DEFAULTS;
   },
 
   async reviews(opts?: { kind?: "daily" | "weekly"; date?: string }): Promise<ReviewDoc[]> {
@@ -315,7 +331,7 @@ export const mockReads: LifeOsReads = {
       subjects: s.subjects,
       edges: s.edges,
       inboxCount: s.inbox.length,
-      habits: s.habits,
+      habits: mockHabits(),
       occurrences: s.occurrences,
       today: todayIso(),
       primaryFocus: s.primaryFocus,

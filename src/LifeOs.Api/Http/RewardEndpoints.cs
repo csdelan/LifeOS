@@ -6,8 +6,8 @@ using LifeOs.Domain;
 namespace LifeOs.Api.Http;
 
 /// <summary>
-/// The rewards surface (REWARD-1 / REWARD-3 / REWARD-5) — the HTTP twin of
-/// <c>bsk wallet</c>, <c>bsk ledger</c>, <c>bsk redeem</c> and <c>bsk rewards</c>. Reads
+/// The rewards surface (REWARD-1..5) — the HTTP twin of <c>bsk wallet</c>, <c>bsk ledger</c>,
+/// <c>bsk redeem</c>, <c>bsk rewards</c> and <c>bsk bounty</c>. Reads
 /// go through <see cref="RewardReader"/> on the reader connection; writes call the same
 /// Application services the CLI does. Renaming, describing and archiving a Reward are the
 /// ordinary <c>/api/rename</c>, <c>/api/attributes</c> and <c>/api/archive</c>.
@@ -37,6 +37,10 @@ public static class RewardEndpoints
             .Produces<RewardRow>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/rewards/target", TargetReward).WithName("TargetReward")
             .Produces<RewardRow>().Produces<ApiError>(StatusCodes.Status400BadRequest);
+        api.MapGet("/bounty/defaults", GetBountyDefaults).WithName("GetBountyDefaults")
+            .Produces<IReadOnlyList<BountyTypeDefaults>>();
+        api.MapPost("/bounty", SetBounty).WithName("SetBounty")
+            .Produces<BountyResult>().Produces<ApiError>(StatusCodes.Status400BadRequest);
     }
 
     private static async Task<IResult> GetWallet(RewardReader rewards, CancellationToken cancellationToken)
@@ -112,6 +116,34 @@ public static class RewardEndpoints
             WriteEndpoints.ResolveWriteRef(body.Reward, reader), body.TargetUsd, cancellationToken);
         return Results.Ok(RewardRows.From(reward));
     }
+
+    private static IResult GetBountyDefaults() => Results.Ok(BountyRows.Defaults());
+
+    private static async Task<IResult> SetBounty(
+        BountyBody body,
+        BountyService bounties,
+        SubjectReader reader,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(body.Subject))
+        {
+            return Results.BadRequest(new ApiError("subject is required."));
+        }
+
+        var asks = (body.Amounts is { Count: > 0 } ? 1 : 0) + (body.Nothing ? 1 : 0) + (body.Clear ? 1 : 0);
+        if (asks != 1)
+        {
+            return Results.BadRequest(new ApiError("Send one of amounts, nothing or clear."));
+        }
+
+        var subject = WriteEndpoints.ResolveWriteRef(body.Subject, reader);
+        var view = body.Clear
+            ? await bounties.ClearAsync(subject, body.Trigger, cancellationToken)
+            : body.Nothing
+                ? await bounties.SetNothingAsync(subject, body.Trigger, cancellationToken)
+                : await bounties.SetAsync(subject, body.Trigger, body.Amounts!, cancellationToken);
+        return Results.Ok(BountyRows.From(view));
+    }
 }
 
 public sealed class RedeemBody
@@ -151,6 +183,35 @@ public sealed class RewardPriceBody
 
     /// <summary>The new price, currency → amount; it replaces the old one.</summary>
     public Dictionary<string, long> Price { get; set; } = new();
+}
+
+/// <summary>
+/// <c>POST /api/bounty</c> (<c>bsk bounty</c>): send one of <see cref="Amounts"/>,
+/// <see cref="Nothing"/> or <see cref="Clear"/>.
+/// </summary>
+public sealed class BountyBody
+{
+    /// <summary>The Task, Project, Goal or Habit (id, urn or title).</summary>
+    public string Subject { get; set; } = "";
+
+    /// <summary>
+    /// The trigger to price (<c>completed</c>, <c>followed</c>, <c>streak_7</c>, …); may be
+    /// omitted when the type pays on one. With <see cref="Clear"/> and no trigger, every
+    /// trigger goes back on its default.
+    /// </summary>
+    public string? Trigger { get; set; }
+
+    /// <summary>
+    /// Currencies to set on what the trigger pays now, currency → amount: <c>karma: 3</c>
+    /// adds Karma, <c>xp: 0</c> drops XP. Name all six to set the whole price.
+    /// </summary>
+    public Dictionary<string, long>? Amounts { get; set; }
+
+    /// <summary>The trigger pays nothing at all.</summary>
+    public bool Nothing { get; set; }
+
+    /// <summary>Put the trigger (or, without one, every trigger) back on its type default.</summary>
+    public bool Clear { get; set; }
 }
 
 public sealed class RewardTargetBody

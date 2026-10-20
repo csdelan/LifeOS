@@ -94,6 +94,24 @@ test.describe("golden paths", () => {
     await expect(page.getByText("Episode of a show — Season finale, part two")).toBeVisible();
   });
 
+  test("earn on a habit day, then establish a habit that met its target", async ({ page }) => {
+    await page.goto("/habits");
+    const inbox = page.getByRole("list", { name: "Building" }).getByRole("listitem").filter({ hasText: "Inbox Zero pass" });
+    await expect(inbox.getByText("Pays 1 Coins · 5 Freedom · 5 XP a day")).toBeAttached();
+    await inbox.getByRole("button", { name: "Followed", exact: true }).click();
+    await expect(page.getByText("Earned +1 Coins +5 Freedom +5 XP")).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole("button", { name: "Ready to establish Morning mobility" }).click();
+    const confirm = page.getByRole("alertdialog", { name: "Establish Morning mobility?" });
+    await expect(confirm).toContainText("pays 25 Coins · 60 Freedom · 1 Gems · 100 XP");
+    await confirm.getByRole("button", { name: "Establish" }).click();
+
+    await expect(page.getByText("Earned +25 Coins +60 Freedom +1 Gems +100 XP")).toBeVisible({ timeout: 10_000 });
+    const graduated = page.getByRole("region", { name: "Established" });
+    await expect(graduated.getByText("Morning mobility")).toBeVisible();
+    await expect(page.getByRole("list", { name: "Building" })).not.toContainText("Morning mobility");
+  });
+
   test("theme toggle switches the document class", async ({ page }) => {
     await page.goto("/");
     const html = page.locator("html");

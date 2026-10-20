@@ -7,8 +7,8 @@ agent with no session context can pick up any phase.
 
 **Scope agreed with Chris on 2026-10-20.** The rules in §1 are his answers to the design
 questions. R0 (the requirements and this plan), R1 (the ledger), R2 (earning on work), R3
-(habit earning), R4 (the reward catalog) and R5 (the wallet and Redeem page) are done; R6–R7
-are open.
+(habit earning), R4 (the reward catalog), R5 (the wallet and Redeem page) and R6 (earning in
+the UI) are done; R7 is open.
 
 ## 0. Read these first
 
@@ -264,7 +264,7 @@ Karma and Resolve default to 0; Chris adds them per item.
 | `v_reward_due` | `v_reward_trigger` rows on or after `bsk.ledger_opened_at()`. |
 | `v_habit_establishment` | Per Building habit: min_adherence, window_days, window_start, followed / partial / missed / concluded, adherence, age_days, target_met. |
 | `v_reward` | Per Reward: name, kind (instant unless savings), price, target_usd, redemptions, coins_redeemed, dollars_redeemed, last_redeemed_at, percent_of_target and remaining_usd (savings goals with a target), description, notes, archived. |
-| API | `GET /api/wallet`, `GET /api/ledger?from&to`, `GET /api/ledger/daily?from&to&tz`, `GET /api/rewards`, `POST /api/redeem`, `POST /api/bounty`. Built in R5: the wallet, ledger (`?from&to&limit`), catalog and redeem reads and writes, plus `POST /api/rewards`, `/api/rewards/price` and `/api/rewards/target`; `/api/ledger/daily` is R7 and `/api/bounty` is R6. |
+| API | `GET /api/wallet`, `GET /api/ledger?from&to`, `GET /api/ledger/daily?from&to&tz`, `GET /api/rewards`, `POST /api/redeem`, `POST /api/bounty`. Built in R5: the wallet, ledger (`?from&to&limit`), catalog and redeem reads and writes, plus `POST /api/rewards`, `/api/rewards/price` and `/api/rewards/target`; `/api/ledger/daily` is R7. Built in R6: `POST /api/bounty` and `GET /api/bounty/defaults`; the subject list and detail reads carry the bounty, and `GET /api/habits` carries each habit's status and establishment progress. |
 
 - **Time zones:** daily totals bucket by `occurred_at AT TIME ZONE @tz`, using the browser's
   IANA zone. The database runs in UTC, so an evening completion would otherwise land on
@@ -376,5 +376,34 @@ number from 0025.
   R6: the web's `setStatus` / `adhere` still return nothing; read `awards` from their responses
   (and `TimerActionResult.awards`) for the toast and chime, and give the mock store an earning
   reconcile so mock mode pays. Status, adherence and timer writes already refresh the wallet.
-- [ ] R6 — Earning in the UI
+- [x] R6 — Earning in the UI. API: `POST /api/bounty` (`BountyService`: amounts, `nothing`
+  or `clear`, the kernel's refusals as 400s) and `GET /api/bounty/defaults` (every earning
+  type's triggers at their defaults, for create forms); `SubjectListItem.bounty` (what the
+  headline trigger pays: completed, or a followed habit day), `SubjectDetail.bounty` (every
+  trigger with its price, `isCustom` and `default`), and `HabitRow.status` / `bounty` /
+  `establishment` (from `v_habit_establishment`, while Building). Prices are computed in C#
+  from `attributes->>'bounty'` with `Bounty.Price`, so the web never duplicates the live
+  defaults. Web: a Bounty section in the New dialog and the detail pane for Task / Project /
+  Goal / Habit — a summary per trigger, and Change opens a box per currency pre-filled with
+  what it pays now; `lib/bounty.ts` `bountyWrites` saves only what changed (an untouched or
+  unchanged trigger writes nothing, one edited back to its default is cleared so retuning
+  still reaches it, an emptied one pays nothing, otherwise the whole price is stored), and a
+  bounty is written before any status change in the same save. Bounty chips (`BountyChip`,
+  "🪙2 ⏳10 ⭐10", words for screen readers) on list rows (Tasks, Focus) while the item is open,
+  on habit rows ("/day") and in the detail header. `setStatus` / `adhere` answer `Award[]` and
+  the timer's result carries `awards`; `decorateWrites` hands them to
+  `lib/earn-feedback.ts`: a toast of what was earned and a chime (`playChime`, behind the same
+  Sound switch) on every earn, the full celebration for Gems, streak milestones and
+  establishing, and a quiet "Gave back" toast for a reversal. Habit vocabulary in the web's
+  `STATUS_BY_TYPE` / `TERMINAL_STATUSES` (and the docs copy); the Habit edit form has Status.
+  Habits page: Building habits with the adherence buttons, a "Ready to establish" button when
+  the target is met (an AlertDialog with the progress and what establishing pays; confirm =
+  status Established), and Established and Abandoned sections without daily tracking.
+  `todayHabitRows` drops terminal habits, so a graduated habit leaves Today in live mode too.
+  The detail pane shows a habit's progress toward its target. The mock store earns: a status
+  change settles the item's completed / established award and a habit day settles its
+  followed / partial awards and the streak milestones of the runs around it, priced from the
+  item's bounty with the kernel's refusals for `setBounty`; seeded history is never swept.
+  Not built: an editor for a habit's establish target — nothing but a hand-edited attribute
+  writes `attributes.establish_target` yet (REWARD-2 stays `building`).
 - [ ] R7 — History + report

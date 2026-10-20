@@ -36,6 +36,9 @@ import { SubjectTypeFields } from "@/components/create/subject-type-fields";
 import { useCreateActions } from "@/components/create/create-context";
 import { AttachmentChip } from "@/components/artifacts/attachment-chip";
 import { StreakGrid } from "@/components/habits/streak-grid";
+import { ReadyToEstablish } from "@/components/habits/establish-dialog";
+import { BountyChip } from "@/components/rewards/bounty-chip";
+import { BountySection } from "@/components/rewards/bounty-editor";
 import { TaskTimerPanel } from "@/components/timer/task-timer";
 import { JournalEditor, looksLikeHtml } from "@/components/journal/journal-editor";
 import {
@@ -57,11 +60,14 @@ import {
   childTypesFor,
   defaultStatus,
   inferChildRelation,
+  isTerminal,
   shortIdOf,
   typeLabel,
 } from "@/lib/production-ui-types";
-import type { Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
+import type { HabitRow, Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { formatTimestamp } from "@/lib/dates";
+import { bountyDirty, bountyProblem, bountyWrites, type BountyDraft } from "@/lib/bounty";
+import { establishmentProgress, habitStage, isReadyToEstablish } from "@/lib/establish";
 import { splitTags } from "@/lib/tag-suggest";
 import { parseRecurrence } from "@/lib/recurrence";
 import {
@@ -93,6 +99,7 @@ export function SubjectDetail({
   const { data: habits } = useHabits();
   const { data: occurrences } = useOccurrences(subjectId);
   const [editing, setEditing] = useState(false);
+  const [bountyDraft, setBountyDraft] = useState<BountyDraft>({});
   const writes = useWrites();
   const { openNew } = useCreateActions();
 
@@ -123,7 +130,13 @@ export function SubjectDetail({
     );
   }, [data, list, habit, rels, tags, editing, form]);
 
-  const dirty = isDetailDirty(editing, form.formState.isDirty);
+  // A new subject starts with nothing typed into its bounty.
+  useEffect(() => {
+    setBountyDraft({});
+  }, [subjectId]);
+
+  const bountyLines = data?.bounty ?? [];
+  const dirty = isDetailDirty(editing, form.formState.isDirty || bountyDirty(bountyLines, bountyDraft));
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -166,6 +179,11 @@ export function SubjectDetail({
       toast.error("A Habit needs at least one Goal or Identity Statement.");
       return;
     }
+    const bountyIssue = bountyProblem(bountyDraft);
+    if (bountyIssue) {
+      toast.error(bountyIssue);
+      return;
+    }
     // Rename first, so a refused rename (two Problems can't share a title) stops the
     // save before any other field changes — the same order the Pilot's Edit uses.
     const nextTitle = values.title.trim().split(/\s+/).join(" ");
@@ -181,6 +199,11 @@ export function SubjectDetail({
     if (Object.keys(attrs).length > 0) {
       await writes.setAttributes(subject.id, attrs);
     }
+    // Price before the status moves, so completing in the same save pays the new bounty.
+    for (const req of bountyWrites(subject.id, bountyLines, bountyDraft)) {
+      await writes.setBounty(req);
+    }
+    setBountyDraft({});
     const nextStatus = values.status || defaultStatus(subject.type);
     if (nextStatus && nextStatus !== (subject.status || defaultStatus(subject.type))) {
       await writes.setStatus(subject.id, nextStatus);
@@ -222,8 +245,11 @@ export function SubjectDetail({
         tags: (tags ?? []).join(", "),
       }),
     );
+    setBountyDraft({});
     setEditing(false);
   }
+
+  const headline = bountyLines[0];
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -261,6 +287,12 @@ export function SubjectDetail({
               ) : null}
               {subject.archived ? (
                 <span className="text-[0.75rem] text-muted-foreground">Archived</span>
+              ) : null}
+              {headline && !isTerminal(subject.status) ? (
+                <BountyChip
+                  amounts={headline.amounts}
+                  suffix={headline.trigger === "followed" ? "a day" : undefined}
+                />
               ) : null}
             </div>
           </div>
@@ -338,6 +370,16 @@ export function SubjectDetail({
           <TabsContent value="overview">
             <div className="space-y-5">
               <SubjectTypeFields form={form} editing={editing} />
+              {subject.type === "Habit" && habit ? <EstablishmentPanel habit={habit} /> : null}
+              <BountySection
+                key={`${subject.id}-${editing}`}
+                idPrefix={`bounty-${subject.id}`}
+                type={subject.type}
+                lines={bountyLines}
+                draft={bountyDraft}
+                onChange={setBountyDraft}
+                editing={editing}
+              />
               {(files ?? []).length > 0 ? (
                 <section>
                   <p className="type-scale-section text-muted-foreground">
@@ -759,6 +801,27 @@ function HistoryTab({ subjectId }: { subjectId: string }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+/** Where a habit stands on its way to graduating, and the Establish suggestion. */
+function EstablishmentPanel({ habit }: { habit: HabitRow }) {
+  const stage = habitStage(habit);
+  if (stage === "abandoned") return null;
+  return (
+    <section className="rounded-xl bg-muted/40 p-3">
+      <p className="type-scale-section text-muted-foreground">Establishing</p>
+      {stage === "established" ? (
+        <p className="mt-1 text-sm">
+          Established — graduated from daily tracking. Move it back to Building to track it again.
+        </p>
+      ) : habit.establishment ? (
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm">{establishmentProgress(habit.establishment)}</p>
+          {isReadyToEstablish(habit) ? <ReadyToEstablish habit={habit} /> : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 

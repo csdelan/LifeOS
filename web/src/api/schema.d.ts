@@ -660,6 +660,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/bounty/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetBountyDefaults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bounty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SetBounty"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -712,6 +744,33 @@ export interface components {
                 [key: string]: number | string;
             };
         };
+        BountyBody: {
+            subject?: string;
+            trigger?: null | string;
+            amounts?: null | {
+                [key: string]: number | string;
+            };
+            nothing?: boolean;
+            clear?: boolean;
+        };
+        BountyLineRow: {
+            trigger?: string;
+            amounts?: {
+                [key: string]: number | string;
+            };
+            isCustom?: boolean;
+            default?: {
+                [key: string]: number | string;
+            };
+        };
+        BountyResult: {
+            subject?: components["schemas"]["CreatedSubject"];
+            lines?: components["schemas"]["BountyLineRow"][];
+        };
+        BountyTypeDefaults: {
+            type?: string;
+            lines?: components["schemas"]["BountyLineRow"][];
+        };
         CaptureBody: {
             text?: string;
         };
@@ -724,6 +783,26 @@ export interface components {
         };
         EarnResult: {
             awards?: components["schemas"]["AwardRow"][];
+        };
+        HabitEstablishment: {
+            /** Format: double */
+            minAdherence?: number | string;
+            /** Format: int32 */
+            windowDays?: number | string;
+            windowStart?: string;
+            /** Format: int64 */
+            followed?: number | string;
+            /** Format: int64 */
+            partial?: number | string;
+            /** Format: int64 */
+            missed?: number | string;
+            /** Format: int64 */
+            concluded?: number | string;
+            /** Format: double */
+            adherence?: null | number | string;
+            /** Format: int32 */
+            ageDays?: number | string;
+            targetMet?: boolean;
         };
         HabitOccurrenceRow: {
             /** Format: uuid */
@@ -753,6 +832,11 @@ export interface components {
             /** Format: int32 */
             currentStreak?: number | string;
             lastState?: null | string;
+            status?: null | string;
+            bounty?: null | {
+                [key: string]: number | string;
+            };
+            establishment?: null | components["schemas"]["HabitEstablishment"];
         };
         InboxItem: {
             /** Format: uuid */
@@ -993,6 +1077,7 @@ export interface components {
             area?: null | string;
             areaName?: null | string;
             attributes?: null | string;
+            bounty?: null | components["schemas"]["BountyLineRow"][];
         };
         SubjectListItem: {
             /** Format: uuid */
@@ -1016,6 +1101,9 @@ export interface components {
             personKind?: null | string;
             /** Format: int32 */
             visionOrder?: null | number | string;
+            bounty?: null | {
+                [key: string]: number | string;
+            };
         };
         SubjectRelationsResponse: {
             parents?: components["schemas"]["RelationEdge"][];
@@ -2285,6 +2373,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RewardRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetBountyDefaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BountyTypeDefaults"][];
+                };
+            };
+        };
+    };
+    SetBounty: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BountyBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BountyResult"];
                 };
             };
             /** @description Bad Request */

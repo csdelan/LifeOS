@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { SubjectTypeFields } from "@/components/create/subject-type-fields";
+import { BountySection } from "@/components/rewards/bounty-editor";
 import { TagListField } from "@/components/primitives/tag-input";
 import { splitTags } from "@/lib/tag-suggest";
 import {
@@ -34,7 +35,8 @@ import {
 } from "@/lib/production-ui-types";
 import type { CreatedSubject, NewSubjectRequest, SubjectType } from "@/lib/production-ui-types";
 import { parseRecurrence } from "@/lib/recurrence";
-import { useCreateSubject, useSubjects, useWrites } from "@/lib/queries";
+import { bountyProblem, bountyWrites, defaultLines, type BountyDraft } from "@/lib/bounty";
+import { useBountyDefaults, useCreateSubject, useSubjects, useWrites } from "@/lib/queries";
 import {
   attrsToWrite,
   emptyFormValues,
@@ -76,11 +78,16 @@ export function NewSubjectDialog({
   const type = form.watch("type");
   const cfg = formConfig(type);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // The bounty starts on the type's defaults; only triggers Chris changes are saved.
+  const { data: bountyDefaults } = useBountyDefaults();
+  const bountyLines = defaultLines(type, bountyDefaults);
+  const [bountyDraft, setBountyDraft] = useState<BountyDraft>({});
 
   useEffect(() => {
     if (!open) return;
     form.reset(seedValues(startType, initialParent, initialTitle));
     setSubmitError(null);
+    setBountyDraft({});
   }, [open, startType, initialParent, initialTitle, form]);
 
   // The dialog scrolls, so a field error can sit out of view; repeat it by Save.
@@ -91,6 +98,11 @@ export function NewSubjectDialog({
 
   async function onSubmit(values: SubjectFormValues) {
     setSubmitError(null);
+    const bountyIssue = bountyProblem(bountyDraft);
+    if (bountyIssue) {
+      setSubmitError(bountyIssue);
+      return;
+    }
     const t = values.type;
     const parents = selectedParentIds(values);
     const primaryParent = initialParent?.id || values.parent || parents[0];
@@ -137,6 +149,10 @@ export function NewSubjectDialog({
     parents: string[],
     primaryParent: string | undefined,
   ) {
+    // Priced before any status change, so creating it Completed pays the new bounty.
+    for (const req of bountyWrites(created.id, bountyLines, bountyDraft)) {
+      await writes.setBounty(req);
+    }
     const initialStatus = values.status || defaultStatus(t);
     if (initialStatus && initialStatus !== defaultStatus(t)) {
       await writes.setStatus(created.id, initialStatus);
@@ -188,6 +204,7 @@ export function NewSubjectDialog({
                 onValueChange={(v) => {
                   const next = v as SubjectType;
                   const prev = form.getValues();
+                  setBountyDraft({});
                   const keep = attrsToWrite(next, { ...prev, type: next }, { omitEmpty: true });
                   form.reset({
                     ...emptyFormValues(next, "create"),
@@ -235,6 +252,16 @@ export function NewSubjectDialog({
           </div>
 
           <SubjectTypeFields form={form} editing />
+
+          <BountySection
+            key={type}
+            idPrefix="create-bounty"
+            type={type}
+            lines={bountyLines}
+            draft={bountyDraft}
+            onChange={setBountyDraft}
+            editing
+          />
 
           <Separator />
           <div className="space-y-1.5">

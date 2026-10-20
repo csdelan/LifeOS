@@ -27,6 +27,12 @@ public sealed class SubjectListItem
     public DateTime? NextReviewAt { get; set; }
     public string? PersonKind { get; set; }
     public int? VisionOrder { get; set; }
+
+    /// <summary>
+    /// What completing it (a Habit: following it for a day) pays, currency → amount — its
+    /// own bounty or the type default. Null for a type that doesn't earn (REWARD-2).
+    /// </summary>
+    public IReadOnlyDictionary<string, long>? Bounty { get; set; }
 }
 
 /// <summary>The detail-pane header fields for one subject, plus the raw attributes jsonb.</summary>
@@ -48,6 +54,9 @@ public sealed class SubjectDetail
     public string? Area { get; set; }
     public string? AreaName { get; set; }
     public string? Attributes { get; set; }
+
+    /// <summary>What each trigger pays (REWARD-2); null for a type that doesn't earn.</summary>
+    public IReadOnlyList<BountyLineRow>? Bounty { get; set; }
 }
 
 /// <summary>One alignment-graph edge, in whichever direction it was queried.</summary>
@@ -161,6 +170,15 @@ public sealed class HabitRow
     public DateTime CreatedAt { get; set; }
     public int CurrentStreak { get; set; }
     public string? LastState { get; set; }
+
+    /// <summary>Building, Established (graduated) or Abandoned; null reads as Building.</summary>
+    public string? Status { get; set; }
+
+    /// <summary>What a followed day pays, currency → amount (REWARD-2).</summary>
+    public IReadOnlyDictionary<string, long>? Bounty { get; set; }
+
+    /// <summary>Progress toward the establish target, while the habit is Building and unarchived.</summary>
+    public HabitEstablishment? Establishment { get; set; }
 }
 
 public sealed class HabitOccurrenceRow

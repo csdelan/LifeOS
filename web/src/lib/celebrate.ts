@@ -1,5 +1,6 @@
 /**
- * Celebration for redemptions (REWARD-4): confetti and a short fanfare. Sounds are
+ * Feedback for rewards (REWARD-4): a small chime on every earn, and confetti with a short
+ * fanfare for redemptions and the big earns. Sounds are
  * synthesized with Web Audio, so there are no audio files to ship or license. Sound has
  * one mute switch, a per-device preference kept in browser storage, not data. Confetti
  * never runs under the system's reduced-motion setting; sound is not motion, so it
@@ -73,6 +74,21 @@ export function playFanfare(): boolean {
   [523.25, 659.25, 783.99].forEach((f, i) => tone(ac, f, t + i * 0.11, 0.2, 0.16));
   [523.25, 659.25, 783.99, 1046.5].forEach((f) => tone(ac, f, t + 0.36, 0.95, 0.09));
   return true;
+}
+
+/** Two quick bright notes, a coin's "ding": under half a second. False when there's no audio. */
+export function playChime(): boolean {
+  const ac = audio();
+  if (!ac) return false;
+  const t = ac.currentTime + 0.02;
+  tone(ac, 1318.51, t, 0.18, 0.08);
+  tone(ac, 1975.53, t + 0.08, 0.3, 0.06);
+  return true;
+}
+
+/** The small chime, unless muted. */
+export function chime(): boolean {
+  return isSoundOn() && playChime();
 }
 
 const CONFETTI_COLORS = [

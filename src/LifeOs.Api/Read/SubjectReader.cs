@@ -1,4 +1,7 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Dapper;
+using LifeOs.Domain;
 using Npgsql;
 
 namespace LifeOs.Api.Read;
@@ -41,7 +44,7 @@ public sealed class SubjectReader(string connectionString)
     public IReadOnlyList<SubjectListItem> QuerySubjects(string? type, bool includeArchived = false)
     {
         using var db = Open();
-        return db.Query<SubjectListItem>(
+        return db.Query<SubjectListItem, BountyText, SubjectListItem>(
             """
             SELECT s.id, s.urn, s.type, s.title,
                    c.status,
@@ -58,7 +61,8 @@ public sealed class SubjectReader(string connectionString)
                    s.expected_cadence,
                    s.next_review_at,
                    s.attributes->>'person_kind' AS person_kind,
-                   (s.attributes->>'vision_order')::int AS vision_order
+                   (s.attributes->>'vision_order')::int AS vision_order,
+                   s.attributes->>'bounty' AS bounty_json
             FROM bsk.v_subject s
             LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = s.id
             LEFT JOIN bsk.v_area a ON a.urn = s.area
@@ -66,13 +70,15 @@ public sealed class SubjectReader(string connectionString)
               AND (@includeArchived OR NOT s.archived)
             ORDER BY s.title
             """,
-            new { type, includeArchived }).AsList();
+            WithHeadline,
+            new { type, includeArchived },
+            splitOn: "bounty_json").AsList();
     }
 
     public SubjectListItem? GetListItem(Guid id)
     {
         using var db = Open();
-        return db.QueryFirstOrDefault<SubjectListItem>(
+        return db.Query<SubjectListItem, BountyText, SubjectListItem>(
             """
             SELECT s.id, s.urn, s.type, s.title,
                    c.status,
@@ -89,19 +95,22 @@ public sealed class SubjectReader(string connectionString)
                    s.expected_cadence,
                    s.next_review_at,
                    s.attributes->>'person_kind' AS person_kind,
-                   (s.attributes->>'vision_order')::int AS vision_order
+                   (s.attributes->>'vision_order')::int AS vision_order,
+                   s.attributes->>'bounty' AS bounty_json
             FROM bsk.v_subject s
             LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = s.id
             LEFT JOIN bsk.v_area a ON a.urn = s.area
             WHERE s.id = @id
             """,
-            new { id });
+            WithHeadline,
+            new { id },
+            splitOn: "bounty_json").FirstOrDefault();
     }
 
     public SubjectDetail? GetSubject(Guid id)
     {
         using var db = Open();
-        return db.QueryFirstOrDefault<SubjectDetail>(
+        var detail = db.QueryFirstOrDefault<SubjectDetail>(
             """
             SELECT s.id, s.urn, s.type, s.title,
                    c.status,
@@ -116,6 +125,45 @@ public sealed class SubjectReader(string connectionString)
             WHERE s.id = @id
             """,
             new { id });
+        if (detail is not null)
+        {
+            detail.Bounty = BountyRows.Lines(detail.Type, BountyJsonOf(detail.Attributes));
+        }
+
+        return detail;
+    }
+
+    /// <summary>The raw <c>bounty</c> member of an attributes document, as <c>attributes-&gt;&gt;'bounty'</c> reads it.</summary>
+    private static string? BountyJsonOf(string? attributes)
+    {
+        if (string.IsNullOrWhiteSpace(attributes))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonNode.Parse(attributes) is JsonObject bag
+                   && bag["bounty"] is { } bounty
+                ? bounty.ToJsonString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static SubjectListItem WithHeadline(SubjectListItem item, BountyText? bounty)
+    {
+        item.Bounty = BountyRows.Headline(item.Type, bounty?.BountyJson);
+        return item;
+    }
+
+    /// <summary>The split-off <c>bounty_json</c> column of a list read; Dapper hands null when it is.</summary>
+    private sealed class BountyText
+    {
+        public string? BountyJson { get; set; }
     }
 
     public SubjectDetail? GetSubjectByUrn(string urn)
@@ -330,19 +378,34 @@ public sealed class SubjectReader(string connectionString)
     public IReadOnlyList<HabitRow> GetHabits(bool includeArchived = false)
     {
         using var db = Open();
-        var rows = db.Query<HabitRow>(
+        var rows = db.Query<HabitRow, BountyText, HabitEstablishment, HabitRow>(
             """
             SELECT h.id, h.urn, h.name, h.cue, h.routine, h.reward,
                    h.start_date, h.end_date, h.allows_partial,
                    h.recurrence::text AS recurrence, h.archived, h.created_at,
                    coalesce(st.current_streak, 0) AS current_streak,
-                   st.last_state
+                   st.last_state,
+                   c.status,
+                   s.attributes->>'bounty' AS bounty_json,
+                   e.min_adherence, e.window_days, e.window_start::text AS window_start,
+                   e.followed, e.partial, e.missed, e.concluded, e.adherence,
+                   e.age_days, e.target_met
             FROM bsk.v_habit h
+            JOIN bsk.v_subject s ON s.id = h.id
             LEFT JOIN bsk.v_habit_streak st ON st.habit_id = h.id
+            LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = h.id
+            LEFT JOIN bsk.v_habit_establishment e ON e.habit_id = h.id
             WHERE @includeArchived OR NOT h.archived
             ORDER BY h.name
             """,
-            new { includeArchived }).AsList();
+            (habit, bounty, establishment) =>
+            {
+                habit.Bounty = BountyRows.Headline(SubjectTypes.Habit, bounty?.BountyJson);
+                habit.Establishment = establishment;
+                return habit;
+            },
+            new { includeArchived },
+            splitOn: "bounty_json,min_adherence").AsList();
         foreach (var row in rows)
         {
             row.LastState = MapAdherenceState(row.LastState);

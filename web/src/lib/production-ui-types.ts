@@ -93,14 +93,16 @@ export const STATUS_BY_TYPE: Partial<Record<SubjectType, string[]>> = {
   Problem:     ["Open", "Working", "Resolved", "Cancelled"],
   Appointment: ["Scheduled", "Completed", "Cancelled", "Missed"],
   Idea:        ["New", "Promoted", "Rejected"],
-  // Value (Identity Statement), Area, Habit, Person: no status workflow.
+  // Established graduates a Habit: it leaves daily tracking (REWARD-2).
+  Habit:       ["Building", "Established", "Abandoned"],
+  // Value (Identity Statement), Area, Person: no status workflow.
 };
 
 /** Statuses that drop an item from default views (terminal). */
 export const TERMINAL_STATUSES = new Set([
   "done", "completed", "resolved", "closed", "cancelled",
   "abandoned", "dropped", "archived", "superseded",
-  "fulfilled", "missed", "promoted", "rejected",
+  "fulfilled", "missed", "promoted", "rejected", "established",
 ]);
 
 export function isTerminal(status?: string | null): boolean {
@@ -242,6 +244,8 @@ export interface SubjectListItem {
   nextReviewAt?: string | null;
   personKind?: string | null;  // "human" | "ai"
   visionOrder?: number | null;
+  /** What completing it pays (a Habit: a followed day); null for a type that doesn't earn. */
+  bounty?: Amounts | null;
 }
 
 /** Detail-pane header for one subject, plus the raw attributes JSON. */
@@ -262,6 +266,8 @@ export interface SubjectDetail {
   area?: string | null;
   areaName?: string | null;
   attributes?: string | null;  // raw attributes jsonb as text
+  /** What each trigger pays (REWARD-2); null for a type that doesn't earn. */
+  bounty?: BountyLine[] | null;
 }
 
 /** One alignment-graph edge (the tree/graph is built from these). */
@@ -421,6 +427,8 @@ export interface TimerActionResult {
   timer: TaskTimer;
   paused: CreatedSubject[];
   completed: boolean;
+  /** What Complete earned (REWARD-4); empty for the other actions. */
+  awards?: Award[];
 }
 
 // ---------------------------------------------------------------------------
@@ -504,6 +512,60 @@ export interface Award {
 }
 
 /**
+ * What one trigger of an item pays (REWARD-2): its own price when `isCustom`, otherwise its
+ * type default, which `default` always carries.
+ */
+export interface BountyLine {
+  trigger: string;
+  amounts: Amounts;
+  isCustom: boolean;
+  default: Amounts;
+}
+
+/** Each trigger an earning type pays on, at its default — what a create form pre-fills. */
+export interface BountyTypeDefaults {
+  type: SubjectType;
+  lines: BountyLine[];
+}
+
+/**
+ * Price an item (`bsk bounty`). Send one of `amounts` (set these currencies on what the
+ * trigger pays now; name all six to set the whole price), `nothing` or `clear` (back on the
+ * default; with no trigger, every trigger). `trigger` may be left out when the type has one.
+ */
+export interface BountyRequest {
+  subject: string;
+  trigger?: string;
+  amounts?: Amounts;
+  nothing?: boolean;
+  clear?: boolean;
+}
+
+export interface BountyResult {
+  subject: CreatedSubject;
+  lines: BountyLine[];
+}
+
+/**
+ * A Building habit's progress toward its establish target (`v_habit_establishment`):
+ * adherence over the window, partial counting half. `targetMet` is the "Ready to
+ * establish" suggestion; confirming is a status change to Established.
+ */
+export interface HabitEstablishment {
+  minAdherence: number;
+  windowDays: number;
+  windowStart: string;
+  followed: number;
+  partial: number;
+  missed: number;
+  concluded: number;
+  /** 0..1, or null before any occurrence in the window concluded. */
+  adherence?: number | null;
+  ageDays: number;
+  targetMet: boolean;
+}
+
+/**
  * A redemption (`bsk redeem`). Omit `amounts` to pay an instant reward's price; a savings
  * goal needs `{ coins: n }`; with no `reward`, amounts and a `note` are both required.
  */
@@ -564,6 +626,12 @@ export interface HabitRow {
   createdAt: string;
   currentStreak: number;
   lastState?: string | null;
+  /** Building (null reads as Building), Established (graduated) or Abandoned. */
+  status?: string | null;
+  /** What a followed day pays. */
+  bounty?: Amounts | null;
+  /** While Building and unarchived: progress toward the establish target. */
+  establishment?: HabitEstablishment | null;
 }
 
 export interface HabitOccurrenceRow {
@@ -677,7 +745,8 @@ export interface LifeOsWriteClient {
   setAttributes(subject: string, attrs: Record<string, string>): Promise<void>; // "" removes a key
   /** Change the title (urn unchanged). A series rename carries to its upcoming occurrences. */
   rename(subject: string, title: string): Promise<RenamedSubject>;
-  setStatus(subject: string, status: string): Promise<void>;                    // state_change
+  /** A state_change; answers what it earned or gave back (REWARD-4). */
+  setStatus(subject: string, status: string): Promise<Award[]>;
   archive(subject: string): Promise<void>;
   restore(subject: string): Promise<void>;
   tag(item: string, opts: { add?: string[]; remove?: string[] }): Promise<void>;
@@ -688,8 +757,9 @@ export interface LifeOsWriteClient {
   flag(item: string): Promise<void>;                                            // (re-)enter inbox
   dismiss(item: string): Promise<void>;                                         // attention-only clear
   drop(item: string): Promise<void>;                                            // subject → terminal status
+  /** Record a habit day; answers what it earned or gave back (REWARD-4). */
   adhere(habit: string, state: "followed" | "partial" | "missed",
-         opts?: { on?: string; note?: string }): Promise<void>;
+         opts?: { on?: string; note?: string }): Promise<Award[]>;
   /** Set structured recurrence on a Habit (GEN-3). */
   recur(habit: string, spec: RecurrenceSpec): Promise<void>;
   involve(subject: string, person: string, role: PersonRole, remove?: boolean): Promise<void>;
@@ -726,4 +796,6 @@ export interface LifeOsWriteClient {
   priceReward(reward: string, price: Amounts): Promise<RewardRow>;
   /** Set a savings goal's target in dollars; null removes it. */
   targetReward(reward: string, targetUsd: number | null): Promise<RewardRow>;
+  /** Price a Task / Project / Goal / Habit (REWARD-2). Refused for a type that doesn't earn. */
+  setBounty(req: BountyRequest): Promise<BountyResult>;
 }

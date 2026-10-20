@@ -6,11 +6,20 @@ import {
 } from "@/lib/derive";
 import { api, unwrap } from "@/lib/live/http";
 import type { RecapSection } from "@/lib/review-recap";
-import { normalizeLedgerRow, normalizeReward, normalizeWallet } from "@/lib/rewards";
+import {
+  normalizeBountyDefaults,
+  normalizeDetailBounty,
+  normalizeHabit,
+  normalizeLedgerRow,
+  normalizeListBounty,
+  normalizeReward,
+  normalizeWallet,
+} from "@/lib/rewards";
 import type { LifeOsReads } from "@/lib/mock/api";
 import type {
   AreaRow,
   ArtifactRecord,
+  BountyTypeDefaults,
   HabitOccurrenceRow,
   HabitRow,
   InboxItem,
@@ -55,7 +64,7 @@ export const liveReads: LifeOsReads = {
         },
       }),
     );
-    return asType<SubjectListItem[]>(data);
+    return asType<SubjectListItem[]>(data).map(normalizeListBounty);
   },
 
   async getSubject(id) {
@@ -66,7 +75,7 @@ export const liveReads: LifeOsReads = {
     if (!response.ok || data === undefined) {
       throw new Error(`API ${response.status}`);
     }
-    return asType<SubjectDetail>(data);
+    return normalizeDetailBounty(asType<SubjectDetail>(data));
   },
 
   async getListItem(id) {
@@ -77,7 +86,7 @@ export const liveReads: LifeOsReads = {
     if (!response.ok || data === undefined) {
       throw new Error(`API ${response.status}`);
     }
-    return asType<SubjectListItem>(data);
+    return normalizeListBounty(asType<SubjectListItem>(data));
   },
 
   async relations(id) {
@@ -153,7 +162,7 @@ export const liveReads: LifeOsReads = {
 
   async habits() {
     const data = await unwrap(api().GET("/api/habits"));
-    return asType<HabitRow[]>(data);
+    return asType<HabitRow[]>(data).map(normalizeHabit);
   },
 
   async occurrences(opts) {
@@ -196,6 +205,11 @@ export const liveReads: LifeOsReads = {
       }),
     );
     return asType<RewardRow[]>(data).map(normalizeReward);
+  },
+
+  async bountyDefaults() {
+    const data = await unwrap(api().GET("/api/bounty/defaults"));
+    return normalizeBountyDefaults(asType<BountyTypeDefaults[]>(data));
   },
 
   async reviews(opts) {

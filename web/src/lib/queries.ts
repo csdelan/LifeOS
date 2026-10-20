@@ -12,6 +12,7 @@ import { useMemo } from "react";
 import { isLiveApi } from "@/lib/api-base";
 import { createWriteClient, getReads } from "@/lib/client";
 import { mapForestStatus, type DashboardRead, type MapLens } from "@/lib/derive";
+import { announceAwards } from "@/lib/earn-feedback";
 import { fetchMe, meQueryKey } from "@/lib/me";
 import type { LifeOsReads } from "@/lib/mock/api";
 import type {
@@ -52,6 +53,7 @@ export const qk = {
   wallet: ["wallet"] as const,
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
+  bountyDefaults: ["bounty-defaults"] as const,
   reviews: ["reviews"] as const,
   recap: ["recap"] as const,
   dashboard: ["dashboard"] as const,
@@ -115,9 +117,12 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async setStatus(subject, status) {
       optimisticStatus(qc, subject, status);
       try {
-        await client.setStatus(subject, status);
+        const awards = await client.setStatus(subject, status);
+        announceAwards(awards);
+        return awards;
       } finally {
-        // A status change can earn or give back (REWARD-1), so the wallet moves too.
+        // A status change can earn or give back (REWARD-1), so the wallet moves too; a
+        // habit's graduates it off the daily list.
         await invalidate(qc, [
           qk.subject(subject),
           qk.listItem(subject),
@@ -125,6 +130,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
           qk.subjects,
           qk.dashboard,
           qk.inbox,
+          qk.habits,
           qk.wallet,
           qk.ledger,
           ["forest"],
@@ -221,7 +227,9 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async adhere(habit, state, opts) {
       optimisticAdhere(qc, habit, state === "missed" ? "not_followed" : state, opts?.on);
       try {
-        await client.adhere(habit, state, opts);
+        const awards = await client.adhere(habit, state, opts);
+        announceAwards(awards);
+        return awards;
       } finally {
         await invalidate(qc, [qk.habits, qk.occurrences, qk.dashboard, qk.wallet, qk.ledger]);
       }
@@ -235,6 +243,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async timer(task, action) {
       try {
         const result = await client.timer(task, action);
+        announceAwards(result.awards);
         if (action === "complete") {
           // Complete also moves the Task's Status.
           await invalidate(qc, [
@@ -326,6 +335,18 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       await invalidate(qc, [qk.rewards, qk.subject(reward)]);
       return row;
     },
+
+    async setBounty(req) {
+      const result = await client.setBounty(req);
+      await invalidate(qc, [
+        qk.subject(result.subject.id),
+        qk.listItem(result.subject.id),
+        qk.subjects,
+        qk.habits,
+        qk.dashboard,
+      ]);
+      return result;
+    },
   };
 }
 
@@ -393,6 +414,15 @@ function optimisticAdhere(
         ? { ...o, state }
         : o,
     );
+  });
+}
+
+/** What each earning type's triggers pay by default — fixed while the app runs. */
+export function useBountyDefaults() {
+  return useQuery({
+    queryKey: qk.bountyDefaults,
+    queryFn: () => reads().bountyDefaults(),
+    staleTime: Infinity,
   });
 }
 

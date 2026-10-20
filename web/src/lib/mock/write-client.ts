@@ -26,6 +26,7 @@ import {
   mockAddReward,
   mockPriceReward,
   mockRedeem,
+  mockSetBounty,
   mockTargetReward,
   relateEvent,
   removeInbox,
@@ -90,9 +91,10 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
 
     async setStatus(subject, status) {
       await wait();
-      setStatus(subject, status);
+      const awards = setStatus(subject, status);
       notify(`Status → ${status}`);
       bump();
+      return awards;
     },
 
     async archive(subject) {
@@ -163,7 +165,7 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
 
     async adhere(habit, state, opts) {
       await wait();
-      adhereHabit(habit, state, opts?.on, opts?.note);
+      const awards = adhereHabit(habit, state, opts?.on, opts?.note);
       notify(
         state === "followed"
           ? "Marked followed"
@@ -172,6 +174,7 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
             : "Marked missed",
       );
       bump();
+      return awards;
     },
 
     async recur(habit, spec) {
@@ -279,6 +282,14 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       notify(targetUsd === null ? "Target removed" : "Target saved");
       bump();
       return row;
+    },
+
+    async setBounty(req) {
+      await wait();
+      const result = mockSetBounty(req);
+      notify("Bounty saved");
+      bump();
+      return result;
     },
   };
 }

@@ -3,7 +3,10 @@ import { Label } from "@/components/ui/label";
 import { balanceOf, type AmountDraft, type CurrencyDef } from "@/lib/rewards";
 import type { Wallet } from "@/lib/production-ui-types";
 
-/** One whole-number box per currency; with a wallet, each shows what you have. */
+/**
+ * One whole-number box per currency; with a wallet, each shows what you have. `min` is the
+ * smallest amount a box takes: 1 for a spend, 0 for a bounty (a currency it doesn't pay).
+ */
 export function AmountFields({
   idPrefix,
   currencies,
@@ -11,6 +14,7 @@ export function AmountFields({
   onChange,
   wallet,
   disabled,
+  min = 1,
 }: {
   idPrefix: string;
   currencies: readonly CurrencyDef[];
@@ -18,6 +22,7 @@ export function AmountFields({
   onChange: (next: AmountDraft) => void;
   wallet?: Wallet;
   disabled?: boolean;
+  min?: number;
 }) {
   return (
     <div className="grid grid-cols-2 gap-3">
@@ -32,7 +37,7 @@ export function AmountFields({
               id={id}
               type="number"
               inputMode="numeric"
-              min={1}
+              min={min}
               step={1}
               placeholder="0"
               value={value[c.key] ?? ""}

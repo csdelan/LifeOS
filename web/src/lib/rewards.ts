@@ -6,9 +6,17 @@
  */
 import type {
   Amounts,
+  Award,
+  BountyLine,
+  BountyResult,
+  BountyTypeDefaults,
+  HabitRow,
   LedgerRow,
   Redemption,
   RewardRow,
+  SubjectDetail,
+  SubjectListItem,
+  TimerActionResult,
   Wallet,
   WalletLine,
 } from "@/lib/production-ui-types";
@@ -255,6 +263,61 @@ export function normalizeReward(raw: RewardRow): RewardRow {
     dollarsRedeemed: num(raw.dollarsRedeemed),
     percentOfTarget: numOrNull(raw.percentOfTarget),
     remainingUsd: numOrNull(raw.remainingUsd),
+  };
+}
+
+export function normalizeAward(raw: Award): Award {
+  return { ...raw, amounts: normalizeAmounts(raw.amounts) };
+}
+
+/** The `awards` of an earning write's response (`{ awards }`), as numbers. */
+export function normalizeAwards(raw: unknown): Award[] {
+  const awards = (raw as { awards?: Award[] } | null | undefined)?.awards;
+  return Array.isArray(awards) ? awards.map(normalizeAward) : [];
+}
+
+export function normalizeTimerAwards(raw: TimerActionResult): TimerActionResult {
+  return { ...raw, awards: (raw.awards ?? []).map(normalizeAward) };
+}
+
+export function normalizeBountyLine(raw: BountyLine): BountyLine {
+  return { ...raw, amounts: normalizeAmounts(raw.amounts), default: normalizeAmounts(raw.default) };
+}
+
+export function normalizeBountyResult(raw: BountyResult): BountyResult {
+  return { ...raw, lines: (raw.lines ?? []).map(normalizeBountyLine) };
+}
+
+export function normalizeBountyDefaults(raw: BountyTypeDefaults[]): BountyTypeDefaults[] {
+  return raw.map((d) => ({ ...d, lines: (d.lines ?? []).map(normalizeBountyLine) }));
+}
+
+export function normalizeListBounty(raw: SubjectListItem): SubjectListItem {
+  return raw.bounty ? { ...raw, bounty: normalizeAmounts(raw.bounty) } : raw;
+}
+
+export function normalizeDetailBounty(raw: SubjectDetail): SubjectDetail {
+  return raw.bounty ? { ...raw, bounty: raw.bounty.map(normalizeBountyLine) } : raw;
+}
+
+export function normalizeHabit(raw: HabitRow): HabitRow {
+  const e = raw.establishment;
+  return {
+    ...raw,
+    bounty: raw.bounty ? normalizeAmounts(raw.bounty) : null,
+    establishment: e
+      ? {
+          ...e,
+          minAdherence: num(e.minAdherence),
+          windowDays: num(e.windowDays),
+          followed: num(e.followed),
+          partial: num(e.partial),
+          missed: num(e.missed),
+          concluded: num(e.concluded),
+          adherence: numOrNull(e.adherence),
+          ageDays: num(e.ageDays),
+        }
+      : null,
   };
 }
 

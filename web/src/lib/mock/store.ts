@@ -3,10 +3,15 @@ import {
   revokeIfBlobUrl,
 } from "@/lib/artifacts";
 import { deriveTitle } from "@/lib/capture";
-import { nowIso, slugify, todayIso, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
+import { addDays, nowIso, slugify, todayIso, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
 import type {
   Amounts,
   ArtifactRecord,
+  Award,
+  BountyRequest,
+  BountyResult,
+  HabitEstablishment,
+  HabitRow,
   BinaryCaptureResult,
   CaptureKind,
   CreatedSubject,
@@ -34,6 +39,7 @@ import type {
   Wallet,
 } from "@/lib/production-ui-types";
 import { defaultStatus, isTerminal } from "@/lib/production-ui-types";
+import { BOUNTY_TRIGGERS, STREAK_MILESTONES, earns, linesFor, parseBounty, priceOf } from "@/lib/bounty";
 import { applyStreakToHabit } from "@/lib/habit-streak";
 import { CURRENCIES, coinsToUsd, currency, orderedAmounts, shortfall } from "@/lib/rewards";
 import { foldTimer, type TimerEvent } from "@/lib/timer";
@@ -350,9 +356,9 @@ function safeAttrs(raw?: string | null): Record<string, string> {
   }
 }
 
-export function setStatus(subject: string, status: string) {
+export function setStatus(subject: string, status: string): Award[] {
   const item = byRef(subject);
-  if (!item) return;
+  if (!item) return [];
   const occurredAt = nowIso();
   state.subjects = state.subjects.map((s) =>
     s.id === item.id ? { ...s, status } : s,
@@ -363,7 +369,9 @@ export function setStatus(subject: string, status: string) {
     { id: newId(), status, occurredAt },
     ...(state.history[item.id] ?? []),
   ];
+  const awards = reconcileStatus(item.id, occurredAt);
   emit();
+  return awards;
 }
 
 /** A task's timer as the kernel folds it, or null when it was never started. */
@@ -401,8 +409,8 @@ export function applyTimer(taskRef: string, action: TimerAction): TimerActionRes
     if (current !== "stopped") {
       state.timerEvents = [...state.timerEvents, { subjectId: task.id, action: "stop", occurredAt: at }];
     }
-    setStatus(task.id, "Completed");
-    return { timer: timerFor(task.id) ?? neverTimed(task), paused, completed: true };
+    const awards = setStatus(task.id, "Completed");
+    return { timer: timerFor(task.id) ?? neverTimed(task), paused, completed: true, awards };
   }
 
   const allowed =
@@ -437,7 +445,7 @@ export function applyTimer(taskRef: string, action: TimerAction): TimerActionRes
   events.push({ subjectId: task.id, action, occurredAt: at });
   state.timerEvents = [...state.timerEvents, ...events];
   emit();
-  return { timer: timerFor(task.id) ?? neverTimed(task), paused, completed: false };
+  return { timer: timerFor(task.id) ?? neverTimed(task), paused, completed: false, awards: [] };
 }
 
 function neverTimed(task: SubjectListItem): TaskTimer {
@@ -980,9 +988,9 @@ export function adhereHabit(
   adherence: "followed" | "partial" | "missed",
   on?: string,
   note?: string,
-) {
+): Award[] {
   const habit = state.habits.find((h) => h.id === habitRef || h.urn === habitRef);
-  if (!habit) return;
+  if (!habit) return [];
   const date = on ?? todayIso();
   const mapped = adherence === "missed" ? "not_followed" : adherence;
   state.occurrences = state.occurrences.map((o) =>
@@ -1011,7 +1019,9 @@ export function adhereHabit(
   state.habits = state.habits.map((h) =>
     h.id === habit.id ? applyStreakToHabit(h, state.occurrences, today) : h,
   );
+  const awards = reconcileDay(habit.id, date, nowIso());
   emit();
+  return awards;
 }
 
 export function setHabitRecurrence(habitRef: string, spec: RecurrenceSpec) {
@@ -1190,11 +1200,13 @@ export function mockLedger(opts?: { from?: string; to?: string; limit?: number }
     throw new Error("The ledger range must end after it starts.");
   }
   const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 500);
-  return [...state.ledger]
-    .filter((e) => (!opts?.from || e.occurredAt >= opts.from) && (!opts?.to || e.occurredAt < opts.to))
-    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+  // Newest first; entries written in the same instant keep their write order, newest first.
+  return state.ledger
+    .map((e, i) => ({ e, i }))
+    .filter(({ e }) => (!opts?.from || e.occurredAt >= opts.from) && (!opts?.to || e.occurredAt < opts.to))
+    .sort((a, b) => b.e.occurredAt.localeCompare(a.e.occurredAt) || b.i - a.i)
     .slice(0, limit)
-    .map(ledgerRow);
+    .map(({ e }) => ledgerRow(e));
 }
 
 /** A price as the kernel reads it: spendable currencies, whole amounts above zero. */
@@ -1416,3 +1428,258 @@ export function mockTargetReward(ref: string, targetUsd: number | null): RewardR
 }
 
 export type { CanonicalEdge, MockState };
+
+// ---------------------------------------------------------------------------
+// Earning (REWARD-2 / REWARD-4): the reconcile of RewardService, scoped to what a write
+// touched. A status change settles the item's `completed` (or a habit's `established`)
+// award; a habit day settles that day's followed / partial awards and the streak
+// milestones of the runs around it. Due and unpaid → an earn priced now; paid and no
+// longer due → a reversal of exactly what was paid. Seeded history is never swept, so a
+// click pays only for what it changed.
+// ---------------------------------------------------------------------------
+
+function storedBounty(subjectId: string): Record<string, Amounts> {
+  return parseBounty(rawAttrs(state.details[subjectId]?.attributes).bounty);
+}
+
+function netPaid(awardKey: string): Amounts {
+  const net: Amounts = {};
+  for (const e of state.ledger) {
+    if (e.awardKey !== awardKey || (e.entry !== "earn" && e.entry !== "reversal")) continue;
+    for (const [k, n] of Object.entries(e.amounts)) net[k] = (net[k] ?? 0) + n;
+  }
+  return Object.fromEntries(Object.entries(net).filter(([, n]) => n !== 0));
+}
+
+function settle(item: SubjectListItem, awardKey: string, trigger: string, due: boolean, at: string): Award | null {
+  const net = netPaid(awardKey);
+  const paid = Object.keys(net).length > 0;
+  let entry: "earn" | "reversal";
+  let amounts: Amounts;
+  if (due && !paid) {
+    amounts = priceOf(item.type, trigger, storedBounty(item.id));
+    // A trigger priced to pay nothing writes nothing.
+    if (Object.keys(amounts).length === 0) return null;
+    entry = "earn";
+    // The first paying earn opens the wallet, dated at it.
+    if (!state.ledger.some((e) => e.entry === "open")) {
+      state.ledger = [
+        ...state.ledger,
+        { id: newId(), occurredAt: at, entry: "open", provenance: "declared", amounts: {} },
+      ];
+    }
+  } else if (!due && paid) {
+    amounts = Object.fromEntries(Object.entries(net).map(([k, n]) => [k, -n]));
+    entry = "reversal";
+  } else {
+    return null;
+  }
+  const id = newId();
+  state.ledger = [
+    ...state.ledger,
+    { id, occurredAt: at, entry, provenance: "derived", amounts, trigger, awardKey, subjectId: item.id },
+  ];
+  return {
+    id,
+    entry,
+    trigger,
+    awardKey,
+    subject: { id: item.id, urn: item.urn, type: item.type, title: item.title },
+    amounts: { ...amounts },
+  };
+}
+
+function reconcileStatus(subjectId: string, at: string): Award[] {
+  const item = byId(subjectId);
+  if (!item || !earns(item.type)) return [];
+  const status = (item.status ?? "").trim().toLowerCase();
+  const award =
+    item.type === "Habit"
+      ? settle(item, `established:${item.id}`, "established", status === "established", at)
+      : settle(item, `completed:${item.id}`, "completed", status === "completed", at);
+  return award ? [award] : [];
+}
+
+interface Run {
+  start: string;
+  dates: string[];
+}
+
+/** Runs of consecutive followed occurrences; any other concluded day breaks one. */
+function followedRuns(habitId: string, today: string): Run[] {
+  const days = state.occurrences
+    .filter((o) => o.habitId === habitId && o.occurrenceDate <= today)
+    .filter((o) => !(o.occurrenceDate === today && o.state === "unrecorded"))
+    .sort((a, b) => a.occurrenceDate.localeCompare(b.occurrenceDate));
+  const runs: Run[] = [];
+  let current: Run | null = null;
+  for (const o of days) {
+    if (o.state === "followed") {
+      current ??= { start: o.occurrenceDate, dates: [] };
+      current.dates.push(o.occurrenceDate);
+    } else {
+      if (current) runs.push(current);
+      current = null;
+    }
+  }
+  if (current) runs.push(current);
+  return runs;
+}
+
+function reconcileDay(habitId: string, date: string, at: string): Award[] {
+  const item = byId(habitId);
+  // Days recorded after graduation (or abandoning) show in the history but don't pay.
+  if (!item || isTerminal(item.status)) return [];
+  const recorded = state.occurrences.find((o) => o.habitId === habitId && o.occurrenceDate === date)?.state;
+  const awards: (Award | null)[] = [
+    settle(item, `day:${habitId}:${date}:followed`, "followed", recorded === "followed", at),
+    settle(item, `day:${habitId}:${date}:partial`, "partial", recorded === "partial", at),
+  ];
+
+  const runs = followedRuns(habitId, todayIso());
+  const reaches = (start: string, n: number) => runs.some((r) => r.start === start && r.dates.length >= n);
+  // Milestones this habit has been paid for, on runs that may have held this day…
+  const paid = new Set(
+    state.ledger
+      .filter((e) => e.subjectId === habitId && e.awardKey?.startsWith("streak_"))
+      .map((e) => e.awardKey!)
+      .filter((key) => Object.keys(netPaid(key)).length > 0 && key.slice(key.lastIndexOf(":") + 1) <= date),
+  );
+  for (const key of paid) {
+    const n = Number(key.slice("streak_".length, key.indexOf(":")));
+    const start = key.slice(key.lastIndexOf(":") + 1);
+    awards.push(settle(item, key, `streak_${n}`, reaches(start, n), at));
+  }
+  // …and the milestones the run holding this day reaches now.
+  const run = runs.find((r) => r.dates.includes(date));
+  for (const n of STREAK_MILESTONES) {
+    const key = `streak_${n}:${habitId}:${run?.start}`;
+    if (run && run.dates.length >= n && !paid.has(key)) {
+      awards.push(settle(item, key, `streak_${n}`, true, at));
+    }
+  }
+  return awards.filter((a): a is Award => !!a);
+}
+
+/** A list row with what its headline trigger pays (`SubjectListItem.bounty`). */
+export function withBounty(item: SubjectListItem): SubjectListItem {
+  const trigger = BOUNTY_TRIGGERS[item.type]?.[0];
+  return { ...item, bounty: trigger ? priceOf(item.type, trigger, storedBounty(item.id)) : null };
+}
+
+export function detailWithBounty(detail: SubjectDetail): SubjectDetail {
+  return { ...detail, bounty: earns(detail.type) ? linesFor(detail.type, storedBounty(detail.id)) : null };
+}
+
+function establishment(habit: HabitRow, status: string | null | undefined): HabitEstablishment | null {
+  if (habit.archived || isTerminal(status)) return null;
+  const target = rawAttrs(state.details[habit.id]?.attributes).establish_target as
+    | { min_adherence?: unknown; window_days?: unknown }
+    | undefined;
+  const rawMin = Number(target?.min_adherence);
+  const minAdherence = rawMin > 0 && rawMin <= 1 ? rawMin : rawMin > 1 && rawMin <= 100 ? rawMin / 100 : 0.8;
+  const rawWindow = Number(target?.window_days);
+  const windowDays = rawWindow >= 1 ? Math.floor(rawWindow) : 60;
+  const today = todayIso();
+  const windowStart = addDays(today, -windowDays + 1);
+  let followed = 0;
+  let partial = 0;
+  let missed = 0;
+  for (const o of state.occurrences) {
+    if (o.habitId !== habit.id || o.occurrenceDate < windowStart || o.occurrenceDate > today) continue;
+    if (o.state === "followed") followed++;
+    else if (o.state === "partial") partial++;
+    // A past day left unrecorded concluded as missed; today stays open until recorded.
+    else if (o.state === "not_followed" || o.occurrenceDate < today) missed++;
+  }
+  const concluded = followed + partial + missed;
+  const adherence = concluded > 0 ? Math.round(((followed + 0.5 * partial) / concluded) * 10000) / 10000 : null;
+  const start = habit.startDate ?? habit.createdAt.slice(0, 10);
+  const ageDays = Math.round((Date.parse(today) - Date.parse(start)) / 86_400_000);
+  return {
+    minAdherence,
+    windowDays,
+    windowStart,
+    followed,
+    partial,
+    missed,
+    concluded,
+    adherence,
+    ageDays,
+    targetMet: adherence !== null && adherence >= minAdherence && ageDays >= windowDays,
+  };
+}
+
+/** `GET /api/habits`: each habit with its status, what a day pays and its progress. */
+export function mockHabits(): HabitRow[] {
+  return state.habits.map((h) => {
+    const status = byId(h.id)?.status ?? null;
+    return {
+      ...h,
+      status,
+      bounty: priceOf("Habit", "followed", storedBounty(h.id)),
+      establishment: establishment(h, status),
+    };
+  });
+}
+
+/** `bsk bounty` / `POST /api/bounty`, with BountyService's refusals in its words. */
+export function mockSetBounty(req: BountyRequest): BountyResult {
+  const item = byRef(req.subject);
+  if (!item) throw new Error(`No subject matches '${req.subject}'.`);
+  const asks = (req.amounts && Object.keys(req.amounts).length > 0 ? 1 : 0) + (req.nothing ? 1 : 0) + (req.clear ? 1 : 0);
+  if (asks !== 1) throw new Error("Send one of amounts, nothing or clear.");
+  const changes: Amounts = {};
+  for (const [key, n] of Object.entries(req.amounts ?? {})) {
+    const c = CURRENCIES.find((x) => x.key === key.trim().toLowerCase());
+    if (!c) {
+      throw new Error(`Unknown currency '${key}'. Expected one of: ${CURRENCIES.map((x) => x.key).join(", ")}.`);
+    }
+    if (!Number.isInteger(n) || n < 0) {
+      throw new Error(`A bounty pays a whole number of ${c.label} from zero up; got ${n}.`);
+    }
+    if (changes[c.key] !== undefined) throw new Error(`${c.label} is listed twice.`);
+    changes[c.key] = n;
+  }
+  const triggers = BOUNTY_TRIGGERS[item.type] ?? [];
+  if (triggers.length === 0) {
+    throw new Error(`'${item.title}' is a ${item.type}; only Task, Project, Goal, Habit earn rewards.`);
+  }
+  const asked = req.trigger?.trim().toLowerCase();
+  if (asked === "partial" && triggers.includes("followed")) {
+    throw new Error("A partial day always pays half of followed; price followed instead.");
+  }
+  const trigger = !asked
+    ? req.clear
+      ? undefined
+      : triggers.length === 1
+        ? triggers[0]
+        : (() => {
+            throw new Error(`Say which trigger to price: ${triggers.join(", ")}.`);
+          })()
+    : triggers.find((t) => t === asked);
+  if (asked && !trigger) {
+    throw new Error(`A ${item.type} doesn't pay on '${req.trigger?.trim()}'. Expected: ${triggers.join(", ")}.`);
+  }
+
+  const stored = storedBounty(item.id);
+  if (req.clear) {
+    if (trigger) delete stored[trigger];
+    else for (const key of Object.keys(stored)) delete stored[key];
+  } else if (req.nothing) {
+    stored[trigger!] = {};
+  } else {
+    const price = priceOf(item.type, trigger!, stored);
+    for (const [k, n] of Object.entries(changes)) {
+      if (n === 0) delete price[k];
+      else price[k] = n;
+    }
+    stored[trigger!] = Object.fromEntries(orderedAmounts(price));
+  }
+  writeRewardAttrs(item.id, { bounty: Object.keys(stored).length > 0 ? stored : undefined });
+  emit();
+  return {
+    subject: { id: item.id, urn: item.urn, type: item.type, title: item.title },
+    lines: linesFor(item.type, stored),
+  };
+}

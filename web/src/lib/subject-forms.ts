@@ -363,7 +363,7 @@ const CONFIG: Partial<Record<SubjectType, TypeFormConfig>> = {
   Habit: {
     type: "Habit",
     titleLabel: "Title",
-    hasStatus: false,
+    hasStatus: true,
     hasArea: true,
     canArchive: true,
     fields: [
@@ -383,6 +383,8 @@ const CONFIG: Partial<Record<SubjectType, TypeFormConfig>> = {
         hint: "A Habit needs at least one parent.",
       },
       areaField(),
+      // New habits start Building; Established graduates one (REWARD-2).
+      { ...statusField(), editOnly: true },
     ],
   },
   Commitment: {

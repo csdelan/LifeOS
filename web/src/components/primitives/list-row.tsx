@@ -2,8 +2,9 @@ import { cn } from "@/lib/utils";
 import { DateChip } from "@/components/primitives/date-chip";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { TypeBadge } from "@/components/primitives/type-badge";
+import { BountyChip } from "@/components/rewards/bounty-chip";
 import type { SubjectListItem } from "@/lib/production-ui-types";
-import { defaultStatus } from "@/lib/production-ui-types";
+import { defaultStatus, isTerminal } from "@/lib/production-ui-types";
 
 export function ListRow({
   item,
@@ -46,6 +47,8 @@ export function ListRow({
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-1.5">
         {trailing}
+        {/* What finishing it pays; once it's done, it has paid. */}
+        {isTerminal(status) ? null : <BountyChip amounts={item.bounty} />}
         <DateChip date={item.due} kind="due" />
         {item.scheduled && item.scheduled !== item.due ? (
           <DateChip date={item.scheduled} kind="scheduled" />
