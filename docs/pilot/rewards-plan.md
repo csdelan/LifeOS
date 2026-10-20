@@ -89,6 +89,7 @@ A future `penalty` entry is declared or derived with negative amounts and needs 
 | Trigger | Key | Due when |
 |---|---|---|
 | Task / Project / Goal completed | `completed:<subject>` | its current status is Completed |
+| Task time on the timer | `timed:<task>` | its current status is Completed and the timer recorded more than 0 seconds before that completion (0029) |
 | Habit day followed | `day:<habit>:<date>:followed` | the latest adherence for that date is followed |
 | Habit day partial | `day:<habit>:<date>:partial` | the latest adherence is partial; pays half of the `followed` bounty, rounded down |
 | Streak milestone, n ∈ {7, 30, 100} | `streak_<n>:<habit>:<run start date>` | a run of consecutive followed occurrences starting on that date reaches n |
@@ -96,7 +97,7 @@ A future `penalty` entry is declared or derived with negative amounts and needs 
 
 Every key also requires its triggering fact to fall on or after the `open` entry. A key's
 fact is the moment it became true in the record (`triggered_at` in `v_reward_trigger`): the
-status change for `completed` and `established`, the recording for a day, and for a
+status change for `completed`, `timed` and `established`, the recording for a day, and for a
 milestone the recording of the last of its n days. So a day pays when it is recorded after
 the opening, whatever its date (a backfill pays, as REWARD-2 asks), and dates never meet
 timestamps across time zones. Days and runs only count up to graduation (§3.5).
@@ -159,7 +160,29 @@ Read current status from the live fold `bsk_derived.subject_current_source`, as 
 { "followed": {}, "streak_7": {}, "streak_30": {}, "streak_100": {}, "established": {} }
 ```
 
+```json
+{ "completed": { "coins": 3 }, "timed": { "xp": 1, "every_minutes": 15 } }
+```
+
 - A missing trigger → the type default. An explicit `{}` → pays nothing.
+- **Time on the timer (`timed`, Tasks only, migration 0029).** On top of `completed`, a Task
+  can pay for the time its timer (TASKS-2) recorded: its `timed` price once for every
+  `every_minutes` (default 1, stored inside `timed` only when it isn't 1), rounded down, so 25
+  minutes at 10 pays twice. It is opt-in: `timed` has no default, so it pays nothing until
+  priced, and nothing for a task completed without the timer.
+  - What counts: `v_reward_trigger` sums every start / resume segment up to the next timer
+    action, among the timer events at or before the completion. A timer still running at the
+    completion stops counting there (whether the timer's Complete or a status change completed
+    it), and time recorded after the completion never counts.
+  - The seconds travel on the trigger row (`timed_seconds`, `DueAward.TimedSeconds`) and C#
+    prices them (`Bounty.PriceTimed`), as it does every other trigger. The earn cites the
+    status change and the timer events it counted.
+  - Like `completed`, reopening gives it back exactly, and completing again pays on all the
+    time recorded by then. Changing the price or the minutes never changes a paid earn.
+  - Written by `bsk bounty <task> --on timed xp=1 --every 15` (`--every` alone keeps the
+    price) and `POST /api/bounty` with `trigger: "timed"` and `everyMinutes`; minutes are
+    refused for any other trigger and below 1. `--clear` on `timed` drops the minutes with it.
+    A Task left without `--on` still prices `completed` (`BountyTriggers.Implied`).
 - It is named `bounty` because a Habit's `attributes.reward` is already the cue / routine /
   reward text (`v_habit.reward`).
 - It is written by `bsk bounty <subject> [--on <trigger>] xp=10 karma=3` and by
@@ -167,7 +190,7 @@ Read current status from the live fold `bsk_derived.subject_current_source`, as 
   never priced): `karma=3` adds Karma, `xp=0` drops XP. `--nothing` stores `{}`; `--clear`
   puts the trigger (or, without `--on`, every trigger) back on the default. With no amounts it
   shows each trigger's price and whether it is the default. `--on` may be left out when the
-  type pays on one trigger.
+  type pays on one trigger, or for `completed`.
 - Reading is lenient: a bounty in another shape, an unknown currency or an amount that isn't
   a whole number above zero is skipped (the trigger then pays the default or what remains),
   so a hand-edited bounty never fails a status change. `BountyService` is the strict writer.
@@ -176,18 +199,20 @@ Read current status from the live fold `bsk_derived.subject_current_source`, as 
 
 Starter defaults (`BountyDefaults`), placeholders to tune by feel:
 
-| Trigger | XP | Coins | Freedom | Gems |
-|---|---|---|---|---|
-| Task completed | 10 | 2 | 10 | – |
-| Project completed | 50 | 10 | 30 | 1 |
-| Goal completed | 150 | 25 | 60 | 3 |
-| Habit day followed (partial = half) | 5 | 1 | 5 | – |
-| Habit 7-day streak | 25 | 5 | 15 | – |
-| Habit 30-day streak | 75 | 15 | 30 | – |
-| Habit 100-day streak | 200 | 40 | 90 | 1 |
-| Habit established | 100 | 25 | 60 | 1 |
+| Trigger | XP | Freedom | Gems |
+|---|---|---|---|
+| Task completed | 10 | 10 | – |
+| Task time on the timer | – | – | – |
+| Project completed | 50 | 30 | 1 |
+| Goal completed | 150 | 60 | 3 |
+| Habit day followed (partial = half) | 5 | 5 | – |
+| Habit 7-day streak | 25 | 15 | – |
+| Habit 30-day streak | 75 | 30 | – |
+| Habit 100-day streak | 200 | 90 | 1 |
+| Habit established | 100 | 60 | 1 |
 
-Karma and Resolve default to 0; Chris adds them per item.
+Coins, Karma and Resolve default to 0 everywhere (2026-10-20): Coins are real money, so Chris
+awards them only for specific things, per item. Time on the timer has no default at all.
 
 ### 3.5 Habit lifecycle
 
@@ -447,3 +472,22 @@ number from 0025.
   The mock store's `mockLedgerDaily` files by the viewer's zone and refuses what the kernel
   refuses, in its words. The shared Tabs trigger now uses `text-muted-foreground`
   (`text-foreground/60` failed AA contrast in light mode).
+- [x] Follow-up (2026-10-20): zero-Coin defaults and time on the timer (migration 0029).
+  - No default pays Coins any more (Karma and Resolve already didn't); every other default is
+    unchanged. Items already priced keep their own bounty, and paid earns never change.
+  - The `timed` trigger (§3.2, §3.4): `BountyTriggers.Timed` on Tasks with `OptIn` (no
+    default), `AwardKeys.Timed`, `Bounty.ParseEveryMinutes` / `PriceTimed`, and `ToJson`
+    writing `every_minutes` inside `timed`. Migration 0029 recreates `v_reward_trigger` /
+    `v_reward_due` with the timed rows and a `timed_seconds` column (null on every other row).
+    `BountyService.SetAsync` / `SetNothingAsync` take `everyMinutes`; `BountyLine.EveryMinutes`
+    is on `GET /api/subjects/{id}` and `POST /api/bounty` answers; `bsk bounty --every`.
+  - Web: Tasks' Bounty section has a "For time on the timer" row with a Minutes per payment
+    box (blank = 1) and a line saying when it pays; `bountyWrites` sends `everyMinutes` with
+    any `timed` write, and clears `timed` once it is back on nothing every minute. The summary
+    reads "Pays 2 XP per 15 min" ("/15 min" on the chip). Toasts and the ledger name it "time
+    on the timer". The mock store settles `timed` on a Task's status change from its timer
+    events up to the completion (`lib/timer.ts` `timedSecondsBefore`).
+  - Also fixed: two light-mode contrast failures found by axe in both themes. The nav's
+    count badge (the link's `opacity-70` faded it to 3.0:1; the label now fades instead) and
+    the reward catalog's price chips (reward-hue text, 4.3:1; now foreground ink, as on the
+    bounty chip).

@@ -1021,6 +1021,8 @@ Build:      built
   choice. Complete is the one status shortcut, and it sits on the timer in the Task detail,
   not on the Tasks toolbar (TASKS-1). Events are append-only, so a mistaken start or stop
   stays in history; a correction would be a new kind of event.
+- Recorded time can pay: a Task priced for time on the timer (REWARD-1's `timed` trigger)
+  earns once per X minutes the timer recorded before it was completed.
 - Open decisions: manual time entry / correction; whether Start should also move a
   Not started Task to In progress.
 
@@ -2355,6 +2357,13 @@ Build:      built
 - Spendable: Coins, Freedom, Gems, Karma. XP and Resolve are tracked only.
 - The wallet starts at zero on launch day; nothing completed before then pays.
   (Decisions 2026-10-20.)
+- "Change the default rewards to zero coins. I will only award coins for specific things."
+  (2026-10-20) No type default pays Coins; I add them to the items that earn them.
+- "For tasks, let's add the capability to optionally reward currency for every 'X' minutes
+  duration spent (measured by the new timer). This is in addition to the fixed rewards for
+  the task. X will need to also be set, but it defaults to 1. If the timer isn't used when the
+  task is completed, then no time based reward is given. But the default is no time based
+  rewards unless I explicitly set it and use the timer." (2026-10-20)
 
 **Ontology fit (Claude):**
 - Maps to (D11): every earn is a `ledger` event with `derived` provenance whose
@@ -2362,7 +2371,14 @@ Build:      built
   the item, so "why did I get these coins?" is always answered by the record.
 - The bounty is `attributes.bounty`, a map of trigger → amounts
   (`{"completed": {"xp": 10, "coins": 2}}`). Unset = the current type default; `{}` = pays
-  nothing. It is not `attributes.reward`, which a Habit already uses for its cue / routine /
+  nothing.
+- Time on the timer is a second Task trigger, `timed` (award key `timed:<task>`), priced per
+  payment with the minutes inside it: `{"timed": {"xp": 1, "every_minutes": 15}}`. It is due
+  when the Task is Completed and its timer (TASKS-2) recorded time before that completion, and
+  pays the price once per whole block of minutes. The time counted is the timer's segments up
+  to the completion: a running timer stops counting there, and later time never counts. It has
+  no default, so it pays nothing until priced, and nothing without the timer. Reopening gives
+  it back; completing again pays on all the time recorded by then. It is not `attributes.reward`, which a Habit already uses for its cue / routine /
   reward loop.
 - Honest undo: the engine reconciles. It works out from the record which awards the item
   *should* hold (is it Completed now?), compares that with what the ledger has paid under each
@@ -2373,7 +2389,10 @@ Build:      built
   than a migration; `BountyDefaults`; `RewardService.ReconcileAsync` hooked into
   `StatusService` (so the web, `bsk status` and the timer's Complete all pay the same way);
   `v_reward_due` (which awards the record says are due), `v_ledger`, `v_wallet`;
-  `bsk bounty`, `bsk wallet`, `bsk rewards reconcile`.
+  `bsk bounty`, `bsk wallet`, `bsk rewards reconcile`. Time on the timer: migration 0029
+  (the `timed` rows of `v_reward_trigger` / `v_reward_due`, with `timed_seconds`),
+  `Bounty.PriceTimed`, `bsk bounty --on timed --every <minutes>`, `everyMinutes` on
+  `POST /api/bounty` and the bounty lines.
 - Implications: a penalty later is just a ledger entry with negative amounts, with no schema
   change. A one-time `open` ledger entry is the launch start line: triggers before it never pay.
 - Open decisions: a UI for editing the type defaults (v1 keeps them in code).

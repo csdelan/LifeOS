@@ -37,7 +37,7 @@ describe("mockLedgerDaily (LedgerDays, GET /api/ledger/daily)", () => {
     // Today holds the completion and its reversal (and, late at night, a seeded habit day).
     const todays = days.at(-1)!;
     expect(todays.date).toBe(today);
-    expect(todays.reversed).toEqual({ coins: 2, freedom: 10, xp: 10 });
+    expect(todays.reversed).toEqual({ freedom: 10, xp: 10 });
     expect(todays.earned.xp).toBeGreaterThanOrEqual(10);
     const wallet = mockWallet();
     const total = (pick: "earned" | "reversed" | "spent") => sumAmounts(...days.map((d) => d[pick]));

@@ -153,17 +153,18 @@ public static class RewardEndpoints
         }
 
         var asks = (body.Amounts is { Count: > 0 } ? 1 : 0) + (body.Nothing ? 1 : 0) + (body.Clear ? 1 : 0);
-        if (asks != 1)
+        // everyMinutes may come alone (keep the amounts), or with amounts or nothing — not with clear.
+        if (asks > 1 || (asks == 0 && body.EveryMinutes is null) || (body.Clear && body.EveryMinutes is not null))
         {
-            return Results.BadRequest(new ApiError("Send one of amounts, nothing or clear."));
+            return Results.BadRequest(new ApiError("Send one of amounts, nothing or clear (everyMinutes may come alone, with amounts or with nothing)."));
         }
 
         var subject = WriteEndpoints.ResolveWriteRef(body.Subject, reader);
         var view = body.Clear
             ? await bounties.ClearAsync(subject, body.Trigger, cancellationToken)
             : body.Nothing
-                ? await bounties.SetNothingAsync(subject, body.Trigger, cancellationToken)
-                : await bounties.SetAsync(subject, body.Trigger, body.Amounts!, cancellationToken);
+                ? await bounties.SetNothingAsync(subject, body.Trigger, body.EveryMinutes, cancellationToken)
+                : await bounties.SetAsync(subject, body.Trigger, body.Amounts, body.EveryMinutes, cancellationToken);
         return Results.Ok(BountyRows.From(view));
     }
 
@@ -233,7 +234,8 @@ public sealed class RewardPriceBody
 
 /// <summary>
 /// <c>POST /api/bounty</c> (<c>bsk bounty</c>): send one of <see cref="Amounts"/>,
-/// <see cref="Nothing"/> or <see cref="Clear"/>.
+/// <see cref="Nothing"/> or <see cref="Clear"/> — or, for <c>timed</c>, just
+/// <see cref="EveryMinutes"/>, which may also come with amounts or nothing.
 /// </summary>
 public sealed class BountyBody
 {
@@ -258,6 +260,12 @@ public sealed class BountyBody
 
     /// <summary>Put the trigger (or, without one, every trigger) back on its type default.</summary>
     public bool Clear { get; set; }
+
+    /// <summary>
+    /// <c>timed</c> only: how many minutes on the timer each payment takes, a whole number
+    /// from 1 up.
+    /// </summary>
+    public int? EveryMinutes { get; set; }
 }
 
 /// <summary>

@@ -328,7 +328,8 @@ function PriceChips({ reward }: { reward: RewardRow }) {
         return (
           <span
             key={key}
-            className="rounded-full bg-[var(--type-reward)]/12 px-2 py-0.5 text-xs font-medium text-[var(--type-reward)]"
+            // Foreground ink, as on the bounty chip: the reward hue as text fails contrast in light mode.
+            className="rounded-full bg-[var(--type-reward)]/12 px-2 py-0.5 text-xs font-medium text-foreground"
           >
             <span aria-hidden>{c?.symbol} </span>
             {n.toLocaleString()} {c?.label ?? key}

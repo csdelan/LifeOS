@@ -66,6 +66,25 @@ export function foldTimer(
 }
 
 /**
+ * The seconds a task's timer recorded up to `at` (its completion), as `bsk.v_reward_trigger`
+ * counts them for the `timed` reward: every start / resume runs until the next action, a
+ * segment still running at `at` stops there, and nothing after `at` counts.
+ */
+export function timedSecondsBefore(events: TimerEvent[], subjectId: string, at: string): number {
+  const atMs = Date.parse(at);
+  const ordered = events
+    .filter((e) => e.subjectId === subjectId && Date.parse(e.occurredAt) <= atMs)
+    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+  let total = 0;
+  ordered.forEach((e, i) => {
+    if (e.action !== "start" && e.action !== "resume") return;
+    const end = ordered[i + 1] ? Date.parse(ordered[i + 1].occurredAt) : atMs;
+    total += (end - Date.parse(e.occurredAt)) / 1000;
+  });
+  return Math.floor(total);
+}
+
+/**
  * The live figures: the stored seconds plus the running segment, if any. Clamped so
  * a client clock that runs behind the server never shows negative time.
  */

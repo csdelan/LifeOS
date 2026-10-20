@@ -22,26 +22,29 @@ public sealed class BountyService(SubjectService subjects, ISubjectRepository re
     public async Task<BountyView> GetAsync(string reference, CancellationToken cancellationToken = default)
     {
         var subject = await ResolveEarningAsync(reference, cancellationToken);
-        var stored = Bounty.Parse(await repository.GetAttributeValueAsync(
-            subject.Id, Bounty.AttributeKey, cancellationToken));
-        return View(subject, stored);
+        var (stored, every) = await ReadAsync(subject, cancellationToken);
+        return View(subject, stored, every);
     }
 
     /// <summary>
     /// Sets currencies on a trigger's price, starting from what it pays now (the default
     /// when it has never been priced): <c>karma=3</c> adds Karma, <c>xp=0</c> drops XP.
-    /// <paramref name="trigger"/> may be omitted when the type has only one. Refused, with
-    /// nothing written, for an unknown currency, an amount below zero, a currency listed
-    /// twice, or a trigger the type does not pay on.
+    /// <paramref name="trigger"/> may be omitted when the type has only one, or for
+    /// <c>completed</c> on a type that pays on completion. <paramref name="everyMinutes"/>
+    /// sets how many minutes on the timer each <c>timed</c> payment takes; with it, the
+    /// amounts may be left out. Refused, with nothing written, for an unknown currency, an
+    /// amount below zero, a currency listed twice, a trigger the type does not pay on, or
+    /// minutes that aren't a whole number from 1 up or aren't for <c>timed</c>.
     /// </summary>
     public async Task<BountyView> SetAsync(
-        string reference, string? trigger, IReadOnlyDictionary<string, long> amounts,
-        CancellationToken cancellationToken = default)
+        string reference, string? trigger, IReadOnlyDictionary<string, long>? amounts,
+        int? everyMinutes = null, CancellationToken cancellationToken = default)
     {
-        var changes = Normalize(amounts);
+        var changes = amounts is { Count: > 0 } || everyMinutes is null ? Normalize(amounts) : [];
         var subject = await ResolveEarningAsync(reference, cancellationToken);
         var on = TriggerFor(subject, trigger);
-        var stored = await ReadAsync(subject, cancellationToken);
+        CheckEveryMinutes(on, everyMinutes);
+        var (stored, every) = await ReadAsync(subject, cancellationToken);
 
         var price = Bounty.Price(subject.Type, on, stored);
         foreach (var (currency, amount) in changes)
@@ -57,18 +60,22 @@ public sealed class BountyService(SubjectService subjects, ISubjectRepository re
         }
 
         stored[on] = Bounty.InDisplayOrder(price);
-        return await WriteAsync(subject, stored, cancellationToken);
+        return await WriteAsync(subject, stored, everyMinutes ?? every, cancellationToken);
     }
 
-    /// <summary>Makes a trigger pay nothing at all (stores an explicit <c>{}</c>).</summary>
+    /// <summary>
+    /// Makes a trigger pay nothing at all (stores an explicit <c>{}</c>), optionally setting
+    /// the <c>timed</c> trigger's <paramref name="everyMinutes"/> at the same time.
+    /// </summary>
     public async Task<BountyView> SetNothingAsync(
-        string reference, string? trigger, CancellationToken cancellationToken = default)
+        string reference, string? trigger, int? everyMinutes = null, CancellationToken cancellationToken = default)
     {
         var subject = await ResolveEarningAsync(reference, cancellationToken);
         var on = TriggerFor(subject, trigger);
-        var stored = await ReadAsync(subject, cancellationToken);
+        CheckEveryMinutes(on, everyMinutes);
+        var (stored, every) = await ReadAsync(subject, cancellationToken);
         stored[on] = [];
-        return await WriteAsync(subject, stored, cancellationToken);
+        return await WriteAsync(subject, stored, everyMinutes ?? every, cancellationToken);
     }
 
     /// <summary>
@@ -79,7 +86,7 @@ public sealed class BountyService(SubjectService subjects, ISubjectRepository re
         string reference, string? trigger, CancellationToken cancellationToken = default)
     {
         var subject = await ResolveEarningAsync(reference, cancellationToken);
-        var stored = await ReadAsync(subject, cancellationToken);
+        var (stored, every) = await ReadAsync(subject, cancellationToken);
         if (string.IsNullOrWhiteSpace(trigger))
         {
             stored.Clear();
@@ -89,7 +96,27 @@ public sealed class BountyService(SubjectService subjects, ISubjectRepository re
             stored.Remove(TriggerFor(subject, trigger));
         }
 
-        return await WriteAsync(subject, stored, cancellationToken);
+        // Clearing `timed` clears its minutes with it: ToJson only writes them inside it.
+        return await WriteAsync(subject, stored, every, cancellationToken);
+    }
+
+    private static void CheckEveryMinutes(string trigger, int? everyMinutes)
+    {
+        if (everyMinutes is not { } minutes)
+        {
+            return;
+        }
+
+        if (!string.Equals(trigger, BountyTriggers.Timed, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"Only {BountyTriggers.Timed} pays by the minutes on the timer; {trigger} pays once.");
+        }
+
+        if (minutes < 1)
+        {
+            throw new ArgumentException($"Pay for every whole number of minutes on the timer from 1 up; got {minutes}.");
+        }
     }
 
     private async Task<SubjectRef> ResolveEarningAsync(string reference, CancellationToken cancellationToken)
@@ -109,10 +136,9 @@ public sealed class BountyService(SubjectService subjects, ISubjectRepository re
         var triggers = BountyTriggers.For(subject.Type);
         if (string.IsNullOrWhiteSpace(trigger))
         {
-            return triggers.Count == 1
-                ? triggers[0]
-                : throw new ArgumentException(
-                    $"Say which trigger to price: {string.Join(", ", triggers)}.");
+            return BountyTriggers.Implied(subject.Type)
+                   ?? throw new ArgumentException(
+                       $"Say which trigger to price: {string.Join(", ", triggers)}.");
         }
 
         if (string.Equals(trigger.Trim(), BountyTriggers.Partial, StringComparison.OrdinalIgnoreCase)
@@ -155,19 +181,22 @@ public sealed class BountyService(SubjectService subjects, ISubjectRepository re
         return byKey;
     }
 
-    private async Task<Dictionary<string, Dictionary<string, long>>> ReadAsync(
+    private async Task<(Dictionary<string, Dictionary<string, long>> Stored, int? EveryMinutes)> ReadAsync(
         SubjectRef subject, CancellationToken cancellationToken)
-        => Bounty.Parse(await repository.GetAttributeValueAsync(subject.Id, Bounty.AttributeKey, cancellationToken));
+    {
+        var json = await repository.GetAttributeValueAsync(subject.Id, Bounty.AttributeKey, cancellationToken);
+        return (Bounty.Parse(json), Bounty.ParseEveryMinutes(json));
+    }
 
     private async Task<BountyView> WriteAsync(
-        SubjectRef subject, Dictionary<string, Dictionary<string, long>> stored,
+        SubjectRef subject, Dictionary<string, Dictionary<string, long>> stored, int? everyMinutes,
         CancellationToken cancellationToken)
     {
         var updated = stored.Count == 0
             ? await repository.UpdateAttributesAsync(subject.Id, "{}", [Bounty.AttributeKey], cancellationToken)
             : await repository.UpdateAttributesAsync(
                 subject.Id,
-                new JsonObject { [Bounty.AttributeKey] = Bounty.ToJson(stored) }.ToJsonString(),
+                new JsonObject { [Bounty.AttributeKey] = Bounty.ToJson(stored, everyMinutes) }.ToJsonString(),
                 [],
                 cancellationToken);
         if (!updated)
@@ -176,18 +205,25 @@ public sealed class BountyService(SubjectService subjects, ISubjectRepository re
             throw new SubjectNotFoundException(subject.Urn);
         }
 
-        return View(subject, stored);
+        return View(subject, stored, stored.ContainsKey(BountyTriggers.Timed) ? everyMinutes : null);
     }
 
-    private static BountyView View(SubjectRef subject, IReadOnlyDictionary<string, Dictionary<string, long>> stored)
+    private static BountyView View(
+        SubjectRef subject, IReadOnlyDictionary<string, Dictionary<string, long>> stored, int? everyMinutes)
         => new(subject, BountyTriggers.For(subject.Type)
             .Select(trigger => new BountyLine(
-                trigger, Bounty.Price(subject.Type, trigger, stored), IsCustom: stored.ContainsKey(trigger)))
+                trigger, Bounty.Price(subject.Type, trigger, stored), IsCustom: stored.ContainsKey(trigger),
+                EveryMinutes: trigger == BountyTriggers.Timed ? everyMinutes ?? Bounty.DefaultEveryMinutes : null))
             .ToList());
 }
 
-/// <summary>What one trigger pays, and whether that is the item's own price (else its type default).</summary>
-public sealed record BountyLine(string Trigger, IReadOnlyDictionary<string, long> Amounts, bool IsCustom);
+/// <summary>
+/// What one trigger pays, and whether that is the item's own price (else its type default).
+/// For <c>timed</c>, <see cref="EveryMinutes"/> is how many minutes on the timer each
+/// payment takes; null for every other trigger.
+/// </summary>
+public sealed record BountyLine(
+    string Trigger, IReadOnlyDictionary<string, long> Amounts, bool IsCustom, int? EveryMinutes = null);
 
 /// <summary>An item and what each of its triggers pays.</summary>
 public sealed record BountyView(SubjectRef Subject, IReadOnlyList<BountyLine> Lines);

@@ -322,8 +322,8 @@ public sealed class RewardService(
             return false;
         }
 
-        var stored = await ReadBountyAsync(subject, cancellationToken);
-        var paying = caused.Where(t => Bounty.Price(subject.Type, t.Trigger, stored).Count > 0).ToList();
+        var bounty = await ReadBountyAsync(subject, cancellationToken);
+        var paying = caused.Where(t => bounty.Price(subject.Type, t).Count > 0).ToList();
         if (paying.Count == 0)
         {
             return false;
@@ -348,10 +348,10 @@ public sealed class RewardService(
         var unpaid = due.Where(d => !paidKeys.Contains(d.AwardKey)).ToList();
         if (unpaid.Count > 0)
         {
-            var stored = await ReadBountyAsync(subject, cancellationToken);
+            var bounty = await ReadBountyAsync(subject, cancellationToken);
             foreach (var award in unpaid)
             {
-                var amounts = Bounty.Price(subject.Type, award.Trigger, stored);
+                var amounts = bounty.Price(subject.Type, award);
                 if (amounts.Count == 0)
                 {
                     // Priced to pay nothing: there is nothing to record.
@@ -425,9 +425,27 @@ public sealed class RewardService(
             ExpectPaid: expectPaid);
     }
 
-    private async Task<Dictionary<string, Dictionary<string, long>>> ReadBountyAsync(
-        SubjectRef subject, CancellationToken cancellationToken)
-        => Bounty.Parse(await subjects.GetAttributeValueAsync(subject.Id, Bounty.AttributeKey, cancellationToken));
+    private async Task<StoredBounty> ReadBountyAsync(SubjectRef subject, CancellationToken cancellationToken)
+    {
+        var json = await subjects.GetAttributeValueAsync(subject.Id, Bounty.AttributeKey, cancellationToken);
+        return new StoredBounty(Bounty.Parse(json), Bounty.ParseEveryMinutes(json) ?? Bounty.DefaultEveryMinutes);
+    }
+
+    /// <summary>An item's stored bounty, read once per reconcile.</summary>
+    private sealed record StoredBounty(Dictionary<string, Dictionary<string, long>> Amounts, int EveryMinutes)
+    {
+        /// <summary>
+        /// What <paramref name="award"/> pays: its trigger's price, or — for the timer time
+        /// on a completed task — that price once per <see cref="EveryMinutes"/> recorded.
+        /// </summary>
+        public Dictionary<string, long> Price(string type, DueAward award)
+        {
+            var price = Bounty.Price(type, award.Trigger, Amounts);
+            return string.Equals(award.Trigger, BountyTriggers.Timed, StringComparison.OrdinalIgnoreCase)
+                ? Bounty.PriceTimed(price, award.TimedSeconds ?? 0, EveryMinutes)
+                : price;
+        }
+    }
 }
 
 /// <summary>One currency in the wallet: its totals and balance.</summary>

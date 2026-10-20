@@ -204,6 +204,7 @@ export function triggerLabel(trigger: string): string {
   if (trigger === "followed") return "day followed";
   if (trigger === "partial") return "partial day";
   if (trigger === "established") return "established";
+  if (trigger === "timed") return "time on the timer";
   const streak = /^streak_(\d+)$/.exec(trigger);
   return streak ? `${streak[1]}-day streak` : trigger;
 }
@@ -293,7 +294,12 @@ export function normalizeTimerAwards(raw: TimerActionResult): TimerActionResult 
 }
 
 export function normalizeBountyLine(raw: BountyLine): BountyLine {
-  return { ...raw, amounts: normalizeAmounts(raw.amounts), default: normalizeAmounts(raw.default) };
+  return {
+    ...raw,
+    amounts: normalizeAmounts(raw.amounts),
+    default: normalizeAmounts(raw.default),
+    ...(raw.everyMinutes != null ? { everyMinutes: Number(raw.everyMinutes) } : {}),
+  };
 }
 
 export function normalizeBountyResult(raw: BountyResult): BountyResult {

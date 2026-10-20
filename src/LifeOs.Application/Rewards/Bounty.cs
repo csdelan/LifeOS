@@ -9,6 +9,11 @@ namespace LifeOs.Application.Rewards;
 /// amounts, e.g. <c>{"completed": {"xp": 10, "karma": 3}}</c>. A trigger the bounty does
 /// not name pays its type default; an explicit <c>{}</c> pays nothing.
 /// <para>
+/// A Task's <c>timed</c> trigger also says how often it pays: <c>{"timed": {"xp": 1,
+/// "every_minutes": 15}}</c> pays 1 XP for every 15 minutes on the timer. Without
+/// <c>every_minutes</c> it pays every minute.
+/// </para>
+/// <para>
 /// Reading is lenient — a bounty hand-edited into some other shape, a currency the
 /// vocabulary no longer names, or an amount that is not a whole number above zero is
 /// skipped rather than failing a status change. <see cref="BountyService"/> is the
@@ -19,6 +24,12 @@ public static class Bounty
 {
     /// <summary>The attribute that holds an item's bounty.</summary>
     public const string AttributeKey = "bounty";
+
+    /// <summary>The key, inside the <c>timed</c> price, for how many minutes each payment takes.</summary>
+    public const string EveryMinutesKey = "every_minutes";
+
+    /// <summary>How many minutes on the timer each <c>timed</c> payment takes when the item doesn't say.</summary>
+    public const int DefaultEveryMinutes = 1;
 
     /// <summary>
     /// The stored bounty, trigger → amounts (each in display order), from the raw
@@ -93,8 +104,53 @@ public static class Bounty
             : new Dictionary<string, long>(BountyDefaults.For(type, trigger));
     }
 
-    /// <summary>The bounty as the jsonb value to store.</summary>
-    public static JsonObject ToJson(IReadOnlyDictionary<string, Dictionary<string, long>> bounty)
+    /// <summary>
+    /// The stored <c>timed</c> price's <c>every_minutes</c>, or null when it doesn't set one
+    /// (or it isn't a whole number from 1 up) — read leniently, like <see cref="Parse"/>.
+    /// </summary>
+    public static int? ParseEveryMinutes(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonNode.Parse(json) is JsonObject root
+                   && root[BountyTriggers.Timed] is JsonObject timed
+                   && timed[EveryMinutesKey] is JsonValue value
+                   && value.TryGetValue<int>(out var minutes)
+                   && minutes >= 1
+                ? minutes
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// What a completed task's timer time pays: <paramref name="perBlock"/> once for every
+    /// <paramref name="everyMinutes"/> in <paramref name="seconds"/>, rounded down — nothing
+    /// for less than one block.
+    /// </summary>
+    public static Dictionary<string, long> PriceTimed(
+        IReadOnlyDictionary<string, long> perBlock, long seconds, int everyMinutes)
+    {
+        var blocks = seconds / (60L * Math.Max(everyMinutes, 1));
+        return blocks <= 0
+            ? []
+            : InDisplayOrder(perBlock.ToDictionary(kv => kv.Key, kv => kv.Value * blocks));
+    }
+
+    /// <summary>
+    /// The bounty as the jsonb value to store; <paramref name="everyMinutes"/>, when other than
+    /// the default, goes into the <c>timed</c> price (and is dropped when there is none).
+    /// </summary>
+    public static JsonObject ToJson(
+        IReadOnlyDictionary<string, Dictionary<string, long>> bounty, int? everyMinutes = null)
     {
         var root = new JsonObject();
         foreach (var (trigger, amounts) in bounty.OrderBy(kv => kv.Key, StringComparer.Ordinal))
@@ -103,6 +159,12 @@ public static class Bounty
             foreach (var (currency, amount) in amounts)
             {
                 node[currency] = amount;
+            }
+
+            if (string.Equals(trigger, BountyTriggers.Timed, StringComparison.OrdinalIgnoreCase)
+                && everyMinutes is { } minutes && minutes != DefaultEveryMinutes)
+            {
+                node[EveryMinutesKey] = minutes;
             }
 
             root[trigger] = node;

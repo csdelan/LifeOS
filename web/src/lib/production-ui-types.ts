@@ -535,6 +535,8 @@ export interface BountyLine {
   amounts: Amounts;
   isCustom: boolean;
   default: Amounts;
+  /** `timed` only: the minutes on the timer each payment of `amounts` takes (default 1). */
+  everyMinutes?: number | null;
 }
 
 /** Each trigger an earning type pays on, at its default — what a create form pre-fills. */
@@ -546,7 +548,9 @@ export interface BountyTypeDefaults {
 /**
  * Price an item (`bsk bounty`). Send one of `amounts` (set these currencies on what the
  * trigger pays now; name all six to set the whole price), `nothing` or `clear` (back on the
- * default; with no trigger, every trigger). `trigger` may be left out when the type has one.
+ * default; with no trigger, every trigger). `trigger` may be left out when the type has one,
+ * or for `completed`. `everyMinutes` (`timed` only, from 1) sets the minutes on the timer
+ * each payment takes; it may come alone, with amounts or with nothing, never with clear.
  */
 export interface BountyRequest {
   subject: string;
@@ -554,6 +558,7 @@ export interface BountyRequest {
   amounts?: Amounts;
   nothing?: boolean;
   clear?: boolean;
+  everyMinutes?: number;
 }
 
 export interface BountyResult {

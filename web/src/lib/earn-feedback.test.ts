@@ -37,6 +37,16 @@ describe("summarizeAwards", () => {
     expect(summary.big).toBe(true);
   });
 
+  it("names time on the timer beside completing", () => {
+    const summary = summarizeAwards([
+      award("completed", { freedom: 10, xp: 10 }, "earn", "Write the report"),
+      award("timed", { xp: 4 }, "earn", "Write the report"),
+    ]);
+    expect(summary.earned).toEqual({ freedom: 10, xp: 14 });
+    expect(summary.earnedFor).toBe("Write the report — completed, time on the timer");
+    expect(summary.big).toBe(false);
+  });
+
   it("is big for Gems, a streak milestone or establishing — not an ordinary day", () => {
     expect(summarizeAwards([award("followed", { xp: 5 })]).big).toBe(false);
     expect(summarizeAwards([award("completed", { gems: 1 })]).big).toBe(true);

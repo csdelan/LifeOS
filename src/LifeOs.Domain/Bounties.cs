@@ -15,6 +15,14 @@ public static class BountyTriggers
     /// <summary>A Task, Project or Goal reached its Completed status.</summary>
     public const string Completed = "completed";
 
+    /// <summary>
+    /// A Task was completed with time on its timer (TASKS-2): it pays its price once for
+    /// every <c>every_minutes</c> (default 1) the timer recorded before the completion, on
+    /// top of <see cref="Completed"/>. Opt-in: it has no default, so it pays nothing until
+    /// priced, and nothing when the timer recorded no time.
+    /// </summary>
+    public const string Timed = "timed";
+
     /// <summary>A habit occurrence was followed.</summary>
     public const string Followed = "followed";
 
@@ -35,14 +43,30 @@ public static class BountyTriggers
 
     private static readonly Dictionary<string, string[]> ByType = new(StringComparer.OrdinalIgnoreCase)
     {
-        [SubjectTypes.Task] = [Completed],
+        [SubjectTypes.Task] = [Completed, Timed],
         [SubjectTypes.Project] = [Completed],
         [SubjectTypes.Goal] = [Completed],
         [SubjectTypes.Habit] = [Followed, .. StreakMilestones.Select(Streak), Established],
     };
 
+    /// <summary>The triggers with no default price: they pay only once an item prices them.</summary>
+    public static IReadOnlySet<string> OptIn { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Timed };
+
     /// <summary>The types that can earn rewards.</summary>
     public static IReadOnlyCollection<string> EarningTypes => ByType.Keys;
+
+    /// <summary>
+    /// The trigger meant when none is named: the type's only one, or <see cref="Completed"/>
+    /// for a type that pays on completion; null when the type has several and none is
+    /// the obvious one (a Habit).
+    /// </summary>
+    public static string? Implied(string type)
+    {
+        var triggers = For(type);
+        return triggers.Count == 1
+            ? triggers[0]
+            : triggers.Contains(Completed) ? Completed : null;
+    }
 
     /// <summary>
     /// The triggers <paramref name="type"/> can be priced on, or empty when it never
@@ -71,7 +95,8 @@ public static class BountyTriggers
 /// The default bounty per type and trigger (rewards plan §3.4) — what an item pays
 /// when its own bounty does not name that trigger. Placeholders to tune by feel;
 /// retuning one never rewrites a past earn, because each earn records its amounts.
-/// Karma and Resolve default to zero: they are set per item.
+/// Coins (real money), Karma and Resolve default to zero: Chris awards them per item,
+/// for specific things. An <see cref="BountyTriggers.OptIn"/> trigger has no default.
 /// </summary>
 public static class BountyDefaults
 {
@@ -79,35 +104,35 @@ public static class BountyDefaults
     {
         [(SubjectTypes.Task, BountyTriggers.Completed)] = new()
         {
-            [Currencies.Coins] = 2, [Currencies.Freedom] = 10, [Currencies.Xp] = 10
+            [Currencies.Freedom] = 10, [Currencies.Xp] = 10
         },
         [(SubjectTypes.Project, BountyTriggers.Completed)] = new()
         {
-            [Currencies.Coins] = 10, [Currencies.Freedom] = 30, [Currencies.Gems] = 1, [Currencies.Xp] = 50
+            [Currencies.Freedom] = 30, [Currencies.Gems] = 1, [Currencies.Xp] = 50
         },
         [(SubjectTypes.Goal, BountyTriggers.Completed)] = new()
         {
-            [Currencies.Coins] = 25, [Currencies.Freedom] = 60, [Currencies.Gems] = 3, [Currencies.Xp] = 150
+            [Currencies.Freedom] = 60, [Currencies.Gems] = 3, [Currencies.Xp] = 150
         },
         [(SubjectTypes.Habit, BountyTriggers.Followed)] = new()
         {
-            [Currencies.Coins] = 1, [Currencies.Freedom] = 5, [Currencies.Xp] = 5
+            [Currencies.Freedom] = 5, [Currencies.Xp] = 5
         },
         [(SubjectTypes.Habit, BountyTriggers.Streak(7))] = new()
         {
-            [Currencies.Coins] = 5, [Currencies.Freedom] = 15, [Currencies.Xp] = 25
+            [Currencies.Freedom] = 15, [Currencies.Xp] = 25
         },
         [(SubjectTypes.Habit, BountyTriggers.Streak(30))] = new()
         {
-            [Currencies.Coins] = 15, [Currencies.Freedom] = 30, [Currencies.Xp] = 75
+            [Currencies.Freedom] = 30, [Currencies.Xp] = 75
         },
         [(SubjectTypes.Habit, BountyTriggers.Streak(100))] = new()
         {
-            [Currencies.Coins] = 40, [Currencies.Freedom] = 90, [Currencies.Gems] = 1, [Currencies.Xp] = 200
+            [Currencies.Freedom] = 90, [Currencies.Gems] = 1, [Currencies.Xp] = 200
         },
         [(SubjectTypes.Habit, BountyTriggers.Established)] = new()
         {
-            [Currencies.Coins] = 25, [Currencies.Freedom] = 60, [Currencies.Gems] = 1, [Currencies.Xp] = 100
+            [Currencies.Freedom] = 60, [Currencies.Gems] = 1, [Currencies.Xp] = 100
         },
     };
 
@@ -137,6 +162,9 @@ public static class AwardKeys
 {
     /// <summary>The key for completing <paramref name="subjectId"/>.</summary>
     public static string Completed(Guid subjectId) => $"{BountyTriggers.Completed}:{subjectId}";
+
+    /// <summary>The key for the timer time on <paramref name="taskId"/> when it was completed.</summary>
+    public static string Timed(Guid taskId) => $"{BountyTriggers.Timed}:{taskId}";
 
     /// <summary>The key for establishing <paramref name="habitId"/>.</summary>
     public static string Established(Guid habitId) => $"{BountyTriggers.Established}:{habitId}";

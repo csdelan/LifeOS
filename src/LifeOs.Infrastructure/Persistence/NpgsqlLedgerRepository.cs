@@ -403,7 +403,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
         var rows = await connection.QueryAsync<AwardRow>(new CommandDefinition(
             $"""
             SELECT award_key AS awardkey, trigger, source_event_ids AS sourceeventids,
-                   triggered_at AS triggeredat
+                   triggered_at AS triggeredat, timed_seconds AS timedseconds
             FROM {view}
             WHERE subject_id = @subjectId
             ORDER BY award_key;
@@ -411,7 +411,8 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
             new { subjectId },
             cancellationToken: cancellationToken));
         return rows
-            .Select(r => new DueAward(r.AwardKey, r.Trigger, r.SourceEventIds, AsUtc(r.TriggeredAt)!.Value))
+            .Select(r => new DueAward(
+                r.AwardKey, r.Trigger, r.SourceEventIds, AsUtc(r.TriggeredAt)!.Value, r.TimedSeconds))
             .ToList();
     }
 
@@ -545,6 +546,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
         public string Trigger { get; set; } = "";
         public Guid[] SourceEventIds { get; set; } = [];
         public DateTime TriggeredAt { get; set; }
+        public long? TimedSeconds { get; set; }
     }
 
     private sealed class PaidRow

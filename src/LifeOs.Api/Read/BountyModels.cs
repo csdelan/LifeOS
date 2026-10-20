@@ -14,6 +14,12 @@ public sealed class BountyLineRow
     public IReadOnlyDictionary<string, long> Amounts { get; set; } = new Dictionary<string, long>();
     public bool IsCustom { get; set; }
     public IReadOnlyDictionary<string, long> Default { get; set; } = new Dictionary<string, long>();
+
+    /// <summary>
+    /// <c>timed</c> only: how many minutes on the timer each payment of <see cref="Amounts"/>
+    /// takes (1 unless the item says otherwise); null for every other trigger.
+    /// </summary>
+    public int? EveryMinutes { get; set; }
 }
 
 /// <summary><c>POST /api/bounty</c>: the item and what each of its triggers pays now.</summary>
@@ -95,12 +101,14 @@ public static class BountyRows
         }
 
         var stored = Bounty.Parse(bountyJson);
+        var every = Bounty.ParseEveryMinutes(bountyJson) ?? Bounty.DefaultEveryMinutes;
         return BountyTriggers.For(type).Select(trigger => new BountyLineRow
         {
             Trigger = trigger,
             Amounts = Bounty.Price(type, trigger, stored),
             IsCustom = stored.ContainsKey(trigger),
-            Default = BountyDefaults.For(type, trigger)
+            Default = BountyDefaults.For(type, trigger),
+            EveryMinutes = trigger == BountyTriggers.Timed ? every : null
         }).ToList();
     }
 
@@ -132,7 +140,8 @@ public static class BountyRows
             Trigger = line.Trigger,
             Amounts = line.Amounts,
             IsCustom = line.IsCustom,
-            Default = BountyDefaults.For(view.Subject.Type, line.Trigger)
+            Default = BountyDefaults.For(view.Subject.Type, line.Trigger),
+            EveryMinutes = line.EveryMinutes
         }).ToList()
     };
 }

@@ -372,7 +372,8 @@ function NavBody({
                 "flex min-h-11 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition-colors ease-hearth md:min-h-0",
                 active
                   ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground opacity-70 hover:bg-sidebar-accent hover:opacity-100",
+                  : // Fade the label and icon, not the whole link, so the count badge keeps its contrast.
+                    "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
               )}
             >
               <Icon className="size-4" aria-hidden />

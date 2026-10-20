@@ -48,10 +48,14 @@ public sealed class RewardEndpointsTests(PostgresFixture postgres)
         => (await PostAsync(client, "/api/subjects", new { type = SubjectTypes.Task, title = Unique("rewarded task") }))
             .GetProperty("id").GetGuid();
 
-    /// <summary>Completes a fresh Task, earning its type default (10 XP, 2 Coins, 10 Freedom).</summary>
+    /// <summary>
+    /// Completes a fresh Task priced at its type default plus 2 Coins (Coins default to zero),
+    /// earning 10 XP, 2 Coins and 10 Freedom.
+    /// </summary>
     private static async Task EarnTaskDefaultAsync(HttpClient client)
     {
         var task = await NewTaskAsync(client);
+        await PostAsync(client, "/api/bounty", new { subject = task.ToString(), amounts = new { coins = 2 } });
         var earned = await PostAsync(client, "/api/status", new { subject = task.ToString(), status = "Completed" });
         Assert.Single(earned.GetProperty("awards").EnumerateArray());
     }
@@ -72,7 +76,7 @@ public sealed class RewardEndpointsTests(PostgresFixture postgres)
     {
         await using var host = await StartAsync();
         var task = await NewTaskAsync(host.Client);
-        var before = await BalanceAsync(host.Client, Currencies.Coins);
+        var before = await BalanceAsync(host.Client, Currencies.Xp);
 
         var completed = await PostAsync(host.Client, "/api/status", new { subject = task.ToString(), status = "Completed" });
 
@@ -80,13 +84,14 @@ public sealed class RewardEndpointsTests(PostgresFixture postgres)
         Assert.Equal(LedgerEntries.Earn, earn.GetProperty("entry").GetString());
         Assert.Equal(BountyTriggers.Completed, earn.GetProperty("trigger").GetString());
         Assert.Equal(task, earn.GetProperty("subject").GetProperty("id").GetGuid());
-        Assert.Equal(2, Amount(earn.GetProperty("amounts"), Currencies.Coins));
-        Assert.Equal(before + 2, await BalanceAsync(host.Client, Currencies.Coins));
+        Assert.Equal(10, Amount(earn.GetProperty("amounts"), Currencies.Xp));
+        Assert.Equal(0, Amount(earn.GetProperty("amounts"), Currencies.Coins));
+        Assert.Equal(before + 10, await BalanceAsync(host.Client, Currencies.Xp));
 
         var reopened = await PostAsync(host.Client, "/api/status", new { subject = task.ToString(), status = "In progress" });
         var reversal = Assert.Single(reopened.GetProperty("awards").EnumerateArray());
         Assert.Equal(LedgerEntries.Reversal, reversal.GetProperty("entry").GetString());
-        Assert.Equal(-2, Amount(reversal.GetProperty("amounts"), Currencies.Coins));
+        Assert.Equal(-10, Amount(reversal.GetProperty("amounts"), Currencies.Xp));
 
         // A change that pays nothing still answers, with no awards.
         var waiting = await PostAsync(host.Client, "/api/status", new { subject = task.ToString(), status = "Waiting" });
@@ -112,7 +117,7 @@ public sealed class RewardEndpointsTests(PostgresFixture postgres)
         var award = Assert.Single(followed.GetProperty("awards").EnumerateArray());
         Assert.Equal((LedgerEntries.Earn, BountyTriggers.Followed),
             (award.GetProperty("entry").GetString(), award.GetProperty("trigger").GetString()));
-        Assert.Equal(1, Amount(award.GetProperty("amounts"), Currencies.Coins));
+        Assert.Equal(5, Amount(award.GetProperty("amounts"), Currencies.Xp));
     }
 
     [Fact]

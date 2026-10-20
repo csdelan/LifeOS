@@ -42,10 +42,21 @@ import type {
   Wallet,
 } from "@/lib/production-ui-types";
 import { defaultStatus, isTerminal } from "@/lib/production-ui-types";
-import { BOUNTY_TRIGGERS, STREAK_MILESTONES, earns, linesFor, parseBounty, priceOf } from "@/lib/bounty";
+import {
+  BOUNTY_TRIGGERS,
+  STREAK_MILESTONES,
+  TIMED,
+  bountyJson,
+  earns,
+  linesFor,
+  parseBounty,
+  parseEveryMinutes,
+  priceOf,
+  priceTimed,
+} from "@/lib/bounty";
 import { applyStreakToHabit } from "@/lib/habit-streak";
 import { CURRENCIES, coinsToUsd, currency, orderedAmounts, shortfall } from "@/lib/rewards";
-import { foldTimer, type TimerEvent } from "@/lib/timer";
+import { foldTimer, timedSecondsBefore, type TimerEvent } from "@/lib/timer";
 import {
   createSeed,
   type CanonicalEdge,
@@ -1503,7 +1514,7 @@ export type { CanonicalEdge, MockState };
 // ---------------------------------------------------------------------------
 // Earning (REWARD-2 / REWARD-4): the reconcile of RewardService, scoped to what a write
 // touched. A status change settles the item's `completed` (or a habit's `established`)
-// award; a habit day settles that day's followed / partial awards and the streak
+// award, and a Task's `timed` one (its timer's time up to the completion); a habit day settles that day's followed / partial awards and the streak
 // milestones of the runs around it. Due and unpaid → an earn priced now; paid and no
 // longer due → a reversal of exactly what was paid. Seeded history is never swept, so a
 // click pays only for what it changed.
@@ -1511,6 +1522,10 @@ export type { CanonicalEdge, MockState };
 
 function storedBounty(subjectId: string): Record<string, Amounts> {
   return parseBounty(rawAttrs(state.details[subjectId]?.attributes).bounty);
+}
+
+function storedEveryMinutes(subjectId: string): number | null {
+  return parseEveryMinutes(rawAttrs(state.details[subjectId]?.attributes).bounty);
 }
 
 function netPaid(awardKey: string): Amounts {
@@ -1522,13 +1537,20 @@ function netPaid(awardKey: string): Amounts {
   return Object.fromEntries(Object.entries(net).filter(([, n]) => n !== 0));
 }
 
-function settle(item: SubjectListItem, awardKey: string, trigger: string, due: boolean, at: string): Award | null {
+function settle(
+  item: SubjectListItem,
+  awardKey: string,
+  trigger: string,
+  due: boolean,
+  at: string,
+  price: () => Amounts = () => priceOf(item.type, trigger, storedBounty(item.id)),
+): Award | null {
   const net = netPaid(awardKey);
   const paid = Object.keys(net).length > 0;
   let entry: "earn" | "reversal";
   let amounts: Amounts;
   if (due && !paid) {
-    amounts = priceOf(item.type, trigger, storedBounty(item.id));
+    amounts = price();
     // A trigger priced to pay nothing writes nothing.
     if (Object.keys(amounts).length === 0) return null;
     entry = "earn";
@@ -1564,11 +1586,20 @@ function reconcileStatus(subjectId: string, at: string): Award[] {
   const item = byId(subjectId);
   if (!item || !earns(item.type)) return [];
   const status = (item.status ?? "").trim().toLowerCase();
-  const award =
-    item.type === "Habit"
-      ? settle(item, `established:${item.id}`, "established", status === "established", at)
-      : settle(item, `completed:${item.id}`, "completed", status === "completed", at);
-  return award ? [award] : [];
+  if (item.type === "Habit") {
+    const award = settle(item, `established:${item.id}`, "established", status === "established", at);
+    return award ? [award] : [];
+  }
+  const awards = [settle(item, `completed:${item.id}`, "completed", status === "completed", at)];
+  if (item.type === "Task") {
+    const seconds = status === "completed" ? timedSecondsBefore(state.timerEvents, item.id, at) : 0;
+    awards.push(
+      settle(item, `${TIMED}:${item.id}`, TIMED, seconds > 0, at, () =>
+        priceTimed(priceOf(item.type, TIMED, storedBounty(item.id)), seconds, storedEveryMinutes(item.id) ?? 1),
+      ),
+    );
+  }
+  return awards.filter((a): a is Award => !!a);
 }
 
 interface Run {
@@ -1639,7 +1670,12 @@ export function withBounty(item: SubjectListItem): SubjectListItem {
 }
 
 export function detailWithBounty(detail: SubjectDetail): SubjectDetail {
-  return { ...detail, bounty: earns(detail.type) ? linesFor(detail.type, storedBounty(detail.id)) : null };
+  return {
+    ...detail,
+    bounty: earns(detail.type)
+      ? linesFor(detail.type, storedBounty(detail.id), storedEveryMinutes(detail.id))
+      : null,
+  };
 }
 
 /**
@@ -1765,7 +1801,12 @@ export function mockSetBounty(req: BountyRequest): BountyResult {
   const item = byRef(req.subject);
   if (!item) throw new Error(`No subject matches '${req.subject}'.`);
   const asks = (req.amounts && Object.keys(req.amounts).length > 0 ? 1 : 0) + (req.nothing ? 1 : 0) + (req.clear ? 1 : 0);
-  if (asks !== 1) throw new Error("Send one of amounts, nothing or clear.");
+  const minutes = req.everyMinutes;
+  if (asks > 1 || (asks === 0 && minutes == null) || (req.clear && minutes != null)) {
+    throw new Error(
+      "Send one of amounts, nothing or clear (everyMinutes may come alone, with amounts or with nothing).",
+    );
+  }
   const changes: Amounts = {};
   for (const [key, n] of Object.entries(req.amounts ?? {})) {
     const c = CURRENCIES.find((x) => x.key === key.trim().toLowerCase());
@@ -1786,25 +1827,34 @@ export function mockSetBounty(req: BountyRequest): BountyResult {
   if (asked === "partial" && triggers.includes("followed")) {
     throw new Error("A partial day always pays half of followed; price followed instead.");
   }
+  // `BountyTriggers.Implied`: the only trigger, else completed.
+  const implied = triggers.length === 1 ? triggers[0] : triggers.includes("completed") ? "completed" : undefined;
   const trigger = !asked
     ? req.clear
       ? undefined
-      : triggers.length === 1
-        ? triggers[0]
-        : (() => {
-            throw new Error(`Say which trigger to price: ${triggers.join(", ")}.`);
-          })()
+      : (implied ??
+        (() => {
+          throw new Error(`Say which trigger to price: ${triggers.join(", ")}.`);
+        })())
     : triggers.find((t) => t === asked);
   if (asked && !trigger) {
     throw new Error(`A ${item.type} doesn't pay on '${req.trigger?.trim()}'. Expected: ${triggers.join(", ")}.`);
   }
+  if (minutes != null) {
+    if (trigger !== TIMED) throw new Error(`Only ${TIMED} pays by the minutes on the timer; ${trigger} pays once.`);
+    if (!Number.isInteger(minutes) || minutes < 1) {
+      throw new Error(`Pay for every whole number of minutes on the timer from 1 up; got ${minutes}.`);
+    }
+  }
 
   const stored = storedBounty(item.id);
+  let every = storedEveryMinutes(item.id);
   if (req.clear) {
     if (trigger) delete stored[trigger];
     else for (const key of Object.keys(stored)) delete stored[key];
   } else if (req.nothing) {
     stored[trigger!] = {};
+    every = minutes ?? every;
   } else {
     const price = priceOf(item.type, trigger!, stored);
     for (const [k, n] of Object.entries(changes)) {
@@ -1812,11 +1862,14 @@ export function mockSetBounty(req: BountyRequest): BountyResult {
       else price[k] = n;
     }
     stored[trigger!] = Object.fromEntries(orderedAmounts(price));
+    every = minutes ?? every;
   }
-  writeRewardAttrs(item.id, { bounty: Object.keys(stored).length > 0 ? stored : undefined });
+  // The minutes live inside `timed`, so clearing it clears them.
+  if (!stored[TIMED]) every = null;
+  writeRewardAttrs(item.id, { bounty: Object.keys(stored).length > 0 ? bountyJson(stored, every) : undefined });
   emit();
   return {
     subject: { id: item.id, urn: item.urn, type: item.type, title: item.title },
-    lines: linesFor(item.type, stored),
+    lines: linesFor(item.type, stored, every),
   };
 }

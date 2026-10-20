@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addDays, todayIso } from "@/lib/dates";
 import { todayHabitRows } from "@/lib/derive";
 import {
@@ -18,7 +18,7 @@ import {
 import { balanceOf } from "@/lib/rewards";
 
 const ago = (n: number) => addDays(todayIso(), -n);
-const coins = () => balanceOf(mockWallet(), "coins");
+const xp = () => balanceOf(mockWallet(), "xp");
 
 describe("mock earning (RewardService.ReconcileAsync, scoped to the write)", () => {
   beforeEach(() => {
@@ -26,24 +26,25 @@ describe("mock earning (RewardService.ReconcileAsync, scoped to the write)", () 
   });
 
   it("pays a Task's default on completion, gives it back on reopen, and pays once on re-completion", () => {
-    const before = coins();
+    const before = xp();
     const [earn] = setStatus("task-shoes", "Completed");
     expect(earn).toMatchObject({
       entry: "earn",
       trigger: "completed",
       awardKey: "completed:task-shoes",
-      amounts: { coins: 2, freedom: 10, xp: 10 },
+      amounts: { freedom: 10, xp: 10 },
       subject: { id: "task-shoes", title: "Buy race shoes" },
     });
-    expect(coins()).toBe(before + 2);
+    expect(earn.amounts.coins).toBeUndefined();
+    expect(xp()).toBe(before + 10);
     expect(setStatus("task-shoes", "Completed")).toEqual([]);
 
     const [reversal] = setStatus("task-shoes", "In progress");
-    expect(reversal).toMatchObject({ entry: "reversal", amounts: { coins: -2, freedom: -10, xp: -10 } });
-    expect(coins()).toBe(before);
+    expect(reversal).toMatchObject({ entry: "reversal", amounts: { freedom: -10, xp: -10 } });
+    expect(xp()).toBe(before);
 
     expect(setStatus("task-shoes", "Completed")).toHaveLength(1);
-    expect(coins()).toBe(before + 2);
+    expect(xp()).toBe(before + 10);
     expect(
       getState().ledger.filter((e) => e.awardKey === "completed:task-shoes").map((e) => e.entry),
     ).toEqual(["earn", "reversal", "earn"]);
@@ -52,7 +53,7 @@ describe("mock earning (RewardService.ReconcileAsync, scoped to the write)", () 
 
   it("pays an item's own bounty, and nothing for one priced at nothing", () => {
     mockSetBounty({ subject: "task-shoes", amounts: { karma: 3, xp: 0 } });
-    expect(setStatus("task-shoes", "Completed")[0].amounts).toEqual({ coins: 2, freedom: 10, karma: 3 });
+    expect(setStatus("task-shoes", "Completed")[0].amounts).toEqual({ freedom: 10, karma: 3 });
 
     mockSetBounty({ subject: "task-longrun", nothing: true });
     expect(setStatus("task-longrun", "Completed")).toEqual([]);
@@ -66,11 +67,11 @@ describe("mock earning (RewardService.ReconcileAsync, scoped to the write)", () 
   it("pays a followed day, half for a partial one, and gives a corrected day back", () => {
     const habit = "habit-stretch";
     const [day] = adhereHabit(habit, "followed", todayIso());
-    expect(day).toMatchObject({ trigger: "followed", awardKey: `day:${habit}:${todayIso()}:followed`, amounts: { coins: 1, freedom: 5, xp: 5 } });
+    expect(day).toMatchObject({ trigger: "followed", awardKey: `day:${habit}:${todayIso()}:followed`, amounts: { freedom: 5, xp: 5 } });
 
     const swap = adhereHabit(habit, "partial", todayIso());
     expect(swap.map((a) => [a.entry, a.trigger, a.amounts])).toEqual([
-      ["reversal", "followed", { coins: -1, freedom: -5, xp: -5 }],
+      ["reversal", "followed", { freedom: -5, xp: -5 }],
       ["earn", "partial", { freedom: 2, xp: 2 }],
     ]);
 
@@ -98,7 +99,7 @@ describe("mock earning (RewardService.ReconcileAsync, scoped to the write)", () 
   it("establishing pays and graduates; back to Building gives it back and tracks it again", () => {
     expect(mockHabits().find((h) => h.id === "habit-mobility")?.establishment?.targetMet).toBe(true);
     const [award] = setStatus("habit-mobility", "Established");
-    expect(award).toMatchObject({ trigger: "established", amounts: { coins: 25, freedom: 60, gems: 1, xp: 100 } });
+    expect(award).toMatchObject({ trigger: "established", amounts: { freedom: 60, gems: 1, xp: 100 } });
 
     const habits = mockHabits();
     const mobility = habits.find((h) => h.id === "habit-mobility")!;
@@ -118,7 +119,7 @@ describe("mock earning (RewardService.ReconcileAsync, scoped to the write)", () 
   it("reads progress toward the establish target, and a young habit isn't ready", () => {
     const inbox = mockHabits().find((h) => h.id === "habit-inbox")!;
     expect(inbox.status).toBeNull();
-    expect(inbox.bounty).toEqual({ coins: 1, freedom: 5, xp: 5 });
+    expect(inbox.bounty).toEqual({ freedom: 5, xp: 5 });
     expect(inbox.establishment).toMatchObject({ minAdherence: 0.8, windowDays: 60, targetMet: false });
     expect(inbox.establishment!.ageDays).toBe(40);
   });
@@ -133,22 +134,20 @@ describe("mockSetBounty (BountyService)", () => {
     const result = mockSetBounty({ subject: "habit-inbox", trigger: "streak_7", amounts: { resolve: 2 } });
     expect(result.lines.find((l) => l.trigger === "streak_7")).toEqual({
       trigger: "streak_7",
-      amounts: { coins: 5, freedom: 15, xp: 25, resolve: 2 },
+      amounts: { freedom: 15, xp: 25, resolve: 2 },
       isCustom: true,
-      default: { coins: 5, freedom: 15, xp: 25 },
+      default: { freedom: 15, xp: 25 },
     });
     const detail = detailWithBounty(getState().details["habit-inbox"]);
     expect(detail.bounty?.find((l) => l.trigger === "streak_7")?.isCustom).toBe(true);
 
     mockSetBounty({ subject: "task-shoes", amounts: { xp: 30 } });
     expect(withBounty(getState().subjects.find((s) => s.id === "task-shoes")!).bounty).toEqual({
-      coins: 2,
       freedom: 10,
       xp: 30,
     });
     mockSetBounty({ subject: "task-shoes", clear: true });
     expect(withBounty(getState().subjects.find((s) => s.id === "task-shoes")!).bounty).toEqual({
-      coins: 2,
       freedom: 10,
       xp: 10,
     });
@@ -172,8 +171,91 @@ describe("mockSetBounty (BountyService)", () => {
       "only Task, Project, Goal, Habit earn rewards.",
     );
     expect(() => mockSetBounty({ subject: "task-shoes", nothing: true, clear: true })).toThrow(
-      "Send one of amounts, nothing or clear.",
+      "Send one of amounts, nothing or clear (everyMinutes may come alone, with amounts or with nothing).",
     );
+    expect(() => mockSetBounty({ subject: "task-shoes", trigger: "timed", clear: true, everyMinutes: 5 })).toThrow(
+      "Send one of amounts, nothing or clear",
+    );
+    expect(() => mockSetBounty({ subject: "task-shoes", amounts: { xp: 1 }, everyMinutes: 15 })).toThrow(
+      "Only timed pays by the minutes on the timer; completed pays once.",
+    );
+    expect(() => mockSetBounty({ subject: "task-shoes", trigger: "timed", everyMinutes: 0 })).toThrow(
+      "Pay for every whole number of minutes on the timer from 1 up; got 0.",
+    );
+  });
+
+  it("keeps the minutes inside timed: minutes alone keep the price, and clearing timed drops both", () => {
+    const timed = () => detailWithBounty(getState().details["task-shoes"]).bounty?.find((l) => l.trigger === "timed");
+    const stored = () =>
+      (JSON.parse(getState().details["task-shoes"].attributes ?? "{}") as { bounty?: unknown }).bounty;
+
+    expect(timed()).toEqual({ trigger: "timed", amounts: {}, isCustom: false, default: {}, everyMinutes: 1 });
+    mockSetBounty({ subject: "task-shoes", trigger: "timed", amounts: { xp: 2 }, everyMinutes: 25 });
+    mockSetBounty({ subject: "task-shoes", trigger: "timed", everyMinutes: 45 });
+    expect(timed()).toMatchObject({ amounts: { xp: 2 }, isCustom: true, everyMinutes: 45 });
+    mockSetBounty({ subject: "task-shoes", amounts: { coins: 3 } });
+    expect(stored()).toEqual({ timed: { xp: 2, every_minutes: 45 }, completed: { coins: 3, freedom: 10, xp: 10 } });
+
+    mockSetBounty({ subject: "task-shoes", trigger: "timed", clear: true });
+    expect(timed()).toEqual({ trigger: "timed", amounts: {}, isCustom: false, default: {}, everyMinutes: 1 });
+    expect(stored()).toEqual({ completed: { coins: 3, freedom: 10, xp: 10 } });
+  });
+});
+
+describe("time on the timer (the timed reward)", () => {
+  beforeEach(() => {
+    resetStore();
+    vi.useFakeTimers({ toFake: ["Date"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("pays once per block of minutes on top of completing, clips a running timer, and gives it back on reopen", () => {
+    const t0 = Date.now();
+    const at = (minutes: number) => vi.setSystemTime(t0 + minutes * 60_000);
+    mockSetBounty({ subject: "task-shoes", trigger: "timed", amounts: { xp: 2, coins: 1 }, everyMinutes: 15 });
+
+    applyTimer("task-shoes", "start");
+    at(20);
+    applyTimer("task-shoes", "pause");
+    at(30);
+    applyTimer("task-shoes", "resume");
+    // 20 + 19 = 39 minutes, still running: completing stops it here. Two whole blocks of 15.
+    at(49);
+    const done = applyTimer("task-shoes", "complete");
+    expect(done.awards?.map((a) => [a.trigger, a.awardKey, a.amounts])).toEqual([
+      ["completed", "completed:task-shoes", { freedom: 10, xp: 10 }],
+      ["timed", "timed:task-shoes", { coins: 2, xp: 4 }],
+    ]);
+
+    at(60);
+    expect(setStatus("task-shoes", "In progress").map((a) => [a.entry, a.trigger, a.amounts])).toEqual([
+      ["reversal", "completed", { freedom: -10, xp: -10 }],
+      ["reversal", "timed", { coins: -2, xp: -4 }],
+    ]);
+
+    // Six more minutes, then done again: paid on all 45.
+    applyTimer("task-shoes", "start");
+    at(66);
+    expect(applyTimer("task-shoes", "complete").awards?.find((a) => a.trigger === "timed")?.amounts).toEqual({
+      coins: 3,
+      xp: 6,
+    });
+  });
+
+  it("pays nothing for time unless it is priced, and nothing without the timer", () => {
+    // task-longrun's seeded timer recorded 25 minutes; its time was never priced.
+    expect(setStatus("task-longrun", "Completed").map((a) => a.trigger)).toEqual(["completed"]);
+    setStatus("task-longrun", "In progress");
+    mockSetBounty({ subject: "task-longrun", trigger: "timed", amounts: { freedom: 1 }, everyMinutes: 10 });
+    expect(setStatus("task-longrun", "Completed").find((a) => a.trigger === "timed")?.amounts).toEqual({
+      freedom: 2,
+    });
+
+    // Priced, but done without the timer.
+    mockSetBounty({ subject: "task-shoes", trigger: "timed", amounts: { xp: 5 } });
+    expect(setStatus("task-shoes", "Completed").map((a) => a.trigger)).toEqual(["completed"]);
   });
 });
 

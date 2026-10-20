@@ -1,15 +1,31 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { AmountFields } from "@/components/rewards/amount-fields";
 import { BountyChip } from "@/components/rewards/bounty-chip";
 import type { BountyLine, SubjectType } from "@/lib/production-ui-types";
-import { bountyProblem, bountyTriggerTitle, draftForLine, type BountyDraft } from "@/lib/bounty";
-import { CURRENCIES, amountsFrom, draftFrom, sameAmounts } from "@/lib/rewards";
+import {
+  DEFAULT_EVERY_MINUTES,
+  EVERY_MINUTES,
+  TIMED,
+  bountyProblem,
+  bountyTriggerTitle,
+  draftAmounts,
+  draftForLine,
+  draftMinutes,
+  draftOnDefault,
+  lineDraft,
+  perMinutes,
+  type BountyDraft,
+} from "@/lib/bounty";
+import { CURRENCIES } from "@/lib/rewards";
 
 /**
  * An item's bounty (REWARD-2), one row of currencies per trigger, pre-filled with what it
  * pays now — the type default until Chris prices it. The draft holds only the triggers he
- * touched; `bountyWrites` turns it into the writes, saving only what changed.
+ * touched; `bountyWrites` turns it into the writes, saving only what changed. A Task's
+ * time on the timer also takes the minutes each payment needs.
  */
 export function BountyEditor({
   idPrefix,
@@ -29,8 +45,9 @@ export function BountyEditor({
     <div className="space-y-3">
       {lines.map((line) => {
         const value = draftForLine(line, draft);
-        const onDefault = sameAmounts(amountsFrom(value), line.default);
+        const onDefault = draftOnDefault(line, value);
         const headingId = `${idPrefix}-${line.trigger}-title`;
+        const minutesId = `${idPrefix}-${line.trigger}-every`;
         return (
           <div
             key={line.trigger}
@@ -49,12 +66,37 @@ export function BountyEditor({
                   type="button"
                   variant="ghost"
                   size="xs"
-                  onClick={() => onChange({ ...draft, [line.trigger]: draftFrom(line.default, CURRENCIES) })}
+                  onClick={() =>
+                    onChange({ ...draft, [line.trigger]: lineDraft(line, line.default, DEFAULT_EVERY_MINUTES) })
+                  }
                 >
                   Use the default
                 </Button>
               )}
             </div>
+            {line.trigger === TIMED ? (
+              <div className="space-y-1">
+                <Label htmlFor={minutesId}>Minutes per payment</Label>
+                <Input
+                  id={minutesId}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  step={1}
+                  placeholder={String(DEFAULT_EVERY_MINUTES)}
+                  className="w-24"
+                  value={value[EVERY_MINUTES] ?? ""}
+                  aria-describedby={`${minutesId}-hint`}
+                  onChange={(e) =>
+                    onChange({ ...draft, [line.trigger]: { ...value, [EVERY_MINUTES]: e.target.value } })
+                  }
+                />
+                <p id={`${minutesId}-hint`} className="text-[0.6875rem] text-muted-foreground">
+                  Paid on top of completing, once for every {minutesWords(draftMinutes(value))} the timer
+                  recorded before the task was done. Nothing without the timer.
+                </p>
+              </div>
+            ) : null}
             <AmountFields
               idPrefix={`${idPrefix}-${line.trigger}`}
               currencies={CURRENCIES}
@@ -78,18 +120,27 @@ export function BountyEditor({
   );
 }
 
+/** "minute", "15 minutes". */
+function minutesWords(n: number): string {
+  return Number.isInteger(n) && n > 1 ? `${n} minutes` : "minute";
+}
+
 /** Each trigger and what it pays, read-only; "default" marks the type default. */
 export function BountySummary({ lines, draft = {} }: { lines: BountyLine[]; draft?: BountyDraft }) {
   return (
     <ul className="space-y-1">
       {lines.map((line) => {
-        const amounts = amountsFrom(draftForLine(line, draft));
-        const custom = draft[line.trigger] ? !sameAmounts(amounts, line.default) : line.isCustom;
+        const typed = draftForLine(line, draft);
+        const amounts = draftAmounts(typed);
+        const custom = draft[line.trigger] ? !draftOnDefault(line, typed) : line.isCustom;
         return (
           <li key={line.trigger} className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted-foreground">{bountyTriggerTitle(line.trigger)}</span>
             {Object.keys(amounts).length > 0 ? (
-              <BountyChip amounts={amounts} />
+              <BountyChip
+                amounts={amounts}
+                suffix={line.trigger === TIMED ? perMinutes(draftMinutes(typed)) : undefined}
+              />
             ) : (
               <span className="text-[0.75rem] text-muted-foreground">pays nothing</span>
             )}

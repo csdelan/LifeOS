@@ -137,13 +137,13 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
         var kernel = Build();
         var task = await CreateAsync(kernel, SubjectTypes.Task);
         await kernel.Bounties.SetAsync(
-            task.Urn, null, new Dictionary<string, long> { ["karma"] = 3, ["xp"] = 25, ["freedom"] = 0 }, Ct);
+            task.Urn, null, new Dictionary<string, long> { ["karma"] = 3, ["xp"] = 25, ["freedom"] = 0 }, cancellationToken: Ct);
 
         var completed = await kernel.Status.ChangeStatusAsync(task.Urn, "Completed", Ct);
 
         // Starts from the default, adds Karma, raises XP, drops Freedom.
         Assert.Equal(
-            new Dictionary<string, long> { [Currencies.Coins] = 2, [Currencies.Karma] = 3, [Currencies.Xp] = 25 },
+            new Dictionary<string, long> { [Currencies.Karma] = 3, [Currencies.Xp] = 25 },
             Assert.Single(completed.Awards).Amounts);
     }
 
@@ -152,7 +152,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
     {
         var kernel = Build();
         var task = await CreateAsync(kernel, SubjectTypes.Task);
-        await kernel.Bounties.SetNothingAsync(task.Urn, null, Ct);
+        await kernel.Bounties.SetNothingAsync(task.Urn, null, cancellationToken: Ct);
 
         var completed = await kernel.Status.ChangeStatusAsync(task.Urn, "Completed", Ct);
 
@@ -225,7 +225,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
         var task = await CreateAsync(kernel, SubjectTypes.Task);
         await kernel.Status.ChangeStatusAsync(task.Urn, "Completed", Ct);
 
-        await kernel.Bounties.SetAsync(task.Urn, null, new Dictionary<string, long> { ["xp"] = 999 }, Ct);
+        await kernel.Bounties.SetAsync(task.Urn, null, new Dictionary<string, long> { ["xp"] = 999 }, cancellationToken: Ct);
 
         Assert.Empty(await kernel.Rewards.ReconcileAsync(task, cancellationToken: Ct));
         Assert.Equal(Default(SubjectTypes.Task), await NetForAsync(kernel, task));
@@ -280,7 +280,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
 
         Assert.Empty(completed.Awards);
         var refused = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            kernel.Bounties.SetAsync(appointment.Urn, null, new Dictionary<string, long> { ["xp"] = 5 }, Ct));
+            kernel.Bounties.SetAsync(appointment.Urn, null, new Dictionary<string, long> { ["xp"] = 5 }, cancellationToken: Ct));
         Assert.Contains("only Task, Project, Goal, Habit earn", refused.Message);
     }
 
@@ -336,7 +336,12 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
                 BountyTriggers.Earns(type) == (triggers.Count > 0),
                 $"{type}: BountyTriggers says earns={BountyTriggers.Earns(type)}, v_reward_trigger has [{string.Join(", ", triggers)}].");
             Assert.All(triggers, t => Assert.True(BountyTriggers.Pays(type, t), $"{type} has an unpriced trigger '{t}'."));
-            Assert.All(BountyTriggers.For(type), t => Assert.NotEmpty(BountyDefaults.For(type, t)));
+            // Every trigger has a default except the opt-in ones, which pay only once priced.
+            Assert.All(
+                BountyTriggers.For(type),
+                t => Assert.Equal(!BountyTriggers.OptIn.Contains(t), BountyDefaults.For(type, t).Count > 0));
+            Assert.All(BountyTriggers.For(type), t => Assert.False(
+                BountyDefaults.For(type, t).ContainsKey(Currencies.Coins), $"{type} {t} defaults to Coins."));
             if (type == SubjectTypes.Habit)
             {
                 Assert.Equal(
@@ -433,7 +438,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
             var task = await CreateAsync(kernel, SubjectTypes.Task);
             Assert.Empty((await kernel.Status.ChangeStatusAsync(task.Urn, "In progress", Ct)).Awards);
             var unpriced = await CreateAsync(kernel, SubjectTypes.Task);
-            await kernel.Bounties.SetNothingAsync(unpriced.Urn, null, Ct);
+            await kernel.Bounties.SetNothingAsync(unpriced.Urn, null, cancellationToken: Ct);
             Assert.Empty((await kernel.Status.ChangeStatusAsync(unpriced.Urn, "Completed", Ct)).Awards);
             Assert.Null((await kernel.Rewards.GetWalletAsync(Ct)).OpenedAt);
 
@@ -472,12 +477,12 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
         Assert.Equal(Default(SubjectTypes.Goal), unpriced.Amounts);
 
         var priced = Assert.Single((await kernel.Bounties.SetAsync(
-            goal.Urn, "Completed", new Dictionary<string, long> { ["resolve"] = 5 }, Ct)).Lines);
+            goal.Urn, "Completed", new Dictionary<string, long> { ["resolve"] = 5 }, cancellationToken: Ct)).Lines);
         Assert.True(priced.IsCustom);
         Assert.Equal(5, priced.Amounts[Currencies.Resolve]);
         Assert.Equal(Default(SubjectTypes.Goal)[Currencies.Gems], priced.Amounts[Currencies.Gems]);
 
-        var nothing = Assert.Single((await kernel.Bounties.SetNothingAsync(goal.Urn, null, Ct)).Lines);
+        var nothing = Assert.Single((await kernel.Bounties.SetNothingAsync(goal.Urn, null, cancellationToken: Ct)).Lines);
         Assert.True(nothing.IsCustom);
         Assert.Empty(nothing.Amounts);
 
@@ -498,7 +503,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
         var task = await CreateAsync(kernel, SubjectTypes.Task);
 
         var refused = await Assert.ThrowsAsync<ArgumentException>(() =>
-            kernel.Bounties.SetAsync(task.Urn, trigger, new Dictionary<string, long> { [currency] = amount }, Ct));
+            kernel.Bounties.SetAsync(task.Urn, trigger, new Dictionary<string, long> { [currency] = amount }, cancellationToken: Ct));
 
         Assert.Contains(message, refused.Message);
         Assert.Null(await kernel.Provider.GetRequiredService<ISubjectRepository>()

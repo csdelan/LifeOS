@@ -150,9 +150,11 @@ public sealed record LedgerWrite(
 /// <summary>
 /// An award <c>bsk.v_reward_due</c> says an item is due (rewards plan §3.2): its key,
 /// its trigger, the events that make it due (cited by the earn), and when it became due.
+/// A <c>timed</c> award also carries the seconds the timer recorded before the completion.
 /// </summary>
 public sealed record DueAward(
-    string AwardKey, string Trigger, IReadOnlyList<Guid> SourceEventIds, DateTimeOffset TriggeredAt);
+    string AwardKey, string Trigger, IReadOnlyList<Guid> SourceEventIds, DateTimeOffset TriggeredAt,
+    long? TimedSeconds = null);
 
 /// <summary>
 /// An award the ledger currently holds for an item: its key, its trigger, what it nets

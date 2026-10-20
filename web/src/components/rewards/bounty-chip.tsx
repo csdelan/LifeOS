@@ -14,7 +14,7 @@ export function BountyChip({
 }: {
   amounts?: Amounts | null;
   prefix?: string;
-  /** e.g. "a day", read after the amounts. */
+  /** e.g. "a day" or "per 15 min", read after the amounts; shown as "/day", "/15 min". */
   suffix?: string;
   className?: string;
 }) {
@@ -37,7 +37,7 @@ export function BountyChip({
             {n.toLocaleString()}
           </span>
         ))}
-        {suffix ? <span className="text-muted-foreground">/{suffix.replace(/^an? /, "")}</span> : null}
+        {suffix ? <span className="text-muted-foreground">/{suffix.replace(/^(an?|per) /, "")}</span> : null}
       </span>
     </span>
   );

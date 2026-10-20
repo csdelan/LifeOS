@@ -64,12 +64,22 @@ public sealed class BountyEndpointsTests(PostgresFixture postgres)
         Assert.Equal(
             [SubjectTypes.Goal, SubjectTypes.Habit, SubjectTypes.Project, SubjectTypes.Task],
             byType.Keys.Order());
-        var task = Assert.Single(byType[SubjectTypes.Task].EnumerateArray());
-        Assert.Equal(BountyTriggers.Completed, task.GetProperty("trigger").GetString());
+        var taskLines = byType[SubjectTypes.Task].EnumerateArray().ToList();
         Assert.Equal(
-            new Dictionary<string, long> { [Currencies.Coins] = 2, [Currencies.Freedom] = 10, [Currencies.Xp] = 10 },
+            [BountyTriggers.Completed, BountyTriggers.Timed],
+            taskLines.Select(l => l.GetProperty("trigger").GetString()));
+        var task = taskLines[0];
+        // Coins default to zero: Chris awards them per item.
+        Assert.Equal(
+            new Dictionary<string, long> { [Currencies.Freedom] = 10, [Currencies.Xp] = 10 },
             Amounts(task.GetProperty("amounts")));
         Assert.False(task.GetProperty("isCustom").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, task.GetProperty("everyMinutes").ValueKind);
+        // Time on the timer pays nothing until priced, every minute by default.
+        var timed = taskLines[1];
+        Assert.Empty(timed.GetProperty("amounts").EnumerateObject());
+        Assert.Empty(timed.GetProperty("default").EnumerateObject());
+        Assert.Equal(1, timed.GetProperty("everyMinutes").GetInt32());
         Assert.Equal(
             ["followed", "streak_7", "streak_30", "streak_100", "established"],
             byType[SubjectTypes.Habit].EnumerateArray().Select(l => l.GetProperty("trigger").GetString()));
@@ -98,7 +108,7 @@ public sealed class BountyEndpointsTests(PostgresFixture postgres)
         var line = Line(priced.GetProperty("lines"), BountyTriggers.Completed);
         Assert.Equal(expected, Amounts(line.GetProperty("amounts")));
         Assert.True(line.GetProperty("isCustom").GetBoolean());
-        Assert.Equal(2, Amounts(line.GetProperty("default"))[Currencies.Coins]);
+        Assert.Equal(10, Amounts(line.GetProperty("default"))[Currencies.Xp]);
 
         var item = await GetAsync(host.Client, $"/api/subjects/{task}/list-item");
         Assert.Equal(expected, Amounts(item.GetProperty("bounty")));
@@ -161,9 +171,50 @@ public sealed class BountyEndpointsTests(PostgresFixture postgres)
         Assert.Equal(
             new Dictionary<string, long>
             {
-                [Currencies.Coins] = 5, [Currencies.Freedom] = 15, [Currencies.Xp] = 25, [Currencies.Resolve] = 2
+                [Currencies.Freedom] = 15, [Currencies.Xp] = 25, [Currencies.Resolve] = 2
             },
             Amounts(Line(streak.GetProperty("lines"), "streak_7").GetProperty("amounts")));
+
+        // Minutes on the timer belong to `timed`, from 1 up, and never come with clear.
+        var task = await NewAsync(host.Client, SubjectTypes.Task);
+        Assert.Contains("Only timed pays by the minutes on the timer",
+            await RefusedAsync(host.Client, new { subject = task.ToString(), everyMinutes = 15, amounts = new { xp = 1 } }));
+        Assert.Contains("from 1 up; got 0",
+            await RefusedAsync(host.Client, new { subject = task.ToString(), trigger = "timed", everyMinutes = 0 }));
+        Assert.Contains("one of amounts, nothing or clear",
+            await RefusedAsync(host.Client, new { subject = task.ToString(), trigger = "timed", everyMinutes = 5, clear = true }));
+    }
+
+    [Fact]
+    public async Task Time_on_the_timer_is_priced_per_block_of_minutes_and_reads_back()
+    {
+        await using var host = await StartAsync();
+        var task = await NewAsync(host.Client, SubjectTypes.Task);
+
+        var priced = await PostAsync(host.Client, "/api/bounty", new
+        {
+            subject = task.ToString(), trigger = "timed", amounts = new { xp = 2 }, everyMinutes = 15
+        });
+        var timed = Line(priced.GetProperty("lines"), BountyTriggers.Timed);
+        Assert.Equal(new Dictionary<string, long> { [Currencies.Xp] = 2 }, Amounts(timed.GetProperty("amounts")));
+        Assert.Equal(15, timed.GetProperty("everyMinutes").GetInt32());
+        Assert.True(timed.GetProperty("isCustom").GetBoolean());
+
+        // Minutes alone keep the amounts.
+        var retimed = await PostAsync(host.Client, "/api/bounty", new { subject = task.ToString(), trigger = "timed", everyMinutes = 30 });
+        timed = Line(retimed.GetProperty("lines"), BountyTriggers.Timed);
+        Assert.Equal(new Dictionary<string, long> { [Currencies.Xp] = 2 }, Amounts(timed.GetProperty("amounts")));
+        Assert.Equal(30, timed.GetProperty("everyMinutes").GetInt32());
+
+        var detail = await GetAsync(host.Client, $"/api/subjects/{task}");
+        Assert.Equal(30, Line(detail.GetProperty("bounty"), BountyTriggers.Timed).GetProperty("everyMinutes").GetInt32());
+
+        // Clearing it puts both back: pays nothing, every minute.
+        var cleared = await PostAsync(host.Client, "/api/bounty", new { subject = task.ToString(), trigger = "timed", clear = true });
+        timed = Line(cleared.GetProperty("lines"), BountyTriggers.Timed);
+        Assert.Empty(timed.GetProperty("amounts").EnumerateObject());
+        Assert.Equal(1, timed.GetProperty("everyMinutes").GetInt32());
+        Assert.False(timed.GetProperty("isCustom").GetBoolean());
     }
 
     [Fact]

@@ -46,7 +46,7 @@ describe("Rewards History", () => {
     const cell = await screen.findByRole("button", {
       name: `${formatDayFull(todayIso())} (today): ${todayInWords()}`,
     });
-    expect(todayInWords()).toContain("gave back 2 Coins, 10 Freedom, 10 XP");
+    expect(todayInWords()).toContain("gave back 10 Freedom, 10 XP");
     await user.click(cell);
     expect(cell).toHaveAttribute("aria-pressed", "true");
 

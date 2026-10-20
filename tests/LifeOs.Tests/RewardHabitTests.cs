@@ -343,14 +343,14 @@ public sealed class RewardHabitTests(PostgresFixture postgres)
         Assert.All(view.Lines, l => Assert.False(l.IsCustom));
 
         var needsTrigger = await Assert.ThrowsAsync<ArgumentException>(() =>
-            kernel.Bounties.SetAsync(habit.Urn, null, new Dictionary<string, long> { ["xp"] = 9 }, Ct));
+            kernel.Bounties.SetAsync(habit.Urn, null, new Dictionary<string, long> { ["xp"] = 9 }, cancellationToken: Ct));
         Assert.Contains("Say which trigger", needsTrigger.Message);
         var partial = await Assert.ThrowsAsync<ArgumentException>(() =>
-            kernel.Bounties.SetAsync(habit.Urn, "partial", new Dictionary<string, long> { ["xp"] = 9 }, Ct));
+            kernel.Bounties.SetAsync(habit.Urn, "partial", new Dictionary<string, long> { ["xp"] = 9 }, cancellationToken: Ct));
         Assert.Contains("half of followed", partial.Message);
 
         await kernel.Bounties.SetAsync(
-            habit.Urn, "followed", new Dictionary<string, long> { ["xp"] = 9, ["coins"] = 0, ["freedom"] = 0, ["karma"] = 1 }, Ct);
+            habit.Urn, "followed", new Dictionary<string, long> { ["xp"] = 9, ["coins"] = 0, ["freedom"] = 0, ["karma"] = 1 }, cancellationToken: Ct);
 
         var recorded = await RecordAsync(kernel, habit, AdherenceResults.Partial);
         Assert.Equal(new Dictionary<string, long> { [Currencies.Xp] = 4 }, Assert.Single(recorded.Awards).Amounts);

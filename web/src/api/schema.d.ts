@@ -784,6 +784,8 @@ export interface components {
             };
             nothing?: boolean;
             clear?: boolean;
+            /** Format: int32 */
+            everyMinutes?: null | number | string;
         };
         BountyLineRow: {
             trigger?: string;
@@ -794,6 +796,8 @@ export interface components {
             default?: {
                 [key: string]: number | string;
             };
+            /** Format: int32 */
+            everyMinutes?: null | number | string;
         };
         BountyResult: {
             subject?: components["schemas"]["CreatedSubject"];
