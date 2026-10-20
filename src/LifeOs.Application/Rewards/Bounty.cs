@@ -74,13 +74,24 @@ public static class Bounty
 
     /// <summary>
     /// What <paramref name="trigger"/> pays on an item of <paramref name="type"/>: its own
-    /// bounty's amounts when it names the trigger, otherwise the type default.
+    /// bounty's amounts when it names the trigger, otherwise the type default. A partial
+    /// habit day pays half of what a followed one does, rounded down; a currency that
+    /// halves to nothing is dropped.
     /// </summary>
     public static Dictionary<string, long> Price(
         string type, string trigger, IReadOnlyDictionary<string, Dictionary<string, long>> stored)
-        => stored.TryGetValue(trigger, out var custom)
-            ? custom
+    {
+        if (string.Equals(trigger, BountyTriggers.Partial, StringComparison.OrdinalIgnoreCase))
+        {
+            return Price(type, BountyTriggers.Followed, stored)
+                .Where(kv => kv.Value / 2 > 0)
+                .ToDictionary(kv => kv.Key, kv => kv.Value / 2);
+        }
+
+        return stored.TryGetValue(trigger, out var custom)
+            ? new Dictionary<string, long>(custom)
             : new Dictionary<string, long>(BountyDefaults.For(type, trigger));
+    }
 
     /// <summary>The bounty as the jsonb value to store.</summary>
     public static JsonObject ToJson(IReadOnlyDictionary<string, Dictionary<string, long>> bounty)

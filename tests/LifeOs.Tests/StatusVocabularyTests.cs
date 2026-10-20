@@ -35,6 +35,7 @@ public sealed class StatusVocabularyTests(PostgresFixture postgres)
     [InlineData("missed")]      // Commitment / Appointment
     [InlineData("promoted")]    // Idea
     [InlineData("rejected")]    // Idea
+    [InlineData("Established")] // Habit (0027)
     public async Task New_terminal_words_are_terminal(string status)
     {
         await using var connection = await OpenAsync();
@@ -53,6 +54,7 @@ public sealed class StatusVocabularyTests(PostgresFixture postgres)
     [InlineData("Working")]     // Problem
     [InlineData("Scheduled")]   // Appointment
     [InlineData("New")]         // Idea
+    [InlineData("Building")]    // Habit
     public async Task Live_statuses_are_not_terminal(string status)
     {
         await using var connection = await OpenAsync();

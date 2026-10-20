@@ -115,6 +115,13 @@ public sealed class BountyService(SubjectService subjects, ISubjectRepository re
                     $"Say which trigger to price: {string.Join(", ", triggers)}.");
         }
 
+        if (string.Equals(trigger.Trim(), BountyTriggers.Partial, StringComparison.OrdinalIgnoreCase)
+            && triggers.Contains(BountyTriggers.Followed))
+        {
+            throw new ArgumentException(
+                $"A partial day always pays half of {BountyTriggers.Followed}; price {BountyTriggers.Followed} instead.");
+        }
+
         return triggers.FirstOrDefault(t => string.Equals(t, trigger.Trim(), StringComparison.OrdinalIgnoreCase))
                ?? throw new ArgumentException(
                    $"A {subject.Type} doesn't pay on '{trigger.Trim()}'. Expected: {string.Join(", ", triggers)}.");

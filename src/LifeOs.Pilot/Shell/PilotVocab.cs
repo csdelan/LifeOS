@@ -55,6 +55,7 @@ internal static class PilotVocab
         [Problem] = ["Open", "Working", "Resolved", "Cancelled"],
         [Appointment] = ["Scheduled", "Completed", "Cancelled", "Missed"],
         [Idea] = ["New", "Promoted", "Rejected"],
+        [Habit] = ["Building", "Established", "Abandoned"],
     };
 
     private static readonly HashSet<string> Terminal = new(StringComparer.OrdinalIgnoreCase)
@@ -62,6 +63,7 @@ internal static class PilotVocab
         "done", "completed", "resolved", "closed", "cancelled",
         "abandoned", "dropped", "archived", "superseded",
         "fulfilled", "missed", "promoted", "rejected",
+        "established",
     };
 
     // The terminal status Drop assigns per type — mirror of StatusVocabulary.DismissStatusByType.
@@ -75,6 +77,7 @@ internal static class PilotVocab
         [Problem] = "Cancelled",
         [Appointment] = "Cancelled",
         [Idea] = "Rejected",
+        [Habit] = "Abandoned",
     };
 
     /// <summary>The status Drop assigns to a subject of this type, or "" if it has none.</summary>

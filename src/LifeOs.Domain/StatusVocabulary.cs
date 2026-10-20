@@ -11,8 +11,9 @@ namespace LifeOs.Domain;
 ///
 /// <para>Only status-bearing types appear here. Identity Statement (Value) has no
 /// status (it archives instead, D9); Area / Person / Constraint / Season are
-/// status-less in the Pilot. Appointment's vocabulary is fixed now though the type is
-/// created later; Habit and Review gain theirs when their types land.</para>
+/// status-less in the Pilot. Habit's lifecycle (Building → Established | Abandoned)
+/// arrived with habit earning (migration 0027): a terminal habit graduates and leaves
+/// daily tracking. Review gains its vocabulary when its type lands.</para>
 /// </summary>
 public static class StatusVocabulary
 {
@@ -29,6 +30,7 @@ public static class StatusVocabulary
         [SubjectTypes.Problem] = ["Open", "Working", "Resolved", "Cancelled"],
         [SubjectTypes.Appointment] = ["Scheduled", "Completed", "Cancelled", "Missed"],
         [SubjectTypes.Idea] = ["New", "Promoted", "Rejected"],
+        [SubjectTypes.Habit] = ["Building", "Established", "Abandoned"],
     };
 
     /// <summary>
@@ -43,6 +45,7 @@ public static class StatusVocabulary
         "done", "completed", "resolved", "closed", "cancelled",
         "abandoned", "dropped", "archived", "superseded",
         "fulfilled", "missed", "promoted", "rejected",
+        "established",
     };
 
     /// <summary>
@@ -63,6 +66,7 @@ public static class StatusVocabulary
         [SubjectTypes.Problem] = "Cancelled",
         [SubjectTypes.Appointment] = "Cancelled",
         [SubjectTypes.Idea] = "Rejected",
+        [SubjectTypes.Habit] = "Abandoned",
     };
 
     /// <summary>The subject types that carry a status workflow.</summary>

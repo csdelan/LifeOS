@@ -2382,7 +2382,7 @@ Build:      building
 ### REWARD-2 — Habits pay per day, at streak milestones, and when established
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
 
 **Workflow (Chris):**
 - "When I successfully complete 1 instance of a habit, I get a small reward of some type.
@@ -2618,7 +2618,8 @@ carries its own status set, moved by `state_change` events: Goal (New → Active
 Completed / Abandoned), Project (same shape), Task (Not started / In progress / Waiting /
 Completed / Cancelled), Commitment (Open / Fulfilled / Missed / Cancelled), Decision (Open /
 Implementing / Cancelled / Closed), Problem (Open / Working / Resolved), Appointment
-(Scheduled / Completed / Cancelled / Missed), Idea (New / Promoted / Rejected). **Identity
+(Scheduled / Completed / Cancelled / Missed), Idea (New / Promoted / Rejected), and — since
+REWARD-2 (migration 0027) — Habit (Building / Established / Abandoned). **Identity
 Statement has no status** (it uses archive, D9). The diagnostics depend on which statuses
 are **terminal** — neglect skips terminal subjects via `is_terminal_status` (migration
 0008); breach is Commitment-only. Deliverable: a documented per-type status map + terminal
@@ -2746,11 +2747,12 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   / `bsk redeem`; daily totals come with R5 / R7).
 - **Bounties + reconcile engine** (REWARD-1 / REWARD-2) — `attributes.bounty`, type defaults,
   `v_reward_due`, `RewardService` reconcile hooked into status changes and habit adherence,
-  `bsk bounty` / `bsk rewards reconcile`. — **Shipped** for Tasks, Projects and Goals (R2,
-  migration 0026); the habit triggers and the adherence hook come with R3.
+  `bsk bounty` / `bsk rewards reconcile`. — **Shipped** (R2, migration 0026, for Tasks,
+  Projects and Goals; R3, migration 0027, for Habits).
 - **Habit lifecycle** (REWARD-2) — Habit status vocab Building → Established | Abandoned,
   `established` terminal, graduation ends occurrence expansion, establishment target +
-  `v_habit_establishment`. — **Open** (R3).
+  `v_habit_establishment`. — **Shipped** (R3, migration 0027; the "Ready to establish" badge
+  is R6).
 - **Reward catalog type + redemption** (REWARD-3) — `Reward` subject type (the 15th), `v_reward`
   with savings progress, no-overdraft redeem under a wallet lock, `bsk redeem`. — **Open** (R4).
 

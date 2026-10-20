@@ -6,8 +6,8 @@ doc). The requirements say *what*; this doc says *how* and *in what order*, writ
 agent with no session context can pick up any phase.
 
 **Scope agreed with Chris on 2026-10-20.** The rules in §1 are his answers to the design
-questions. R0 (the requirements and this plan), R1 (the ledger) and R2 (earning on work) are
-done; R3–R7 are open.
+questions. R0 (the requirements and this plan), R1 (the ledger), R2 (earning on work) and R3
+(habit earning) are done; R4–R7 are open.
 
 ## 0. Read these first
 
@@ -93,8 +93,12 @@ A future `penalty` entry is declared or derived with negative amounts and needs 
 | Streak milestone, n ∈ {7, 30, 100} | `streak_<n>:<habit>:<run start date>` | a run of consecutive followed occurrences starting on that date reaches n |
 | Habit established | `established:<habit>` | its current status is Established |
 
-Every key also requires its triggering fact to fall on or after the `open` entry. For a
-milestone, that fact is the day that reached n.
+Every key also requires its triggering fact to fall on or after the `open` entry. A key's
+fact is the moment it became true in the record (`triggered_at` in `v_reward_trigger`): the
+status change for `completed` and `established`, the recording for a day, and for a
+milestone the recording of the last of its n days. So a day pays when it is recorded after
+the opening, whatever its date (a backfill pays, as REWARD-2 asks), and dates never meet
+timestamps across time zones. Days and runs only count up to graduation (§3.5).
 
 ### 3.3 Reconcile, not react
 
@@ -194,8 +198,13 @@ Karma and Resolve default to 0; Chris adds them per item.
   the drift-guard test fails.
 - **Graduation:**
   - `v_habit_occurrence` (0018) stops expanding at the date of the terminal status change;
-    recorded history stays.
+    recorded history stays. (Built, 0027: scheduled dates stop the day *before* graduation, so
+    the graduation day is never auto-missed; a day recorded on it still counts.)
   - Moving the habit back to Building resumes tracking and reverses the establishment award.
+  - Days recorded after graduation show in the history but don't pay. Abandoning pays nothing
+    and keeps what the days earned.
+  - Occurrences are folded from `bsk_derived.habit_occurrence_source`, which keeps archived
+    habits, so archiving never takes a reward back; `v_habit_occurrence` hides them as before.
 - **Target:** `attributes.establish_target` = `{ "min_adherence": 0.8, "window_days": 60 }`,
   the default when absent.
   - `v_habit_establishment` gives, per Building habit:
@@ -204,6 +213,9 @@ Karma and Resolve default to 0; Chris adds them per item.
     - `target_met`: adherence ≥ the minimum, and the habit is at least `window_days` old
   - It is read-only. It drives a "Ready to establish" badge; confirming is an ordinary status
     change.
+  - Built (0027): the window is the last `window_days` days up to today; today counts once
+    recorded. A `min_adherence` written as a percentage (80) reads as 0.8. A target that isn't a
+    number falls back to the default.
 
 ### 3.6 Reward catalog and redemption
 
@@ -229,7 +241,7 @@ Karma and Resolve default to 0; Chris adds them per item.
 | `v_wallet` | Per currency: earned, reversed, spent, balance. |
 | `v_reward_trigger` | Every award the record supports, whatever the start line: subject_id, subject_type, award_key, trigger, source_event_ids, triggered_at. |
 | `v_reward_due` | `v_reward_trigger` rows on or after `bsk.ledger_opened_at()`. |
-| `v_habit_establishment` | Per habit: window, adherence, target_met. |
+| `v_habit_establishment` | Per Building habit: min_adherence, window_days, window_start, followed / partial / missed / concluded, adherence, age_days, target_met. |
 | `v_reward` | The catalog plus savings progress. |
 | API | `GET /api/wallet`, `GET /api/ledger?from&to`, `GET /api/ledger/daily?from&to&tz`, `GET /api/rewards`, `POST /api/redeem`, `POST /api/bounty`. |
 
@@ -306,7 +318,17 @@ number from 0025.
   `BountyTriggers` / `BountyDefaults` — the drift test checks they match), and call
   `ReconcileAsync(habit, adherenceEventId)` from `AdherenceService`. The API's `awards` on
   responses is still R5.
-- [ ] R3 — Habit lifecycle + habit earning
+- [x] R3 — Habit lifecycle + habit earning (migration 0027). Habit vocabulary Building →
+  Established | Abandoned in `StatusVocabulary` and the Pilot mirror; `established` terminal;
+  `bsk_derived.habit_occurrence_source` (archived included, graduation-capped) behind
+  `v_habit_occurrence`; `v_habit_establishment`; the habit rows of `v_reward_trigger` (days,
+  7 / 30 / 100 runs, established); habit triggers and defaults in `BountyTriggers` /
+  `BountyDefaults`, partial priced as half of followed; `AdherenceService` reconciles after
+  every recording and `bsk adhere` prints what it earned. Notes for R6: the web's
+  `STATUS_BY_TYPE` / `TERMINAL_STATUSES` (and the copy in `docs/pilot/production-ui-types.ts`)
+  still treat Habit as status-less; add the Habit vocabulary and `established` with the
+  "Ready to establish" badge. The Pilot already offers Change status on habits. Graduated
+  habits already drop off the web's Today list, because their occurrences stop.
 - [ ] R4 — Reward catalog
 - [ ] R5 — Wallet + Redeem page
 - [ ] R6 — Earning in the UI

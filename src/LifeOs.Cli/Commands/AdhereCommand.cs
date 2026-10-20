@@ -12,7 +12,9 @@ namespace LifeOs.Cli.Commands;
 /// how a habit occurrence turned out (GEN-3): <c>followed</c>, <c>partial</c>, or
 /// <c>missed</c>. Defaults to today. Recording is append-only, so correcting a past
 /// occurrence is just another recording for that date (the projection takes the
-/// latest). Partial is only accepted when the habit allows it.
+/// latest). Partial is only accepted when the habit allows it. A followed day earns the
+/// habit's bounty (partial earns half) and a run reaching 7 / 30 / 100 earns its
+/// milestone; a correction reverses what no longer holds. Those entries are printed too.
 /// </summary>
 internal static class AdhereCommand
 {
@@ -62,13 +64,15 @@ internal static class AdhereCommand
                         eventId = recorded.EventId,
                         habit = recorded.Habit.Urn,
                         result = recorded.Result,
-                        occurrence = recorded.Occurrence.ToString("yyyy-MM-dd")
+                        occurrence = recorded.Occurrence.ToString("yyyy-MM-dd"),
+                        awards = RewardOutput.AwardsJson(recorded.Awards)
                     });
                 }
                 else
                 {
                     Console.WriteLine(
                         $"Recorded {recorded.Result} for {recorded.Habit.Urn} on {recorded.Occurrence:yyyy-MM-dd}.");
+                    RewardOutput.WriteAwards(recorded.Awards);
                 }
 
                 return 0;

@@ -11,6 +11,8 @@ namespace LifeOs.Cli.Commands;
 /// price; <c>karma=3</c> adds Karma to what the trigger pays now (its type default when
 /// never priced) and <c>xp=0</c> drops XP; <c>--nothing</c> makes it pay nothing;
 /// <c>--clear</c> puts it back on the type default. Already-paid rewards never change.
+/// A Habit has several triggers (followed, streak_7, streak_30, streak_100, established),
+/// so pricing one needs <c>--on</c>; a partial day always pays half of followed.
 /// </summary>
 internal static class BountyCommand
 {
@@ -18,7 +20,7 @@ internal static class BountyCommand
     {
         var subjectArgument = new Argument<string>("subject")
         {
-            Description = "The Task, Project or Goal to price (urn, short id, or title)."
+            Description = "The Task, Project, Goal or Habit to price (urn, short id, or title)."
         };
         var amountsArgument = new Argument<string[]>("amounts")
         {
@@ -27,7 +29,7 @@ internal static class BountyCommand
         };
         var onOption = new Option<string?>("--on")
         {
-            Description = "The trigger to price, e.g. completed (optional when the type has one)."
+            Description = "The trigger to price, e.g. completed, followed, streak_7 (optional when the type has one)."
         };
         var nothingOption = new Option<bool>("--nothing")
         {
@@ -38,7 +40,7 @@ internal static class BountyCommand
             Description = "Put the trigger (or, without --on, every trigger) back on the type default."
         };
 
-        var command = new Command("bounty", "Show or set what completing an item earns.");
+        var command = new Command("bounty", "Show or set what an item earns.");
         command.Arguments.Add(subjectArgument);
         command.Arguments.Add(amountsArgument);
         command.Options.Add(onOption);

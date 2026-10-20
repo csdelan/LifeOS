@@ -106,6 +106,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>(),
             sp.GetRequiredService<IActivityWriter>(),
+            sp.GetRequiredService<RewardService>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
 

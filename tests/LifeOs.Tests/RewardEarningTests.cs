@@ -281,13 +281,15 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
         Assert.Empty(completed.Awards);
         var refused = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             kernel.Bounties.SetAsync(appointment.Urn, null, new Dictionary<string, long> { ["xp"] = 5 }, Ct));
-        Assert.Contains("only Task, Project, Goal earn", refused.Message);
+        Assert.Contains("only Task, Project, Goal, Habit earn", refused.Message);
     }
 
     [Fact]
-    public async Task The_due_view_covers_exactly_the_earning_types()
+    public async Task The_trigger_view_covers_exactly_the_earning_types_and_triggers()
     {
         var kernel = Build();
+        var events = kernel.Provider.GetRequiredService<IEventStore>();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var types = typeof(SubjectTypes)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
             .Where(f => f is { IsLiteral: true, FieldType: var t } && t == typeof(string))
@@ -297,16 +299,50 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
 
         foreach (var type in types)
         {
-            // Every type the kernel knows, made minimally valid (a Value needs a statement).
-            var subject = await CreateAsync(kernel, type, """{"statement":"a reward drift check"}""");
-            await RecordStatusWithoutReconcileAsync(kernel, subject, "Completed");
+            // Every type the kernel knows, made minimally valid (a Value needs a statement)
+            // and given a daily recurrence, then every fact that can pay, all behind
+            // reconcile's back: one item Completed; another Established with a week of
+            // followed days (enough for the 7-day milestone).
+            var attributes = JsonSerializer.Serialize(new
+            {
+                statement = "a reward drift check",
+                start = today.AddDays(-7).ToString("yyyy-MM-dd"),
+                recurrence = new { freq = "daily" }
+            });
+            var completed = await CreateAsync(kernel, type, attributes);
+            await RecordStatusWithoutReconcileAsync(kernel, completed, "Completed");
 
-            var triggers = await kernel.Ledger.GetTriggersAsync(subject.Id, Ct);
+            var established = await CreateAsync(kernel, type, attributes);
+            for (var day = 6; day >= 0; day--)
+            {
+                var now = DateTimeOffset.UtcNow;
+                await events.AppendAsync(new NewEvent(
+                    EventKinds.Activity, Provenances.Declared, now, now, KernelSources.Cli,
+                    PayloadJson: JsonSerializer.Serialize(new
+                    {
+                        subject_id = established.Id.ToString(),
+                        occurrence = today.AddDays(-day).ToString("yyyy-MM-dd"),
+                        result = AdherenceResults.Followed
+                    })), Ct);
+            }
+
+            await RecordStatusWithoutReconcileAsync(kernel, established, "Established");
+
+            var triggers = (await kernel.Ledger.GetTriggersAsync(completed.Id, Ct))
+                .Concat(await kernel.Ledger.GetTriggersAsync(established.Id, Ct))
+                .Select(t => t.Trigger)
+                .ToHashSet();
             Assert.True(
                 BountyTriggers.Earns(type) == (triggers.Count > 0),
-                $"{type}: BountyTriggers says earns={BountyTriggers.Earns(type)}, v_reward_trigger has {triggers.Count} rows.");
-            Assert.All(triggers, t => Assert.Contains(t.Trigger, BountyTriggers.For(type)));
+                $"{type}: BountyTriggers says earns={BountyTriggers.Earns(type)}, v_reward_trigger has [{string.Join(", ", triggers)}].");
+            Assert.All(triggers, t => Assert.True(BountyTriggers.Pays(type, t), $"{type} has an unpriced trigger '{t}'."));
             Assert.All(BountyTriggers.For(type), t => Assert.NotEmpty(BountyDefaults.For(type, t)));
+            if (type == SubjectTypes.Habit)
+            {
+                Assert.Equal(
+                    new[] { BountyTriggers.Established, BountyTriggers.Followed, BountyTriggers.Streak(7) },
+                    triggers.Order(StringComparer.Ordinal));
+            }
         }
     }
 

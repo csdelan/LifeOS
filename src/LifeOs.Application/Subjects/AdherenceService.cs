@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 
 namespace LifeOs.Application.Subjects;
@@ -13,9 +14,15 @@ namespace LifeOs.Application.Subjects;
 /// correction is simply a newer recording for the same date (GEN-5, latest wins);
 /// nothing is mutated. Partial is fixed half-credit and is only allowed when the
 /// habit's <c>allows_partial</c> flag is set.
+/// <para>
+/// Every recording then reconciles the habit's rewards (REWARD-2, rewards plan §3.3): a
+/// followed day earns, a partial one earns half, a run reaching 7 / 30 / 100 earns its
+/// milestone, and a correction gives back whatever the record no longer supports.
+/// </para>
 /// </summary>
 public sealed class AdherenceService(
-    SubjectService subjects, ISubjectRepository repository, IActivityWriter writer, IClock clock, string sourceId)
+    SubjectService subjects, ISubjectRepository repository, IActivityWriter writer, RewardService rewards,
+    IClock clock, string sourceId)
 {
     public async Task<AdherenceResult> RecordAsync(
         string habitReference, string result, DateOnly occurrence, string? note = null,
@@ -70,7 +77,8 @@ public sealed class AdherenceService(
             [new SubjectEventEdge(habit.Id, relation, Provenances.Declared)],
             cancellationToken);
 
-        return new AdherenceResult(eventId, habit, normalizedResult, occurrence);
+        var awards = await rewards.ReconcileAsync(habit, eventId, cancellationToken);
+        return new AdherenceResult(eventId, habit, normalizedResult, occurrence, awards);
     }
 
     private async Task<bool> AllowsPartialAsync(Guid habitId, CancellationToken cancellationToken)
@@ -80,5 +88,9 @@ public sealed class AdherenceService(
     }
 }
 
-/// <summary>The outcome of recording adherence: the event, the habit, the result and the occurrence.</summary>
-public sealed record AdherenceResult(Guid EventId, SubjectRef Habit, string Result, DateOnly Occurrence);
+/// <summary>
+/// The outcome of recording adherence: the event, the habit, the result, the occurrence,
+/// and any ledger entries it earned or reversed.
+/// </summary>
+public sealed record AdherenceResult(
+    Guid EventId, SubjectRef Habit, string Result, DateOnly Occurrence, IReadOnlyList<Award> Awards);
