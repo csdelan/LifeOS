@@ -27,6 +27,7 @@ import {
   mockPriceReward,
   mockRedeem,
   mockSetBounty,
+  mockSetHabitTarget,
   mockTargetReward,
   relateEvent,
   removeInbox,
@@ -288,6 +289,14 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       await wait();
       const result = mockSetBounty(req);
       notify("Bounty saved");
+      bump();
+      return result;
+    },
+
+    async setHabitTarget(req) {
+      await wait();
+      const result = mockSetHabitTarget(req);
+      notify(req.clear ? "Target back on the default" : "Target saved");
       bump();
       return result;
     },

@@ -7,7 +7,7 @@ namespace LifeOs.Api.Http;
 
 /// <summary>
 /// The rewards surface (REWARD-1..5) — the HTTP twin of <c>bsk wallet</c>, <c>bsk ledger</c>,
-/// <c>bsk redeem</c>, <c>bsk rewards</c> and <c>bsk bounty</c>. Reads
+/// <c>bsk redeem</c>, <c>bsk rewards</c>, <c>bsk bounty</c> and <c>bsk habit target</c>. Reads
 /// go through <see cref="RewardReader"/> on the reader connection; writes call the same
 /// Application services the CLI does. Renaming, describing and archiving a Reward are the
 /// ordinary <c>/api/rename</c>, <c>/api/attributes</c> and <c>/api/archive</c>.
@@ -41,6 +41,8 @@ public static class RewardEndpoints
             .Produces<IReadOnlyList<BountyTypeDefaults>>();
         api.MapPost("/bounty", SetBounty).WithName("SetBounty")
             .Produces<BountyResult>().Produces<ApiError>(StatusCodes.Status400BadRequest);
+        api.MapPost("/habits/target", SetHabitTarget).WithName("SetHabitTarget")
+            .Produces<HabitTargetResult>().Produces<ApiError>(StatusCodes.Status400BadRequest);
     }
 
     private static async Task<IResult> GetWallet(RewardReader rewards, CancellationToken cancellationToken)
@@ -144,6 +146,30 @@ public static class RewardEndpoints
                 : await bounties.SetAsync(subject, body.Trigger, body.Amounts!, cancellationToken);
         return Results.Ok(BountyRows.From(view));
     }
+
+    private static async Task<IResult> SetHabitTarget(
+        HabitTargetBody body,
+        HabitTargetService targets,
+        SubjectReader reader,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(body.Habit))
+        {
+            return Results.BadRequest(new ApiError("habit is required."));
+        }
+
+        var setting = body.MinAdherence is not null || body.WindowDays is not null;
+        if (setting == body.Clear)
+        {
+            return Results.BadRequest(new ApiError("Send minAdherence and/or windowDays, or clear — one of them."));
+        }
+
+        var habit = WriteEndpoints.ResolveWriteRef(body.Habit, reader);
+        var view = body.Clear
+            ? await targets.ClearAsync(habit, cancellationToken)
+            : await targets.SetAsync(habit, body.MinAdherence, body.WindowDays, cancellationToken);
+        return Results.Ok(HabitTargetResult.From(view));
+    }
 }
 
 public sealed class RedeemBody
@@ -211,6 +237,29 @@ public sealed class BountyBody
     public bool Nothing { get; set; }
 
     /// <summary>Put the trigger (or, without one, every trigger) back on its type default.</summary>
+    public bool Clear { get; set; }
+}
+
+/// <summary>
+/// <c>POST /api/habits/target</c> (<c>bsk habit target</c>): send <see cref="MinAdherence"/>,
+/// <see cref="WindowDays"/> or both — a part left out keeps what the habit has — or
+/// <see cref="Clear"/>.
+/// </summary>
+public sealed class HabitTargetBody
+{
+    /// <summary>The Habit (id, urn or title).</summary>
+    public string Habit { get; set; } = "";
+
+    /// <summary>
+    /// The share of days to follow: above 0 and up to 1 (0.8), or a percentage above 1 and up
+    /// to 100 (80), stored as the fraction.
+    /// </summary>
+    public decimal? MinAdherence { get; set; }
+
+    /// <summary>The window it is measured over, in whole days (1 to 3650).</summary>
+    public int? WindowDays { get; set; }
+
+    /// <summary>Put the habit back on the default target, 80% over 60 days.</summary>
     public bool Clear { get; set; }
 }
 

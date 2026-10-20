@@ -11,6 +11,7 @@ import type {
   BountyResult,
   BountyTypeDefaults,
   HabitRow,
+  HabitTargetResult,
   LedgerRow,
   Redemption,
   RewardRow,
@@ -319,6 +320,10 @@ export function normalizeHabit(raw: HabitRow): HabitRow {
         }
       : null,
   };
+}
+
+export function normalizeHabitTarget(raw: HabitTargetResult): HabitTargetResult {
+  return { ...raw, minAdherence: num(raw.minAdherence), windowDays: num(raw.windowDays) };
 }
 
 export function normalizeRedemption(raw: Redemption): Redemption {

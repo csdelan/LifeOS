@@ -692,6 +692,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/habits/target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SetHabitTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -837,6 +853,23 @@ export interface components {
                 [key: string]: number | string;
             };
             establishment?: null | components["schemas"]["HabitEstablishment"];
+        };
+        HabitTargetBody: {
+            habit?: string;
+            /** Format: double */
+            minAdherence?: null | number | string;
+            /** Format: int32 */
+            windowDays?: null | number | string;
+            clear?: boolean;
+        };
+        HabitTargetResult: {
+            habit?: components["schemas"]["CreatedSubject"];
+            /** Format: double */
+            minAdherence?: number | string;
+            /** Format: int32 */
+            windowDays?: number | string;
+            adherenceIsCustom?: boolean;
+            windowIsCustom?: boolean;
         };
         InboxItem: {
             /** Format: uuid */
@@ -2426,6 +2459,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BountyResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SetHabitTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HabitTargetBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HabitTargetResult"];
                 };
             };
             /** @description Bad Request */

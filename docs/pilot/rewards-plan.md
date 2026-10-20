@@ -217,6 +217,12 @@ Karma and Resolve default to 0; Chris adds them per item.
   - Built (0027): the window is the last `window_days` days up to today; today counts once
     recorded. A `min_adherence` written as a percentage (80) reads as 0.8. A target that isn't a
     number falls back to the default.
+  - Written by `HabitTargetService` (`bsk habit target <habit> [--adherence 80%|0.8]
+    [--days 60] | --clear`, `POST /api/habits/target`). Each part is optional, so setting one
+    keeps the other; a part never set stays absent and reads as the default. The writer is
+    strict where the view is lenient: Habits only, numbers only, an adherence above 0 and up to
+    1 (a number above 1 and up to 100 is a percentage, stored as the fraction), and a window of
+    1 to 3650 whole days (a larger one would push the window start outside Postgres's dates).
 
 ### 3.6 Reward catalog and redemption
 
@@ -264,7 +270,7 @@ Karma and Resolve default to 0; Chris adds them per item.
 | `v_reward_due` | `v_reward_trigger` rows on or after `bsk.ledger_opened_at()`. |
 | `v_habit_establishment` | Per Building habit: min_adherence, window_days, window_start, followed / partial / missed / concluded, adherence, age_days, target_met. |
 | `v_reward` | Per Reward: name, kind (instant unless savings), price, target_usd, redemptions, coins_redeemed, dollars_redeemed, last_redeemed_at, percent_of_target and remaining_usd (savings goals with a target), description, notes, archived. |
-| API | `GET /api/wallet`, `GET /api/ledger?from&to`, `GET /api/ledger/daily?from&to&tz`, `GET /api/rewards`, `POST /api/redeem`, `POST /api/bounty`. Built in R5: the wallet, ledger (`?from&to&limit`), catalog and redeem reads and writes, plus `POST /api/rewards`, `/api/rewards/price` and `/api/rewards/target`; `/api/ledger/daily` is R7. Built in R6: `POST /api/bounty` and `GET /api/bounty/defaults`; the subject list and detail reads carry the bounty, and `GET /api/habits` carries each habit's status and establishment progress. |
+| API | `GET /api/wallet`, `GET /api/ledger?from&to`, `GET /api/ledger/daily?from&to&tz`, `GET /api/rewards`, `POST /api/redeem`, `POST /api/bounty`. Built in R5: the wallet, ledger (`?from&to&limit`), catalog and redeem reads and writes, plus `POST /api/rewards`, `/api/rewards/price` and `/api/rewards/target`; `/api/ledger/daily` is R7. Built in R6: `POST /api/bounty` and `GET /api/bounty/defaults`; the subject list and detail reads carry the bounty, and `GET /api/habits` carries each habit's status and establishment progress. After R6: `POST /api/habits/target` (`{habit, minAdherence?, windowDays?}` or `{habit, clear}`), answering the target as the view reads it and which parts are the habit's own. |
 
 - **Time zones:** daily totals bucket by `occurred_at AT TIME ZONE @tz`, using the browser's
   IANA zone. The database runs in UTC, so an evening completion would otherwise land on
@@ -404,6 +410,12 @@ number from 0025.
   change settles the item's completed / established award and a habit day settles its
   followed / partial awards and the streak milestones of the runs around it, priced from the
   item's bounty with the kernel's refusals for `setBounty`; seeded history is never swept.
-  Not built: an editor for a habit's establish target — nothing but a hand-edited attribute
-  writes `attributes.establish_target` yet (REWARD-2 stays `building`).
+  Follow-up (REWARD-2 now `built`): the establish-target editor. `HabitTargetService` writes
+  `attributes.establish_target` as numbers (§3.5); `bsk habit target` and
+  `POST /api/habits/target` call it. Web: `setHabitTarget` (live, mock and `decorateWrites`,
+  which refreshes the habits); while editing a Building habit, the detail pane's Establishing
+  panel shows "Establish when followed __% over __ days" pre-filled from
+  `HabitRow.establishment`, and `lib/establish.ts` `targetWrite` sends only the part that
+  changed, the percentage as a fraction. The mock store's `mockSetHabitTarget` refuses what
+  the service refuses, in its words.
 - [ ] R7 — History + report

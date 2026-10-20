@@ -67,7 +67,16 @@ import {
 import type { HabitRow, Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { formatTimestamp } from "@/lib/dates";
 import { bountyDirty, bountyProblem, bountyWrites, type BountyDraft } from "@/lib/bounty";
-import { establishmentProgress, habitStage, isReadyToEstablish } from "@/lib/establish";
+import {
+  establishmentProgress,
+  habitStage,
+  isReadyToEstablish,
+  targetDirty,
+  targetFields,
+  targetProblem,
+  targetWrite,
+  type TargetDraft,
+} from "@/lib/establish";
 import { splitTags } from "@/lib/tag-suggest";
 import { parseRecurrence } from "@/lib/recurrence";
 import {
@@ -100,6 +109,7 @@ export function SubjectDetail({
   const { data: occurrences } = useOccurrences(subjectId);
   const [editing, setEditing] = useState(false);
   const [bountyDraft, setBountyDraft] = useState<BountyDraft>({});
+  const [targetDraft, setTargetDraft] = useState<TargetDraft>({});
   const writes = useWrites();
   const { openNew } = useCreateActions();
 
@@ -130,13 +140,19 @@ export function SubjectDetail({
     );
   }, [data, list, habit, rels, tags, editing, form]);
 
-  // A new subject starts with nothing typed into its bounty.
+  // A new subject starts with nothing typed into its bounty or establish target.
   useEffect(() => {
     setBountyDraft({});
+    setTargetDraft({});
   }, [subjectId]);
 
   const bountyLines = data?.bounty ?? [];
-  const dirty = isDetailDirty(editing, form.formState.isDirty || bountyDirty(bountyLines, bountyDraft));
+  const dirty = isDetailDirty(
+    editing,
+    form.formState.isDirty ||
+      bountyDirty(bountyLines, bountyDraft) ||
+      targetDirty(habit?.establishment, targetDraft),
+  );
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -179,7 +195,7 @@ export function SubjectDetail({
       toast.error("A Habit needs at least one Goal or Identity Statement.");
       return;
     }
-    const bountyIssue = bountyProblem(bountyDraft);
+    const bountyIssue = bountyProblem(bountyDraft) ?? targetProblem(targetDraft);
     if (bountyIssue) {
       toast.error(bountyIssue);
       return;
@@ -204,6 +220,11 @@ export function SubjectDetail({
       await writes.setBounty(req);
     }
     setBountyDraft({});
+    const target = subject.type === "Habit" ? targetWrite(subject.id, habit?.establishment, targetDraft) : null;
+    if (target) {
+      await writes.setHabitTarget(target);
+    }
+    setTargetDraft({});
     const nextStatus = values.status || defaultStatus(subject.type);
     if (nextStatus && nextStatus !== (subject.status || defaultStatus(subject.type))) {
       await writes.setStatus(subject.id, nextStatus);
@@ -246,6 +267,7 @@ export function SubjectDetail({
       }),
     );
     setBountyDraft({});
+    setTargetDraft({});
     setEditing(false);
   }
 
@@ -370,7 +392,14 @@ export function SubjectDetail({
           <TabsContent value="overview">
             <div className="space-y-5">
               <SubjectTypeFields form={form} editing={editing} />
-              {subject.type === "Habit" && habit ? <EstablishmentPanel habit={habit} /> : null}
+              {subject.type === "Habit" && habit ? (
+                <EstablishmentPanel
+                  habit={habit}
+                  editing={editing}
+                  draft={targetDraft}
+                  onChange={setTargetDraft}
+                />
+              ) : null}
               <BountySection
                 key={`${subject.id}-${editing}`}
                 idPrefix={`bounty-${subject.id}`}
@@ -804,10 +833,27 @@ function HistoryTab({ subjectId }: { subjectId: string }) {
   );
 }
 
-/** Where a habit stands on its way to graduating, and the Establish suggestion. */
-function EstablishmentPanel({ habit }: { habit: HabitRow }) {
+/**
+ * Where a habit stands on its way to graduating, and the Establish suggestion; while editing a
+ * Building habit, its target too — "Establish when followed 80 % over 60 days" — pre-filled
+ * with what it is now.
+ */
+function EstablishmentPanel({
+  habit,
+  editing,
+  draft,
+  onChange,
+}: {
+  habit: HabitRow;
+  editing: boolean;
+  draft: TargetDraft;
+  onChange: (next: TargetDraft) => void;
+}) {
   const stage = habitStage(habit);
   if (stage === "abandoned") return null;
+  const establishment = habit.establishment;
+  const fields = establishment ? targetFields(establishment) : null;
+  const problem = editing ? targetProblem(draft) : null;
   return (
     <section className="rounded-xl bg-muted/40 p-3">
       <p className="type-scale-section text-muted-foreground">Establishing</p>
@@ -815,10 +861,53 @@ function EstablishmentPanel({ habit }: { habit: HabitRow }) {
         <p className="mt-1 text-sm">
           Established — graduated from daily tracking. Move it back to Building to track it again.
         </p>
-      ) : habit.establishment ? (
+      ) : establishment ? (
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm">{establishmentProgress(habit.establishment)}</p>
+          <p className="text-sm">{establishmentProgress(establishment)}</p>
           {isReadyToEstablish(habit) ? <ReadyToEstablish habit={habit} /> : null}
+        </div>
+      ) : null}
+      {editing && stage === "building" && fields ? (
+        <div className="mt-2 space-y-1">
+          <div
+            role="group"
+            aria-label="Establish target"
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"
+          >
+            <span>Establish when followed</span>
+            <Input
+              aria-label="Target percent of days followed"
+              type="number"
+              inputMode="decimal"
+              min={1}
+              max={100}
+              step="any"
+              className="h-7 w-16"
+              value={draft.percent ?? fields.percent}
+              onChange={(e) => onChange({ ...draft, percent: e.target.value })}
+            />
+            <span>% over</span>
+            <Input
+              aria-label="Target window in days"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={3650}
+              step={1}
+              className="h-7 w-20"
+              value={draft.days ?? fields.days}
+              onChange={(e) => onChange({ ...draft, days: e.target.value })}
+            />
+            <span>days</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            A partial day counts half. Establishing is always your call.
+          </p>
+          {problem ? (
+            <p role="alert" className="text-xs text-destructive">
+              {problem}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>

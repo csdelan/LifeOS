@@ -147,6 +147,10 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>()));
 
+        services.AddSingleton(sp => new HabitTargetService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>()));
+
         services.AddSingleton(sp => new RelateService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventReader>(),

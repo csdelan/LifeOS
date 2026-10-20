@@ -11,6 +11,8 @@ import type {
   BountyRequest,
   BountyResult,
   HabitEstablishment,
+  HabitTargetRequest,
+  HabitTargetResult,
   HabitRow,
   BinaryCaptureResult,
   CaptureKind,
@@ -1571,15 +1573,32 @@ export function detailWithBounty(detail: SubjectDetail): SubjectDetail {
   return { ...detail, bounty: earns(detail.type) ? linesFor(detail.type, storedBounty(detail.id)) : null };
 }
 
-function establishment(habit: HabitRow, status: string | null | undefined): HabitEstablishment | null {
-  if (habit.archived || isTerminal(status)) return null;
-  const target = rawAttrs(state.details[habit.id]?.attributes).establish_target as
+/**
+ * The parts of a habit's `attributes.establish_target` the kernel honours, read as
+ * `v_habit_establishment` reads them: numbers only, a `min_adherence` above 1 as a
+ * percentage. A part left out (or unusable) is the default.
+ */
+function storedTarget(id: string): { minAdherence?: number; windowDays?: number } {
+  const target = rawAttrs(state.details[id]?.attributes).establish_target as
     | { min_adherence?: unknown; window_days?: unknown }
     | undefined;
-  const rawMin = Number(target?.min_adherence);
-  const minAdherence = rawMin > 0 && rawMin <= 1 ? rawMin : rawMin > 1 && rawMin <= 100 ? rawMin / 100 : 0.8;
-  const rawWindow = Number(target?.window_days);
-  const windowDays = rawWindow >= 1 ? Math.floor(rawWindow) : 60;
+  const min = target?.min_adherence;
+  const window = target?.window_days;
+  return {
+    minAdherence: typeof min === "number" && min > 0 && min <= 100 ? (min <= 1 ? min : min / 100) : undefined,
+    windowDays: typeof window === "number" && window >= 1 ? Math.floor(window) : undefined,
+  };
+}
+
+const DEFAULT_MIN_ADHERENCE = 0.8;
+const DEFAULT_WINDOW_DAYS = 60;
+const MAX_WINDOW_DAYS = 3650;
+
+function establishment(habit: HabitRow, status: string | null | undefined): HabitEstablishment | null {
+  if (habit.archived || isTerminal(status)) return null;
+  const stored = storedTarget(habit.id);
+  const minAdherence = stored.minAdherence ?? DEFAULT_MIN_ADHERENCE;
+  const windowDays = stored.windowDays ?? DEFAULT_WINDOW_DAYS;
   const today = todayIso();
   const windowStart = addDays(today, -windowDays + 1);
   let followed = 0;
@@ -1621,6 +1640,55 @@ export function mockHabits(): HabitRow[] {
       establishment: establishment(h, status),
     };
   });
+}
+
+/** `bsk habit target` / `POST /api/habits/target`, with HabitTargetService's refusals in its words. */
+export function mockSetHabitTarget(req: HabitTargetRequest): HabitTargetResult {
+  if (!req.habit?.trim()) throw new Error("habit is required.");
+  const setting = req.minAdherence !== undefined || req.windowDays !== undefined;
+  if (setting === !!req.clear) {
+    throw new Error("Send minAdherence and/or windowDays, or clear — one of them.");
+  }
+  let min: number | undefined;
+  if (req.minAdherence !== undefined) {
+    const n = req.minAdherence;
+    if (!(n > 0 && n <= 100)) {
+      throw new Error(
+        `An establish target is the share of days followed: above 0 and up to 1 (0.8), or a percentage up to 100 (80); got ${n}.`,
+      );
+    }
+    min = n <= 1 ? n : n / 100;
+  }
+  if (req.windowDays !== undefined) {
+    const n = req.windowDays;
+    if (!Number.isInteger(n) || n < 1 || n > MAX_WINDOW_DAYS) {
+      throw new Error(`An establish window is a whole number of days from 1 to ${MAX_WINDOW_DAYS}; got ${n}.`);
+    }
+  }
+  const habit = byRef(req.habit);
+  if (!habit) throw new Error(`No subject matches '${req.habit}'.`);
+  if (habit.type !== "Habit") {
+    throw new Error(`'${habit.title}' is a ${habit.type}; only a Habit has an establish target.`);
+  }
+
+  const stored = req.clear ? {} : storedTarget(habit.id);
+  const next = { minAdherence: min ?? stored.minAdherence, windowDays: req.windowDays ?? stored.windowDays };
+  writeRewardAttrs(habit.id, {
+    establish_target: req.clear
+      ? undefined
+      : {
+          ...(next.minAdherence !== undefined ? { min_adherence: next.minAdherence } : {}),
+          ...(next.windowDays !== undefined ? { window_days: next.windowDays } : {}),
+        },
+  });
+  emit();
+  return {
+    habit: { id: habit.id, urn: habit.urn, type: habit.type, title: habit.title },
+    minAdherence: next.minAdherence ?? DEFAULT_MIN_ADHERENCE,
+    windowDays: next.windowDays ?? DEFAULT_WINDOW_DAYS,
+    adherenceIsCustom: next.minAdherence !== undefined,
+    windowIsCustom: next.windowDays !== undefined,
+  };
 }
 
 /** `bsk bounty` / `POST /api/bounty`, with BountyService's refusals in its words. */

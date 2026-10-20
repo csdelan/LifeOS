@@ -2382,7 +2382,7 @@ Build:      built
 ### REWARD-2 — Habits pay per day, at streak milestones, and when established
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "When I successfully complete 1 instance of a habit, I get a small reward of some type.
@@ -2753,8 +2753,9 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 - **Habit lifecycle** (REWARD-2) — Habit status vocab Building → Established | Abandoned,
   `established` terminal, graduation ends occurrence expansion, establishment target +
   `v_habit_establishment`. — **Shipped** (R3, migration 0027; the "Ready to establish" badge,
-  its confirm and the graduated sections, R6). Still open: a way to edit a habit's establish
-  target.
+  its confirm and the graduated sections, R6; the establish-target editor — `bsk habit
+  target`, `POST /api/habits/target` and the detail pane's "Establish when followed __% over
+  __ days" — after R6).
 - **Reward catalog type + redemption** (REWARD-3) — `Reward` subject type (the 15th), `v_reward`
   with savings progress, no-overdraft redeem under a wallet lock, `bsk redeem`. — **Shipped**
   (R4, migration 0028; `bsk rewards list / add / price / target`; the Rewards tab and Redeem

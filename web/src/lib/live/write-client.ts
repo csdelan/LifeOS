@@ -3,6 +3,7 @@ import { api, unwrap } from "@/lib/live/http";
 import type {
   BountyResult,
   CreatedSubject,
+  HabitTargetResult,
   LifeOsWriteClient,
   Redemption,
   RenamedSubject,
@@ -15,6 +16,7 @@ import { normalizeTimer } from "@/lib/live/reads";
 import {
   normalizeAwards,
   normalizeBountyResult,
+  normalizeHabitTarget,
   normalizeRedemption,
   normalizeReward,
   normalizeTimerAwards,
@@ -224,6 +226,14 @@ export function createLiveWriteClient(): LifeOsWriteClient {
         (await unwrap(api().POST("/api/bounty", { body: req }))) as unknown as BountyResult,
       );
       notify("Bounty saved");
+      return result;
+    },
+
+    async setHabitTarget(req) {
+      const result = normalizeHabitTarget(
+        (await unwrap(api().POST("/api/habits/target", { body: req }))) as unknown as HabitTargetResult,
+      );
+      notify(req.clear ? "Target back on the default" : "Target saved");
       return result;
     },
   };

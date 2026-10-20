@@ -9,6 +9,7 @@ import {
   mockHabits,
   mockLedger,
   mockSetBounty,
+  mockSetHabitTarget,
   mockWallet,
   resetStore,
   setStatus,
@@ -173,5 +174,51 @@ describe("mockSetBounty (BountyService)", () => {
     expect(() => mockSetBounty({ subject: "task-shoes", nothing: true, clear: true })).toThrow(
       "Send one of amounts, nothing or clear.",
     );
+  });
+});
+
+describe("mockSetHabitTarget (HabitTargetService)", () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  const target = (id: string) => mockHabits().find((h) => h.id === id)!.establishment!;
+  const stored = (id: string) =>
+    (JSON.parse(getState().details[id]?.attributes ?? "{}") as { establish_target?: unknown }).establish_target;
+
+  it("stores numbers the progress reads, keeps the part left out, and clear puts the default back", () => {
+    const set = mockSetHabitTarget({ habit: "habit-inbox", minAdherence: 75 });
+    expect(set).toMatchObject({ minAdherence: 0.75, windowDays: 60, adherenceIsCustom: true, windowIsCustom: false });
+    expect(set.habit).toMatchObject({ id: "habit-inbox", type: "Habit" });
+    expect(stored("habit-inbox")).toEqual({ min_adherence: 0.75 });
+    expect(target("habit-inbox")).toMatchObject({ minAdherence: 0.75, windowDays: 60 });
+
+    mockSetHabitTarget({ habit: "habit-inbox", windowDays: 30 });
+    expect(stored("habit-inbox")).toEqual({ min_adherence: 0.75, window_days: 30 });
+    expect(target("habit-inbox")).toMatchObject({ minAdherence: 0.75, windowDays: 30 });
+
+    const cleared = mockSetHabitTarget({ habit: "habit-inbox", clear: true });
+    expect(cleared).toMatchObject({ minAdherence: 0.8, windowDays: 60, adherenceIsCustom: false, windowIsCustom: false });
+    expect(stored("habit-inbox")).toBeUndefined();
+    expect(target("habit-inbox")).toMatchObject({ minAdherence: 0.8, windowDays: 60 });
+  });
+
+  it("refuses what the kernel refuses, in its words, and writes nothing", () => {
+    expect(() => mockSetHabitTarget({ habit: "habit-inbox" })).toThrow(
+      "Send minAdherence and/or windowDays, or clear — one of them.",
+    );
+    expect(() => mockSetHabitTarget({ habit: "habit-inbox", windowDays: 30, clear: true })).toThrow("one of them");
+    expect(() => mockSetHabitTarget({ habit: "habit-inbox", minAdherence: 0 })).toThrow(
+      "An establish target is the share of days followed: above 0 and up to 1 (0.8), or a percentage up to 100 (80); got 0.",
+    );
+    expect(() => mockSetHabitTarget({ habit: "habit-inbox", minAdherence: 120 })).toThrow("got 120.");
+    expect(() => mockSetHabitTarget({ habit: "habit-inbox", windowDays: 0 })).toThrow(
+      "An establish window is a whole number of days from 1 to 3650; got 0.",
+    );
+    expect(() => mockSetHabitTarget({ habit: "habit-inbox", windowDays: 1.5 })).toThrow("got 1.5.");
+    expect(() => mockSetHabitTarget({ habit: "task-shoes", windowDays: 30 })).toThrow(
+      "is a Task; only a Habit has an establish target.",
+    );
+    expect(stored("habit-inbox")).toBeUndefined();
   });
 });

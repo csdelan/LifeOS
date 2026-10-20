@@ -566,6 +566,28 @@ export interface HabitEstablishment {
 }
 
 /**
+ * Set a Habit's establish target (`bsk habit target`): send `minAdherence` (a fraction above 0
+ * and up to 1; a number above 1 and up to 100 is read as a percentage), `windowDays` (whole
+ * days, 1–3650) or both — a part left out keeps what the habit has — or `clear` (back on the
+ * default, 80% over 60 days).
+ */
+export interface HabitTargetRequest {
+  habit: string;
+  minAdherence?: number;
+  windowDays?: number;
+  clear?: boolean;
+}
+
+/** The habit's establish target after the write, and whether each part is its own. */
+export interface HabitTargetResult {
+  habit: CreatedSubject;
+  minAdherence: number;
+  windowDays: number;
+  adherenceIsCustom: boolean;
+  windowIsCustom: boolean;
+}
+
+/**
  * A redemption (`bsk redeem`). Omit `amounts` to pay an instant reward's price; a savings
  * goal needs `{ coins: n }`; with no `reward`, amounts and a `note` are both required.
  */
@@ -798,4 +820,6 @@ export interface LifeOsWriteClient {
   targetReward(reward: string, targetUsd: number | null): Promise<RewardRow>;
   /** Price a Task / Project / Goal / Habit (REWARD-2). Refused for a type that doesn't earn. */
   setBounty(req: BountyRequest): Promise<BountyResult>;
+  /** Set or clear a Habit's establish target (REWARD-2). Refused for any other type. */
+  setHabitTarget(req: HabitTargetRequest): Promise<HabitTargetResult>;
 }

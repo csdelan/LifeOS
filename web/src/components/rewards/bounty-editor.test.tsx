@@ -143,4 +143,46 @@ describe("bounty and establishing in the detail pane", () => {
     expect(await screen.findByText(/graduated from daily tracking/)).toBeInTheDocument();
     expect(getState().ledger.at(-1)).toMatchObject({ entry: "earn", trigger: "established" });
   });
+
+  it("edits a habit's establish target, saving only the part that changed", async () => {
+    const setTarget = vi.spyOn(writes, "setHabitTarget");
+    const user = userEvent.setup();
+    withProviders(<SubjectDetail subjectId="habit-inbox" />);
+    expect(await screen.findByText(/over the last 60 days · target 80%/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Target percent of days followed")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const save = screen.getByRole("button", { name: "Save" });
+    const percent = screen.getByLabelText("Target percent of days followed");
+    expect(percent).toHaveValue(80);
+    expect(screen.getByLabelText("Target window in days")).toHaveValue(60);
+    expect(save).toBeDisabled();
+
+    fireEvent.change(percent, { target: { value: "70" } });
+    await waitFor(() => expect(save).toBeEnabled());
+    await user.click(save);
+
+    await waitFor(() => expect(attrsOf("habit-inbox").establish_target).toEqual({ min_adherence: 0.7 }));
+    expect(setTarget).toHaveBeenCalledTimes(1);
+    expect(setTarget.mock.calls[0][0]).toEqual({ habit: "habit-inbox", minAdherence: 0.7 });
+    expect(await screen.findByText(/over the last 60 days · target 70%/)).toBeInTheDocument();
+  });
+
+  it("says why a target can't be saved and writes nothing", async () => {
+    const setTarget = vi.spyOn(writes, "setHabitTarget");
+    const user = userEvent.setup();
+    withProviders(<SubjectDetail subjectId="habit-inbox" />);
+    await screen.findByText(/over the last 60 days · target 80%/);
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByLabelText("Target window in days"), { target: { value: "0" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The window is a whole number of days from 1 to 3650.",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(setTarget).not.toHaveBeenCalled();
+    expect(attrsOf("habit-inbox").establish_target).toBeUndefined();
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
 });

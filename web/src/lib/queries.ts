@@ -347,6 +347,12 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       ]);
       return result;
     },
+
+    async setHabitTarget(req) {
+      const result = await client.setHabitTarget(req);
+      await invalidate(qc, [qk.habits, qk.subject(result.habit.id)]);
+      return result;
+    },
   };
 }
 

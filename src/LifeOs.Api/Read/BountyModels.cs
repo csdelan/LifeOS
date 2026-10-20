@@ -54,6 +54,35 @@ public sealed class HabitEstablishment
     public bool TargetMet { get; set; }
 }
 
+/// <summary>
+/// <c>POST /api/habits/target</c> (<c>bsk habit target</c>): the habit's establish target as
+/// <c>bsk.v_habit_establishment</c> reads it — the minimum adherence as a fraction (0.8) and
+/// the window in days — and whether each part is the habit's own or the default.
+/// </summary>
+public sealed class HabitTargetResult
+{
+    public CreatedSubject Habit { get; set; } = new();
+    public decimal MinAdherence { get; set; }
+    public int WindowDays { get; set; }
+    public bool AdherenceIsCustom { get; set; }
+    public bool WindowIsCustom { get; set; }
+
+    public static HabitTargetResult From(HabitTargetView view) => new()
+    {
+        Habit = new CreatedSubject
+        {
+            Id = view.Habit.Id,
+            Urn = view.Habit.Urn,
+            Type = view.Habit.Type,
+            Title = view.Habit.Title
+        },
+        MinAdherence = view.MinAdherence,
+        WindowDays = view.WindowDays,
+        AdherenceIsCustom = view.AdherenceIsCustom,
+        WindowIsCustom = view.WindowIsCustom
+    };
+}
+
 /// <summary>Builds the bounty shapes from an item's raw <c>attributes-&gt;&gt;'bounty'</c> text.</summary>
 public static class BountyRows
 {
