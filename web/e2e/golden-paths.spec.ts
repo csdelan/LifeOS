@@ -112,6 +112,28 @@ test.describe("golden paths", () => {
     await expect(page.getByRole("list", { name: "Building" })).not.toContainText("Morning mobility");
   });
 
+  test("a habit day earned today shows in the rewards history, and opens its habit", async ({ page }) => {
+    await page.goto("/habits");
+    const inbox = page.getByRole("list", { name: "Building" }).getByRole("listitem").filter({ hasText: "Inbox Zero pass" });
+    await inbox.getByRole("button", { name: "Followed", exact: true }).click();
+    await expect(page.getByText("Earned +1 Coins +5 Freedom +5 XP")).toBeVisible({ timeout: 10_000 });
+
+    // In-app navigation keeps the mock's state.
+    await page.getByRole("link", { name: "Rewards" }).first().click();
+    await page.getByRole("button", { name: "See all history" }).click();
+    await expect(page).toHaveURL(/view=history/);
+
+    const today = page.getByRole("button", { name: /\(today\): earned / });
+    await today.click();
+    await expect(today).toHaveAttribute("aria-pressed", "true");
+    const entries = page.getByRole("list", { name: /^Entries for / });
+    const entry = entries.getByRole("button", { name: "Inbox Zero pass" });
+    await expect(entry.first()).toBeVisible({ timeout: 10_000 });
+    await entry.first().click();
+    await expect(page).toHaveURL(/selected=habit-inbox/);
+    await expect(page.getByRole("heading", { name: /Inbox Zero pass/ }).last()).toBeVisible({ timeout: 10_000 });
+  });
+
   test("theme toggle switches the document class", async ({ page }) => {
     await page.goto("/");
     const html = page.locator("html");

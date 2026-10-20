@@ -3,6 +3,7 @@
  * attaches `Authorization: Bearer` from the Supabase session (refreshed on expiry).
  */
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -605,6 +606,34 @@ export function useLedger(limit = 100) {
   return useQuery({
     queryKey: [...qk.ledger, limit],
     queryFn: () => reads().ledger({ limit }),
+  });
+}
+
+/** The most entries one history range lists (the API's cap). */
+export const LEDGER_RANGE_LIMIT = 500;
+
+/**
+ * The ledger entries in [from, to) (ISO instants), newest first, up to
+ * {@link LEDGER_RANGE_LIMIT}. Keyed under `ledger`, so every earning or spending write
+ * refreshes it.
+ */
+export function useLedgerRange(from: string, to: string) {
+  return useQuery({
+    queryKey: [...qk.ledger, "range", from, to],
+    queryFn: () => reads().ledger({ from, to, limit: LEDGER_RANGE_LIMIT }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * The history by local day (REWARD-5) for the days [from, to) in the viewer's time zone.
+ * Keyed under `ledger`, so it refreshes with every earn, reversal and redemption.
+ */
+export function useLedgerDaily(from: string, to: string, tz: string) {
+  return useQuery({
+    queryKey: [...qk.ledger, "daily", from, to, tz],
+    queryFn: () => reads().ledgerDaily({ from, to, tz }),
+    placeholderData: keepPreviousData,
   });
 }
 

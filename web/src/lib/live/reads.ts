@@ -10,6 +10,7 @@ import {
   normalizeBountyDefaults,
   normalizeDetailBounty,
   normalizeHabit,
+  normalizeLedgerDay,
   normalizeLedgerRow,
   normalizeListBounty,
   normalizeReward,
@@ -24,6 +25,7 @@ import type {
   HabitRow,
   InboxItem,
   JournalEntry,
+  LedgerDay,
   LedgerRow,
   PersonRow,
   RelationEdge,
@@ -196,6 +198,15 @@ export const liveReads: LifeOsReads = {
       }),
     );
     return asType<LedgerRow[]>(data).map(normalizeLedgerRow);
+  },
+
+  async ledgerDaily(opts) {
+    const data = await unwrap(
+      api().GET("/api/ledger/daily", {
+        params: { query: { from: opts.from, to: opts.to, tz: opts.tz } },
+      }),
+    );
+    return asType<LedgerDay[]>(data).map(normalizeLedgerDay);
   },
 
   async rewards(opts) {

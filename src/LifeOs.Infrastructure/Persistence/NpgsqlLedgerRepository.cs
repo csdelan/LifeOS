@@ -1,3 +1,4 @@
+using System.Globalization;
 using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Rewards;
@@ -119,6 +120,54 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
             .GroupBy(r => r.EventId)
             .Select(ToEntry)
             .ToList();
+    }
+
+    public async Task<IReadOnlyList<LedgerDayTotal>> GetDailyTotalsAsync(
+        DateOnly from, DateOnly to, string timeZone, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        // The range ends are local midnights in the zone (`timestamp AT TIME ZONE` gives the
+        // instant, across DST changes), so the occurred_at index still serves the scan; each
+        // row is filed on the date its instant reads in the zone. Aliased to DayRow's names
+        // (no underscore matching in the CLI host).
+        const string sql = """
+            SELECT to_char((l.occurred_at AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS day,
+                   l.currency,
+                   coalesce(sum(l.amount) FILTER (WHERE l.entry = 'earn'), 0)::bigint      AS earned,
+                   coalesce(-sum(l.amount) FILTER (WHERE l.entry = 'reversal'), 0)::bigint AS reversed,
+                   coalesce(-sum(l.amount) FILTER (WHERE l.entry = 'redeem'), 0)::bigint   AS spent,
+                   sum(l.amount)::bigint                                                   AS net
+            FROM bsk.v_ledger l
+            WHERE l.occurred_at >= (@from::date)::timestamp AT TIME ZONE @tz
+              AND l.occurred_at <  (@to::date)::timestamp AT TIME ZONE @tz
+            GROUP BY 1, 2
+            ORDER BY 1, 2;
+            """;
+
+        try
+        {
+            var rows = await connection.QueryAsync<DayRow>(new CommandDefinition(
+                sql,
+                new
+                {
+                    tz = timeZone,
+                    from = from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    to = to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                },
+                cancellationToken: cancellationToken));
+            return rows
+                .Select(r => new LedgerDayTotal(
+                    DateOnly.ParseExact(r.Day, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    r.Currency, r.Earned, r.Reversed, r.Spent, r.Net))
+                .ToList();
+        }
+        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
+        {
+            // `time zone "…" not recognized`: the caller named a zone Postgres doesn't have.
+            throw new ArgumentException($"Unknown time zone '{timeZone}'.", e);
+        }
     }
 
     public async Task<DateTimeOffset?> GetOpenedAtAsync(CancellationToken cancellationToken = default)
@@ -450,6 +499,16 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
         }
 
         return int.MaxValue;
+    }
+
+    private sealed class DayRow
+    {
+        public string Day { get; set; } = "";
+        public string Currency { get; set; } = "";
+        public long Earned { get; set; }
+        public long Reversed { get; set; }
+        public long Spent { get; set; }
+        public long Net { get; set; }
     }
 
     private sealed class BalanceRow

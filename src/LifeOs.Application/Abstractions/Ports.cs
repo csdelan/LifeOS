@@ -235,6 +235,17 @@ public interface ILedgerRepository
     Task<IReadOnlyList<LedgerEntry>> GetEntriesAsync(
         DateTimeOffset? from, DateTimeOffset? to, int? limit, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Each local day's totals per currency for the days [<paramref name="from"/>,
+    /// <paramref name="to"/>), read in <paramref name="timeZone"/> (an IANA name such as
+    /// <c>America/Chicago</c>): an entry falls on the date its <c>occurred_at</c> reads there,
+    /// so an evening completion is filed on its own evening, not the next UTC day. Days and
+    /// currencies without entries have no row. Throws <see cref="ArgumentException"/> for a
+    /// time zone the database doesn't know.
+    /// </summary>
+    Task<IReadOnlyList<LedgerDayTotal>> GetDailyTotalsAsync(
+        DateOnly from, DateOnly to, string timeZone, CancellationToken cancellationToken = default);
+
     /// <summary>When the wallet was opened (its earliest <c>open</c> entry), or <c>null</c> before launch.</summary>
     Task<DateTimeOffset?> GetOpenedAtAsync(CancellationToken cancellationToken = default);
 

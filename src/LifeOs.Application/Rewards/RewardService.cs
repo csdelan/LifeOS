@@ -78,6 +78,19 @@ public sealed class RewardService(
     }
 
     /// <summary>
+    /// The rewards history by local day (REWARD-5) for the days [<paramref name="from"/>,
+    /// <paramref name="to"/>) as they read in <paramref name="timeZone"/> (an IANA name):
+    /// one <see cref="LedgerDay"/> per day with entries, oldest first. See
+    /// <see cref="LedgerDays.Validate"/> for what is refused.
+    /// </summary>
+    public async Task<IReadOnlyList<LedgerDay>> GetDailyAsync(
+        DateOnly from, DateOnly to, string timeZone, CancellationToken cancellationToken = default)
+    {
+        LedgerDays.Validate(from, to, timeZone);
+        return LedgerDays.Fold(await ledger.GetDailyTotalsAsync(from, to, timeZone, cancellationToken));
+    }
+
+    /// <summary>
     /// Opens the wallet: writes the <c>open</c> start line, dated <paramref name="at"/>
     /// (default now), unless it is already open. Nothing that happened before the
     /// opening ever pays. Safe to call repeatedly — it returns the existing opening.

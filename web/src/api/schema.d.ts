@@ -596,6 +596,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ledger/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetLedgerDaily"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rewards": {
         parameters: {
             query?: never;
@@ -903,6 +919,21 @@ export interface components {
             /** Format: date-time */
             occurredAt?: string;
             content?: string;
+        };
+        LedgerDayRow: {
+            date?: string;
+            earned?: {
+                [key: string]: number | string;
+            };
+            reversed?: {
+                [key: string]: number | string;
+            };
+            spent?: {
+                [key: string]: number | string;
+            };
+            net?: {
+                [key: string]: number | string;
+            };
         };
         LedgerRow: {
             /** Format: uuid */
@@ -2252,6 +2283,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LedgerRow"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetLedgerDaily: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                tz?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerDayRow"][];
                 };
             };
             /** @description Bad Request */

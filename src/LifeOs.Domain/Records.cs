@@ -106,6 +106,13 @@ public sealed record ArtifactBlobMetadata(
 public sealed record WalletBalance(string Currency, long Earned, long Reversed, long Spent, long Balance);
 
 /// <summary>
+/// One local day's totals in one currency (REWARD-5): what that day's ledger entries —
+/// dated in the viewer's time zone — earned, reversed and spent (positive totals), and
+/// <see cref="Net"/>, the signed sum of every entry that day in that currency.
+/// </summary>
+public sealed record LedgerDayTotal(DateOnly Date, string Currency, long Earned, long Reversed, long Spent, long Net);
+
+/// <summary>
 /// One ledger entry as <c>bsk.v_ledger</c> reads it (REWARD-5): what it was
 /// (<see cref="LedgerEntries"/>), its signed amounts per currency, and what it concerns —
 /// the item that earned it, or the reward it bought.

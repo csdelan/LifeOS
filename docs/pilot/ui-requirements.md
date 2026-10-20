@@ -2484,7 +2484,7 @@ Build:      built
 ### REWARD-5 — A rewards history shows what I earned and spent by day, week and month
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "Some way to track how much rewards I earn over time... sort of like a report or calendar
@@ -2743,8 +2743,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   Person-ref attribute for the Pilot. — **Shipped** (Phase 11, `attributes.people`, `bsk involve`).
 - **Currency ledger + wallet** (REWARD-1 / REWARD-5 / D11) — `ledger` event kind, a currency
   vocabulary with a spendable flag, `v_ledger` / `v_wallet` / daily totals, `bsk wallet`. —
-  **Shipped** except daily totals (rewards plan R1, migration 0025, `bsk wallet` / `bsk ledger`
-  / `bsk redeem`; daily totals come with R5 / R7).
+  **Shipped** (rewards plan R1, migration 0025, `bsk wallet` / `bsk ledger` / `bsk redeem`;
+  daily totals in the viewer's time zone, R7: `bsk ledger --daily`, `GET /api/ledger/daily`).
 - **Bounties + reconcile engine** (REWARD-1 / REWARD-2) — `attributes.bounty`, type defaults,
   `v_reward_due`, `RewardService` reconcile hooked into status changes and habit adherence,
   `bsk bounty` / `bsk rewards reconcile`. — **Shipped** (R2, migration 0026, for Tasks,
@@ -2762,10 +2762,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   dialog, R5).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
-scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the rest of the
-**rewards UI** (REWARD-5's history, rewards plan R7, sequenced in
-[rewards-plan.md](rewards-plan.md)) and REWARD-2's per-habit establish-target editor. Everything else above
-has shipped. The user-facing UIs for the shipped kernel bits still vary by surface — see each
+scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1). Everything else above
+has shipped, the rewards work included (R1–R7 in [rewards-plan.md](rewards-plan.md)). The user-facing UIs for the shipped kernel bits still vary by surface — see each
 requirement's Build field (e.g. CAP-2 / CAP-4 are `building`: kernel done, capture UI pending).
 
 *(Prior mapping gaps already closed: the `concerns` write path — shipped as `bsk relate`.)*

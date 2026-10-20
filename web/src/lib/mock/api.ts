@@ -22,6 +22,7 @@ import type {
   HabitRow,
   InboxItem,
   JournalEntry,
+  LedgerDay,
   LedgerRow,
   PersonRow,
   RelationEdge,
@@ -50,6 +51,7 @@ import {
   listTimers,
   mockHabits,
   mockLedger,
+  mockLedgerDaily,
   mockRewards,
   mockWallet,
   withBounty,
@@ -125,6 +127,11 @@ export interface LifeOsReads {
   wallet(): Promise<Wallet>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
+  /**
+   * The history by local day (REWARD-5): the days [from, to) (`YYYY-MM-DD`) as they read in
+   * `tz`, the viewer's IANA time zone, oldest first; days without entries are left out.
+   */
+  ledgerDaily(opts: { from: string; to: string; tz: string }): Promise<LedgerDay[]>;
   /** The reward catalog (REWARD-3), with each Reward's redemptions and savings progress. */
   rewards(opts?: { includeArchived?: boolean }): Promise<RewardRow[]>;
   /** What each trigger of each earning type pays by default (REWARD-2). */
@@ -282,6 +289,11 @@ export const mockReads: LifeOsReads = {
   async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {
     await wait();
     return mockLedger(opts);
+  },
+
+  async ledgerDaily(opts: { from: string; to: string; tz: string }): Promise<LedgerDay[]> {
+    await wait();
+    return mockLedgerDaily(opts);
   },
 
   async rewards(opts?: { includeArchived?: boolean }): Promise<RewardRow[]> {

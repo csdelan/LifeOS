@@ -27,6 +27,8 @@ public static class RewardEndpoints
             .Produces<WalletSummary>();
         api.MapGet("/ledger", GetLedger).WithName("GetLedger")
             .Produces<IReadOnlyList<LedgerRow>>().Produces<ApiError>(StatusCodes.Status400BadRequest);
+        api.MapGet("/ledger/daily", GetLedgerDaily).WithName("GetLedgerDaily")
+            .Produces<IReadOnlyList<LedgerDayRow>>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapGet("/rewards", GetRewards).WithName("GetRewards")
             .Produces<IReadOnlyList<RewardRow>>();
         api.MapPost("/redeem", Redeem).WithName("Redeem")
@@ -53,6 +55,24 @@ public static class RewardEndpoints
         CancellationToken cancellationToken)
         => Results.Ok(await rewards.GetLedgerAsync(
             from, to, Math.Clamp(limit ?? DefaultLedgerLimit, 1, MaxLedgerLimit), cancellationToken));
+
+    /// <summary>
+    /// The rewards history by local day (REWARD-5): the days [<paramref name="from"/>,
+    /// <paramref name="to"/>) as they read in <paramref name="tz"/>, the viewer's IANA time
+    /// zone (UTC when omitted) — the database runs in UTC, so an evening completion would
+    /// otherwise land on tomorrow.
+    /// </summary>
+    private static async Task<IResult> GetLedgerDaily(
+        RewardReader rewards, DateOnly? from, DateOnly? to, string? tz, CancellationToken cancellationToken)
+    {
+        if (from is not { } start || to is not { } end)
+        {
+            return Results.BadRequest(new ApiError("from and to are required, as yyyy-MM-dd."));
+        }
+
+        return Results.Ok(await rewards.GetDailyAsync(
+            start, end, string.IsNullOrEmpty(tz) ? "UTC" : tz, cancellationToken));
+    }
 
     private static async Task<IResult> GetRewards(
         RewardReader rewards, CancellationToken cancellationToken, bool includeArchived = false)

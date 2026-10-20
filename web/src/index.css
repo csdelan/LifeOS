@@ -22,6 +22,8 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-chart-earned: var(--chart-earned);
+  --color-chart-spent: var(--chart-spent);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -81,6 +83,10 @@
   --chart-3: oklch(0.55 0.1 250);
   --chart-4: oklch(0.5 0.12 320);
   --chart-5: oklch(0.45 0.06 130);
+  /* Rewards history (REWARD-5): earned vs spent. Same hues as chart-1 / chart-2, stepped into
+     the categorical band so the pair stays apart under colour-blindness (validated, ΔE 11.6). */
+  --chart-earned: oklch(0.46 0.12 168);
+  --chart-spent: oklch(0.66 0.15 48);
   --radius: 0.7rem;
   --sidebar: oklch(0.96 0.014 85);
   --sidebar-foreground: oklch(0.23 0.02 50);
@@ -137,6 +143,8 @@
   --chart-3: oklch(0.7 0.1 250);
   --chart-4: oklch(0.72 0.1 320);
   --chart-5: oklch(0.7 0.06 130);
+  --chart-earned: oklch(0.64 0.11 168);
+  --chart-spent: oklch(0.66 0.15 50);
   --sidebar: oklch(0.16 0.016 170);
   --sidebar-foreground: oklch(0.945 0.012 85);
   --sidebar-primary: oklch(0.78 0.08 168);

@@ -12,6 +12,7 @@ import type {
   BountyTypeDefaults,
   HabitRow,
   HabitTargetResult,
+  LedgerDay,
   LedgerRow,
   Redemption,
   RewardRow,
@@ -250,6 +251,16 @@ export function normalizeLedgerRow(raw: LedgerRow): LedgerRow {
     amounts: normalizeAmounts(raw.amounts),
     dollars: numOrNull(raw.dollars),
     coinRate: numOrNull(raw.coinRate),
+  };
+}
+
+export function normalizeLedgerDay(raw: LedgerDay): LedgerDay {
+  return {
+    date: raw.date,
+    earned: normalizeAmounts(raw.earned),
+    reversed: normalizeAmounts(raw.reversed),
+    spent: normalizeAmounts(raw.spent),
+    net: normalizeAmounts(raw.net),
   };
 }
 

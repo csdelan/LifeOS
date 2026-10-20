@@ -8,6 +8,7 @@ const routes = [
   "/tasks",
   "/habits",
   "/rewards",
+  "/rewards?view=history",
   "/vision",
   "/reviews",
   "/people",

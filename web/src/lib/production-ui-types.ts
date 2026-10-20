@@ -460,6 +460,21 @@ export interface Wallet {
 
 export type LedgerEntryKind = "open" | "earn" | "reversal" | "redeem";
 
+/**
+ * One local day of the rewards history (REWARD-5, `GET /api/ledger/daily`): per currency,
+ * what that day's entries earned, gave back and spent (positive totals), and `net`, the
+ * signed sum of all of them. Currencies at zero are left out; a day without entries has no
+ * row. Weeks and months are roll-ups of these days (`lib/rewards-history.ts`).
+ */
+export interface LedgerDay {
+  /** `YYYY-MM-DD` in the viewer's time zone. */
+  date: string;
+  earned: Amounts;
+  reversed: Amounts;
+  spent: Amounts;
+  net: Amounts;
+}
+
 /** One ledger entry (`bsk.v_ledger`), newest first: what it was and what it concerns. */
 export interface LedgerRow {
   id: string;

@@ -35,6 +35,18 @@ public sealed class RewardReader(string readerConnectionString, decimal coinValu
         return entries.Select(RewardRows.From).ToList();
     }
 
+    /// <summary>
+    /// The history by local day in <paramref name="timeZone"/>, oldest first — the same read
+    /// as <see cref="RewardService.GetDailyAsync"/>, on the reader connection.
+    /// </summary>
+    public async Task<IReadOnlyList<LedgerDayRow>> GetDailyAsync(
+        DateOnly from, DateOnly to, string timeZone, CancellationToken cancellationToken = default)
+    {
+        LedgerDays.Validate(from, to, timeZone);
+        var totals = await ledger.GetDailyTotalsAsync(from, to, timeZone, cancellationToken);
+        return LedgerDays.Fold(totals).Select(RewardRows.From).ToList();
+    }
+
     public async Task<IReadOnlyList<RewardRow>> GetRewardsAsync(
         bool includeArchived, CancellationToken cancellationToken = default)
         => (await ledger.GetCatalogAsync(includeArchived, cancellationToken)).Select(RewardRows.From).ToList();

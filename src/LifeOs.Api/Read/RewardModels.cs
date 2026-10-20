@@ -1,3 +1,4 @@
+using System.Globalization;
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 
@@ -47,6 +48,22 @@ public sealed class LedgerRow
     public string? Note { get; set; }
     public decimal? Dollars { get; set; }
     public decimal? CoinRate { get; set; }
+}
+
+/// <summary>
+/// One local day of the rewards history (REWARD-5), oldest first in
+/// <c>GET /api/ledger/daily</c>: per currency, what that day's entries earned, gave back and
+/// spent (positive totals), and <see cref="Net"/>, the signed sum of all of them. Currencies
+/// at zero are left out; a day without entries has no row. Weeks and months are roll-ups.
+/// </summary>
+public sealed class LedgerDayRow
+{
+    /// <summary>The local date, <c>yyyy-MM-dd</c>, in the time zone the read asked for.</summary>
+    public string Date { get; set; } = "";
+    public IReadOnlyDictionary<string, long> Earned { get; set; } = new Dictionary<string, long>();
+    public IReadOnlyDictionary<string, long> Reversed { get; set; } = new Dictionary<string, long>();
+    public IReadOnlyDictionary<string, long> Spent { get; set; } = new Dictionary<string, long>();
+    public IReadOnlyDictionary<string, long> Net { get; set; } = new Dictionary<string, long>();
 }
 
 /// <summary>
@@ -145,6 +162,15 @@ public static class RewardRows
         Note = entry.Note,
         Dollars = entry.Dollars,
         CoinRate = entry.CoinRate
+    };
+
+    public static LedgerDayRow From(LedgerDay day) => new()
+    {
+        Date = day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        Earned = day.Earned,
+        Reversed = day.Reversed,
+        Spent = day.Spent,
+        Net = day.Net
     };
 
     public static RewardRow From(CatalogReward reward) => new()

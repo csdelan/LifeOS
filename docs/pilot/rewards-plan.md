@@ -7,8 +7,8 @@ agent with no session context can pick up any phase.
 
 **Scope agreed with Chris on 2026-10-20.** The rules in §1 are his answers to the design
 questions. R0 (the requirements and this plan), R1 (the ledger), R2 (earning on work), R3
-(habit earning), R4 (the reward catalog), R5 (the wallet and Redeem page) and R6 (earning in
-the UI) are done; R7 is open.
+(habit earning), R4 (the reward catalog), R5 (the wallet and Redeem page), R6 (earning in
+the UI) and R7 (history and report) are done.
 
 ## 0. Read these first
 
@@ -270,7 +270,7 @@ Karma and Resolve default to 0; Chris adds them per item.
 | `v_reward_due` | `v_reward_trigger` rows on or after `bsk.ledger_opened_at()`. |
 | `v_habit_establishment` | Per Building habit: min_adherence, window_days, window_start, followed / partial / missed / concluded, adherence, age_days, target_met. |
 | `v_reward` | Per Reward: name, kind (instant unless savings), price, target_usd, redemptions, coins_redeemed, dollars_redeemed, last_redeemed_at, percent_of_target and remaining_usd (savings goals with a target), description, notes, archived. |
-| API | `GET /api/wallet`, `GET /api/ledger?from&to`, `GET /api/ledger/daily?from&to&tz`, `GET /api/rewards`, `POST /api/redeem`, `POST /api/bounty`. Built in R5: the wallet, ledger (`?from&to&limit`), catalog and redeem reads and writes, plus `POST /api/rewards`, `/api/rewards/price` and `/api/rewards/target`; `/api/ledger/daily` is R7. Built in R6: `POST /api/bounty` and `GET /api/bounty/defaults`; the subject list and detail reads carry the bounty, and `GET /api/habits` carries each habit's status and establishment progress. After R6: `POST /api/habits/target` (`{habit, minAdherence?, windowDays?}` or `{habit, clear}`), answering the target as the view reads it and which parts are the habit's own. |
+| API | `GET /api/wallet`, `GET /api/ledger?from&to`, `GET /api/ledger/daily?from&to&tz`, `GET /api/rewards`, `POST /api/redeem`, `POST /api/bounty`. Built in R5: the wallet, ledger (`?from&to&limit`), catalog and redeem reads and writes, plus `POST /api/rewards`, `/api/rewards/price` and `/api/rewards/target`; `/api/ledger/daily` was built in R7. Built in R6: `POST /api/bounty` and `GET /api/bounty/defaults`; the subject list and detail reads carry the bounty, and `GET /api/habits` carries each habit's status and establishment progress. After R6: `POST /api/habits/target` (`{habit, minAdherence?, windowDays?}` or `{habit, clear}`), answering the target as the view reads it and which parts are the habit's own. |
 
 - **Time zones:** daily totals bucket by `occurred_at AT TIME ZONE @tz`, using the browser's
   IANA zone. The database runs in UTC, so an evening completion would otherwise land on
@@ -418,4 +418,31 @@ number from 0025.
   `HabitRow.establishment`, and `lib/establish.ts` `targetWrite` sends only the part that
   changed, the percentage as a fraction. The mock store's `mockSetHabitTarget` refuses what
   the service refuses, in its words.
-- [ ] R7 — History + report
+- [x] R7 — History + report. No migration: `NpgsqlLedgerRepository.GetDailyTotalsAsync` totals
+  `v_ledger` by `(occurred_at AT TIME ZONE @tz)::date` over the half-open local range
+  [from, to), per currency: earned, reversed and spent as positive totals, and the signed net.
+  `LedgerDays.Validate` refuses a range that doesn't end after it starts, one longer than 731
+  days, and a blank or malformed zone; Postgres refuses an unknown zone (22023), answered as
+  "Unknown time zone 'X'." `LedgerDays.Fold` makes one `LedgerDay` per date, zeros dropped,
+  currencies in display order. `RewardService.GetDailyAsync`, `bsk ledger --daily [--from]
+  [--to] [--tz]` (`--to` inclusive, the last 30 days by default, in this machine's zone: the
+  solution runs with invariant globalization, so common Windows zone ids are mapped to IANA
+  in the command and any other zone reads in UTC with a note) and
+  `GET /api/ledger/daily?from&to&tz` (`LedgerDayRow[]`; a missing date or unknown zone is a
+  400; tz defaults to UTC). Web: Rewards has Wallet & rewards and History tabs
+  (`/rewards?view=history`, plus `selected` for the detail peek); "See all history" on Recent
+  activity opens it. History reads one daily range covering the month and both charts
+  (`lib/rewards-history.ts` `historyRange`), so switching weeks / months never waits.
+  - A month calendar (Sunday first) for one currency at a time, shaded by what each day earned
+    net of what it gave back (one hue, four steps), with spending below; future days are
+    disabled and each day says its totals in words.
+  - Earned-vs-spent bars for the last 8 weeks or 6 months (tracked currencies show earned
+    only), with a tooltip per period, the last period labelled, and a Table view. New
+    `--chart-earned` / `--chart-spent` tokens per theme, checked with the dataviz validator.
+  - Picking a day, week or month narrows the report below: its totals (Spent with the real
+    dollars that moved), and its ledger entries grouped by day, filterable by kind (earned /
+    given back / spent) and currency, each linking to its item or Reward in the detail peek.
+    A reversal is its own entry on the day it was made, so a past day never changes.
+  The mock store's `mockLedgerDaily` files by the viewer's zone and refuses what the kernel
+  refuses, in its words. The shared Tabs trigger now uses `text-muted-foreground`
+  (`text-foreground/60` failed AA contrast in light mode).

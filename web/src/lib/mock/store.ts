@@ -20,6 +20,7 @@ import type {
   EventRelation,
   InboxItem,
   InboxResolution,
+  LedgerDay,
   LedgerRow,
   NewRewardRequest,
   NewSubjectRequest,
@@ -1209,6 +1210,74 @@ export function mockLedger(opts?: { from?: string; to?: string; limit?: number }
     .sort((a, b) => b.e.occurredAt.localeCompare(a.e.occurredAt) || b.i - a.i)
     .slice(0, limit)
     .map(({ e }) => ledgerRow(e));
+}
+
+const MAX_HISTORY_DAYS = 731;
+
+/** "2026-10-14": the date an instant reads in `tz` (throws for a zone Intl doesn't know). */
+function dateIn(tz: string): (iso: string) => string {
+  const format = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return (iso) => {
+    const parts = Object.fromEntries(format.formatToParts(new Date(iso)).map((p) => [p.type, p.value]));
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  };
+}
+
+function daySpan(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+/**
+ * The history by local day, as `GET /api/ledger/daily` reads it (`LedgerDays`): each
+ * entry filed on the date it reads in `tz`, the days [from, to), oldest first, with the
+ * kernel's refusals in its words.
+ */
+export function mockLedgerDaily(opts: { from: string; to: string; tz: string }): LedgerDay[] {
+  const { from, to, tz } = opts;
+  if (to <= from) throw new Error("The history range must end after it starts.");
+  const span = daySpan(from, to);
+  if (span > MAX_HISTORY_DAYS) {
+    throw new Error(`The history range can span at most ${MAX_HISTORY_DAYS} days; this one spans ${span}.`);
+  }
+  let local: (iso: string) => string;
+  try {
+    if (!tz.trim() || /\s/.test(tz)) throw new RangeError(tz);
+    local = dateIn(tz);
+  } catch {
+    throw new Error(`Unknown time zone '${tz}'.`);
+  }
+
+  const days = new Map<string, { earned: Amounts; reversed: Amounts; spent: Amounts; net: Amounts }>();
+  for (const e of state.ledger) {
+    const date = local(e.occurredAt);
+    if (date < from || date >= to) continue;
+    let day = days.get(date);
+    if (!day) {
+      day = { earned: {}, reversed: {}, spent: {}, net: {} };
+      days.set(date, day);
+    }
+    for (const [key, n] of Object.entries(e.amounts)) {
+      if (!n) continue;
+      const bucket = e.entry === "earn" ? day.earned : e.entry === "reversal" ? day.reversed : e.entry === "redeem" ? day.spent : null;
+      if (bucket) bucket[key] = (bucket[key] ?? 0) + Math.abs(n);
+      day.net[key] = (day.net[key] ?? 0) + n;
+    }
+  }
+  const tidy = (a: Amounts) => Object.fromEntries(orderedAmounts(a));
+  return [...days.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, d]) => ({
+      date,
+      earned: tidy(d.earned),
+      reversed: tidy(d.reversed),
+      spent: tidy(d.spent),
+      net: tidy(d.net),
+    }));
 }
 
 /** A price as the kernel reads it: spendable currencies, whole amounts above zero. */

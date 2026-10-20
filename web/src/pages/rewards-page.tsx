@@ -1,12 +1,18 @@
 import { useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { GiftIcon, PencilIcon, PiggyBankIcon, PlusIcon, Volume2Icon, VolumeXIcon } from "lucide-react";
+import { SubjectDetail } from "@/components/detail/subject-detail";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton, ListSkeleton } from "@/components/primitives/skeletons";
 import { RedeemDialog } from "@/components/rewards/redeem-dialog";
 import { RewardFormDialog } from "@/components/rewards/reward-form-dialog";
+import { RewardsHistory } from "@/components/rewards/rewards-history";
+import { useDirty } from "@/components/shell/app-shell";
+import { PeekPanel } from "@/components/shell/panels";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSoundOn } from "@/lib/celebrate";
 import { formatTimestamp } from "@/lib/dates";
 import { useLedger, useRewards, useWallet, useWrites } from "@/lib/queries";
@@ -27,9 +33,15 @@ const RECENT = 8;
 
 /**
  * The Rewards tab (REWARD-3): the wallet, the catalog, and what was spent lately.
- * Redeeming celebrates (REWARD-4); the history by day / week / month is R7.
+ * Redeeming celebrates (REWARD-4). History (REWARD-5) shows what was earned and spent by
+ * day, week and month, and opens the item behind any entry in the side panel.
  */
 export function RewardsPage() {
+  const search = useSearch({ from: "/rewards" });
+  const navigate = useNavigate({ from: "/rewards" });
+  const { setDirty, requestNavigation } = useDirty();
+  const view = search.view === "history" ? "history" : "wallet";
+  const selected = search.selected;
   const wallet = useWallet();
   const [showArchived, setShowArchived] = useState(false);
   const rewards = useRewards(showArchived);
@@ -44,175 +56,206 @@ export function RewardsPage() {
   const goals = live.filter((r) => r.kind === "savings");
   const archived = rows.filter((r) => r.archived);
 
+  const showView = (next: "wallet" | "history") =>
+    void navigate({ search: (prev) => ({ ...prev, view: next === "history" ? "history" : undefined }) });
+  const openSubject = (id: string) =>
+    requestNavigation(() => void navigate({ search: (prev) => ({ ...prev, selected: id }) }));
+  const closeSubject = () =>
+    requestNavigation(() => void navigate({ search: (prev) => ({ ...prev, selected: undefined }) }));
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 border-b px-4 py-4 md:px-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="type-scale-section text-primary">Rewards</p>
-            <h1 className="font-heading text-2xl">Spend what you've earned</h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Every redemption is logged with what it was for. Coins are real money, at{" "}
-              {formatUsd(wallet.data?.coinValueUsd ?? 0.5)} each.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 pr-1">
-              {soundOn ? (
-                <Volume2Icon className="size-4 text-muted-foreground" aria-hidden />
-              ) : (
-                <VolumeXIcon className="size-4 text-muted-foreground" aria-hidden />
-              )}
-              <Label htmlFor="rewards-sound" className="text-xs font-normal">
-                Sound
-              </Label>
-              <Switch id="rewards-sound" checked={soundOn} onCheckedChange={setSoundOn} />
+    <div className="flex h-full min-h-0">
+      <Tabs
+        value={view}
+        onValueChange={(v) => showView(v === "history" ? "history" : "wallet")}
+        className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-0"
+      >
+        <header className="shrink-0 border-b px-4 pt-4 md:px-6">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="type-scale-section text-primary">Rewards</p>
+              <h1 className="font-heading text-2xl">Spend what you've earned</h1>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Every redemption is logged with what it was for. Coins are real money, at{" "}
+                {formatUsd(wallet.data?.coinValueUsd ?? 0.5)} each.
+              </p>
             </div>
-            <Button variant="outline" onClick={() => setEditing({ reward: null })}>
-              <PlusIcon aria-hidden /> Add reward
-            </Button>
-            <Button onClick={() => setRedeeming({ reward: null })} disabled={!wallet.data}>
-              Redeem something else
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-4 py-5 md:px-6">
-        <WalletSection wallet={wallet.data} isLoading={wallet.isLoading} isError={wallet.isError} />
-
-        {rewards.isLoading ? <ListSkeleton rows={3} /> : null}
-        {rewards.isError ? (
-          <EmptyState
-            tone="error"
-            icon={GiftIcon}
-            title="The catalog failed to load"
-            description="This is not an empty catalog — the reader never returned."
-          />
-        ) : null}
-        {!rewards.isLoading && !rewards.isError && live.length === 0 ? (
-          <EmptyState
-            icon={GiftIcon}
-            title="No rewards yet"
-            description="Add what you're working toward: a treat with a price, or a savings goal."
-            action={
-              <Button onClick={() => setEditing({ reward: null })}>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 pr-1">
+                {soundOn ? (
+                  <Volume2Icon className="size-4 text-muted-foreground" aria-hidden />
+                ) : (
+                  <VolumeXIcon className="size-4 text-muted-foreground" aria-hidden />
+                )}
+                <Label htmlFor="rewards-sound" className="text-xs font-normal">
+                  Sound
+                </Label>
+                <Switch id="rewards-sound" checked={soundOn} onCheckedChange={setSoundOn} />
+              </div>
+              <Button variant="outline" onClick={() => setEditing({ reward: null })}>
                 <PlusIcon aria-hidden /> Add reward
               </Button>
-            }
-          />
-        ) : null}
-
-        {treats.length > 0 ? (
-          <section aria-labelledby="rewards-treats">
-            <h2 id="rewards-treats" className="type-scale-section mb-3 text-muted-foreground">
-              Treats
-            </h2>
-            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {treats.map((r) => (
-                <li key={r.id}>
-                  <TreatCard
-                    reward={r}
-                    wallet={wallet.data}
-                    onRedeem={() => setRedeeming({ reward: r })}
-                    onEdit={() => setEditing({ reward: r })}
-                  />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        {goals.length > 0 ? (
-          <section aria-labelledby="rewards-savings">
-            <h2 id="rewards-savings" className="type-scale-section mb-3 text-muted-foreground">
-              Savings goals
-            </h2>
-            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {goals.map((r) => (
-                <li key={r.id}>
-                  <SavingsCard
-                    reward={r}
-                    wallet={wallet.data}
-                    onDeposit={() => setRedeeming({ reward: r })}
-                    onEdit={() => setEditing({ reward: r })}
-                  />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        <section aria-labelledby="rewards-recent">
-          <h2 id="rewards-recent" className="type-scale-section mb-3 text-muted-foreground">
-            Recent activity
-          </h2>
-          {ledger.isLoading ? <ListSkeleton rows={4} /> : null}
-          {ledger.isError ? (
-            <p role="alert" className="text-sm text-destructive">
-              The ledger failed to load.
-            </p>
-          ) : null}
-          {ledger.data && ledger.data.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nothing yet. Complete a task or follow a habit to start earning.
-            </p>
-          ) : null}
-          <ul className="divide-y rounded-xl ring-1 ring-foreground/10">
-            {(ledger.data ?? []).map((row) => (
-              <li key={row.id} className="flex items-baseline justify-between gap-3 px-3 py-2.5 text-sm">
-                <div className="min-w-0">
-                  <p className="truncate">{ledgerLabel(row)}</p>
-                  <p className="text-[0.6875rem] text-muted-foreground">
-                    {formatTimestamp(row.occurredAt)}
-                    {row.dollars != null ? ` · ${formatUsd(row.dollars)}` : ""}
-                  </p>
-                </div>
-                <span
-                  className={cn(
-                    "shrink-0 text-xs tabular-nums",
-                    row.entry === "earn" ? "text-success" : "text-muted-foreground",
-                  )}
-                >
-                  {formatAmounts(row.amounts, { signed: true })}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section aria-label="Archived rewards" className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Switch id="rewards-archived" checked={showArchived} onCheckedChange={setShowArchived} />
-            <Label htmlFor="rewards-archived" className="text-xs font-normal">
-              Show archived rewards
-            </Label>
+              <Button onClick={() => setRedeeming({ reward: null })} disabled={!wallet.data}>
+                Redeem something else
+              </Button>
+            </div>
           </div>
-          {showArchived && !rewards.isLoading ? (
-            archived.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nothing archived.</p>
-            ) : (
-              <ul className="space-y-2">
-                {archived.map((r) => (
-                  <ArchivedRow key={r.id} reward={r} />
+          <TabsList variant="line" className="mt-3 -mb-px h-auto">
+            <TabsTrigger value="wallet">Wallet &amp; rewards</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+        </header>
+
+        <TabsContent value="history" className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+          <RewardsHistory onOpenSubject={openSubject} />
+        </TabsContent>
+
+        <TabsContent value="wallet" className="min-h-0 flex-1 space-y-8 overflow-y-auto px-4 py-5 md:px-6">
+          <WalletSection wallet={wallet.data} isLoading={wallet.isLoading} isError={wallet.isError} />
+
+          {rewards.isLoading ? <ListSkeleton rows={3} /> : null}
+          {rewards.isError ? (
+            <EmptyState
+              tone="error"
+              icon={GiftIcon}
+              title="The catalog failed to load"
+              description="This is not an empty catalog — the reader never returned."
+            />
+          ) : null}
+          {!rewards.isLoading && !rewards.isError && live.length === 0 ? (
+            <EmptyState
+              icon={GiftIcon}
+              title="No rewards yet"
+              description="Add what you're working toward: a treat with a price, or a savings goal."
+              action={
+                <Button onClick={() => setEditing({ reward: null })}>
+                  <PlusIcon aria-hidden /> Add reward
+                </Button>
+              }
+            />
+          ) : null}
+
+          {treats.length > 0 ? (
+            <section aria-labelledby="rewards-treats">
+              <h2 id="rewards-treats" className="type-scale-section mb-3 text-muted-foreground">
+                Treats
+              </h2>
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {treats.map((r) => (
+                  <li key={r.id}>
+                    <TreatCard
+                      reward={r}
+                      wallet={wallet.data}
+                      onRedeem={() => setRedeeming({ reward: r })}
+                      onEdit={() => setEditing({ reward: r })}
+                    />
+                  </li>
                 ))}
               </ul>
-            )
+            </section>
           ) : null}
-        </section>
-      </div>
 
-      <RedeemDialog
-        open={!!redeeming}
-        onOpenChange={(open) => !open && setRedeeming(null)}
-        reward={redeeming?.reward ?? null}
-        wallet={wallet.data}
-      />
-      <RewardFormDialog
-        open={!!editing}
-        onOpenChange={(open) => !open && setEditing(null)}
-        reward={editing?.reward}
-      />
+          {goals.length > 0 ? (
+            <section aria-labelledby="rewards-savings">
+              <h2 id="rewards-savings" className="type-scale-section mb-3 text-muted-foreground">
+                Savings goals
+              </h2>
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {goals.map((r) => (
+                  <li key={r.id}>
+                    <SavingsCard
+                      reward={r}
+                      wallet={wallet.data}
+                      onDeposit={() => setRedeeming({ reward: r })}
+                      onEdit={() => setEditing({ reward: r })}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <section aria-labelledby="rewards-recent">
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h2 id="rewards-recent" className="type-scale-section text-muted-foreground">
+                Recent activity
+              </h2>
+              <Button variant="link" size="sm" className="h-auto p-0" onClick={() => showView("history")}>
+                See all history
+              </Button>
+            </div>
+            {ledger.isLoading ? <ListSkeleton rows={4} /> : null}
+            {ledger.isError ? (
+              <p role="alert" className="text-sm text-destructive">
+                The ledger failed to load.
+              </p>
+            ) : null}
+            {ledger.data && ledger.data.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nothing yet. Complete a task or follow a habit to start earning.
+              </p>
+            ) : null}
+            <ul className="divide-y rounded-xl ring-1 ring-foreground/10">
+              {(ledger.data ?? []).map((row) => (
+                <li key={row.id} className="flex items-baseline justify-between gap-3 px-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate">{ledgerLabel(row)}</p>
+                    <p className="text-[0.6875rem] text-muted-foreground">
+                      {formatTimestamp(row.occurredAt)}
+                      {row.dollars != null ? ` · ${formatUsd(row.dollars)}` : ""}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 text-xs tabular-nums",
+                      row.entry === "earn" ? "text-success" : "text-muted-foreground",
+                    )}
+                  >
+                    {formatAmounts(row.amounts, { signed: true })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section aria-label="Archived rewards" className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Switch id="rewards-archived" checked={showArchived} onCheckedChange={setShowArchived} />
+              <Label htmlFor="rewards-archived" className="text-xs font-normal">
+                Show archived rewards
+              </Label>
+            </div>
+            {showArchived && !rewards.isLoading ? (
+              archived.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nothing archived.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {archived.map((r) => (
+                    <ArchivedRow key={r.id} reward={r} />
+                  ))}
+                </ul>
+              )
+            ) : null}
+          </section>
+        </TabsContent>
+
+        <RedeemDialog
+          open={!!redeeming}
+          onOpenChange={(open) => !open && setRedeeming(null)}
+          reward={redeeming?.reward ?? null}
+          wallet={wallet.data}
+        />
+        <RewardFormDialog
+          open={!!editing}
+          onOpenChange={(open) => !open && setEditing(null)}
+          reward={editing?.reward}
+        />
+      </Tabs>
+      <PeekPanel open={!!selected} title="Detail" onClose={closeSubject}>
+        {selected ? (
+          <SubjectDetail subjectId={selected} onDirtyChange={setDirty} onClose={closeSubject} />
+        ) : null}
+      </PeekPanel>
     </div>
   );
 }

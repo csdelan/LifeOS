@@ -45,6 +45,13 @@ export type HabitsSearch = {
   selected?: string;
 };
 
+export type RewardsSearch = {
+  /** "history" opens the Rewards History tab (REWARD-5); absent is the wallet and catalog. */
+  view?: "history";
+  /** An item or Reward opened from the history, shown in the side panel. */
+  selected?: string;
+};
+
 export type ReviewsSearch = {
   kind?: "daily" | "weekly";
   date?: string;
@@ -139,6 +146,10 @@ const habitsRoute = createRoute({
 const rewardsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/rewards",
+  validateSearch: (search: Record<string, unknown>): RewardsSearch => ({
+    view: search.view === "history" ? "history" : undefined,
+    selected: typeof search.selected === "string" ? search.selected : undefined,
+  }),
   component: RewardsPage,
 });
 
