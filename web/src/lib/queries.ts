@@ -49,6 +49,9 @@ export const qk = {
   habits: ["habits"] as const,
   occurrences: ["occurrences"] as const,
   timers: ["timers"] as const,
+  wallet: ["wallet"] as const,
+  ledger: ["ledger"] as const,
+  rewards: ["rewards"] as const,
   reviews: ["reviews"] as const,
   recap: ["recap"] as const,
   dashboard: ["dashboard"] as const,
@@ -95,6 +98,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         qk.habits,
         qk.areas,
         qk.people,
+        qk.rewards,
         ["forest"],
         ["edges"],
       ]);
@@ -113,6 +117,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       try {
         await client.setStatus(subject, status);
       } finally {
+        // A status change can earn or give back (REWARD-1), so the wallet moves too.
         await invalidate(qc, [
           qk.subject(subject),
           qk.listItem(subject),
@@ -120,6 +125,8 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
           qk.subjects,
           qk.dashboard,
           qk.inbox,
+          qk.wallet,
+          qk.ledger,
           ["forest"],
           ["edges"],
         ]);
@@ -130,6 +137,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       await client.archive(subject);
       await invalidate(qc, [
         qk.timers,
+        qk.rewards,
         qk.subject(subject),
         qk.listItem(subject),
         qk.subjects,
@@ -144,6 +152,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       await client.restore(subject);
       await invalidate(qc, [
         qk.timers,
+        qk.rewards,
         qk.subject(subject),
         qk.listItem(subject),
         qk.subjects,
@@ -214,7 +223,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       try {
         await client.adhere(habit, state, opts);
       } finally {
-        await invalidate(qc, [qk.habits, qk.occurrences, qk.dashboard]);
+        await invalidate(qc, [qk.habits, qk.occurrences, qk.dashboard, qk.wallet, qk.ledger]);
       }
     },
 
@@ -234,6 +243,8 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
             qk.history(task),
             qk.subjects,
             qk.dashboard,
+            qk.wallet,
+            qk.ledger,
             ["forest"],
           ]);
         }
@@ -287,6 +298,33 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async completeReview(id) {
       await client.completeReview(id);
       await invalidate(qc, [qk.reviews]);
+    },
+
+    async redeem(req) {
+      const redemption = await client.redeem(req);
+      // The response carries the wallet after the spend: show it at once, and refresh the
+      // rest without waiting, so the celebration lands with the click.
+      qc.setQueryData(qk.wallet, redemption.wallet);
+      void invalidate(qc, [qk.wallet, qk.ledger, qk.rewards]);
+      return redemption;
+    },
+
+    async addReward(req) {
+      const reward = await client.addReward(req);
+      await invalidate(qc, [qk.rewards, qk.subjects]);
+      return reward;
+    },
+
+    async priceReward(reward, price) {
+      const row = await client.priceReward(reward, price);
+      await invalidate(qc, [qk.rewards, qk.subject(reward)]);
+      return row;
+    },
+
+    async targetReward(reward, targetUsd) {
+      const row = await client.targetReward(reward, targetUsd);
+      await invalidate(qc, [qk.rewards, qk.subject(reward)]);
+      return row;
     },
   };
 }
@@ -516,6 +554,30 @@ export function useTimer(taskId: string | undefined) {
     [data, taskId],
   );
   return { ...rest, data: timer };
+}
+
+/** Every currency's balance (REWARD-1). */
+export function useWallet() {
+  return useQuery({
+    queryKey: qk.wallet,
+    queryFn: () => reads().wallet(),
+  });
+}
+
+/** The newest ledger entries, newest first. */
+export function useLedger(limit = 100) {
+  return useQuery({
+    queryKey: [...qk.ledger, limit],
+    queryFn: () => reads().ledger({ limit }),
+  });
+}
+
+/** The reward catalog (REWARD-3). */
+export function useRewards(includeArchived = false) {
+  return useQuery({
+    queryKey: [...qk.rewards, includeArchived],
+    queryFn: () => reads().rewards({ includeArchived }),
+  });
 }
 
 export function useReviews(kind?: "daily" | "weekly", date?: string) {

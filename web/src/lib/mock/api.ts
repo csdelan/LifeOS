@@ -21,15 +21,18 @@ import type {
   HabitRow,
   InboxItem,
   JournalEntry,
+  LedgerRow,
   PersonRow,
   RelationEdge,
   ResolvedInboxItem,
   ReviewDoc,
+  RewardRow,
   StatusHistoryEntry,
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
   TaskTimer,
+  Wallet,
 } from "@/lib/production-ui-types";
 import { isTerminal } from "@/lib/production-ui-types";
 import { composeRecap, type RecapSection } from "@/lib/review-recap";
@@ -42,6 +45,9 @@ import {
   getArtifact,
   getState as storeState,
   listTimers,
+  mockLedger,
+  mockRewards,
+  mockWallet,
 } from "@/lib/mock/store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
@@ -108,6 +114,12 @@ export interface LifeOsReads {
   occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]>;
   /** Every timed Task's timer (TASKS-2), running first. Archived tasks are left out. */
   timers(): Promise<TaskTimer[]>;
+  /** Every currency's balance (REWARD-1), and what a Coin is worth. */
+  wallet(): Promise<Wallet>;
+  /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
+  ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
+  /** The reward catalog (REWARD-3), with each Reward's redemptions and savings progress. */
+  rewards(opts?: { includeArchived?: boolean }): Promise<RewardRow[]>;
   reviews(opts?: { kind?: "daily" | "weekly"; date?: string }): Promise<ReviewDoc[]>;
   recap(opts: { start: string; end: string; asOf: string }): Promise<RecapSection[]>;
   /**
@@ -249,6 +261,21 @@ export const mockReads: LifeOsReads = {
   async timers(): Promise<TaskTimer[]> {
     await wait();
     return listTimers();
+  },
+
+  async wallet(): Promise<Wallet> {
+    await wait();
+    return mockWallet();
+  },
+
+  async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {
+    await wait();
+    return mockLedger(opts);
+  },
+
+  async rewards(opts?: { includeArchived?: boolean }): Promise<RewardRow[]> {
+    await wait();
+    return mockRewards(opts?.includeArchived);
   },
 
   async reviews(opts?: { kind?: "daily" | "weekly"; date?: string }): Promise<ReviewDoc[]> {

@@ -1,18 +1,8 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using Dapper;
-using LifeOs.Api.Hosting;
 using LifeOs.Domain;
-using LifeOs.Infrastructure;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.JsonWebTokens;
-using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 
 namespace LifeOs.Tests;
@@ -25,11 +15,6 @@ namespace LifeOs.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class WriteEndpointsTests(PostgresFixture postgres)
 {
-    private const string Issuer = "https://test.supabase.co/auth/v1";
-    private const string Audience = "authenticated";
-    private const string Secret = "unit-test-hmac-secret-32bytes-min!";
-    private const string Allowed = "owner@example.com";
-
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -296,70 +281,5 @@ public sealed class WriteEndpointsTests(PostgresFixture postgres)
             new { from, relation, to }, cancellationToken: Ct));
     }
 
-    private async Task<TestHost> StartAsync()
-    {
-        // Program.Main sets this before building the host; the read endpoints need it
-        // to map snake_case columns (item_id -> ItemId).
-        DefaultTypeMap.MatchNamesWithUnderscores = true;
-
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
-        {
-            EnvironmentName = "Development",
-            ApplicationName = "LifeOs.Api.WriteEndpointsTests",
-        });
-        builder.Logging.ClearProviders();
-        builder.WebHost.UseUrls("http://127.0.0.1:0");
-        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["Auth:Issuer"] = Issuer,
-            ["Auth:Audience"] = Audience,
-            ["Auth:JwtSecret"] = Secret,
-            ["ALLOWED_EMAILS"] = Allowed,
-            ["ConnectionStrings:Owner"] = postgres.ConnectionString,
-            ["ConnectionStrings:Reader"] = BskReader.ConnectionStringFrom(postgres.ConnectionString),
-            ["VITE_SUPABASE_URL"] = "https://placeholder.supabase.co",
-            ["VITE_SUPABASE_ANON_KEY"] = "placeholder-anon-key",
-        });
-
-        ApiHost.ConfigureServices(builder);
-        builder.Logging.ClearProviders();
-        var app = builder.Build();
-        ApiHost.ConfigurePipeline(app);
-        await app.StartAsync(Ct);
-
-        var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single().TrimEnd('/') + "/") };
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token());
-        return new TestHost(app, client);
-    }
-
-    private static string Token()
-        => new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
-        {
-            Issuer = Issuer,
-            Audience = Audience,
-            Claims = new Dictionary<string, object>
-            {
-                ["sub"] = "user-1",
-                ["email"] = Allowed,
-                ["email_verified"] = true,
-                ["role"] = "authenticated",
-            },
-            NotBefore = DateTime.UtcNow.AddMinutes(-1),
-            Expires = DateTime.UtcNow.AddMinutes(10),
-            IssuedAt = DateTime.UtcNow,
-            SigningCredentials = new SigningCredentials(
-                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret)),
-                SecurityAlgorithms.HmacSha256),
-        });
-
-    private sealed class TestHost(WebApplication app, HttpClient client) : IAsyncDisposable
-    {
-        public HttpClient Client { get; } = client;
-
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            await app.DisposeAsync();
-        }
-    }
+    private Task<ApiTestHost> StartAsync() => ApiTestHost.StartAsync(postgres.ConnectionString, Ct);
 }

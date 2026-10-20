@@ -1,6 +1,7 @@
 using LifeOs.Api.Auth;
 using LifeOs.Api.Http;
 using LifeOs.Api.Read;
+using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -52,6 +53,7 @@ public static class ApiHost
             owner, KernelSources.Api,
             ServiceCollectionExtensions.ParseCoinValueUsd(builder.Configuration[CoinRates.ConfigurationKey]));
         builder.Services.AddSingleton(new SubjectReader(reader));
+        builder.Services.AddSingleton(sp => new RewardReader(reader, sp.GetRequiredService<RewardService>().CoinValueUsd));
 
         // Fail closed: missing issuer/audience/JWKS-or-secret/ALLOWED_EMAILS throws.
         builder.Services.AddLifeOsAuth(builder.Configuration);
@@ -127,6 +129,7 @@ public static class ApiHost
         app.MapAuthEndpoints();
         app.MapReadEndpoints();
         app.MapWriteEndpoints();
+        app.MapRewardEndpoints();
         app.MapSpaFallback();
     }
 }

@@ -1,6 +1,7 @@
 import { addDays, nowIso, slugify, todayIso, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
 import { dataUrlFor, silentWavDataUrl } from "@/lib/artifacts";
 import type {
+  Amounts,
   AreaRow,
   ArtifactRecord,
   ConcerningEvent,
@@ -10,6 +11,7 @@ import type {
   InboxItem,
   InboxResolution,
   JournalEntry,
+  LedgerEntryKind,
   PersonAssociationRow,
   PersonRow,
   Relation,
@@ -45,6 +47,24 @@ export interface MockResolvedRow {
   resolvedAt: string;
 }
 
+/**
+ * One ledger event (D11), the mock's copy of `bsk.event` kind `ledger`: signed amounts,
+ * and the item that earned it or the Reward it bought.
+ */
+export interface MockLedgerEntry {
+  id: string;
+  occurredAt: string;
+  entry: LedgerEntryKind;
+  provenance: "declared" | "derived";
+  amounts: Amounts;
+  trigger?: string;
+  awardKey?: string;
+  subjectId?: string;
+  note?: string;
+  dollars?: number;
+  coinRate?: number;
+}
+
 export interface CanonicalEdge {
   fromId: string;
   relation: Relation;
@@ -73,6 +93,10 @@ export interface MockState {
   reviews: ReviewDoc[];
   /** Task timer actions, oldest first — the mock's copy of the timer activity events. */
   timerEvents: TimerEvent[];
+  /** Ledger entries, oldest first (REWARD-1). Catalog Rewards are ordinary `Reward` subjects. */
+  ledger: MockLedgerEntry[];
+  /** `Rewards:CoinValueUsd`: what one Coin is worth in dollars. */
+  coinValueUsd: number;
   primaryFocus: { title: string; subjectId: string; kind: "goal" };
   objectives: { id: string; title: string; subjectId?: string }[];
 }
@@ -707,7 +731,17 @@ export function createSeed(): MockState {
     }),
   ];
 
-  let subjects = [...values, ...goals, ...projects, ...tasks, ...extras];
+  // The reward catalog (REWARD-3): instant rewards with a price, savings goals with a target.
+  const rewards: SubjectListItem[] = [
+    item({ id: "reward-episode", short: "r10001", type: "Reward", title: "Episode of a show", createdAt: isoAgo(220) }),
+    item({ id: "reward-takeout", short: "r10002", type: "Reward", title: "Takeout dinner", createdAt: isoAgo(220) }),
+    item({ id: "reward-movie", short: "r10003", type: "Reward", title: "Movie night", createdAt: isoAgo(220) }),
+    item({ id: "reward-roadtrip", short: "r10004", type: "Reward", title: "Road trip", createdAt: isoAgo(220) }),
+    item({ id: "reward-vacation", short: "r10005", type: "Reward", title: "Vacation fund", createdAt: isoAgo(220) }),
+    item({ id: "reward-shoes", short: "r10006", type: "Reward", title: "New running shoes", createdAt: isoAgo(220) }),
+  ];
+
+  let subjects = [...values, ...goals, ...projects, ...tasks, ...extras, ...rewards];
 
   const details: Record<string, SubjectDetail> = {};
   for (const s of subjects) {
@@ -735,6 +769,18 @@ export function createSeed(): MockState {
   details["dec-stack"].scope = "React + TypeScript + Vite. Kernel stays C#.";
   details["dec-blazor"].scope = "Superseded: sharing C# types was not worth the UI ceiling.";
   details["cns-kernel"].scope = "The browser never writes the store. Application services are the only write path.";
+  const rewardAttrs: Record<string, Record<string, unknown>> = {
+    "reward-episode": { kind: "instant", price: { freedom: 45 }, description: "One episode, guilt-free" },
+    "reward-takeout": { kind: "instant", price: { freedom: 30, karma: 2 }, description: "Nobody cooks tonight" },
+    "reward-movie": { kind: "instant", price: { freedom: 120 }, description: "Pick the film; popcorn included" },
+    "reward-roadtrip": { kind: "instant", price: { gems: 5 }, description: "A long weekend somewhere new" },
+    "reward-vacation": { kind: "savings", target_usd: 500, description: "Lake house, next summer" },
+    "reward-shoes": { kind: "savings", target_usd: 140 },
+  };
+  for (const [id, attrs] of Object.entries(rewardAttrs)) {
+    details[id].attributes = JSON.stringify(attrs);
+    if (typeof attrs.description === "string") details[id].scope = attrs.description;
+  }
   details["prob-sleep"].scope = "3:40am wakeups, four nights out of seven. Caffeine and screens are the suspects.";
   details["idea-winddown"].scope = "Phone lives in the kitchen after 9:30. Paper book, dim lights.";
   details["appt-run"].scope = "Easy conversational pace. Sam at the north gate, 7:00.";
@@ -1574,6 +1620,8 @@ export function createSeed(): MockState {
       { subjectId: "task-longrun", action: "resume", occurredAt: isoAgo(25.7) },
       { subjectId: "task-longrun", action: "stop", occurredAt: isoAgo(25.53333) },
     ],
+    ledger: seedLedger(),
+    coinValueUsd: 0.5,
     primaryFocus: {
       title: "Ship LifeOS production UI",
       subjectId: "goal-lifeos",
@@ -1585,6 +1633,79 @@ export function createSeed(): MockState {
       { id: "obj-3", title: "Long run, easy pace", subjectId: "task-longrun" },
     ],
   };
+}
+
+/**
+ * Ten days of rewards: the wallet opening, habit days and a 7-day streak, one completed
+ * Task (priced with Karma and Resolve), an episode redeemed with a note, and a first
+ * deposit into the vacation fund. Balances: 60 Freedom, 13 Coins, 3 Karma, no Gems —
+ * so some catalog rewards are affordable and Movie night and Road trip are not.
+ */
+function seedLedger(): MockLedgerEntry[] {
+  const day: Amounts = { xp: 5, coins: 1, freedom: 5 };
+  const entries: MockLedgerEntry[] = [
+    { id: "ledger-open", occurredAt: isoAgo(24 * 10), entry: "open", provenance: "declared", amounts: {} },
+  ];
+  const habitDay = (habit: string, ago: number) => {
+    const date = addDays(todayIso(), -ago);
+    entries.push({
+      id: `ledger-${habit}-${ago}`,
+      occurredAt: isoAgo(24 * ago - 1),
+      entry: "earn",
+      provenance: "derived",
+      amounts: day,
+      trigger: "followed",
+      awardKey: `day:${habit}:${date}:followed`,
+      subjectId: habit,
+    });
+  };
+  for (let ago = 9; ago >= 1; ago--) {
+    habitDay("habit-mobility", ago);
+    if (ago >= 3) habitDay("habit-journal", ago);
+  }
+  entries.push(
+    {
+      id: "ledger-streak",
+      occurredAt: isoAgo(24 * 3 - 1.5),
+      entry: "earn",
+      provenance: "derived",
+      amounts: { xp: 25, coins: 5, freedom: 15 },
+      trigger: "streak_7",
+      awardKey: `streak_7:habit-mobility:${addDays(todayIso(), -9)}`,
+      subjectId: "habit-mobility",
+    },
+    {
+      id: "ledger-types",
+      occurredAt: isoAgo(30),
+      entry: "earn",
+      provenance: "derived",
+      amounts: { xp: 10, coins: 2, freedom: 10, karma: 3, resolve: 2 },
+      trigger: "completed",
+      awardKey: "completed:task-types",
+      subjectId: "task-types",
+    },
+    {
+      id: "ledger-episode",
+      occurredAt: isoAgo(24 * 4),
+      entry: "redeem",
+      provenance: "declared",
+      amounts: { freedom: -45 },
+      subjectId: "reward-episode",
+      note: "Season finale",
+    },
+    {
+      id: "ledger-vacation",
+      occurredAt: isoAgo(24 * 2),
+      entry: "redeem",
+      provenance: "declared",
+      amounts: { coins: -10 },
+      subjectId: "reward-vacation",
+      note: "First deposit",
+      dollars: 5,
+      coinRate: 0.5,
+    },
+  );
+  return entries.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
 }
 
 function habitDays(

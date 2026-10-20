@@ -53,7 +53,7 @@ public sealed class RewardService(
     {
         var openedAt = await ledger.GetOpenedAtAsync(cancellationToken);
         var balances = await ledger.GetBalancesAsync(cancellationToken);
-        return new Wallet(openedAt, Lines(balances), CoinValueUsd);
+        return Wallet.From(openedAt, balances, CoinValueUsd);
     }
 
     /// <summary>
@@ -415,13 +415,24 @@ public sealed class RewardService(
     private async Task<Dictionary<string, Dictionary<string, long>>> ReadBountyAsync(
         SubjectRef subject, CancellationToken cancellationToken)
         => Bounty.Parse(await subjects.GetAttributeValueAsync(subject.Id, Bounty.AttributeKey, cancellationToken));
+}
 
+/// <summary>One currency in the wallet: its totals and balance.</summary>
+public sealed record WalletLine(Currency Currency, long Earned, long Reversed, long Spent, long Balance);
+
+/// <summary>
+/// The wallet: when it opened (null before launch), every currency's line in display
+/// order, and what a Coin is worth in dollars.
+/// </summary>
+public sealed record Wallet(DateTimeOffset? OpenedAt, IReadOnlyList<WalletLine> Lines, decimal CoinValueUsd)
+{
     /// <summary>
-    /// One line per known currency in display order, zero where the ledger never touched
-    /// it, then any currency the ledger holds that the vocabulary no longer names — kept
-    /// visible rather than silently dropped.
+    /// The wallet from the ledger's folded balances (<c>bsk.v_wallet</c>): one line per
+    /// known currency in display order, zero where the ledger never touched it, then any
+    /// currency the ledger holds that the vocabulary no longer names — kept visible rather
+    /// than silently dropped.
     /// </summary>
-    private static List<WalletLine> Lines(IReadOnlyList<WalletBalance> balances)
+    public static Wallet From(DateTimeOffset? openedAt, IReadOnlyList<WalletBalance> balances, decimal coinValueUsd)
     {
         var byKey = balances.ToDictionary(b => b.Currency, StringComparer.OrdinalIgnoreCase);
         var lines = Currencies.All
@@ -436,19 +447,9 @@ public sealed class RewardService(
             .Select(b => new WalletLine(
                 new Currency(b.Currency, b.Currency, Spendable: false), b.Earned, b.Reversed, b.Spent, b.Balance)));
 
-        return lines;
+        return new Wallet(openedAt, lines, coinValueUsd);
     }
-}
 
-/// <summary>One currency in the wallet: its totals and balance.</summary>
-public sealed record WalletLine(Currency Currency, long Earned, long Reversed, long Spent, long Balance);
-
-/// <summary>
-/// The wallet: when it opened (null before launch), every currency's line in display
-/// order, and what a Coin is worth in dollars.
-/// </summary>
-public sealed record Wallet(DateTimeOffset? OpenedAt, IReadOnlyList<WalletLine> Lines, decimal CoinValueUsd)
-{
     /// <summary>The balance of <paramref name="currency"/>, or 0 when the wallet has never held it.</summary>
     public long BalanceOf(string currency)
         => Lines.FirstOrDefault(l => string.Equals(l.Currency.Key, currency, StringComparison.OrdinalIgnoreCase))

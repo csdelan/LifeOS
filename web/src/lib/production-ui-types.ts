@@ -423,6 +423,118 @@ export interface TimerActionResult {
   completed: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Rewards (REWARD-1 / REWARD-3 / D11): the wallet, the ledger and the catalog.
+// Amounts are keyed by currency (`coins`, `freedom`, …; see `lib/rewards.ts`).
+// ---------------------------------------------------------------------------
+
+/** Currency key → whole amount. Ledger rows are signed; prices and spends are positive. */
+export type Amounts = Record<string, number>;
+
+/** One currency's line in the wallet (`bsk.v_wallet`); earned / reversed / spent are positive totals. */
+export interface WalletLine {
+  currency: string;
+  label: string;
+  spendable: boolean;
+  earned: number;
+  reversed: number;
+  spent: number;
+  balance: number;
+}
+
+/** The wallet: every currency in display order, and what a Coin is worth in dollars. */
+export interface Wallet {
+  /** When the ledger opened; null before anything has paid. */
+  openedAt?: string | null;
+  coinValueUsd: number;
+  balances: WalletLine[];
+}
+
+export type LedgerEntryKind = "open" | "earn" | "reversal" | "redeem";
+
+/** One ledger entry (`bsk.v_ledger`), newest first: what it was and what it concerns. */
+export interface LedgerRow {
+  id: string;
+  occurredAt: string;
+  entry: LedgerEntryKind;
+  provenance: string;
+  /** Signed: earns are positive, reversals and redemptions negative. */
+  amounts: Amounts;
+  trigger?: string | null;
+  awardKey?: string | null;
+  /** The item that earned it, or the Reward it bought. */
+  subject?: CreatedSubject | null;
+  note?: string | null;
+  /** Set whenever Coins moved: the dollars, at `coinRate`. */
+  dollars?: number | null;
+  coinRate?: number | null;
+}
+
+/** `instant` rewards have a price; `savings` goals take Coins toward a dollar target. */
+export type RewardKind = "instant" | "savings";
+
+/** One catalog Reward (`bsk.v_reward`), with what has been redeemed against it. */
+export interface RewardRow {
+  id: string;
+  urn: string;
+  name: string;
+  kind: RewardKind;
+  /** An instant reward's price; empty for a savings goal or an unpriced reward. */
+  price: Amounts;
+  targetUsd?: number | null;
+  redemptions: number;
+  coinsRedeemed: number;
+  dollarsRedeemed: number;
+  lastRedeemedAt?: string | null;
+  /** A savings goal with a target: progress, and what is left. */
+  percentOfTarget?: number | null;
+  remainingUsd?: number | null;
+  description?: string | null;
+  archived: boolean;
+}
+
+/** An earn or reversal a write produced (REWARD-4's feedback). */
+export interface Award {
+  id: string;
+  entry: "earn" | "reversal";
+  trigger: string;
+  awardKey: string;
+  subject: CreatedSubject;
+  amounts: Amounts;
+}
+
+/**
+ * A redemption (`bsk redeem`). Omit `amounts` to pay an instant reward's price; a savings
+ * goal needs `{ coins: n }`; with no `reward`, amounts and a `note` are both required.
+ */
+export interface RedeemRequest {
+  reward?: string;
+  amounts?: Amounts;
+  note?: string;
+}
+
+/** What a redemption spent (positive amounts), the Reward's progress after it, and the wallet. */
+export interface Redemption {
+  id: string;
+  amounts: Amounts;
+  note?: string | null;
+  dollars?: number | null;
+  coinRate?: number | null;
+  reward?: RewardRow | null;
+  wallet: Wallet;
+}
+
+/** A new catalog Reward (`bsk rewards add`). */
+export interface NewRewardRequest {
+  title: string;
+  kind?: RewardKind;
+  /** Instant rewards only. */
+  price?: Amounts;
+  /** Savings goals only. */
+  targetUsd?: number;
+  description?: string;
+}
+
 export interface AreaRow {
   id: string;
   urn: string;
@@ -600,4 +712,18 @@ export interface LifeOsWriteClient {
   /** Mock-only until Review subjects (D3) exist. */
   saveReview(id: string, body: ReviewBody): Promise<void>;
   completeReview(id: string): Promise<void>;
+  /**
+   * Spend currencies (REWARD-3). Refused — nothing written — on an overdraft, a tracked
+   * currency, or a custom redemption without a note.
+   */
+  redeem(req: RedeemRequest): Promise<Redemption>;
+  /**
+   * Catalog writes. Rename, describe (`description`) and archive a Reward through the
+   * ordinary `rename` / `setAttributes` / `archive`.
+   */
+  addReward(req: NewRewardRequest): Promise<RewardRow>;
+  /** Replace an instant reward's price. */
+  priceReward(reward: string, price: Amounts): Promise<RewardRow>;
+  /** Set a savings goal's target in dollars; null removes it. */
+  targetReward(reward: string, targetUsd: number | null): Promise<RewardRow>;
 }

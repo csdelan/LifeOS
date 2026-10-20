@@ -5,6 +5,7 @@ import {
 import { deriveTitle } from "@/lib/capture";
 import { nowIso, slugify, todayIso, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
 import type {
+  Amounts,
   ArtifactRecord,
   BinaryCaptureResult,
   CaptureKind,
@@ -12,24 +13,36 @@ import type {
   EventRelation,
   InboxItem,
   InboxResolution,
+  LedgerRow,
+  NewRewardRequest,
   NewSubjectRequest,
   RecurrenceSpec,
+  RedeemRequest,
+  Redemption,
   Relation,
   RenamedSubject,
   RenamedTag,
   ReviewBody,
   ReviewDoc,
+  RewardRow,
   SubjectDetail,
   SubjectListItem,
   SubjectType,
   TaskTimer,
   TimerAction,
   TimerActionResult,
+  Wallet,
 } from "@/lib/production-ui-types";
 import { defaultStatus, isTerminal } from "@/lib/production-ui-types";
 import { applyStreakToHabit } from "@/lib/habit-streak";
+import { CURRENCIES, coinsToUsd, currency, orderedAmounts, shortfall } from "@/lib/rewards";
 import { foldTimer, type TimerEvent } from "@/lib/timer";
-import { createSeed, type CanonicalEdge, type MockState } from "@/lib/mock/seed";
+import {
+  createSeed,
+  type CanonicalEdge,
+  type MockLedgerEntry,
+  type MockState,
+} from "@/lib/mock/seed";
 
 let state: MockState = createSeed();
 const listeners = new Set<() => void>();
@@ -228,7 +241,8 @@ export function applyAttrs(subjectId: string, attrs: Record<string, string>) {
   if (!list || !detail) return;
   const next = { ...list };
   const nextDetail = { ...detail };
-  const bag = safeAttrs(detail.attributes);
+  // The whole bag, not just its strings: a Reward's price is an object.
+  const bag = rawAttrs(detail.attributes);
   for (const [key, value] of Object.entries(attrs)) {
     if (value === "") {
       delete bag[key];
@@ -307,6 +321,18 @@ function syncSpecial(subjectId: string) {
         ? { ...a, name: list.title, description: attrs.description, notes: attrs.notes }
         : a,
     );
+  }
+}
+
+function rawAttrs(raw?: string | null): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? { ...(parsed as Record<string, unknown>) }
+      : {};
+  } catch {
+    return {};
   }
 }
 
@@ -1103,6 +1129,290 @@ export function involvePerson(
     ];
   }
   emit();
+}
+
+// ---------------------------------------------------------------------------
+// Rewards (REWARD-1 / REWARD-3): folds over `state.ledger`, as v_wallet / v_ledger /
+// v_reward fold the ledger events, and the redeem and catalog rules of RewardService
+// and RewardCatalogService — the same refusals, in the same words.
+// ---------------------------------------------------------------------------
+
+export function mockWallet(): Wallet {
+  const balances = CURRENCIES.map((c) => {
+    let earned = 0;
+    let reversed = 0;
+    let spent = 0;
+    for (const e of state.ledger) {
+      const n = e.amounts[c.key] ?? 0;
+      if (e.entry === "earn") earned += n;
+      else if (e.entry === "reversal") reversed -= n;
+      else if (e.entry === "redeem") spent -= n;
+    }
+    return {
+      currency: c.key,
+      label: c.label,
+      spendable: c.spendable,
+      earned,
+      reversed,
+      spent,
+      balance: earned - reversed - spent,
+    };
+  });
+  return {
+    openedAt: state.ledger.find((e) => e.entry === "open")?.occurredAt ?? null,
+    coinValueUsd: state.coinValueUsd,
+    balances,
+  };
+}
+
+function ledgerRow(e: MockLedgerEntry): LedgerRow {
+  const subject = e.subjectId ? byId(e.subjectId) : undefined;
+  return {
+    id: e.id,
+    occurredAt: e.occurredAt,
+    entry: e.entry,
+    provenance: e.provenance,
+    amounts: { ...e.amounts },
+    trigger: e.trigger ?? null,
+    awardKey: e.awardKey ?? null,
+    subject: subject
+      ? { id: subject.id, urn: subject.urn, type: subject.type, title: subject.title }
+      : null,
+    note: e.note ?? null,
+    dollars: e.dollars ?? null,
+    coinRate: e.coinRate ?? null,
+  };
+}
+
+/** Newest first, in [from, to), as `GET /api/ledger` reads it. */
+export function mockLedger(opts?: { from?: string; to?: string; limit?: number }): LedgerRow[] {
+  if (opts?.from && opts?.to && opts.from >= opts.to) {
+    throw new Error("The ledger range must end after it starts.");
+  }
+  const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 500);
+  return [...state.ledger]
+    .filter((e) => (!opts?.from || e.occurredAt >= opts.from) && (!opts?.to || e.occurredAt < opts.to))
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+    .slice(0, limit)
+    .map(ledgerRow);
+}
+
+/** A price as the kernel reads it: spendable currencies, whole amounts above zero. */
+function lenientPrice(raw: unknown): Amounts {
+  const out: Amounts = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const c = currency(key);
+    const n = Number(value);
+    if (c?.spendable && Number.isInteger(n) && n > 0) out[c.key] = n;
+  }
+  return Object.fromEntries(orderedAmounts(out));
+}
+
+function rewardRow(subject: SubjectListItem): RewardRow {
+  const attrs = rawAttrs(state.details[subject.id]?.attributes);
+  const kind = attrs.kind === "savings" ? "savings" : "instant";
+  const target = Number(attrs.target_usd);
+  const targetUsd = Number.isFinite(target) && target > 0 ? target : null;
+  const redeems = state.ledger.filter((e) => e.entry === "redeem" && e.subjectId === subject.id);
+  const dollarsRedeemed =
+    Math.round(redeems.reduce((sum, e) => sum + (e.dollars ?? 0), 0) * 100) / 100;
+  const hasTarget = kind === "savings" && targetUsd !== null;
+  return {
+    id: subject.id,
+    urn: subject.urn,
+    name: subject.title,
+    kind,
+    price: lenientPrice(attrs.price),
+    targetUsd,
+    redemptions: redeems.length,
+    coinsRedeemed: redeems.reduce((sum, e) => sum - (e.amounts.coins ?? 0), 0),
+    dollarsRedeemed,
+    lastRedeemedAt: redeems.map((e) => e.occurredAt).sort().at(-1) ?? null,
+    percentOfTarget: hasTarget ? Math.round((1000 * dollarsRedeemed) / targetUsd) / 10 : null,
+    remainingUsd: hasTarget ? Math.max(targetUsd - dollarsRedeemed, 0) : null,
+    description: typeof attrs.description === "string" ? attrs.description : null,
+    archived: subject.archived,
+  };
+}
+
+export function mockRewards(includeArchived = false): RewardRow[] {
+  return state.subjects
+    .filter((s) => s.type === "Reward" && (includeArchived || !s.archived))
+    .sort((a, b) => a.title.localeCompare(b.title))
+    .map(rewardRow);
+}
+
+/** RewardPrice.Normalize: spendable currencies, whole amounts above zero, display order. */
+function normalizeSpend(amounts: Amounts): Amounts {
+  const out: Amounts = {};
+  for (const [key, n] of Object.entries(amounts)) {
+    const c = currency(key);
+    if (!c) {
+      throw new Error(
+        `Unknown currency '${key}'. Expected one of: ${CURRENCIES.map((x) => x.key).join(", ")}.`,
+      );
+    }
+    if (!c.spendable) throw new Error(`${c.label} is tracked, not spent; it can't be redeemed.`);
+    if (!Number.isInteger(n) || n <= 0) {
+      throw new Error(`Use a whole number of ${c.label} above zero; got ${n}.`);
+    }
+    if (out[c.key] !== undefined) throw new Error(`${c.label} is listed twice.`);
+    out[c.key] = n;
+  }
+  return Object.fromEntries(orderedAmounts(out));
+}
+
+function rewardByRef(ref: string): SubjectListItem | undefined {
+  const title = ref.trim().toLowerCase();
+  return byRef(ref) ?? state.subjects.find((s) => s.title.toLowerCase() === title);
+}
+
+export function mockRedeem(req: RedeemRequest): Redemption {
+  const note = req.note?.trim() || undefined;
+  const given = req.amounts && Object.keys(req.amounts).length > 0 ? req.amounts : undefined;
+  let reward: SubjectListItem | undefined;
+  let spend: Amounts;
+  if (!req.reward?.trim()) {
+    if (!given) throw new Error("Say what to redeem, e.g. freedom=45.");
+    spend = normalizeSpend(given);
+    if (!note) throw new Error("Say what this redemption is for: a note is required.");
+  } else {
+    reward = rewardByRef(req.reward);
+    if (!reward) throw new Error(`No subject matches '${req.reward}'.`);
+    if (reward.type !== "Reward") {
+      throw new Error(
+        `'${reward.title}' is a ${reward.type}, not a Reward; redeem against a Reward, or give a note instead.`,
+      );
+    }
+    if (reward.archived) {
+      throw new Error(`'${reward.title}' is archived; restore it to redeem against it.`);
+    }
+    const row = rewardRow(reward);
+    if (row.kind === "savings") {
+      if (!given) {
+        throw new Error(`Say how many Coins to put toward '${reward.title}', e.g. coins=50.`);
+      }
+      spend = normalizeSpend(given);
+      if (Object.keys(spend).some((k) => k !== "coins")) {
+        throw new Error(`'${reward.title}' is a savings goal: only Coins go toward it.`);
+      }
+    } else if (given) {
+      spend = normalizeSpend(given);
+    } else if (Object.keys(row.price).length > 0) {
+      spend = row.price;
+    } else {
+      throw new Error(
+        `'${reward.title}' has no price yet: say what it costs this time, e.g. freedom=45, or give it a price.`,
+      );
+    }
+  }
+  const refused = shortfall(mockWallet(), spend);
+  if (refused) throw new Error(refused);
+
+  // Coins are real money: stamp what moved and the rate it moved at.
+  const coins = spend.coins;
+  const entry: MockLedgerEntry = {
+    id: newId(),
+    occurredAt: nowIso(),
+    entry: "redeem",
+    provenance: "declared",
+    amounts: Object.fromEntries(Object.entries(spend).map(([k, n]) => [k, -n])),
+    subjectId: reward?.id,
+    note,
+    dollars: coins ? coinsToUsd(coins, state.coinValueUsd) : undefined,
+    coinRate: coins ? state.coinValueUsd : undefined,
+  };
+  state.ledger = [...state.ledger, entry];
+  emit();
+  return {
+    id: entry.id,
+    amounts: spend,
+    note: note ?? null,
+    dollars: entry.dollars ?? null,
+    coinRate: entry.coinRate ?? null,
+    reward: reward ? rewardRow(reward) : null,
+    wallet: mockWallet(),
+  };
+}
+
+function normalizeTarget(target: number): number {
+  const cents = Math.round(target * 100) / 100;
+  if (!(cents > 0)) throw new Error(`A savings target is a dollar amount above zero; got ${target}.`);
+  return cents;
+}
+
+/** Write a Reward's catalog attributes; `undefined` removes a key. */
+function writeRewardAttrs(id: string, patch: Record<string, unknown>) {
+  const detail = state.details[id];
+  if (!detail) return;
+  const bag = rawAttrs(detail.attributes);
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete bag[key];
+    else bag[key] = value;
+  }
+  state.details[id] = { ...detail, attributes: JSON.stringify(bag) };
+}
+
+export function mockAddReward(req: NewRewardRequest): RewardRow {
+  const title = req.title.trim();
+  if (!title) throw new Error("title is required.");
+  const kind = req.kind ?? "instant";
+  if (kind !== "instant" && kind !== "savings") {
+    throw new Error(`A Reward is instant or savings; got '${String(kind)}'.`);
+  }
+  const price = req.price && Object.keys(req.price).length > 0 ? req.price : undefined;
+  if (price && kind === "savings") {
+    throw new Error(
+      "A savings goal has no price: Coins go into it as you deposit them. Give it a target instead.",
+    );
+  }
+  if (req.targetUsd !== undefined && kind !== "savings") {
+    throw new Error("Only a savings goal has a target; an instant reward has a price.");
+  }
+  const normalizedPrice = price ? normalizeSpend(price) : undefined;
+  const target = req.targetUsd !== undefined ? normalizeTarget(req.targetUsd) : undefined;
+  const description = req.description?.trim() || undefined;
+  const created = createSubject({
+    type: "Reward",
+    title,
+    attrs: description ? { description } : {},
+  });
+  writeRewardAttrs(created.id, { kind, price: normalizedPrice, target_usd: target });
+  emit();
+  return rewardRow(byId(created.id)!);
+}
+
+function catalogReward(ref: string): SubjectListItem {
+  const reward = rewardByRef(ref);
+  if (!reward) throw new Error(`No subject matches '${ref}'.`);
+  if (reward.type !== "Reward") throw new Error(`'${reward.title}' is a ${reward.type}, not a Reward.`);
+  return reward;
+}
+
+export function mockPriceReward(ref: string, price: Amounts): RewardRow {
+  if (Object.keys(price).length === 0) throw new Error("Say what it costs, e.g. freedom=120.");
+  const normalized = normalizeSpend(price);
+  const reward = catalogReward(ref);
+  if (rewardRow(reward).kind === "savings") {
+    throw new Error(
+      `'${reward.title}' is a savings goal: Coins go into it as you deposit them, so it has no price.`,
+    );
+  }
+  writeRewardAttrs(reward.id, { price: normalized });
+  emit();
+  return rewardRow(reward);
+}
+
+export function mockTargetReward(ref: string, targetUsd: number | null): RewardRow {
+  const normalized = targetUsd === null ? undefined : normalizeTarget(targetUsd);
+  const reward = catalogReward(ref);
+  if (rewardRow(reward).kind !== "savings") {
+    throw new Error(`'${reward.title}' is an instant reward: it has a price, not a target.`);
+  }
+  writeRewardAttrs(reward.id, { target_usd: normalized });
+  emit();
+  return rewardRow(reward);
 }
 
 export type { CanonicalEdge, MockState };

@@ -275,4 +275,6 @@ public sealed class TimerActionResult
     public IReadOnlyList<CreatedSubject> Paused { get; set; } = [];
     /// <summary>True when the action was <c>complete</c> and the Task moved to Completed.</summary>
     public bool Completed { get; set; }
+    /// <summary>What completing earned (REWARD-4); empty for every other action.</summary>
+    public IReadOnlyList<AwardRow> Awards { get; set; } = [];
 }

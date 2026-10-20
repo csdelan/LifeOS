@@ -564,10 +564,116 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetWallet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetLedger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rewards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetRewards"];
+        put?: never;
+        post: operations["AddReward"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["Redeem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rewards/price": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PriceReward"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rewards/target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TargetReward"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AddRewardBody: {
+            title?: string;
+            kind?: null | string;
+            price?: null | {
+                [key: string]: number | string;
+            };
+            /** Format: double */
+            targetUsd?: null | number | string;
+            description?: null | string;
+        };
         AdhereBody: {
             habit?: string;
             state?: string;
@@ -595,6 +701,17 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
+        AwardRow: {
+            /** Format: uuid */
+            id?: string;
+            entry?: string;
+            trigger?: string;
+            awardKey?: string;
+            subject?: components["schemas"]["CreatedSubject"];
+            amounts?: {
+                [key: string]: number | string;
+            };
+        };
         CaptureBody: {
             text?: string;
         };
@@ -604,6 +721,9 @@ export interface components {
             urn?: string;
             type?: string;
             title?: string;
+        };
+        EarnResult: {
+            awards?: components["schemas"]["AwardRow"][];
         };
         HabitOccurrenceRow: {
             /** Format: uuid */
@@ -667,6 +787,25 @@ export interface components {
             occurredAt?: string;
             content?: string;
         };
+        LedgerRow: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: date-time */
+            occurredAt?: string;
+            entry?: string;
+            provenance?: string;
+            amounts?: {
+                [key: string]: number | string;
+            };
+            trigger?: null | string;
+            awardKey?: null | string;
+            subject?: null | components["schemas"]["CreatedSubject"];
+            note?: null | string;
+            /** Format: double */
+            dollars?: null | number | string;
+            /** Format: double */
+            coinRate?: null | number | string;
+        };
         LinkBody: {
             from?: string;
             relation?: string;
@@ -698,6 +837,27 @@ export interface components {
             source?: string;
             type?: string;
             title?: string;
+        };
+        RedeemBody: {
+            reward?: null | string;
+            amounts?: null | {
+                [key: string]: number | string;
+            };
+            note?: null | string;
+        };
+        RedemptionResult: {
+            /** Format: uuid */
+            id?: string;
+            amounts?: {
+                [key: string]: number | string;
+            };
+            note?: null | string;
+            /** Format: double */
+            dollars?: null | number | string;
+            /** Format: double */
+            coinRate?: null | number | string;
+            reward?: null | components["schemas"]["RewardRow"];
+            wallet?: components["schemas"]["WalletSummary"];
         };
         RelateBody: {
             /** Format: uuid */
@@ -755,6 +915,43 @@ export interface components {
             eventKind?: null | string;
             eventContent?: null | string;
             tags?: string[];
+        };
+        RewardPriceBody: {
+            reward?: string;
+            price?: {
+                [key: string]: number | string;
+            };
+        };
+        RewardRow: {
+            /** Format: uuid */
+            id?: string;
+            urn?: string;
+            name?: string;
+            kind?: string;
+            price?: {
+                [key: string]: number | string;
+            };
+            /** Format: double */
+            targetUsd?: null | number | string;
+            /** Format: int64 */
+            redemptions?: number | string;
+            /** Format: int64 */
+            coinsRedeemed?: number | string;
+            /** Format: double */
+            dollarsRedeemed?: number | string;
+            /** Format: date-time */
+            lastRedeemedAt?: null | string;
+            /** Format: double */
+            percentOfTarget?: null | number | string;
+            /** Format: double */
+            remainingUsd?: null | number | string;
+            description?: null | string;
+            archived?: boolean;
+        };
+        RewardTargetBody: {
+            reward?: string;
+            /** Format: double */
+            targetUsd?: null | number | string;
         };
         SetAttributesBody: {
             subject?: string;
@@ -857,10 +1054,31 @@ export interface components {
             timer?: components["schemas"]["TaskTimer"];
             paused?: components["schemas"]["CreatedSubject"][];
             completed?: boolean;
+            awards?: components["schemas"]["AwardRow"][];
         };
         TimerBody: {
             task?: string;
             action?: string;
+        };
+        WalletCurrencyLine: {
+            currency?: string;
+            label?: string;
+            spendable?: boolean;
+            /** Format: int64 */
+            earned?: number | string;
+            /** Format: int64 */
+            reversed?: number | string;
+            /** Format: int64 */
+            spent?: number | string;
+            /** Format: int64 */
+            balance?: number | string;
+        };
+        WalletSummary: {
+            /** Format: date-time */
+            openedAt?: null | string;
+            /** Format: double */
+            coinValueUsd?: number | string;
+            balances?: components["schemas"]["WalletCurrencyLine"][];
         };
     };
     responses: never;
@@ -1409,7 +1627,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EarnResult"];
+                };
             };
             /** @description Bad Request */
             400: {
@@ -1721,7 +1941,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EarnResult"];
+                };
             };
             /** @description Bad Request */
             400: {
@@ -1857,6 +2079,213 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetWallet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletSummary"];
+                };
+            };
+        };
+    };
+    GetLedger: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                limit?: number | string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerRow"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetRewards: {
+        parameters: {
+            query?: {
+                includeArchived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RewardRow"][];
+                };
+            };
+        };
+    };
+    AddReward: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddRewardBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RewardRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    Redeem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedeemBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedemptionResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    PriceReward: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RewardPriceBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RewardRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    TargetReward: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RewardTargetBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RewardRow"];
+                };
             };
             /** @description Bad Request */
             400: {

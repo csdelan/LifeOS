@@ -7,7 +7,8 @@ agent with no session context can pick up any phase.
 
 **Scope agreed with Chris on 2026-10-20.** The rules in §1 are his answers to the design
 questions. R0 (the requirements and this plan), R1 (the ledger), R2 (earning on work), R3
-(habit earning) and R4 (the reward catalog) are done; R5–R7 are open.
+(habit earning), R4 (the reward catalog) and R5 (the wallet and Redeem page) are done; R6–R7
+are open.
 
 ## 0. Read these first
 
@@ -263,7 +264,7 @@ Karma and Resolve default to 0; Chris adds them per item.
 | `v_reward_due` | `v_reward_trigger` rows on or after `bsk.ledger_opened_at()`. |
 | `v_habit_establishment` | Per Building habit: min_adherence, window_days, window_start, followed / partial / missed / concluded, adherence, age_days, target_met. |
 | `v_reward` | Per Reward: name, kind (instant unless savings), price, target_usd, redemptions, coins_redeemed, dollars_redeemed, last_redeemed_at, percent_of_target and remaining_usd (savings goals with a target), description, notes, archived. |
-| API | `GET /api/wallet`, `GET /api/ledger?from&to`, `GET /api/ledger/daily?from&to&tz`, `GET /api/rewards`, `POST /api/redeem`, `POST /api/bounty`. |
+| API | `GET /api/wallet`, `GET /api/ledger?from&to`, `GET /api/ledger/daily?from&to&tz`, `GET /api/rewards`, `POST /api/redeem`, `POST /api/bounty`. Built in R5: the wallet, ledger (`?from&to&limit`), catalog and redeem reads and writes, plus `POST /api/rewards`, `/api/rewards/price` and `/api/rewards/target`; `/api/ledger/daily` is R7 and `/api/bounty` is R6. |
 
 - **Time zones:** daily totals bucket by `occurred_at AT TIME ZONE @tz`, using the browser's
   IANA zone. The database runs in UTC, so an evening completion would otherwise land on
@@ -357,6 +358,23 @@ number from 0025.
   the catalog reads are `ILedgerRepository.GetCatalogAsync` / `GetCatalogRewardAsync`; the web's
   `ATTR_KEYS_BY_TYPE.Reward` leaves out `price`, an object the rewards endpoints write; a
   redemption returns the Reward's progress afterwards for the dialog.
-- [ ] R5 — Wallet + Redeem page
+- [x] R5 — Wallet + Redeem page. API: `RewardEndpoints` (`GET /api/wallet`, `GET /api/ledger`
+  newest first with `limit` 1..500 (default 100) and a `from` < `to` check, `GET /api/rewards`
+  with `includeArchived`, `POST /api/redeem`, `POST /api/rewards`, `/api/rewards/price`,
+  `/api/rewards/target`) reading through `RewardReader` on the reader connection; rename,
+  describe and archive a Reward with the ordinary endpoints. `/api/status` and `/api/adhere` now
+  answer `{ awards }`, and `/api/timer` adds `awards`, each the entries the reconcile wrote.
+  Web: a Rewards tab (`/rewards`, in the nav and the command palette) with the wallet (Coins
+  shown in dollars), Treats and Savings goals cards (a treat the wallet can't cover is blocked
+  with the kernel's reason; savings show progress), recent activity, and archived rewards with
+  Restore. The Redeem dialog pre-fills the price (editable for this time), takes only Coins
+  into a savings goal and shows the dollars that move, needs a note without a Reward, and
+  checks the kernel's rules as you type. Add / edit catalog items (kind fixed once created;
+  edits save only what changed). `lib/celebrate.ts`: DOM confetti (none under reduced motion)
+  and a synthesized Web Audio fanfare behind a per-device Sound switch. The mock folds a seeded
+  ledger the way the views do and refuses what the kernel refuses, in the same words. Notes for
+  R6: the web's `setStatus` / `adhere` still return nothing; read `awards` from their responses
+  (and `TimerActionResult.awards`) for the toast and chime, and give the mock store an earning
+  reconcile so mock mode pays. Status, adherence and timer writes already refresh the wallet.
 - [ ] R6 — Earning in the UI
 - [ ] R7 — History + report

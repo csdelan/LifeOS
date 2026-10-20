@@ -6,6 +6,7 @@ import type {
 } from "@/lib/production-ui-types";
 import { inferChildRelation, renamedMessage } from "@/lib/production-ui-types";
 import { extensionForMime, sha256Hex } from "@/lib/artifacts";
+import { redemptionMessage } from "@/lib/rewards";
 import {
   addEdge,
   adhereHabit,
@@ -22,6 +23,10 @@ import {
   dropInboxItem,
   flagItem,
   involvePerson,
+  mockAddReward,
+  mockPriceReward,
+  mockRedeem,
+  mockTargetReward,
   relateEvent,
   removeInbox,
   renameSubject,
@@ -242,6 +247,38 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       completeReviewDoc(id);
       notify("Review complete");
       bump();
+    },
+
+    async redeem(req) {
+      await wait();
+      const redemption = mockRedeem(req);
+      notify(redemptionMessage(redemption));
+      bump();
+      return redemption;
+    },
+
+    async addReward(req) {
+      await wait();
+      const reward = mockAddReward(req);
+      notify(`Added ${reward.name}`);
+      bump();
+      return reward;
+    },
+
+    async priceReward(reward, price) {
+      await wait();
+      const row = mockPriceReward(reward, price);
+      notify("Price saved");
+      bump();
+      return row;
+    },
+
+    async targetReward(reward, targetUsd) {
+      await wait();
+      const row = mockTargetReward(reward, targetUsd);
+      notify(targetUsd === null ? "Target removed" : "Target saved");
+      bump();
+      return row;
     },
   };
 }

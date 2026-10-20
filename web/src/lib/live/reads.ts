@@ -6,6 +6,7 @@ import {
 } from "@/lib/derive";
 import { api, unwrap } from "@/lib/live/http";
 import type { RecapSection } from "@/lib/review-recap";
+import { normalizeLedgerRow, normalizeReward, normalizeWallet } from "@/lib/rewards";
 import type { LifeOsReads } from "@/lib/mock/api";
 import type {
   AreaRow,
@@ -14,15 +15,18 @@ import type {
   HabitRow,
   InboxItem,
   JournalEntry,
+  LedgerRow,
   PersonRow,
   RelationEdge,
   ResolvedInboxItem,
   ReviewDoc,
+  RewardRow,
   StatusHistoryEntry,
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
   TaskTimer,
+  Wallet,
 } from "@/lib/production-ui-types";
 
 function asType<T>(value: unknown): T {
@@ -169,6 +173,29 @@ export const liveReads: LifeOsReads = {
   async timers() {
     const data = await unwrap(api().GET("/api/timers"));
     return asType<TaskTimer[]>(data).map(normalizeTimer);
+  },
+
+  async wallet() {
+    const data = await unwrap(api().GET("/api/wallet"));
+    return normalizeWallet(asType<Wallet>(data));
+  },
+
+  async ledger(opts) {
+    const data = await unwrap(
+      api().GET("/api/ledger", {
+        params: { query: { from: opts?.from, to: opts?.to, limit: opts?.limit } },
+      }),
+    );
+    return asType<LedgerRow[]>(data).map(normalizeLedgerRow);
+  },
+
+  async rewards(opts) {
+    const data = await unwrap(
+      api().GET("/api/rewards", {
+        params: { query: { includeArchived: opts?.includeArchived } },
+      }),
+    );
+    return asType<RewardRow[]>(data).map(normalizeReward);
   },
 
   async reviews(opts) {

@@ -7,6 +7,7 @@ const routes = [
   "/map",
   "/tasks",
   "/habits",
+  "/rewards",
   "/vision",
   "/reviews",
   "/people",

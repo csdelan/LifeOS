@@ -2422,7 +2422,7 @@ Build:      building
 ### REWARD-3 — A Redeem page spends currencies on rewards and logs why
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "I would like a redeem page where I can actually redeem currencies for rewards... and it
@@ -2461,7 +2461,7 @@ Build:      building
 ### REWARD-4 — Earning and redeeming give immediate, celebratory feedback
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      building
 
 **Workflow (Chris):**
 - "Give a positive sound feedback and maybe throw in a quick celebrate animation for
@@ -2755,11 +2755,13 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   is R6).
 - **Reward catalog type + redemption** (REWARD-3) — `Reward` subject type (the 15th), `v_reward`
   with savings progress, no-overdraft redeem under a wallet lock, `bsk redeem`. — **Shipped**
-  (R4, migration 0028; `bsk rewards list / add / price / target`; the Redeem page is R5).
+  (R4, migration 0028; `bsk rewards list / add / price / target`; the Rewards tab and Redeem
+  dialog, R5).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
-scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **rewards ledger**
-(REWARD-1..5, sequenced in [rewards-plan.md](rewards-plan.md)). Everything else above
+scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the rest of the
+**rewards UI** (REWARD-4's earning feedback and REWARD-5's history, rewards plan R6–R7, sequenced
+in [rewards-plan.md](rewards-plan.md)). Everything else above
 has shipped. The user-facing UIs for the shipped kernel bits still vary by surface — see each
 requirement's Build field (e.g. CAP-2 / CAP-4 are `building`: kernel done, capture UI pending).
 

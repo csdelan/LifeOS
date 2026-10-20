@@ -10,6 +10,7 @@ import { InboxPage } from "@/pages/inbox-page";
 import { MapPage } from "@/pages/map-page";
 import { TasksPage } from "@/pages/tasks-page";
 import { HabitsPage } from "@/pages/habits-page";
+import { RewardsPage } from "@/pages/rewards-page";
 import { VisionPage } from "@/pages/vision-page";
 import { ReviewsPage } from "@/pages/reviews-page";
 import { PeoplePage } from "@/pages/people-page";
@@ -135,6 +136,12 @@ const habitsRoute = createRoute({
   component: HabitsPage,
 });
 
+const rewardsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/rewards",
+  component: RewardsPage,
+});
+
 const reviewsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/reviews",
@@ -169,6 +176,7 @@ const routeTree = rootRoute.addChildren([
   mapRoute,
   tasksRoute,
   habitsRoute,
+  rewardsRoute,
   visionRoute,
   reviewsRoute,
   peopleRoute,

@@ -71,6 +71,27 @@ test.describe("golden paths", () => {
     });
   });
 
+  test("redeem a catalog reward with a note", async ({ page }) => {
+    await page.goto("/rewards");
+    const freedom = page.getByRole("listitem", { name: /^Freedom: / });
+    await expect(freedom).toHaveAccessibleName("Freedom: 60");
+    // Movie night costs more Freedom than the wallet holds: blocked, with the reason.
+    await expect(page.getByRole("button", { name: "Redeem Movie night" })).toBeDisabled();
+    await expect(page.getByText("You have 60 Freedom; this needs 120.")).toBeVisible();
+
+    await page.getByRole("button", { name: "Redeem Episode of a show" }).click();
+    const dialog = page.getByRole("dialog", { name: "Redeem Episode of a show" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel(/What's it for/).fill("Season finale, part two");
+    await dialog.getByRole("button", { name: "Redeem", exact: true }).click();
+
+    await expect(page.getByTestId("confetti")).toBeAttached();
+    await expect(page.getByText("Redeemed Episode of a show: 45 Freedom")).toBeVisible({ timeout: 10_000 });
+    await expect(dialog).toBeHidden();
+    await expect(freedom).toHaveAccessibleName("Freedom: 15");
+    await expect(page.getByText("Episode of a show — Season finale, part two")).toBeVisible();
+  });
+
   test("theme toggle switches the document class", async ({ page }) => {
     await page.goto("/");
     const html = page.locator("html");

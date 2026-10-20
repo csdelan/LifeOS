@@ -3,12 +3,15 @@ import { api, unwrap } from "@/lib/live/http";
 import type {
   CreatedSubject,
   LifeOsWriteClient,
+  Redemption,
   RenamedSubject,
   RenamedTag,
+  RewardRow,
   TimerActionResult,
 } from "@/lib/production-ui-types";
 import { renamedMessage } from "@/lib/production-ui-types";
 import { normalizeTimer } from "@/lib/live/reads";
+import { normalizeRedemption, normalizeReward, redemptionMessage } from "@/lib/rewards";
 
 function notify(message: string) {
   toast.success(message);
@@ -168,6 +171,42 @@ export function createLiveWriteClient(): LifeOsWriteClient {
     async completeReview(_id) {
       // TODO(api): POST /api/reviews/{id}/complete
       toast.error("Reviews are mock-only until the kernel ships.");
+    },
+
+    async redeem(req) {
+      const redemption = normalizeRedemption(
+        (await unwrap(api().POST("/api/redeem", { body: req }))) as unknown as Redemption,
+      );
+      notify(redemptionMessage(redemption));
+      return redemption;
+    },
+
+    async addReward(req) {
+      const reward = normalizeReward(
+        (await unwrap(api().POST("/api/rewards", { body: req }))) as unknown as RewardRow,
+      );
+      notify(`Added ${reward.name}`);
+      return reward;
+    },
+
+    async priceReward(reward, price) {
+      const row = normalizeReward(
+        (await unwrap(
+          api().POST("/api/rewards/price", { body: { reward, price } }),
+        )) as unknown as RewardRow,
+      );
+      notify("Price saved");
+      return row;
+    },
+
+    async targetReward(reward, targetUsd) {
+      const row = normalizeReward(
+        (await unwrap(
+          api().POST("/api/rewards/target", { body: { reward, targetUsd } }),
+        )) as unknown as RewardRow,
+      );
+      notify(targetUsd === null ? "Target removed" : "Target saved");
+      return row;
     },
   };
 }

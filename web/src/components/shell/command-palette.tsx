@@ -13,6 +13,7 @@ import { useSubjects } from "@/lib/queries";
 import { typeLabel } from "@/lib/production-ui-types";
 import {
   CompassIcon,
+  GiftIcon,
   InboxIcon,
   LayoutDashboardIcon,
   ListTodoIcon,
@@ -71,6 +72,9 @@ export function CommandPalette({
           </CommandItem>
           <CommandItem onSelect={() => go("/habits")}>
             <RepeatIcon /> Habits
+          </CommandItem>
+          <CommandItem onSelect={() => go("/rewards")}>
+            <GiftIcon /> Rewards
           </CommandItem>
           <CommandItem onSelect={() => go("/vision")}>
             <EyeIcon /> Vision

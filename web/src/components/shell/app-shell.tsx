@@ -12,6 +12,7 @@ import {
 import {
   ClipboardCheckIcon,
   CompassIcon,
+  GiftIcon,
   InboxIcon,
   LayoutDashboardIcon,
   ListTodoIcon,
@@ -83,6 +84,7 @@ const NAV = [
   { to: "/map", label: "Map", icon: MapIcon },
   { to: "/tasks", label: "Tasks", icon: ListTodoIcon },
   { to: "/habits", label: "Habits", icon: RepeatIcon },
+  { to: "/rewards", label: "Rewards", icon: GiftIcon },
   { to: "/vision", label: "Vision", icon: EyeIcon },
   { to: "/reviews", label: "Reviews", icon: ClipboardCheckIcon },
   { to: "/people", label: "People", icon: UsersIcon },

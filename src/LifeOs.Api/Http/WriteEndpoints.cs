@@ -40,7 +40,7 @@ public static class WriteEndpoints
             .Produces<RenamedSubject>().Produces<ApiError>(StatusCodes.Status400BadRequest)
             .Produces<ApiError>(StatusCodes.Status409Conflict);
         api.MapPost("/status", SetStatus).WithName("SetStatus")
-            .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
+            .Produces<EarnResult>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/archive", Archive).WithName("Archive")
             .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/restore", Restore).WithName("Restore")
@@ -60,7 +60,7 @@ public static class WriteEndpoints
         api.MapPost("/drop", Drop).WithName("Drop")
             .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/adhere", Adhere).WithName("Adhere")
-            .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
+            .Produces<EarnResult>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/timer", Timer).WithName("Timer")
             .Produces<TimerActionResult>().Produces<ApiError>(StatusCodes.Status400BadRequest)
             .Produces<ApiError>(StatusCodes.Status409Conflict);
@@ -214,9 +214,10 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject and status are required."));
         }
 
-        await status.ChangeStatusAsync(
+        // The reconcile's earns and reversals ride back for REWARD-4's feedback.
+        var result = await status.ChangeStatusAsync(
             ResolveWriteRef(body.Subject, reader), body.Status, cancellationToken);
-        return Results.Ok();
+        return Results.Ok(RewardRows.Earned(result.Awards));
     }
 
     private static async Task<IResult> Archive(
@@ -389,9 +390,9 @@ public static class WriteEndpoints
             var other => other
         };
         var occurrence = ParseOccurrence(body.On);
-        await adherence.RecordAsync(
+        var recorded = await adherence.RecordAsync(
             ResolveWriteRef(body.Habit, reader), result, occurrence, body.Note, cancellationToken);
-        return Results.Ok();
+        return Results.Ok(RewardRows.Earned(recorded.Awards));
     }
 
     private static async Task<IResult> Timer(
@@ -424,7 +425,8 @@ public static class WriteEndpoints
         {
             Timer = timer,
             Paused = result.Paused.Select(ToCreated).ToList(),
-            Completed = result.Completed
+            Completed = result.Completed,
+            Awards = result.Awards.Select(RewardRows.From).ToList()
         });
     }
 
@@ -535,7 +537,7 @@ public static class WriteEndpoints
     /// title. When the reference is a uuid that names a subject, substitute its urn.
     /// Event ids (promote / tag / triage of a capture) are left as the guid string.
     /// </summary>
-    private static string ResolveWriteRef(string reference, SubjectReader reader)
+    internal static string ResolveWriteRef(string reference, SubjectReader reader)
     {
         if (!Guid.TryParse(reference.Trim(), out var id))
         {
