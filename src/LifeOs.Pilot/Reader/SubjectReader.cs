@@ -354,4 +354,33 @@ public sealed class SubjectReader(string connectionString)
             .ThenBy(g => g.Title, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
+
+    private const string TimerSelect =
+        """
+        SELECT subject_id, subject_urn, subject_title, state, running_since,
+               total_seconds, session_seconds, sessions, last_changed_at
+        FROM bsk.v_task_timer
+        """;
+
+    /// <summary>One Task's timer (TASKS-2), or null when it has never run.</summary>
+    public TaskTimerRow? GetTimer(Guid subjectId)
+    {
+        using var db = Open();
+        return db.QueryFirstOrDefault<TaskTimerRow>(
+            $"{TimerSelect} WHERE subject_id = @subjectId", new { subjectId });
+    }
+
+    /// <summary>Every timed Task's timer: running first, then paused, then most recently changed.</summary>
+    public IReadOnlyList<TaskTimerRow> GetTimers(bool includeArchived = false)
+    {
+        using var db = Open();
+        return db.Query<TaskTimerRow>(
+            $"""
+            {TimerSelect}
+            WHERE @includeArchived OR NOT archived
+            ORDER BY CASE state WHEN 'running' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END,
+                     last_changed_at DESC
+            """,
+            new { includeArchived }).AsList();
+    }
 }

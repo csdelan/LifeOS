@@ -72,6 +72,28 @@ public sealed record BinaryCaptureResult(Guid EventId, Guid ArtifactId, bool Ded
 public sealed record ArtifactBlob(
     Guid ArtifactId, byte[] Bytes, string ContentType, long ByteSize, string Sha256, string? Filename);
 
+/// <summary>
+/// A Task's timer as <c>bsk.v_task_timer</c> folds it (TASKS-2). <see cref="TotalSeconds"/>
+/// and <see cref="SessionSeconds"/> count closed segments only; while the timer is
+/// running, the live figure adds <c>now − RunningSince</c>.
+/// </summary>
+public sealed record TimerSnapshot(
+    Guid SubjectId,
+    string Urn,
+    string Type,
+    string Title,
+    string State,
+    DateTimeOffset? RunningSince,
+    long TotalSeconds,
+    long SessionSeconds);
+
+/// <summary>
+/// One timer action to append: its event, the task it concerns, and the state the
+/// timer must still be in when the write lands (so two windows racing on one timer
+/// cannot both win).
+/// </summary>
+public sealed record TimerWrite(Guid SubjectId, string ExpectedState, NewEvent Event);
+
 /// <summary>An artifact's binary metadata without the bytes — for list/metadata reads.</summary>
 public sealed record ArtifactBlobMetadata(
     Guid ArtifactId, string ContentType, long ByteSize, string Sha256, string? Filename);

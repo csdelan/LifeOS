@@ -17,7 +17,15 @@ import { SubjectDetail } from "@/components/detail/subject-detail";
 import { useCreateActions } from "@/components/create/create-context";
 import { useDirty } from "@/components/shell/app-shell";
 import { PeekPanel } from "@/components/shell/panels";
-import { useAlignmentEdges, useAreas, useCreateSubject, useSubjects, useTagUniverse } from "@/lib/queries";
+import { TimerChip } from "@/components/timer/task-timer";
+import {
+  useAlignmentEdges,
+  useAreas,
+  useCreateSubject,
+  useSubjects,
+  useTagUniverse,
+  useTimers,
+} from "@/lib/queries";
 import { STATUS_BY_TYPE, defaultStatus } from "@/lib/production-ui-types";
 import { todayIso } from "@/lib/dates";
 import { NONE } from "@/lib/subject-forms";
@@ -51,6 +59,7 @@ export function TasksPage() {
   const { data: edges } = useAlignmentEdges(true);
   const { data: areas } = useAreas();
   const { data: tags } = useTagUniverse();
+  const { data: timers } = useTimers();
   const create = useCreateSubject();
   const { openNew } = useCreateActions();
   const { setDirty, requestNavigation } = useDirty();
@@ -117,6 +126,10 @@ export function TasksPage() {
   }, [data, filters, tagFilter, parentOf, today]);
 
   const grouped = groupTasks(filtered, today);
+  const timerById = useMemo(
+    () => new Map((timers ?? []).map((t) => [t.subjectId, t])),
+    [timers],
+  );
 
   function select(id: string) {
     requestNavigation(() => {
@@ -274,6 +287,7 @@ export function TasksPage() {
                     item={item}
                     selected={selected === item.id}
                     onSelect={() => select(item.id)}
+                    trailing={<TimerChip timer={timerById.get(item.id)} />}
                   />
                 ))}
               </section>

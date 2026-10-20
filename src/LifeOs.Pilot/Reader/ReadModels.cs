@@ -215,3 +215,17 @@ public sealed class JournalEntry
     public DateTime OccurredAt { get; set; }
     public string Content { get; set; } = "";
 }
+
+/// <summary>A Task's timer, folded from its timer events by <c>bsk.v_task_timer</c> (TASKS-2).</summary>
+public sealed class TaskTimerRow
+{
+    public Guid SubjectId { get; set; }
+    public string SubjectUrn { get; set; } = "";
+    public string SubjectTitle { get; set; } = "";
+    public string State { get; set; } = "stopped";
+    public DateTime? RunningSince { get; set; }
+    public long TotalSeconds { get; set; }
+    public long SessionSeconds { get; set; }
+    public long Sessions { get; set; }
+    public DateTime LastChangedAt { get; set; }
+}

@@ -194,6 +194,29 @@ public interface IActivityWriter
 }
 
 /// <summary>
+/// Reads and appends Task timer actions (TASKS-2). Nothing about a timer is stored
+/// except its append-only actions; state and recorded time are folded by
+/// <c>bsk.v_task_timer</c>.
+/// </summary>
+public interface ITimerRepository
+{
+    /// <summary>The task's timer, or <c>null</c> when it has never been started.</summary>
+    Task<TimerSnapshot?> GetAsync(Guid subjectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every timer that is running right now — normally none or one.</summary>
+    Task<IReadOnlyList<TimerSnapshot>> GetRunningAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Appends timer actions, each an event plus a <c>concerns</c> edge to its task, as
+    /// one transaction serialized against every other timer write. Each task's state is
+    /// re-read inside that transaction; if any no longer matches its
+    /// <see cref="TimerWrite.ExpectedState"/>, nothing is written and
+    /// <see cref="TimerConflictException"/> is thrown.
+    /// </summary>
+    Task AppendAsync(IReadOnlyList<TimerWrite> writes, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Creates <c>event → subject</c> edges (concerns/evidences/violates) for events that
 /// already exist — the write path behind <c>bsk relate</c>. Distinct from
 /// <see cref="IActivityWriter"/>, which writes a new event and its edges together.

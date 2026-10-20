@@ -10,11 +10,13 @@
   </PropertyGroup>
 
   <!--
-    WinForms-free Pilot helper compiled into the test assembly so URL filtering
-    can be asserted without a ProjectReference to the Windows-only Pilot exe.
+    WinForms-free Pilot helpers compiled into the test assembly so URL filtering and
+    timer formatting can be asserted without a ProjectReference to the Windows-only
+    Pilot exe.
   -->
   <ItemGroup>
     <Compile Include="..\..\src\LifeOs.Pilot\Shell\BrowserUrl.cs" Link="Pilot\BrowserUrl.cs" />
+    <Compile Include="..\..\src\LifeOs.Pilot\Shell\TimerFormat.cs" Link="Pilot\TimerFormat.cs" />
   </ItemGroup>
 
   <ItemGroup>

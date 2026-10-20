@@ -47,7 +47,12 @@ public static class ReadEndpoints
             .Produces<IReadOnlyList<HabitOccurrenceRow>>();
         api.MapGet("/edges", GetEdges).WithName("GetAlignmentEdges")
             .Produces<IReadOnlyList<AlignmentEdge>>();
+        api.MapGet("/timers", GetTimers).WithName("GetTimers")
+            .Produces<IReadOnlyList<TaskTimer>>();
     }
+
+    private static IResult GetTimers(SubjectReader reader)
+        => Results.Ok(reader.GetTimers());
 
     private static IResult ListSubjects(SubjectReader reader, string? type, bool includeArchived = false)
         => Results.Ok(reader.QuerySubjects(type, includeArchived));

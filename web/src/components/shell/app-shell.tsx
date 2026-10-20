@@ -44,6 +44,7 @@ import { NewSubjectDialog } from "@/components/create/new-subject-dialog";
 import { QuickCaptureDialog } from "@/components/create/quick-capture-dialog";
 import { VoiceCaptureDialog } from "@/components/create/voice-capture-dialog";
 import { CreateActions, type CreateOpts } from "@/components/create/create-context";
+import { RunningTimer } from "@/components/timer/running-timer";
 import { useAuth } from "@/components/auth/auth-provider";
 import { isLiveApi } from "@/lib/api-base";
 import { useInbox, useMe } from "@/lib/queries";
@@ -206,6 +207,7 @@ export function AppShell() {
           <MenuIcon />
         </Button>
         <p className="font-heading text-lg leading-none">LifeOS</p>
+        <RunningTimer compact className="ml-1" />
         <div className="ml-auto flex items-center gap-1">
           <Button
             variant="ghost"
@@ -385,6 +387,7 @@ function NavBody({
           );
         })}
       </nav>
+      <RunningTimer className="mx-2 mb-2" />
       <div className="space-y-1 border-t p-2">
         <Link
           to="/gallery"

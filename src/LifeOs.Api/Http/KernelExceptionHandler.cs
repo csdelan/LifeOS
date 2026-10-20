@@ -26,6 +26,7 @@ public static class KernelExceptionHandler
             ambiguous.Message,
             ambiguous.Candidates.Select(c => new { id = c.Id, urn = c.Urn, type = c.Type, title = c.Title }))),
         DuplicateSubjectException duplicate => (StatusCodes.Status409Conflict, new ApiError(duplicate.Message)),
+        TimerConflictException conflict => (StatusCodes.Status409Conflict, new ApiError(conflict.Message)),
         ArgumentException or InvalidOperationException => (
             StatusCodes.Status400BadRequest, new ApiError(ex.Message)),
         _ => (StatusCodes.Status500InternalServerError, new ApiError(ex?.Message ?? "Unexpected error."))

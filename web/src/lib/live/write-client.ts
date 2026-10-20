@@ -5,8 +5,10 @@ import type {
   LifeOsWriteClient,
   RenamedSubject,
   RenamedTag,
+  TimerActionResult,
 } from "@/lib/production-ui-types";
 import { renamedMessage } from "@/lib/production-ui-types";
+import { normalizeTimer } from "@/lib/live/reads";
 
 function notify(message: string) {
   toast.success(message);
@@ -114,6 +116,13 @@ export function createLiveWriteClient(): LifeOsWriteClient {
             ? "Partial credit"
             : "Marked missed",
       );
+    },
+
+    async timer(task, action) {
+      const result = (await unwrap(
+        api().POST("/api/timer", { body: { task, action } }),
+      )) as unknown as TimerActionResult;
+      return { ...result, timer: normalizeTimer(result.timer) };
     },
 
     async involve(subject, person, role, remove) {

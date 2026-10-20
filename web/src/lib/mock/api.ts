@@ -29,6 +29,7 @@ import type {
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
+  TaskTimer,
 } from "@/lib/production-ui-types";
 import { isTerminal } from "@/lib/production-ui-types";
 import { composeRecap, type RecapSection } from "@/lib/review-recap";
@@ -40,6 +41,7 @@ import {
   filesForSubject,
   getArtifact,
   getState as storeState,
+  listTimers,
 } from "@/lib/mock/store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
@@ -104,6 +106,8 @@ export interface LifeOsReads {
   people(): Promise<PersonRow[]>;
   habits(): Promise<HabitRow[]>;
   occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]>;
+  /** Every timed Task's timer (TASKS-2), running first. Archived tasks are left out. */
+  timers(): Promise<TaskTimer[]>;
   reviews(opts?: { kind?: "daily" | "weekly"; date?: string }): Promise<ReviewDoc[]>;
   recap(opts: { start: string; end: string; asOf: string }): Promise<RecapSection[]>;
   /**
@@ -240,6 +244,11 @@ export const mockReads: LifeOsReads = {
       if (opts?.on && o.occurrenceDate !== opts.on) return false;
       return true;
     });
+  },
+
+  async timers(): Promise<TaskTimer[]> {
+    await wait();
+    return listTimers();
   },
 
   async reviews(opts?: { kind?: "daily" | "weekly"; date?: string }): Promise<ReviewDoc[]> {

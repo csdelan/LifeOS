@@ -3,6 +3,7 @@ using LifeOs.Pilot.Controls;
 using LifeOs.Pilot.Dialogs;
 using LifeOs.Pilot.Reader;
 using LifeOs.Pilot.Shell;
+using Npgsql;
 
 namespace LifeOs.Pilot.Views;
 
@@ -35,6 +36,8 @@ internal sealed class TasksView : UserControl, IPilotView
         _detail.Changed += (_, _) => Reload();
         Ui.ConfigureGrid(_grid);
         _grid.SelectionChanged += OnSelect;
+        _grid.CellFormatting += OnTrackedFormatting;
+        _grid.CellToolTipTextNeeded += OnTrackedToolTip;
 
         _statusFilter.Items.Add("Active (default)");
         foreach (var status in PilotVocab.StatusesFor(PilotVocab.Task))
@@ -141,7 +144,12 @@ internal sealed class TasksView : UserControl, IPilotView
                 filtered = filtered.Where(t => t.Area == urn);
             }
 
-            var grouped = filtered.Select(t => ToRow(t, today)).OrderBy(t => t.GroupOrder).ThenBy(t => t.Title).ToList();
+            var timers = ReadTimers();
+            var grouped = filtered
+                .Select(t => ToRow(t, today, timers.GetValueOrDefault(t.Id)))
+                .OrderBy(t => t.GroupOrder)
+                .ThenBy(t => t.Title)
+                .ToList();
             _grid.DataSource = grouped;
             BindColumns();
             _status.Text = $"{grouped.Count} task(s)";
@@ -292,10 +300,11 @@ internal sealed class TasksView : UserControl, IPilotView
         Ui.ShowColumn(_grid, "Due", 100, 3);
         Ui.ShowColumn(_grid, "Scheduled", 100, 4);
         Ui.ShowColumn(_grid, "AreaName", 120, 5, "Area");
-        Ui.ShowColumn(_grid, "Tags", 140, 6);
+        Ui.ShowColumn(_grid, "Tracked", 90, 6);
+        Ui.ShowColumn(_grid, "Tags", 140, 7);
     }
 
-    private static TaskRow ToRow(SubjectListItem t, DateOnly today)
+    private static TaskRow ToRow(SubjectListItem t, DateOnly today, TaskTimerRow? timer)
     {
         var due = Parse(t.Due);
         var scheduled = Parse(t.Scheduled);
@@ -332,8 +341,85 @@ internal sealed class TasksView : UserControl, IPilotView
             Scheduled = t.Scheduled,
             AreaName = t.AreaName,
             Tags = t.Tags,
+            Tracked = Tracked(timer),
+            TimerState = timer?.State,
             Group = group,
             GroupOrder = order
+        };
+    }
+
+    /// <summary>
+    /// The Tracked column is extra: a database that predates the timer view (staging
+    /// before CI migrates it) still lists its Tasks, just without recorded time.
+    /// </summary>
+    private Dictionary<Guid, TaskTimerRow> ReadTimers()
+    {
+        try
+        {
+            return _reader.GetTimers(_archived.Checked).ToDictionary(t => t.SubjectId);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UndefinedTable)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>TASKS-2 grid read-out: recorded time, marked while the timer runs or is paused.</summary>
+    private static string? Tracked(TaskTimerRow? timer)
+    {
+        if (timer is null)
+        {
+            return null;
+        }
+
+        var (total, _) = TimerFormat.Live(
+            timer.State, timer.RunningSince, timer.TotalSeconds, timer.SessionSeconds, DateTime.UtcNow);
+        return timer.State switch
+        {
+            TimerFormat.Running => $"● {TimerFormat.Tracked(total)}",
+            TimerFormat.Paused => $"‖ {TimerFormat.Tracked(total)}",
+            _ => total > 0 ? TimerFormat.Tracked(total) : null
+        };
+    }
+
+    private bool IsTrackedCell(int row, int column, out TaskRow? task)
+    {
+        task = row >= 0 && column >= 0 && _grid.Columns[column].Name == "Tracked"
+            ? _grid.Rows[row].DataBoundItem as TaskRow
+            : null;
+        return task is not null;
+    }
+
+    private void OnTrackedFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (!IsTrackedCell(e.RowIndex, e.ColumnIndex, out var task) || e.CellStyle is null)
+        {
+            return;
+        }
+
+        if (task!.TimerState == TimerFormat.Running)
+        {
+            e.CellStyle.ForeColor = TaskTimerBar.RunningColor;
+        }
+        else if (task.TimerState == TimerFormat.Paused)
+        {
+            e.CellStyle.ForeColor = TaskTimerBar.PausedColor;
+        }
+    }
+
+    private void OnTrackedToolTip(object? sender, DataGridViewCellToolTipTextNeededEventArgs e)
+    {
+        if (!IsTrackedCell(e.RowIndex, e.ColumnIndex, out var task) || task!.Tracked is null)
+        {
+            return;
+        }
+
+        var time = task.Tracked.TrimStart('●', '‖', ' ');
+        e.ToolTipText = task.TimerState switch
+        {
+            TimerFormat.Running => $"Timer running · {time} recorded",
+            TimerFormat.Paused => $"Timer paused · {time} recorded",
+            _ => $"{time} recorded"
         };
     }
 
@@ -350,6 +436,8 @@ internal sealed class TasksView : UserControl, IPilotView
         public string? Scheduled { get; set; }
         public string? AreaName { get; set; }
         public string? Tags { get; set; }
+        public string? Tracked { get; set; }
+        public string? TimerState { get; set; }
         public string Group { get; set; } = "";
         public int GroupOrder { get; set; }
     }

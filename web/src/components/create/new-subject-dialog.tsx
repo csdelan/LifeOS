@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FieldErrors, Resolver } from "react-hook-form";
@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { SubjectTypeFields } from "@/components/create/subject-type-fields";
+import { TagListField } from "@/components/primitives/tag-input";
+import { splitTags } from "@/lib/tag-suggest";
 import {
   CREATABLE_TYPES,
   childTypesFor,
@@ -143,7 +145,7 @@ export function NewSubjectDialog({
       await writes.recur(created.id, parseRecurrence(attrs.recurrence));
     }
     if (values.tags.trim()) {
-      const tags = values.tags.split(",").map((x) => x.trim()).filter(Boolean);
+      const tags = splitTags(values.tags);
       if (tags.length) await writes.tag(created.id, { add: tags });
     }
     if (t === "Habit") {
@@ -236,11 +238,23 @@ export function NewSubjectDialog({
 
           <Separator />
           <div className="space-y-1.5">
-            <Label htmlFor="tags">Tags (comma-separated, optional)</Label>
-            <Input id="tags" placeholder="health, focus" {...form.register("tags")} />
+            <Label htmlFor="tags">Tags (optional)</Label>
+            <Controller
+              control={form.control}
+              name="tags"
+              render={({ field }) => (
+                <TagListField
+                  id="tags"
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Type to find a tag, Enter to add"
+                />
+              )}
+            />
             <p className="text-xs text-muted-foreground">
-              Tags classify. Relationships are assigned separately — the parent above is a
-              relationship, not a tag.
+              Tags classify. Existing tags are suggested as you type; a new one is fine too.
+              Relationships are assigned separately — the parent above is a relationship,
+              not a tag.
             </p>
           </div>
 

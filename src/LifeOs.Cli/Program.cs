@@ -40,6 +40,7 @@ rootCommand.Subcommands.Add(SetCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(RenameCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(RecurCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(AdhereCommand.Create(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(TimerCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(InvolveCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(MaterializeCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(RelateCommand.Create(connectionOption, jsonOption));

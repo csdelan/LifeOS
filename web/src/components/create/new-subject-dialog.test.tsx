@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NewSubjectDialog } from "@/components/create/new-subject-dialog";
 import { ApiRequestError } from "@/lib/live/http";
 import { createMockWriteClient } from "@/lib/mock/write-client";
+import { getState, resetStore } from "@/lib/mock/store";
+import { tagUniverse } from "@/lib/mock/seed";
 import type { LifeOsWriteClient, SubjectType } from "@/lib/production-ui-types";
 import type { CreateParent } from "@/components/create/new-subject-dialog";
 
@@ -103,5 +106,28 @@ describe("NewSubjectDialog", () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ type: "Habit", parent: "goal-half", relation: "serves" }),
     );
+  });
+
+  it("picks tags from the existing ones and keeps a new one typed before Save", async () => {
+    resetStore();
+    writes = createMockWriteClient();
+    const tag = vi.spyOn(writes, "tag");
+    const onOpenChange = vi.fn();
+    const existing = [...tagUniverse(getState())].sort((a, b) => b.itemCount - a.itemCount)[0].tag;
+    const user = userEvent.setup();
+    renderDialog({ initialType: "Task", onOpenChange });
+
+    await user.type(screen.getByLabelText("Title"), "Buy trail shoes");
+    const tags = screen.getByRole("combobox", { name: /Tags/ });
+    await user.click(tags);
+    const listbox = await screen.findByRole("listbox", { name: "Existing tags" });
+    await user.click(within(listbox).getByText(existing));
+    expect(screen.getByRole("button", { name: `Remove tag ${existing}` })).toBeInTheDocument();
+
+    await user.type(tags, "Gear");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(tag).toHaveBeenCalledWith(expect.any(String), { add: [existing, "gear"] });
   });
 });

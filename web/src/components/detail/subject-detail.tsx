@@ -29,12 +29,14 @@ import { DateChip } from "@/components/primitives/date-chip";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { Tag } from "@/components/primitives/tag";
+import { TagInput } from "@/components/primitives/tag-input";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { SubjectTypeFields } from "@/components/create/subject-type-fields";
 import { useCreateActions } from "@/components/create/create-context";
 import { AttachmentChip } from "@/components/artifacts/attachment-chip";
 import { StreakGrid } from "@/components/habits/streak-grid";
+import { TaskTimerPanel } from "@/components/timer/task-timer";
 import { JournalEditor, looksLikeHtml } from "@/components/journal/journal-editor";
 import {
   useHabits,
@@ -60,6 +62,7 @@ import {
 } from "@/lib/production-ui-types";
 import type { Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { formatTimestamp } from "@/lib/dates";
+import { splitTags } from "@/lib/tag-suggest";
 import { parseRecurrence } from "@/lib/recurrence";
 import {
   attrsToWrite,
@@ -67,6 +70,7 @@ import {
   formConfig,
   formValuesFromDetail,
   isDetailDirty,
+  parseAttrBag,
   selectedParentIds,
   subjectFormSchema,
   type SubjectFormValues,
@@ -301,6 +305,13 @@ export function SubjectDetail({
             ) : null}
           </div>
         </div>
+        {subject.type === "Task" ? (
+          <TaskTimerPanel
+            taskId={subject.id}
+            estimate={parseAttrBag(subject.attributes).estimated_duration}
+            className="mt-3"
+          />
+        ) : null}
       </header>
 
       <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col gap-0">
@@ -582,6 +593,12 @@ function TagsTab({ subjectId }: { subjectId: string }) {
   const [renameDraft, setRenameDraft] = useState("");
   const usedOn = (universe ?? []).find((u) => u.tag === renaming)?.itemCount;
 
+  function addTags(add: string[]) {
+    if (add.length === 0) return;
+    void writes.tag(subjectId, { add });
+    setDraft("");
+  }
+
   async function submitRename() {
     if (!renaming) return;
     const next = renameDraft.trim();
@@ -636,12 +653,14 @@ function TagsTab({ subjectId }: { subjectId: string }) {
             {usedOn ? ` (${usedOn} item${usedOn === 1 ? "" : "s"})` : ""}.
           </p>
           <div className="flex gap-2">
-            <Input
+            <TagInput
               autoFocus
               value={renameDraft}
-              onChange={(e) => setRenameDraft(e.target.value)}
+              onValueChange={setRenameDraft}
+              exclude={[renaming]}
+              fillOnPick
+              placeholder="New tag name"
               aria-label="New tag name"
-              list={`tag-universe-${subjectId}`}
             />
             <Button type="submit" size="sm">
               Rename
@@ -655,31 +674,19 @@ function TagsTab({ subjectId }: { subjectId: string }) {
           </p>
         </form>
       ) : null}
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!draft.trim()) return;
-          void writes.tag(subjectId, { add: [draft.trim()] });
-          setDraft("");
-        }}
-      >
-        <Input
+      <div className="flex gap-2">
+        <TagInput
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onValueChange={setDraft}
+          exclude={tags ?? []}
+          onCommit={addTags}
           placeholder="Add a tag"
-          list={`tag-universe-${subjectId}`}
           aria-label="Add a tag"
         />
-        <datalist id={`tag-universe-${subjectId}`}>
-          {(universe ?? []).map((t) => (
-            <option key={t.tag} value={t.tag} />
-          ))}
-        </datalist>
-        <Button type="submit" size="sm">
+        <Button type="button" size="sm" disabled={!splitTags(draft).length} onClick={() => addTags(splitTags(draft))}>
           Add
         </Button>
-      </form>
+      </div>
     </div>
   );
 }

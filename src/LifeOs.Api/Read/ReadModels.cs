@@ -246,3 +246,33 @@ public sealed class RenamedTag
     public int Renamed { get; set; }
     public int Merged { get; set; }
 }
+
+/// <summary>
+/// A Task's timer, from <c>bsk.v_task_timer</c> (TASKS-2). The seconds count closed
+/// segments only: while <see cref="State"/> is <c>running</c>, add now − <see cref="RunningSince"/>.
+/// </summary>
+public sealed class TaskTimer
+{
+    public Guid SubjectId { get; set; }
+    public string SubjectUrn { get; set; } = "";
+    public string SubjectTitle { get; set; } = "";
+    /// <summary><c>running</c>, <c>paused</c>, or <c>stopped</c>.</summary>
+    public string State { get; set; } = "";
+    public DateTime? RunningSince { get; set; }
+    public long TotalSeconds { get; set; }
+    /// <summary>Closed time in the newest session (start → stop, across pauses).</summary>
+    public long SessionSeconds { get; set; }
+    public DateTime? SessionStartedAt { get; set; }
+    public long Sessions { get; set; }
+    public DateTime LastChangedAt { get; set; }
+}
+
+/// <summary>The outcome of a timer action: the task's timer afterwards and anything it paused.</summary>
+public sealed class TimerActionResult
+{
+    public TaskTimer Timer { get; set; } = new();
+    /// <summary>Other tasks whose running timer this action paused (one timer runs at a time).</summary>
+    public IReadOnlyList<CreatedSubject> Paused { get; set; } = [];
+    /// <summary>True when the action was <c>complete</c> and the Task moved to Completed.</summary>
+    public bool Completed { get; set; }
+}

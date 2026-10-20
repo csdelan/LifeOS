@@ -178,6 +178,67 @@ public sealed class WriteEndpointsTests(PostgresFixture postgres)
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
     }
 
+    [Fact]
+    public async Task Timer_actions_on_a_task_named_by_id_show_up_in_the_timer_list()
+    {
+        await using var host = await StartAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var task = await PostSubjectAsync(host.Client, new { type = SubjectTypes.Task, title = $"timed {ns}" });
+
+        var started = await PostTimerAsync(host.Client, task.Id, "start");
+        Assert.Equal("running", started.GetProperty("timer").GetProperty("state").GetString());
+        Assert.Equal(task.Id, started.GetProperty("timer").GetProperty("subjectId").GetGuid());
+
+        var timers = await host.Client.GetFromJsonAsync<JsonElement>("/api/timers", Ct);
+        var row = timers.EnumerateArray().Single(t => t.GetProperty("subjectId").GetGuid() == task.Id);
+        Assert.Equal("running", row.GetProperty("state").GetString());
+        Assert.Equal($"timed {ns}", row.GetProperty("subjectTitle").GetString());
+        Assert.NotEqual(JsonValueKind.Null, row.GetProperty("runningSince").ValueKind);
+
+        var done = await PostTimerAsync(host.Client, task.Id, "complete");
+        Assert.True(done.GetProperty("completed").GetBoolean());
+        Assert.Equal("stopped", done.GetProperty("timer").GetProperty("state").GetString());
+    }
+
+    [Fact]
+    public async Task Starting_a_second_timer_reports_the_one_it_paused()
+    {
+        await using var host = await StartAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var first = await PostSubjectAsync(host.Client, new { type = SubjectTypes.Task, title = $"first {ns}" });
+        var second = await PostSubjectAsync(host.Client, new { type = SubjectTypes.Task, title = $"second {ns}" });
+
+        await PostTimerAsync(host.Client, first.Id, "start");
+        var switched = await PostTimerAsync(host.Client, second.Id, "start");
+
+        var paused = switched.GetProperty("paused").EnumerateArray().Select(p => p.GetProperty("id").GetGuid());
+        Assert.Contains(first.Id, paused);
+
+        await PostTimerAsync(host.Client, second.Id, "stop");
+        await PostTimerAsync(host.Client, first.Id, "stop");
+    }
+
+    [Fact]
+    public async Task A_timer_action_that_does_not_fit_is_a_400_with_the_reason()
+    {
+        await using var host = await StartAsync();
+        var task = await PostSubjectAsync(host.Client, new { type = SubjectTypes.Task, title = $"idle {Guid.NewGuid():N}" });
+
+        var response = await host.Client.PostAsJsonAsync("/api/timer", new { task = task.Id.ToString(), action = "pause" }, Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        Assert.Contains("not running", error.GetProperty("error").GetString());
+    }
+
+    private static async Task<JsonElement> PostTimerAsync(HttpClient client, Guid task, string action)
+    {
+        var response = await client.PostAsJsonAsync("/api/timer", new { task = task.ToString(), action }, Ct);
+        var text = await response.Content.ReadAsStringAsync(Ct);
+        Assert.True(response.IsSuccessStatusCode, $"POST /api/timer {action} → {(int)response.StatusCode}: {text}");
+        return JsonDocument.Parse(text).RootElement;
+    }
+
     private static string[] Tags(JsonElement row)
         => row.GetProperty("tags").EnumerateArray().Select(t => t.GetString()!).ToArray();
 

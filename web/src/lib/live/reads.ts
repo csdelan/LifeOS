@@ -22,10 +22,21 @@ import type {
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
+  TaskTimer,
 } from "@/lib/production-ui-types";
 
 function asType<T>(value: unknown): T {
   return value as T;
+}
+
+/** The API types int64 as `number | string`; the timer maths needs numbers. */
+export function normalizeTimer(timer: TaskTimer): TaskTimer {
+  return {
+    ...timer,
+    totalSeconds: Number(timer.totalSeconds) || 0,
+    sessionSeconds: Number(timer.sessionSeconds) || 0,
+    sessions: Number(timer.sessions) || 0,
+  };
 }
 
 export const liveReads: LifeOsReads = {
@@ -153,6 +164,11 @@ export const liveReads: LifeOsReads = {
       }),
     );
     return asType<HabitOccurrenceRow[]>(data);
+  },
+
+  async timers() {
+    const data = await unwrap(api().GET("/api/timers"));
+    return asType<TaskTimer[]>(data).map(normalizeTimer);
   },
 
   async reviews(opts) {

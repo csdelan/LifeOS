@@ -290,6 +290,36 @@ public sealed class SubjectReader(string connectionString)
             "SELECT tag, item_count FROM bsk.v_tag_universe ORDER BY tag").AsList();
     }
 
+    /// <summary>
+    /// Every timed Task's timer (TASKS-2), running first, then most recently changed.
+    /// Archived tasks are left out, as in every default view (D9).
+    /// </summary>
+    public IReadOnlyList<TaskTimer> GetTimers()
+    {
+        using var db = Open();
+        return db.Query<TaskTimer>(
+            """
+            SELECT subject_id, subject_urn, subject_title, state, running_since,
+                   total_seconds, session_seconds, session_started_at, sessions, last_changed_at
+            FROM bsk.v_task_timer
+            WHERE NOT archived
+            ORDER BY (state = 'running') DESC, (state = 'paused') DESC, last_changed_at DESC
+            """).AsList();
+    }
+
+    public TaskTimer? GetTimer(Guid subjectId)
+    {
+        using var db = Open();
+        return db.QueryFirstOrDefault<TaskTimer>(
+            """
+            SELECT subject_id, subject_urn, subject_title, state, running_since,
+                   total_seconds, session_seconds, session_started_at, sessions, last_changed_at
+            FROM bsk.v_task_timer
+            WHERE subject_id = @subjectId
+            """,
+            new { subjectId });
+    }
+
     public IReadOnlyList<AreaRow> GetAreas()
     {
         using var db = Open();

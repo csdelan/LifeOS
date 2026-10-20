@@ -22,6 +22,7 @@ import type {
   TagUniverseItem,
 } from "@/lib/production-ui-types";
 import { defaultStatus } from "@/lib/production-ui-types";
+import type { TimerEvent } from "@/lib/timer";
 
 export interface MockEvent {
   id: string;
@@ -70,6 +71,8 @@ export interface MockState {
   people: PersonRow[];
   associations: PersonAssociationRow[];
   reviews: ReviewDoc[];
+  /** Task timer actions, oldest first — the mock's copy of the timer activity events. */
+  timerEvents: TimerEvent[];
   primaryFocus: { title: string; subjectId: string; kind: "goal" };
   objectives: { id: string; title: string; subjectId?: string }[];
 }
@@ -1564,6 +1567,13 @@ export function createSeed(): MockState {
     people,
     associations,
     reviews,
+    // One finished 25-minute session on the long run yesterday, so the timer has history.
+    timerEvents: [
+      { subjectId: "task-longrun", action: "start", occurredAt: isoAgo(26) },
+      { subjectId: "task-longrun", action: "pause", occurredAt: isoAgo(25.75) },
+      { subjectId: "task-longrun", action: "resume", occurredAt: isoAgo(25.7) },
+      { subjectId: "task-longrun", action: "stop", occurredAt: isoAgo(25.53333) },
+    ],
     primaryFocus: {
       title: "Ship LifeOS production UI",
       subjectId: "goal-lifeos",

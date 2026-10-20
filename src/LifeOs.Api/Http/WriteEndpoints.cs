@@ -61,6 +61,9 @@ public static class WriteEndpoints
             .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/adhere", Adhere).WithName("Adhere")
             .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
+        api.MapPost("/timer", Timer).WithName("Timer")
+            .Produces<TimerActionResult>().Produces<ApiError>(StatusCodes.Status400BadRequest)
+            .Produces<ApiError>(StatusCodes.Status409Conflict);
         api.MapPost("/involve", Involve).WithName("Involve")
             .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/journal", AppendJournal).WithName("AppendJournal")
@@ -391,6 +394,40 @@ public static class WriteEndpoints
         return Results.Ok();
     }
 
+    private static async Task<IResult> Timer(
+        TimerBody body,
+        TimerService timers,
+        SubjectReader reader,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(body.Task) || string.IsNullOrWhiteSpace(body.Action))
+        {
+            return Results.BadRequest(new ApiError("task and action are required."));
+        }
+
+        var action = body.Action.Trim().ToLowerInvariant();
+        var task = ResolveWriteRef(body.Task, reader);
+        var result = action == "complete"
+            ? await timers.CompleteAsync(task, cancellationToken)
+            : await timers.ApplyAsync(task, action, cancellationToken);
+
+        // Read back through the reader view so the response has the same shape (and
+        // the same session fields) as GET /api/timers.
+        var timer = reader.GetTimer(result.Task.Id) ?? new TaskTimer
+        {
+            SubjectId = result.Task.Id,
+            SubjectUrn = result.Task.Urn,
+            SubjectTitle = result.Task.Title,
+            State = TimerStates.Stopped
+        };
+        return Results.Ok(new TimerActionResult
+        {
+            Timer = timer,
+            Paused = result.Paused.Select(ToCreated).ToList(),
+            Completed = result.Completed
+        });
+    }
+
     private static async Task<IResult> Involve(
         InvolveBody body,
         PeopleService people,
@@ -611,6 +648,13 @@ public sealed class AdhereBody
     public string State { get; set; } = "";
     public string? On { get; set; }
     public string? Note { get; set; }
+}
+
+public sealed class TimerBody
+{
+    public string Task { get; set; } = "";
+    /// <summary>start | pause | resume | stop | complete.</summary>
+    public string Action { get; set; } = "";
 }
 
 public sealed class InvolveBody

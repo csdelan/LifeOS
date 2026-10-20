@@ -88,6 +88,32 @@ public static class AdherenceResults
 }
 
 /// <summary>
+/// What can be done to a Task's timer (TASKS-2). Each action is recorded as an
+/// append-only activity event carrying <c>{subject_id, timer: action}</c>; state and
+/// recorded time are folded by <c>bsk.v_task_timer</c> (migration 0024). Complete is
+/// not a timer action of its own: it stops the timer and then moves the Task's Status.
+/// </summary>
+public static class TimerActions
+{
+    public const string Start = "start";
+    public const string Pause = "pause";
+    public const string Resume = "resume";
+    public const string Stop = "stop";
+
+    public static readonly IReadOnlyList<string> All = [Start, Pause, Resume, Stop];
+}
+
+/// <summary>The folded state of a Task's timer, as <c>bsk.v_task_timer.state</c> reports it.</summary>
+public static class TimerStates
+{
+    public const string Running = "running";
+    public const string Paused = "paused";
+
+    /// <summary>Stopped, or never started (a task with no timer events has no row).</summary>
+    public const string Stopped = "stopped";
+}
+
+/// <summary>
 /// Subject → subject edge kinds, matching the CHECK on <c>bsk.subject_relation.relation</c>.
 /// These are the edges both of whose ends are subjects. Event → subject edges live
 /// separately in <see cref="SubjectEventRelations"/>; <c>promoted_from</c> is not an

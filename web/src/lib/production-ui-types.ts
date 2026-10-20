@@ -386,6 +386,40 @@ export interface BinaryCaptureResult {
   needsTranscription?: boolean;
 }
 
+/** A Task timer's folded state (TASKS-2). A task never timed has no timer row. */
+export type TimerState = "running" | "paused" | "stopped";
+
+/**
+ * What the timer widget can do. Complete is Stop followed by moving the Task to
+ * Completed — the only place the timer touches Status.
+ */
+export type TimerAction = "start" | "pause" | "resume" | "stop" | "complete";
+
+/**
+ * A Task's optional timer (`bsk.v_task_timer`, TASKS-2). The seconds count closed
+ * segments only: while `state` is running, add now − `runningSince` (see
+ * `lib/timer.ts`). A session runs from start to stop and may span pauses.
+ */
+export interface TaskTimer {
+  subjectId: string;
+  subjectUrn: string;
+  subjectTitle: string;
+  state: TimerState;
+  runningSince?: string | null;   // ISO timestamp, while running
+  totalSeconds: number;           // every session
+  sessionSeconds: number;         // the newest session
+  sessionStartedAt?: string | null;
+  sessions: number;
+  lastChangedAt: string;
+}
+
+/** Outcome of a timer action. One timer runs at a time, so a start may pause another. */
+export interface TimerActionResult {
+  timer: TaskTimer;
+  paused: CreatedSubject[];
+  completed: boolean;
+}
+
 export interface AreaRow {
   id: string;
   urn: string;
@@ -544,6 +578,8 @@ export interface LifeOsWriteClient {
   /** Set structured recurrence on a Habit (GEN-3). */
   recur(habit: string, spec: RecurrenceSpec): Promise<void>;
   involve(subject: string, person: string, role: PersonRole, remove?: boolean): Promise<void>;
+  /** Drive a Task's timer (TASKS-2). Starting or resuming pauses any other running timer. */
+  timer(task: string, action: TimerAction): Promise<TimerActionResult>;
   appendJournal(subject: string, text: string): Promise<void>;
   capture(text: string): Promise<void>;                                         // note event → inbox
   /**

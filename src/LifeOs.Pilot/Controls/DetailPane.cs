@@ -45,6 +45,7 @@ internal sealed class DetailPane : UserControl
         Margin = new Padding(0),
         Padding = new Padding(0, 2, 0, 4)
     };
+    private readonly TaskTimerBar _timer;
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
     private readonly RichTextBox _overview = ReadOnlyBox();
     private readonly RelationshipEditor _relationships;
@@ -77,6 +78,12 @@ internal sealed class DetailPane : UserControl
         _navigator = navigator;
         _relationships = new RelationshipEditor(reader, bsk) { Dock = DockStyle.Fill };
         _tags = new TagEditor(reader, bsk) { Dock = DockStyle.Fill };
+        _timer = new TaskTimerBar(reader, bsk, navigator);
+        _timer.Changed += (_, _) =>
+        {
+            LoadSubject(_id);
+            Changed?.Invoke(this, EventArgs.Empty);
+        };
 
         _header.Font = new Font(Font, FontStyle.Bold);
         _header.AutoSize = false;
@@ -152,6 +159,8 @@ internal sealed class DetailPane : UserControl
         // unwrapped button row instead, and the parent clips the overflow.
         _header.Dock = DockStyle.Top;
         _header.Height = 28;
+        // Docked top in reverse add order: header, toolbar, then the Task timer.
+        _head.Controls.Add(_timer);
         _head.Controls.Add(_toolbar);
         _head.Controls.Add(_header);
 
@@ -182,6 +191,8 @@ internal sealed class DetailPane : UserControl
         _header.Width = content;
         _toolbar.MaximumSize = new Size(content, 4096);
         _toolbar.Width = content;
+        _timer.MaximumSize = new Size(content, 4096);
+        _timer.Width = content;
     }
 
     public bool HasSelection => _id != Guid.Empty;
@@ -201,6 +212,7 @@ internal sealed class DetailPane : UserControl
         _overview.Clear();
         _journal.Clear();
         _history.Clear();
+        _timer.Unbind();
         _empty.Visible = true;
         _tabs.Visible = false;
         SetWriteEnabled(false);
@@ -227,6 +239,15 @@ internal sealed class DetailPane : UserControl
             _tabs.Visible = true;
             _header.Text = $"{PilotVocab.Label(subject.Type)} — {subject.Title}";
             RenderOverview(subject);
+            if (subject.Type == PilotVocab.Task)
+            {
+                _timer.Bind(subject.Id, subject.Urn, subject.Title, Attr(subject.Attributes, "estimated_duration"));
+            }
+            else
+            {
+                _timer.Unbind();
+            }
+
             _relationships.Bind(subject.Id, subject.Urn);
             _tags.Bind(subject.Urn, _reader.GetTags(subject.Id));
             LoadJournal();

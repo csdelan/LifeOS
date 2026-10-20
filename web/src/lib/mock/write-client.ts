@@ -10,6 +10,7 @@ import {
   addEdge,
   adhereHabit,
   appendJournal,
+  applyTimer,
   applyAttrs,
   archiveSubject,
   byRef,
@@ -173,6 +174,13 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       setHabitRecurrence(habit, spec);
       notify("Recurrence saved");
       bump();
+    },
+
+    async timer(task, action) {
+      await wait();
+      const result = applyTimer(task, action);
+      bump();
+      return result;
     },
 
     async involve(subject, person, role, remove) {

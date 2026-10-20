@@ -1,4 +1,5 @@
 using LifeOs.Pilot.Cli;
+using LifeOs.Pilot.Controls;
 using LifeOs.Pilot.Dialogs;
 using LifeOs.Pilot.Reader;
 using LifeOs.Pilot.Shell;
@@ -56,10 +57,13 @@ public sealed class MainForm : Form
         newButton.Enabled = bsk is not null;
         newButton.Click += (_, _) => DoNew();
         var status = Ui.Muted(bsk is null ? "Read-only (bsk.exe not found)" : "Ready");
+        _navigator.Notified += message => status.Text = message;
+        var runningTimer = new RunningTimerIndicator(reader, bsk, _navigator);
 
         var banner = Ui.Toolbar();
         banner.Dock = DockStyle.Fill;
         banner.Controls.Add(newButton);
+        banner.Controls.Add(runningTimer);
         banner.Controls.Add(status);
 
         var topBar = BuildTopBar(banner);

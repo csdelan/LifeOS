@@ -30,6 +30,7 @@ import {
 import { EmptyState } from "@/components/primitives/empty-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { Tag } from "@/components/primitives/tag";
+import { TagInput } from "@/components/primitives/tag-input";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { AttachmentChip } from "@/components/artifacts/attachment-chip";
 import { Badge } from "@/components/ui/badge";
@@ -40,10 +41,10 @@ import {
   useInbox,
   useResolvedInbox,
   useSubjects,
-  useTagUniverse,
   useWrites,
 } from "@/lib/queries";
 import { formatTimestamp } from "@/lib/dates";
+import { splitTags } from "@/lib/tag-suggest";
 import { cn } from "@/lib/utils";
 import { saveView } from "@/lib/view-state";
 import { useIsDesktop } from "@/lib/media-query";
@@ -402,12 +403,10 @@ export function InboxPage() {
  */
 function TagEditor({ item, hint }: { item: InboxItem; hint: string }) {
   const writes = useWrites();
-  const { data: universe } = useTagUniverse();
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const tags = item.tags ?? [];
   const ref = inboxRef(item);
-  const listId = `inbox-tag-universe-${item.itemId}`;
 
   async function apply(opts: { add?: string[]; remove?: string[] }, done: string) {
     setPending(true);
@@ -421,6 +420,14 @@ function TagEditor({ item, hint }: { item: InboxItem; hint: string }) {
     } finally {
       setPending(false);
     }
+  }
+
+  function add(added: string[]) {
+    if (added.length === 0 || pending) return;
+    const label = added.map((t) => `#${t}`).join(", ");
+    void apply({ add: added }, `Tagged ${label}`).then((ok) => {
+      if (ok) setDraft("");
+    });
   }
 
   return (
@@ -441,33 +448,26 @@ function TagEditor({ item, hint }: { item: InboxItem; hint: string }) {
           ))
         )}
       </div>
-      <form
-        className="mt-2 flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const t = draft.trim();
-          if (!t || pending) return;
-          void apply({ add: [t] }, `Tagged #${t.toLowerCase()}`).then((ok) => {
-            if (ok) setDraft("");
-          });
-        }}
-      >
-        <Input
+      <div className="mt-2 flex gap-2">
+        <TagInput
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onValueChange={setDraft}
+          exclude={tags}
+          onCommit={add}
+          disabled={pending}
           placeholder="Add tag"
           aria-label="Add tag"
-          list={listId}
         />
-        <datalist id={listId}>
-          {(universe ?? []).map((u) => (
-            <option key={u.tag} value={u.tag} />
-          ))}
-        </datalist>
-        <Button type="submit" variant="outline" size="sm" disabled={pending || !draft.trim()}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pending || !splitTags(draft).length}
+          onClick={() => add(splitTags(draft))}
+        >
           {pending ? "Saving…" : "Tag"}
         </Button>
-      </form>
+      </div>
     </section>
   );
 }

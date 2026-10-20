@@ -48,6 +48,7 @@ export const qk = {
   people: ["people"] as const,
   habits: ["habits"] as const,
   occurrences: ["occurrences"] as const,
+  timers: ["timers"] as const,
   reviews: ["reviews"] as const,
   recap: ["recap"] as const,
   dashboard: ["dashboard"] as const,
@@ -128,6 +129,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async archive(subject) {
       await client.archive(subject);
       await invalidate(qc, [
+        qk.timers,
         qk.subject(subject),
         qk.listItem(subject),
         qk.subjects,
@@ -141,6 +143,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async restore(subject) {
       await client.restore(subject);
       await invalidate(qc, [
+        qk.timers,
         qk.subject(subject),
         qk.listItem(subject),
         qk.subjects,
@@ -218,6 +221,27 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async recur(habit, spec) {
       await client.recur(habit, spec);
       await invalidate(qc, [qk.habits, qk.subject(habit), qk.dashboard]);
+    },
+
+    async timer(task, action) {
+      try {
+        const result = await client.timer(task, action);
+        if (action === "complete") {
+          // Complete also moves the Task's Status.
+          await invalidate(qc, [
+            qk.subject(task),
+            qk.listItem(task),
+            qk.history(task),
+            qk.subjects,
+            qk.dashboard,
+            ["forest"],
+          ]);
+        }
+        return result;
+      } finally {
+        // Refresh even on a refusal: a 409 means another window changed the timer.
+        await invalidate(qc, [qk.timers]);
+      }
     },
 
     async involve(subject, person, role, remove) {
@@ -474,6 +498,24 @@ export function useOccurrences(habitId?: string) {
     queryKey: [...qk.occurrences, habitId ?? "all"],
     queryFn: () => reads().occurrences(habitId ? { habitId } : undefined),
   });
+}
+
+/** Every timed Task's timer — one read feeds the detail widget, Tasks rows and the shell. */
+export function useTimers() {
+  return useQuery({
+    queryKey: qk.timers,
+    queryFn: () => reads().timers(),
+  });
+}
+
+/** One task's timer, or null when it has never run. */
+export function useTimer(taskId: string | undefined) {
+  const { data, ...rest } = useTimers();
+  const timer = useMemo(
+    () => (taskId ? (data ?? []).find((t) => t.subjectId === taskId) ?? null : null),
+    [data, taskId],
+  );
+  return { ...rest, data: timer };
 }
 
 export function useReviews(kind?: "daily" | "weekly", date?: string) {

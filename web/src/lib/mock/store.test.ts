@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   addEdge,
   adhereHabit,
+  applyTimer,
   byId,
   captureDocument,
   captureVoice,
@@ -17,6 +18,7 @@ import {
   resetStore,
   setStatus,
   setTags,
+  timerFor,
 } from "@/lib/mock/store";
 import { mockReads } from "@/lib/mock/api";
 import { createMockWriteClient } from "@/lib/mock/write-client";
@@ -241,5 +243,50 @@ describe("mock rename parity", () => {
     expect(getState().tagsByItem["prob-sleep"]).toEqual(["health"]);
     expect(byId("prob-sleep")?.tags).toBe("health");
     expect(() => renameTag("sleep", "rest")).toThrow(/No item is tagged/);
+  });
+});
+
+describe("mock task timer", () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  it("starts, pauses, resumes and stops on the same rules as the kernel", () => {
+    expect(applyTimer("task-shoes", "start").timer.state).toBe("running");
+    expect(() => applyTimer("task-shoes", "start")).toThrow(/already running/);
+    expect(applyTimer("task-shoes", "pause").timer.state).toBe("paused");
+    expect(() => applyTimer("task-shoes", "pause")).toThrow(/not running|paused/);
+    expect(applyTimer("task-shoes", "resume").timer.state).toBe("running");
+    const stopped = applyTimer("task-shoes", "stop").timer;
+    expect(stopped.state).toBe("stopped");
+    expect(stopped.sessions).toBe(1);
+    expect(() => applyTimer("task-shoes", "resume")).toThrow(/start it instead/);
+  });
+
+  it("keeps one timer running: starting another pauses the first", () => {
+    applyTimer("task-shoes", "start");
+    const result = applyTimer("task-phone", "start");
+    expect(result.paused.map((p) => p.id)).toEqual(["task-shoes"]);
+    expect(timerFor("task-shoes")?.state).toBe("paused");
+    expect(timerFor("task-phone")?.state).toBe("running");
+  });
+
+  it("completes: stops the timer and marks the Task Completed", () => {
+    applyTimer("task-shoes", "start");
+    const result = applyTimer("task-shoes", "complete");
+    expect(result.completed).toBe(true);
+    expect(result.timer.state).toBe("stopped");
+    expect(byId("task-shoes")?.status).toBe("Completed");
+  });
+
+  it("keeps the timer on Tasks only", () => {
+    expect(() => applyTimer("goal-lifeos", "start")).toThrow(/not a Task/);
+  });
+
+  it("reads the seeded session on the long run", () => {
+    const timer = timerFor("task-longrun");
+    expect(timer?.state).toBe("stopped");
+    expect(timer?.totalSeconds).toBe(25 * 60);
+    expect(timerFor("task-shoes")).toBeNull();
   });
 });

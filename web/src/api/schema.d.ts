@@ -260,6 +260,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/timers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetTimers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/promote": {
         parameters: {
             query?: never;
@@ -478,6 +494,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["Adhere"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/timer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["Timer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -801,6 +833,34 @@ export interface components {
             tag?: string;
             /** Format: int64 */
             itemCount?: number | string;
+        };
+        TaskTimer: {
+            /** Format: uuid */
+            subjectId?: string;
+            subjectUrn?: string;
+            subjectTitle?: string;
+            state?: string;
+            /** Format: date-time */
+            runningSince?: null | string;
+            /** Format: int64 */
+            totalSeconds?: number | string;
+            /** Format: int64 */
+            sessionSeconds?: number | string;
+            /** Format: date-time */
+            sessionStartedAt?: null | string;
+            /** Format: int64 */
+            sessions?: number | string;
+            /** Format: date-time */
+            lastChangedAt?: string;
+        };
+        TimerActionResult: {
+            timer?: components["schemas"]["TaskTimer"];
+            paused?: components["schemas"]["CreatedSubject"][];
+            completed?: boolean;
+        };
+        TimerBody: {
+            task?: string;
+            action?: string;
         };
     };
     responses: never;
@@ -1201,6 +1261,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlignmentEdge"][];
+                };
+            };
+        };
+    };
+    GetTimers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskTimer"][];
                 };
             };
         };
@@ -1645,6 +1725,48 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    Timer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimerBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimerActionResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

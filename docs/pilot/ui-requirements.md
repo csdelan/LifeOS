@@ -500,6 +500,10 @@ Build:      built
   tag space across subjects and events.
 - Open decisions: normalized table vs per-row array; whether the reserved `focus` attribute
   becomes just another tag or stays special for Season parking.
+- Autocomplete (web, 2026-10-20): every tag field — the New dialog, the detail Tags tab (add
+  and rename), and Inbox triage — uses one autocomplete box over the tag universe. Focus
+  lists the most-used tags; typing narrows them, prefix matches first; tags already on the
+  item are not offered; a new tag is still allowed.
 
 
 
@@ -978,6 +982,46 @@ Build:      built
   the default view but remain reachable via Status filters. This is the Task-scoped sibling of
   BROWSE-2.
 - Open decisions: none blocking.
+
+
+### TASKS-2 — Tasks carry an optional, Toggl-style timer
+Horizon:    Pilot
+Definition: active
+Build:      built
+
+**Workflow (Chris):**
+- "I'd like a Toggl-like timer widget to start/stop/pause/complete a timer on a task, and it
+  will record total duration. This is optional per task, just like with a tool like
+  ClickUp – Toggl integration." (2026-10-20)
+- Every Task offers the timer, but it stays quiet until used: one row with **Start**.
+- **Start** begins a session. **Pause** keeps the session open and **Resume** continues it.
+  **Stop** closes the session. **Complete** stops the timer and marks the Task Completed.
+- Recorded time is the sum of every session. The Task's existing Estimated duration stays and
+  is compared with it (time left, or time over).
+- One timer runs at a time: starting or resuming one pauses whichever was running, and says so.
+- The running timer is visible from every screen, with Pause and Stop, and opens its Task:
+  the web sidebar (a pill in the mobile header), the Pilot's top bar.
+- Task lists show each Task's recorded time: a chip on web rows, a **Tracked** column in the
+  Pilot grid.
+- Not yet: adding or correcting time by hand, timers on types other than Task, time reports.
+
+**Ontology fit (Claude):**
+- Maps to: each action is an append-only `activity` event with `payload.timer` =
+  `start | pause | resume | stop` and a `concerns` edge to the Task. Totals are folded, never
+  stored: `bsk.v_task_timer` pairs each start / resume with the next action and leaves a
+  running segment out (clients add it live). Complete = `stop` + the ordinary `state_change`
+  to Completed.
+- Kernel delta: migration 0024 (`v_task_timer` + a partial index on timer events);
+  `TimerService` (transition rules, the one-running rule, writes serialized by an advisory
+  lock with an expected-state check, so a stale write from another window is refused with
+  409); `bsk timer <start|pause|resume|stop|complete|show> <task>`; `GET /api/timers`;
+  `POST /api/timer`.
+- Implications: starting a timer does not change Status — In progress stays a deliberate
+  choice. Complete is the one status shortcut, and it sits on the timer in the Task detail,
+  not on the Tasks toolbar (TASKS-1). Events are append-only, so a mistaken start or stop
+  stays in history; a correction would be a new kind of event.
+- Open decisions: manual time entry / correction; whether Start should also move a
+  Not started Task to In progress.
 
 
 ### GEN-11 — Identity Statements are timeless rather than status-driven work

@@ -22,9 +22,13 @@ import type {
   SubjectDetail,
   SubjectListItem,
   SubjectType,
+  TaskTimer,
+  TimerAction,
+  TimerActionResult,
 } from "@/lib/production-ui-types";
 import { defaultStatus, isTerminal } from "@/lib/production-ui-types";
 import { applyStreakToHabit } from "@/lib/habit-streak";
+import { foldTimer, type TimerEvent } from "@/lib/timer";
 import { createSeed, type CanonicalEdge, type MockState } from "@/lib/mock/seed";
 
 let state: MockState = createSeed();
@@ -334,6 +338,95 @@ export function setStatus(subject: string, status: string) {
     ...(state.history[item.id] ?? []),
   ];
   emit();
+}
+
+/** A task's timer as the kernel folds it, or null when it was never started. */
+export function timerFor(subjectId: string): TaskTimer | null {
+  const item = byId(subjectId);
+  return item ? foldTimer(state.timerEvents, item) : null;
+}
+
+/** Every timed, unarchived task's timer — running first, then most recently changed. */
+export function listTimers(): TaskTimer[] {
+  const rank = (t: TaskTimer) => (t.state === "running" ? 0 : t.state === "paused" ? 1 : 2);
+  return [...new Set(state.timerEvents.map((e) => e.subjectId))]
+    .map((id) => byId(id))
+    .filter((item): item is SubjectListItem => !!item && !item.archived)
+    .map((item) => foldTimer(state.timerEvents, item)!)
+    .sort((a, b) => rank(a) - rank(b) || b.lastChangedAt.localeCompare(a.lastChangedAt));
+}
+
+/**
+ * Drive a Task's timer the way `TimerService` does: the same allowed transitions and
+ * refusals, one running timer at a time (starting or resuming pauses the other), and
+ * Complete = stop, then Status → Completed.
+ */
+export function applyTimer(taskRef: string, action: TimerAction): TimerActionResult {
+  const task = byRef(taskRef);
+  if (!task) throw new Error(`No subject matches '${taskRef}'.`);
+  if (task.type !== "Task") {
+    throw new Error(`'${task.title}' is a ${task.type}, not a Task; the timer is kept on Tasks.`);
+  }
+  const current = timerFor(task.id)?.state ?? "stopped";
+  const at = nowIso();
+  const paused: CreatedSubject[] = [];
+
+  if (action === "complete") {
+    if (current !== "stopped") {
+      state.timerEvents = [...state.timerEvents, { subjectId: task.id, action: "stop", occurredAt: at }];
+    }
+    setStatus(task.id, "Completed");
+    return { timer: timerFor(task.id) ?? neverTimed(task), paused, completed: true };
+  }
+
+  const allowed =
+    (action === "start" && current === "stopped") ||
+    (action === "pause" && current === "running") ||
+    (action === "resume" && current === "paused") ||
+    (action === "stop" && current !== "stopped");
+  if (!allowed) {
+    const reason =
+      action === "start" && current === "paused"
+        ? "it is paused — resume it, or stop it first"
+        : current === "running" && (action === "start" || action === "resume")
+          ? "it is already running"
+          : action === "resume" && current === "stopped"
+            ? "it is stopped — start it instead"
+            : current === "stopped"
+              ? "it is not running"
+              : `it is ${current}`;
+    throw new Error(`Can't ${action} the timer on '${task.title}': ${reason}.`);
+  }
+
+  const events: TimerEvent[] = [];
+  if (action === "start" || action === "resume") {
+    // Archived or not, a running timer is spending time, so it is paused too.
+    for (const otherId of new Set(state.timerEvents.map((e) => e.subjectId))) {
+      if (otherId === task.id || timerFor(otherId)?.state !== "running") continue;
+      events.push({ subjectId: otherId, action: "pause", occurredAt: at });
+      const row = byId(otherId);
+      if (row) paused.push({ id: row.id, urn: row.urn, type: row.type, title: row.title });
+    }
+  }
+  events.push({ subjectId: task.id, action, occurredAt: at });
+  state.timerEvents = [...state.timerEvents, ...events];
+  emit();
+  return { timer: timerFor(task.id) ?? neverTimed(task), paused, completed: false };
+}
+
+function neverTimed(task: SubjectListItem): TaskTimer {
+  return {
+    subjectId: task.id,
+    subjectUrn: task.urn,
+    subjectTitle: task.title,
+    state: "stopped",
+    runningSince: null,
+    totalSeconds: 0,
+    sessionSeconds: 0,
+    sessionStartedAt: null,
+    sessions: 0,
+    lastChangedAt: nowIso(),
+  };
 }
 
 export function archiveSubject(subject: string, archived: boolean) {

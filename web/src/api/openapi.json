@@ -562,6 +562,29 @@
         }
       }
     },
+    "/api/timers": {
+      "get": {
+        "tags": [
+          "Reads"
+        ],
+        "operationId": "GetTimers",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskTimer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/promote": {
       "post": {
         "tags": [
@@ -1044,6 +1067,56 @@
           },
           "400": {
             "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/timer": {
+      "post": {
+        "tags": [
+          "Writes"
+        ],
+        "operationId": "Timer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimerActionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -2047,6 +2120,94 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "TaskTimer": {
+        "type": "object",
+        "properties": {
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subjectUrn": {
+            "type": "string"
+          },
+          "subjectTitle": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "runningSince": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "totalSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "sessionSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "sessionStartedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "sessions": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "lastChangedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TimerActionResult": {
+        "type": "object",
+        "properties": {
+          "timer": {
+            "$ref": "#/components/schemas/TaskTimer"
+          },
+          "paused": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatedSubject"
+            }
+          },
+          "completed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TimerBody": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
           }
         }
       }
