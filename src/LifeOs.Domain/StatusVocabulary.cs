@@ -6,12 +6,13 @@ namespace LifeOs.Domain;
 /// class is the code mirror of the documented map (the SQL side is the
 /// <c>bsk.is_terminal_status</c> predicate, migration 0011). It is deliberately
 /// data-not-DDL: the single typed-jsonb subject table gains no per-type columns, and
-/// validation is app-side — a writer or UI can consult <see cref="For"/> to offer the
-/// right choices, but the kernel adds no enum constraint.
+/// validation is app-side — a UI consults <see cref="For"/> to offer the right
+/// choices, and <c>StatusService</c> refuses any word outside it (storing the
+/// vocabulary's casing), but the kernel adds no enum constraint.
 ///
 /// <para>Only status-bearing types appear here. Identity Statement (Value) has no
-/// status (it archives instead, D9); Area / Person / Constraint / Season are
-/// status-less in the Pilot. Habit's lifecycle (Building → Established | Abandoned)
+/// status (it archives instead, D9); Area / Person / Constraint / Season / Reward are
+/// status-less. Habit's lifecycle (Building → Established | Abandoned)
 /// arrived with habit earning (migration 0027): a terminal habit graduates and leaves
 /// daily tracking. Review gains its vocabulary when its type lands.</para>
 /// </summary>
@@ -74,7 +75,7 @@ public static class StatusVocabulary
 
     /// <summary>
     /// The allowed statuses for <paramref name="type"/>, or an empty list for a
-    /// status-less type (Value, Area, Person, Constraint, Season).
+    /// status-less type (Value, Area, Person, Constraint, Season, Reward).
     /// </summary>
     public static IReadOnlyList<string> For(string type)
         => ByType.TryGetValue(type, out var statuses) ? statuses : [];
@@ -100,5 +101,14 @@ public static class StatusVocabulary
     /// <paramref name="type"/>. Case-insensitive. A status-less type accepts nothing.
     /// </summary>
     public static bool IsValid(string type, string status)
-        => For(type).Any(s => string.Equals(s, status?.Trim(), StringComparison.OrdinalIgnoreCase));
+        => Canonical(type, status) is not null;
+
+    /// <summary>
+    /// The vocabulary's own spelling of <paramref name="status"/> for
+    /// <paramref name="type"/> (<c>in progress</c> → <c>In progress</c>), or null when
+    /// the word is not in that type's vocabulary. Case- and whitespace-insensitive; a
+    /// status-less type has no canonical status.
+    /// </summary>
+    public static string? Canonical(string type, string? status)
+        => For(type).FirstOrDefault(s => string.Equals(s, status?.Trim(), StringComparison.OrdinalIgnoreCase));
 }

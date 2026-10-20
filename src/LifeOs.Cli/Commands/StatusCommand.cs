@@ -22,7 +22,7 @@ internal static class StatusCommand
         };
         var statusArgument = new Argument<string>("status")
         {
-            Description = "The new status, e.g. open, active, done, dropped."
+            Description = "The new status, from the subject type's vocabulary, e.g. \"In progress\", Completed (any case)."
         };
 
         var command = new Command("status", "Change a subject's status via a state_change event.");

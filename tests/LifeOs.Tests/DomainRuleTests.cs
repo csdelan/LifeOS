@@ -98,7 +98,7 @@ public sealed class DomainRuleTests(PostgresFixture postgres)
         var rebuilder = new DerivedRebuilder(postgres.ConnectionString);
 
         var task = await subjects.CreateAsync(SubjectTypes.Task, $"status task {Guid.NewGuid():N}", cancellationToken: Ct);
-        await status.ChangeStatusAsync(task.Urn, "done", Ct);
+        await status.ChangeStatusAsync(task.Urn, "Completed", Ct);
 
         await using var connection = await OpenAsync();
 
@@ -118,7 +118,7 @@ public sealed class DomainRuleTests(PostgresFixture postgres)
         var afterRebuild = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT status FROM bsk_derived.subject_current WHERE subject_id = @id;",
             new { id = task.Id }, cancellationToken: Ct));
-        Assert.Equal("done", afterRebuild);
+        Assert.Equal("Completed", afterRebuild);
 
         // A direct edit of the projection is drift the verifier catches — the
         // projection is derived, never a source of truth.

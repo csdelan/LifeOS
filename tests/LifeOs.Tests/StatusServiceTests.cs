@@ -49,7 +49,7 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
 
         var project = await subjects.CreateAsync(SubjectTypes.Project, $"launch {ns}", cancellationToken: Ct);
 
-        var result = await status.ChangeStatusAsync(project.Urn, "active", Ct);
+        var result = await status.ChangeStatusAsync(project.Urn, "Active", Ct);
 
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync(Ct);
@@ -61,7 +61,7 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
                 new { id = result.EventId }, cancellationToken: Ct));
         Assert.Equal(EventKinds.StateChange, stored.Kind);
         Assert.Equal(project.Id.ToString(), stored.SubjectId);
-        Assert.Equal("active", stored.Status);
+        Assert.Equal("Active", stored.Status);
 
         // The projection does NOT reflect it until a rebuild runs.
         var beforeRebuild = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
@@ -74,7 +74,7 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
         var afterRebuild = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT status FROM bsk_derived.subject_current WHERE subject_id = @id;",
             new { id = project.Id }, cancellationToken: Ct));
-        Assert.Equal("active", afterRebuild);
+        Assert.Equal("Active", afterRebuild);
     }
 
     [Fact]
@@ -92,8 +92,8 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
         var ns = Guid.NewGuid().ToString("N");
 
         var task = await subjects.CreateAsync(SubjectTypes.Task, $"pack {ns}", cancellationToken: Ct);
-        await status.ChangeStatusAsync(task.Urn, "open", Ct);
-        await status.ChangeStatusAsync(task.Urn, "done", Ct);
+        await status.ChangeStatusAsync(task.Urn, "In progress", Ct);
+        await status.ChangeStatusAsync(task.Urn, "Completed", Ct);
 
         await rebuilder.RebuildAsync(Ct);
 
@@ -103,6 +103,80 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
             "SELECT status FROM bsk_derived.subject_current WHERE subject_id = @id;",
             new { id = task.Id }, cancellationToken: Ct));
 
-        Assert.Equal("done", current);
+        Assert.Equal("Completed", current);
+    }
+
+    // ---- the type's vocabulary is enforced (D7) ----
+
+    [Fact]
+    public async Task A_status_outside_the_types_vocabulary_is_refused_and_nothing_is_written()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var status = provider.GetRequiredService<StatusService>();
+
+        var task = await subjects.CreateAsync(SubjectTypes.Task, $"typo {Guid.NewGuid():N}", cancellationToken: Ct);
+
+        // A typo of the one word rewards pay on, and a word from another type's vocabulary.
+        var typo = await Assert.ThrowsAsync<ArgumentException>(
+            () => status.ChangeStatusAsync(task.Urn, "Compelted", Ct));
+        Assert.Equal(
+            "A Task's status is one of: Not started, In progress, Waiting, Completed, Cancelled; got 'Compelted'.",
+            typo.Message);
+        await Assert.ThrowsAsync<ArgumentException>(() => status.ChangeStatusAsync(task.Urn, "Resolved", Ct));
+
+        Assert.Equal(0, await StateChangesForAsync(task.Id));
+    }
+
+    [Theory]
+    [InlineData(SubjectTypes.Reward, "A Reward has no status; archive it instead.")]
+    [InlineData(SubjectTypes.Value, "A Value has no status; archive it instead.")]
+    [InlineData(SubjectTypes.Person, "A Person has no status; archive it instead.")]
+    [InlineData(SubjectTypes.Constraint, "A Constraint has no status; archive it instead.")]
+    [InlineData(SubjectTypes.Season, "A Season has no status; archive it instead.")]
+    [InlineData(SubjectTypes.Area, "An Area has no status; Areas are permanent.")]
+    public async Task A_status_less_type_refuses_any_status(string type, string message)
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var status = provider.GetRequiredService<StatusService>();
+
+        var attributes = type == SubjectTypes.Value ? """{"statement":"I am someone who tests."}""" : "{}";
+        var subject = await subjects.CreateAsync(type, $"no status {Guid.NewGuid():N}", attributes, cancellationToken: Ct);
+
+        var refused = await Assert.ThrowsAsync<ArgumentException>(
+            () => status.ChangeStatusAsync(subject.Urn, "Completed", Ct));
+
+        Assert.Equal(message, refused.Message);
+        Assert.Equal(0, await StateChangesForAsync(subject.Id));
+    }
+
+    [Fact]
+    public async Task A_status_in_any_case_is_stored_in_the_vocabularys_casing()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var status = provider.GetRequiredService<StatusService>();
+
+        var task = await subjects.CreateAsync(SubjectTypes.Task, $"casing {Guid.NewGuid():N}", cancellationToken: Ct);
+
+        var result = await status.ChangeStatusAsync(task.Urn, "  in PROGRESS ", Ct);
+
+        Assert.Equal("In progress", result.Status);
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync(Ct);
+        var stored = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
+            "SELECT payload->>'status' FROM bsk.event WHERE id = @id;",
+            new { id = result.EventId }, cancellationToken: Ct));
+        Assert.Equal("In progress", stored);
+    }
+
+    private async Task<long> StateChangesForAsync(Guid subjectId)
+    {
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync(Ct);
+        return await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.event WHERE kind = 'state_change' AND payload->>'subject_id' = @id;",
+            new { id = subjectId.ToString() }, cancellationToken: Ct));
     }
 }

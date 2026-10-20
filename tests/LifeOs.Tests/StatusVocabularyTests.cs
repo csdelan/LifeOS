@@ -144,4 +144,15 @@ public sealed class StatusVocabularyTests(PostgresFixture postgres)
         Assert.False(StatusVocabulary.IsValid(SubjectTypes.Idea, "Fulfilled")); // wrong type
         Assert.False(StatusVocabulary.IsValid(SubjectTypes.Value, "Active"));   // status-less
     }
+
+    [Fact]
+    public void Canonical_returns_the_vocabularys_spelling_or_null()
+    {
+        Assert.Equal("In progress", StatusVocabulary.Canonical(SubjectTypes.Task, " in PROGRESS "));
+        Assert.Equal("Completed", StatusVocabulary.Canonical(SubjectTypes.Task, "completed"));
+        Assert.Null(StatusVocabulary.Canonical(SubjectTypes.Task, "Compelted"));   // typo
+        Assert.Null(StatusVocabulary.Canonical(SubjectTypes.Task, "done"));        // legacy, not in the vocabulary
+        Assert.Null(StatusVocabulary.Canonical(SubjectTypes.Reward, "Completed")); // status-less
+        Assert.Null(StatusVocabulary.Canonical(SubjectTypes.Task, null));
+    }
 }
