@@ -92,8 +92,9 @@ describe("mock earning (RewardService.ReconcileAsync, scoped to the write)", () 
   });
 
   it("never re-pays the seeded mobility streak when today is recorded", () => {
+    // Today's Health XP lifts the seeded history to level 10: Apprentice pays its Gem too.
     const awards = adhereHabit("habit-mobility", "followed", todayIso());
-    expect(awards.map((a) => a.trigger)).toEqual(["followed"]);
+    expect(awards.map((a) => a.trigger)).toEqual(["followed", "rank"]);
   });
 
   it("establishing pays and graduates; back to Building gives it back and tracks it again", () => {
@@ -113,6 +114,7 @@ describe("mock earning (RewardService.ReconcileAsync, scoped to the write)", () 
     );
     expect(adhereHabit("habit-mobility", "followed", todayIso())).toEqual([
       expect.objectContaining({ entry: "earn", trigger: "followed", awardKey: `day:habit-mobility:${todayIso()}:followed` }),
+      expect.objectContaining({ entry: "earn", trigger: "rank", awardKey: "rank:health_xp:10" }),
     ]);
 
     expect(setStatus("habit-mobility", "Building")[0]).toMatchObject({ entry: "reversal", trigger: "established" });

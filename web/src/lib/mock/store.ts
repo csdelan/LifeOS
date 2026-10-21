@@ -17,6 +17,9 @@ import type {
   BinaryCaptureResult,
   CaptureKind,
   CreatedSubject,
+  DomainDaysRead,
+  DomainsRead,
+  Earned,
   EventRelation,
   InboxItem,
   InboxResolution,
@@ -54,7 +57,20 @@ import {
   priceOf,
   priceTimed,
 } from "@/lib/bounty";
+import {
+  applyMultiplier,
+  CONFIGURED_DOMAINS,
+  domainChanges,
+  DomainProgress,
+  gemsFor,
+  RANK_TRIGGER,
+  rankAwardKey,
+  rulesFor,
+  toDomainDays,
+  toDomainRow,
+} from "@/lib/domain-fold";
 import { applyStreakToHabit } from "@/lib/habit-streak";
+import { creditDays, creditedOnFor, foldDomains, localDay } from "@/lib/mock/domain-credit";
 import { CURRENCIES, coinsToUsd, currency, orderedAmounts, shortfall } from "@/lib/rewards";
 import { foldTimer, timedSecondsBefore, type TimerEvent } from "@/lib/timer";
 import {
@@ -370,9 +386,15 @@ function safeAttrs(raw?: string | null): Record<string, string> {
   }
 }
 
+/** A status change, answering what it earned or gave back. */
 export function setStatus(subject: string, status: string): Award[] {
+  return earnStatus(subject, status).awards;
+}
+
+/** A status change, answering what it earned or gave back and each domain it moved (§3.8). */
+export function earnStatus(subject: string, status: string): Earned {
   const item = byRef(subject);
-  if (!item) return [];
+  if (!item) return { awards: [], progress: [] };
   const occurredAt = nowIso();
   state.subjects = state.subjects.map((s) =>
     s.id === item.id ? { ...s, status } : s,
@@ -383,9 +405,9 @@ export function setStatus(subject: string, status: string): Award[] {
     { id: newId(), status, occurredAt },
     ...(state.history[item.id] ?? []),
   ];
-  const awards = reconcileStatus(item.id, occurredAt);
+  const earned = earning(() => reconcileStatus(item.id, occurredAt));
   emit();
-  return awards;
+  return earned;
 }
 
 /** A task's timer as the kernel folds it, or null when it was never started. */
@@ -423,8 +445,8 @@ export function applyTimer(taskRef: string, action: TimerAction): TimerActionRes
     if (current !== "stopped") {
       state.timerEvents = [...state.timerEvents, { subjectId: task.id, action: "stop", occurredAt: at }];
     }
-    const awards = setStatus(task.id, "Completed");
-    return { timer: timerFor(task.id) ?? neverTimed(task), paused, completed: true, awards };
+    const { awards, progress } = earnStatus(task.id, "Completed");
+    return { timer: timerFor(task.id) ?? neverTimed(task), paused, completed: true, awards, progress };
   }
 
   const allowed =
@@ -459,7 +481,7 @@ export function applyTimer(taskRef: string, action: TimerAction): TimerActionRes
   events.push({ subjectId: task.id, action, occurredAt: at });
   state.timerEvents = [...state.timerEvents, ...events];
   emit();
-  return { timer: timerFor(task.id) ?? neverTimed(task), paused, completed: false, awards: [] };
+  return { timer: timerFor(task.id) ?? neverTimed(task), paused, completed: false, awards: [], progress: [] };
 }
 
 function neverTimed(task: SubjectListItem): TaskTimer {
@@ -997,14 +1019,25 @@ export function captureVoice(req: {
   };
 }
 
+/** Record a habit day, answering what it earned or gave back. */
 export function adhereHabit(
   habitRef: string,
   adherence: "followed" | "partial" | "missed",
   on?: string,
   note?: string,
 ): Award[] {
+  return earnDay(habitRef, adherence, on, note).awards;
+}
+
+/** Record a habit day, answering what it earned or gave back and each domain it moved (§3.8). */
+export function earnDay(
+  habitRef: string,
+  adherence: "followed" | "partial" | "missed",
+  on?: string,
+  note?: string,
+): Earned {
   const habit = state.habits.find((h) => h.id === habitRef || h.urn === habitRef);
-  if (!habit) return [];
+  if (!habit) return { awards: [], progress: [] };
   const date = on ?? todayIso();
   const mapped = adherence === "missed" ? "not_followed" : adherence;
   state.occurrences = state.occurrences.map((o) =>
@@ -1033,9 +1066,9 @@ export function adhereHabit(
   state.habits = state.habits.map((h) =>
     h.id === habit.id ? applyStreakToHabit(h, state.occurrences, today) : h,
   );
-  const awards = reconcileDay(habit.id, date, nowIso());
+  const earned = earning(() => reconcileDay(habit.id, date, nowIso()));
   emit();
-  return awards;
+  return earned;
 }
 
 export function setHabitRecurrence(habitRef: string, spec: RecurrenceSpec) {
@@ -1549,11 +1582,17 @@ function settle(
   const paid = Object.keys(net).length > 0;
   let entry: "earn" | "reversal";
   let amounts: Amounts;
+  let creditedOn: string | undefined;
+  let base: Amounts | undefined;
+  let multipliers: Record<string, number> | undefined;
   if (due && !paid) {
     amounts = price();
     // A trigger priced to pay nothing writes nothing.
     if (Object.keys(amounts).length === 0) return null;
     entry = "earn";
+    // Credited to the day it happened; domain XP paid at that day's multiplier, frozen here.
+    creditedOn = creditedOnFor(awardKey, at);
+    ({ amounts, base, multipliers } = priceDomains(amounts, creditedOn));
     // The first paying earn opens the wallet, dated at it.
     if (!state.ledger.some((e) => e.entry === "open")) {
       state.ledger = [
@@ -1570,7 +1609,18 @@ function settle(
   const id = newId();
   state.ledger = [
     ...state.ledger,
-    { id, occurredAt: at, entry, provenance: "derived", amounts, trigger, awardKey, subjectId: item.id },
+    {
+      id,
+      occurredAt: at,
+      entry,
+      provenance: "derived",
+      amounts,
+      trigger,
+      awardKey,
+      subjectId: item.id,
+      ...(creditedOn ? { creditedOn } : {}),
+      ...(base ? { base, multipliers } : {}),
+    },
   ];
   return {
     id,
@@ -1579,7 +1629,161 @@ function settle(
     awardKey,
     subject: { id: item.id, urn: item.urn, type: item.type, title: item.title },
     amounts: { ...amounts },
+    ...(base ? { base: { ...base }, multipliers: { ...multipliers } } : {}),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Life domains (REWARD-6 / REWARD-7, xp-domains plan §3.4–3.8): RewardService's domain
+// half. Each earning write prices domain XP from the record as it stood before the write,
+// then pays any rank-up it reached and says which domains moved.
+// ---------------------------------------------------------------------------
+
+/** The write in progress: the ledger before it, and its domains folded once, when needed. */
+let pricing: { ledger: MockLedgerEntry[]; folds: DomainProgress[] | null } | null = null;
+
+function foldsBefore(): DomainProgress[] {
+  if (!pricing) return foldDomains(state.ledger, todayIso());
+  pricing.folds ??= foldDomains(pricing.ledger, todayIso());
+  return pricing.folds;
+}
+
+/** `DomainPricing.Price`: each configured domain's XP at the credited day's multiplier. */
+function priceDomains(
+  price: Amounts,
+  creditedOn: string,
+): { amounts: Amounts; base?: Amounts; multipliers?: Record<string, number> } {
+  if (!Object.entries(price).some(([k, n]) => n > 0 && rulesFor(k))) return { amounts: price };
+  const amounts = { ...price };
+  const base: Amounts = {};
+  const multipliers: Record<string, number> = {};
+  for (const [key, n] of Object.entries(price)) {
+    const domain = foldsBefore().find((d) => d.rules.currency === key);
+    if (!domain || n <= 0) continue;
+    const multiplier = domain.multiplierFor(creditedOn);
+    if (multiplier <= 1) continue;
+    amounts[key] = applyMultiplier(n, multiplier);
+    base[key] = n;
+    multipliers[key] = multiplier;
+  }
+  return Object.keys(multipliers).length === 0 ? { amounts } : { amounts, base, multipliers };
+}
+
+/**
+ * Runs an earning write's reconcile. When it wrote domain XP, it also pays any rank-up the
+ * domain reached and answers each domain whose level or rank moved.
+ */
+function earning(reconcile: () => Award[]): Earned {
+  pricing = { ledger: state.ledger, folds: null };
+  try {
+    const awards = reconcile();
+    if (!awards.some((a) => Object.keys(a.amounts).some((k) => rulesFor(k)))) return { awards, progress: [] };
+    const before = foldsBefore();
+    const { rankUps, folds } = payRankUps();
+    return {
+      awards: [...awards, ...rankUps.map((r) => r.award)],
+      progress: domainChanges(before, folds, rankUps),
+    };
+  } finally {
+    pricing = null;
+  }
+}
+
+/**
+ * `PayRankUpsAsync`: each rank a configured domain reached on or after the day the wallet
+ * opened, paid once under `rank:<domain>:<start level>` and never reversed.
+ */
+function payRankUps(): {
+  rankUps: { award: Award; currency: string; rank: number }[];
+  folds: DomainProgress[];
+} {
+  const today = todayIso();
+  const folds = foldDomains(state.ledger, today);
+  const open = state.ledger.find((e) => e.entry === "open");
+  if (!open) return { rankUps: [], folds };
+  const openedOn = localDay(open.occurredAt);
+  const paid = new Set(state.ledger.filter((e) => e.trigger === RANK_TRIGGER).map((e) => e.awardKey));
+  const at = nowIso();
+  const rankUps: { award: Award; currency: string; rank: number }[] = [];
+  for (const progress of folds) {
+    const rules = progress.rules;
+    for (const reached of progress.ranksReached) {
+      const key = rankAwardKey(rules, reached.rank);
+      if (reached.qualifiedOn < openedOn || paid.has(key) || gemsFor(rules, reached.rank) <= 0) continue;
+      const amounts = { gems: gemsFor(rules, reached.rank) };
+      const note = `${currency(rules.currency)?.label.split(" ")[0] ?? rules.currency} ${reached.rule.title}`;
+      const id = newId();
+      state.ledger = [
+        ...state.ledger,
+        {
+          id,
+          occurredAt: at,
+          entry: "earn",
+          provenance: "derived",
+          amounts,
+          trigger: RANK_TRIGGER,
+          awardKey: key,
+          note,
+          creditedOn: reached.qualifiedOn,
+        },
+      ];
+      rankUps.push({
+        award: { id, entry: "earn", trigger: RANK_TRIGGER, awardKey: key, subject: null, note, amounts: { ...amounts } },
+        currency: rules.currency,
+        rank: reached.rank,
+      });
+    }
+  }
+  return { rankUps, folds };
+}
+
+/** `GET /api/domains`: every life domain, configured or not. */
+export function mockDomains(): DomainsRead {
+  const today = todayIso();
+  const credit = creditDays(state.ledger);
+  return {
+    today,
+    domains: CURRENCIES.filter((c) => c.group === "domain").map((c) => {
+      const rules = rulesFor(c.key);
+      const days = credit.get(c.key) ?? [];
+      if (rules) {
+        const progress = DomainProgress.fold(rules, days, today);
+        return toDomainRow(c, progress.totalXp, progress);
+      }
+      return toDomainRow(c, days.filter((d) => d.day <= today).reduce((sum, d) => sum + d.paid, 0), null);
+    }),
+  };
+}
+
+const MAX_DOMAIN_DAYS = 731;
+
+/** `GET /api/domains/{key}/days`: one domain's last days, by key, label or first word. */
+export function mockDomainDays(reference: string, days = 30): DomainDaysRead {
+  if (days < 1) throw new Error(`Ask for at least 1 day; got ${days}.`);
+  if (days > MAX_DOMAIN_DAYS) throw new Error(`Ask for at most ${MAX_DOMAIN_DAYS} days; got ${days}.`);
+  const wanted = reference.trim().toLowerCase();
+  const domains = CURRENCIES.filter((c) => c.group === "domain");
+  const match = domains.find(
+    (c) => c.key === wanted || c.label.toLowerCase() === wanted || c.label.split(" ")[0].toLowerCase() === wanted,
+  );
+  if (!match) {
+    throw new Error(`'${reference}' isn't a life domain. Expected one of: ${domains.map((c) => c.key).join(", ")}.`);
+  }
+  return toDomainDays(match, creditDays(state.ledger).get(match.key) ?? [], todayIso(), days);
+}
+
+/** `POST /api/domains/settle`: pays any rank-up time alone has reached. */
+export function mockSettleDomains(): Earned {
+  const { rankUps, folds } = payRankUps();
+  if (rankUps.length > 0) emit();
+  return { awards: rankUps.map((r) => r.award), progress: domainChanges(folds, folds, rankUps) };
+}
+
+/** The configured domains as they read now (tests and the seed). */
+export function mockDomainFolds(): DomainProgress[] {
+  return CONFIGURED_DOMAINS.map((rules) =>
+    DomainProgress.fold(rules, creditDays(state.ledger).get(rules.currency) ?? [], todayIso()),
+  );
 }
 
 function reconcileStatus(subjectId: string, at: string): Award[] {

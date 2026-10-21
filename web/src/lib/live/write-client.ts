@@ -13,8 +13,8 @@ import type {
 } from "@/lib/production-ui-types";
 import { renamedMessage } from "@/lib/production-ui-types";
 import { normalizeTimer } from "@/lib/live/reads";
+import { normalizeEarned, normalizeProgress } from "@/lib/domains";
 import {
-  normalizeAwards,
   normalizeBountyResult,
   normalizeHabitTarget,
   normalizeRedemption,
@@ -59,7 +59,7 @@ export function createLiveWriteClient(): LifeOsWriteClient {
     async setStatus(subject, status) {
       const earned = await unwrap(api().POST("/api/status", { body: { subject, status } }));
       notify(`Status → ${status}`);
-      return normalizeAwards(earned);
+      return normalizeEarned(earned);
     },
 
     async archive(subject) {
@@ -130,14 +130,22 @@ export function createLiveWriteClient(): LifeOsWriteClient {
             ? "Partial credit"
             : "Marked missed",
       );
-      return normalizeAwards(earned);
+      return normalizeEarned(earned);
+    },
+
+    async settleDomains() {
+      return normalizeEarned(await unwrap(api().POST("/api/domains/settle")));
     },
 
     async timer(task, action) {
       const result = (await unwrap(
         api().POST("/api/timer", { body: { task, action } }),
       )) as unknown as TimerActionResult;
-      return normalizeTimerAwards({ ...result, timer: normalizeTimer(result.timer) });
+      return normalizeTimerAwards({
+        ...result,
+        timer: normalizeTimer(result.timer),
+        progress: normalizeProgress(result.progress),
+      });
     },
 
     async involve(subject, person, role, remove) {

@@ -121,9 +121,62 @@ public sealed class DomainRankRow
     public string? QualifiedOn { get; set; }
 }
 
+/// <summary>
+/// <c>GET /api/domains/{key}/days</c> (xp-domains plan §3.11): one domain's last days, oldest
+/// first and ending today (<c>yyyy-MM-dd</c>, home zone) — the Character page's daily chart.
+/// <see cref="Target"/> is the success rule's number for a configured domain (70 for Health).
+/// </summary>
+public sealed class DomainDaysRead
+{
+    public string Key { get; set; } = "";
+    public string Label { get; set; } = "";
+    public string Name { get; set; } = "";
+    public bool Configured { get; set; }
+    public string Today { get; set; } = "";
+    public long? Target { get; set; }
+    public IReadOnlyList<DomainDayRow> Days { get; set; } = [];
+}
+
+/// <summary>
+/// One day of a domain: base XP (before any multiplier), paid XP, and whether the success rule
+/// passed — null for a domain without rules.
+/// </summary>
+public sealed class DomainDayRow
+{
+    public string Day { get; set; } = "";
+    public long Base { get; set; }
+    public long Paid { get; set; }
+    public bool? Succeeded { get; set; }
+}
+
 /// <summary>Maps the Application's domain readings onto the API's shapes.</summary>
 public static class DomainRows
 {
+    /// <summary>The longest series a days read answers: two years.</summary>
+    public const int MaxDays = 731;
+
+    public static DomainDaysRead From(DomainSeries series)
+    {
+        var domain = series.Domain;
+        var rules = domain.Progress?.Rules;
+        return new DomainDaysRead
+        {
+            Key = domain.Currency.Key,
+            Label = domain.Currency.Label,
+            Name = LifeDomains.Name(domain.Currency.Key),
+            Configured = domain.Configured,
+            Today = series.Days.Count > 0 ? Day(series.Days[^1].Day) : "",
+            Target = rules?.Success is MinimumBaseXp minimum ? minimum.Minimum : null,
+            Days = series.Days.Select(d => new DomainDayRow
+            {
+                Day = Day(d.Day),
+                Base = d.Base,
+                Paid = d.Paid,
+                Succeeded = d.Succeeded
+            }).ToList()
+        };
+    }
+
     public static DomainsRead From(DomainsReading reading) => new()
     {
         Today = Day(reading.Today),

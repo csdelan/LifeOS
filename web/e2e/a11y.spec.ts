@@ -32,6 +32,29 @@ test.describe("accessibility", () => {
     });
   }
 
+  // The Character page with Health's daily chart open, as a chart and as a table, in both
+  // themes (next-themes keeps the choice under "theme").
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /character with the daily chart, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/character");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      await page.getByRole("button", { name: "Show the daily chart" }).click();
+      await expect(page.getByTestId("day-bar")).toHaveCount(30, { timeout: 10_000 });
+      const chart = await scan();
+      expect(chart, JSON.stringify(chart, null, 2)).toEqual([]);
+
+      await page.getByRole("button", { name: "Table", exact: true }).click();
+      await expect(page.getByRole("table", { name: /newest first/ })).toBeVisible();
+      const table = await scan();
+      expect(table, JSON.stringify(table, null, 2)).toEqual([]);
+    });
+  }
+
   // States the routes above don't reach: an Established habit checked off on the Habits
   // page, and Today's Maintaining group open (REWARD-2 maintenance).
   test("axe serious/critical: maintained habits", async ({ page }) => {

@@ -17,9 +17,12 @@ import {
   normalizeWallet,
 } from "@/lib/rewards";
 import type { LifeOsReads } from "@/lib/mock/api";
+import { normalizeDomainDays, normalizeDomains } from "@/lib/domains";
 import type {
   AreaRow,
   ArtifactRecord,
+  DomainDaysRead,
+  DomainsRead,
   BountyTypeDefaults,
   HabitOccurrenceRow,
   HabitRow,
@@ -189,6 +192,18 @@ export const liveReads: LifeOsReads = {
   async wallet() {
     const data = await unwrap(api().GET("/api/wallet"));
     return normalizeWallet(asType<Wallet>(data));
+  },
+
+  async domains() {
+    const data = await unwrap(api().GET("/api/domains"));
+    return normalizeDomains(asType<DomainsRead>(data));
+  },
+
+  async domainDays(domain, days) {
+    const data = await unwrap(
+      api().GET("/api/domains/{key}/days", { params: { path: { key: domain }, query: { days } } }),
+    );
+    return normalizeDomainDays(asType<DomainDaysRead>(data));
   },
 
   async ledger(opts) {

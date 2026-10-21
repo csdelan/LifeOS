@@ -9,7 +9,9 @@ import { extensionForMime, sha256Hex } from "@/lib/artifacts";
 import { redemptionMessage } from "@/lib/rewards";
 import {
   addEdge,
-  adhereHabit,
+  earnDay,
+  earnStatus,
+  mockSettleDomains,
   appendJournal,
   applyTimer,
   applyAttrs,
@@ -35,7 +37,6 @@ import {
   renameTag,
   saveReviewBody,
   setHabitRecurrence,
-  setStatus,
   setTags,
 } from "@/lib/mock/store";
 import { getState } from "@/lib/mock/store";
@@ -92,10 +93,10 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
 
     async setStatus(subject, status) {
       await wait();
-      const awards = setStatus(subject, status);
+      const earned = earnStatus(subject, status);
       notify(`Status → ${status}`);
       bump();
-      return awards;
+      return earned;
     },
 
     async archive(subject) {
@@ -166,7 +167,7 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
 
     async adhere(habit, state, opts) {
       await wait();
-      const awards = adhereHabit(habit, state, opts?.on, opts?.note);
+      const earned = earnDay(habit, state, opts?.on, opts?.note);
       notify(
         state === "followed"
           ? "Marked followed"
@@ -175,7 +176,14 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
             : "Marked missed",
       );
       bump();
-      return awards;
+      return earned;
+    },
+
+    async settleDomains() {
+      await wait();
+      const earned = mockSettleDomains();
+      if (earned.awards.length > 0) bump();
+      return earned;
     },
 
     async recur(habit, spec) {

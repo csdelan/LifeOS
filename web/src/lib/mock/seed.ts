@@ -25,6 +25,7 @@ import type {
 } from "@/lib/production-ui-types";
 import { defaultStatus } from "@/lib/production-ui-types";
 import type { TimerEvent } from "@/lib/timer";
+import { applyMultiplier, DomainProgress, gemsFor, HEALTH, rankAwardKey, type DomainDay } from "@/lib/domain-fold";
 
 export interface MockEvent {
   id: string;
@@ -63,6 +64,11 @@ export interface MockLedgerEntry {
   note?: string;
   dollars?: number;
   coinRate?: number;
+  /** An earn's credited day (migration 0030): the day it counts on in a life domain. */
+  creditedOn?: string;
+  /** An earn paid at a domain multiplier above 1.0 (§3.6): those currencies before it, and each multiplier. */
+  base?: Amounts;
+  multipliers?: Record<string, number>;
 }
 
 export interface CanonicalEdge {
@@ -104,6 +110,25 @@ export interface MockState {
 function isoAgo(hours: number): string {
   return new Date(Date.now() - hours * 3_600_000).toISOString();
 }
+
+/**
+ * Morning mobility on the day `ago` days back, as its occurrences record it — and, before
+ * they begin (24 days back), the rougher rhythm the seeded Health history follows.
+ */
+function mobilityState(ago: number): HabitOccurrenceRow["state"] {
+  if (ago === 0) return "unrecorded";
+  if (ago <= 12) return "followed";
+  if (ago === 13) return "partial";
+  if (ago === 14) return "not_followed";
+  if (ago < 24) return ago % 6 === 0 ? "partial" : "followed";
+  return ago % 5 === 0 ? "not_followed" : ago % 7 === 3 ? "partial" : "followed";
+}
+
+/** What a followed day of Morning mobility pays (its stored bounty); a partial day pays half. */
+const MOBILITY_DAY: Amounts = { coins: 1, freedom: 5, xp: 5, health_xp: 90 };
+
+/** How far back the seeded Health history goes; the wallet opened the day before. */
+const HEALTH_DAYS = 45;
 
 function makeUrn(type: SubjectType, title: string, short: string): string {
   return `urn:bsk:${type.toLowerCase()}:${slugify(title)}-${short}`;
@@ -1332,13 +1357,7 @@ export function createSeed(): MockState {
   ];
 
   const occurrences: HabitOccurrenceRow[] = [
-    ...habitDays(habits[0], today, 24, (ago) => {
-      if (ago === 0) return "unrecorded";
-      if (ago <= 12) return "followed";
-      if (ago === 13) return "partial";
-      if (ago === 14) return "not_followed";
-      return ago % 6 === 0 ? "partial" : "followed";
-    }),
+    ...habitDays(habits[0], today, 24, mobilityState),
     ...habitDays(habits[1], today, 24, (ago) => {
       if (ago === 0) return "unrecorded";
       if (ago <= 4) return "followed";
@@ -1409,6 +1428,8 @@ export function createSeed(): MockState {
         end: h.endDate ?? "",
         allows_partial: h.allowsPartial ? "true" : "false",
         recurrence: h.recurrence ?? "daily",
+        // Morning mobility pays Health XP (xp-domains plan): the Character page's history.
+        ...(h.id === "habit-mobility" ? { bounty: { followed: MOBILITY_DAY } } : {}),
       }),
     });
     tagsByItem[s.id] = s.tags ? s.tags.split(",").map((tag) => tag.trim()).filter(Boolean) : [];
@@ -1636,33 +1657,78 @@ export function createSeed(): MockState {
 }
 
 /**
- * Ten days of rewards: the wallet opening, habit days and a 7-day streak, one completed
- * Task (priced with Karma and Resolve), an episode redeemed with a note, and a first
- * deposit into the vacation fund. Balances: 60 Freedom, 13 Coins, 3 Karma, no Gems —
- * so some catalog rewards are affordable and Movie night and Road trip are not.
+ * Rewards since the wallet opened, 46 days ago: Morning mobility's days, which pay Health XP
+ * (the Character page's history — 45 days at about 75%, so Health is an Apprentice), a
+ * 7-day streak, journal days, one completed Task (priced with Karma and Resolve), an episode
+ * redeemed with a note, and a first deposit into the vacation fund. Mobility's days before
+ * the last nine paid Health XP only. Balances: 60 Freedom, 13 Coins, 3 Karma and the one Gem
+ * Apprentice paid — so some catalog rewards are affordable and Movie night and Road trip are not.
  */
 function seedLedger(): MockLedgerEntry[] {
+  const today = todayIso();
   const day: Amounts = { xp: 5, coins: 1, freedom: 5 };
   const entries: MockLedgerEntry[] = [
-    { id: "ledger-open", occurredAt: isoAgo(24 * 10), entry: "open", provenance: "declared", amounts: {} },
+    { id: "ledger-open", occurredAt: isoAgo(24 * (HEALTH_DAYS + 1)), entry: "open", provenance: "declared", amounts: {} },
   ];
-  const habitDay = (habit: string, ago: number) => {
-    const date = addDays(todayIso(), -ago);
+  const journalDay = (ago: number) => {
+    const date = addDays(today, -ago);
     entries.push({
-      id: `ledger-${habit}-${ago}`,
+      id: `ledger-habit-journal-${ago}`,
       occurredAt: isoAgo(24 * ago - 1),
       entry: "earn",
       provenance: "derived",
       amounts: day,
       trigger: "followed",
-      awardKey: `day:${habit}:${date}:followed`,
-      subjectId: habit,
+      awardKey: `day:habit-journal:${date}:followed`,
+      subjectId: "habit-journal",
+      creditedOn: date,
     });
   };
-  for (let ago = 9; ago >= 1; ago--) {
-    habitDay("habit-mobility", ago);
-    if (ago >= 3) habitDay("habit-journal", ago);
+
+  // Mobility's days, oldest first, each paid on the day at the multiplier its 30 days before
+  // set (§3.6) — the last nine also pay its Coins, Freedom and Life XP.
+  const health: DomainDay[] = [];
+  for (let ago = HEALTH_DAYS; ago >= 1; ago--) {
+    const state = mobilityState(ago);
+    if (state !== "followed" && state !== "partial") continue;
+    const date = addDays(today, -ago);
+    const baseXp = state === "followed" ? MOBILITY_DAY.health_xp : Math.floor(MOBILITY_DAY.health_xp / 2);
+    const multiplier = DomainProgress.fold(HEALTH, health, today).multiplierFor(date);
+    const paid = applyMultiplier(baseXp, multiplier);
+    health.push({ day: date, base: baseXp, paid });
+    entries.push({
+      id: `ledger-habit-mobility-${ago}`,
+      occurredAt: isoAgo(24 * ago - 1),
+      entry: "earn",
+      provenance: "derived",
+      amounts: ago <= 9 ? { ...day, health_xp: paid } : { health_xp: paid },
+      trigger: state,
+      awardKey: `day:habit-mobility:${date}:${state}`,
+      subjectId: "habit-mobility",
+      creditedOn: date,
+      ...(multiplier > 1 ? { base: { health_xp: baseXp }, multipliers: { health_xp: multiplier } } : {}),
+    });
+    if (ago <= 9 && ago >= 3) journalDay(ago);
   }
+
+  // Each rank reached after the wallet opened paid its Gems a minute after the day that reached it.
+  const openedOn = addDays(today, -(HEALTH_DAYS + 1));
+  for (const reached of DomainProgress.fold(HEALTH, health, today).ranksReached) {
+    if (reached.qualifiedOn < openedOn) continue;
+    const reaching = entries.find((e) => e.subjectId === "habit-mobility" && e.creditedOn === reached.qualifiedOn);
+    entries.push({
+      id: `ledger-rank-${reached.rank}`,
+      occurredAt: new Date(Date.parse(reaching?.occurredAt ?? isoAgo(1)) + 60_000).toISOString(),
+      entry: "earn",
+      provenance: "derived",
+      amounts: { gems: gemsFor(HEALTH, reached.rank) },
+      trigger: "rank",
+      awardKey: rankAwardKey(HEALTH, reached.rank),
+      note: `Health ${reached.rule.title}`,
+      creditedOn: reached.qualifiedOn,
+    });
+  }
+
   entries.push(
     {
       // Mobility's run of followed days began 12 days ago; its 7th day paid the milestone.
@@ -1672,8 +1738,9 @@ function seedLedger(): MockLedgerEntry[] {
       provenance: "derived",
       amounts: { xp: 25, coins: 5, freedom: 15 },
       trigger: "streak_7",
-      awardKey: `streak_7:habit-mobility:${addDays(todayIso(), -12)}`,
+      awardKey: `streak_7:habit-mobility:${addDays(today, -12)}`,
       subjectId: "habit-mobility",
+      creditedOn: addDays(today, -6),
     },
     {
       id: "ledger-types",

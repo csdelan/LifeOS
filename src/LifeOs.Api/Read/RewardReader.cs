@@ -60,4 +60,21 @@ public sealed class RewardReader(string readerConnectionString, decimal coinValu
     /// <summary>Every life domain as it reads now (<c>GET /api/domains</c>).</summary>
     public async Task<DomainsRead> GetDomainsAsync(CancellationToken cancellationToken = default)
         => DomainRows.From(await new DomainService(ledger).GetAsync(cancellationToken));
+
+    /// <summary>
+    /// One life domain's last <paramref name="days"/> days, today included
+    /// (<c>GET /api/domains/{key}/days</c>). Throws <see cref="ArgumentException"/> for
+    /// something that isn't a life domain, or a day count outside 1 to
+    /// <see cref="DomainRows.MaxDays"/>.
+    /// </summary>
+    public async Task<DomainDaysRead> GetDomainDaysAsync(
+        string domain, int days, CancellationToken cancellationToken = default)
+    {
+        if (days > DomainRows.MaxDays)
+        {
+            throw new ArgumentException($"Ask for at most {DomainRows.MaxDays} days; got {days}.");
+        }
+
+        return DomainRows.From(await new DomainService(ledger).GetDaysAsync(domain, days, cancellationToken));
+    }
 }

@@ -429,6 +429,8 @@ export interface TimerActionResult {
   completed: boolean;
   /** What Complete earned (REWARD-4); empty for the other actions. */
   awards?: Award[];
+  /** Each life domain Complete moved a level or rank (xp-domains plan §3.8). */
+  progress?: DomainChange[];
 }
 
 // ---------------------------------------------------------------------------
@@ -532,6 +534,142 @@ export interface Award {
   amounts: Amounts;
   base?: Amounts | null;
   multipliers?: Record<string, number> | null;
+}
+
+// ---------------------------------------------------------------------------
+// Life domains (REWARD-6 / REWARD-7, xp-domains plan §3.11): `GET /api/domains` and
+// `GET /api/domains/{key}/days`. Dates are home-zone days (`yyyy-MM-dd`); ranks are indexes
+// into the domain's ladder (0 is Novice); shares and bars run 0–1.
+// ---------------------------------------------------------------------------
+
+export interface DomainsRead {
+  today: string;
+  domains: DomainRow[];
+}
+
+/**
+ * One life domain. Only a configured one (Health in the pilot) has `lifetime`, `current`
+ * and `ranks`; `nextRank` is null at the last rank.
+ */
+export interface DomainRow {
+  key: string;
+  label: string;
+  /** "Health". */
+  name: string;
+  totalXp: number;
+  configured: boolean;
+  lifetime: DomainLifetime | null;
+  nextRank: DomainNextRank | null;
+  current: DomainCurrent | null;
+  ranks: DomainRankRow[] | null;
+}
+
+/** Lifetime advancement, which a bad month never lowers. */
+export interface DomainLifetime {
+  start: string | null;
+  level: number;
+  /** The level the XP alone reaches, before the rank's cap. */
+  rawLevel: number;
+  /** The highest level the rank allows (9 for Novice). */
+  topLevel: number;
+  capped: boolean;
+  rank: number;
+  rankTitle: string;
+  qualifiedOn: string | null;
+  /** What the current level costs in all. */
+  levelXp: number;
+  /** The XP into the level; the whole of it while capped. */
+  xpIntoLevel: number;
+  xpToNext: number;
+  bankedXp: number;
+}
+
+/** The next rank's gate as it reads today; today counts once it has succeeded. */
+export interface DomainNextRank {
+  rank: number;
+  title: string;
+  level: number;
+  bar: number;
+  windowDays: number;
+  consistency: number;
+  successfulDays: number;
+  requiredDays: number;
+  daysNeeded: number;
+  daysOld: number;
+  levelReached: boolean;
+  oldEnough: boolean;
+  barMet: boolean;
+}
+
+/** Current performance, which does drop: today against the rule, and the last 30 days. */
+export interface DomainCurrent {
+  todayBase: number;
+  todaySucceeded: boolean;
+  /** "at least 70 base XP". */
+  rule: string;
+  target: number | null;
+  consistency: number;
+  successfulDays: number;
+  windowDays: number;
+  multiplier: number;
+  nextTier: DomainTier | null;
+}
+
+export interface DomainTier {
+  minShare: number;
+  multiplier: number;
+  daysNeeded: number;
+}
+
+export interface DomainRankRow {
+  rank: number;
+  title: string;
+  level: number;
+  topLevel: number;
+  bar: number;
+  windowDays: number;
+  gems: number;
+  qualifiedOn: string | null;
+}
+
+/** One domain's last days, oldest first, ending today. */
+export interface DomainDaysRead {
+  key: string;
+  label: string;
+  name: string;
+  configured: boolean;
+  today: string;
+  /** The success rule's number (70 for Health); null without rules. */
+  target: number | null;
+  days: DomainDayRow[];
+}
+
+/** One day: base XP (before any multiplier), paid XP, and whether it succeeded (null without rules). */
+export interface DomainDayRow {
+  day: string;
+  base: number;
+  paid: number;
+  succeeded: boolean | null;
+}
+
+/**
+ * A configured life domain whose level or rank a write changed (xp-domains plan §3.8):
+ * `domain` is its currency (`health_xp`), ranks are indexes into its ladder (0 is Novice),
+ * and `rankTitle` names the rank after.
+ */
+export interface DomainChange {
+  domain: string;
+  levelFrom: number;
+  levelTo: number;
+  rankFrom: number;
+  rankTo: number;
+  rankTitle: string;
+}
+
+/** What an earning write answers: the entries it wrote, and each domain it moved. */
+export interface Earned {
+  awards: Award[];
+  progress: DomainChange[];
 }
 
 /**
@@ -795,8 +933,8 @@ export interface LifeOsWriteClient {
   setAttributes(subject: string, attrs: Record<string, string>): Promise<void>; // "" removes a key
   /** Change the title (urn unchanged). A series rename carries to its upcoming occurrences. */
   rename(subject: string, title: string): Promise<RenamedSubject>;
-  /** A state_change; answers what it earned or gave back (REWARD-4). */
-  setStatus(subject: string, status: string): Promise<Award[]>;
+  /** A state_change; answers what it earned or gave back (REWARD-4) and any level or rank it moved. */
+  setStatus(subject: string, status: string): Promise<Earned>;
   archive(subject: string): Promise<void>;
   restore(subject: string): Promise<void>;
   tag(item: string, opts: { add?: string[]; remove?: string[] }): Promise<void>;
@@ -807,9 +945,14 @@ export interface LifeOsWriteClient {
   flag(item: string): Promise<void>;                                            // (re-)enter inbox
   dismiss(item: string): Promise<void>;                                         // attention-only clear
   drop(item: string): Promise<void>;                                            // subject → terminal status
-  /** Record a habit day; answers what it earned or gave back (REWARD-4). */
+  /** Record a habit day; answers what it earned or gave back (REWARD-4) and any level or rank it moved. */
   adhere(habit: string, state: "followed" | "partial" | "missed",
-         opts?: { on?: string; note?: string }): Promise<Award[]>;
+         opts?: { on?: string; note?: string }): Promise<Earned>;
+  /**
+   * Pay any rank-up time alone has reached (`POST /api/domains/settle`, xp-domains plan
+   * §3.7), which the Character page does when it opens.
+   */
+  settleDomains(): Promise<Earned>;
   /** Set structured recurrence on a Habit (GEN-3). */
   recur(habit: string, spec: RecurrenceSpec): Promise<void>;
   involve(subject: string, person: string, role: PersonRole, remove?: boolean): Promise<void>;

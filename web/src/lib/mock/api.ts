@@ -17,6 +17,8 @@ import {
 import type {
   AreaRow,
   ArtifactRecord,
+  DomainDaysRead,
+  DomainsRead,
   BountyTypeDefaults,
   HabitOccurrenceRow,
   HabitRow,
@@ -54,6 +56,8 @@ import {
   mockLedgerDaily,
   mockRewards,
   mockWallet,
+  mockDomains,
+  mockDomainDays,
   withBounty,
 } from "@/lib/mock/store";
 
@@ -125,6 +129,10 @@ export interface LifeOsReads {
   timers(): Promise<TaskTimer[]>;
   /** Every currency's balance (REWARD-1), and what a Coin is worth. */
   wallet(): Promise<Wallet>;
+  /** Every life domain's progression (REWARD-6 / REWARD-7, xp-domains plan §3.11). */
+  domains(): Promise<DomainsRead>;
+  /** One life domain's last `days` days (30 by default), today included: the daily chart. */
+  domainDays(domain: string, days?: number): Promise<DomainDaysRead>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /**
@@ -284,6 +292,16 @@ export const mockReads: LifeOsReads = {
   async wallet(): Promise<Wallet> {
     await wait();
     return mockWallet();
+  },
+
+  async domains(): Promise<DomainsRead> {
+    await wait();
+    return mockDomains();
+  },
+
+  async domainDays(domain: string, days?: number): Promise<DomainDaysRead> {
+    await wait();
+    return mockDomainDays(domain, days);
   },
 
   async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {

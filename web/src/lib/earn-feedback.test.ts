@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { celebrate, chime } from "@/lib/celebrate";
-import { announceAwards, summarizeAwards } from "@/lib/earn-feedback";
-import type { Award } from "@/lib/production-ui-types";
+import { announceAwards, announceEarned, summarizeAwards } from "@/lib/earn-feedback";
+import type { Award, DomainChange } from "@/lib/production-ui-types";
 
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
@@ -113,5 +113,81 @@ describe("announceAwards", () => {
     announceAwards([]);
     announceAwards(undefined);
     expect(toast).not.toHaveBeenCalled();
+  });
+});
+
+describe("announceEarned (xp-domains plan §3.8)", () => {
+  const change = (levelFrom: number, levelTo: number, rankFrom = 0, rankTo = rankFrom, rankTitle = "Novice"): DomainChange => ({
+    domain: "health_xp",
+    levelFrom,
+    levelTo,
+    rankFrom,
+    rankTo,
+    rankTitle,
+  });
+  const rankUp: Award = {
+    id: "rank",
+    entry: "earn",
+    trigger: "rank",
+    awardKey: "rank:health_xp:10",
+    subject: null,
+    note: "Health Apprentice",
+    amounts: { gems: 1 },
+  };
+
+  it("toasts a level-up and gives it the full celebration", () => {
+    announceEarned({ awards: [award("followed", { health_xp: 90 })], progress: [change(11, 12, 1)] });
+    expect(toast).toHaveBeenCalledWith("❤️ Health level 12!", { icon: "⬆️" });
+    expect(celebrate).toHaveBeenCalledTimes(1);
+    expect(celebrate).toHaveBeenCalledWith();
+    expect(chime).not.toHaveBeenCalled();
+  });
+
+  it("names a rank-up's title and celebrates it bigger, once, over the Gem's own celebration", () => {
+    announceEarned({
+      awards: [award("followed", { health_xp: 108 }), rankUp],
+      progress: [change(9, 10, 0, 1, "Apprentice")],
+    });
+    expect(toast).toHaveBeenCalledWith("You're now a Health Apprentice.", {
+      icon: "🏅",
+      description: "A new rank: see it on your Character page.",
+    });
+    expect(toast).toHaveBeenCalledTimes(2);
+    expect(celebrate).toHaveBeenCalledTimes(1);
+    expect(celebrate).toHaveBeenCalledWith("grand");
+    expect(chime).not.toHaveBeenCalled();
+  });
+
+  it("says a rank-up alone, as a settle on opening the Character page pays it", () => {
+    announceEarned({ awards: [rankUp], progress: [change(19, 20, 1, 2, "Journeyman")] });
+    expect(toast).toHaveBeenCalledWith("You're now a Health Journeyman.", expect.anything());
+    expect(celebrate).toHaveBeenCalledWith("grand");
+  });
+
+  it("is quiet about a level a reversal took back", () => {
+    announceEarned({
+      awards: [award("followed", { health_xp: -108 }, "reversal")],
+      progress: [change(10, 9, 1, 0)],
+    });
+    expect(toast).toHaveBeenCalledWith("Health back to level 9", {
+      icon: "↩",
+      description: "A reversal took back the XP that level needed.",
+    });
+    expect(celebrate).not.toHaveBeenCalled();
+    expect(chime).not.toHaveBeenCalled();
+  });
+
+  it("chimes an ordinary earn that moved nothing", () => {
+    announceEarned({ awards: [award("followed", { health_xp: 90 })], progress: [] });
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(chime).toHaveBeenCalledTimes(1);
+    expect(celebrate).not.toHaveBeenCalled();
+  });
+
+  it("says nothing for an empty answer", () => {
+    announceEarned({ awards: [], progress: [] });
+    announceEarned(undefined);
+    expect(toast).not.toHaveBeenCalled();
+    expect(chime).not.toHaveBeenCalled();
   });
 });

@@ -407,7 +407,7 @@ series. Every progression number in the app comes from it.
   - `Award`, the API's `AwardRow` and `bsk … --json` carry `base` and `multipliers`. The CLI
     prints "+78 Health XP (60 × 1.3)", and the web toast's description reads "Stretch — day
     followed (❤️ 60 × 1.3)".
-  - The mock store doesn't multiply yet; it gets the fold in X6.
+  - The mock store doesn't multiply yet; it gets the fold in X6. (X6: it does now.)
   - Backfilling several days in a row prices each one from the days before it, so logging
     them oldest first pays more than newest first. That's the frozen-at-issuance trade-off
     above, not a bug.
@@ -463,6 +463,15 @@ series. Every progression number in the app comes from it.
     one paid, so a rank reached by time alone still announces on settle.
   - A reversal that takes a level away shows too ("level 2 → 1").
   - The web celebration waits for X6.
+- **As built (X6), the web half:**
+  - `announceEarned({ awards, progress })` in `lib/earn-feedback.ts` replaces the awards-only
+    toast on every earning write (status, adhere, timer complete, settle).
+  - A level-up toasts "❤️ Health level 12!" with the full celebration. A rank-up toasts
+    "You're now a Health Journeyman." (pointing at the Character page) with a grand one:
+    twice the confetti and a longer fanfare. A level lost to a reversal toasts "Health back
+    to level 9" quietly.
+  - One write celebrates once, at its biggest: grand, then full, then a chime for any earn.
+  - The words come from `progressMessage` in `lib/domains.ts`.
 
 ### 3.9 Established habits keep earning
 
@@ -592,6 +601,12 @@ Dates are local days in the home zone, not the viewer's zone.
     banked), the rank and since when, and the next rank's gate part by part. `--json` carries
     the same figures.
   - The `days` endpoint and `--report` remain for X6 and X7.
+- **As built (X6):**
+  - `GET /api/domains/{key}/days?days=N` (default 30, 1–731) answers `{ key, label, name,
+    configured, today, target, days }`, oldest first. Each day has base, paid and
+    `succeeded` (null for an unconfigured domain). It takes a day count rather than
+    `from`/`to`; the chart only ever asks for the last N days. Anything that isn't a
+    domain, or a count out of range, is a 400.
 
 ### 3.12 The Character page (web)
 
@@ -611,6 +626,47 @@ Dates are local days in the home zone, not the viewer's zone.
 - **A rank ladder:** all 11 ranks, the current one highlighted, each with its requirement.
 - Mock-first, as before. The mock store computes progress with a small TypeScript port of the
   fold, tested on the same examples as the C# tests.
+- **As built (X6):**
+  - `lib/domain-fold.ts` ports Health's rules, the level curve and `DomainProgress` line for
+    line. Its 45 Vitest cases mirror the C# level, progress and rounding tests.
+  - The mock store now does what the API does:
+    - It credits each earn to a day, as `v_award_credit` does.
+    - It prices configured-domain XP at that day's multiplier and stamps `base` and
+      `multipliers`.
+    - It pays rank-up Gems once.
+    - Status, adhere, timer and settle answer `progress`.
+    - It serves `domains()`, `domainDays()` and `settleDomains()`.
+  - The seed gives Morning mobility 45 days of Health XP: level 9 Novice, 40 XP short of
+    level 10, 24 of the last 30 days successful, ×1.2. Following it today pays 108 (90 ×
+    1.2) and reaches Apprentice, so the rank-up shows straight away.
+  - Opening the page calls `settleDomains()` once; a rank it pays toasts and celebrates like
+    any other.
+  - The card:
+    - Lifetime half: "Level 9", a rank badge, a progress bar, "460 of 500 XP · 40 to
+      level 10" (or, while capped, "Level 19 (top of Apprentice) · N XP banked"), then the
+      next rank's gate from `nextRankText` and "3,560 Health XP in all · since … ·
+      Apprentice since …".
+    - Now half: today's ring (✓ and 90/70 once the day succeeds), "Today: 0 of 70 base XP ·
+      70 to go", "24 of the last 30 days successful", the chip "×1.2 · 80% of the last 30
+      days" and what the next tier needs.
+    - After 30 days without a successful day, a note says the multiplier is back to ×1.0
+      while the level and rank stay.
+  - The daily chart (`components/character/domain-daily-chart.tsx`):
+    - Ranges: 30 days, 90 days or 1 year. Successful days are the full tone, days short of
+      70 a lighter step of it. The 70 is a dashed line, labelled on the axis.
+    - Hover, or the arrow keys on the focused plot, reads a day ("Oct 19: 90 base XP (108
+      paid) · a successful day").
+    - The table view lists the days newest first, in a keyboard-scrollable box.
+    - The range and whether the chart is open are remembered per viewer.
+  - The rank ladder lists all 11 ranks with their levels, requirement and Gems. The rank held
+    is marked "(you)" and `aria-current`; each rank reached shows the day.
+  - Tests:
+    - Vitest: the fold port, the mock store's domain half, the words and the toasts, and the
+      page itself (the card, the ladder, the other domains, the chart and its table, and a
+      settle that pays on open).
+    - An e2e golden path: Level 9 Novice → follow Morning mobility → "You're now a Health
+      Apprentice." → Level 10 Apprentice.
+    - axe on the page with the chart open, as a chart and as a table, in both themes.
 
 ### 3.13 Reports and spider charts (web)
 
@@ -725,5 +781,5 @@ Each of these has to earn its place through use of the pilot.
 - [x] X3 — Rules + daily consistency (migration 0032)
 - [x] X4 — Levels, ranks, rank-up Gems, simulator (no migration). Next: calibrate (§2.4).
 - [x] X5 — The multiplier on earns (no migration)
-- [ ] X6 — Character page
+- [x] X6 — Character page (no migration)
 - [ ] X7 — Reports + charts

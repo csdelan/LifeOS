@@ -66,13 +66,21 @@ function tone(ac: AudioContext, frequency: number, start: number, length: number
   osc.stop(start + length + 0.05);
 }
 
-/** A rising C–E–G, then a held C major chord: about a second. False when there's no audio. */
-export function playFanfare(): boolean {
+/**
+ * A rising C–E–G, then a held C major chord: about a second. The grand one (a rank-up) climbs
+ * on an octave higher and holds a wider chord: about two seconds. False when there's no audio.
+ */
+export function playFanfare(grand = false): boolean {
   const ac = audio();
   if (!ac) return false;
   const t = ac.currentTime + 0.02;
   [523.25, 659.25, 783.99].forEach((f, i) => tone(ac, f, t + i * 0.11, 0.2, 0.16));
-  [523.25, 659.25, 783.99, 1046.5].forEach((f) => tone(ac, f, t + 0.36, 0.95, 0.09));
+  if (!grand) {
+    [523.25, 659.25, 783.99, 1046.5].forEach((f) => tone(ac, f, t + 0.36, 0.95, 0.09));
+    return true;
+  }
+  [1046.5, 1318.51, 1567.98].forEach((f, i) => tone(ac, f, t + 0.36 + i * 0.11, 0.2, 0.14));
+  [523.25, 783.99, 1046.5, 1318.51, 1567.98, 2093].forEach((f) => tone(ac, f, t + 0.75, 1.3, 0.07));
   return true;
 }
 
@@ -102,14 +110,18 @@ const CONFETTI_COLORS = [
 const CONFETTI_PIECES = 90;
 const CONFETTI_MS = 2600;
 
-/** Confetti across the window. False (and nothing added) under reduced motion. */
-export function launchConfetti(): boolean {
+/** How big a celebration is: the full one, or the grand one a rank-up gets. */
+export type CelebrationScale = "full" | "grand";
+
+/** Confetti across the window — twice as much for a grand one. False (and nothing added) under reduced motion. */
+export function launchConfetti(scale: CelebrationScale = "full"): boolean {
   if (typeof document === "undefined" || prefersReducedMotion()) return false;
   const layer = document.createElement("div");
   layer.className = "confetti-layer";
   layer.setAttribute("aria-hidden", "true");
   layer.dataset.testid = "confetti";
-  for (let i = 0; i < CONFETTI_PIECES; i++) {
+  const pieces = scale === "grand" ? CONFETTI_PIECES * 2 : CONFETTI_PIECES;
+  for (let i = 0; i < pieces; i++) {
     const piece = document.createElement("span");
     piece.className = "confetti-piece";
     const style = piece.style;
@@ -118,12 +130,12 @@ export function launchConfetti(): boolean {
     style.setProperty("--r", `${(Math.random() - 0.5) * 1440}deg`);
     style.setProperty("--w", `${6 + Math.random() * 6}px`);
     style.setProperty("--d", `${1.4 + Math.random() * 1}s`);
-    style.setProperty("--delay", `${Math.random() * 0.25}s`);
+    style.setProperty("--delay", `${Math.random() * (scale === "grand" ? 0.9 : 0.25)}s`);
     style.setProperty("--c", CONFETTI_COLORS[i % CONFETTI_COLORS.length]);
     layer.appendChild(piece);
   }
   document.body.appendChild(layer);
-  window.setTimeout(() => layer.remove(), CONFETTI_MS + 300);
+  window.setTimeout(() => layer.remove(), CONFETTI_MS + (scale === "grand" ? 950 : 300));
   return true;
 }
 
@@ -132,9 +144,12 @@ export interface Celebration {
   sound: boolean;
 }
 
-/** The full celebration: confetti unless motion is reduced, a fanfare unless muted. */
-export function celebrate(): Celebration {
-  const confetti = launchConfetti();
-  const sound = isSoundOn() && playFanfare();
+/**
+ * The full celebration: confetti unless motion is reduced, a fanfare unless muted. A rank-up
+ * gets the grand one (xp-domains plan §3.8): twice the confetti and a longer fanfare.
+ */
+export function celebrate(scale: CelebrationScale = "full"): Celebration {
+  const confetti = launchConfetti(scale);
+  const sound = isSoundOn() && playFanfare(scale === "grand");
   return { confetti, sound };
 }

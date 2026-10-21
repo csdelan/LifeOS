@@ -2638,6 +2638,18 @@ before its own day. Other domains, Life XP, Resolve and the spendables never mul
 earning responses, `bsk` and the toast show the working: "+78 Health XP (60 × 1.3)". The
 Character page (X6) is next. Build stays `building`.
 
+**Update (2026-10-20 — X6 landed):** the Character page is in the app at `/character`, in the
+nav and the command palette. Health's card shows the lifetime half (level, rank badge,
+progress to the next level and what the next rank still needs) beside how it's going now
+(today's ring against the 70, 24 of the last 30 days, the multiplier chip). It opens a daily
+chart of base XP with the 70 as a line, for 30 days, 90 days or a year, with a table view.
+Below it is the ladder of all 11 ranks, the held one marked. Social, Environment and Finance
+show their XP and "Levels start once this domain has its own rules." A level-up toasts "❤️
+Health level 12!" with the celebration, a rank-up toasts "You're now a Health Apprentice."
+with a bigger one, and a level lost to an undo says so quietly. Opening the page pays any
+rank reached by time alone. Reports and spider charts (X7) are next. Build stays
+`building`.
+
 **Workflow (Chris):**
 - "For each XP category, I want to track 'levels' from 1-100 that represent RPG levels …
   I start at level 1 with 0 XP, and level 100 represents Grandmaster and typically takes many
@@ -2950,8 +2962,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   earn-only rank-up Gem awards, the simulator, period reports. — **Open**: X1 shipped (the
   currencies and the credited day, migration 0030), X2 (established habits keep earning,
   migration 0031), X3 (Health's rules and daily consistency, migration 0032), X4 (levels,
-  ranks, rank-up Gems and the simulator) and X5 (the multiplier on earns); X6–X7 to go in
-  [xp-domains-plan.md](xp-domains-plan.md).
+  ranks, rank-up Gems and the simulator), X5 (the multiplier on earns) and X6 (the Character
+  page and level-up / rank-up feedback); X7 to go in [xp-domains-plan.md](xp-domains-plan.md).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); **life-domain XP +

@@ -168,6 +168,27 @@ test.describe("golden paths", () => {
     await expect(page.getByRole("heading", { name: /Inbox Zero pass/ }).last()).toBeVisible({ timeout: 10_000 });
   });
 
+  test("following a habit day lifts Health a rank, celebrated, and the Character page shows it", async ({ page }) => {
+    await page.goto("/character");
+    const health = page.getByRole("region", { name: "Health", exact: true });
+    await expect(health.getByText("Level 9", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(health.getByText("Novice", { exact: true })).toBeVisible();
+
+    // In-app navigation keeps the mock's state. The seeded Health history is 40 XP short of
+    // level 10, where Apprentice's window is already met: today's 90 base XP (108 at ×1.2) reaches it.
+    await page.getByRole("link", { name: "Habits" }).first().click();
+    const mobility = page.getByRole("list", { name: "Building" }).getByRole("listitem").filter({ hasText: "Morning mobility" });
+    await mobility.getByRole("button", { name: "Followed", exact: true }).click();
+    await expect(page.getByText("You're now a Health Apprentice.")).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole("link", { name: "Character" }).first().click();
+    await expect(health.getByText("Level 10", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(health.getByText("Apprentice", { exact: true })).toBeVisible();
+    await expect(health.getByRole("img", { name: "Today: 90 of 70 base XP, a successful day" })).toBeVisible();
+    const ranks = page.getByRole("region", { name: "Health ranks" }).getByRole("listitem");
+    await expect(ranks.nth(1)).toHaveAttribute("aria-current", "step");
+  });
+
   test("theme toggle switches the document class", async ({ page }) => {
     await page.goto("/");
     const html = page.locator("html");

@@ -14,6 +14,7 @@ import { typeLabel } from "@/lib/production-ui-types";
 import {
   CompassIcon,
   GiftIcon,
+  MedalIcon,
   InboxIcon,
   LayoutDashboardIcon,
   ListTodoIcon,
@@ -75,6 +76,9 @@ export function CommandPalette({
           </CommandItem>
           <CommandItem onSelect={() => go("/rewards")}>
             <GiftIcon /> Rewards
+          </CommandItem>
+          <CommandItem onSelect={() => go("/character")}>
+            <MedalIcon /> Character
           </CommandItem>
           <CommandItem onSelect={() => go("/vision")}>
             <EyeIcon /> Vision

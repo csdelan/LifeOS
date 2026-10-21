@@ -740,6 +740,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/domains/{key}/days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetDomainDays"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/domains/settle": {
         parameters: {
             query?: never;
@@ -884,6 +900,24 @@ export interface components {
             /** Format: double */
             multiplier?: number | string;
             nextTier?: null | components["schemas"]["DomainTierRow"];
+        };
+        DomainDayRow: {
+            day?: string;
+            /** Format: int64 */
+            base?: number | string;
+            /** Format: int64 */
+            paid?: number | string;
+            succeeded?: null | boolean;
+        };
+        DomainDaysRead: {
+            key?: string;
+            label?: string;
+            name?: string;
+            configured?: boolean;
+            today?: string;
+            /** Format: int64 */
+            target?: null | number | string;
+            days?: components["schemas"]["DomainDayRow"][];
         };
         DomainLifetime: {
             start?: null | string;
@@ -2745,6 +2779,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DomainsRead"];
+                };
+            };
+        };
+    };
+    GetDomainDays: {
+        parameters: {
+            query?: {
+                days?: number | string;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainDaysRead"];
                 };
             };
         };

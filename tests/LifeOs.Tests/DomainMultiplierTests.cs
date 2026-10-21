@@ -65,6 +65,23 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
         Assert.Equal((60L, false), (health.TodayBase, health.TodaySucceeded));
         Assert.Equal(78, health.Periods[^1].Paid);
 
+        // The Character page's chart reads the same days: base against the 70, paid beside it.
+        var days = await host.Client.GetFromJsonAsync<JsonElement>("/api/domains/health/days?days=6", Ct);
+        Assert.Equal(("health_xp", 70L), (days.GetProperty("key").GetString(), days.GetProperty("target").GetInt64()));
+        Assert.Equal(today.ToString("yyyy-MM-dd"), days.GetProperty("today").GetString());
+        var rows = days.GetProperty("days").EnumerateArray().ToList();
+        Assert.Equal(6, rows.Count);
+        Assert.Equal((today.AddDays(-5).ToString("yyyy-MM-dd"), 70L, true),
+            (rows[0].GetProperty("day").GetString(), rows[0].GetProperty("base").GetInt64(), rows[0].GetProperty("succeeded").GetBoolean()));
+        Assert.Equal((0L, false), (rows[1].GetProperty("base").GetInt64(), rows[1].GetProperty("succeeded").GetBoolean()));
+        Assert.Equal((60L, 78L, false),
+            (rows[5].GetProperty("base").GetInt64(), rows[5].GetProperty("paid").GetInt64(), rows[5].GetProperty("succeeded").GetBoolean()));
+        Assert.Equal(30, (await host.Client.GetFromJsonAsync<JsonElement>("/api/domains/health/days", Ct)).GetProperty("days").GetArrayLength());
+        foreach (var bad in new[] { "/api/domains/health/days?days=0", "/api/domains/health/days?days=732", "/api/domains/coins/days" })
+        {
+            Assert.Equal(System.Net.HttpStatusCode.BadRequest, (await host.Client.GetAsync(bad, Ct)).StatusCode);
+        }
+
         // Undoing the day gives back exactly what it paid.
         var undone = await database.Get<AdherenceService>().RecordAsync(habit.Urn, AdherenceResults.Missed, today, cancellationToken: Ct);
         var reversal = Assert.Single(undone.Awards);

@@ -13,7 +13,7 @@ import { useMemo } from "react";
 import { isLiveApi } from "@/lib/api-base";
 import { createWriteClient, getReads } from "@/lib/client";
 import { mapForestStatus, type DashboardRead, type MapLens } from "@/lib/derive";
-import { announceAwards } from "@/lib/earn-feedback";
+import { announceEarned } from "@/lib/earn-feedback";
 import { fetchMe, meQueryKey } from "@/lib/me";
 import type { LifeOsReads } from "@/lib/mock/api";
 import type {
@@ -52,6 +52,9 @@ export const qk = {
   occurrences: ["occurrences"] as const,
   timers: ["timers"] as const,
   wallet: ["wallet"] as const,
+  domains: ["domains"] as const,
+  // Nested under ["domains"], so every domains invalidation refreshes the chart too.
+  domainDays: (domain: string, days: number) => ["domains", "days", domain, days] as const,
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
@@ -118,9 +121,9 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async setStatus(subject, status) {
       optimisticStatus(qc, subject, status);
       try {
-        const awards = await client.setStatus(subject, status);
-        announceAwards(awards);
-        return awards;
+        const earned = await client.setStatus(subject, status);
+        announceEarned(earned);
+        return earned;
       } finally {
         // A status change can earn or give back (REWARD-1), so the wallet moves too; a
         // habit's graduates it off the daily list.
@@ -134,6 +137,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
           qk.habits,
           qk.wallet,
           qk.ledger,
+          qk.domains,
           ["forest"],
           ["edges"],
         ]);
@@ -228,12 +232,19 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async adhere(habit, state, opts) {
       optimisticAdhere(qc, habit, state === "missed" ? "not_followed" : state, opts?.on);
       try {
-        const awards = await client.adhere(habit, state, opts);
-        announceAwards(awards);
-        return awards;
+        const earned = await client.adhere(habit, state, opts);
+        announceEarned(earned);
+        return earned;
       } finally {
-        await invalidate(qc, [qk.habits, qk.occurrences, qk.dashboard, qk.wallet, qk.ledger]);
+        await invalidate(qc, [qk.habits, qk.occurrences, qk.dashboard, qk.wallet, qk.ledger, qk.domains]);
       }
+    },
+
+    async settleDomains() {
+      const earned = await client.settleDomains();
+      announceEarned(earned);
+      if (earned.awards.length > 0) await invalidate(qc, [qk.wallet, qk.ledger, qk.domains]);
+      return earned;
     },
 
     async recur(habit, spec) {
@@ -244,7 +255,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async timer(task, action) {
       try {
         const result = await client.timer(task, action);
-        announceAwards(result.awards);
+        announceEarned(result);
         if (action === "complete") {
           // Complete also moves the Task's Status.
           await invalidate(qc, [
@@ -255,6 +266,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
             qk.dashboard,
             qk.wallet,
             qk.ledger,
+            qk.domains,
             ["forest"],
           ]);
         }
@@ -599,6 +611,24 @@ export function useWallet() {
   return useQuery({
     queryKey: qk.wallet,
     queryFn: () => reads().wallet(),
+  });
+}
+
+/** Every life domain's progression (REWARD-6 / REWARD-7): the Character page. */
+export function useDomains() {
+  return useQuery({
+    queryKey: qk.domains,
+    queryFn: () => reads().domains(),
+  });
+}
+
+/** One domain's last `days` days, for its daily chart; the last range stays up while the next loads. */
+export function useDomainDays(domain: string, days: number, enabled = true) {
+  return useQuery({
+    queryKey: qk.domainDays(domain, days),
+    queryFn: () => reads().domainDays(domain, days),
+    enabled,
+    placeholderData: keepPreviousData,
   });
 }
 

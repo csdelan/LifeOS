@@ -11,6 +11,7 @@ import { MapPage } from "@/pages/map-page";
 import { TasksPage } from "@/pages/tasks-page";
 import { HabitsPage } from "@/pages/habits-page";
 import { RewardsPage } from "@/pages/rewards-page";
+import { CharacterPage } from "@/pages/character-page";
 import { VisionPage } from "@/pages/vision-page";
 import { ReviewsPage } from "@/pages/reviews-page";
 import { PeoplePage } from "@/pages/people-page";
@@ -153,6 +154,12 @@ const rewardsRoute = createRoute({
   component: RewardsPage,
 });
 
+const characterRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/character",
+  component: CharacterPage,
+});
+
 const reviewsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/reviews",
@@ -188,6 +195,7 @@ const routeTree = rootRoute.addChildren([
   tasksRoute,
   habitsRoute,
   rewardsRoute,
+  characterRoute,
   visionRoute,
   reviewsRoute,
   peopleRoute,

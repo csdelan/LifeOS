@@ -19,12 +19,22 @@ public static class DomainEndpoints
 
         api.MapGet("/domains", GetDomains).WithName("GetDomains")
             .Produces<DomainsRead>();
+        api.MapGet("/domains/{key}/days", GetDomainDays).WithName("GetDomainDays")
+            .Produces<DomainDaysRead>();
         api.MapPost("/domains/settle", Settle).WithName("SettleDomains")
             .Produces<EarnResult>();
     }
 
     private static async Task<IResult> GetDomains(RewardReader rewards, CancellationToken cancellationToken)
         => Results.Ok(await rewards.GetDomainsAsync(cancellationToken));
+
+    /// <summary>
+    /// One domain's last <paramref name="days"/> days (30 by default, up to two years), named by
+    /// key, label or first word ("health"): what the Character page's daily chart draws.
+    /// </summary>
+    private static async Task<IResult> GetDomainDays(
+        string key, int? days, RewardReader rewards, CancellationToken cancellationToken)
+        => Results.Ok(await rewards.GetDomainDaysAsync(key, days ?? 30, cancellationToken));
 
     /// <summary>
     /// Pays any rank-up the domains have reached and not been paid — one reached by time alone
