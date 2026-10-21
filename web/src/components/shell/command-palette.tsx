@@ -23,6 +23,7 @@ import {
   MoonIcon,
   PlusIcon,
   RepeatIcon,
+  UtensilsIcon,
   SparklesIcon,
   SunIcon,
   UsersIcon,
@@ -73,6 +74,9 @@ export function CommandPalette({
           </CommandItem>
           <CommandItem onSelect={() => go("/habits")}>
             <RepeatIcon /> Habits
+          </CommandItem>
+          <CommandItem onSelect={() => go("/food")}>
+            <UtensilsIcon /> Food Log
           </CommandItem>
           <CommandItem onSelect={() => go("/rewards")}>
             <GiftIcon /> Rewards

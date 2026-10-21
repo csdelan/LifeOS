@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { celebrate, chime } from "@/lib/celebrate";
-import { announceAwards, announceEarned, summarizeAwards } from "@/lib/earn-feedback";
+import { announceAwards, announceEarned, rescoreMessage, splitRescores, summarizeAwards } from "@/lib/earn-feedback";
 import type { Award, DomainChange } from "@/lib/production-ui-types";
 
 vi.mock("sonner", () => ({
@@ -113,6 +113,54 @@ describe("announceAwards", () => {
     announceAwards([]);
     announceAwards(undefined);
     expect(toast).not.toHaveBeenCalled();
+  });
+});
+
+describe("food awards (food-log plan §3.3)", () => {
+  const food = (entry: Award["entry"], trigger: string, health_xp: number, extra?: Partial<Award>): Award => ({
+    id: `${entry}-${trigger}-${health_xp}`,
+    entry,
+    trigger,
+    awardKey: `${trigger}:2026-10-20`,
+    subject: null,
+    note: trigger === "fast" ? "Fast ending Tue Oct 20 (23 h 00 m)" : "Food day Tue Oct 20",
+    amounts: { health_xp },
+    ...extra,
+  });
+
+  it("toasts a day's diet XP with a plate, naming the day and its working", () => {
+    announceAwards([
+      food("earn", "fast", 8, { base: { health_xp: 7 }, multipliers: { health_xp: 1.2 } }),
+      food("earn", "diet", 38, { base: { health_xp: 32 }, multipliers: { health_xp: 1.2 } }),
+    ]);
+    expect(toast).toHaveBeenCalledWith("Earned +46 Health XP", {
+      icon: "🍽️",
+      description:
+        "Fast ending Tue Oct 20 (23 h 00 m) — fasting (❤️ 7 × 1.2) · Food day Tue Oct 20 — diet score (❤️ 32 × 1.2)",
+    });
+    expect(chime).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a re-scored day as one change, not a give-back and an earn", () => {
+    const { rescores, rest } = splitRescores([food("reversal", "diet", -38), food("earn", "diet", 35)]);
+    expect(rest).toEqual([]);
+    expect(rescores.map(rescoreMessage)).toEqual(["Food day Tue Oct 20 re-scored: 38 → 35 Health XP"]);
+
+    announceAwards([food("reversal", "diet", -38), food("earn", "diet", 35)]);
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith("Food day Tue Oct 20 re-scored: 38 → 35 Health XP", { icon: "🍽️" });
+    // Scored lower: quiet. Scored higher: a chime.
+    expect(chime).not.toHaveBeenCalled();
+    announceAwards([food("reversal", "diet", -35), food("earn", "diet", 38)]);
+    expect(chime).toHaveBeenCalledTimes(1);
+  });
+
+  it("still gives back quietly when a day no longer pays", () => {
+    announceAwards([food("reversal", "diet", -38)]);
+    expect(toast).toHaveBeenCalledWith("Gave back −38 Health XP", {
+      icon: "↩",
+      description: "Food day Tue Oct 20 — diet score",
+    });
   });
 });
 

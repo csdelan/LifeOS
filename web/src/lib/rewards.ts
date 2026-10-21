@@ -224,6 +224,8 @@ export function triggerLabel(trigger: string): string {
   if (trigger === "established") return "established";
   if (trigger === "timed") return "time on the timer";
   if (trigger === "rank") return "rank-up";
+  if (trigger === "diet") return "diet score";
+  if (trigger === "fast") return "fasting";
   const streak = /^streak_(\d+)$/.exec(trigger);
   return streak ? `${streak[1]}-day streak` : trigger;
 }

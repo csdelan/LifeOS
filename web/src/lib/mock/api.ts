@@ -21,6 +21,9 @@ import type {
   DomainReportRead,
   DomainsRead,
   BountyTypeDefaults,
+  FoodDayRead,
+  FoodDaysRead,
+  MealRow,
   HabitOccurrenceRow,
   HabitRow,
   InboxItem,
@@ -58,6 +61,9 @@ import {
   mockRewards,
   mockWallet,
   mockDomains,
+  mockFoodDay,
+  mockFoodDays,
+  mockFoodRecent,
   mockDomainDays,
   mockDomainReport,
   withBounty,
@@ -137,6 +143,12 @@ export interface LifeOsReads {
   domainDays(domain: string, days?: number): Promise<DomainDaysRead>;
   /** Every life domain over its last `days` days (30 by default): the Reports view. */
   domainReport(days?: number): Promise<DomainReportRead>;
+  /** One day of the Food Log (today by default): its entries, fasts and diet score (FOOD-4). */
+  foodDay(date?: string): Promise<FoodDayRead>;
+  /** Every day of a range, at most 62 (the week so far by default): the Week and Month views. */
+  foodDays(from?: string, to?: string): Promise<FoodDaysRead>;
+  /** The newest version of each recent entry by name, for "Log again". */
+  foodRecent(limit?: number): Promise<MealRow[]>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /**
@@ -311,6 +323,21 @@ export const mockReads: LifeOsReads = {
   async domainReport(days?: number): Promise<DomainReportRead> {
     await wait();
     return mockDomainReport(days);
+  },
+
+  async foodDay(date?: string): Promise<FoodDayRead> {
+    await wait();
+    return mockFoodDay(date);
+  },
+
+  async foodDays(from?: string, to?: string): Promise<FoodDaysRead> {
+    await wait();
+    return mockFoodDays(from, to);
+  },
+
+  async foodRecent(limit?: number): Promise<MealRow[]> {
+    await wait();
+    return mockFoodRecent(limit);
   },
 
   async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {

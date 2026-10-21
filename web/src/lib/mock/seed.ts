@@ -6,6 +6,7 @@ import type {
   ArtifactRecord,
   ConcerningEvent,
   EventRelation,
+  FoodMealType,
   HabitOccurrenceRow,
   HabitRow,
   InboxItem,
@@ -25,6 +26,7 @@ import type {
 } from "@/lib/production-ui-types";
 import { defaultStatus } from "@/lib/production-ui-types";
 import type { TimerEvent } from "@/lib/timer";
+import type { MockFoodEvent } from "@/lib/mock/food-fold";
 import { applyMultiplier, DomainProgress, gemsFor, HEALTH, rankAwardKey, type DomainDay } from "@/lib/domain-fold";
 
 export interface MockEvent {
@@ -69,6 +71,8 @@ export interface MockLedgerEntry {
   /** An earn paid at a domain multiplier above 1.0 (§3.6): those currencies before it, and each multiplier. */
   base?: Amounts;
   multipliers?: Record<string, number>;
+  /** A food award's earn: the event versions its day was scored from (`derived_from`). */
+  sources?: string[];
 }
 
 export interface CanonicalEdge {
@@ -103,6 +107,8 @@ export interface MockState {
   ledger: MockLedgerEntry[];
   /** `Rewards:CoinValueUsd`: what one Coin is worth in dollars. */
   coinValueUsd: number;
+  /** Food Log events, in write order (FOOD-1..3): entries, fasts and day closes. */
+  foodEvents: MockFoodEvent[];
   primaryFocus: { title: string; subjectId: string; kind: "goal" };
   objectives: { id: string; title: string; subjectId?: string }[];
 }
@@ -1643,6 +1649,7 @@ export function createSeed(): MockState {
     ],
     ledger: seedLedger(),
     coinValueUsd: 0.5,
+    foodEvents: seedFood(),
     primaryFocus: {
       title: "Ship LifeOS production UI",
       subjectId: "goal-lifeos",
@@ -1654,6 +1661,69 @@ export function createSeed(): MockState {
       { id: "obj-3", title: "Long run, easy pace", subjectId: "task-longrun" },
     ],
   };
+}
+
+/**
+ * Five days of the Food Log, two to six days back, so the views have something to show:
+ * the plan's example days (an ordinary day, a good day, a salmon salad after a 23-hour fast),
+ * a better one and an indulgent one. Nothing yesterday or today, so a fast recorded today never
+ * overlaps one of these. Each day closed itself and hasn't paid: the ledger above holds none of
+ * it, so the seeded Health history stays as the Character page reads it, and the Food Log pays
+ * these days when it opens and settles (food-log plan §3.4).
+ */
+function seedFood(): MockFoodEvent[] {
+  const today = todayIso();
+  const events: MockFoodEvent[] = [];
+  let n = 0;
+  const at = (ago: number, hhmm: string) => {
+    const [y, m, d] = addDays(today, -ago).split("-").map(Number);
+    const [h, min] = hhmm.split(":").map(Number);
+    return new Date(y, m - 1, d, h, min).toISOString();
+  };
+  const later = (iso: string, minutes: number) => new Date(Date.parse(iso) + minutes * 60_000).toISOString();
+  const meal = (ago: number, hhmm: string, name: string, score: number, calories: number, mealType: FoodMealType) => {
+    n += 1;
+    const eatenAt = at(ago, hhmm);
+    events.push({
+      id: `food-ev-${n}`,
+      occurredAt: eatenAt,
+      recordedAt: later(eatenAt, 4),
+      meal: { id: `meal-seed-${n}`, name, score, calories, mealType },
+    });
+  };
+  const fast = (fromAgo: number, from: string, toAgo: number, to: string) => {
+    n += 1;
+    const startedAt = at(fromAgo, from);
+    const endedAt = at(toAgo, to);
+    events.push({ id: `food-ev-${n}`, occurredAt: startedAt, recordedAt: startedAt, fast: { id: `fast-seed-${n}`, startedAt, endedAt: null } });
+    events.push({ id: `food-ev-${n}-end`, occurredAt: endedAt, recordedAt: endedAt, fast: { id: `fast-seed-${n}`, startedAt, endedAt } });
+  };
+
+  // Six days back: a better day after a 16-hour fast — 29 + 3.
+  fast(7, "20:00", 6, "12:00");
+  meal(6, "12:15", "Grilled chicken and vegetables", 4, 700, "lunch");
+  meal(6, "15:30", "Greek yogurt and berries", 5, 200, "snack");
+  meal(6, "19:00", "Salmon, rice and greens", 5, 800, "dinner");
+  // Five back: the ordinary day after a 14-hour fast — 14 + 1.
+  fast(6, "20:00", 5, "10:00");
+  meal(5, "10:15", "Oatmeal and fruit", 4, 400, "breakfast");
+  meal(5, "13:00", "Turkey sandwich", 3, 700, "lunch");
+  meal(5, "18:30", "Pepperoni pizza", 2, 900, "dinner");
+  meal(5, "21:00", "Chocolate chip cookie", 1, 200, "snack");
+  // Four back: the good day after a 16-hour fast — 28 + 3.
+  fast(5, "21:00", 4, "13:00");
+  meal(4, "13:10", "Poke bowl", 5, 700, "lunch");
+  meal(4, "16:00", "Apple and almonds", 4, 200, "snack");
+  meal(4, "19:00", "Chicken stir-fry", 4, 900, "dinner");
+  // Three back: an indulgent day, no fast — 4.
+  meal(3, "09:00", "Pancakes", 2, 600, "breakfast");
+  meal(3, "13:00", "Burger and fries", 1, 1200, "lunch");
+  meal(3, "21:00", "Ice cream", 1, 400, "snack");
+  // Two back: black coffee inside a 23-hour fast, then the salmon salad — 32 + 7.
+  fast(3, "21:30", 2, "20:30");
+  meal(2, "08:00", "Black coffee", 5, 0, "drink");
+  meal(2, "20:45", "Salmon salad", 5, 1200, "dinner");
+  return events;
 }
 
 /**

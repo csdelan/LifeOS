@@ -7,11 +7,18 @@ import type {
 import { inferChildRelation, renamedMessage } from "@/lib/production-ui-types";
 import { extensionForMime, sha256Hex } from "@/lib/artifacts";
 import { redemptionMessage } from "@/lib/rewards";
+import { foodWriteMessage } from "@/lib/food";
 import {
   addEdge,
   earnDay,
   earnStatus,
   mockSettleDomains,
+  mockCloseFoodDay,
+  mockDeleteFood,
+  mockEditFood,
+  mockFastAction,
+  mockLogFood,
+  mockSettleFood,
   appendJournal,
   applyTimer,
   applyAttrs,
@@ -182,6 +189,53 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async settleDomains() {
       await wait();
       const earned = mockSettleDomains();
+      if (earned.awards.length > 0) bump();
+      return earned;
+    },
+
+    async logFood(req) {
+      await wait();
+      const result = mockLogFood(req);
+      notify(foodWriteMessage(result));
+      bump();
+      return result;
+    },
+
+    async editFood(meal, req) {
+      await wait();
+      const result = mockEditFood(meal, req);
+      notify(foodWriteMessage(result));
+      bump();
+      return result;
+    },
+
+    async deleteFood(meal) {
+      await wait();
+      const result = mockDeleteFood(meal);
+      notify(foodWriteMessage(result));
+      bump();
+      return result;
+    },
+
+    async fast(req) {
+      await wait();
+      const result = mockFastAction(req);
+      notify(foodWriteMessage(result));
+      bump();
+      return result;
+    },
+
+    async closeFoodDay(day) {
+      await wait();
+      const result = mockCloseFoodDay(day);
+      notify(foodWriteMessage(result));
+      bump();
+      return result;
+    },
+
+    async settleFood() {
+      await wait();
+      const earned = mockSettleFood();
       if (earned.awards.length > 0) bump();
       return earned;
     },

@@ -8,6 +8,9 @@
  * celebration ("❤️ Health level 12!"), a rank-up the grand one with its title ("You're now a
  * Health Journeyman."), and a level lost to a reversal a quiet one. One write celebrates once,
  * at the size of the biggest thing it did.
+ *
+ * A food day re-scored in one write (given back, then earned at its new score) is one toast:
+ * "Food day Tue Oct 20 re-scored: 38 → 35 Health XP".
  */
 import { toast } from "sonner";
 import { celebrate, chime } from "@/lib/celebrate";
@@ -41,6 +44,54 @@ function forWhat(awards: Award[]): string {
     byItem.set(title, [...(byItem.get(title) ?? []), why]);
   }
   return [...byItem].map(([title, why]) => `${title} — ${why.join(", ")}`).join(" · ");
+}
+
+/**
+ * An award re-priced in one write (food-log plan §3.3): the reversal of what its key paid and
+ * the earn at its new price, shown as one change — "Food day Tue Oct 20 re-scored: 38 → 35
+ * Health XP" — not as a give-back and an earn.
+ */
+export interface Rescore {
+  title: string;
+  from: Amounts;
+  to: Amounts;
+}
+
+function negated(amounts: Amounts): Amounts {
+  return Object.fromEntries(Object.entries(amounts).map(([k, n]) => [k, -n]));
+}
+
+/** Pairs each reversal with an earn of the same key in the same write; the rest stay as they are. */
+export function splitRescores(awards: Award[]): { rescores: Rescore[]; rest: Award[] } {
+  const paired = new Set<Award>();
+  const rescores: Rescore[] = [];
+  for (const reversal of awards.filter((a) => a.entry === "reversal")) {
+    const earn = awards.find((a) => a.entry === "earn" && a.awardKey === reversal.awardKey && !paired.has(a));
+    if (!earn) continue;
+    paired.add(reversal);
+    paired.add(earn);
+    rescores.push({
+      title: earn.subject?.title ?? earn.note ?? reversal.note ?? "Reward",
+      from: negated(reversal.amounts),
+      to: earn.amounts,
+    });
+  }
+  return { rescores, rest: awards.filter((a) => !paired.has(a)) };
+}
+
+/** "Food day Tue Oct 20 re-scored: 38 → 35 Health XP". */
+export function rescoreMessage(r: Rescore): string {
+  const from = Object.entries(r.from);
+  const to = Object.entries(r.to);
+  const sameOne = from.length === 1 && to.length === 1 && from[0][0] === to[0][0];
+  const change = sameOne
+    ? `${from[0][1].toLocaleString()} → ${formatAmounts(r.to)}`
+    : `${formatAmounts(r.from)} → ${formatAmounts(r.to)}`;
+  return `${r.title} re-scored: ${change}`;
+}
+
+function sum(amounts: Amounts): number {
+  return Object.values(amounts).reduce((total, n) => total + n, 0);
 }
 
 export function summarizeAwards(awards: Award[]): AwardSummary {
@@ -77,10 +128,17 @@ export function announceEarned(earned: { awards?: Award[]; progress?: DomainChan
   let celebration: "none" | "chime" | "full" | "grand" = "none";
 
   if (awards.length > 0) {
-    const summary = summarizeAwards(awards);
+    const { rescores, rest } = splitRescores(awards);
+    for (const r of rescores) {
+      toast(rescoreMessage(r), { icon: "🍽️" });
+      if (sum(r.to) > sum(r.from)) celebration = "chime";
+    }
+    const summary = summarizeAwards(rest);
     if (Object.keys(summary.earned).length > 0) {
+      // Diet XP (a day's food or its fast) belongs to no item: a plate says what it was for.
+      const food = rest.filter((a) => a.entry === "earn").every((a) => a.trigger === "diet" || a.trigger === "fast");
       toast(`Earned ${formatAmounts(summary.earned, { signed: true })}`, {
-        icon: summary.big ? "🎉" : "🪙",
+        icon: summary.big ? "🎉" : food ? "🍽️" : "🪙",
         description: summary.earnedFor,
       });
       celebration = summary.big ? "full" : "chime";

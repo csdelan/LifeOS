@@ -2726,7 +2726,13 @@ successful day gets retuned after a few weeks of real XP.
 ### FOOD-1 — A Food Log records what I eat, how healthy it was and roughly how many calories
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-10-20 — the page landed, F4):** `/food` logs, edits and deletes entries from
+the Log food sheet: a bottom sheet on a phone, a side panel on a desktop. It has Log again
+from recent names, the 1–5 picker with its examples, quick calorie sizes, quick times and a
+guessed meal type; nutrients are folded away. Build moves `building → built`; the photo is
+FOOD-5 (F6).
 
 **Update (2026-10-20 — kernel landed, F1):** migration 0034 (`v_meal`, `v_fast`,
 `v_food_day`), `FoodLogService` and `bsk food log / edit / delete` shipped. Build moves
@@ -2763,7 +2769,13 @@ until F2.
 ### FOOD-2 — Fasts are tracked from begin to end, live or backfilled
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-10-20 — the page landed, F4):** the fasting card shows a running fast's live
+counter and ring with End fast, or Begin fast set to the last entry's time. It lists the fasts
+that ended on the day with what they pay, and records, changes or deletes a fast in a dialog.
+Logging food while a fast runs offers "Ends your 16 h fast at 10:19 PM", on by default. Build
+moves `building → built`.
 
 **Update (2026-10-20 — kernel landed, F1):** `bsk food fast begin / end / record / edit /
 delete` and `bsk food log --end-fast` shipped, with one running fast and no overlaps enforced
@@ -2794,7 +2806,13 @@ under a lock. Build moves `needs-kernel → building`: the fasting card (F4) is 
 ### FOOD-3 — My diet earns up to 40 Health XP a day
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-10-20 — the page landed, F4):** the summary card shows what the day is on track
+for ("On track for 39 of 40"), its three parts as meters, Close day, and after the close what
+it paid ("39 base → 46 Health XP (×1.2)"). Diet XP toasts with a plate, and a re-score is one
+toast ("Food day Tue Oct 20 re-scored: 38 → 22 Health XP"). Opening the page settles the food
+days that are due. Build moves `building → built`.
 
 **Update (2026-10-20 — kernel landed, F2):** `FoodRewards` pays `fast:<date>` and
 `diet:<date>` awards at the day's multiplier, re-prices a paid day when its entries change,
@@ -2857,6 +2875,11 @@ day with its parts, projected awards and what's paid. The writes (`POST /api/foo
 `/meals/{id}`, `/meals/{id}/delete`, `/fasts`, `/close`, `/settle`) answer `awards` and
 `progress`. Build moves `needs-kernel → building`: the `/food` page (F4, F5) is not built
 yet.
+
+**Update (2026-10-20 — the Day view landed, F4):** `/food` shows one day at a time (today by
+default, ‹ › and Today through `?date=`): the fasting card, the summary and the gallery of
+entries, newest first, each tile coloured by score with the number and word beside it. The
+Week and Month views are F5; Build stays `building`.
 
 **Workflow (Chris):**
 - "The food log can have a daily view by default, which has a gallery view of each 'meal'
@@ -3169,8 +3192,9 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;
-  `bsk food`. — **Open** (F1–F6 in [food-log-plan.md](food-log-plan.md); migration 0034
-  next).
+  `bsk food`; the `/food` Day view. — **Open** (F1–F4 done in
+  [food-log-plan.md](food-log-plan.md), migration 0034; the Week and Month views (F5) and
+  photos (F6) left).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **Food log + diet

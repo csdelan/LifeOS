@@ -203,6 +203,41 @@ test.describe("golden paths", () => {
     await expect(page.getByRole("heading", { name: "By domain, last 3 months" })).toBeVisible();
   });
 
+  test("record a fast, log food and close the day for diet XP", async ({ page }) => {
+    await page.goto("/food");
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+
+    // A 23-hour fast ending now: 7 base Health XP, 8 at the mock's ×1.2 today.
+    await page.getByRole("button", { name: "Record a past fast" }).click();
+    const fast = page.getByRole("dialog", { name: "Record a past fast" });
+    const began = await page.evaluate(() => {
+      const d = new Date(Date.now() - 23 * 3_600_000);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    });
+    await fast.getByLabel("Began").fill(began);
+    await expect(fast.getByText("A fast of 23 h 00 m")).toBeVisible();
+    await fast.getByRole("button", { name: "Save fast" }).click();
+    await expect(page.getByText("Earned +8 Health XP")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("list", { name: "Fasts that ended this day" })).toContainText("23 h 00 m");
+
+    // A very healthy 1,200-calorie entry: 28 for quality and 4 for calories, with the fast's 7.
+    await page.getByRole("button", { name: "Log food", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Log food" });
+    await sheet.getByLabel("Name").fill("Salmon salad");
+    await sheet.getByRole("radio", { name: "5 · very healthy" }).check();
+    await sheet.getByLabel("Calories").fill("1200");
+    await sheet.getByRole("button", { name: "Log", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText("On track for 39 of 40")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("list", { name: "Entries for today" }).getByRole("button", { name: /^Salmon salad/ })).toBeVisible();
+
+    // Closing the day pays the food: 32 base, 38 at ×1.2.
+    await page.getByRole("button", { name: "Close day" }).click();
+    await expect(page.getByText("Earned +38 Health XP")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("39 base → 46 Health XP (×1.2)")).toBeVisible();
+  });
+
   test("theme toggle switches the document class", async ({ page }) => {
     await page.goto("/");
     const html = page.locator("html");

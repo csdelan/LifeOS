@@ -24,6 +24,13 @@
   --color-chart-1: var(--chart-1);
   --color-chart-earned: var(--chart-earned);
   --color-chart-spent: var(--chart-spent);
+  --color-score-1: var(--score-1);
+  --color-score-2: var(--score-2);
+  --color-score-3: var(--score-3);
+  --color-score-4: var(--score-4);
+  --color-score-5: var(--score-5);
+  --color-score-ink-low: var(--score-ink-low);
+  --color-score-ink-high: var(--score-ink-high);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -87,6 +94,16 @@
      the categorical band so the pair stays apart under colour-blindness (validated, ΔE 11.6). */
   --chart-earned: oklch(0.46 0.12 168);
   --chart-spent: oklch(0.66 0.15 48);
+  /* Food Log (FOOD-4): a food entry's 1-5 health score, an ordinal one-hue ramp, light to dark
+     (validated --ordinal on the card: monotone, steps >= 0.06 L apart, the light end 2.0:1). The
+     number is always shown beside it. Icons sit in score-ink-low on scores 1-2, score-ink-high on 3-5. */
+  --score-1: oklch(0.75 0.09 168);
+  --score-2: oklch(0.66 0.11 168);
+  --score-3: oklch(0.57 0.12 168);
+  --score-4: oklch(0.48 0.11 168);
+  --score-5: oklch(0.39 0.09 168);
+  --score-ink-low: oklch(0.23 0.03 168);
+  --score-ink-high: oklch(0.99 0.01 85);
   --radius: 0.7rem;
   --sidebar: oklch(0.96 0.014 85);
   --sidebar-foreground: oklch(0.23 0.02 50);
@@ -145,6 +162,15 @@
   --chart-5: oklch(0.7 0.06 130);
   --chart-earned: oklch(0.64 0.11 168);
   --chart-spent: oklch(0.66 0.15 50);
+  /* The score ramp's anchor flips in the dark: a healthier entry glows brighter (validated
+     --ordinal on the dark card, the dark end 2.6:1). */
+  --score-1: oklch(0.46 0.09 168);
+  --score-2: oklch(0.55 0.11 168);
+  --score-3: oklch(0.64 0.12 168);
+  --score-4: oklch(0.73 0.11 168);
+  --score-5: oklch(0.82 0.09 168);
+  --score-ink-low: oklch(0.97 0.01 85);
+  --score-ink-high: oklch(0.18 0.02 170);
   --sidebar: oklch(0.16 0.016 170);
   --sidebar-foreground: oklch(0.945 0.012 85);
   --sidebar-primary: oklch(0.78 0.08 168);

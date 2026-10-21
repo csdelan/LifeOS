@@ -18,6 +18,7 @@ import {
 } from "@/lib/rewards";
 import type { LifeOsReads } from "@/lib/mock/api";
 import { normalizeDomainDays, normalizeDomainReport, normalizeDomains } from "@/lib/domains";
+import { normalizeFoodDay, normalizeFoodDays, normalizeMeal } from "@/lib/food";
 import type {
   AreaRow,
   ArtifactRecord,
@@ -25,6 +26,9 @@ import type {
   DomainReportRead,
   DomainsRead,
   BountyTypeDefaults,
+  FoodDayRead,
+  FoodDaysRead,
+  MealRow,
   HabitOccurrenceRow,
   HabitRow,
   InboxItem,
@@ -210,6 +214,21 @@ export const liveReads: LifeOsReads = {
   async domainReport(days) {
     const data = await unwrap(api().GET("/api/domains/report", { params: { query: { days } } }));
     return normalizeDomainReport(asType<DomainReportRead>(data));
+  },
+
+  async foodDay(date) {
+    const data = await unwrap(api().GET("/api/food/day", { params: { query: { date } } }));
+    return normalizeFoodDay(asType<FoodDayRead>(data));
+  },
+
+  async foodDays(from, to) {
+    const data = await unwrap(api().GET("/api/food/days", { params: { query: { from, to } } }));
+    return normalizeFoodDays(asType<FoodDaysRead>(data));
+  },
+
+  async foodRecent(limit) {
+    const data = await unwrap(api().GET("/api/food/recent", { params: { query: { limit } } }));
+    return asType<MealRow[]>(data).map(normalizeMeal);
   },
 
   async ledger(opts) {

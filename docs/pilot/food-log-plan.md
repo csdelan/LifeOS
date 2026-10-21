@@ -520,7 +520,7 @@ Each of these has to earn its place through use.
 - [x] F1 — Food entries and fasts (migration 0034)
 - [x] F2 — Diet XP on the ledger (no migration)
 - [x] F3 — API
-- [ ] F4 — Day view
+- [x] F4 — Day view
 - [ ] F5 — Week and month views
 - [ ] F6 — Photos
 
@@ -592,3 +592,28 @@ Each of these has to earn its place through use.
   out. `{id}` may be the start of the id, as in `bsk food`.
 - **`POST /api/food/fasts`** takes `{action, fast?, at?, from?, to?}`. An action missing what
   it needs is a 400 naming it.
+
+**F4 (2026-10-20).** As planned, plus:
+
+- **The mock's seeded food is unpaid until the page opens.** The seed's Health history is
+  calibrated for the habit golden path (40 XP short of level 10), so the seeded food days
+  don't sit on the seeded ledger, and the mock's domain settle leaves food alone. Opening
+  `/food` settles them, as the API's settle would; in the mock that makes Health an Apprentice
+  on the spot.
+- **The score scale** is one hue (168), five lightness steps per theme, the dark ramp flipped
+  so 5 is always the strongest; it passes the dataviz validator's ordinal checks in both
+  themes. The middle steps (3 in light, 2 in dark) reach only about 4:1 against either ink:
+  enough for a tile's icon, not for small text. So the gallery's tiles carry only an icon,
+  and the score picker shows each score's swatch with the selected one ringed, never text on
+  the fill.
+- **Toasts:** diet and fasting earns show a plate (🍽️); a reversal and an earn on one key are
+  grouped into one "re-scored" toast that chimes only when the score went up, and a give-back
+  alone is quiet.
+- **Day navigation steps from the date asked for**, not the day on screen: the last day stays
+  up while the next loads, so pressing ‹ twice moves two days.
+- **The Log food sheet** takes the whole entry, as the API does. Log again fills everything
+  but the time. Past days start a new entry at noon on that day. End fast shows only for a new
+  entry with calories, eaten after the running fast began.
+- **Accessibility:** the food scans emulate reduced motion, which `index.css` already honours
+  by switching transitions off, so axe reads settled colours. Opening the page stacks the
+  settle's toasts, and the day buttons fade between enabled and disabled.

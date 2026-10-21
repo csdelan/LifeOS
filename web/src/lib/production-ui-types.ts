@@ -968,6 +968,148 @@ export interface NewSubjectRequest {
 export type DeferKind = "date" | "days" | "hours" | "someday" | "postponed";
 export interface DeferRequest { kind: DeferKind; value?: string | number }
 
+// ---------------------------------------------------------------------------
+// Food Log (FOOD-1..5, food-log plan §3.6): `/api/food`. Days are home-zone days
+// (`yyyy-MM-dd`); times are ISO instants. Score parts are unrounded to 2 places; awards are
+// whole base Health XP.
+// ---------------------------------------------------------------------------
+
+export type FoodMealType = "breakfast" | "lunch" | "dinner" | "snack" | "drink";
+
+/** A live food entry: the newest version of its id. */
+export interface MealRow {
+  id: string;
+  name: string;
+  score: number;
+  calories: number;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+  mealType: FoodMealType;
+  eatenAt: string;
+  eatenOn: string;
+  photoArtifactId: string | null;
+  /** The recorded fast it was eaten inside, if any (the day read only). */
+  duringFast: string | null;
+  firstLoggedAt: string;
+  loggedAt: string;
+  versions: number;
+}
+
+/** A live fast: running while `endedAt` is null; it counts on the day it ends. */
+export interface FastRow {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  startedOn: string;
+  endedOn: string | null;
+  running: boolean;
+  seconds: number | null;
+  mealsDuring: number;
+}
+
+/** What the ledger pays one food award: its base, what it paid, and the multiplier (null at 1.0). */
+export interface FoodAwardPaid {
+  base: number;
+  paid: number;
+  multiplier: number | null;
+}
+
+export interface FoodPaid {
+  fast: FoodAwardPaid | null;
+  diet: FoodAwardPaid | null;
+  /** Health XP paid for the day's diet, after the multiplier. */
+  total: number;
+  baseTotal: number;
+}
+
+/** One day's facts, its score (projected until it pays) and what the ledger pays it. */
+export interface FoodDaySummary {
+  day: string;
+  meals: number;
+  calories: number;
+  averageScore: number | null;
+  longestFastSeconds: number | null;
+  /** By hand, or because the day is over. */
+  closed: boolean;
+  closedByHand: boolean;
+  closedAt: string | null;
+  quality: number;
+  caloriesPart: number;
+  fasting: number;
+  foodAward: number;
+  fastAward: number;
+  total: number;
+  cap: number;
+  paid: FoodPaid;
+}
+
+export interface FoodDayRead {
+  day: string;
+  today: string;
+  /** Newest first. */
+  meals: MealRow[];
+  /** The fasts that ended on the day. */
+  fasts: FastRow[];
+  running: FastRow | null;
+  /** The newest entry with calories, anywhere: Begin fast offers its time. */
+  lastMeal: MealRow | null;
+  summary: FoodDaySummary;
+}
+
+export interface FoodDaysRead {
+  from: string;
+  to: string;
+  today: string;
+  /** Every day of the range, oldest first. */
+  days: FoodDaySummary[];
+}
+
+/** A food entry as the page sends it; `eatenAt` defaults to now, `mealType` to a guess. */
+export interface FoodEntryRequest {
+  name: string;
+  score: number;
+  calories: number;
+  eatenAt?: string;
+  mealType?: FoodMealType;
+  proteinG?: number | null;
+  carbsG?: number | null;
+  fatG?: number | null;
+  /** Ends the running fast at the entry's time ("Ends your 17 h fast at 12:30"). */
+  endFast?: boolean;
+}
+
+export type FastActionRequest =
+  | { action: "begin"; at?: string }
+  | { action: "end"; at?: string }
+  | { action: "record"; from: string; to: string }
+  /** `to` left out keeps a running fast running. */
+  | { action: "edit"; fast: string; from: string; to?: string | null }
+  | { action: "delete"; fast: string };
+
+export type FoodAction =
+  | "logged"
+  | "edited"
+  | "deleted"
+  | "fast_begun"
+  | "fast_ended"
+  | "fast_recorded"
+  | "fast_edited"
+  | "fast_deleted"
+  | "closed"
+  | "already_closed";
+
+/** A food write's outcome, with what it earned, gave back or re-scored. */
+export interface FoodWriteResult extends Earned {
+  action: FoodAction;
+  meal: MealRow | null;
+  fast: FastRow | null;
+  /** The day a close was for. */
+  day: string | null;
+  /** The days the write touched. */
+  days: string[];
+}
+
 /**
  * The write client the UI calls. Every method maps to a bsk verb / API endpoint.
  * Mock all of these for the first pass; return shapes match the real API.
@@ -999,6 +1141,17 @@ export interface LifeOsWriteClient {
    * §3.7), which the Character page does when it opens.
    */
   settleDomains(): Promise<Earned>;
+  /** Log a food entry (FOOD-1); answers what it earned (`endFast` can end a fast, which pays). */
+  logFood(req: FoodEntryRequest): Promise<FoodWriteResult>;
+  /** Replace a food entry as a whole; a day that already paid is re-scored. */
+  editFood(meal: string, req: FoodEntryRequest): Promise<FoodWriteResult>;
+  deleteFood(meal: string): Promise<FoodWriteResult>;
+  /** Begin, end, record, edit or delete a fast (FOOD-2). An ended fast pays on its day. */
+  fast(req: FastActionRequest): Promise<FoodWriteResult>;
+  /** Close a day (today by default) so its food pays (FOOD-3). */
+  closeFoodDay(day?: string): Promise<FoodWriteResult>;
+  /** Settle every food day with the ledger, which the Food Log does when it opens. */
+  settleFood(): Promise<Earned>;
   /** Set structured recurrence on a Habit (GEN-3). */
   recur(habit: string, spec: RecurrenceSpec): Promise<void>;
   involve(subject: string, person: string, role: PersonRole, remove?: boolean): Promise<void>;

@@ -18,6 +18,7 @@ import { fetchMe, meQueryKey } from "@/lib/me";
 import type { LifeOsReads } from "@/lib/mock/api";
 import type {
   AdherenceState,
+  Earned,
   HabitOccurrenceRow,
   InboxItem,
   LifeOsWriteClient,
@@ -56,6 +57,10 @@ export const qk = {
   // Nested under ["domains"], so every domains invalidation refreshes the chart too.
   domainDays: (domain: string, days: number) => ["domains", "days", domain, days] as const,
   domainReport: (days: number) => ["domains", "report", days] as const,
+  food: ["food"] as const,
+  foodDay: (date: string) => ["food", "day", date] as const,
+  foodDays: (from: string, to: string) => ["food", "days", from, to] as const,
+  foodRecent: ["food", "recent"] as const,
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
@@ -69,6 +74,17 @@ export const qk = {
 
 function invalidate(qc: QueryClient, keys: readonly (readonly unknown[])[]) {
   return Promise.all(keys.map((queryKey) => qc.invalidateQueries({ queryKey })));
+}
+
+/** A food write: announce what it earned, gave back or re-scored, then refresh what it moved. */
+async function foodWrite<T extends Earned>(qc: QueryClient, write: () => Promise<T>): Promise<T> {
+  try {
+    const result = await write();
+    announceEarned(result);
+    return result;
+  } finally {
+    await invalidate(qc, [qk.food, qk.wallet, qk.ledger, qk.domains]);
+  }
 }
 
 function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWriteClient {
@@ -244,7 +260,35 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async settleDomains() {
       const earned = await client.settleDomains();
       announceEarned(earned);
-      if (earned.awards.length > 0) await invalidate(qc, [qk.wallet, qk.ledger, qk.domains]);
+      // The live settle pays food days that closed themselves, too.
+      if (earned.awards.length > 0) await invalidate(qc, [qk.wallet, qk.ledger, qk.domains, qk.food]);
+      return earned;
+    },
+
+    async logFood(req) {
+      return foodWrite(qc, () => client.logFood(req));
+    },
+
+    async editFood(meal, req) {
+      return foodWrite(qc, () => client.editFood(meal, req));
+    },
+
+    async deleteFood(meal) {
+      return foodWrite(qc, () => client.deleteFood(meal));
+    },
+
+    async fast(req) {
+      return foodWrite(qc, () => client.fast(req));
+    },
+
+    async closeFoodDay(day) {
+      return foodWrite(qc, () => client.closeFoodDay(day));
+    },
+
+    async settleFood() {
+      const earned = await client.settleFood();
+      announceEarned(earned);
+      if (earned.awards.length > 0) await invalidate(qc, [qk.food, qk.wallet, qk.ledger, qk.domains]);
       return earned;
     },
 
@@ -640,6 +684,37 @@ export function useDomainReport(days: number, enabled = true) {
     queryFn: () => reads().domainReport(days),
     enabled,
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * One day of the Food Log (FOOD-4), today in the home zone when `date` is left out; the last
+ * day stays up while the next loads.
+ */
+export function useFoodDay(date?: string) {
+  return useQuery({
+    queryKey: qk.foodDay(date ?? "today"),
+    queryFn: () => reads().foodDay(date),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Every day from `from` to `to`: the Food Log's Week and Month views. */
+export function useFoodDays(from: string, to: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.foodDays(from, to),
+    queryFn: () => reads().foodDays(from, to),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Recent entries by name, for "Log again". */
+export function useFoodRecent(enabled = true) {
+  return useQuery({
+    queryKey: qk.foodRecent,
+    queryFn: () => reads().foodRecent(30),
+    enabled,
   });
 }
 

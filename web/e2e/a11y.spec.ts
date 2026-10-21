@@ -74,6 +74,57 @@ test.describe("accessibility", () => {
     });
   }
 
+  // The Food Log on a seeded day with entries and a fast, then the Log food sheet with a
+  // score picked, in both themes. Opening the page settles diet XP, which stacks toasts, and
+  // day changes fade buttons: reduced motion (no transitions, in index.css) scans them settled.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /food with entries and the log sheet, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/food");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+      // Two days back holds the seeded 23-hour fast, black coffee and a salmon salad.
+      await page.getByRole("button", { name: "Previous day" }).click();
+      await page.getByRole("button", { name: "Previous day" }).click();
+      await expect(page.getByRole("list", { name: /^Entries for / }).getByRole("listitem")).toHaveCount(2, {
+        timeout: 10_000,
+      });
+      await expect(page.getByText(/^\d+ base → \d+ Health XP/)).toBeVisible();
+      const day = await scan();
+      expect(day, JSON.stringify(day, null, 2)).toEqual([]);
+
+      await page.getByRole("button", { name: "Today", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible();
+      await page.getByRole("button", { name: "Log food", exact: true }).click();
+      const sheet = page.getByRole("dialog", { name: "Log food" });
+      await sheet.getByRole("radio", { name: "3 · average" }).check();
+      await expect(sheet.getByText(/^Average: /)).toBeVisible();
+      const log = await scan();
+      expect(log, JSON.stringify(log, null, 2)).toEqual([]);
+    });
+  }
+
+  // The Food Log on a phone: Log food sits at the bottom, and the sheet rises from there.
+  test("axe serious/critical: /food on a phone with the log sheet open", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/food");
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Log food", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Log food" });
+    await expect(sheet).toBeVisible();
+    const box = await sheet.boundingBox();
+    expect(box && box.y + box.height).toBeGreaterThan(800);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    const blocking = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
+  });
+
   // States the routes above don't reach: an Established habit checked off on the Habits
   // page, and Today's Maintaining group open (REWARD-2 maintenance).
   test("axe serious/critical: maintained habits", async ({ page }) => {

@@ -14,6 +14,7 @@ import type {
 import { renamedMessage } from "@/lib/production-ui-types";
 import { normalizeTimer } from "@/lib/live/reads";
 import { normalizeEarned, normalizeProgress } from "@/lib/domains";
+import { foodWriteMessage, normalizeFoodWrite } from "@/lib/food";
 import {
   normalizeBountyResult,
   normalizeHabitTarget,
@@ -135,6 +136,46 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async settleDomains() {
       return normalizeEarned(await unwrap(api().POST("/api/domains/settle")));
+    },
+
+    async logFood(req) {
+      const result = normalizeFoodWrite(await unwrap(api().POST("/api/food/meals", { body: req })));
+      notify(foodWriteMessage(result));
+      return result;
+    },
+
+    async editFood(meal, req) {
+      const result = normalizeFoodWrite(
+        await unwrap(api().POST("/api/food/meals/{id}", { params: { path: { id: meal } }, body: req })),
+      );
+      notify(foodWriteMessage(result));
+      return result;
+    },
+
+    async deleteFood(meal) {
+      const result = normalizeFoodWrite(
+        await unwrap(api().POST("/api/food/meals/{id}/delete", { params: { path: { id: meal } } })),
+      );
+      notify(foodWriteMessage(result));
+      return result;
+    },
+
+    async fast(req) {
+      const result = normalizeFoodWrite(await unwrap(api().POST("/api/food/fasts", { body: req })));
+      notify(foodWriteMessage(result));
+      return result;
+    },
+
+    async closeFoodDay(day) {
+      const result = normalizeFoodWrite(
+        await unwrap(api().POST("/api/food/close", { body: day ? { date: day } : {} })),
+      );
+      notify(foodWriteMessage(result));
+      return result;
+    },
+
+    async settleFood() {
+      return normalizeEarned(await unwrap(api().POST("/api/food/settle")));
     },
 
     async timer(task, action) {

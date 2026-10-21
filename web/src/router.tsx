@@ -12,6 +12,7 @@ import { TasksPage } from "@/pages/tasks-page";
 import { HabitsPage } from "@/pages/habits-page";
 import { RewardsPage } from "@/pages/rewards-page";
 import { CharacterPage } from "@/pages/character-page";
+import { FoodPage } from "@/pages/food-page";
 import { VisionPage } from "@/pages/vision-page";
 import { ReviewsPage } from "@/pages/reviews-page";
 import { PeoplePage } from "@/pages/people-page";
@@ -51,6 +52,12 @@ export type RewardsSearch = {
   view?: "history";
   /** An item or Reward opened from the history, shown in the side panel. */
   selected?: string;
+};
+
+/** The Food Log (FOOD-4/5): Day by default, or the Week or Month around `date`. */
+export type FoodSearch = {
+  view?: "week" | "month";
+  date?: string;
 };
 
 export type CharacterSearch = {
@@ -159,6 +166,16 @@ const rewardsRoute = createRoute({
   component: RewardsPage,
 });
 
+const foodRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/food",
+  validateSearch: (search: Record<string, unknown>): FoodSearch => ({
+    view: search.view === "week" || search.view === "month" ? search.view : undefined,
+    date: typeof search.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(search.date) ? search.date : undefined,
+  }),
+  component: FoodPage,
+});
+
 const characterRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/character",
@@ -202,6 +219,7 @@ const routeTree = rootRoute.addChildren([
   mapRoute,
   tasksRoute,
   habitsRoute,
+  foodRoute,
   rewardsRoute,
   characterRoute,
   visionRoute,
