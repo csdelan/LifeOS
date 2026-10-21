@@ -66,6 +66,7 @@ requirements cluster and the ID says where it lives:
 | `TASKS-` | Tasks working view |
 | `CAL-` | Calendar / Appointments |
 | `REWARD-` | Rewards: currencies, redeeming, reward history, life-domain progression |
+| `FOOD-` | Food Log: food entries, fasts, diet XP |
 | `NAV-` | Navigation shell |
 | `GEN-` | Cross-cutting conventions **and** per-subject-type object specs (Goals, Projects, Tasks, Identity Statements, Commitments, Decisions, Problems, People, Vision, …) |
 
@@ -2722,6 +2723,155 @@ successful day gets retuned after a few weeks of real XP.
 - Open decisions: none blocking.
 
 
+### FOOD-1 — A Food Log records what I eat, how healthy it was and roughly how many calories
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "I would like to implement a Food Log page. The purpose of this page is to track my food
+  intake, healthiness of the food, photos of food (photos can be last priority), Fasting, and
+  calories or nutrient info when available. All of this will be tracked with events."
+  (2026-10-20)
+- "Every time I log food consumed (a meal or snack), it creates a new entry and I rank it with
+  a health score from 1-5 (1=junk food like ice cream, 5=Very healthy, like a salmon salad). I
+  also add a rough calorie number which doesn't need to be precise but just an estimate."
+- Agreed in Q&A (2026-10-20): I log mostly from my phone, so the page is phone-first. Each
+  entry has a time (now by default, backfillable), a short name, the 1–5 score (with examples
+  on the picker) and calories (with quick sizes). Protein, carbs and fat are optional. The
+  meal type is guessed from the time. Recent entries can be logged again in one tap. Drinks
+  with calories are logged like snacks. Entries can be edited or deleted later.
+
+**Ontology fit (Claude):**
+- Maps to: each entry is a `measurement` event (calories, a self-rated score, nutrients),
+  dated when it was eaten (`occurred_at`) and when it was logged (`recorded_at`). It's the
+  first write path for `measurement`. No subject and no edge: a meal is something that
+  happened, not a thing to manage.
+- Kernel delta: `FoodLogService` and `bsk food`; `v_meal` and `v_food_day` (migration 0034).
+  Phase F1 of [food-log-plan.md](food-log-plan.md).
+- Implications: corrections append a newer version of the entry (same id; a delete is a
+  voided version). The newest by `recorded_at` wins, so an edit that moves the time earlier
+  still wins. An entry counts on its home-zone day (America/Los_Angeles).
+- Open decisions: none blocking (agreed 2026-10-20, plan §1).
+
+
+### FOOD-2 — Fasts are tracked from begin to end, live or backfilled
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "I want to track fasts..... Begin fast, and end fast. I should be able to backfill as needed
+  as I won't always record start and end in real time." (2026-10-20)
+- Agreed in Q&A (2026-10-20): Begin and End buttons, helped by the food log:
+  - Begin fast offers the time of my last entry.
+  - Logging food while a fast runs offers to end it at that time.
+  - A running fast shows a live counter: "Fasting 14 h 20 m · earning since 12 h".
+  - A past fast can be recorded with both times.
+  - Fasts aren't inferred from the gaps between meals.
+
+**Ontology fit (Claude):**
+- Maps to: `activity` events carrying a `fast` payload with its own id. Begin, end, a
+  backfill, an edit and a delete are each a new version; the newest wins. Like the task timer
+  (TASKS-2), nothing is stored but the events.
+- Kernel delta: `v_fast` (migration 0034); begin / end / record / edit / delete in
+  `FoodLogService` and `bsk food fast`. Phase F1.
+- Implications: one fast runs at a time, and recorded fasts can't overlap. Food logged inside
+  a recorded fast isn't refused (GEN-5, scout's honor); the day view flags it. A 0-calorie
+  entry (black coffee) never ends a fast.
+- Open decisions: none blocking.
+
+
+### FOOD-3 — My diet earns up to 40 Health XP a day
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "At the end of the day, a weighted health adjusted score can be computed based on how many
+  healthy calories vs unhealthy calories and health XP can be awarded based on that.
+  Consumed calories is also a factor in Health XP. Anything less than 2000 (but above ~500)
+  provides a bonus." (2026-10-20)
+- "The maximum amount of diet related health XP to be earned per day is capped at 40 XP (for
+  now) … Total calories can be 10% of that and healthiness of those calories is 70% of it,
+  and fasting can be max 20% of it."
+- Fasting: "Anything less than 12 hours provides no XP. Beyond 12 hours, I get a small amount
+  of XP per hour of the fast recorded at the end of the fast … Max benefit of a fast caps at
+  24 hours."
+- Examples: "I eat 3000 calories worth of ice cream in a day (and that's it). I get zero
+  Health XP that day from Diet." "I eat 1200 calories of salmon salad in a day (and that's
+  it), with 23 hours of fasting. I will be pretty close to 100%."
+- Agreed in Q&A (2026-10-20):
+  - **Food quality** (28) is a straight line on the calorie-weighted average score.
+  - **The calorie part** (4) fades from 2,000 to 0 at 2,500 instead of a cliff, and doesn't
+    depend on quality.
+  - **Fasting** (8) pays ⅔ XP an hour from 12 to 24 hours, the moment the fast ends, on the
+    day it ends.
+  - **The food part pays when I close the day**, or by itself once the day is over, and a
+    later correction re-scores the day.
+  - **Diet XP counts toward Health's 70-XP successful day**, and the consistency multiplier
+    applies on top.
+
+**Ontology fit (Claude):**
+- Maps to: two award keys a day on the D11 ledger, with no item: `fast:<date>` (due once a
+  fast ending that day has ended) and `diet:<date>` (due once the day is closed). Both pay
+  `health_xp`, are credited to that day and are priced at its multiplier (REWARD-7). Closing a
+  day is an `activity` event. The formula lives in Domain code (`DietRules`), like
+  `LifeDomains`.
+- Kernel delta: `FoodRewards` reconciles food days after every food write, on settle and in
+  the sweep. **Re-pricing**, new for these keys only: when a day's base differs from what its
+  latest earn paid, give it back and earn again. The ledger guard learns to check writes on
+  one key in order, plus the latest earn it read. Phase F2.
+- Implications: the fast and the food are rounded separately, so a day can differ from one
+  rounding of its total by 1 XP. A retune of `DietRules` doesn't rewrite past days; only a
+  change to a day's entries re-scores it. A day that closed itself pays the next time LifeOS
+  settles, still credited to its own day.
+- Open decisions: none blocking. Calibrate after 2–4 weeks of use (plan §2.3).
+
+
+### FOOD-4 — The Food Log shows each day, week and month with the diet XP earned
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "The food log can have a daily view by default, which has a gallery view of each 'meal'
+  (recorded food log) I have, and then a summary of the day. Also have a weekly view, and a
+  monthly view. Each view shows the Health XP contribution I achieved per day (and for total
+  week/month)." (2026-10-20)
+- Weeks run Monday to Sunday.
+
+**Ontology fit (Claude):**
+- Maps to: read-only folds. `v_food_day` gives each day's facts, `DietRules.Score` the parts
+  and awards, and the ledger (`v_award_credit`) what was paid. Today shows as projected until
+  it's closed.
+- Kernel delta: `GET /api/food/day`, `/api/food/days`, `/api/food/recent` (F3); the `/food`
+  page's Day view (F4), then Week and Month (F5).
+- Implications: none beyond FOOD-3.
+- Open decisions: none blocking.
+
+
+### FOOD-5 — A food entry can carry a photo
+Horizon:    Pilot
+Definition: active
+Build:      mapped
+
+**Workflow (Chris):**
+- "Photos of food (photos can be last priority)." (2026-10-20)
+- Taken with the phone's camera from the Log food sheet, shown in the day's gallery.
+
+**Ontology fit (Claude):**
+- Maps to: an artifact whose bytes live in `bsk.artifact_blob` (CAP-4's storage). The entry's
+  version that adds the photo carries the artifact id, and every later version carries it
+  forward.
+- Kernel delta: none. The API needs its first multipart upload and an artifact content read;
+  the browser resizes photos first. Phase F6, last.
+- Implications: photos live in Postgres, so check the Supabase plan's database limit before
+  F6. At about 150 KB each and three a day, that's roughly 165 MB a year. The blob store is
+  a port, so moving bytes to object storage later doesn't touch the events.
+- Open decisions: none blocking.
+
+
 
 ---
 
@@ -2886,6 +3036,18 @@ achievement). The only writes are ordinary ledger entries: each earn freezes the
 it was paid at, and a rank-up's Gems are an earn-only award, paid once and never reversed.
 Design and build order: [xp-domains-plan.md](xp-domains-plan.md).
 
+**D13 — The Food Log is events, and a day's diet XP is re-priced when its entries change
+(FOOD-1..5, 2026-10-20).** A food entry is a `measurement` event; a fast and a day's close are
+`activity` events. None is a subject: they record what happened, and nothing about them is
+managed over time. Each entry and fast has its own id. An edit or a delete appends a newer
+version, and the newest by `recorded_at` wins, so the record is never rewritten. A day's diet
+XP comes from rules in Domain code (`DietRules`), the way Health's rules are in
+`LifeDomains`. It's paid under two item-less award keys a day: `fast:<date>` when a fast
+ends, and `diet:<date>` when the day is closed. Every other award stays presence-based. These
+two keys are the ledger's first **re-priced** awards: when a day's entries change, its award
+is given back and earned again at the new base. A retune of the rules never rewrites a past
+day. Design and build order: [food-log-plan.md](food-log-plan.md).
+
 ### Method for the Habit ↔ Commitment discrepancy
 
 "Habit" (UI concept) and "Commitment" (storage type) are deliberately decoupled — Chris
@@ -2980,9 +3142,15 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   credited day, established habits keep earning, Health's rules and daily consistency,
   levels, ranks, rank-up Gems and the simulator, the multiplier on earns, the Character page
   with level-up / rank-up feedback, and the period reports). Calibration continues in use.
+- **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
+  and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
+  `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;
+  `bsk food`. — **Open** (F1–F6 in [food-log-plan.md](food-log-plan.md); migration 0034
+  next).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
-scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1). Everything else
+scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **Food log + diet
+XP** (FOOD-1..5 / D13). Everything else
 above has shipped, the rewards work included (R1–R7 in [rewards-plan.md](rewards-plan.md))
 and life-domain XP (X1–X7 in [xp-domains-plan.md](xp-domains-plan.md)). The user-facing UIs for the shipped kernel bits still vary by surface — see each
 requirement's Build field (e.g. CAP-2 / CAP-4 are `building`: kernel done, capture UI pending).
