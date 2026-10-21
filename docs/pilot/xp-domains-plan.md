@@ -241,9 +241,18 @@ Chris's rule is that XP counts on **the day it happened**. Each earn records tha
     check-off landed on tomorrow, outside the day's credit. `AdherenceService` now asks
     `IHomeCalendar`, which Postgres answers. Today's check-offs, including the Maintaining
     group, also send their row's date.
-  - **Still UTC:** the habit views (0027's occurrences and targets) read `current_date`,
-    which is the database's UTC date. So after about 5 pm Pacific, today's unlogged habits
-    read as missed. Logging them still records the right day.
+  - **The habit views' today** is the home zone's too (migration 0033, fixed 2026-10-20).
+    They read `current_date`, the database's UTC date, so after about 5 pm Pacific:
+    - today's unlogged habits read as missed, and the Habits page's streak fell to 0
+    - an evening graduation landed on tomorrow
+    - the establishment window ran a day ahead
+
+    `bsk.home_today()` now replaces `current_date` in those views. The views read the
+    database setting `bsk.home_zone` rather than a per-connection one, because connections
+    go through Supabase's pooler. Unset, it means `America/Los_Angeles`.
+  - **Changing the home zone** therefore takes two settings: `Rewards:HomeTimeZone` for the
+    app, and `ALTER DATABASE <db> SET bsk.home_zone = '<zone>'` for the habit views. The
+    tests pin the views to UTC.
 - **Earns from before X1** have no `credited_on`. They read as their `occurred_at` in the home
   zone. None of them carry domain XP, so nothing is affected.
 - **History is different on purpose.** R7's History keeps filing entries by when they were
