@@ -150,9 +150,14 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IClock>(),
             sourceId));
 
+        services.AddSingleton(sp => new FoodReads(
+            sp.GetRequiredService<IFoodLogRepository>(),
+            sp.GetRequiredService<ILedgerRepository>()));
+
         services.AddSingleton(sp => new FoodLogService(
             sp.GetRequiredService<IFoodLogRepository>(),
             sp.GetRequiredService<FoodRewards>(),
+            sp.GetRequiredService<FoodReads>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
 

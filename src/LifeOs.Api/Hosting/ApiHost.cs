@@ -58,6 +58,7 @@ public static class ApiHost
         builder.Services.AddSingleton(new SubjectReader(reader));
         builder.Services.AddSingleton(sp => new RewardReader(
             reader, sp.GetRequiredService<RewardService>().CoinValueUsd, homeZone));
+        builder.Services.AddSingleton(new FoodReader(reader, homeZone));
 
         // Fail closed: missing issuer/audience/JWKS-or-secret/ALLOWED_EMAILS throws.
         builder.Services.AddLifeOsAuth(builder.Configuration);
@@ -135,6 +136,7 @@ public static class ApiHost
         app.MapWriteEndpoints();
         app.MapRewardEndpoints();
         app.MapDomainEndpoints();
+        app.MapFoodEndpoints();
         app.MapSpaFallback();
     }
 }

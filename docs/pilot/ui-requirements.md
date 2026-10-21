@@ -2849,7 +2849,14 @@ retune never rewrites it (plan, As built F2).
 ### FOOD-4 — The Food Log shows each day, week and month with the diet XP earned
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-10-20 — API landed, F3):** `GET /api/food/day`, `/api/food/days` (up to 62
+days; the week so far by default) and `/api/food/recent` read on the reader connection, each
+day with its parts, projected awards and what's paid. The writes (`POST /api/food/meals`,
+`/meals/{id}`, `/meals/{id}/delete`, `/fasts`, `/close`, `/settle`) answer `awards` and
+`progress`. Build moves `needs-kernel → building`: the `/food` page (F4, F5) is not built
+yet.
 
 **Workflow (Chris):**
 - "The food log can have a daily view by default, which has a gallery view of each 'meal'

@@ -519,7 +519,7 @@ Each of these has to earn its place through use.
 - [x] F0 — Requirements (FOOD-1 to FOOD-5, D13) + this plan
 - [x] F1 — Food entries and fasts (migration 0034)
 - [x] F2 — Diet XP on the ledger (no migration)
-- [ ] F3 — API
+- [x] F3 — API
 - [ ] F4 — Day view
 - [ ] F5 — Week and month views
 - [ ] F6 — Photos
@@ -572,3 +572,23 @@ Each of these has to earn its place through use.
 - **`bsk food` prints a re-price as one line**, "Re-scored Food day Tue Oct 20: 32 -> 18
   Health XP.", and the day read prints what's paid ("Paid: 39 Health XP (food 32 x 1.2 = 38,
   fast 7)"); `--week` / `--month` add a paid column and total.
+
+**F3 (2026-10-20).** As planned, plus:
+
+- **One read path.** The reads moved out of `FoodLogService` into `FoodReads` (Application),
+  which only reads. `bsk food` reaches it through `FoodLogService`, and the API's
+  `FoodReader` builds it on the reader connection, so the page and the CLI read a day
+  identically.
+- **Shapes** (`FoodModels.cs`): `FoodDayRead` (`day`, `today`, `meals` newest first with
+  `duringFast`, `fasts`, `running`, `lastMeal`, `summary`), `FoodDaysRead` (`from`, `to`,
+  `today`, `days`), and `FoodWriteResultRow` (`action`, `meal`, `fast`, `day`, `days`,
+  `awards`, `progress`). Each summary carries the parts, both projected awards, `cap` (40),
+  and `paid` (`fast` and `diet`, each `{base, paid, multiplier}`, plus `total` and
+  `baseTotal`).
+- **`GET /api/food/days`** defaults `to` to today and `from` to that week's Monday.
+  `GET /api/food/recent` takes `limit` from 1 to 100 (20 by default).
+- **`POST /api/food/meals/{id}` takes the whole entry**, as the Log food sheet sends it, so a
+  nutrient left out is cleared. The entry's time and meal type stay as they were when left
+  out. `{id}` may be the start of the id, as in `bsk food`.
+- **`POST /api/food/fasts`** takes `{action, fast?, at?, from?, to?}`. An action missing what
+  it needs is a 400 naming it.

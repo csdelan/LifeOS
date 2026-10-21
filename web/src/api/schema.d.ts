@@ -788,6 +788,150 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/food/day": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetFoodDay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/food/days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetFoodDays"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/food/recent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetRecentFood"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/food/meals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["LogFood"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/food/meals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EditFood"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/food/meals/{id}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DeleteFood"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/food/fasts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["FastAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/food/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CloseFoodDay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/food/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SettleFood"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1067,6 +1211,122 @@ export interface components {
             awards?: components["schemas"]["AwardRow"][];
             progress?: components["schemas"]["DomainChangeRow"][];
         };
+        FastRow: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            endedAt?: null | string;
+            startedOn?: string;
+            endedOn?: null | string;
+            running?: boolean;
+            /** Format: int64 */
+            seconds?: null | number | string;
+            /** Format: int32 */
+            mealsDuring?: number | string;
+        };
+        FoodAwardPaidRow: {
+            /** Format: int64 */
+            base?: number | string;
+            /** Format: int64 */
+            paid?: number | string;
+            /** Format: double */
+            multiplier?: null | number | string;
+        };
+        FoodCloseBody: {
+            /** Format: date */
+            date?: null | string;
+        };
+        FoodDayRead: {
+            day?: string;
+            today?: string;
+            meals?: components["schemas"]["MealRow"][];
+            fasts?: components["schemas"]["FastRow"][];
+            running?: null | components["schemas"]["FastRow"];
+            lastMeal?: null | components["schemas"]["MealRow"];
+            summary?: components["schemas"]["FoodDaySummaryRow"];
+        };
+        FoodDaySummaryRow: {
+            day?: string;
+            /** Format: int32 */
+            meals?: number | string;
+            /** Format: int64 */
+            calories?: number | string;
+            /** Format: double */
+            averageScore?: null | number | string;
+            /** Format: int64 */
+            longestFastSeconds?: null | number | string;
+            closed?: boolean;
+            closedByHand?: boolean;
+            /** Format: date-time */
+            closedAt?: null | string;
+            /** Format: double */
+            quality?: number | string;
+            /** Format: double */
+            caloriesPart?: number | string;
+            /** Format: double */
+            fasting?: number | string;
+            /** Format: int64 */
+            foodAward?: number | string;
+            /** Format: int64 */
+            fastAward?: number | string;
+            /** Format: int64 */
+            total?: number | string;
+            /** Format: int32 */
+            cap?: number | string;
+            paid?: components["schemas"]["FoodPaidRow"];
+        };
+        FoodDaysRead: {
+            from?: string;
+            to?: string;
+            today?: string;
+            days?: components["schemas"]["FoodDaySummaryRow"][];
+        };
+        FoodEntryBody: {
+            name?: null | string;
+            /** Format: int32 */
+            score?: null | number | string;
+            /** Format: int32 */
+            calories?: null | number | string;
+            /** Format: date-time */
+            eatenAt?: null | string;
+            mealType?: null | string;
+            /** Format: int32 */
+            proteinG?: null | number | string;
+            /** Format: int32 */
+            carbsG?: null | number | string;
+            /** Format: int32 */
+            fatG?: null | number | string;
+            endFast?: boolean;
+        };
+        FoodFastBody: {
+            action?: null | string;
+            fast?: null | string;
+            /** Format: date-time */
+            at?: null | string;
+            /** Format: date-time */
+            from?: null | string;
+            /** Format: date-time */
+            to?: null | string;
+        };
+        FoodPaidRow: {
+            fast?: null | components["schemas"]["FoodAwardPaidRow"];
+            diet?: null | components["schemas"]["FoodAwardPaidRow"];
+            /** Format: int64 */
+            total?: number | string;
+            /** Format: int64 */
+            baseTotal?: number | string;
+        };
+        FoodWriteResultRow: {
+            action?: string;
+            meal?: null | components["schemas"]["MealRow"];
+            fast?: null | components["schemas"]["FastRow"];
+            day?: null | string;
+            days?: string[];
+            awards?: components["schemas"]["AwardRow"][];
+            progress?: components["schemas"]["DomainChangeRow"][];
+        };
         HabitEstablishment: {
             /** Format: double */
             minAdherence?: number | string;
@@ -1212,6 +1472,35 @@ export interface components {
         };
         MeResponse: {
             email: string;
+        };
+        MealRow: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            /** Format: int32 */
+            score?: number | string;
+            /** Format: int32 */
+            calories?: number | string;
+            /** Format: int32 */
+            proteinG?: null | number | string;
+            /** Format: int32 */
+            carbsG?: null | number | string;
+            /** Format: int32 */
+            fatG?: null | number | string;
+            mealType?: string;
+            /** Format: date-time */
+            eatenAt?: string;
+            eatenOn?: string;
+            /** Format: uuid */
+            photoArtifactId?: null | string;
+            /** Format: uuid */
+            duringFast?: null | string;
+            /** Format: date-time */
+            firstLoggedAt?: string;
+            /** Format: date-time */
+            loggedAt?: string;
+            /** Format: int32 */
+            versions?: number | string;
         };
         NewSubjectBody: {
             type?: string;
@@ -2888,6 +3177,285 @@ export interface operations {
         };
     };
     SettleDomains: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EarnResult"];
+                };
+            };
+        };
+    };
+    GetFoodDay: {
+        parameters: {
+            query?: {
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodDayRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetFoodDays: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodDaysRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetRecentFood: {
+        parameters: {
+            query?: {
+                limit?: number | string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealRow"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    LogFood: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FoodEntryBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodWriteResultRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    EditFood: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FoodEntryBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodWriteResultRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    DeleteFood: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodWriteResultRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    FastAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FoodFastBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodWriteResultRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    CloseFoodDay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["FoodCloseBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodWriteResultRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SettleFood: {
         parameters: {
             query?: never;
             header?: never;

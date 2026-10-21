@@ -19,10 +19,11 @@ namespace LifeOs.Application.Food;
 /// <c>recorded_at</c> wins, so nothing is ever rewritten. Refusals are in words, with nothing
 /// written. Days and wall-clock times are the home zone's.
 /// </summary>
-public sealed class FoodLogService(IFoodLogRepository food, FoodRewards rewards, IClock clock, string sourceId)
+public sealed class FoodLogService(
+    IFoodLogRepository food, FoodRewards rewards, FoodReads reads, IClock clock, string sourceId)
 {
     /// <summary>The widest range <see cref="GetDaysAsync"/> answers.</summary>
-    public const int MaxRangeDays = 62;
+    public const int MaxRangeDays = FoodReads.MaxRangeDays;
 
     /// <summary>How far ahead of the clock a time may be (a phone's clock running fast).</summary>
     private static readonly TimeSpan Skew = TimeSpan.FromMinutes(1);
@@ -36,7 +37,7 @@ public sealed class FoodLogService(IFoodLogRepository food, FoodRewards rewards,
     };
 
     /// <summary>The diet rules days are scored with.</summary>
-    public DietRules Rules { get; } = DietRules.Default;
+    public DietRules Rules => reads.Rules;
 
     // ---------------------------------------------------------------------------------
     // Food entries
@@ -255,104 +256,17 @@ public sealed class FoodLogService(IFoodLogRepository food, FoodRewards rewards,
         return await ResultAsync(FoodActions.Closed, null, null, target, [target], ids[0], cancellationToken);
     }
 
-    /// <summary>
-    /// One day of the Food Log (default today): its entries, the fasts that ended on it, the
-    /// running fast, when food with calories was last eaten (for Begin fast), its score, and
-    /// what the ledger pays it.
-    /// </summary>
-    public async Task<FoodDayView> GetDayAsync(DateOnly? day = null, CancellationToken cancellationToken = default)
-    {
-        var today = await food.TodayAsync(cancellationToken);
-        var target = day ?? today;
-        var facts = (await food.GetDaysAsync(target, target, cancellationToken)).FirstOrDefault()
-                    ?? FoodDay.Empty(target, target < today);
-        var meals = await food.GetMealsAsync(target, target, cancellationToken);
-        var fasts = await food.GetFastsEndedAsync(target, target, cancellationToken);
-        var running = await food.GetRunningFastAsync(cancellationToken);
-        var last = (await food.GetLatestMealsAsync(1, withCalories: true, cancellationToken)).FirstOrDefault();
-        var paid = await rewards.GetPaidAsync(target, target, cancellationToken);
-        return new FoodDayView(
-            target, today, meals.OrderByDescending(m => m.EatenAt).ToList(), fasts, running, last, facts,
-            Rules.Score(facts.Facts), await EatenDuringFastsAsync(meals, cancellationToken),
-            paid.GetValueOrDefault(target) ?? FoodDayPaid.None);
-    }
+    /// <summary>One day of the Food Log (default today): see <see cref="FoodReads.GetDayAsync"/>.</summary>
+    public Task<FoodDayView> GetDayAsync(DateOnly? day = null, CancellationToken cancellationToken = default)
+        => reads.GetDayAsync(day, cancellationToken);
 
-    /// <summary>
-    /// Which of <paramref name="meals"/> (with calories) were eaten strictly inside a recorded
-    /// fast, and which fast: the day view flags them and offers to end that fast there.
-    /// </summary>
-    private async Task<IReadOnlyDictionary<Guid, Guid>> EatenDuringFastsAsync(
-        IReadOnlyList<Meal> meals, CancellationToken cancellationToken)
-    {
-        var eating = meals.Where(m => m.Calories > 0).ToList();
-        if (eating.Count == 0)
-        {
-            return new Dictionary<Guid, Guid>();
-        }
+    /// <summary>Every day of a range, at most <see cref="MaxRangeDays"/>: see <see cref="FoodReads.GetDaysAsync"/>.</summary>
+    public Task<FoodRange> GetDaysAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+        => reads.GetDaysAsync(from, to, cancellationToken);
 
-        var span = new FastSpan(eating.Min(m => m.EatenAt), eating.Max(m => m.EatenAt));
-        var fasts = await food.GetOverlappingFastsAsync(span, cancellationToken);
-        var flagged = new Dictionary<Guid, Guid>();
-        foreach (var meal in eating)
-        {
-            var inside = fasts.FirstOrDefault(f => f.StartedAt < meal.EatenAt && (f.EndedAt is null || meal.EatenAt < f.EndedAt));
-            if (inside is not null)
-            {
-                flagged[meal.Id] = inside.Id;
-            }
-        }
-
-        return flagged;
-    }
-
-    /// <summary>
-    /// Every day from <paramref name="from"/> to <paramref name="to"/> (inclusive, at most
-    /// <see cref="MaxRangeDays"/>), each with its facts and score; a day with nothing on it
-    /// is empty.
-    /// </summary>
-    public async Task<FoodRange> GetDaysAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
-    {
-        if (to < from)
-        {
-            throw new ArgumentException("The range must end on or after the day it starts.");
-        }
-
-        if (to.DayNumber - from.DayNumber + 1 > MaxRangeDays)
-        {
-            throw new ArgumentException($"Ask for at most {MaxRangeDays} days at a time.");
-        }
-
-        var today = await food.TodayAsync(cancellationToken);
-        var byDay = (await food.GetDaysAsync(from, to, cancellationToken)).ToDictionary(d => d.Day);
-        var paid = await rewards.GetPaidAsync(from, to, cancellationToken);
-        var days = new List<FoodDaySummary>();
-        for (var d = from; d <= to; d = d.AddDays(1))
-        {
-            var facts = byDay.TryGetValue(d, out var found) ? found : FoodDay.Empty(d, d < today);
-            days.Add(new FoodDaySummary(facts, Rules.Score(facts.Facts), paid.GetValueOrDefault(d) ?? FoodDayPaid.None));
-        }
-
-        return new FoodRange(from, to, today, days);
-    }
-
-    /// <summary>
-    /// The latest entry of each distinct name (any case), newest first, at most
-    /// <paramref name="limit"/> — what "Log again" offers.
-    /// </summary>
-    public async Task<IReadOnlyList<Meal>> GetRecentAsync(int limit = 20, CancellationToken cancellationToken = default)
-    {
-        if (limit is < 1 or > 100)
-        {
-            throw new ArgumentException("Ask for 1 to 100 recent entries.");
-        }
-
-        var latest = await food.GetLatestMealsAsync(limit * 10, withCalories: false, cancellationToken);
-        return latest
-            .GroupBy(m => m.Name.Trim(), StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.First())
-            .Take(limit)
-            .ToList();
-    }
+    /// <summary>What "Log again" offers: see <see cref="FoodReads.GetRecentAsync"/>.</summary>
+    public Task<IReadOnlyList<Meal>> GetRecentAsync(int limit = 20, CancellationToken cancellationToken = default)
+        => reads.GetRecentAsync(limit, cancellationToken);
 
     /// <summary>
     /// Settles every food day with the ledger (food-log plan §3.4) — what the Food Log page

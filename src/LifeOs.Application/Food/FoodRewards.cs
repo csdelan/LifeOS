@@ -84,34 +84,6 @@ public sealed class FoodRewards(
     }
 
     /// <summary>
-    /// What the ledger pays each day from <paramref name="from"/> to <paramref name="to"/> for
-    /// its fast and its food: base, paid and multiplier, for the keys paid now.
-    /// </summary>
-    public async Task<IReadOnlyDictionary<DateOnly, FoodDayPaid>> GetPaidAsync(
-        DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
-    {
-        var byDay = new Dictionary<DateOnly, FoodDayPaid>();
-        foreach (var award in await ledger.GetKeyedAwardsAsync(FoodAwards.Triggers, cancellationToken))
-        {
-            if (!award.Paid || FoodAwards.DayOf(award.AwardKey) is not { } day || day < from || day > to)
-            {
-                continue;
-            }
-
-            var paid = new FoodPaid(
-                award.LatestBase.GetValueOrDefault(Rules.Currency),
-                award.Net.GetValueOrDefault(Rules.Currency),
-                award.LatestMultipliers.TryGetValue(Rules.Currency, out var multiplier) ? multiplier : null);
-            var current = byDay.GetValueOrDefault(day) ?? new FoodDayPaid(null, null);
-            byDay[day] = award.AwardKey.StartsWith(FoodAwards.FastTrigger + ":", StringComparison.Ordinal)
-                ? current with { Fast = paid }
-                : current with { Diet = paid };
-        }
-
-        return byDay;
-    }
-
-    /// <summary>
     /// The entries that bring the ledger in line with every food day. For each key that could
     /// pay or is paid:
     /// <list type="bullet">
