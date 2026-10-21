@@ -1,5 +1,5 @@
 /**
- * Rewards vocabulary and rules the UI shares with the kernel (REWARD-1 / REWARD-3).
+ * Rewards vocabulary and rules the UI shares with the kernel (REWARD-1 / REWARD-3 / REWARD-6).
  * The currency list mirrors `Currencies` in LifeOs.Domain; the redeem checks mirror
  * `RewardService.RedeemAsync` / `RewardPrice.Normalize`, so the dialog can say why
  * before it asks — the kernel still has the final word.
@@ -23,10 +23,17 @@ import type {
   WalletLine,
 } from "@/lib/production-ui-types";
 
+/**
+ * Where a currency sits in the bounty editor: spent on rewards, tracked, or the XP of a
+ * life domain (REWARD-6) — tracked too, and the basis of levels and ranks later.
+ */
+export type CurrencyGroup = "spend" | "track" | "domain";
+
 export interface CurrencyDef {
   key: string;
   label: string;
   spendable: boolean;
+  group: CurrencyGroup;
   /** Shown beside amounts; decorative (screen readers get the label). */
   symbol: string;
   /** What one unit buys, for the wallet card. */
@@ -35,12 +42,23 @@ export interface CurrencyDef {
 
 /** Display order, as the Domain lists them. */
 export const CURRENCIES: readonly CurrencyDef[] = [
-  { key: "coins", label: "Coins", spendable: true, symbol: "🪙", hint: "Real money, into savings" },
-  { key: "freedom", label: "Freedom", spendable: true, symbol: "⏳", hint: "1 Freedom = 1 minute of fun" },
-  { key: "gems", label: "Gems", spendable: true, symbol: "💎", hint: "For the big ones" },
-  { key: "karma", label: "Karma", spendable: true, symbol: "✨", hint: "Good deeds" },
-  { key: "xp", label: "XP", spendable: false, symbol: "⭐", hint: "Experience from everything" },
-  { key: "resolve", label: "Resolve", spendable: false, symbol: "🛡️", hint: "Resistance overcome" },
+  { key: "coins", label: "Coins", spendable: true, group: "spend", symbol: "🪙", hint: "Real money, into savings" },
+  { key: "freedom", label: "Freedom", spendable: true, group: "spend", symbol: "⏳", hint: "1 Freedom = 1 minute of fun" },
+  { key: "gems", label: "Gems", spendable: true, group: "spend", symbol: "💎", hint: "For the big ones" },
+  { key: "karma", label: "Karma", spendable: true, group: "spend", symbol: "✨", hint: "Good deeds" },
+  { key: "xp", label: "Life XP", spendable: false, group: "track", symbol: "⭐", hint: "General experience from everything" },
+  { key: "resolve", label: "Resolve", spendable: false, group: "track", symbol: "🛡️", hint: "Resistance overcome" },
+  { key: "health_xp", label: "Health XP", spendable: false, group: "domain", symbol: "❤️", hint: "Exercise, sleep, nutrition" },
+  { key: "social_xp", label: "Social XP", spendable: false, group: "domain", symbol: "🤝", hint: "Family, friends, outreach" },
+  { key: "environment_xp", label: "Environment XP", spendable: false, group: "domain", symbol: "🏡", hint: "Clean, tidy, maintain, declutter" },
+  { key: "finance_xp", label: "Finance XP", spendable: false, group: "domain", symbol: "📈", hint: "Budget, save, grow net worth" },
+];
+
+/** The bounty editor's sections, in display order, each with its currencies. */
+export const CURRENCY_GROUPS: readonly { id: CurrencyGroup; label: string; currencies: readonly CurrencyDef[] }[] = [
+  { id: "spend", label: "Spend", currencies: CURRENCIES.filter((c) => c.group === "spend") },
+  { id: "track", label: "Track", currencies: CURRENCIES.filter((c) => c.group === "track") },
+  { id: "domain", label: "Life domains", currencies: CURRENCIES.filter((c) => c.group === "domain") },
 ];
 
 export const SPENDABLE = CURRENCIES.filter((c) => c.spendable);

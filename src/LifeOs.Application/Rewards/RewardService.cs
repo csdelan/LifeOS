@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LifeOs.Application.Abstractions;
@@ -359,11 +360,12 @@ public sealed class RewardService(
                 }
 
                 // Dated at the trigger, so the history shows the day it was earned even
-                // when a sweep heals it later.
+                // when a sweep heals it later; credited to the day it happened, which for a
+                // habit day logged late is earlier still (xp-domains plan §3.3).
                 writes.Add(Entry(
                     subject, LedgerEntries.Earn, award.AwardKey, award.Trigger, amounts,
                     occurredAt: award.TriggeredAt, recordedAt: now, derivedFrom: award.SourceEventIds,
-                    expectPaid: false));
+                    expectPaid: false, creditedOn: award.CreditedOn));
                 awards.Add(new Award(Guid.Empty, subject, LedgerEntries.Earn, award.Trigger, award.AwardKey, amounts));
             }
         }
@@ -397,16 +399,19 @@ public sealed class RewardService(
     private LedgerWrite Entry(
         SubjectRef subject, string entry, string awardKey, string trigger,
         IReadOnlyDictionary<string, long> amounts, DateTimeOffset occurredAt, DateTimeOffset recordedAt,
-        IReadOnlyList<Guid> derivedFrom, bool expectPaid)
+        IReadOnlyList<Guid> derivedFrom, bool expectPaid, DateOnly? creditedOn = null)
     {
-        var payload = JsonSerializer.Serialize(new
-        {
-            entry,
-            amounts,
-            award_key = awardKey,
-            trigger,
-            subject_id = subject.Id.ToString()
-        });
+        var payload = JsonSerializer.Serialize(
+            new
+            {
+                entry,
+                amounts,
+                award_key = awardKey,
+                trigger,
+                subject_id = subject.Id.ToString(),
+                credited_on = creditedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            },
+            OmitNulls);
 
         var newEvent = new NewEvent(
             Kind: EventKinds.Ledger,

@@ -2543,7 +2543,15 @@ Build:      built
 ### REWARD-6 — Life domains earn their own XP and chart my life balance
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-10-20 — X1 landed):** the four domain currencies (Health, Social, Environment,
+Finance XP; tracked, default 0) and the day each earn counts on shipped (migration 0030
+`occurred_on`, payload `credited_on`, `Rewards:HomeTimeZone`). Any item can be priced in
+domain XP from `bsk bounty`, the API and the bounty editor's new Life domains group, and it
+earns on the right day. Build moves `needs-kernel → building`: levels, ranks, the multiplier,
+the Character page and the reports (X2–X7 in [xp-domains-plan.md](xp-domains-plan.md)) are
+still to come.
 
 **Workflow (Chris):**
 - "I'm thinking of having certain 'Currencies' actually be more like 'XP' which isn't
@@ -2898,8 +2906,9 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   revision) — four tracked domain currencies, the day each earn counts on, established habits
   paying for logged days, a per-domain daily credit read, the progression fold (levels, ranks,
   consistency, multiplier) with replaceable success rules, the multiplier in reconcile,
-  earn-only rank-up Gem awards, the simulator, period reports. — **Open** (X1–X7 in
-  [xp-domains-plan.md](xp-domains-plan.md)).
+  earn-only rank-up Gem awards, the simulator, period reports. — **Open**: X1 shipped (the
+  currencies and the credited day, migration 0030); X2–X7 to go in
+  [xp-domains-plan.md](xp-domains-plan.md).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); **life-domain XP +

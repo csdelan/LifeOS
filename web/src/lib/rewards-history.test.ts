@@ -110,7 +110,7 @@ describe("totals", () => {
 
   it("says a period in words", () => {
     expect(totalsInWords(totalsFor(days, weekPeriod("2026-10-14")))).toBe(
-      "earned 2 Coins, 11 XP; gave back 3 XP; spent 45 Freedom",
+      "earned 2 Coins, 11 Life XP; gave back 3 Life XP; spent 45 Freedom",
     );
     expect(totalsInWords(day("2026-10-01"))).toBe("nothing earned or spent");
   });

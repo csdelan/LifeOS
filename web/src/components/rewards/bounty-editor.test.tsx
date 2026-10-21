@@ -54,6 +54,33 @@ const attrsOf = (id: string) => JSON.parse(getState().details[id]?.attributes ??
 const row = (title: string) => within(screen.getByRole("group", { name: title }));
 
 describe("bounty in the New dialog", () => {
+  it("groups each trigger's boxes into Spend, Track and Life domains, and saves a domain's XP", async () => {
+    const setBounty = vi.spyOn(writes, "setBounty");
+    const onOpenChange = vi.fn();
+    withProviders(<NewSubjectDialog open onOpenChange={onOpenChange} initialType="Task" />);
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Morning run" } });
+    expect(await screen.findByText("When completed")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Change" }));
+
+    const completed = row("When completed");
+    const groups = completed.getAllByRole("group").map((g) => g.querySelector("legend")?.textContent);
+    expect(groups).toEqual(["Spend", "Track", "Life domains"]);
+    const domains = within(completed.getByRole("group", { name: "Life domains" }));
+    for (const label of ["Health XP", "Social XP", "Environment XP", "Finance XP"]) {
+      expect(domains.getByLabelText(new RegExp(label))).toHaveValue(null);
+    }
+
+    fireEvent.change(domains.getByLabelText(/Health XP/), { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(setBounty.mock.calls[0][0]).toMatchObject({
+      trigger: "completed",
+      amounts: { freedom: 10, xp: 10, health_xp: 25, social_xp: 0 },
+    });
+  });
+
   it("starts from the type default and saves only what changed", async () => {
     const setBounty = vi.spyOn(writes, "setBounty");
     const onOpenChange = vi.fn();
@@ -61,11 +88,11 @@ describe("bounty in the New dialog", () => {
 
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Fix the gate" } });
     expect(await screen.findByText("When completed")).toBeInTheDocument();
-    expect(screen.getByText("Pays 10 Freedom · 10 XP")).toBeInTheDocument();
+    expect(screen.getByText("Pays 10 Freedom · 10 Life XP")).toBeInTheDocument();
     expect(screen.getByText("For time on the timer")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Change" }));
-    expect(row("When completed").getByLabelText(/XP/)).toHaveValue(10);
+    expect(row("When completed").getByLabelText(/Life XP/)).toHaveValue(10);
     expect(row("When completed").getByLabelText(/Coins/)).toHaveValue(null);
     fireEvent.change(row("When completed").getByLabelText(/Karma/), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -75,7 +102,7 @@ describe("bounty in the New dialog", () => {
     expect(setBounty.mock.calls[0][0]).toEqual({
       subject: expect.any(String),
       trigger: "completed",
-      amounts: { coins: 0, freedom: 10, gems: 0, karma: 3, xp: 10, resolve: 0 },
+      amounts: { coins: 0, freedom: 10, gems: 0, karma: 3, xp: 10, resolve: 0, health_xp: 0, social_xp: 0, environment_xp: 0, finance_xp: 0 },
     });
   });
 
@@ -90,10 +117,10 @@ describe("bounty in the New dialog", () => {
     expect(timed.getByLabelText("Minutes per payment")).toHaveValue(1);
     expect(timed.getByText(/once for every minute the timer recorded/)).toBeInTheDocument();
     fireEvent.change(timed.getByLabelText("Minutes per payment"), { target: { value: "15" } });
-    fireEvent.change(timed.getByLabelText(/XP/), { target: { value: "2" } });
+    fireEvent.change(timed.getByLabelText(/Life XP/), { target: { value: "2" } });
     expect(timed.getByText(/once for every 15 minutes the timer recorded/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
-    expect(screen.getByText("Pays 2 XP per 15 min")).toBeInTheDocument();
+    expect(screen.getByText("Pays 2 Life XP per 15 min")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
@@ -101,7 +128,7 @@ describe("bounty in the New dialog", () => {
       {
         subject: expect.any(String),
         trigger: "timed",
-        amounts: { coins: 0, freedom: 0, gems: 0, karma: 0, xp: 2, resolve: 0 },
+        amounts: { coins: 0, freedom: 0, gems: 0, karma: 0, xp: 2, resolve: 0, health_xp: 0, social_xp: 0, environment_xp: 0, finance_xp: 0 },
         everyMinutes: 15,
       },
     ]);
@@ -116,7 +143,7 @@ describe("bounty in the New dialog", () => {
 
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Oil the hinges" } });
     fireEvent.click(await screen.findByRole("button", { name: "Change" }));
-    fireEvent.change(row("When completed").getByLabelText(/XP/), { target: { value: "12" } });
+    fireEvent.change(row("When completed").getByLabelText(/Life XP/), { target: { value: "12" } });
     fireEvent.change(row("For time on the timer").getByLabelText("Minutes per payment"), { target: { value: "5" } });
     fireEvent.click(row("When completed").getByRole("button", { name: "Use the default" }));
     fireEvent.click(row("For time on the timer").getByRole("button", { name: "Use the default" }));
@@ -146,7 +173,7 @@ describe("bounty and establishing in the detail pane", () => {
     const user = userEvent.setup();
     withProviders(<SubjectDetail subjectId="task-shoes" />);
     await screen.findByRole("heading", { name: /Buy race shoes/ });
-    expect(screen.getAllByText("Pays 10 Freedom · 10 XP").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Pays 10 Freedom · 10 Life XP").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "Edit" }));
     const save = screen.getByRole("button", { name: "Save" });
@@ -167,7 +194,7 @@ describe("bounty and establishing in the detail pane", () => {
     const setBounty = vi.spyOn(writes, "setBounty");
     const user = userEvent.setup();
     withProviders(<SubjectDetail subjectId="task-shoes" />);
-    expect(await screen.findByText("Pays 2 XP per 15 min")).toBeInTheDocument();
+    expect(await screen.findByText("Pays 2 Life XP per 15 min")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Edit" }));
     await user.click(screen.getByRole("button", { name: "Change" }));
@@ -191,7 +218,7 @@ describe("bounty and establishing in the detail pane", () => {
     await user.click(await screen.findByRole("button", { name: "Ready to establish Morning mobility" }));
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog).toHaveTextContent(/over the last 60 days · target 80%/);
-    await waitFor(() => expect(dialog).toHaveTextContent("pays 60 Freedom · 1 Gems · 100 XP"));
+    await waitFor(() => expect(dialog).toHaveTextContent("pays 60 Freedom · 1 Gems · 100 Life XP"));
     await user.click(within(dialog).getByRole("button", { name: "Establish" }));
 
     await waitFor(() =>

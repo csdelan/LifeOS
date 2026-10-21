@@ -162,7 +162,7 @@ describe("mockSetBounty (BountyService)", () => {
     );
     expect(() => mockSetBounty({ subject: "task-shoes", amounts: { gold: 5 } })).toThrow("Unknown currency 'gold'.");
     expect(() => mockSetBounty({ subject: "task-shoes", amounts: { xp: -1 } })).toThrow(
-      "A bounty pays a whole number of XP from zero up; got -1.",
+      "A bounty pays a whole number of Life XP from zero up; got -1.",
     );
     expect(() => mockSetBounty({ subject: "goal-archived", trigger: "followed", amounts: { xp: 1 } })).toThrow(
       "A Goal doesn't pay on 'followed'. Expected: completed.",

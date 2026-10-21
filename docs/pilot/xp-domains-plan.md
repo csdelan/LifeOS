@@ -214,15 +214,21 @@ Chris's rule is that XP counts on **the day it happened**. Each earn records tha
   - day rows: the occurrence date
   - streak rows: `max(occurrence_date)` of the run's n days
   - every other row: null
-- `ILedgerRepository.GetDueAsync` / `GetTriggersAsync` take the home zone and return
+- `NpgsqlLedgerRepository` is built with the home zone, so the `ILedgerRepository` signatures
+  don't change. `GetDueAsync` / `GetTriggersAsync` return
   `coalesce(occurred_on, (triggered_at AT TIME ZONE @tz)::date)` as `DueAward.CreditedOn`.
-  `RewardService.Entry` stamps it.
+  `RewardService.Entry` stamps it on each earn. A reversal carries none: it gives back an
+  earn, which has the day.
 - **Home zone:**
   - Set by `Rewards:HomeTimeZone` (environment `Rewards__HomeTimeZone`), default
     `America/Los_Angeles`. `bsk` reads the same variable.
   - It travels next to the coin rate.
-  - An unknown zone must fail loudly, not misdate days. The API checks it against Postgres at
-    startup (`SELECT now() AT TIME ZONE @tz`), and `bsk` checks it on first use.
+  - An unknown zone must fail loudly, not misdate days. The solution runs with invariant
+    globalization, so .NET can't resolve IANA names; Postgres does the date math. Two checks:
+    - Building the kernel checks the name's shape, so a Windows id such as
+      `Pacific Standard Time` stops the API at startup and `bsk` before it runs.
+    - A well-formed name Postgres doesn't know (`Mars/Olympus`) fails the first reconcile or
+      trigger read, with a message naming `Rewards:HomeTimeZone`.
 - **Earns from before X1** have no `credited_on`. They read as their `occurred_at` in the home
   zone. None of them carry domain XP, so nothing is affected.
 - **History is different on purpose.** R7's History keeps filing entries by when they were
@@ -552,7 +558,7 @@ Each of these has to earn its place through use of the pilot.
 ## Status
 
 - [x] X0 — Requirements (REWARD-6, REWARD-7, REWARD-2 revision, D12) + this plan
-- [ ] X1 — Domain currencies + the credited day (migration 0030)
+- [x] X1 — Domain currencies + the credited day (migration 0030)
 - [ ] X2 — Established habits keep earning (migration 0031)
 - [ ] X3 — Rules + daily consistency (migration 0032)
 - [ ] X4 — Levels, ranks, rank-up Gems, simulator

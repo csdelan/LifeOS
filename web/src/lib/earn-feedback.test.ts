@@ -58,7 +58,7 @@ describe("summarizeAwards", () => {
 describe("announceAwards", () => {
   it("toasts an earn and chimes", () => {
     announceAwards([award("completed", { coins: 2, freedom: 10, xp: 10 }, "earn", "Buy race shoes")]);
-    expect(toast).toHaveBeenCalledWith("Earned +2 Coins +10 Freedom +10 XP", {
+    expect(toast).toHaveBeenCalledWith("Earned +2 Coins +10 Freedom +10 Life XP", {
       icon: "🪙",
       description: "Buy race shoes — completed",
     });

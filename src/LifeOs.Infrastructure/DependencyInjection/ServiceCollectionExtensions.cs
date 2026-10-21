@@ -22,17 +22,26 @@ namespace LifeOs.Infrastructure.DependencyInjection;
 /// <c>Rewards__CoinValueUsd</c> environment variable (the same setting, as ASP.NET names it
 /// there), else <see cref="CoinRates.DefaultUsd"/>.
 /// </para>
+/// <para>
+/// <c>homeTimeZone</c> decides which local day an earn counts on (<see cref="HomeZone"/>).
+/// It comes from the host's <c>Rewards:HomeTimeZone</c> the same way, else the
+/// <c>Rewards__HomeTimeZone</c> environment variable, else <see cref="HomeZone.Default"/>.
+/// </para>
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>The environment variable that carries <see cref="CoinRates.ConfigurationKey"/>.</summary>
     public const string CoinValueVariable = "Rewards__CoinValueUsd";
 
+    /// <summary>The environment variable that carries <see cref="HomeZone.ConfigurationKey"/>.</summary>
+    public const string HomeTimeZoneVariable = "Rewards__HomeTimeZone";
+
     public static IServiceCollection AddLifeOsKernel(
         this IServiceCollection services, string connectionString, string sourceId = KernelSources.Cli,
-        decimal? coinValueUsd = null)
+        decimal? coinValueUsd = null, string? homeTimeZone = null)
     {
         var coinValue = coinValueUsd ?? ParseCoinValueUsd(Environment.GetEnvironmentVariable(CoinValueVariable));
+        var homeZone = ParseHomeTimeZone(homeTimeZone ?? Environment.GetEnvironmentVariable(HomeTimeZoneVariable));
 
         services.AddSingleton<IClock, SystemClock>();
 
@@ -47,7 +56,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITagRepository>(_ => new NpgsqlTagRepository(connectionString));
         services.AddSingleton<IAppointmentRepository>(_ => new NpgsqlAppointmentRepository(connectionString));
         services.AddSingleton<ITimerRepository>(_ => new NpgsqlTimerRepository(connectionString));
-        services.AddSingleton<ILedgerRepository>(_ => new NpgsqlLedgerRepository(connectionString));
+        services.AddSingleton<ILedgerRepository>(_ => new NpgsqlLedgerRepository(connectionString, homeZone));
 
         services.AddSingleton(sp => new CaptureService(
             sp.GetRequiredService<IEventStore>(),
@@ -203,6 +212,25 @@ public static class ServiceCollectionExtensions
             ? value
             : throw new InvalidOperationException(
                 $"{CoinRates.ConfigurationKey} must be a dollar amount above zero, e.g. 0.50; got '{configured}'.");
+    }
+
+    /// <summary>
+    /// A configured home time zone: <see cref="HomeZone.Default"/> when blank, otherwise an
+    /// IANA zone name. Anything else fails loudly — a misread zone would file earns on the
+    /// wrong days. (Postgres checks the name itself on first use.)
+    /// </summary>
+    public static string ParseHomeTimeZone(string? configured)
+    {
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            return HomeZone.Default;
+        }
+
+        var zone = configured.Trim();
+        return HomeZone.IsWellFormed(zone)
+            ? zone
+            : throw new InvalidOperationException(
+                $"{HomeZone.ConfigurationKey} must be an IANA time zone name, e.g. {HomeZone.Default}; got '{configured}'.");
     }
 
     /// <summary>

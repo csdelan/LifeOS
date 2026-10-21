@@ -48,10 +48,12 @@ public static class ApiHost
         var reader = ApiConnections.ResolveReader(builder.Configuration, builder.Environment);
         builder.Services.AddSingleton(new ApiConnectionStrings(owner, reader));
         // Coins are real money (REWARD-3): Rewards:CoinValueUsd, default $0.50; a bad value
-        // fails startup rather than mis-pricing deposits.
+        // fails startup rather than mis-pricing deposits. Rewards:HomeTimeZone (default
+        // America/Los_Angeles) decides which day an earn counts on; a malformed one fails too.
         builder.Services.AddLifeOsKernel(
             owner, KernelSources.Api,
-            ServiceCollectionExtensions.ParseCoinValueUsd(builder.Configuration[CoinRates.ConfigurationKey]));
+            ServiceCollectionExtensions.ParseCoinValueUsd(builder.Configuration[CoinRates.ConfigurationKey]),
+            ServiceCollectionExtensions.ParseHomeTimeZone(builder.Configuration[HomeZone.ConfigurationKey]));
         builder.Services.AddSingleton(new SubjectReader(reader));
         builder.Services.AddSingleton(sp => new RewardReader(reader, sp.GetRequiredService<RewardService>().CoinValueUsd));
 

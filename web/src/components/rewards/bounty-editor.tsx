@@ -19,11 +19,12 @@ import {
   perMinutes,
   type BountyDraft,
 } from "@/lib/bounty";
-import { CURRENCIES } from "@/lib/rewards";
+import { CURRENCY_GROUPS } from "@/lib/rewards";
 
 /**
  * An item's bounty (REWARD-2), one row of currencies per trigger, pre-filled with what it
- * pays now — the type default until Chris prices it. The draft holds only the triggers he
+ * pays now — the type default until Chris prices it. Each row groups its boxes: what can
+ * be spent, what is tracked, and the life domains' XP (REWARD-6). The draft holds only the triggers he
  * touched; `bountyWrites` turns it into the writes, saving only what changed. A Task's
  * time on the timer also takes the minutes each payment needs.
  */
@@ -97,13 +98,18 @@ export function BountyEditor({
                 </p>
               </div>
             ) : null}
-            <AmountFields
-              idPrefix={`${idPrefix}-${line.trigger}`}
-              currencies={CURRENCIES}
-              value={value}
-              min={0}
-              onChange={(next) => onChange({ ...draft, [line.trigger]: next })}
-            />
+            {CURRENCY_GROUPS.map((group) => (
+              <fieldset key={group.id} className="space-y-1.5">
+                <legend className="mb-1.5 text-[0.6875rem] font-medium text-muted-foreground">{group.label}</legend>
+                <AmountFields
+                  idPrefix={`${idPrefix}-${line.trigger}`}
+                  currencies={group.currencies}
+                  value={value}
+                  min={0}
+                  onChange={(next) => onChange({ ...draft, [line.trigger]: next })}
+                />
+              </fieldset>
+            ))}
           </div>
         );
       })}

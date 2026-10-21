@@ -91,7 +91,11 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
             Currencies.All.Select(c => c.Key),
             wallet.Lines.Take(Currencies.All.Count).Select(l => l.Currency.Key));
         Assert.Equal(
-            new[] { Currencies.Xp, Currencies.Resolve },
+            new[]
+            {
+                Currencies.Xp, Currencies.Resolve, Currencies.HealthXp, Currencies.SocialXp,
+                Currencies.EnvironmentXp, Currencies.FinanceXp
+            },
             wallet.Lines.Where(l => !l.Currency.Spendable).Select(l => l.Currency.Key));
     }
 

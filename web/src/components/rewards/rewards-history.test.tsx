@@ -46,7 +46,7 @@ describe("Rewards History", () => {
     const cell = await screen.findByRole("button", {
       name: `${formatDayFull(todayIso())} (today): ${todayInWords()}`,
     });
-    expect(todayInWords()).toContain("gave back 10 Freedom, 10 XP");
+    expect(todayInWords()).toContain("gave back 10 Freedom, 10 Life XP");
     await user.click(cell);
     expect(cell).toHaveAttribute("aria-pressed", "true");
 
@@ -90,8 +90,8 @@ describe("Rewards History", () => {
     const user = userEvent.setup();
     renderHistory();
     await user.click(within(screen.getByRole("group", { name: "Chart by" })).getByRole("button", { name: "Months" }));
-    expect(screen.getByRole("heading", { name: "XP earned by month" })).toBeInTheDocument();
-    expect(screen.getByText("XP is tracked, never spent.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Life XP earned by month" })).toBeInTheDocument();
+    expect(screen.getByText("Life XP is tracked, never spent.")).toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Legend" })).not.toBeInTheDocument();
   });
 });

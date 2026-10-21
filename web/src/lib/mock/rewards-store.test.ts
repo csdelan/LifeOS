@@ -31,6 +31,10 @@ describe("mock rewards (v_wallet / v_ledger / v_reward and RedeemAsync)", () => 
       ["karma", 3],
       ["xp", 115],
       ["resolve", 2],
+      ["health_xp", 0],
+      ["social_xp", 0],
+      ["environment_xp", 0],
+      ["finance_xp", 0],
     ]);
     expect(wallet.balances.find((b) => b.currency === "freedom")).toMatchObject({ earned: 105, spent: 45 });
     expect(wallet.openedAt).toBeTruthy();
@@ -73,7 +77,7 @@ describe("mock rewards (v_wallet / v_ledger / v_reward and RedeemAsync)", () => 
 
   it("refuses what the kernel refuses", () => {
     expect(() => mockRedeem({ amounts: { freedom: 5 } })).toThrow("a note is required");
-    expect(() => mockRedeem({ amounts: { xp: 5 }, note: "x" })).toThrow("XP is tracked, not spent");
+    expect(() => mockRedeem({ amounts: { xp: 5 }, note: "x" })).toThrow("Life XP is tracked, not spent");
     expect(() => mockRedeem({ reward: "task-types" })).toThrow("is a Task, not a Reward");
     archiveSubject("reward-takeout", true);
     expect(() => mockRedeem({ reward: "reward-takeout" })).toThrow("is archived; restore it");

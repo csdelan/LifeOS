@@ -151,10 +151,13 @@ public sealed record LedgerWrite(
 /// An award <c>bsk.v_reward_due</c> says an item is due (rewards plan §3.2): its key,
 /// its trigger, the events that make it due (cited by the earn), and when it became due.
 /// A <c>timed</c> award also carries the seconds the timer recorded before the completion.
+/// <see cref="CreditedOn"/> is the local day it counts on (xp-domains plan §3.3): a habit
+/// day's own date, a streak's last day, else the day <see cref="TriggeredAt"/> falls on in
+/// the home time zone.
 /// </summary>
 public sealed record DueAward(
     string AwardKey, string Trigger, IReadOnlyList<Guid> SourceEventIds, DateTimeOffset TriggeredAt,
-    long? TimedSeconds = null);
+    long? TimedSeconds = null, DateOnly? CreditedOn = null);
 
 /// <summary>
 /// An award the ledger currently holds for an item: its key, its trigger, what it nets

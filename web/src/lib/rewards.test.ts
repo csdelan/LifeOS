@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  CURRENCIES,
+  CURRENCY_GROUPS,
   amountsFrom,
   coinsToUsd,
   formatAmounts,
@@ -22,7 +24,7 @@ const wallet: Wallet = {
     { currency: "coins", label: "Coins", spendable: true, earned: 20, reversed: 0, spent: 7, balance: 13 },
     { currency: "freedom", label: "Freedom", spendable: true, earned: 60, reversed: 0, spent: 0, balance: 60 },
     { currency: "gems", label: "Gems", spendable: true, earned: 0, reversed: 0, spent: 0, balance: 0 },
-    { currency: "xp", label: "XP", spendable: false, earned: 115, reversed: 0, spent: 0, balance: 115 },
+    { currency: "xp", label: "Life XP", spendable: false, earned: 115, reversed: 0, spent: 0, balance: 115 },
   ],
 };
 
@@ -44,7 +46,7 @@ function reward(partial: Partial<RewardRow>): RewardRow {
 describe("rewards formatting", () => {
   it("lists amounts in the Domain's currency order", () => {
     expect(formatAmounts({ karma: 2, freedom: 30 })).toBe("30 Freedom · 2 Karma");
-    expect(formatAmounts({ xp: 10, coins: -2 }, { signed: true })).toBe("−2 Coins +10 XP");
+    expect(formatAmounts({ xp: 10, coins: -2 }, { signed: true })).toBe("−2 Coins +10 Life XP");
   });
 
   it("prices Coins in dollars to the cent", () => {
@@ -81,7 +83,7 @@ describe("redeem rules (mirroring RedeemAsync)", () => {
 
   it("refuses tracked currencies and amounts that aren't whole numbers above zero", () => {
     expect(redeemProblem({ amounts: { xp: 5 }, note: "x" }, wallet)).toBe(
-      "XP is tracked, not spent; it can't be redeemed.",
+      "Life XP is tracked, not spent; it can't be redeemed.",
     );
     expect(redeemProblem({ amounts: { freedom: 1.5 }, note: "x" }, wallet)).toBe(
       "Use a whole number of Freedom above zero.",
@@ -153,5 +155,25 @@ describe("API normalization", () => {
     expect([redemption.amounts.coins, redemption.dollars, redemption.coinRate, redemption.wallet.coinValueUsd]).toEqual(
       [4, 2, null, 0.5],
     );
+  });
+});
+
+describe("currencies (mirrors LifeOs.Domain Currencies)", () => {
+  it("lists the life domains as tracked currencies after Resolve, and Life XP as plain XP's label", () => {
+    expect(CURRENCIES.map((c) => c.key)).toEqual([
+      "coins", "freedom", "gems", "karma", "xp", "resolve",
+      "health_xp", "social_xp", "environment_xp", "finance_xp",
+    ]);
+    expect(CURRENCIES.find((c) => c.key === "xp")?.label).toBe("Life XP");
+    expect(CURRENCIES.filter((c) => c.group === "domain").every((c) => !c.spendable)).toBe(true);
+  });
+
+  it("puts every currency in exactly one bounty-editor group, in display order", () => {
+    expect(CURRENCY_GROUPS.flatMap((g) => g.currencies.map((c) => c.key))).toEqual(CURRENCIES.map((c) => c.key));
+    expect(CURRENCY_GROUPS.map((g) => g.label)).toEqual(["Spend", "Track", "Life domains"]);
+  });
+
+  it("refuses to spend a life domain's XP", () => {
+    expect(priceProblem({ health_xp: 5 })).toBe("Health XP is tracked, not spent; it can't be a price.");
   });
 });

@@ -106,7 +106,7 @@ describe("time on the timer (the timed trigger)", () => {
       {
         subject: "t",
         trigger: "timed",
-        amounts: { coins: 0, freedom: 0, gems: 0, karma: 0, xp: 2, resolve: 0 },
+        amounts: { coins: 0, freedom: 0, gems: 0, karma: 0, xp: 2, resolve: 0, health_xp: 0, social_xp: 0, environment_xp: 0, finance_xp: 0 },
         everyMinutes: 15,
       },
     ]);
@@ -147,7 +147,7 @@ describe("bountyWrites — save only what changed", () => {
       {
         subject: "t",
         trigger: "completed",
-        amounts: { coins: 2, freedom: 10, gems: 0, karma: 3, xp: 10, resolve: 0 },
+        amounts: { coins: 2, freedom: 10, gems: 0, karma: 3, xp: 10, resolve: 0, health_xp: 0, social_xp: 0, environment_xp: 0, finance_xp: 0 },
       },
     ]);
   });

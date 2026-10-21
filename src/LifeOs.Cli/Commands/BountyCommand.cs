@@ -27,7 +27,7 @@ internal static class BountyCommand
         };
         var amountsArgument = new Argument<string[]>("amounts")
         {
-            Description = "currency=amount pairs to set, e.g. xp=20 karma=3 (0 drops a currency).",
+            Description = "currency=amount pairs to set, e.g. xp=20 karma=3 health_xp=25 (0 drops a currency).",
             Arity = ArgumentArity.ZeroOrMore
         };
         var onOption = new Option<string?>("--on")

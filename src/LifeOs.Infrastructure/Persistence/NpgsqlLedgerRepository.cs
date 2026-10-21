@@ -18,8 +18,15 @@ namespace LifeOs.Infrastructure.Persistence;
 /// redemption) — re-reads the balances it touched before committing, so two
 /// redemptions racing from two windows cannot together overspend, and two reconciles
 /// racing on one item cannot both pay it.
+/// <para>
+/// <paramref name="homeTimeZone"/> (an IANA name, <see cref="HomeZone"/>) files each due
+/// award on a local day — the day it counts on (xp-domains plan §3.3): its own date when it
+/// has one (a habit day), else its trigger's instant read in that zone. Postgres does the
+/// conversion; a zone it doesn't know fails the read loudly.
+/// </para>
 /// </summary>
-public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRepository
+public sealed class NpgsqlLedgerRepository(string connectionString, string homeTimeZone = HomeZone.Default)
+    : ILedgerRepository
 {
     // One lock for every ledger write: a balance check is only sound if nothing else
     // can land between the check and the commit. The key is arbitrary but fixed.
@@ -400,19 +407,35 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
     {
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
-        var rows = await connection.QueryAsync<AwardRow>(new CommandDefinition(
-            $"""
-            SELECT award_key AS awardkey, trigger, source_event_ids AS sourceeventids,
-                   triggered_at AS triggeredat, timed_seconds AS timedseconds
-            FROM {view}
-            WHERE subject_id = @subjectId
-            ORDER BY award_key;
-            """,
-            new { subjectId },
-            cancellationToken: cancellationToken));
+        // The credited day comes back as text: Dapper has no DateOnly mapping in every host.
+        IEnumerable<AwardRow> rows;
+        try
+        {
+            rows = await connection.QueryAsync<AwardRow>(new CommandDefinition(
+                $"""
+                SELECT award_key AS awardkey, trigger, source_event_ids AS sourceeventids,
+                       triggered_at AS triggeredat, timed_seconds AS timedseconds,
+                       to_char(coalesce(occurred_on, (triggered_at AT TIME ZONE @tz)::date), 'YYYY-MM-DD')
+                           AS creditedon
+                FROM {view}
+                WHERE subject_id = @subjectId
+                ORDER BY award_key;
+                """,
+                new { subjectId, tz = homeTimeZone },
+                cancellationToken: cancellationToken));
+        }
+        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
+        {
+            // `time zone "…" not recognized`: the configured home zone is well formed but unknown.
+            throw new InvalidOperationException(
+                $"{HomeZone.ConfigurationKey} '{homeTimeZone}' is not a time zone the database knows; use an IANA name such as {HomeZone.Default}.",
+                e);
+        }
+
         return rows
             .Select(r => new DueAward(
-                r.AwardKey, r.Trigger, r.SourceEventIds, AsUtc(r.TriggeredAt)!.Value, r.TimedSeconds))
+                r.AwardKey, r.Trigger, r.SourceEventIds, AsUtc(r.TriggeredAt)!.Value, r.TimedSeconds,
+                DateOnly.ParseExact(r.CreditedOn, "yyyy-MM-dd", CultureInfo.InvariantCulture)))
             .ToList();
     }
 
@@ -547,6 +570,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString) : ILedgerRep
         public Guid[] SourceEventIds { get; set; } = [];
         public DateTime TriggeredAt { get; set; }
         public long? TimedSeconds { get; set; }
+        public string CreditedOn { get; set; } = "";
     }
 
     private sealed class PaidRow
