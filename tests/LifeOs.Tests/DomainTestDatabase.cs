@@ -88,17 +88,18 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
     }
 
     /// <summary>
-    /// Health XP credited to <paramref name="day"/> straight into the ledger, with no reconcile
-    /// after it — as if time alone, not a write, had moved things on since.
+    /// Health XP (or another <paramref name="currency"/>) credited to <paramref name="day"/>
+    /// straight into the ledger, with no reconcile after it — as if time alone, not a write, had
+    /// moved things on since.
     /// </summary>
-    public async Task CreditAsync(DateOnly day, long xp)
+    public async Task CreditAsync(DateOnly day, long xp, string currency = Currencies.HealthXp)
     {
         var key = $"test:{Guid.NewGuid():N}";
         var now = DateTimeOffset.UtcNow;
         var payload = JsonSerializer.Serialize(new
         {
             entry = LedgerEntries.Earn,
-            amounts = new Dictionary<string, long> { [Currencies.HealthXp] = xp },
+            amounts = new Dictionary<string, long> { [currency] = xp },
             award_key = key,
             trigger = "test",
             credited_on = day.ToString("yyyy-MM-dd")

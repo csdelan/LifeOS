@@ -2549,7 +2549,17 @@ Build:      built
 ### REWARD-6 — Life domains earn their own XP and chart my life balance
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-10-20 — X7 landed):** life balance is charted. The Character page's Reports
+tab plots each configured domain's consistency over 7 days, 30 days, 3 months, 6 months or a
+year. It can compare a second period, and each value says how much history backs it ("77% ·
+44 of 90 days"). A domain younger than the period is drawn hollow. A second chart shows each
+domain's level since the start. With Health the only configured domain these are horizontal
+bars; from three configured domains they become spider charts, which are built and waiting.
+A table lists every domain's figures, the unconfigured domains' XP included.
+`GET /api/domains/report` and `bsk domains --report N` read the same. Build moves `building →
+built`: Social, Environment and Finance join the charts when they get rules of their own.
 
 **Update (2026-10-20 — X1 landed):** the four domain currencies (Health, Social, Environment,
 Finance XP; tracked, default 0) and the day each earn counts on shipped (migration 0030
@@ -2607,7 +2617,7 @@ Finance report XP only until they get rules. Build stays `building`.
 ### REWARD-7 — Each life domain levels up, ranks up on consistency, and rewards a steady streak
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Update (2026-10-20 — X3 landed):** Health's rules are in code (`LifeDomains`): a
 successful day is 70+ base XP, plus the eleven ranks, the multiplier tiers and the rank-up
@@ -2649,6 +2659,12 @@ Health level 12!" with the celebration, a rank-up toasts "You're now a Health Ap
 with a bigger one, and a level lost to an undo says so quietly. Opening the page pays any
 rank reached by time alone. Reports and spider charts (X7) are next. Build stays
 `building`.
+
+**Update (2026-10-20 — X7 landed):** the period reports show the levels and ranks each
+domain gained in the period, beside its consistency and XP (REWARD-6 has the charts). Every
+phase of [xp-domains-plan.md](xp-domains-plan.md) has shipped, so Build moves `building →
+built`. What's left is calibration in use (§2.4): Chris prices Health items, and the 70-XP
+successful day gets retuned after a few weeks of real XP.
 
 **Workflow (Chris):**
 - "For each XP category, I want to track 'levels' from 1-100 that represent RPG levels …
@@ -2959,16 +2975,16 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   revision) — four tracked domain currencies, the day each earn counts on, established habits
   paying for logged days, a per-domain daily credit read, the progression fold (levels, ranks,
   consistency, multiplier) with replaceable success rules, the multiplier in reconcile,
-  earn-only rank-up Gem awards, the simulator, period reports. — **Open**: X1 shipped (the
-  currencies and the credited day, migration 0030), X2 (established habits keep earning,
-  migration 0031), X3 (Health's rules and daily consistency, migration 0032), X4 (levels,
-  ranks, rank-up Gems and the simulator), X5 (the multiplier on earns) and X6 (the Character
-  page and level-up / rank-up feedback); X7 to go in [xp-domains-plan.md](xp-domains-plan.md).
+  earn-only rank-up Gem awards, the simulator, period reports. — **Shipped** (X1–X7 in
+  [xp-domains-plan.md](xp-domains-plan.md), migrations 0030–0032: the currencies and the
+  credited day, established habits keep earning, Health's rules and daily consistency,
+  levels, ranks, rank-up Gems and the simulator, the multiplier on earns, the Character page
+  with level-up / rank-up feedback, and the period reports). Calibration continues in use.
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
-scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); **life-domain XP +
-progression** (REWARD-6 / REWARD-7). Everything else above
-has shipped, the rewards work included (R1–R7 in [rewards-plan.md](rewards-plan.md)). The user-facing UIs for the shipped kernel bits still vary by surface — see each
+scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1). Everything else
+above has shipped, the rewards work included (R1–R7 in [rewards-plan.md](rewards-plan.md))
+and life-domain XP (X1–X7 in [xp-domains-plan.md](xp-domains-plan.md)). The user-facing UIs for the shipped kernel bits still vary by surface — see each
 requirement's Build field (e.g. CAP-2 / CAP-4 are `building`: kernel done, capture UI pending).
 
 *(Prior mapping gaps already closed: the `concerns` write path — shipped as `bsk relate`.)*

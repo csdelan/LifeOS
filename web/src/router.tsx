@@ -53,6 +53,11 @@ export type RewardsSearch = {
   selected?: string;
 };
 
+export type CharacterSearch = {
+  /** "reports" opens the Reports tab (xp-domains plan §3.13); absent is the domain cards. */
+  view?: "reports";
+};
+
 export type ReviewsSearch = {
   kind?: "daily" | "weekly";
   date?: string;
@@ -157,6 +162,9 @@ const rewardsRoute = createRoute({
 const characterRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/character",
+  validateSearch: (search: Record<string, unknown>): CharacterSearch => ({
+    view: search.view === "reports" ? "reports" : undefined,
+  }),
   component: CharacterPage,
 });
 

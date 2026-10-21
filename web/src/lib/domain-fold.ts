@@ -11,6 +11,7 @@ import type {
   DomainChange,
   DomainDaysRead,
   DomainRankRow,
+  DomainReportRow,
   DomainRow,
 } from "@/lib/production-ui-types";
 
@@ -219,6 +220,27 @@ export interface DomainStanding {
   rawLevel: number;
   level: number;
   rank: number;
+}
+
+/**
+ * `DomainPeriodReport`: a configured domain over its last `days` days. Consistency and the
+ * average are over the days counted (on or after the start), so a young domain's figures say
+ * how much history backs them.
+ */
+export interface DomainPeriodReport {
+  days: number;
+  from: string;
+  to: string;
+  daysCounted: number;
+  successfulDays: number;
+  base: number;
+  paid: number;
+  consistency: number;
+  averageBase: number;
+  fullHistory: boolean;
+  before: DomainStanding;
+  now: DomainStanding;
+  ranksReached: RankReached[];
 }
 
 export interface RankReached {
@@ -443,6 +465,40 @@ export class DomainProgress {
     return multiplierOf(this.rules, w.successfulDays, w.days);
   }
 
+  /**
+   * `DomainProgress.Report`: the last `days` days as a rank gate of that length reads them
+   * today (ending yesterday until today succeeds), the XP credited to them, and the standing
+   * the day before against now.
+   */
+  report(days: number): DomainPeriodReport {
+    if (days < 1) throw new RangeError(`A report covers at least one day; got ${days}.`);
+    const window = this.windowEndingOn(this.today, days);
+    let base = 0;
+    let paid = 0;
+    for (const p of this.periods) {
+      if (p.day >= window.from && p.day <= window.to) {
+        base += p.base;
+        paid += p.paid;
+      }
+    }
+    const counted = window.coveredDays;
+    return {
+      days,
+      from: window.from,
+      to: window.to,
+      daysCounted: counted,
+      successfulDays: window.successfulDays,
+      base,
+      paid,
+      consistency: counted === 0 ? 0 : window.successfulDays / counted,
+      averageBase: counted === 0 ? 0 : base / counted,
+      fullHistory: counted === days,
+      before: this.standingOn(shiftDay(window.from, -1)),
+      now: this.standingOn(this.today),
+      ranksReached: this.ranksReached.filter((r) => r.qualifiedOn >= window.from),
+    };
+  }
+
   private walk(): DomainStanding[] {
     const walked: DomainStanding[] = [];
     const { curve, ranks } = this.rules;
@@ -609,6 +665,70 @@ export function toDomainDays(
     today,
     target: rules?.minimumBaseXp ?? null,
     days,
+  };
+}
+
+/** Rounds half away from zero to one place, as `Math.Round(x, 1, AwayFromZero)`. */
+const round1 = (n: number) => Math.sign(n) * Math.round(Math.abs(n) * 10) / 10;
+
+/**
+ * `DomainService.GetReportAsync` + `DomainRows.From`: one domain over its last `days` days. A
+ * configured domain reports its period; one without rules, the XP credited to the `days` days
+ * ending today.
+ */
+export function toDomainReportRow(
+  currency: { key: string; label: string },
+  credit: readonly DomainDay[],
+  today: string,
+  days: number,
+): DomainReportRow {
+  const rules = rulesFor(currency.key);
+  const row: DomainReportRow = {
+    key: currency.key,
+    label: currency.label,
+    name: domainName(currency.label),
+    configured: !!rules,
+    from: shiftDay(today, 1 - days),
+    to: today,
+    base: 0,
+    paid: 0,
+    daysCounted: null,
+    successfulDays: null,
+    consistency: null,
+    averageBase: null,
+    levelFrom: null,
+    levelTo: null,
+    rankFrom: null,
+    rankTo: null,
+    rankTitle: null,
+    ranksReached: null,
+  };
+  if (!rules) {
+    for (const d of credit) {
+      if (d.day >= row.from && d.day <= today) {
+        row.base += d.base;
+        row.paid += d.paid;
+      }
+    }
+    return row;
+  }
+  const r = DomainProgress.fold(rules, credit, today).report(days);
+  return {
+    ...row,
+    from: r.from,
+    to: r.to,
+    base: r.base,
+    paid: r.paid,
+    daysCounted: r.daysCounted,
+    successfulDays: r.successfulDays,
+    consistency: round4(r.consistency),
+    averageBase: round1(r.averageBase),
+    levelFrom: r.before.level,
+    levelTo: r.now.level,
+    rankFrom: r.before.rank,
+    rankTo: r.now.rank,
+    rankTitle: rules.ranks[r.now.rank].title,
+    ranksReached: r.ranksReached.map((x) => ({ rank: x.rank, title: x.rule.title, qualifiedOn: x.qualifiedOn })),
   };
 }
 

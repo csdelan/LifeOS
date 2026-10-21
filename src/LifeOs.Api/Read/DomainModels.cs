@@ -149,6 +149,57 @@ public sealed class DomainDayRow
     public bool? Succeeded { get; set; }
 }
 
+/// <summary>
+/// <c>GET /api/domains/report?days=N</c> (xp-domains plan §3.11, §3.13): every life domain over
+/// its last <see cref="Days"/> days, as of <see cref="Today"/> (<c>yyyy-MM-dd</c>, home zone) —
+/// what the Character page's reports plot.
+/// </summary>
+public sealed class DomainReportRead
+{
+    public string Today { get; set; } = "";
+    public int Days { get; set; }
+    public IReadOnlyList<DomainReportRow> Domains { get; set; } = [];
+}
+
+/// <summary>
+/// One life domain over a report's period: the days it covers (<see cref="From"/>–<see cref="To"/>;
+/// a configured domain's end yesterday until today succeeds) and the XP credited to them. A
+/// configured domain adds the days counted (those on or after its start), the successful days,
+/// consistency (0–1) and base XP a day over the days counted, and the level and rank (indexes,
+/// 0 is Novice) the period started from against now, with each rank reached in it. Those are
+/// null for a domain without rules.
+/// </summary>
+public sealed class DomainReportRow
+{
+    public string Key { get; set; } = "";
+    public string Label { get; set; } = "";
+    public string Name { get; set; } = "";
+    public bool Configured { get; set; }
+    public string From { get; set; } = "";
+    public string To { get; set; } = "";
+    public long Base { get; set; }
+    public long Paid { get; set; }
+    public int? DaysCounted { get; set; }
+    public int? SuccessfulDays { get; set; }
+    public decimal? Consistency { get; set; }
+    public decimal? AverageBase { get; set; }
+    public int? LevelFrom { get; set; }
+    public int? LevelTo { get; set; }
+    public int? RankFrom { get; set; }
+    public int? RankTo { get; set; }
+    /// <summary>The rank held now, e.g. "Apprentice".</summary>
+    public string? RankTitle { get; set; }
+    public IReadOnlyList<DomainRankReachedRow>? RanksReached { get; set; }
+}
+
+/// <summary>A rank a domain entered in a report's period, and the day it qualified.</summary>
+public sealed class DomainRankReachedRow
+{
+    public int Rank { get; set; }
+    public string Title { get; set; } = "";
+    public string QualifiedOn { get; set; } = "";
+}
+
 /// <summary>Maps the Application's domain readings onto the API's shapes.</summary>
 public static class DomainRows
 {
@@ -175,6 +226,47 @@ public static class DomainRows
                 Succeeded = d.Succeeded
             }).ToList()
         };
+    }
+
+    public static DomainReportRead From(DomainReportReading report) => new()
+    {
+        Today = Day(report.Today),
+        Days = report.Days,
+        Domains = report.Domains.Select(From).ToList()
+    };
+
+    public static DomainReportRow From(DomainReportEntry entry)
+    {
+        var currency = entry.Domain.Currency;
+        var row = new DomainReportRow
+        {
+            Key = currency.Key,
+            Label = currency.Label,
+            Name = LifeDomains.Name(currency.Key),
+            Configured = entry.Domain.Configured,
+            From = Day(entry.From),
+            To = Day(entry.To),
+            Base = entry.Base,
+            Paid = entry.Paid
+        };
+        if (entry.Period is not { } period || entry.Domain.Progress is not { } progress)
+        {
+            return row;
+        }
+
+        row.DaysCounted = period.DaysCounted;
+        row.SuccessfulDays = period.SuccessfulDays;
+        row.Consistency = Math.Round(period.Consistency, 4);
+        row.AverageBase = Math.Round(period.AverageBase, 1, MidpointRounding.AwayFromZero);
+        row.LevelFrom = period.Before.Level;
+        row.LevelTo = period.Now.Level;
+        row.RankFrom = period.Before.Rank;
+        row.RankTo = period.Now.Rank;
+        row.RankTitle = progress.Rules.Ranks[period.Now.Rank].Title;
+        row.RanksReached = period.RanksReached
+            .Select(r => new DomainRankReachedRow { Rank = r.Rank, Title = r.Rule.Title, QualifiedOn = Day(r.QualifiedOn) })
+            .ToList();
+        return row;
     }
 
     public static DomainsRead From(DomainsReading reading) => new()

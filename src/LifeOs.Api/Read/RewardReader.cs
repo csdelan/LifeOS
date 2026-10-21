@@ -77,4 +77,18 @@ public sealed class RewardReader(string readerConnectionString, decimal coinValu
 
         return DomainRows.From(await new DomainService(ledger).GetDaysAsync(domain, days, cancellationToken));
     }
+
+    /// <summary>
+    /// Every life domain over its last <paramref name="days"/> days (xp-domains plan §3.13), at
+    /// most <see cref="DomainRows.MaxDays"/>.
+    /// </summary>
+    public async Task<DomainReportRead> GetDomainReportAsync(int days, CancellationToken cancellationToken = default)
+    {
+        if (days > DomainRows.MaxDays)
+        {
+            throw new ArgumentException($"Ask for at most {DomainRows.MaxDays} days; got {days}.");
+        }
+
+        return DomainRows.From(await new DomainService(ledger).GetReportAsync(days, cancellationToken));
+    }
 }

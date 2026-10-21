@@ -18,6 +18,7 @@ import type {
   CaptureKind,
   CreatedSubject,
   DomainDaysRead,
+  DomainReportRead,
   DomainsRead,
   Earned,
   EventRelation,
@@ -67,6 +68,7 @@ import {
   rankAwardKey,
   rulesFor,
   toDomainDays,
+  toDomainReportRow,
   toDomainRow,
 } from "@/lib/domain-fold";
 import { applyStreakToHabit } from "@/lib/habit-streak";
@@ -1770,6 +1772,21 @@ export function mockDomainDays(reference: string, days = 30): DomainDaysRead {
     throw new Error(`'${reference}' isn't a life domain. Expected one of: ${domains.map((c) => c.key).join(", ")}.`);
   }
   return toDomainDays(match, creditDays(state.ledger).get(match.key) ?? [], todayIso(), days);
+}
+
+/** `GET /api/domains/report?days=N`: every life domain over its last `days` days. */
+export function mockDomainReport(days = 30): DomainReportRead {
+  if (days < 1) throw new Error(`Ask for at least 1 day; got ${days}.`);
+  if (days > MAX_DOMAIN_DAYS) throw new Error(`Ask for at most ${MAX_DOMAIN_DAYS} days; got ${days}.`);
+  const today = todayIso();
+  const credit = creditDays(state.ledger);
+  return {
+    today,
+    days,
+    domains: CURRENCIES.filter((c) => c.group === "domain").map((c) =>
+      toDomainReportRow(c, credit.get(c.key) ?? [], today, days),
+    ),
+  };
 }
 
 /** `POST /api/domains/settle`: pays any rank-up time alone has reached. */

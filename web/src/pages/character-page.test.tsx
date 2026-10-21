@@ -23,6 +23,13 @@ vi.mock("@/lib/celebrate", async (importOriginal) => ({
 
 let writes: LifeOsWriteClient;
 
+const router = vi.hoisted(() => ({ search: {} as { view?: "reports" }, navigate: vi.fn() }));
+
+vi.mock("@tanstack/react-router", () => ({
+  useSearch: () => router.search,
+  useNavigate: () => router.navigate,
+}));
+
 vi.mock("@/lib/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/client")>()),
   createWriteClient: () => writes,
@@ -32,6 +39,7 @@ beforeEach(() => {
   resetStore();
   localStorage.clear();
   vi.clearAllMocks();
+  router.search = {};
   writes = createMockWriteClient();
 });
 
@@ -124,6 +132,22 @@ describe("Character page (xp-domains plan §3.12)", () => {
     expect(rows).toHaveLength(31);
     expect(within(rows[1]).getAllByRole("cell").map((c) => c.textContent)).toEqual(["0", "0", "No"]);
     expect(within(rows[2]).getAllByRole("cell").map((c) => c.textContent)).toEqual(["90", "108", "Yes"]);
+  });
+
+  it("switches to the Reports tab through the URL, and shows them there", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderPage();
+    await healthCard();
+    await user.click(screen.getByRole("tab", { name: "Reports" }));
+    const update = router.navigate.mock.calls[0][0].search as (prev: object) => object;
+    expect(update({})).toEqual({ view: "reports" });
+    unmount();
+
+    router.search = { view: "reports" };
+    renderPage();
+    expect(screen.getByRole("tab", { name: "Reports" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("list", { name: "Consistency, last 30 days" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Health" })).not.toBeInTheDocument();
   });
 
   it("pays a rank time alone reached when it opens, and celebrates it", async () => {

@@ -607,6 +607,26 @@ Dates are local days in the home zone, not the viewer's zone.
     `succeeded` (null for an unconfigured domain). It takes a day count rather than
     `from`/`to`; the chart only ever asks for the last N days. Anything that isn't a
     domain, or a count out of range, is a 400.
+- **As built (X7):**
+  - `GET /api/domains/report?days=N` (default 30, 1–731) answers `{ today, days, domains }`.
+    Every domain has key, label, name, `configured`, `from`/`to` and the XP credited to those
+    days (`base`, `paid`).
+  - A configured domain adds `daysCounted`, `successfulDays`, `consistency` and
+    `averageBase`. It also gives `levelFrom`/`levelTo` and `rankFrom`/`rankTo`, the rank
+    title now, and `ranksReached` (title and day). These are null for a domain without rules.
+  - `DomainProgress.Report(days)` (Domain) computes a configured domain's period;
+    `DomainService.GetReportAsync` reads every domain.
+  - The period is the window a rank gate of that length reads today: the last N days, ending
+    today once today has succeeded and yesterday until then. An unfinished today never counts
+    against it. Its XP counts once it does.
+  - `daysCounted` is the days of the period on or after the domain's start. Consistency and
+    the average are over those days, so a young domain reads "8 of its 9 days", not "8 of
+    30".
+  - Levels compare the end of the day before the period with now. `ranksReached` lists the
+    ranks entered since the period began.
+  - A domain without rules reports the XP credited to the N days ending today.
+  - `bsk domains [<domain>] --report N` prints the same, with a line per figure, and
+    `--json`. `--days` with `--report` is refused.
 
 ### 3.12 The Character page (web)
 
@@ -687,6 +707,52 @@ Dates are local days in the home zone, not the viewer's zone.
   values in words. Colours go through the dataviz validator in both themes.
 - Life XP, Resolve and unconfigured domains aren't plotted. Unconfigured domains' XP shows in
   the table.
+- **As built (X7):**
+  - The Character page has two tabs: Domains (the X6 cards) and Reports
+    (`/character?view=reports`), in `components/character/domain-reports.tsx`.
+  - Period chips: 7 days, 30 days, 3 months, 6 months, 1 year (prose says "12 months"). A
+    "Compare with" menu adds a second period. Both choices are remembered per viewer.
+  - **Consistency:**
+    - One bar per configured domain with fewer than three configured, which means Health
+      alone today.
+    - Each bar's label gives the value and its history: "77% · 44 of 90 days", or "80% · all
+      30 days".
+    - A domain younger than the period is a hollow, dashed bar.
+    - A comparison period is a tick across the bar, named under it: "30 days: 80% · all 30
+      days".
+  - **Since the start:** each configured domain's level as a bar from 1 to 100, ticked where
+    each rank begins. It reads `GET /api/domains`.
+  - **From three configured domains,** both become spider charts:
+    - Consistency has rings at 25/50/75/100%, the period filled, the comparison dashed and a
+      hollow vertex where history is short. Each axis label gives the value and its history.
+    - Level has a ring at each rank.
+    - The spiders are built and unit-tested now; the app shows them once two more domains
+      have rules.
+  - **By domain:** a table of every domain's days counted, successful days, consistency, XP
+    (with base when it differs), base XP a day, level from → to and ranks reached.
+    Unconfigured domains show "XP only" and their XP. It's the charts' table view, in a
+    keyboard-scrollable box.
+  - Words: each bar's label and value are visible text. Each spider's accessible name lists
+    every value in words.
+  - Colours:
+    - The period is `--chart-earned`; the comparison is plain ink marked by shape (a tick or
+      a dashed line), not a second hue.
+    - The dataviz validator passes the green alone in both themes (#006c4b on #fefcf8,
+      #37a17f on #111c18).
+    - Against the ink, the green clears CVD and normal-vision separation (ΔE ≥ 23.8) and 3:1
+      contrast. The ink only fails the hue-band checks, which are meant for coloured series.
+  - While a new period loads, the last one stays on screen dimmed, labelled with the period
+    it covers.
+  - Mock: `toDomainReportRow` / `DomainProgress.report` port the C# report, and
+    `mockDomainReport` serves it.
+  - Tests:
+    - .NET: the report's window, counts, XP, standing and ranks, today once it succeeds, a
+      young domain, before the start, and the endpoint. Also a `bsk domains --report` smoke
+      test on a throwaway database.
+    - Vitest: the TS port on the same examples, the mock read, the words, the Reports view
+      (bars, hollow, comparison, a rank reached in the period, the table) and both spiders.
+    - e2e: Reports → 3 months → compare 30 days.
+    - axe: Reports compared, in both themes.
 
 ## 4. Phases
 
@@ -782,4 +848,4 @@ Each of these has to earn its place through use of the pilot.
 - [x] X4 — Levels, ranks, rank-up Gems, simulator (no migration). Next: calibrate (§2.4).
 - [x] X5 — The multiplier on earns (no migration)
 - [x] X6 — Character page (no migration)
-- [ ] X7 — Reports + charts
+- [x] X7 — Reports + charts (no migration)

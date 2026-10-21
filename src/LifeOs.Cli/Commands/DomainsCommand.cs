@@ -18,6 +18,12 @@ namespace LifeOs.Cli.Commands;
 /// domain, or for every domain when none is named. Days are read in the home zone
 /// (<c>Rewards:HomeTimeZone</c>).
 /// </para>
+/// <para>
+/// <c>bsk domains [&lt;domain&gt;] --report &lt;n&gt;</c> is the period report (xp-domains plan
+/// §3.13): each domain over its last <c>n</c> days — 7, 30, 90, 180 or 365, as the Character
+/// page offers — with a configured domain's consistency over the days it has history for, its
+/// XP and base XP a day, and the levels and ranks it gained; a domain without rules, its XP.
+/// </para>
 /// <para><c>bsk domains simulate</c> is the simulator (<see cref="DomainsSimulateCommand"/>).</para>
 /// </summary>
 internal static class DomainsCommand
@@ -35,10 +41,15 @@ internal static class DomainsCommand
         {
             Description = $"List each day, today included: this many (default {DefaultDays} when a domain is named)."
         };
+        var reportOption = new Option<int?>("--report")
+        {
+            Description = "Report each domain over its last this many days (7, 30, 90, 180 or 365): consistency, XP, levels and ranks gained."
+        };
 
         var command = new Command("domains", "Show life-domain XP, levels, ranks, consistency and multipliers.");
         command.Arguments.Add(domainArgument);
         command.Options.Add(daysOption);
+        command.Options.Add(reportOption);
         command.Subcommands.Add(DomainsSimulateCommand.Create(connectionOption, jsonOption));
 
         command.SetAction((parseResult, cancellationToken) =>
@@ -47,11 +58,33 @@ internal static class DomainsCommand
             var asJson = parseResult.GetValue(jsonOption);
             var domain = parseResult.GetValue(domainArgument);
             var days = parseResult.GetValue(daysOption);
+            var report = parseResult.GetValue(reportOption);
 
             return Cli.RunAsync(asJson, async () =>
             {
+                if (days is not null && report is not null)
+                {
+                    throw new ArgumentException("Use --days or --report, not both.");
+                }
+
                 await using var provider = Cli.BuildServices(connectionString);
                 var service = provider.GetRequiredService<DomainService>();
+
+                if (report is { } reportDays)
+                {
+                    var reading = await service.GetReportAsync(reportDays, cancellationToken);
+                    var entries = domain is null
+                        ? reading.Domains
+                        : reading.Domains.Where(e => e.Domain.Currency.Key == DomainService.Resolve(domain).Key).ToList();
+                    if (asJson)
+                    {
+                        Cli.WriteJson(new { today = reading.Today, days = reading.Days, domains = entries.Select(ReportJson) });
+                        return 0;
+                    }
+
+                    WriteReport(reading, entries);
+                    return 0;
+                }
 
                 if (domain is null && days is null)
                 {
@@ -104,6 +137,69 @@ internal static class DomainsCommand
 
         return command;
     }
+
+    private static void WriteReport(DomainReportReading reading, IReadOnlyList<DomainReportEntry> entries)
+    {
+        Console.WriteLine($"Life domains — the last {Plural(reading.Days, "day")} to {Day(reading.Today)}");
+        foreach (var e in entries)
+        {
+            var xp = e.Base == e.Paid ? Xp(e.Paid) : $"{Xp(e.Paid)} ({e.Base.ToString("#,0", CultureInfo.InvariantCulture)} base)";
+            Console.WriteLine($"  {e.Domain.Currency.Label,-16}{xp}");
+            if (e.Period is not { } p)
+            {
+                Console.WriteLine("    collects XP only (no rules yet)");
+                continue;
+            }
+
+            var rules = e.Domain.Progress!.Rules;
+            Console.WriteLine($"    days        {Day(p.From)} to {Day(p.To)}"
+                + (p.To < reading.Today ? " (today counts once it succeeds)" : ""));
+            if (p.DaysCounted == 0)
+            {
+                Console.WriteLine("    consistency no days yet: the domain starts with its first XP");
+            }
+            else
+            {
+                Console.WriteLine($"    consistency {p.SuccessfulDays} of {Plural(p.DaysCounted, "day")} successful ({Percent(p.Consistency)})"
+                    + (p.FullHistory ? "" : $" — {p.DaysCounted} of the {p.Days} days since the start"));
+                Console.WriteLine($"    per day     {p.AverageBase.ToString("0.#", CultureInfo.InvariantCulture)} base XP on average");
+            }
+
+            var levels = p.Before.Level == p.Now.Level
+                ? $"{p.Now.Level}, unchanged"
+                : $"{p.Before.Level} → {p.Now.Level}";
+            Console.WriteLine($"    level       {levels} ({rules.Ranks[p.Now.Rank].Title})");
+            Console.WriteLine(p.RanksReached.Count == 0
+                ? "    ranks       none reached"
+                : $"    ranks       {string.Join(", ", p.RanksReached.Select(r => $"{r.Rule.Title} on {Day(r.QualifiedOn)}"))}");
+        }
+    }
+
+    private static object ReportJson(DomainReportEntry e) => new
+    {
+        currency = e.Domain.Currency.Key,
+        label = e.Domain.Currency.Label,
+        configured = e.Domain.Configured,
+        from = e.From,
+        to = e.To,
+        @base = e.Base,
+        paid = e.Paid,
+        period = e.Period is not { } p
+            ? null
+            : new
+            {
+                daysCounted = p.DaysCounted,
+                successfulDays = p.SuccessfulDays,
+                consistency = p.Consistency,
+                averageBase = p.AverageBase,
+                fullHistory = p.FullHistory,
+                levelFrom = p.Before.Level,
+                levelTo = p.Now.Level,
+                rankFrom = p.Before.Rank,
+                rankTo = p.Now.Rank,
+                ranksReached = p.RanksReached.Select(r => new { index = r.Rank, title = r.Rule.Title, qualifiedOn = r.QualifiedOn })
+            }
+    };
 
     private static void WriteSeries(DomainSeries series)
     {

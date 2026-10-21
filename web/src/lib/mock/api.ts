@@ -18,6 +18,7 @@ import type {
   AreaRow,
   ArtifactRecord,
   DomainDaysRead,
+  DomainReportRead,
   DomainsRead,
   BountyTypeDefaults,
   HabitOccurrenceRow,
@@ -58,6 +59,7 @@ import {
   mockWallet,
   mockDomains,
   mockDomainDays,
+  mockDomainReport,
   withBounty,
 } from "@/lib/mock/store";
 
@@ -133,6 +135,8 @@ export interface LifeOsReads {
   domains(): Promise<DomainsRead>;
   /** One life domain's last `days` days (30 by default), today included: the daily chart. */
   domainDays(domain: string, days?: number): Promise<DomainDaysRead>;
+  /** Every life domain over its last `days` days (30 by default): the Reports view. */
+  domainReport(days?: number): Promise<DomainReportRead>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /**
@@ -302,6 +306,11 @@ export const mockReads: LifeOsReads = {
   async domainDays(domain: string, days?: number): Promise<DomainDaysRead> {
     await wait();
     return mockDomainDays(domain, days);
+  },
+
+  async domainReport(days?: number): Promise<DomainReportRead> {
+    await wait();
+    return mockDomainReport(days);
   },
 
   async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {

@@ -653,6 +653,52 @@ export interface DomainDayRow {
 }
 
 /**
+ * `GET /api/domains/report?days=N` (xp-domains plan §3.11, §3.13): every life domain over its
+ * last `days` days, as of `today` (home zone) — the Character page's Reports.
+ */
+export interface DomainReportRead {
+  today: string;
+  days: number;
+  domains: DomainReportRow[];
+}
+
+/**
+ * One life domain over a report's period: the days it covers (`from`–`to`; a configured
+ * domain's end yesterday until today succeeds) and the XP credited to them. A configured
+ * domain adds the days counted (on or after its start), the successful ones, consistency (0–1)
+ * and base XP a day over the days counted, and the level and rank (indexes, 0 is Novice) the
+ * period started from against now. Those are null for a domain without rules.
+ */
+export interface DomainReportRow {
+  key: string;
+  label: string;
+  name: string;
+  configured: boolean;
+  from: string;
+  to: string;
+  base: number;
+  paid: number;
+  daysCounted: number | null;
+  successfulDays: number | null;
+  consistency: number | null;
+  averageBase: number | null;
+  levelFrom: number | null;
+  levelTo: number | null;
+  rankFrom: number | null;
+  rankTo: number | null;
+  /** The rank held now, e.g. "Apprentice". */
+  rankTitle: string | null;
+  ranksReached: DomainRankReached[] | null;
+}
+
+/** A rank a domain entered in a report's period, and the day it qualified. */
+export interface DomainRankReached {
+  rank: number;
+  title: string;
+  qualifiedOn: string;
+}
+
+/**
  * A configured life domain whose level or rank a write changed (xp-domains plan §3.8):
  * `domain` is its currency (`health_xp`), ranks are indexes into its ladder (0 is Novice),
  * and `rankTitle` names the rank after.

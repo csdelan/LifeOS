@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  historyText,
   multiplierLabel,
   nextRankText,
   normalizeDomainDays,
+  normalizeDomainReport,
   normalizeEarned,
+  periodLabel,
   progressMessage,
   rankRequirement,
 } from "@/lib/domains";
-import type { DomainDaysRead, DomainNextRank } from "@/lib/production-ui-types";
+import type { DomainDaysRead, DomainNextRank, DomainReportRead } from "@/lib/production-ui-types";
 
 const journeyman: DomainNextRank = {
   rank: 2,
@@ -53,6 +56,18 @@ describe("domain words (xp-domains plan §3.12)", () => {
   });
 });
 
+describe("report words (xp-domains plan §3.13)", () => {
+  it("names a period", () => {
+    expect([7, 30, 90, 180, 365].map(periodLabel)).toEqual(["7 days", "30 days", "3 months", "6 months", "12 months"]);
+  });
+
+  it("says how much of a period a value covers", () => {
+    expect(historyText(30, 30)).toBe("all 30 days");
+    expect(historyText(12, 30)).toBe("12 of 30 days");
+    expect(historyText(0, 30)).toBe("no days yet");
+  });
+});
+
 describe("progressMessage (xp-domains plan §3.8)", () => {
   const change = { domain: "health_xp", levelFrom: 11, levelTo: 12, rankFrom: 1, rankTo: 1, rankTitle: "Apprentice" };
 
@@ -83,6 +98,21 @@ describe("normalizing domain reads", () => {
       { domain: "health_xp", levelFrom: 9, levelTo: 10, rankFrom: 0, rankTo: 1, rankTitle: "Apprentice" },
     ]);
     expect(normalizeEarned(undefined)).toEqual({ awards: [], progress: [] });
+  });
+
+  it("reads a report's numbers from strings, and an unconfigured row's progression as null", () => {
+    const raw = {
+      today: "2026-10-20",
+      days: "30",
+      domains: [
+        { key: "health_xp", label: "Health XP", name: "Health", configured: true, from: "2026-09-20", to: "2026-10-19", base: "2100", paid: "2310", daysCounted: "30", successfulDays: "27", consistency: "0.9", averageBase: "70", levelFrom: "6", levelTo: "10", rankFrom: "0", rankTo: "1", rankTitle: "Apprentice", ranksReached: [{ rank: "1", title: "Apprentice", qualifiedOn: "2026-10-14" }] },
+        { key: "social_xp", label: "Social XP", name: "Social", configured: false, from: "2026-09-21", to: "2026-10-20", base: "20", paid: "20" },
+      ],
+    } as unknown as DomainReportRead;
+    const report = normalizeDomainReport(raw);
+    expect(report.days).toBe(30);
+    expect(report.domains[0]).toMatchObject({ paid: 2310, consistency: 0.9, levelTo: 10, ranksReached: [{ rank: 1 }] });
+    expect(report.domains[1]).toMatchObject({ paid: 20, daysCounted: null, consistency: null, rankTitle: null, ranksReached: null });
   });
 
   it("reads a domain's days with a null target and success for an unconfigured domain", () => {

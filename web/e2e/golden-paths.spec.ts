@@ -189,6 +189,20 @@ test.describe("golden paths", () => {
     await expect(ranks.nth(1)).toHaveAttribute("aria-current", "step");
   });
 
+  test("Character Reports compare Health over a longer period than its history", async ({ page }) => {
+    await page.goto("/character");
+    await page.getByRole("tab", { name: "Reports" }).click();
+    await expect(page).toHaveURL(/view=reports/);
+    const consistency = (label: string) => page.getByRole("list", { name: `Consistency, last ${label}` });
+    await expect(consistency("30 days")).toContainText("80% · all 30 days", { timeout: 10_000 });
+
+    await page.getByRole("button", { name: "3 months" }).click();
+    await expect(consistency("3 months")).toContainText("77% · 44 of 90 days", { timeout: 10_000 });
+    await page.getByRole("combobox", { name: "Compare with" }).selectOption("30");
+    await expect(consistency("3 months")).toContainText("30 days: 80% · all 30 days", { timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "By domain, last 3 months" })).toBeVisible();
+  });
+
   test("theme toggle switches the document class", async ({ page }) => {
     await page.goto("/");
     const html = page.locator("html");

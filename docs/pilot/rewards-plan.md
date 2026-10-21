@@ -342,7 +342,7 @@ number from 0025.
   2026-10-20): Health, Social, Environment and Finance XP as tracked currencies, each with
   levels 1–100, consistency-gated ranks, a consistency multiplier and spider-chart reports.
   Its own plan: [xp-domains-plan.md](xp-domains-plan.md). Domains are priced per item, not
-  tied to Areas.
+  tied to Areas. **Shipped** as X1–X7 (2026-10-20); calibration continues in use.
 - **More earning sources:** Reviews, Inbox Zero, resolved Problems, fulfilled Commitments.
   Each is a new trigger in `v_reward_due` plus a default, not a rebuild.
 - **Editing the defaults and the coin rate in the UI.** v1 keeps them in code and

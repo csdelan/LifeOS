@@ -17,11 +17,12 @@ import {
   normalizeWallet,
 } from "@/lib/rewards";
 import type { LifeOsReads } from "@/lib/mock/api";
-import { normalizeDomainDays, normalizeDomains } from "@/lib/domains";
+import { normalizeDomainDays, normalizeDomainReport, normalizeDomains } from "@/lib/domains";
 import type {
   AreaRow,
   ArtifactRecord,
   DomainDaysRead,
+  DomainReportRead,
   DomainsRead,
   BountyTypeDefaults,
   HabitOccurrenceRow,
@@ -204,6 +205,11 @@ export const liveReads: LifeOsReads = {
       api().GET("/api/domains/{key}/days", { params: { path: { key: domain }, query: { days } } }),
     );
     return normalizeDomainDays(asType<DomainDaysRead>(data));
+  },
+
+  async domainReport(days) {
+    const data = await unwrap(api().GET("/api/domains/report", { params: { query: { days } } }));
+    return normalizeDomainReport(asType<DomainReportRead>(data));
   },
 
   async ledger(opts) {

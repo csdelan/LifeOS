@@ -5,6 +5,7 @@ import {
   earnStatus,
   getState,
   mockDomainDays,
+  mockDomainReport,
   mockDomains,
   mockLedger,
   mockSetBounty,
@@ -109,6 +110,29 @@ describe("mock life domains (DomainService, RewardService's domain half)", () =>
     expect(() => mockDomainDays("health", 0)).toThrow("Ask for at least 1 day; got 0.");
     expect(() => mockDomainDays("health", 732)).toThrow("Ask for at most 731 days; got 732.");
     expect(() => mockDomainDays("coins")).toThrow("'coins' isn't a life domain.");
+  });
+
+  it("reports every domain over a period: Health in full, the others their XP", () => {
+    const report = mockDomainReport(30);
+    expect([report.today, report.days]).toEqual([today(), 30]);
+    expect(report.domains.map((d) => d.key)).toEqual(["health_xp", "social_xp", "environment_xp", "finance_xp"]);
+    // Nothing yet today, so the 30 days end yesterday.
+    expect(report.domains[0]).toMatchObject({
+      configured: true,
+      from: addDays(today(), -30),
+      to: addDays(today(), -1),
+      daysCounted: 30,
+      successfulDays: 24,
+      consistency: 0.8,
+      levelTo: 9,
+      rankTitle: "Novice",
+      ranksReached: [],
+    });
+    // Health's 44 days of history, inside a 90-day period.
+    expect(mockDomainReport(90).domains[0]).toMatchObject({ daysCounted: 44, successfulDays: 34, levelFrom: 1 });
+    expect(report.domains[1]).toMatchObject({ configured: false, paid: 0, daysCounted: null, consistency: null });
+    expect(() => mockDomainReport(0)).toThrow("Ask for at least 1 day; got 0.");
+    expect(() => mockDomainReport(732)).toThrow("Ask for at most 731 days; got 732.");
   });
 
   it("settles a rank time alone reached, once", () => {

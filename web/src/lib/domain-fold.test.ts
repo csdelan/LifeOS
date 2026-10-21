@@ -10,6 +10,7 @@ import {
   rankAwardKey,
   shiftDay,
   toDomainDays,
+  toDomainReportRow,
   toDomainRow,
   topLevelOf,
   totalFor,
@@ -247,6 +248,84 @@ describe("the multiplier on what's paid (§3.6)", () => {
     [-25, 1.1, -28],
   ])("pays %i at ×%d as %i, rounding halves up", (amount, multiplier, paid) => {
     expect(applyMultiplier(amount, multiplier)).toBe(paid);
+  });
+});
+
+describe("a period report (§3.13, DomainReportTests)", () => {
+  /** 60 days ending yesterday, all successful but 20–22 days ago, and `today` base XP today. */
+  const sixtyDays = (today = 30) =>
+    fold([
+      ...Array.from({ length: 60 }, (_, i) => i + 1)
+        .filter((n) => n < 20 || n > 22)
+        .map(good),
+      day(0, today),
+    ]);
+
+  it("counts the days a rank gate reads and what moved in them", () => {
+    const r = sixtyDays().report(30);
+    expect([r.from, r.to]).toEqual([ago(30), ago(1)]);
+    expect([r.days, r.daysCounted, r.successfulDays, r.fullHistory]).toEqual([30, 30, 27, true]);
+    expect([r.consistency, r.base, r.paid, r.averageBase]).toEqual([0.9, 27 * 70, 27 * 70, 63]);
+    expect(r.before).toMatchObject({ totalXp: 2_100, level: 6, rank: 0 });
+    expect(r.now).toMatchObject({ totalXp: 4_020, level: 10, rank: 1 });
+    expect(r.ranksReached.map((x) => [x.rule.title, x.qualifiedOn])).toEqual([["Apprentice", ago(6)]]);
+  });
+
+  it("starts a week from the standing the day before it", () => {
+    const r = sixtyDays().report(7);
+    expect([r.from, r.to, r.daysCounted, r.successfulDays, r.paid]).toEqual([ago(7), ago(1), 7, 7, 490]);
+    expect(r.before).toMatchObject({ totalXp: 3_500, level: 9, rank: 0 });
+    expect(r.ranksReached.map((x) => x.rule.title)).toEqual(["Apprentice"]);
+  });
+
+  it("counts today once it has succeeded", () => {
+    const r = sixtyDays(70).report(7);
+    expect([r.from, r.to, r.daysCounted, r.successfulDays, r.base]).toEqual([ago(6), TODAY, 7, 7, 490]);
+  });
+
+  it("reports a young domain over the days it has", () => {
+    const r = fold(days(9, 1, 70).filter((d) => d.day !== ago(4))).report(30);
+    expect([r.daysCounted, r.successfulDays, r.fullHistory]).toEqual([9, 8, false]);
+    expect(r.consistency).toBeCloseTo(8 / 9, 12);
+    expect(r.now).toMatchObject({ totalXp: 560, level: 2 });
+    expect(r.before.level).toBe(1);
+  });
+
+  it("counts nothing before the start, and refuses an empty period", () => {
+    const r = fold([]).report(7);
+    expect([r.daysCounted, r.consistency, r.averageBase, r.before.level, r.now.level]).toEqual([0, 0, 0, 1, 1]);
+    expect(() => fold([]).report(0)).toThrow(RangeError);
+  });
+
+  it("reads a row as GET /api/domains/report does, and an unconfigured domain's XP only", () => {
+    const credit = [...days(60, 23, 70), ...days(19, 1, 70)];
+    const health = toDomainReportRow({ key: "health_xp", label: "Health XP" }, credit, TODAY, 30);
+    expect(health).toMatchObject({
+      name: "Health",
+      configured: true,
+      from: ago(30),
+      to: ago(1),
+      daysCounted: 30,
+      successfulDays: 27,
+      consistency: 0.9,
+      averageBase: 63,
+      levelFrom: 6,
+      levelTo: 10,
+      rankFrom: 0,
+      rankTo: 1,
+      rankTitle: "Apprentice",
+      ranksReached: [{ rank: 1, title: "Apprentice", qualifiedOn: ago(6) }],
+    });
+    const young = toDomainReportRow({ key: "health_xp", label: "Health XP" }, days(9, 1, 70).filter((d) => d.day !== ago(4)), TODAY, 30);
+    expect([young.consistency, young.averageBase]).toEqual([0.8889, 62.2]);
+
+    const social = toDomainReportRow(
+      { key: "social_xp", label: "Social XP" },
+      [day(3, 15), day(10, 40), day(-1, 99)],
+      TODAY,
+      7,
+    );
+    expect(social).toMatchObject({ configured: false, from: ago(6), to: TODAY, paid: 15, daysCounted: null, consistency: null });
   });
 });
 

@@ -40,6 +40,39 @@ public sealed record DomainStanding(DateOnly Day, long TotalXp, int RawLevel, in
 public sealed record RankReached(int Rank, RankRule Rule, DateOnly QualifiedOn);
 
 /// <summary>
+/// A configured domain over its last <paramref name="Days"/> days (xp-domains plan §3.11,
+/// §3.13). The days run <paramref name="From"/> to <paramref name="To"/>, ending today once
+/// today has succeeded and yesterday until then, as rank gates read them, so an unfinished
+/// today never counts against it. <paramref name="DaysCounted"/> is how many of them are on or
+/// after the domain's start; consistency and the average are over those days, so a young
+/// domain's figures say how much history backs them. <paramref name="Before"/> is where the
+/// domain stood at the end of the day before <paramref name="From"/>, <paramref name="Now"/>
+/// where it stands today, and <paramref name="RanksReached"/> the ranks entered since
+/// <paramref name="From"/>.
+/// </summary>
+public sealed record DomainPeriodReport(
+    int Days,
+    DateOnly From,
+    DateOnly To,
+    int DaysCounted,
+    int SuccessfulDays,
+    long Base,
+    long Paid,
+    DomainStanding Before,
+    DomainStanding Now,
+    IReadOnlyList<RankReached> RanksReached)
+{
+    /// <summary>The successful share of the days counted (0–1); 0 before the start.</summary>
+    public decimal Consistency => DaysCounted == 0 ? 0m : (decimal)SuccessfulDays / DaysCounted;
+
+    /// <summary>The base XP a counted day earned, on average; 0 before the start.</summary>
+    public decimal AverageBase => DaysCounted == 0 ? 0m : (decimal)Base / DaysCounted;
+
+    /// <summary>Whether every day of the period counted: the domain is at least as old as the period.</summary>
+    public bool FullHistory => DaysCounted == Days;
+}
+
+/// <summary>
 /// The next rank's gate as it reads today (xp-domains plan §3.5): its rule, the window ending
 /// today (today counting once it has succeeded), and the domain's age in counted days.
 /// <paramref name="LevelReached"/> says whether the raw level has reached the rank's start.
@@ -290,6 +323,40 @@ public sealed class DomainProgress
 
     /// <summary>The multiplier for XP credited to <paramref name="day"/> (§3.6): the tier of the window before it.</summary>
     public decimal MultiplierFor(DateOnly day) => Rules.Multiplier.For(WindowBefore(day, Rules.Multiplier.WindowDays).Share);
+
+    /// <summary>
+    /// The domain over its last <paramref name="days"/> days (§3.13): the window a rank gate of
+    /// that length would read today, the XP credited to it, and the level and rank it started
+    /// from against now.
+    /// </summary>
+    public DomainPeriodReport Report(int days)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(days, 1);
+
+        var window = WindowEndingOn(Today, days);
+        long dayBase = 0;
+        long paid = 0;
+        foreach (var period in Periods)
+        {
+            if (period.Start >= window.From && period.End <= window.To)
+            {
+                dayBase += period.Base;
+                paid += period.Paid;
+            }
+        }
+
+        return new DomainPeriodReport(
+            days,
+            window.From,
+            window.To,
+            window.CoveredDays,
+            window.SuccessfulDays,
+            dayBase,
+            paid,
+            StandingOn(window.From.AddDays(-1)),
+            StandingOn(Today),
+            reached.Where(r => r.QualifiedOn >= window.From).ToList());
+    }
 
     /// <summary>Walks every period from the start, carrying the XP so far and the rank held.</summary>
     private List<DomainStanding> Walk()

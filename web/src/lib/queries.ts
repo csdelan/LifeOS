@@ -55,6 +55,7 @@ export const qk = {
   domains: ["domains"] as const,
   // Nested under ["domains"], so every domains invalidation refreshes the chart too.
   domainDays: (domain: string, days: number) => ["domains", "days", domain, days] as const,
+  domainReport: (days: number) => ["domains", "report", days] as const,
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
@@ -627,6 +628,16 @@ export function useDomainDays(domain: string, days: number, enabled = true) {
   return useQuery({
     queryKey: qk.domainDays(domain, days),
     queryFn: () => reads().domainDays(domain, days),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Every life domain over its last `days` days: the Character page's Reports. */
+export function useDomainReport(days: number, enabled = true) {
+  return useQuery({
+    queryKey: qk.domainReport(days),
+    queryFn: () => reads().domainReport(days),
     enabled,
     placeholderData: keepPreviousData,
   });

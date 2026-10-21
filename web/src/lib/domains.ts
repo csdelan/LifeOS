@@ -6,6 +6,7 @@ import type {
   DomainChange,
   DomainDaysRead,
   DomainNextRank,
+  DomainReportRead,
   DomainRow,
   DomainsRead,
   Earned,
@@ -103,6 +104,28 @@ export function normalizeDomainDays(raw: DomainDaysRead): DomainDaysRead {
   };
 }
 
+export function normalizeDomainReport(raw: DomainReportRead): DomainReportRead {
+  return {
+    today: raw.today,
+    days: num(raw.days),
+    domains: (raw.domains ?? []).map((d) => ({
+      ...d,
+      base: num(d.base),
+      paid: num(d.paid),
+      daysCounted: numOrNull(d.daysCounted),
+      successfulDays: numOrNull(d.successfulDays),
+      consistency: numOrNull(d.consistency),
+      averageBase: numOrNull(d.averageBase),
+      levelFrom: numOrNull(d.levelFrom),
+      levelTo: numOrNull(d.levelTo),
+      rankFrom: numOrNull(d.rankFrom),
+      rankTo: numOrNull(d.rankTo),
+      rankTitle: d.rankTitle ?? null,
+      ranksReached: d.ranksReached ? d.ranksReached.map((r) => ({ ...r, rank: num(r.rank) })) : null,
+    })),
+  };
+}
+
 export function normalizeProgress(raw: DomainChange[] | null | undefined): DomainChange[] {
   return (raw ?? []).map((c) => ({
     ...c,
@@ -137,6 +160,21 @@ export function domainNameOf(key: string): string {
 /** "60%". */
 export function percent(share: number): string {
   return `${Math.round(share * 100)}%`;
+}
+
+/** A report period in words: "30 days", "3 months", "12 months". */
+export function periodLabel(days: number): string {
+  const months: Record<number, string> = { 90: "3 months", 180: "6 months", 365: "12 months" };
+  return months[days] ?? `${days} ${days === 1 ? "day" : "days"}`;
+}
+
+/**
+ * How much of a period a value covers: "all 30 days", "12 of 30 days", or "no days yet" for a
+ * domain that hasn't started (§3.13).
+ */
+export function historyText(daysCounted: number, days: number): string {
+  if (daysCounted === 0) return "no days yet";
+  return daysCounted >= days ? `all ${days} days` : `${daysCounted} of ${days} days`;
 }
 
 /** "×1.2". */

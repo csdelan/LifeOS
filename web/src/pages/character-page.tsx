@@ -1,9 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ChartColumnIcon, ChevronDownIcon, MedalIcon } from "lucide-react";
 import { DomainDailyChart } from "@/components/character/domain-daily-chart";
+import { DomainReports } from "@/components/character/domain-reports";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton } from "@/components/primitives/skeletons";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDay } from "@/lib/dates";
 import {
   domainSymbol,
@@ -20,10 +23,14 @@ import { cn } from "@/lib/utils";
 /**
  * The Character page (REWARD-7, xp-domains plan §3.12): each configured life domain's
  * lifetime advancement beside how it's going now, its daily chart, and its rank ladder;
- * domains without rules show their XP. Opening it settles any rank time alone has reached
+ * domains without rules show their XP. The Reports tab (§3.13) compares the domains over a
+ * period. Opening the page settles any rank time alone has reached
  * (`POST /api/domains/settle`), which celebrates like any other rank-up.
  */
 export function CharacterPage() {
+  const search = useSearch({ from: "/character" });
+  const navigate = useNavigate({ from: "/character" });
+  const view = search.view === "reports" ? "reports" : "domains";
   const domains = useDomains();
   const writes = useWrites();
   const settled = useRef(false);
@@ -39,18 +46,29 @@ export function CharacterPage() {
   const configured = rows.filter((d) => d.configured);
   const others = rows.filter((d) => !d.configured);
 
+  const showView = (next: string) =>
+    void navigate({ search: (prev) => ({ ...prev, view: next === "reports" ? "reports" : undefined }) });
+
   return (
-    <div className="h-full overflow-y-auto">
-      <header className="border-b px-4 py-4 md:px-6">
+    <Tabs value={view} onValueChange={showView} className="flex h-full min-h-0 flex-col gap-0">
+      <header className="shrink-0 border-b px-4 pt-4 md:px-6">
         <p className="type-scale-section text-primary">Character</p>
         <h1 className="font-heading text-2xl">Your life domains</h1>
         <p className="mt-1 max-w-prose text-xs text-muted-foreground">
           Levels and ranks are for life: a bad month never takes them back. Today's ring, the last 30 days
           and the multiplier show how it's going now.
         </p>
+        <TabsList variant="line" className="mt-3 -mb-px h-auto">
+          <TabsTrigger value="domains">Domains</TabsTrigger>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
+        </TabsList>
       </header>
 
-      <div className="space-y-8 px-4 py-5 md:px-6">
+      <TabsContent value="reports" className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+        <DomainReports />
+      </TabsContent>
+
+      <TabsContent value="domains" className="min-h-0 flex-1 space-y-8 overflow-y-auto px-4 py-5 md:px-6">
         {domains.isLoading ? (
           <div className="grid gap-3 md:grid-cols-2">
             <CardSkeleton />
@@ -94,8 +112,8 @@ export function CharacterPage() {
             </ul>
           </section>
         ) : null}
-      </div>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }
 

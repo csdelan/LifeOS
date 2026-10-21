@@ -21,6 +21,8 @@ public static class DomainEndpoints
             .Produces<DomainsRead>();
         api.MapGet("/domains/{key}/days", GetDomainDays).WithName("GetDomainDays")
             .Produces<DomainDaysRead>();
+        api.MapGet("/domains/report", GetDomainReport).WithName("GetDomainReport")
+            .Produces<DomainReportRead>();
         api.MapPost("/domains/settle", Settle).WithName("SettleDomains")
             .Produces<EarnResult>();
     }
@@ -35,6 +37,13 @@ public static class DomainEndpoints
     private static async Task<IResult> GetDomainDays(
         string key, int? days, RewardReader rewards, CancellationToken cancellationToken)
         => Results.Ok(await rewards.GetDomainDaysAsync(key, days ?? 30, cancellationToken));
+
+    /// <summary>
+    /// Every life domain over its last <paramref name="days"/> days (30 by default, up to two
+    /// years): what the Character page's reports plot — 7, 30, 90, 180 or 365 there.
+    /// </summary>
+    private static async Task<IResult> GetDomainReport(int? days, RewardReader rewards, CancellationToken cancellationToken)
+        => Results.Ok(await rewards.GetDomainReportAsync(days ?? 30, cancellationToken));
 
     /// <summary>
     /// Pays any rank-up the domains have reached and not been paid — one reached by time alone

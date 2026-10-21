@@ -27,6 +27,17 @@ public sealed record DomainSeriesDay(DateOnly Day, long Base, long Paid, bool? S
 public sealed record DomainSeries(DomainReading Domain, IReadOnlyList<DomainSeriesDay> Days);
 
 /// <summary>
+/// One life domain over a report's period: the XP credited to the period's days and, for a
+/// configured domain, its period report (whose days end yesterday until today succeeds). A
+/// domain without rules reports the XP credited to the period's days ending today.
+/// </summary>
+public sealed record DomainReportEntry(
+    DomainReading Domain, DateOnly From, DateOnly To, long Base, long Paid, DomainPeriodReport? Period);
+
+/// <summary>Every life domain over its last <see cref="Days"/> days, as of <see cref="Today"/> in the home zone.</summary>
+public sealed record DomainReportReading(DateOnly Today, int Days, IReadOnlyList<DomainReportEntry> Domains);
+
+/// <summary>
 /// A configured life domain whose level or rank a write changed (xp-domains plan §3.8): its
 /// currency, the level and rank (an index into its ranks) before and after, and the title of
 /// the rank after.
@@ -83,6 +94,37 @@ public sealed class DomainService(ILedgerRepository ledger)
         }
 
         return new DomainSeries(reading, series.ToList());
+    }
+
+    /// <summary>
+    /// Every life domain over its last <paramref name="days"/> days (xp-domains plan §3.11,
+    /// §3.13): a configured domain's consistency over the days it has history for, its XP and
+    /// the levels and ranks it gained; a domain without rules, its XP. Throws
+    /// <see cref="ArgumentException"/> for a day count below 1.
+    /// </summary>
+    public async Task<DomainReportReading> GetReportAsync(int days, CancellationToken cancellationToken = default)
+    {
+        if (days < 1)
+        {
+            throw new ArgumentException($"Ask for at least 1 day; got {days}.");
+        }
+
+        var credit = await ledger.GetDomainDaysAsync(
+            Currencies.LifeDomains.Select(c => c.Key).ToList(), cancellationToken);
+        var entries = Currencies.LifeDomains.Select(currency =>
+        {
+            var reading = Read(currency, credit);
+            if (reading.Progress is { } progress)
+            {
+                var period = progress.Report(days);
+                return new DomainReportEntry(reading, period.From, period.To, period.Base, period.Paid, period);
+            }
+
+            var from = credit.Today.AddDays(1 - days);
+            var inPeriod = DaysOf(currency.Key, credit).Where(d => d.Day >= from && d.Day <= credit.Today).ToList();
+            return new DomainReportEntry(reading, from, credit.Today, inPeriod.Sum(d => d.Base), inPeriod.Sum(d => d.Paid), null);
+        }).ToList();
+        return new DomainReportReading(credit.Today, days, entries);
     }
 
     /// <summary>

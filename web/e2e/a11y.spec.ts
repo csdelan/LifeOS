@@ -55,6 +55,25 @@ test.describe("accessibility", () => {
     });
   }
 
+  // The Character page's Reports, over a period longer than Health's history (a hollow bar)
+  // against a second period (a tick), in both themes.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /character?view=reports compared, ${theme} theme`, async ({ page }) => {
+      await page.addInitScript((t) => {
+        localStorage.setItem("theme", t);
+        localStorage.setItem("lifeos.view.character.reports", JSON.stringify({ period: "90", compare: "30" }));
+      }, theme);
+      await page.goto("/character?view=reports");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      await expect(page.getByRole("list", { name: "Consistency, last 3 months" })).toContainText("30 days: 80%", {
+        timeout: 10_000,
+      });
+      const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      const blocking = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
+    });
+  }
+
   // States the routes above don't reach: an Established habit checked off on the Habits
   // page, and Today's Maintaining group open (REWARD-2 maintenance).
   test("axe serious/critical: maintained habits", async ({ page }) => {
