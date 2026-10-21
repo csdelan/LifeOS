@@ -2629,6 +2629,15 @@ real days so far, and the simulator's scenarios are in the regression suite. Nex
 calibration (Chris prices Health items and lives with them), then the multiplier on earns
 (X5) and the Character page (X6). Build stays `building`.
 
+**Update (2026-10-20 — X5 landed):** Health XP is now paid at the multiplier of the day it
+counts on: the share of successful days in the 30 days before that day picks ×1.0, ×1.1, ×1.2
+or ×1.3, rounding halves up (60 at ×1.3 pays 78). The earn keeps what it would have paid and
+the multiplier beside the amount, so success still reads the 60 and nothing re-prices it
+later; undoing gives back exactly what was paid. A day logged late is priced from the days
+before its own day. Other domains, Life XP, Resolve and the spendables never multiply. The
+earning responses, `bsk` and the toast show the working: "+78 Health XP (60 × 1.3)". The
+Character page (X6) is next. Build stays `building`.
+
 **Workflow (Chris):**
 - "For each XP category, I want to track 'levels' from 1-100 that represent RPG levels …
   I start at level 1 with 0 XP, and level 100 represents Grandmaster and typically takes many
@@ -2940,8 +2949,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   consistency, multiplier) with replaceable success rules, the multiplier in reconcile,
   earn-only rank-up Gem awards, the simulator, period reports. — **Open**: X1 shipped (the
   currencies and the credited day, migration 0030), X2 (established habits keep earning,
-  migration 0031), X3 (Health's rules and daily consistency, migration 0032) and X4 (levels,
-  ranks, rank-up Gems and the simulator); X5–X7 to go in
+  migration 0031), X3 (Health's rules and daily consistency, migration 0032), X4 (levels,
+  ranks, rank-up Gems and the simulator) and X5 (the multiplier on earns); X6–X7 to go in
   [xp-domains-plan.md](xp-domains-plan.md).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review

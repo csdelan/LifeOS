@@ -193,7 +193,7 @@ public static class DomainSimulator
             var drawn = Draw(pattern, from, end, random);
             var unpriced = DomainProgress.Fold(rules, history.Concat(drawn.Select(d => new DomainDay(d.Day, d.Base, d.Base))), end);
             var paid = drawn.Select(d => new DomainDay(
-                d.Day, d.Base, options.Multiplier ? Price(d.Base, unpriced.MultiplierFor(d.Day)) : d.Base));
+                d.Day, d.Base, options.Multiplier ? MultiplierRule.Apply(d.Base, unpriced.MultiplierFor(d.Day)) : d.Base));
             runs.Add(DomainProgress.Fold(rules, history.Concat(paid), end));
         }
 
@@ -206,10 +206,6 @@ public static class DomainSimulator
             new Spread<int>(Percentile(levels, 0.10), Percentile(levels, 0.50), Percentile(levels, 0.90)),
             finalRanks, consistency, runs);
     }
-
-    /// <summary>What <paramref name="baseXp"/> pays at <paramref name="multiplier"/>, halves rounded up (25 × 1.1 = 28).</summary>
-    public static long Price(long baseXp, decimal multiplier)
-        => (long)Math.Round(baseXp * multiplier, MidpointRounding.AwayFromZero);
 
     private static RankOutcome Outcome(DomainRules rules, int rank, IReadOnlyList<DomainProgress> runs)
     {

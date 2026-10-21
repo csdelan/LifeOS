@@ -66,6 +66,13 @@ public sealed record MultiplierRule(int WindowDays, IReadOnlyList<MultiplierTier
     /// <summary>The next tier above <paramref name="share"/>, or null at the top.</summary>
     public MultiplierTier? NextAbove(decimal share)
         => Tiers.Where(t => share < t.MinShare).OrderBy(t => t.MinShare).FirstOrDefault();
+
+    /// <summary>
+    /// What <paramref name="amount"/> pays at <paramref name="multiplier"/> (xp-domains plan
+    /// §3.6): whole XP, rounding halves up, so 25 at 1.1 pays 28.
+    /// </summary>
+    public static long Apply(long amount, decimal multiplier)
+        => (long)Math.Round(amount * multiplier, MidpointRounding.AwayFromZero);
 }
 
 /// <summary>Gems paid once for entering each rank, and <paramref name="Top"/> for the last one.</summary>

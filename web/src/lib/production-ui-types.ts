@@ -519,6 +519,8 @@ export interface RewardRow {
 /**
  * An earn or reversal a write produced (REWARD-4's feedback). A rank-up (`trigger` "rank",
  * REWARD-7) belongs to no item: `subject` is null and `note` names it ("Health Apprentice").
+ * An earn whose life-domain XP was paid at a multiplier above 1.0 (xp-domains plan §3.6) adds
+ * `base` (those currencies before it) and `multipliers`, e.g. `{ health_xp: 1.3 }`.
  */
 export interface Award {
   id: string;
@@ -528,6 +530,8 @@ export interface Award {
   subject: CreatedSubject | null;
   note?: string | null;
   amounts: Amounts;
+  base?: Amounts | null;
+  multipliers?: Record<string, number> | null;
 }
 
 /**

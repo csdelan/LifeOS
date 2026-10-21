@@ -299,7 +299,23 @@ export function normalizeReward(raw: RewardRow): RewardRow {
 }
 
 export function normalizeAward(raw: Award): Award {
-  return { ...raw, amounts: normalizeAmounts(raw.amounts) };
+  return {
+    ...raw,
+    amounts: normalizeAmounts(raw.amounts),
+    base: raw.base ? normalizeAmounts(raw.base) : null,
+    multipliers: raw.multipliers ? normalizeAmounts(raw.multipliers) : null,
+  };
+}
+
+/**
+ * How an award's life-domain XP was multiplied (xp-domains plan §3.6): "❤️ 60 × 1.3" for each
+ * currency paid at a multiplier, or "" when none was.
+ */
+export function multipliedLabel(award: Award): string {
+  return Object.entries(award.multipliers ?? {})
+    .filter(([key]) => award.base?.[key] !== undefined)
+    .map(([key, m]) => `${currency(key)?.symbol ?? currencyLabel(key)} ${award.base![key]} × ${m}`)
+    .join(", ");
 }
 
 /** The `awards` of an earning write's response (`{ awards }`), as numbers. */

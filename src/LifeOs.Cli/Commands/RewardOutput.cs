@@ -47,21 +47,35 @@ internal static class RewardOutput
         awardKey = a.AwardKey,
         subject = a.Subject is { } s ? new { urn = s.Urn, type = s.Type, title = s.Title } : null,
         amounts = a.Amounts,
-        note = a.Note
+        note = a.Note,
+        @base = a.Base,
+        multipliers = a.Multipliers
     });
 
     /// <summary>
     /// Prints one line per award: "Earned +10 XP, +2 Coins (completed: Write report)." — or, for
-    /// a rank-up, "(rank: Health Apprentice)".
+    /// a rank-up, "(rank: Health Apprentice)". Domain XP paid at a multiplier says so:
+    /// "+28 Health XP (25 × 1.1)".
     /// </summary>
     public static void WriteAwards(IEnumerable<Award> awards)
     {
         foreach (var award in awards)
         {
             var verb = award.Entry == LedgerEntries.Reversal ? "Reversed" : "Earned";
-            Console.WriteLine($"{verb} {Amounts(award.Amounts)} ({award.Trigger}: {award.Subject?.Title ?? award.Note}).");
+            Console.WriteLine($"{verb} {Amounts(award)} ({award.Trigger}: {award.Subject?.Title ?? award.Note}).");
         }
     }
+
+    /// <summary>An award's amounts, each one paid at a multiplier followed by its working: "+28 Health XP (25 × 1.1)".</summary>
+    private static string Amounts(Award award)
+        => string.Join(", ", award.Amounts.Select(kv =>
+        {
+            var amount = Amounts(new Dictionary<string, long> { [kv.Key] = kv.Value });
+            return award.Base?.GetValueOrDefault(kv.Key) is { } basis and > 0
+                   && award.Multipliers?.GetValueOrDefault(kv.Key) is { } multiplier and > 0
+                ? $"{amount} ({basis} × {multiplier.ToString("0.0#", CultureInfo.InvariantCulture)})"
+                : amount;
+        }));
 
     /// <summary>Each life domain whose level or rank a write changed, as JSON-ready data.</summary>
     public static object ProgressJson(IEnumerable<DomainChange> progress) => progress.Select(p => new

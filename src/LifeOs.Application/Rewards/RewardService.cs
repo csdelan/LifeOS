@@ -491,7 +491,9 @@ public sealed class RewardService(
 
     /// <summary>
     /// One reconcile of <paramref name="subject"/>: the entries written and, when they carry
-    /// configured life-domain XP, the domains as they stood just before (else null).
+    /// configured life-domain XP, the domains as they stood just before (else null). An earn's
+    /// domain XP is paid at the multiplier of the day it's credited to (xp-domains plan §3.6),
+    /// read from one fold of the domains as they stand now.
     /// </summary>
     private async Task<(IReadOnlyList<Award> Awards, IReadOnlyList<DomainProgress>? DomainsBefore)> ReconcileOnceAsync(
         SubjectRef subject, Guid? causeEventId, CancellationToken cancellationToken)
@@ -504,6 +506,9 @@ public sealed class RewardService(
         var now = clock.UtcNow;
         var writes = new List<LedgerWrite>();
         var awards = new List<Award>();
+        IReadOnlyList<DomainProgress>? domains = null;
+        async Task<IReadOnlyList<DomainProgress>> DomainsAsync()
+            => domains ??= Fold(await ReadDomainsAsync(cancellationToken));
 
         var unpaid = due.Where(d => !paidKeys.Contains(d.AwardKey)).ToList();
         if (unpaid.Count > 0)
@@ -511,21 +516,29 @@ public sealed class RewardService(
             var bounty = await ReadBountyAsync(subject, cancellationToken);
             foreach (var award in unpaid)
             {
-                var amounts = bounty.Price(subject.Type, award);
-                if (amounts.Count == 0)
+                var price = bounty.Price(subject.Type, award);
+                if (price.Count == 0)
                 {
                     // Priced to pay nothing: there is nothing to record.
                     continue;
                 }
 
+                // Domain XP pays at its credited day's multiplier, frozen in the entry: nothing
+                // re-prices it later. A day logged late is priced from the days before it.
+                var earn = DomainPricing.CouldMultiply(price)
+                    ? PriceOn(price, award, await DomainsAsync())
+                    : new PricedEarn(price);
+
                 // Dated at the trigger, so the history shows the day it was earned even
                 // when a sweep heals it later; credited to the day it happened, which for a
                 // habit day logged late is earlier still (xp-domains plan §3.3).
                 writes.Add(Entry(
-                    subject, LedgerEntries.Earn, award.AwardKey, award.Trigger, amounts,
+                    subject, LedgerEntries.Earn, award.AwardKey, award.Trigger, earn.Amounts,
                     occurredAt: award.TriggeredAt, recordedAt: now, derivedFrom: award.SourceEventIds,
-                    expectPaid: false, creditedOn: award.CreditedOn));
-                awards.Add(new Award(Guid.Empty, subject, LedgerEntries.Earn, award.Trigger, award.AwardKey, amounts));
+                    expectPaid: false, creditedOn: award.CreditedOn, basis: earn.Base, multipliers: earn.Multipliers));
+                awards.Add(new Award(
+                    Guid.Empty, subject, LedgerEntries.Earn, award.Trigger, award.AwardKey, earn.Amounts,
+                    Base: earn.Base, Multipliers: earn.Multipliers));
             }
         }
 
@@ -552,16 +565,30 @@ public sealed class RewardService(
         }
 
         var before = awards.Any(a => a.Amounts.Keys.Any(k => LifeDomains.For(k) is not null))
-            ? Fold(await ReadDomainsAsync(cancellationToken))
+            ? await DomainsAsync()
             : null;
         var ids = await ledger.AppendAsync(writes, cancellationToken);
         return (awards.Select((award, i) => award with { EventId = ids[i] }).ToList(), before);
     }
 
+    /// <summary>
+    /// <paramref name="price"/> at the multiplier of the day <paramref name="award"/> is
+    /// credited to (today, in the home zone, should the view ever leave that day out).
+    /// </summary>
+    private static PricedEarn PriceOn(
+        IReadOnlyDictionary<string, long> price, DueAward award, IReadOnlyList<DomainProgress> domains)
+        => DomainPricing.Price(price, award.CreditedOn ?? domains[0].Today, domains);
+
+    /// <summary>
+    /// A ledger entry for an item. An earn paid at a multiplier above 1.0 also stamps
+    /// <paramref name="basis"/> (its payload's <c>base</c>: those currencies before the
+    /// multiplier, which success rules read) and <paramref name="multipliers"/>.
+    /// </summary>
     private LedgerWrite Entry(
         SubjectRef subject, string entry, string awardKey, string trigger,
         IReadOnlyDictionary<string, long> amounts, DateTimeOffset occurredAt, DateTimeOffset recordedAt,
-        IReadOnlyList<Guid> derivedFrom, bool expectPaid, DateOnly? creditedOn = null)
+        IReadOnlyList<Guid> derivedFrom, bool expectPaid, DateOnly? creditedOn = null,
+        IReadOnlyDictionary<string, long>? basis = null, IReadOnlyDictionary<string, decimal>? multipliers = null)
     {
         var payload = JsonSerializer.Serialize(
             new
@@ -571,7 +598,9 @@ public sealed class RewardService(
                 award_key = awardKey,
                 trigger,
                 subject_id = subject.Id.ToString(),
-                credited_on = creditedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                credited_on = creditedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                @base = basis,
+                multipliers
             },
             OmitNulls);
 
@@ -690,11 +719,15 @@ public sealed record Wallet(DateTimeOffset? OpenedAt, IReadOnlyList<WalletLine> 
 /// <summary>
 /// A ledger entry a reconcile wrote: an <c>earn</c> (positive amounts) or a
 /// <c>reversal</c> (negative), for which item, trigger and award key. A rank-up has no item:
-/// its <paramref name="Note"/> says what it was for, e.g. "Health Apprentice".
+/// its <paramref name="Note"/> says what it was for, e.g. "Health Apprentice". An earn whose
+/// life-domain XP was paid at a multiplier above 1.0 carries <paramref name="Base"/> (those
+/// currencies before it) and <paramref name="Multipliers"/> (xp-domains plan §3.6), so it can
+/// read "28 Health XP (25 × 1.1)".
 /// </summary>
 public sealed record Award(
     Guid EventId, SubjectRef? Subject, string Entry, string Trigger, string AwardKey,
-    IReadOnlyDictionary<string, long> Amounts, string? Note = null);
+    IReadOnlyDictionary<string, long> Amounts, string? Note = null,
+    IReadOnlyDictionary<string, long>? Base = null, IReadOnlyDictionary<string, decimal>? Multipliers = null);
 
 /// <summary>
 /// What an earning write did: the ledger entries it wrote, and each configured life domain

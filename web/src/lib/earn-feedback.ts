@@ -7,12 +7,15 @@
 import { toast } from "sonner";
 import { celebrate, chime } from "@/lib/celebrate";
 import type { Amounts, Award } from "@/lib/production-ui-types";
-import { formatAmounts, triggerLabel } from "@/lib/rewards";
+import { formatAmounts, multipliedLabel, triggerLabel } from "@/lib/rewards";
 
 export interface AwardSummary {
   earned: Amounts;
   givenBack: Amounts;
-  /** "Morning mobility — day followed, 7-day streak", one part per item. */
+  /**
+   * "Morning mobility — day followed, 7-day streak", one part per item; domain XP paid at a
+   * multiplier adds its working: "day followed (❤️ 60 × 1.3)".
+   */
   earnedFor: string;
   givenBackFor: string;
   /** Gems, a streak milestone or establishing a habit: the full celebration. */
@@ -27,7 +30,9 @@ function forWhat(awards: Award[]): string {
   const byItem = new Map<string, string[]>();
   for (const a of awards) {
     const title = a.subject?.title ?? a.note ?? "Reward";
-    byItem.set(title, [...(byItem.get(title) ?? []), triggerLabel(a.trigger)]);
+    const multiplied = multipliedLabel(a);
+    const why = multiplied ? `${triggerLabel(a.trigger)} (${multiplied})` : triggerLabel(a.trigger);
+    byItem.set(title, [...(byItem.get(title) ?? []), why]);
   }
   return [...byItem].map(([title, why]) => `${title} — ${why.join(", ")}`).join(" · ");
 }

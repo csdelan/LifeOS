@@ -95,7 +95,9 @@ public sealed class RewardRow
 /// A ledger entry an earning write produced (REWARD-4's toast): an <c>earn</c> with positive
 /// amounts or a <c>reversal</c> with negative ones, for which item and trigger. A rank-up
 /// (trigger <c>rank</c>) has no item: its <see cref="Note"/> says which rank, e.g.
-/// "Health Apprentice".
+/// "Health Apprentice". An earn whose life-domain XP was paid at a multiplier above 1.0
+/// (xp-domains plan §3.6) adds <see cref="Base"/>, those currencies before the multiplier, and
+/// <see cref="Multipliers"/>, so it can read "28 Health XP (25 × 1.1)"; both are null otherwise.
 /// </summary>
 public sealed class AwardRow
 {
@@ -106,6 +108,8 @@ public sealed class AwardRow
     public CreatedSubject? Subject { get; set; }
     public IReadOnlyDictionary<string, long> Amounts { get; set; } = new Dictionary<string, long>();
     public string? Note { get; set; }
+    public IReadOnlyDictionary<string, long>? Base { get; set; }
+    public IReadOnlyDictionary<string, decimal>? Multipliers { get; set; }
 }
 
 /// <summary>
@@ -218,7 +222,9 @@ public static class RewardRows
         AwardKey = award.AwardKey,
         Subject = award.Subject is { } subject ? Subject(subject) : null,
         Amounts = award.Amounts,
-        Note = award.Note
+        Note = award.Note,
+        Base = award.Base,
+        Multipliers = award.Multipliers
     };
 
     public static DomainChangeRow From(DomainChange change) => new()

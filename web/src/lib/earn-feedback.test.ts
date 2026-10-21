@@ -63,6 +63,17 @@ describe("summarizeAwards", () => {
     expect(summary.big).toBe(true);
   });
 
+  it("shows how domain XP paid at a multiplier was worked out", () => {
+    const multiplied: Award = {
+      ...award("followed", { freedom: 5, health_xp: 78 }),
+      base: { health_xp: 60 },
+      multipliers: { health_xp: 1.3 },
+    };
+    const summary = summarizeAwards([multiplied, award("completed", { health_xp: 25 }, "earn", "Stretch")]);
+    expect(summary.earned).toEqual({ freedom: 5, health_xp: 103 });
+    expect(summary.earnedFor).toBe("Morning mobility — day followed (❤️ 60 × 1.3) · Stretch — completed");
+  });
+
   it("is big for Gems, a streak milestone or establishing — not an ordinary day", () => {
     expect(summarizeAwards([award("followed", { xp: 5 })]).big).toBe(false);
     expect(summarizeAwards([award("completed", { gems: 1 })]).big).toBe(true);

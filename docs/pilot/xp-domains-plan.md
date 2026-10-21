@@ -395,6 +395,22 @@ series. Every progression number in the app comes from it.
 - `Award` carries `base` and `multipliers`, so the toast can say "❤️ 28 Health XP (25 × 1.1)".
 - Earns record their amounts when issued, so XP earned before X5 is never multiplied after the
   fact.
+- **As built (X5):**
+  - No migration: 0032's `v_award_credit` already reads a stamped `base`.
+  - `ReconcileOnceAsync` folds the configured domains once, only when a due earn's price
+    carries their XP, and prices each such earn with `DomainPricing.Price(price, creditedOn,
+    folds)`. The same fold is the "before" for `progress`. A lost race re-reads and re-prices.
+  - `base` and `multipliers` list only the currencies that were multiplied, so their keys
+    match. A domain at ×1.0 stamps nothing, and only positive amounts multiply.
+  - `MultiplierRule.Apply(amount, multiplier)` is the one rounding rule; the simulator uses it
+    too.
+  - `Award`, the API's `AwardRow` and `bsk … --json` carry `base` and `multipliers`. The CLI
+    prints "+78 Health XP (60 × 1.3)", and the web toast's description reads "Stretch — day
+    followed (❤️ 60 × 1.3)".
+  - The mock store doesn't multiply yet; it gets the fold in X6.
+  - Backfilling several days in a row prices each one from the days before it, so logging
+    them oldest first pays more than newest first. That's the frozen-at-issuance trade-off
+    above, not a bug.
 
 ### 3.7 Rank-up Gems
 
@@ -708,6 +724,6 @@ Each of these has to earn its place through use of the pilot.
 - [x] X2 — Established habits keep earning (migration 0031)
 - [x] X3 — Rules + daily consistency (migration 0032)
 - [x] X4 — Levels, ranks, rank-up Gems, simulator (no migration). Next: calibrate (§2.4).
-- [ ] X5 — The multiplier on earns
+- [x] X5 — The multiplier on earns (no migration)
 - [ ] X6 — Character page
 - [ ] X7 — Reports + charts

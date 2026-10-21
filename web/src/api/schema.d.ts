@@ -808,6 +808,12 @@ export interface components {
                 [key: string]: number | string;
             };
             note?: null | string;
+            base?: null | {
+                [key: string]: number | string;
+            };
+            multipliers?: null | {
+                [key: string]: number | string;
+            };
         };
         BountyBody: {
             subject?: string;

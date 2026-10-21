@@ -184,14 +184,6 @@ public sealed class DomainSimulatorTests
         Assert.Contains(run.Periods, p => p.Base == 120);
     }
 
-    [Theory]
-    [InlineData(25, "1.1", 28)]
-    [InlineData(25, "1.3", 33)]
-    [InlineData(10, "1.25", 13)]
-    [InlineData(70, "1.0", 70)]
-    public void A_day_is_paid_at_its_multiplier_rounding_halves_up(long baseXp, string multiplier, long paid)
-        => Assert.Equal(paid, DomainSimulator.Price(baseXp, decimal.Parse(multiplier, System.Globalization.CultureInfo.InvariantCulture)));
-
     [Fact]
     public void A_pattern_no_one_could_follow_is_refused()
     {

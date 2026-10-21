@@ -6,6 +6,8 @@ import {
   coinsToUsd,
   formatAmounts,
   ledgerLabel,
+  multipliedLabel,
+  normalizeAward,
   normalizeRedemption,
   normalizeReward,
   priceProblem,
@@ -155,6 +157,24 @@ describe("API normalization", () => {
     expect([redemption.amounts.coins, redemption.dollars, redemption.coinRate, redemption.wallet.coinValueUsd]).toEqual(
       [4, 2, null, 0.5],
     );
+  });
+
+  it("reads an award's base and multipliers as numbers, and says how it was multiplied", () => {
+    const earn = normalizeAward({
+      id: "e",
+      entry: "earn",
+      trigger: "followed",
+      awardKey: "day:h:2026-10-20:followed",
+      subject: null,
+      amounts: { health_xp: "78" as unknown as number, freedom: 5 },
+      base: { health_xp: "60" as unknown as number },
+      multipliers: { health_xp: "1.3" as unknown as number },
+    });
+    expect([earn.amounts.health_xp, earn.base?.health_xp, earn.multipliers?.health_xp]).toEqual([78, 60, 1.3]);
+    expect(multipliedLabel(earn)).toBe("❤️ 60 × 1.3");
+
+    const plain = normalizeAward({ ...earn, base: undefined, multipliers: undefined });
+    expect([plain.base, plain.multipliers, multipliedLabel(plain)]).toEqual([null, null, ""]);
   });
 });
 
