@@ -57,6 +57,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAppointmentRepository>(_ => new NpgsqlAppointmentRepository(connectionString));
         services.AddSingleton<ITimerRepository>(_ => new NpgsqlTimerRepository(connectionString));
         services.AddSingleton<ILedgerRepository>(_ => new NpgsqlLedgerRepository(connectionString, homeZone));
+        services.AddSingleton<IHomeCalendar>(_ => new NpgsqlHomeCalendar(connectionString, homeZone));
 
         services.AddSingleton(sp => new CaptureService(
             sp.GetRequiredService<IEventStore>(),
@@ -130,6 +131,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IActivityWriter>(),
             sp.GetRequiredService<RewardService>(),
             sp.GetRequiredService<IClock>(),
+            sp.GetRequiredService<IHomeCalendar>(),
             sourceId));
 
         services.AddSingleton(sp => new TimerService(

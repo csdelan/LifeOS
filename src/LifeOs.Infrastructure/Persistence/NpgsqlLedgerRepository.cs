@@ -473,10 +473,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     }
 
     // `time zone "…" not recognized`: the configured home zone is well formed but unknown.
-    private InvalidOperationException UnknownHomeZone(PostgresException e)
-        => new(
-            $"{HomeZone.ConfigurationKey} '{homeTimeZone}' is not a time zone the database knows; use an IANA name such as {HomeZone.Default}.",
-            e);
+    private InvalidOperationException UnknownHomeZone(PostgresException e) => NpgsqlHomeCalendar.UnknownZone(homeTimeZone, e);
 
     // Days come back as text: Dapper has no DateOnly mapping in every host.
     private static DateOnly ParseDay(string day) => DateOnly.ParseExact(day, "yyyy-MM-dd", CultureInfo.InvariantCulture);

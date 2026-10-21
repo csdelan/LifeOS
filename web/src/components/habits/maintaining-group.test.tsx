@@ -45,7 +45,7 @@ describe("MaintainingGroup (REWARD-2 maintenance)", () => {
     expect(within(list).queryByRole("button", { name: "Floss: partly followed today" })).toBeNull();
   });
 
-  it("checks a day off with one tap, and a second tap on the lit button undoes it", async () => {
+  it("checks a day off with one tap, on the row's date, and a second tap on the lit button undoes it", async () => {
     const onPick = vi.fn();
     render(<MaintainingGroup rows={rows} onPick={onPick} onOpen={vi.fn()} defaultOpen />);
 
@@ -56,9 +56,9 @@ describe("MaintainingGroup (REWARD-2 maintenance)", () => {
     await userEvent.click(floss);
 
     expect(onPick.mock.calls).toEqual([
-      ["walk", "followed"],
-      ["walk", "partial"],
-      ["floss", "missed"],
+      ["walk", "followed", "2026-10-21"],
+      ["walk", "partial", "2026-10-21"],
+      ["floss", "missed", "2026-10-21"],
     ]);
   });
 

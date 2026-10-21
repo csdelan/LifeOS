@@ -236,6 +236,14 @@ Chris's rule is that XP counts on **the day it happened**. Each earn records tha
       `Pacific Standard Time` stops the API at startup and `bsk` before it runs.
     - A well-formed name Postgres doesn't know (`Mars/Olympus`) fails the first reconcile or
       trigger read, with a message naming `Rewards:HomeTimeZone`.
+  - **A check-off without a date** is today in the home zone too (fixed 2026-10-20).
+    `bsk adhere` and `POST /api/adhere` used the UTC date, so after about 5 pm Pacific a
+    check-off landed on tomorrow, outside the day's credit. `AdherenceService` now asks
+    `IHomeCalendar`, which Postgres answers. Today's check-offs, including the Maintaining
+    group, also send their row's date.
+  - **Still UTC:** the habit views (0027's occurrences and targets) read `current_date`,
+    which is the database's UTC date. So after about 5 pm Pacific, today's unlogged habits
+    read as missed. Logging them still records the right day.
 - **Earns from before X1** have no `credited_on`. They read as their `occurred_at` in the home
   zone. None of them carry domain XP, so nothing is affected.
 - **History is different on purpose.** R7's History keeps filing entries by when they were

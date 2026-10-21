@@ -22,10 +22,15 @@ namespace LifeOs.Application.Subjects;
 /// </summary>
 public sealed class AdherenceService(
     SubjectService subjects, ISubjectRepository repository, IActivityWriter writer, RewardService rewards,
-    IClock clock, string sourceId)
+    IClock clock, IHomeCalendar calendar, string sourceId)
 {
+    /// <summary>
+    /// Records <paramref name="result"/> for the habit's occurrence on
+    /// <paramref name="occurrence"/>. Without a date it's today in the home zone, never the
+    /// server's: a check-off at 9 pm Pacific is that evening's, not tomorrow's in UTC.
+    /// </summary>
     public async Task<AdherenceResult> RecordAsync(
-        string habitReference, string result, DateOnly occurrence, string? note = null,
+        string habitReference, string result, DateOnly? occurrence = null, string? note = null,
         CancellationToken cancellationToken = default)
     {
         var normalizedResult = (result ?? "").Trim().ToLowerInvariant();
@@ -49,6 +54,9 @@ public sealed class AdherenceService(
                 $"Habit '{habit.Urn}' does not allow partial credit. Set attributes.allows_partial to enable it.");
         }
 
+        var now = clock.UtcNow;
+        var day = occurrence ?? await calendar.DateAtAsync(now, cancellationToken);
+
         // Followed and partial support the habit; a miss violates it. The full/partial
         // distinction lives in the payload, keeping the edge vocabulary binary (D2).
         var relation = normalizedResult == AdherenceResults.Missed
@@ -58,12 +66,11 @@ public sealed class AdherenceService(
         var payload = JsonSerializer.Serialize(new
         {
             subject_id = habit.Id.ToString(),
-            occurrence = occurrence.ToString("yyyy-MM-dd"),
+            occurrence = day.ToString("yyyy-MM-dd"),
             result = normalizedResult,
             note = string.IsNullOrWhiteSpace(note) ? null : note.Trim()
         });
 
-        var now = clock.UtcNow;
         var activityEvent = new NewEvent(
             Kind: EventKinds.Activity,
             Provenance: Provenances.Declared,
@@ -78,7 +85,7 @@ public sealed class AdherenceService(
             cancellationToken);
 
         var awards = await rewards.ReconcileAsync(habit, eventId, cancellationToken);
-        return new AdherenceResult(eventId, habit, normalizedResult, occurrence, awards);
+        return new AdherenceResult(eventId, habit, normalizedResult, day, awards);
     }
 
     private async Task<bool> AllowsPartialAsync(Guid habitId, CancellationToken cancellationToken)

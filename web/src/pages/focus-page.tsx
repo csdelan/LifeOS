@@ -166,10 +166,13 @@ export function FocusPage() {
                   <AdherenceButtons
                     state={h.state}
                     allowsPartial={h.allowsPartial}
+                    // The row's own date: left to the server, an evening check-off
+                    // would fall on tomorrow's date in UTC.
                     onPick={(s) =>
                       void writes.adhere(
                         h.habitId,
                         s === "not_followed" ? "missed" : s,
+                        { on: h.occurrenceDate },
                       )
                     }
                   />
@@ -178,7 +181,7 @@ export function FocusPage() {
             </ul>
             <MaintainingGroup
               rows={data.maintainingHabits}
-              onPick={(habitId, pick) => void writes.adhere(habitId, pick)}
+              onPick={(habitId, pick, on) => void writes.adhere(habitId, pick, { on })}
               onOpen={(habitId) =>
                 void navigate({ to: "/habits", search: { selected: habitId } })
               }

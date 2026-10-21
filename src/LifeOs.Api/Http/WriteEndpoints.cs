@@ -548,11 +548,12 @@ public static class WriteEndpoints
         return subject?.Urn ?? reference;
     }
 
-    private static DateOnly ParseOccurrence(string? text)
+    /// <summary>The occurrence date asked for, or null for today in the home zone (the service's default).</summary>
+    private static DateOnly? ParseOccurrence(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            return DateOnly.FromDateTime(DateTime.UtcNow);
+            return null;
         }
 
         if (!DateOnly.TryParse(text, CultureInfo.InvariantCulture, out var date))
@@ -648,6 +649,8 @@ public sealed class AdhereBody
 {
     public string Habit { get; set; } = "";
     public string State { get; set; } = "";
+
+    /// <summary>The occurrence date (YYYY-MM-DD); omitted, it's today in the home zone (Rewards:HomeTimeZone).</summary>
     public string? On { get; set; }
     public string? Note { get; set; }
 }

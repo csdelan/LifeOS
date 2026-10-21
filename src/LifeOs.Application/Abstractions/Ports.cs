@@ -9,6 +9,20 @@ public interface IClock
 }
 
 /// <summary>
+/// The calendar in the home zone (<see cref="HomeZone"/>, <c>Rewards:HomeTimeZone</c>): what
+/// day it is where Chris lives, whatever zone the server or the database runs in. The
+/// solution runs with invariant globalization, so the database does the zone math.
+/// </summary>
+public interface IHomeCalendar
+{
+    /// <summary>
+    /// The date in the home zone at <paramref name="instant"/>. Throws
+    /// <see cref="InvalidOperationException"/> for a zone the database doesn't know.
+    /// </summary>
+    Task<DateOnly> DateAtAsync(DateTimeOffset instant, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Stores raw captured content. Stage 1 is text-only; the store returns the id
 /// events reference. Content is immutable once written.
 /// </summary>

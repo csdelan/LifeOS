@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
 /**
  * Today's collapsed Maintaining group (REWARD-2 maintenance): each Established habit with a
  * one-tap check-off. The header counts what's done today; there is no red, no "missed" and
- * no streak, because a maintained habit has no schedule to fall behind on.
+ * no streak, because a maintained habit has no schedule to fall behind on. A pick carries
+ * its row's date, so it lands on the day the row shows.
  */
 export function MaintainingGroup({
   rows,
@@ -18,7 +19,7 @@ export function MaintainingGroup({
   defaultOpen = false,
 }: {
   rows: HabitOccurrenceRow[];
-  onPick: (habitId: string, pick: MaintainPick) => void;
+  onPick: (habitId: string, pick: MaintainPick, occurrenceDate: string) => void;
   onOpen: (habitId: string) => void;
   defaultOpen?: boolean;
 }) {
@@ -64,7 +65,7 @@ export function MaintainingGroup({
                 habitName={h.habitName}
                 state={h.state}
                 allowsPartial={h.allowsPartial}
-                onPick={(pick) => onPick(h.habitId, pick)}
+                onPick={(pick) => onPick(h.habitId, pick, h.occurrenceDate)}
               />
             </li>
           ))}

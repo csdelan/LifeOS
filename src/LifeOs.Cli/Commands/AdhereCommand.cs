@@ -10,7 +10,8 @@ namespace LifeOs.Cli.Commands;
 /// <summary>
 /// <c>bsk adhere &lt;habit&gt; &lt;result&gt; [--on YYYY-MM-DD] [--note …]</c> — record
 /// how a habit occurrence turned out (GEN-3): <c>followed</c>, <c>partial</c>, or
-/// <c>missed</c>. Defaults to today. Recording is append-only, so correcting a past
+/// <c>missed</c>. Defaults to today in the home zone (<c>Rewards:HomeTimeZone</c>, Pacific by
+/// default), not the machine's or UTC's. Recording is append-only, so correcting a past
 /// occurrence is just another recording for that date (the projection takes the
 /// latest). Partial is only accepted when the habit allows it. A followed day earns the
 /// habit's bounty (partial earns half) and a run reaching 7 / 30 / 100 earns its
@@ -30,7 +31,7 @@ internal static class AdhereCommand
         };
         var onOption = new Option<string?>("--on")
         {
-            Description = "The occurrence date (YYYY-MM-DD). Defaults to today."
+            Description = "The occurrence date (YYYY-MM-DD). Defaults to today in the home zone (Pacific unless Rewards__HomeTimeZone says otherwise)."
         };
         var noteOption = new Option<string?>("--note") { Description = "An optional note for this occurrence." };
 
@@ -82,11 +83,11 @@ internal static class AdhereCommand
         return command;
     }
 
-    private static DateOnly ParseOccurrence(string? text)
+    private static DateOnly? ParseOccurrence(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            return DateOnly.FromDateTime(DateTime.UtcNow);
+            return null;
         }
 
         if (!DateOnly.TryParse(text, CultureInfo.InvariantCulture, out var date))
