@@ -1,6 +1,7 @@
 using System.Globalization;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Capture;
+using LifeOs.Application.Food;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
@@ -58,6 +59,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITimerRepository>(_ => new NpgsqlTimerRepository(connectionString));
         services.AddSingleton<ILedgerRepository>(_ => new NpgsqlLedgerRepository(connectionString, homeZone));
         services.AddSingleton<IHomeCalendar>(_ => new NpgsqlHomeCalendar(connectionString, homeZone));
+        services.AddSingleton<IFoodLogRepository>(_ => new NpgsqlFoodLogRepository(connectionString));
 
         services.AddSingleton(sp => new CaptureService(
             sp.GetRequiredService<IEventStore>(),
@@ -138,6 +140,11 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ITimerRepository>(),
             sp.GetRequiredService<StatusService>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
+
+        services.AddSingleton(sp => new FoodLogService(
+            sp.GetRequiredService<IFoodLogRepository>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
 

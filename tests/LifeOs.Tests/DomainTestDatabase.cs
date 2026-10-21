@@ -28,13 +28,14 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
     private readonly string name;
     private readonly CancellationToken ct;
 
-    private DomainTestDatabase(string adminConnectionString, string name, string connectionString, CancellationToken ct)
+    private DomainTestDatabase(
+        string adminConnectionString, string name, string connectionString, string zone, CancellationToken ct)
     {
         this.adminConnectionString = adminConnectionString;
         this.name = name;
         this.ct = ct;
         ConnectionString = connectionString;
-        Kernel = new ServiceCollection().AddLifeOsKernel(connectionString, homeTimeZone: Zone).BuildServiceProvider();
+        Kernel = new ServiceCollection().AddLifeOsKernel(connectionString, homeTimeZone: zone).BuildServiceProvider();
     }
 
     public string ConnectionString { get; }
@@ -43,7 +44,11 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
 
     public T Get<T>() where T : notnull => Kernel.GetRequiredService<T>();
 
-    public static async Task<DomainTestDatabase> CreateAsync(PostgresFixture postgres, CancellationToken ct)
+    /// <summary>
+    /// A new database. <paramref name="zone"/> is its home zone (UTC unless a test is about
+    /// another), set both in the database (<c>bsk.home_zone</c>) and on the kernel.
+    /// </summary>
+    public static async Task<DomainTestDatabase> CreateAsync(PostgresFixture postgres, CancellationToken ct, string zone = Zone)
     {
         var name = $"domain_{Guid.NewGuid():N}";
         await using (var admin = new NpgsqlConnection(postgres.ConnectionString))
@@ -51,12 +56,12 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
             await admin.OpenAsync(ct);
             await admin.ExecuteAsync(new CommandDefinition($"CREATE DATABASE {name};", cancellationToken: ct));
             await admin.ExecuteAsync(new CommandDefinition(
-                $"ALTER DATABASE {name} SET bsk.home_zone = '{Zone}';", cancellationToken: ct));
+                $"ALTER DATABASE {name} SET bsk.home_zone = '{zone}';", cancellationToken: ct));
         }
 
         var connectionString = new NpgsqlConnectionStringBuilder(postgres.ConnectionString) { Database = name }.ConnectionString;
         await new MigrationRunner(connectionString).ApplyAsync(ct);
-        return new DomainTestDatabase(postgres.ConnectionString, name, connectionString, ct);
+        return new DomainTestDatabase(postgres.ConnectionString, name, connectionString, zone, ct);
     }
 
     /// <summary>Today in the home zone.</summary>

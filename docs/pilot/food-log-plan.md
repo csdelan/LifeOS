@@ -50,7 +50,7 @@ diet score, changes what Chris eats. Everything in §6 has to earn its place thr
 | Diet XP per day | Up to **40 base Health XP**: **food quality 28** (70%), **calories 4** (10%), **fasting 8** (20%). §2 has the formula. |
 | Food quality | The calorie-weighted average of the day's scores, on a straight line: an average of 1 pays 0, 2 pays 7, 3 pays 14, 4 pays 21, 5 pays 28. |
 | Calories | 0 XP under 500 calories. 4 XP from 500 to 2,000. Then it fades evenly to 0 at 2,500. It doesn't depend on quality: 1,500 calories of ice cream still earns the 4. |
-| Fasting | Nothing up to 12 hours. Then ⅔ XP per hour, counted by the minute, up to 8 XP at 24 hours. Longer fasts pay the 8. |
+| Fasting | Nothing up to 12 hours. Then ⅔ XP per hour, counted by the second, up to 8 XP at 24 hours. Longer fasts pay the 8. |
 | Which day does a fast count on? | **The day it ends.** Only the longest fast ending on a day counts, so a day's fasting never pays more than 8. |
 | When does fasting pay? | **The moment the fast ends**, or when a backfilled fast is saved. |
 | When does food pay? | **When the day is closed.** Chris taps **Close day** after his last meal. If he doesn't, the day closes itself once it's over, and it pays the next time LifeOS settles (§3.4), credited to its own day. |
@@ -95,7 +95,7 @@ deleted):
   - `C ≥ 2500`: 0
 - **Food award** = `round(Quality + Calories part)`, halves up; 32 at most.
 
-For the longest fast ending on the day, `h` = its length in hours (by the minute):
+For the longest fast ending on the day, `h` = its length in hours (to the second):
 
 - **Fasting award** = `round(8 × clamp(h − 12, 0, 12) / 12)`, halves up; 8 at most.
 
@@ -517,9 +517,31 @@ Each of these has to earn its place through use.
 ## Status
 
 - [x] F0 — Requirements (FOOD-1 to FOOD-5, D13) + this plan
-- [ ] F1 — Food entries and fasts (migration 0034)
+- [x] F1 — Food entries and fasts (migration 0034)
 - [ ] F2 — Diet XP on the ledger
 - [ ] F3 — API
 - [ ] F4 — Day view
 - [ ] F5 — Week and month views
 - [ ] F6 — Photos
+
+### As built
+
+**F1 (2026-10-20).** As planned, plus:
+
+- **Times are kept to the whole second.** A fast's end is stored both as the event's date and
+  inside its payload; at the second, both read back the same, so the entry that ends a fast
+  never counts as eaten inside it.
+- **One lock for food writes.** Begin, end, record, edit and `--end-fast` re-check "one fast
+  runs at a time" and "no overlaps" under a transaction-scoped advisory lock, so two windows
+  can't both start a fast. A lost race is refused in words (`FoodConflictException`, a 400).
+- **The day view flags food eaten inside a fast** with the fast's id (`EatenDuringFast`), so
+  the page can offer to end that fast at the entry's time. 0-calorie entries are never
+  flagged.
+- **`bsk food edit` changes only what it's given**; the service takes the whole entry. The
+  meal type stays as it was unless `--type` is given.
+- **`--at` reads** `12:30`, `7:30pm` (today, or yesterday when today's is still ahead),
+  `yesterday 20:00`, `2026-10-19 19:00` (home zone), or an ISO instant with an offset.
+- **`GetRecentAsync`** ("Log again") returns the newest entry of each name, ignoring case and
+  surrounding spaces.
+- **Food events never reach other views:** they carry no `subject_id` and no edge, so the
+  inbox, the diagnostics, the habit and timer views and the ledger never see them (tested).

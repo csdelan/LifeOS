@@ -2726,7 +2726,12 @@ successful day gets retuned after a few weeks of real XP.
 ### FOOD-1 — A Food Log records what I eat, how healthy it was and roughly how many calories
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-10-20 — kernel landed, F1):** migration 0034 (`v_meal`, `v_fast`,
+`v_food_day`), `FoodLogService` and `bsk food log / edit / delete` shipped. Build moves
+`needs-kernel → building`: the Food Log page (F4) is not built yet, and entries don't pay XP
+until F2.
 
 **Workflow (Chris):**
 - "I would like to implement a Food Log page. The purpose of this page is to track my food
@@ -2758,7 +2763,11 @@ Build:      needs-kernel
 ### FOOD-2 — Fasts are tracked from begin to end, live or backfilled
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-10-20 — kernel landed, F1):** `bsk food fast begin / end / record / edit /
+delete` and `bsk food log --end-fast` shipped, with one running fast and no overlaps enforced
+under a lock. Build moves `needs-kernel → building`: the fasting card (F4) is not built yet.
 
 **Workflow (Chris):**
 - "I want to track fasts..... Begin fast, and end fast. I should be able to backfill as needed
