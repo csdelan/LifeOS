@@ -223,6 +223,7 @@ export function triggerLabel(trigger: string): string {
   if (trigger === "partial") return "partial day";
   if (trigger === "established") return "established";
   if (trigger === "timed") return "time on the timer";
+  if (trigger === "rank") return "rank-up";
   const streak = /^streak_(\d+)$/.exec(trigger);
   return streak ? `${streak[1]}-day streak` : trigger;
 }

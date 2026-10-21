@@ -20,8 +20,43 @@ public sealed record ConsistencyWindow(DateOnly From, DateOnly To, int Days, int
     /// <summary>The successful share of the window (0–1).</summary>
     public decimal Share => Days == 0 ? 0m : (decimal)SuccessfulDays / Days;
 
+    /// <summary>Whether every day of the window is on or after the domain's start.</summary>
+    public bool Covered => CoveredDays == Days;
+
+    /// <summary>The successful days a share of <paramref name="share"/> takes in this window.</summary>
+    public int Required(decimal share) => (int)Math.Ceiling(share * Days);
+
+    /// <summary>Whether the window's successful share is at or above <paramref name="share"/>.</summary>
+    public bool Reaches(decimal share) => SuccessfulDays >= Required(share);
+
     /// <summary>How many more successful days the window needs to reach <paramref name="share"/>.</summary>
-    public int DaysNeededFor(decimal share) => Math.Max(0, (int)Math.Ceiling(share * Days) - SuccessfulDays);
+    public int DaysNeededFor(decimal share) => Math.Max(0, Required(share) - SuccessfulDays);
+}
+
+/// <summary>Where a domain stood at the end of <paramref name="Day"/>: its XP, raw level, level and rank (an index into the ranks).</summary>
+public sealed record DomainStanding(DateOnly Day, long TotalXp, int RawLevel, int Level, int Rank);
+
+/// <summary>A rank the walk reached (an index into the ranks, never Novice), and the day it qualified.</summary>
+public sealed record RankReached(int Rank, RankRule Rule, DateOnly QualifiedOn);
+
+/// <summary>
+/// The next rank's gate as it reads today (xp-domains plan §3.5): its rule, the window ending
+/// today (today counting once it has succeeded), and the domain's age in counted days.
+/// <paramref name="LevelReached"/> says whether the raw level has reached the rank's start.
+/// </summary>
+public sealed record NextRank(int Rank, RankRule Rule, ConsistencyWindow Window, int DaysOld, bool LevelReached)
+{
+    /// <summary>The successful days the bar takes over the window, e.g. 18 for 60% of 30.</summary>
+    public int Required => Window.Required(Rule.MinConsistency);
+
+    /// <summary>The successful days the window still needs.</summary>
+    public int DaysNeeded => Window.DaysNeededFor(Rule.MinConsistency);
+
+    /// <summary>Whether the domain is at least as old as the window.</summary>
+    public bool OldEnough => DaysOld >= Rule.WindowDays;
+
+    /// <summary>Whether the window's share is at or above the bar.</summary>
+    public bool BarMet => Window.Reaches(Rule.MinConsistency);
 }
 
 /// <summary>
@@ -29,28 +64,63 @@ public sealed record ConsistencyWindow(DateOnly From, DateOnly To, int Days, int
 /// Every progression number in the app comes from <see cref="Fold"/>; nothing is cached or
 /// stored, so a retuned rule or a corrected entry shows on the next read.
 /// <para>
-/// This is the fold's daily part (phase X3): the periods from the domain's start to today,
-/// which of them succeeded, consistency, and the multiplier for any day. Levels and ranks
-/// join in phase X4.
+/// The fold walks each day from the domain's start to today: whether it succeeded, the XP
+/// so far and the level it reaches, and the rank held. A rank is entered on the first day its
+/// level is reached, the domain is as old as its window, and the window's successful share is
+/// at its bar; several can be entered on one day. Once entered, a rank holds for every later
+/// day, so inactivity never costs one — only a changed past (a retuned rule, a corrected
+/// entry) can. The level stops at the top of the rank held; XP beyond it is banked.
 /// </para>
 /// </summary>
 public sealed class DomainProgress
 {
-    private readonly Dictionary<DateOnly, DomainPeriod> byDay;
+    // successes[i] is how many of the first i periods succeeded, so any window is O(1).
+    private readonly int[] successes;
+    private readonly List<DomainStanding> standings;
+    private readonly List<RankReached> reached = [];
 
-    private DomainProgress(
-        DomainRules rules, DateOnly today, DateOnly? start, long totalXp, IReadOnlyList<DomainPeriod> periods)
+    private DomainProgress(DomainRules rules, DateOnly today, DateOnly? start, IReadOnlyList<DomainPeriod> periods)
     {
         Rules = rules;
         Today = today;
         Start = start;
-        TotalXp = totalXp;
         Periods = periods;
-        byDay = periods.ToDictionary(p => p.Start);
-        TodayPeriod = byDay.GetValueOrDefault(today);
+        successes = new int[periods.Count + 1];
+        for (var i = 0; i < periods.Count; i++)
+        {
+            successes[i + 1] = successes[i] + (periods[i].Succeeded ? 1 : 0);
+        }
+
+        // Periods run from the start to today, so today's is the last.
+        TodayPeriod = periods.Count > 0 ? periods[^1] : null;
         Consistency = WindowBefore(today, rules.Multiplier.WindowDays);
         MultiplierNow = rules.Multiplier.For(Consistency.Share);
         NextTier = rules.Multiplier.NextAbove(Consistency.Share);
+
+        standings = Walk();
+        var now = standings.Count > 0 ? standings[^1] : new DomainStanding(today, 0, 1, 1, 0);
+        TotalXp = now.TotalXp;
+        RawLevel = now.RawLevel;
+        Level = now.Level;
+        Rank = now.Rank;
+
+        var curve = rules.Curve;
+        if (Capped)
+        {
+            XpIntoLevel = curve.CostToNext(Level);
+            BankedXp = TotalXp - curve.TotalFor(Level + 1);
+        }
+        else
+        {
+            XpIntoLevel = TotalXp - curve.TotalFor(Level);
+            XpToNext = Level == curve.MaxLevel ? 0 : curve.TotalFor(Level + 1) - TotalXp;
+        }
+
+        if (Rank + 1 < rules.Ranks.Count)
+        {
+            var rule = rules.Ranks[Rank + 1];
+            Next = new NextRank(Rank + 1, rule, WindowEndingOn(today, rule.WindowDays), DaysOld, RawLevel >= rule.StartLevel);
+        }
     }
 
     public DomainRules Rules { get; }
@@ -67,6 +137,9 @@ public sealed class DomainProgress
     /// <summary>Every period from the start to today (empty before the start).</summary>
     public IReadOnlyList<DomainPeriod> Periods { get; }
 
+    /// <summary>Where the domain stood at the end of each period, alongside <see cref="Periods"/>.</summary>
+    public IReadOnlyList<DomainStanding> Standings => standings;
+
     /// <summary>Today's period, or null before the start.</summary>
     public DomainPeriod? TodayPeriod { get; }
 
@@ -75,6 +148,50 @@ public sealed class DomainProgress
 
     /// <summary>Whether today has already succeeded.</summary>
     public bool TodaySucceeded => TodayPeriod?.Succeeded ?? false;
+
+    /// <summary>
+    /// The domain's age for rank gates: the days from its start through today, today counting
+    /// once it has succeeded (0 before the start).
+    /// </summary>
+    public int DaysOld => Start is { } start
+        ? Math.Max(0, (TodaySucceeded ? Today : Today.AddDays(-1)).DayNumber - start.DayNumber + 1)
+        : 0;
+
+    /// <summary>The level <see cref="TotalXp"/> reaches on the curve, before the rank's cap.</summary>
+    public int RawLevel { get; }
+
+    /// <summary>The level: <see cref="RawLevel"/>, stopped at the top of the rank held.</summary>
+    public int Level { get; }
+
+    /// <summary>The rank held, an index into the rules' ranks (0 is Novice).</summary>
+    public int Rank { get; }
+
+    /// <summary>The rank held.</summary>
+    public RankRule RankRule => Rules.Ranks[Rank];
+
+    /// <summary>The day the rank held qualified, or null for Novice.</summary>
+    public DateOnly? RankQualifiedOn => reached.Count > 0 ? reached[^1].QualifiedOn : null;
+
+    /// <summary>Every rank above Novice the walk entered, in order, with the day each qualified.</summary>
+    public IReadOnlyList<RankReached> RanksReached => reached;
+
+    /// <summary>The highest level the rank held allows (9 for Novice).</summary>
+    public int TopLevel => Rules.TopLevelOf(Rank);
+
+    /// <summary>Whether the rank's top holds the level below what the XP reaches.</summary>
+    public bool Capped => RawLevel > Level;
+
+    /// <summary>The XP into the current level; the whole level while capped.</summary>
+    public long XpIntoLevel { get; }
+
+    /// <summary>The XP still to go to the next level; 0 while capped and at the top level.</summary>
+    public long XpToNext { get; }
+
+    /// <summary>While capped, the XP beyond what the next level takes; otherwise 0.</summary>
+    public long BankedXp { get; }
+
+    /// <summary>The next rank's gate, or null at the last rank.</summary>
+    public NextRank? Next { get; }
 
     /// <summary>
     /// Consistency now: the successful share of the multiplier's window of complete days
@@ -100,14 +217,20 @@ public sealed class DomainProgress
             throw new NotSupportedException($"Only a daily cadence is built; {rules.Currency} has {rules.Cadence}.");
         }
 
-        var credit = days
-            .Where(d => d.Day <= today)
-            .GroupBy(d => d.Day)
-            .ToDictionary(g => g.Key, g => (Base: g.Sum(d => d.Base), Paid: g.Sum(d => d.Paid)));
+        var credit = new Dictionary<DateOnly, (long Base, long Paid)>();
+        foreach (var day in days)
+        {
+            if (day.Day <= today)
+            {
+                var (dayBase, dayPaid) = credit.GetValueOrDefault(day.Day);
+                credit[day.Day] = (dayBase + day.Base, dayPaid + day.Paid);
+            }
+        }
+
         var paidDays = credit.Where(kv => kv.Value.Paid > 0).Select(kv => kv.Key).ToList();
         if (paidDays.Count == 0)
         {
-            return new DomainProgress(rules, today, start: null, totalXp: 0, periods: []);
+            return new DomainProgress(rules, today, start: null, periods: []);
         }
 
         var start = paidDays.Min();
@@ -119,11 +242,25 @@ public sealed class DomainProgress
             periods.Add(new DomainPeriod(day, day, dayBase, dayPaid, succeeded));
         }
 
-        return new DomainProgress(rules, today, start, periods.Sum(p => p.Paid), periods);
+        return new DomainProgress(rules, today, start, periods);
     }
 
     /// <summary>Whether <paramref name="day"/> succeeded; days before the start and after today never did.</summary>
-    public bool SucceededOn(DateOnly day) => byDay.TryGetValue(day, out var period) && period.Succeeded;
+    public bool SucceededOn(DateOnly day) => IndexOf(day) is { } i && Periods[i].Succeeded;
+
+    /// <summary>
+    /// Where the domain stood at the end of <paramref name="day"/>: level 1 and Novice before
+    /// the start, and as it stands today for any later day.
+    /// </summary>
+    public DomainStanding StandingOn(DateOnly day)
+    {
+        if (Start is not { } start || day < start)
+        {
+            return new DomainStanding(day, 0, 1, 1, 0);
+        }
+
+        return standings[Math.Min(day.DayNumber - start.DayNumber, standings.Count - 1)] with { Day = day };
+    }
 
     /// <summary>
     /// The <paramref name="days"/> complete days before <paramref name="day"/>. The multiplier
@@ -154,24 +291,70 @@ public sealed class DomainProgress
     /// <summary>The multiplier for XP credited to <paramref name="day"/> (§3.6): the tier of the window before it.</summary>
     public decimal MultiplierFor(DateOnly day) => Rules.Multiplier.For(WindowBefore(day, Rules.Multiplier.WindowDays).Share);
 
+    /// <summary>Walks every period from the start, carrying the XP so far and the rank held.</summary>
+    private List<DomainStanding> Walk()
+    {
+        var walked = new List<DomainStanding>(Periods.Count);
+        var curve = Rules.Curve;
+        var ranks = Rules.Ranks;
+        long total = 0;
+        var rank = 0;
+        foreach (var period in Periods)
+        {
+            total += period.Paid;
+            var rawLevel = curve.LevelFor(total);
+            while (rank + 1 < ranks.Count && Qualifies(ranks[rank + 1], rawLevel, period.End))
+            {
+                rank++;
+                reached.Add(new RankReached(rank, ranks[rank], period.End));
+            }
+
+            walked.Add(new DomainStanding(period.End, total, rawLevel, Math.Min(rawLevel, Rules.TopLevelOf(rank)), rank));
+        }
+
+        return walked;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="rule"/>'s gate is open on <paramref name="day"/>: the level is
+    /// reached, the domain is as old as the window, the window's share is at the bar, and the
+    /// rank lists no milestones (their evaluator isn't built, so a rank that lists any waits).
+    /// </summary>
+    private bool Qualifies(RankRule rule, int rawLevel, DateOnly day)
+    {
+        if (rawLevel < rule.StartLevel || rule.Milestones.Count > 0)
+        {
+            return false;
+        }
+
+        var window = WindowEndingOn(day, rule.WindowDays);
+        return window.Covered && window.Reaches(rule.MinConsistency);
+    }
+
+    /// <summary>The index of <paramref name="day"/>'s period, or null outside the start..today.</summary>
+    private int? IndexOf(DateOnly day)
+    {
+        if (Start is not { } start)
+        {
+            return null;
+        }
+
+        var i = day.DayNumber - start.DayNumber;
+        return i >= 0 && i < Periods.Count ? i : null;
+    }
+
     private ConsistencyWindow Window(DateOnly from, DateOnly to)
     {
         var days = Math.Max(0, to.DayNumber - from.DayNumber + 1);
-        var covered = 0;
-        var successful = 0;
-        for (var day = from; day <= to; day = day.AddDays(1))
+        if (days == 0 || Start is not { } start)
         {
-            if (Start is { } start && day >= start)
-            {
-                covered++;
-            }
-
-            if (SucceededOn(day))
-            {
-                successful++;
-            }
+            return new ConsistencyWindow(from, to, days, 0, 0);
         }
 
+        var covered = Math.Max(0, to.DayNumber - Math.Max(from.DayNumber, start.DayNumber) + 1);
+        var low = Math.Clamp(from.DayNumber - start.DayNumber, 0, Periods.Count);
+        var high = Math.Clamp(to.DayNumber - start.DayNumber + 1, 0, Periods.Count);
+        var successful = high > low ? successes[high] - successes[low] : 0;
         return new ConsistencyWindow(from, to, days, covered, successful);
     }
 }

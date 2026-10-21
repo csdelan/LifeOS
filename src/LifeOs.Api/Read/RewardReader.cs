@@ -1,4 +1,5 @@
 using LifeOs.Application.Rewards;
+using LifeOs.Domain;
 using LifeOs.Infrastructure.Persistence;
 
 namespace LifeOs.Api.Read;
@@ -10,10 +11,15 @@ namespace LifeOs.Api.Read;
 /// which the reader role is granted — so the wallet, the history and the catalog read
 /// exactly as <c>bsk wallet</c>, <c>bsk ledger</c> and <c>bsk rewards list</c> do. No
 /// writes live here; redeeming goes through <see cref="RewardService"/>.
+/// <para>
+/// The life domains (REWARD-6 / REWARD-7) fold <c>bsk.v_award_credit</c> through
+/// <see cref="DomainService"/>, on the days of <paramref name="homeTimeZone"/>
+/// (<c>Rewards:HomeTimeZone</c>), as <c>bsk domains</c> does.
+/// </para>
 /// </summary>
-public sealed class RewardReader(string readerConnectionString, decimal coinValueUsd)
+public sealed class RewardReader(string readerConnectionString, decimal coinValueUsd, string homeTimeZone = HomeZone.Default)
 {
-    private readonly NpgsqlLedgerRepository ledger = new(readerConnectionString);
+    private readonly NpgsqlLedgerRepository ledger = new(readerConnectionString, homeTimeZone);
 
     public async Task<WalletSummary> GetWalletAsync(CancellationToken cancellationToken = default)
     {
@@ -50,4 +56,8 @@ public sealed class RewardReader(string readerConnectionString, decimal coinValu
     public async Task<IReadOnlyList<RewardRow>> GetRewardsAsync(
         bool includeArchived, CancellationToken cancellationToken = default)
         => (await ledger.GetCatalogAsync(includeArchived, cancellationToken)).Select(RewardRows.From).ToList();
+
+    /// <summary>Every life domain as it reads now (<c>GET /api/domains</c>).</summary>
+    public async Task<DomainsRead> GetDomainsAsync(CancellationToken cancellationToken = default)
+        => DomainRows.From(await new DomainService(ledger).GetAsync(cancellationToken));
 }

@@ -516,13 +516,17 @@ export interface RewardRow {
   archived: boolean;
 }
 
-/** An earn or reversal a write produced (REWARD-4's feedback). */
+/**
+ * An earn or reversal a write produced (REWARD-4's feedback). A rank-up (`trigger` "rank",
+ * REWARD-7) belongs to no item: `subject` is null and `note` names it ("Health Apprentice").
+ */
 export interface Award {
   id: string;
   entry: "earn" | "reversal";
   trigger: string;
   awardKey: string;
-  subject: CreatedSubject;
+  subject: CreatedSubject | null;
+  note?: string | null;
   amounts: Amounts;
 }
 

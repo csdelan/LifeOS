@@ -72,18 +72,101 @@ public sealed record MultiplierRule(int WindowDays, IReadOnlyList<MultiplierTier
 public sealed record RankUpGems(int PerRank, int Top);
 
 /// <summary>
+/// A domain's level curve (xp-domains plan §3.2): how much XP each level costs. Levels run from
+/// 1, at 0 XP, to <see cref="MaxLevel"/>. Replaceable per domain.
+/// </summary>
+public interface ILevelCurve
+{
+    /// <summary>The highest level.</summary>
+    int MaxLevel { get; }
+
+    /// <summary>The XP to go from <paramref name="level"/> to the next; 0 at <see cref="MaxLevel"/>.</summary>
+    long CostToNext(int level);
+
+    /// <summary>The total XP that reaches <paramref name="level"/> (0 for level 1).</summary>
+    long TotalFor(int level);
+
+    /// <summary>The level <paramref name="totalXp"/> reaches, at most <see cref="MaxLevel"/>.</summary>
+    int LevelFor(long totalXp);
+}
+
+/// <summary>
+/// A level curve that rises steadily, then faster (xp-domains plan §2.1): going from level L to
+/// L+1 costs <c>Base + PerLevel·(L−1) + RampPerLevel·max(0, L−RampFrom)</c>. Health's
+/// <c>RampCurve(300, 25, 45, 70)</c> reaches level 100 at 254,925 XP.
+/// </summary>
+public sealed record RampCurve(long Base, long PerLevel, int RampFrom, long RampPerLevel, int MaxLevel = 100)
+    : ILevelCurve
+{
+    public long CostToNext(int level)
+    {
+        Check(level);
+        return level == MaxLevel ? 0 : Base + PerLevel * (level - 1) + RampPerLevel * Math.Max(0, level - RampFrom);
+    }
+
+    public long TotalFor(int level)
+    {
+        Check(level);
+
+        // The sum of CostToNext(1 .. level−1), in closed form.
+        long steps = level - 1;
+        long ramped = Math.Max(0, level - 1 - RampFrom);
+        return Base * steps + PerLevel * steps * (steps - 1) / 2 + RampPerLevel * ramped * (ramped + 1) / 2;
+    }
+
+    public int LevelFor(long totalXp)
+    {
+        // The highest level whose total is within reach.
+        int low = 1, high = MaxLevel;
+        while (low < high)
+        {
+            var middle = (low + high + 1) / 2;
+            if (TotalFor(middle) <= totalXp)
+            {
+                low = middle;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+
+        return low;
+    }
+
+    private void Check(int level)
+    {
+        if (level < 1 || level > MaxLevel)
+        {
+            throw new ArgumentOutOfRangeException(nameof(level), level, $"Levels run from 1 to {MaxLevel}.");
+        }
+    }
+}
+
+/// <summary>
 /// One configured life domain's rules (xp-domains plan §3.2): the currency it reads, the
-/// period its success rule judges, the ranks, the multiplier and the rank-up Gems. The level
-/// curve joins in phase X4. Retuning means editing these numbers and deploying: every
-/// reading is folded from the XP on each read, so a change shows at once.
+/// period its success rule judges, the level curve, the ranks, the multiplier and the rank-up
+/// Gems. Retuning means editing these numbers and deploying: every reading is folded from
+/// the XP on each read, so a change shows at once.
 /// </summary>
 public sealed record DomainRules(
     string Currency,
     Cadence Cadence,
+    ILevelCurve Curve,
     ISuccessRule Success,
     IReadOnlyList<RankRule> Ranks,
     MultiplierRule Multiplier,
-    RankUpGems RankUpGems);
+    RankUpGems RankUpGems)
+{
+    /// <summary>The highest level <paramref name="rank"/> (an index into <see cref="Ranks"/>) allows: 9 for Novice.</summary>
+    public int TopLevelOf(int rank) => rank + 1 < Ranks.Count ? Ranks[rank + 1].StartLevel - 1 : Curve.MaxLevel;
+
+    /// <summary>The Gems for entering <paramref name="rank"/>: <see cref="RankUpGems.Top"/> for the last one.</summary>
+    public int GemsFor(int rank) => rank == Ranks.Count - 1 ? RankUpGems.Top : RankUpGems.PerRank;
+
+    /// <summary>The award key for entering <paramref name="rank"/> (xp-domains plan §3.7), e.g. <c>rank:health_xp:10</c>.</summary>
+    public string RankAwardKey(int rank) => $"{LifeDomains.RankTrigger}:{Currency}:{Ranks[rank].StartLevel}";
+}
 
 /// <summary>
 /// The life domains with rules (REWARD-6 / REWARD-7, D12). Only Health is configured in the
@@ -93,6 +176,9 @@ public sealed record DomainRules(
 /// </summary>
 public static class LifeDomains
 {
+    /// <summary>The trigger of a rank-up award (xp-domains plan §3.7).</summary>
+    public const string RankTrigger = "rank";
+
     private static readonly IReadOnlyList<string> NoMilestones = [];
 
     /// <summary>
@@ -102,6 +188,7 @@ public static class LifeDomains
     public static readonly DomainRules Health = new(
         Currencies.HealthXp,
         Cadence.Daily,
+        new RampCurve(Base: 300, PerLevel: 25, RampFrom: 45, RampPerLevel: 70),
         new MinimumBaseXp(70),
         [
             new(1, "Novice", 0m, 0, NoMilestones),
@@ -121,6 +208,10 @@ public static class LifeDomains
 
     /// <summary>Every configured domain.</summary>
     public static readonly IReadOnlyList<DomainRules> Configured = [Health];
+
+    /// <summary>A domain's name: its currency label's first word, e.g. "Health" for <c>health_xp</c>.</summary>
+    public static string Name(string currency)
+        => Currencies.Find(currency)?.Label.Split(' ')[0] ?? currency;
 
     /// <summary>The rules for <paramref name="currency"/>, or null for a domain that only collects XP.</summary>
     public static DomainRules? For(string currency)

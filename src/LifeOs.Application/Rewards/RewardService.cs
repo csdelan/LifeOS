@@ -257,7 +257,9 @@ public sealed class RewardService(
     /// <summary>
     /// Brings the ledger in line with the record for <paramref name="subject"/>: earns
     /// every award it is due and has not been paid, and reverses every award it was paid
-    /// that is no longer due. Returns the entries written (none when it was already in line).
+    /// that is no longer due. When that wrote life-domain XP, it also pays any rank-up the
+    /// domain has reached (<see cref="ReconcileDomainsAsync"/>). Returns the entries written
+    /// (none when it was already in line).
     /// <para>
     /// <paramref name="causeEventId"/> is the write that prompted this reconcile (a status
     /// change), cited by any reversal. Before the wallet has ever opened, a cause that
@@ -267,18 +269,34 @@ public sealed class RewardService(
     /// </summary>
     public async Task<IReadOnlyList<Award>> ReconcileAsync(
         SubjectRef subject, Guid? causeEventId = null, CancellationToken cancellationToken = default)
+        => (await ReconcileWithProgressAsync(subject, causeEventId, cancellationToken)).Awards;
+
+    /// <summary>
+    /// <see cref="ReconcileAsync"/>, also answering each configured life domain whose level or
+    /// rank it changed (xp-domains plan §3.8) — what an earning write says back.
+    /// </summary>
+    public async Task<Earned> ReconcileWithProgressAsync(
+        SubjectRef subject, Guid? causeEventId = null, CancellationToken cancellationToken = default)
     {
         if (await ledger.GetOpenedAtAsync(cancellationToken) is null
             && !await OpenForAsync(subject, causeEventId, cancellationToken))
         {
-            return [];
+            return Earned.Nothing;
         }
 
         for (var attempt = 1; ; attempt++)
         {
             try
             {
-                return await ReconcileOnceAsync(subject, causeEventId, cancellationToken);
+                var (awards, before) = await ReconcileOnceAsync(subject, causeEventId, cancellationToken);
+                if (before is null)
+                {
+                    return new Earned(awards, []);
+                }
+
+                // It wrote domain XP: pay any rank-up that reached, and say what changed.
+                var (ranks, after) = await PayRankUpsAsync(cancellationToken);
+                return new Earned([.. awards, .. ranks.Select(r => r.Award)], DomainChanges(before, after, ranks));
             }
             catch (LedgerConflictException) when (attempt < ReconcileAttempts)
             {
@@ -290,7 +308,8 @@ public sealed class RewardService(
     /// <summary>
     /// Reconciles every item the ledger could disagree with — those with an award due and
     /// those with an award paid — healing any trigger whose own reconcile never ran (a
-    /// crash, a direct import). Never opens the wallet. Returns every entry written.
+    /// crash, a direct import), then pays any rank-up still due. Never opens the wallet.
+    /// Returns every entry written.
     /// </summary>
     public async Task<IReadOnlyList<Award>> ReconcileAllAsync(CancellationToken cancellationToken = default)
     {
@@ -300,8 +319,144 @@ public sealed class RewardService(
             awards.AddRange(await ReconcileAsync(subject, causeEventId: null, cancellationToken));
         }
 
+        awards.AddRange(await ReconcileDomainsAsync(cancellationToken));
         return awards;
     }
+
+    /// <summary>
+    /// Pays each rank-up the configured life domains have reached (xp-domains plan §3.7):
+    /// <see cref="RankUpGems"/> once per rank, under the award key
+    /// <c>rank:&lt;domain&gt;:&lt;start level&gt;</c>, for a rank that qualified on or after the
+    /// day the wallet opened. It earns only: a rank award is never reversed, so losing a rank
+    /// to a retune and reaching it again never pays twice. Returns the entries written.
+    /// </summary>
+    public async Task<IReadOnlyList<Award>> ReconcileDomainsAsync(CancellationToken cancellationToken = default)
+        => (await PayRankUpsAsync(cancellationToken)).Awards.Select(r => r.Award).ToList();
+
+    /// <summary>
+    /// <see cref="ReconcileDomainsAsync"/> for <c>POST /api/domains/settle</c>, which the
+    /// Character page calls when it opens: a rank reached by time alone (an old miss leaving
+    /// the window, the domain turning old enough) pays then, and its domain's change comes back
+    /// so it can be celebrated.
+    /// </summary>
+    public async Task<Earned> SettleDomainsAsync(CancellationToken cancellationToken = default)
+    {
+        var (ranks, folds) = await PayRankUpsAsync(cancellationToken);
+        return new Earned(ranks.Select(r => r.Award).ToList(), DomainChanges(folds, folds, ranks));
+    }
+
+    /// <summary>Folds the configured domains, then pays their rank-ups, re-reading after a lost race.</summary>
+    private async Task<(IReadOnlyList<RankUp> Awards, IReadOnlyList<DomainProgress> Folds)> PayRankUpsAsync(
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            var credit = await ReadDomainsAsync(cancellationToken);
+            var folds = Fold(credit);
+            try
+            {
+                return (await PayRankUpsAsync(credit.OpenedOn, folds, cancellationToken), folds);
+            }
+            catch (LedgerConflictException) when (attempt < ReconcileAttempts)
+            {
+                // Another writer paid one of these first; re-read and retry.
+            }
+        }
+    }
+
+    private async Task<IReadOnlyList<RankUp>> PayRankUpsAsync(
+        DateOnly? openedOn, IReadOnlyList<DomainProgress> folds, CancellationToken cancellationToken)
+    {
+        if (openedOn is not { } opened)
+        {
+            return [];
+        }
+
+        var due = folds
+            .SelectMany(p => p.RanksReached.Where(r => r.QualifiedOn >= opened).Select(r => (Progress: p, Reached: r)))
+            .Where(d => d.Progress.Rules.GemsFor(d.Reached.Rank) > 0)
+            .ToList();
+        if (due.Count == 0)
+        {
+            return [];
+        }
+
+        var paid = await ledger.GetPaidKeysAsync(LifeDomains.RankTrigger, cancellationToken);
+        var now = clock.UtcNow;
+        var writes = new List<LedgerWrite>();
+        var rankUps = new List<RankUp>();
+        foreach (var (progress, reached) in due)
+        {
+            var rules = progress.Rules;
+            var key = rules.RankAwardKey(reached.Rank);
+            if (paid.Contains(key))
+            {
+                continue;
+            }
+
+            // A rank needs XP, so the domain has credit on or before the day it qualified; if a
+            // racing reversal just took it, the next reconcile pays the rank instead.
+            if (await ledger.GetLatestCreditEventAsync(rules.Currency, reached.QualifiedOn, cancellationToken)
+                is not { } cause)
+            {
+                continue;
+            }
+
+            var amounts = new Dictionary<string, long> { [Currencies.Gems] = rules.GemsFor(reached.Rank) };
+            var note = $"{LifeDomains.Name(rules.Currency)} {reached.Rule.Title}";
+            writes.Add(RankEntry(rules.Currency, key, amounts, note, reached.QualifiedOn, now, cause));
+            rankUps.Add(new RankUp(
+                new Award(Guid.Empty, null, LedgerEntries.Earn, LifeDomains.RankTrigger, key, amounts, note),
+                rules.Currency, reached.Rank));
+        }
+
+        if (writes.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = await ledger.AppendAsync(writes, cancellationToken);
+        return rankUps.Select((r, i) => r with { Award = r.Award with { EventId = ids[i] } }).ToList();
+    }
+
+    /// <summary>
+    /// Each configured domain whose level or rank moved from <paramref name="before"/> to
+    /// <paramref name="after"/>. A rank-up paid in <paramref name="rankUps"/> counts as reached
+    /// now, even when time alone opened its gate earlier: its domain moves from the rank below
+    /// it, at the level that rank allowed.
+    /// </summary>
+    private static IReadOnlyList<DomainChange> DomainChanges(
+        IReadOnlyList<DomainProgress> before, IReadOnlyList<DomainProgress> after, IReadOnlyList<RankUp> rankUps)
+    {
+        var changes = new List<DomainChange>();
+        foreach (var now in after)
+        {
+            var then = before.First(b => b.Rules.Currency == now.Rules.Currency);
+            var (levelFrom, rankFrom) = (then.Level, then.Rank);
+            var paid = rankUps.Where(r => r.Currency == now.Rules.Currency).Select(r => r.Rank).ToList();
+            if (paid.Count > 0 && paid.Min() - 1 < rankFrom)
+            {
+                rankFrom = paid.Min() - 1;
+                levelFrom = Math.Min(then.RawLevel, now.Rules.TopLevelOf(rankFrom));
+            }
+
+            if (levelFrom != now.Level || rankFrom != now.Rank)
+            {
+                changes.Add(new DomainChange(now.Rules.Currency, levelFrom, now.Level, rankFrom, now.Rank, now.RankRule.Title));
+            }
+        }
+
+        return changes;
+    }
+
+    private Task<DomainCredit> ReadDomainsAsync(CancellationToken cancellationToken)
+        => ledger.GetDomainDaysAsync(LifeDomains.Configured.Select(r => r.Currency).ToList(), cancellationToken);
+
+    private static IReadOnlyList<DomainProgress> Fold(DomainCredit credit)
+        => LifeDomains.Configured.Select(r => DomainService.Fold(r, credit)).ToList();
+
+    /// <summary>A rank-up award, with its domain and rank (an index into the domain's ranks).</summary>
+    private sealed record RankUp(Award Award, string Currency, int Rank);
 
     /// <summary>
     /// Opens the wallet at the first trigger <paramref name="causeEventId"/> makes pay on
@@ -334,7 +489,11 @@ public sealed class RewardService(
         return true;
     }
 
-    private async Task<IReadOnlyList<Award>> ReconcileOnceAsync(
+    /// <summary>
+    /// One reconcile of <paramref name="subject"/>: the entries written and, when they carry
+    /// configured life-domain XP, the domains as they stood just before (else null).
+    /// </summary>
+    private async Task<(IReadOnlyList<Award> Awards, IReadOnlyList<DomainProgress>? DomainsBefore)> ReconcileOnceAsync(
         SubjectRef subject, Guid? causeEventId, CancellationToken cancellationToken)
     {
         var due = await ledger.GetDueAsync(subject.Id, cancellationToken);
@@ -389,11 +548,14 @@ public sealed class RewardService(
 
         if (writes.Count == 0)
         {
-            return [];
+            return ([], null);
         }
 
+        var before = awards.Any(a => a.Amounts.Keys.Any(k => LifeDomains.For(k) is not null))
+            ? Fold(await ReadDomainsAsync(cancellationToken))
+            : null;
         var ids = await ledger.AppendAsync(writes, cancellationToken);
-        return awards.Select((award, i) => award with { EventId = ids[i] }).ToList();
+        return (awards.Select((award, i) => award with { EventId = ids[i] }).ToList(), before);
     }
 
     private LedgerWrite Entry(
@@ -428,6 +590,39 @@ public sealed class RewardService(
             GuardBalance: false,
             AwardKey: awardKey,
             ExpectPaid: expectPaid);
+    }
+
+    /// <summary>
+    /// A rank-up's earn (xp-domains plan §3.7): no subject, so no <c>concerns</c> edge; the
+    /// payload names the domain and says which rank in its note, and it's credited to the day
+    /// the rank qualified, citing the domain's latest earn credited by then.
+    /// </summary>
+    private LedgerWrite RankEntry(
+        string currency, string awardKey, IReadOnlyDictionary<string, long> amounts, string note,
+        DateOnly qualifiedOn, DateTimeOffset now, Guid cause)
+    {
+        var payload = JsonSerializer.Serialize(
+            new
+            {
+                entry = LedgerEntries.Earn,
+                amounts,
+                award_key = awardKey,
+                trigger = LifeDomains.RankTrigger,
+                domain = currency,
+                note,
+                credited_on = qualifiedOn.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            });
+
+        var newEvent = new NewEvent(
+            Kind: EventKinds.Ledger,
+            Provenance: Provenances.Derived,
+            OccurredAt: now,
+            RecordedAt: now,
+            SourceId: sourceId,
+            PayloadJson: payload,
+            DerivedFrom: [cause]);
+
+        return new LedgerWrite(newEvent, [], GuardBalance: false, AwardKey: awardKey, ExpectPaid: false);
     }
 
     private async Task<StoredBounty> ReadBountyAsync(SubjectRef subject, CancellationToken cancellationToken)
@@ -494,11 +689,21 @@ public sealed record Wallet(DateTimeOffset? OpenedAt, IReadOnlyList<WalletLine> 
 
 /// <summary>
 /// A ledger entry a reconcile wrote: an <c>earn</c> (positive amounts) or a
-/// <c>reversal</c> (negative), for which item, trigger and award key.
+/// <c>reversal</c> (negative), for which item, trigger and award key. A rank-up has no item:
+/// its <paramref name="Note"/> says what it was for, e.g. "Health Apprentice".
 /// </summary>
 public sealed record Award(
-    Guid EventId, SubjectRef Subject, string Entry, string Trigger, string AwardKey,
-    IReadOnlyDictionary<string, long> Amounts);
+    Guid EventId, SubjectRef? Subject, string Entry, string Trigger, string AwardKey,
+    IReadOnlyDictionary<string, long> Amounts, string? Note = null);
+
+/// <summary>
+/// What an earning write did: the ledger entries it wrote, and each configured life domain
+/// whose level or rank changed (xp-domains plan §3.8).
+/// </summary>
+public sealed record Earned(IReadOnlyList<Award> Awards, IReadOnlyList<DomainChange> Progress)
+{
+    public static readonly Earned Nothing = new([], []);
+}
 
 /// <summary>When the wallet opened, and whether this call opened it.</summary>
 public sealed record WalletOpening(DateTimeOffset OpenedAt, bool Created);

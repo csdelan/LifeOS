@@ -27,6 +27,13 @@ public sealed record DomainSeriesDay(DateOnly Day, long Base, long Paid, bool? S
 public sealed record DomainSeries(DomainReading Domain, IReadOnlyList<DomainSeriesDay> Days);
 
 /// <summary>
+/// A configured life domain whose level or rank a write changed (xp-domains plan §3.8): its
+/// currency, the level and rank (an index into its ranks) before and after, and the title of
+/// the rank after.
+/// </summary>
+public sealed record DomainChange(string Domain, int LevelFrom, int LevelTo, int RankFrom, int RankTo, string RankTitle);
+
+/// <summary>
 /// Reads life-domain progression (REWARD-6 / REWARD-7, D12, xp-domains plan §3.4–3.5):
 /// the ledger's daily credit per domain, folded under each configured domain's rules on every
 /// read. Nothing here is stored, so a retuned rule or a corrected entry shows at once.
@@ -93,21 +100,25 @@ public sealed class DomainService(ILedgerRepository ledger)
                    $"'{reference}' isn't a life domain. Expected one of: {string.Join(", ", Currencies.LifeDomains.Select(c => c.Key))}.");
     }
 
+    /// <summary>One configured domain's progression, folded from <paramref name="credit"/>.</summary>
+    public static DomainProgress Fold(DomainRules rules, DomainCredit credit)
+        => DomainProgress.Fold(rules, DaysOf(rules.Currency, credit), credit.Today);
+
     private static DomainReading Read(Currency currency, DomainCredit credit)
     {
-        var days = credit.Days
-            .Where(d => d.Currency == currency.Key)
-            .Select(d => new DomainDay(d.Day, d.Base, d.Paid))
-            .ToList();
         if (LifeDomains.For(currency.Key) is { } rules)
         {
-            var progress = DomainProgress.Fold(rules, days, credit.Today);
+            var progress = Fold(rules, credit);
             return new DomainReading(currency, progress.TotalXp, progress);
         }
 
         // XP only: what's been paid on days up to today, as a configured domain counts it.
-        return new DomainReading(currency, days.Where(d => d.Day <= credit.Today).Sum(d => d.Paid), null);
+        return new DomainReading(
+            currency, DaysOf(currency.Key, credit).Where(d => d.Day <= credit.Today).Sum(d => d.Paid), null);
     }
+
+    private static IEnumerable<DomainDay> DaysOf(string currency, DomainCredit credit)
+        => credit.Days.Where(d => d.Currency == currency).Select(d => new DomainDay(d.Day, d.Base, d.Paid));
 
     private static IEnumerable<DateOnly> Dates(DateOnly from, DateOnly to)
     {

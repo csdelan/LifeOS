@@ -8,15 +8,17 @@ using Microsoft.Extensions.DependencyInjection;
 namespace LifeOs.Cli.Commands;
 
 /// <summary>
-/// <c>bsk domains</c> — every life domain's XP and, for a domain with rules, today against
-/// its success rule, its consistency over the last 30 complete days, and the multiplier that
-/// earns (REWARD-6 / REWARD-7, xp-domains plan §3.5).
+/// <c>bsk domains</c> — every life domain's XP and, for a domain with rules, its level and
+/// rank (with any XP banked above the rank's top), what the next rank still needs, today
+/// against its success rule, its consistency over the last 30 complete days, and the
+/// multiplier that earns (REWARD-6 / REWARD-7, xp-domains plan §3.5).
 /// <para>
 /// <c>bsk domains [&lt;domain&gt;] --days &lt;n&gt;</c> (or just a domain) adds the daily series —
 /// each day's base and paid XP and whether it succeeded, the last 14 days by default — for that
 /// domain, or for every domain when none is named. Days are read in the home zone
 /// (<c>Rewards:HomeTimeZone</c>).
 /// </para>
+/// <para><c>bsk domains simulate</c> is the simulator (<see cref="DomainsSimulateCommand"/>).</para>
 /// </summary>
 internal static class DomainsCommand
 {
@@ -34,9 +36,10 @@ internal static class DomainsCommand
             Description = $"List each day, today included: this many (default {DefaultDays} when a domain is named)."
         };
 
-        var command = new Command("domains", "Show life-domain XP, consistency and multipliers.");
+        var command = new Command("domains", "Show life-domain XP, levels, ranks, consistency and multipliers.");
         command.Arguments.Add(domainArgument);
         command.Options.Add(daysOption);
+        command.Subcommands.Add(DomainsSimulateCommand.Create(connectionOption, jsonOption));
 
         command.SetAction((parseResult, cancellationToken) =>
         {
@@ -128,8 +131,39 @@ internal static class DomainsCommand
 
         if (p.Start is null)
         {
-            Console.WriteLine($"    not started: a successful day is {p.Rules.Success.Describe()}");
+            Console.WriteLine($"    not started: level 1 ({p.RankRule.Title}); a successful day is {p.Rules.Success.Describe()}");
             return;
+        }
+
+        Console.WriteLine(p.Capped
+            ? $"    level       {p.Level} — the top of {p.RankRule.Title}; {Xp(p.BankedXp)} banked toward level {p.RawLevel}"
+            : p.XpToNext == 0
+                ? $"    level       {p.Level} ({p.RankRule.Title})"
+                : $"    level       {p.Level} ({p.RankRule.Title}) — {Xp(p.XpIntoLevel)} of {Xp(p.Rules.Curve.CostToNext(p.Level))} toward level {p.Level + 1}");
+        if (p.RankQualifiedOn is { } qualifiedOn)
+        {
+            Console.WriteLine($"    rank        {p.RankRule.Title} since {Day(qualifiedOn)}");
+        }
+
+        if (p.Next is { } rank)
+        {
+            var rule = rank.Rule;
+            var gate = $"level {rule.StartLevel}, {Percent(rule.MinConsistency)} of {rule.WindowDays} days successful";
+            var standing = new List<string>
+            {
+                rank.LevelReached ? "level reached" : $"level {p.RawLevel} so far",
+                $"{rank.Window.SuccessfulDays} of {rank.Required} successful days"
+            };
+            if (!rank.OldEnough)
+            {
+                standing.Add($"{rank.DaysOld} of {rule.WindowDays} days old");
+            }
+
+            Console.WriteLine($"    next rank   {rule.Title} at {gate}: {string.Join(", ", standing)}");
+        }
+        else
+        {
+            Console.WriteLine("    next rank   none: the top rank");
         }
 
         Console.WriteLine(p.TodaySucceeded
@@ -155,6 +189,32 @@ internal static class DomainsCommand
             : new
             {
                 start = p.Start,
+                level = p.Level,
+                rawLevel = p.RawLevel,
+                topLevel = p.TopLevel,
+                capped = p.Capped,
+                xpIntoLevel = p.XpIntoLevel,
+                xpToNext = p.XpToNext,
+                bankedXp = p.BankedXp,
+                rank = new { index = p.Rank, title = p.RankRule.Title, qualifiedOn = p.RankQualifiedOn },
+                ranksReached = p.RanksReached.Select(r => new { index = r.Rank, title = r.Rule.Title, qualifiedOn = r.QualifiedOn }),
+                nextRank = p.Next is not { } rank
+                    ? null
+                    : new
+                    {
+                        index = rank.Rank,
+                        title = rank.Rule.Title,
+                        level = rank.Rule.StartLevel,
+                        bar = rank.Rule.MinConsistency,
+                        windowDays = rank.Rule.WindowDays,
+                        successfulDays = rank.Window.SuccessfulDays,
+                        requiredDays = rank.Required,
+                        daysNeeded = rank.DaysNeeded,
+                        daysOld = rank.DaysOld,
+                        levelReached = rank.LevelReached,
+                        oldEnough = rank.OldEnough,
+                        barMet = rank.BarMet
+                    },
                 success = p.Rules.Success.Describe(),
                 todayBase = p.TodayBase,
                 todaySucceeded = p.TodaySucceeded,
@@ -180,6 +240,8 @@ internal static class DomainsCommand
     };
 
     private static string Day(DateOnly day) => day.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private static string Xp(long xp) => xp.ToString("#,0", CultureInfo.InvariantCulture) + " XP";
 
     private static string Percent(decimal share)
         => (share * 100m).ToString("0.#", CultureInfo.InvariantCulture) + "%";

@@ -197,16 +197,62 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
 
         try
         {
-            var today = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
-                "SELECT to_char((now() AT TIME ZONE @tz)::date, 'YYYY-MM-DD');",
+            var dates = await connection.QuerySingleAsync<DatesRow>(new CommandDefinition(
+                """
+                SELECT to_char((now() AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS today,
+                       to_char((bsk.ledger_opened_at() AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS openedon;
+                """,
                 new { tz = homeTimeZone }, cancellationToken: cancellationToken));
             var rows = await connection.QueryAsync<CreditRow>(new CommandDefinition(
                 daysSql,
                 new { tz = homeTimeZone, currencies = currencies.ToArray() },
                 cancellationToken: cancellationToken));
             return new DomainCredit(
-                ParseDay(today!),
-                rows.Select(r => new CreditDay(r.Currency, ParseDay(r.Day), r.Base, r.Paid)).ToList());
+                ParseDay(dates.Today),
+                rows.Select(r => new CreditDay(r.Currency, ParseDay(r.Day), r.Base, r.Paid)).ToList(),
+                dates.OpenedOn is { } openedOn ? ParseDay(openedOn) : null);
+        }
+        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
+        {
+            throw UnknownHomeZone(e);
+        }
+    }
+
+    public async Task<IReadOnlySet<string>> GetPaidKeysAsync(
+        string trigger, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var keys = await connection.QueryAsync<string>(new CommandDefinition(
+            """
+            SELECT DISTINCT award_key
+            FROM bsk.v_ledger
+            WHERE trigger = @trigger AND award_key IS NOT NULL
+            GROUP BY award_key, currency
+            HAVING sum(amount) <> 0;
+            """,
+            new { trigger }, cancellationToken: cancellationToken));
+        return keys.ToHashSet(StringComparer.Ordinal);
+    }
+
+    public async Task<Guid?> GetLatestCreditEventAsync(
+        string currency, DateOnly day, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        try
+        {
+            return await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition(
+                """
+                SELECT c.event_id
+                FROM bsk.v_award_credit c
+                CROSS JOIN LATERAL (SELECT coalesce(c.credited_on, (c.occurred_at AT TIME ZONE @tz)::date) AS day) d
+                WHERE c.currency = @currency AND d.day <= @day::date
+                ORDER BY d.day DESC, c.occurred_at DESC, c.event_id DESC
+                LIMIT 1;
+                """,
+                new { tz = homeTimeZone, currency, day = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
+                cancellationToken: cancellationToken));
         }
         catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
         {
@@ -610,6 +656,12 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
         public DateTime TriggeredAt { get; set; }
         public long? TimedSeconds { get; set; }
         public string CreditedOn { get; set; } = "";
+    }
+
+    private sealed class DatesRow
+    {
+        public string Today { get; set; } = "";
+        public string? OpenedOn { get; set; }
     }
 
     private sealed class CreditRow

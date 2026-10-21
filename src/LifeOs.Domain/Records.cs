@@ -119,8 +119,11 @@ public sealed record LedgerDayTotal(DateOnly Date, string Currency, long Earned,
 /// </summary>
 public sealed record CreditDay(string Currency, DateOnly Day, long Base, long Paid);
 
-/// <summary>The life-domain credit per currency and day, with today's date in the home zone.</summary>
-public sealed record DomainCredit(DateOnly Today, IReadOnlyList<CreditDay> Days);
+/// <summary>
+/// The life-domain credit per currency and day, with today's date in the home zone and the
+/// day the wallet opened there (null before it has), before which no rank-up pays.
+/// </summary>
+public sealed record DomainCredit(DateOnly Today, IReadOnlyList<CreditDay> Days, DateOnly? OpenedOn = null);
 
 /// <summary>
 /// One ledger entry as <c>bsk.v_ledger</c> reads it (REWARD-5): what it was

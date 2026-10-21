@@ -81,6 +81,31 @@ public sealed class LifeDomainsTests
         Assert.True(rules.RankUpGems.PerRank > 0 && rules.RankUpGems.Top >= rules.RankUpGems.PerRank);
     }
 
+    [Theory]
+    [MemberData(nameof(ConfiguredCurrencies))]
+    public void The_level_curve_runs_to_the_last_rank_and_never_gets_cheaper(string currency)
+    {
+        var rules = LifeDomains.For(currency)!;
+        var curve = rules.Curve;
+
+        Assert.Equal(rules.Ranks[^1].StartLevel, curve.MaxLevel);
+        Assert.Equal(0, curve.TotalFor(1));
+        for (var level = 1; level < curve.MaxLevel; level++)
+        {
+            Assert.True(curve.CostToNext(level) > 0, $"level {level} costs nothing");
+            Assert.Equal(level, curve.LevelFor(curve.TotalFor(level)));
+            if (level > 1)
+            {
+                Assert.True(curve.CostToNext(level) >= curve.CostToNext(level - 1), $"level {level} costs less than {level - 1}");
+            }
+        }
+
+        // Every rank pays its Gems under a key of its own.
+        var keys = Enumerable.Range(1, rules.Ranks.Count - 1).Select(rules.RankAwardKey).ToList();
+        Assert.Equal(keys.Count, keys.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(keys, k => Assert.Equal(LifeDomains.RankTrigger, AwardKeys.TriggerOf(k)));
+    }
+
     [Fact]
     public void Health_is_the_pilot_domain_judged_daily_at_70_base_xp()
     {
@@ -90,6 +115,7 @@ public sealed class LifeDomainsTests
         Assert.Same(health, LifeDomains.For("HEALTH_XP"));
         Assert.Equal(Currencies.HealthXp, health.Currency);
         Assert.Equal(Cadence.Daily, health.Cadence);
+        Assert.Equal(new RampCurve(Base: 300, PerLevel: 25, RampFrom: 45, RampPerLevel: 70), health.Curve);
         Assert.Equal(new MinimumBaseXp(70), health.Success);
         Assert.Equal("at least 70 base XP", health.Success.Describe());
         Assert.Equal(30, health.Multiplier.WindowDays);

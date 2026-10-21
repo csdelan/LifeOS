@@ -217,7 +217,7 @@ public static class WriteEndpoints
         // The reconcile's earns and reversals ride back for REWARD-4's feedback.
         var result = await status.ChangeStatusAsync(
             ResolveWriteRef(body.Subject, reader), body.Status, cancellationToken);
-        return Results.Ok(RewardRows.Earned(result.Awards));
+        return Results.Ok(RewardRows.Earned(result.Awards, result.Progress));
     }
 
     private static async Task<IResult> Archive(
@@ -392,7 +392,7 @@ public static class WriteEndpoints
         var occurrence = ParseOccurrence(body.On);
         var recorded = await adherence.RecordAsync(
             ResolveWriteRef(body.Habit, reader), result, occurrence, body.Note, cancellationToken);
-        return Results.Ok(RewardRows.Earned(recorded.Awards));
+        return Results.Ok(RewardRows.Earned(recorded.Awards, recorded.Progress));
     }
 
     private static async Task<IResult> Timer(
@@ -426,7 +426,8 @@ public static class WriteEndpoints
             Timer = timer,
             Paused = result.Paused.Select(ToCreated).ToList(),
             Completed = result.Completed,
-            Awards = result.Awards.Select(RewardRows.From).ToList()
+            Awards = result.Awards.Select(RewardRows.From).ToList(),
+            Progress = result.Progress.Select(RewardRows.From).ToList()
         });
     }
 

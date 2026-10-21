@@ -74,7 +74,8 @@ internal static class TimerCommand
                         sessionSeconds = timer.SessionSeconds,
                         paused = (result?.Paused ?? []).Select(p => new { urn = p.Urn, title = p.Title }),
                         completed = result?.Completed ?? false,
-                        awards = RewardOutput.AwardsJson(result?.Awards ?? [])
+                        awards = RewardOutput.AwardsJson(result?.Awards ?? []),
+                        progress = RewardOutput.ProgressJson(result?.Progress ?? [])
                     });
                     return 0;
                 }
@@ -89,6 +90,7 @@ internal static class TimerCommand
                     $"{timer.Urn}: {timer.State}{running}; {FormatSeconds(timer.TotalSeconds)} recorded" +
                     (result?.Completed == true ? "; marked Completed." : "."));
                 RewardOutput.WriteAwards(result?.Awards ?? []);
+                RewardOutput.WriteProgress(result?.Progress ?? []);
                 return 0;
             });
         });

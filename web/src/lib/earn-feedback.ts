@@ -1,7 +1,7 @@
 /**
  * What an earning write says back (REWARD-4): a toast with what it paid and a small chime
  * on every earn, and the full celebration (confetti and the fanfare) when it pays Gems,
- * reaches a streak milestone or establishes a habit. A reversal — reopening a completed
+ * reaches a streak milestone or establishes a habit — a rank-up pays Gems. A reversal — reopening a completed
  * Task, correcting a day — gets a quiet toast and no sound.
  */
 import { toast } from "sonner";
@@ -26,7 +26,7 @@ function add(into: Amounts, amounts: Amounts) {
 function forWhat(awards: Award[]): string {
   const byItem = new Map<string, string[]>();
   for (const a of awards) {
-    const title = a.subject.title;
+    const title = a.subject?.title ?? a.note ?? "Reward";
     byItem.set(title, [...(byItem.get(title) ?? []), triggerLabel(a.trigger)]);
   }
   return [...byItem].map(([title, why]) => `${title} — ${why.join(", ")}`).join(" · ");

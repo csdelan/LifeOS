@@ -724,6 +724,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/domains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetDomains"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/domains/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SettleDomains"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -771,10 +803,11 @@ export interface components {
             entry?: string;
             trigger?: string;
             awardKey?: string;
-            subject?: components["schemas"]["CreatedSubject"];
+            subject?: null | components["schemas"]["CreatedSubject"];
             amounts?: {
                 [key: string]: number | string;
             };
+            note?: null | string;
         };
         BountyBody: {
             subject?: string;
@@ -817,8 +850,124 @@ export interface components {
             type?: string;
             title?: string;
         };
+        DomainChangeRow: {
+            domain?: string;
+            /** Format: int32 */
+            levelFrom?: number | string;
+            /** Format: int32 */
+            levelTo?: number | string;
+            /** Format: int32 */
+            rankFrom?: number | string;
+            /** Format: int32 */
+            rankTo?: number | string;
+            rankTitle?: string;
+        };
+        DomainCurrent: {
+            /** Format: int64 */
+            todayBase?: number | string;
+            todaySucceeded?: boolean;
+            rule?: string;
+            /** Format: int64 */
+            target?: null | number | string;
+            /** Format: double */
+            consistency?: number | string;
+            /** Format: int32 */
+            successfulDays?: number | string;
+            /** Format: int32 */
+            windowDays?: number | string;
+            /** Format: double */
+            multiplier?: number | string;
+            nextTier?: null | components["schemas"]["DomainTierRow"];
+        };
+        DomainLifetime: {
+            start?: null | string;
+            /** Format: int32 */
+            level?: number | string;
+            /** Format: int32 */
+            rawLevel?: number | string;
+            /** Format: int32 */
+            topLevel?: number | string;
+            capped?: boolean;
+            /** Format: int32 */
+            rank?: number | string;
+            rankTitle?: string;
+            qualifiedOn?: null | string;
+            /** Format: int64 */
+            levelXp?: number | string;
+            /** Format: int64 */
+            xpIntoLevel?: number | string;
+            /** Format: int64 */
+            xpToNext?: number | string;
+            /** Format: int64 */
+            bankedXp?: number | string;
+        };
+        DomainNextRank: {
+            /** Format: int32 */
+            rank?: number | string;
+            title?: string;
+            /** Format: int32 */
+            level?: number | string;
+            /** Format: double */
+            bar?: number | string;
+            /** Format: int32 */
+            windowDays?: number | string;
+            /** Format: double */
+            consistency?: number | string;
+            /** Format: int32 */
+            successfulDays?: number | string;
+            /** Format: int32 */
+            requiredDays?: number | string;
+            /** Format: int32 */
+            daysNeeded?: number | string;
+            /** Format: int32 */
+            daysOld?: number | string;
+            levelReached?: boolean;
+            oldEnough?: boolean;
+            barMet?: boolean;
+        };
+        DomainRankRow: {
+            /** Format: int32 */
+            rank?: number | string;
+            title?: string;
+            /** Format: int32 */
+            level?: number | string;
+            /** Format: int32 */
+            topLevel?: number | string;
+            /** Format: double */
+            bar?: number | string;
+            /** Format: int32 */
+            windowDays?: number | string;
+            /** Format: int32 */
+            gems?: number | string;
+            qualifiedOn?: null | string;
+        };
+        DomainRow: {
+            key?: string;
+            label?: string;
+            name?: string;
+            /** Format: int64 */
+            totalXp?: number | string;
+            configured?: boolean;
+            lifetime?: null | components["schemas"]["DomainLifetime"];
+            nextRank?: null | components["schemas"]["DomainNextRank"];
+            current?: null | components["schemas"]["DomainCurrent"];
+            ranks?: null | components["schemas"]["DomainRankRow"][];
+        };
+        DomainTierRow: {
+            /** Format: double */
+            minShare?: number | string;
+            /** Format: double */
+            multiplier?: number | string;
+            /** Format: int32 */
+            daysNeeded?: number | string;
+        };
+        DomainsRead: {
+            today?: string;
+            domains?: components["schemas"]["DomainRow"][];
+        };
         EarnResult: {
             awards?: components["schemas"]["AwardRow"][];
+            progress?: components["schemas"]["DomainChangeRow"][];
         };
         HabitEstablishment: {
             /** Format: double */
@@ -1211,6 +1360,7 @@ export interface components {
             paused?: components["schemas"]["CreatedSubject"][];
             completed?: boolean;
             awards?: components["schemas"]["AwardRow"][];
+            progress?: components["schemas"]["DomainChangeRow"][];
         };
         TimerBody: {
             task?: string;
@@ -2569,6 +2719,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetDomains: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainsRead"];
+                };
+            };
+        };
+    };
+    SettleDomains: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EarnResult"];
                 };
             };
         };

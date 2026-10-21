@@ -295,4 +295,6 @@ public sealed class TimerActionResult
     public bool Completed { get; set; }
     /// <summary>What completing earned (REWARD-4); empty for every other action.</summary>
     public IReadOnlyList<AwardRow> Awards { get; set; } = [];
+    /// <summary>Each life domain whose level or rank completing changed (xp-domains plan §3.8).</summary>
+    public IReadOnlyList<DomainChangeRow> Progress { get; set; } = [];
 }

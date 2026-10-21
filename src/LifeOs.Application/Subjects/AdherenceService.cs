@@ -84,8 +84,8 @@ public sealed class AdherenceService(
             [new SubjectEventEdge(habit.Id, relation, Provenances.Declared)],
             cancellationToken);
 
-        var awards = await rewards.ReconcileAsync(habit, eventId, cancellationToken);
-        return new AdherenceResult(eventId, habit, normalizedResult, day, awards);
+        var earned = await rewards.ReconcileWithProgressAsync(habit, eventId, cancellationToken);
+        return new AdherenceResult(eventId, habit, normalizedResult, day, earned.Awards, earned.Progress);
     }
 
     private async Task<bool> AllowsPartialAsync(Guid habitId, CancellationToken cancellationToken)
@@ -96,8 +96,9 @@ public sealed class AdherenceService(
 }
 
 /// <summary>
-/// The outcome of recording adherence: the event, the habit, the result, the occurrence,
-/// and any ledger entries it earned or reversed.
+/// The outcome of recording adherence: the event, the habit, the result, the occurrence, any
+/// ledger entries it earned or reversed, and each life domain whose level or rank that changed.
 /// </summary>
 public sealed record AdherenceResult(
-    Guid EventId, SubjectRef Habit, string Result, DateOnly Occurrence, IReadOnlyList<Award> Awards);
+    Guid EventId, SubjectRef Habit, string Result, DateOnly Occurrence, IReadOnlyList<Award> Awards,
+    IReadOnlyList<DomainChange> Progress);

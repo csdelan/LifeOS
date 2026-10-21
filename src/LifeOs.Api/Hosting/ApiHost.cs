@@ -50,12 +50,14 @@ public static class ApiHost
         // Coins are real money (REWARD-3): Rewards:CoinValueUsd, default $0.50; a bad value
         // fails startup rather than mis-pricing deposits. Rewards:HomeTimeZone (default
         // America/Los_Angeles) decides which day an earn counts on; a malformed one fails too.
+        var homeZone = ServiceCollectionExtensions.ParseHomeTimeZone(builder.Configuration[HomeZone.ConfigurationKey]);
         builder.Services.AddLifeOsKernel(
             owner, KernelSources.Api,
             ServiceCollectionExtensions.ParseCoinValueUsd(builder.Configuration[CoinRates.ConfigurationKey]),
-            ServiceCollectionExtensions.ParseHomeTimeZone(builder.Configuration[HomeZone.ConfigurationKey]));
+            homeZone);
         builder.Services.AddSingleton(new SubjectReader(reader));
-        builder.Services.AddSingleton(sp => new RewardReader(reader, sp.GetRequiredService<RewardService>().CoinValueUsd));
+        builder.Services.AddSingleton(sp => new RewardReader(
+            reader, sp.GetRequiredService<RewardService>().CoinValueUsd, homeZone));
 
         // Fail closed: missing issuer/audience/JWKS-or-secret/ALLOWED_EMAILS throws.
         builder.Services.AddLifeOsAuth(builder.Configuration);
@@ -132,6 +134,7 @@ public static class ApiHost
         app.MapReadEndpoints();
         app.MapWriteEndpoints();
         app.MapRewardEndpoints();
+        app.MapDomainEndpoints();
         app.MapSpaFallback();
     }
 }

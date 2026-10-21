@@ -2617,6 +2617,18 @@ succeeded, consistency over the last 30 complete days, and the multiplier for an
 `needs-kernel → building`. Levels, ranks and rank-up Gems (X4), the multiplier on earns (X5)
 and the Character page (X6) are still to come.
 
+**Update (2026-10-20 — X4 landed):** Health now has levels and ranks. The level curve runs to
+100; a rank waits for its level, a domain as old as its window and the consistency bar, and
+the level stops at the top of the rank held with the XP beyond it banked. Inactivity never
+lowers either. Each rank pays its Gems once (1 a rank, 5 for Grandmaster) under its own award
+key, earn-only, from any write that adds Health XP, the `bsk rewards reconcile` sweep or
+`POST /api/domains/settle`. The earning responses answer `progress` (level and rank before and
+after), and `GET /api/domains` / `bsk domains` show the lifetime figures and the next rank's
+gate. `bsk domains simulate` runs ten seeded years of a chosen pattern, or `--replay` of the
+real days so far, and the simulator's scenarios are in the regression suite. Next is
+calibration (Chris prices Health items and lives with them), then the multiplier on earns
+(X5) and the Character page (X6). Build stays `building`.
+
 **Workflow (Chris):**
 - "For each XP category, I want to track 'levels' from 1-100 that represent RPG levels …
   I start at level 1 with 0 XP, and level 100 represents Grandmaster and typically takes many
@@ -2928,8 +2940,9 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   consistency, multiplier) with replaceable success rules, the multiplier in reconcile,
   earn-only rank-up Gem awards, the simulator, period reports. — **Open**: X1 shipped (the
   currencies and the credited day, migration 0030), X2 (established habits keep earning,
-  migration 0031) and X3 (Health's rules and daily consistency, migration 0032); X4–X7 to go
-  in [xp-domains-plan.md](xp-domains-plan.md).
+  migration 0031), X3 (Health's rules and daily consistency, migration 0032) and X4 (levels,
+  ranks, rank-up Gems and the simulator); X5–X7 to go in
+  [xp-domains-plan.md](xp-domains-plan.md).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); **life-domain XP +

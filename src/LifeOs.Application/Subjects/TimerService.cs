@@ -76,7 +76,7 @@ public sealed class TimerService(
         await timers.AppendAsync(writes, cancellationToken);
 
         var snapshot = await timers.GetAsync(task.Id, cancellationToken) ?? Never(task);
-        return new TimerResult(task, snapshot, paused, Completed: false, Awards: []);
+        return new TimerResult(task, snapshot, paused, Completed: false, Awards: [], Progress: []);
     }
 
     /// <summary>
@@ -96,7 +96,7 @@ public sealed class TimerService(
         var completed = await status.ChangeStatusAsync(task.Urn, CompletedStatus, cancellationToken);
 
         var snapshot = await timers.GetAsync(task.Id, cancellationToken) ?? Never(task);
-        return new TimerResult(task, snapshot, [], Completed: true, completed.Awards);
+        return new TimerResult(task, snapshot, [], Completed: true, completed.Awards, completed.Progress);
     }
 
     private async Task<SubjectRef> ResolveTaskAsync(string reference, CancellationToken cancellationToken)
@@ -158,8 +158,8 @@ public sealed class TimerService(
 /// <summary>
 /// The outcome of a timer action: the task, its timer afterwards, any other timers the
 /// action paused (starting one pauses the running one), whether the task was completed,
-/// and what completing it earned.
+/// what completing it earned, and each life domain whose level or rank that changed.
 /// </summary>
 public sealed record TimerResult(
     SubjectRef Task, TimerSnapshot Timer, IReadOnlyList<SubjectRef> Paused, bool Completed,
-    IReadOnlyList<Award> Awards);
+    IReadOnlyList<Award> Awards, IReadOnlyList<DomainChange> Progress);

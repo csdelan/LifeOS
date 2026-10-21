@@ -265,10 +265,23 @@ public interface ILedgerRepository
     /// xp-domains plan §3.4): every currently paid award counts on its latest earn's credited
     /// day, or, for an earn from before credited days, on its instant's date in the home zone.
     /// Days without credit have no row. Also answers today's date in the home zone, so a fold
-    /// and its data agree on what today is.
+    /// and its data agree on what today is, and the day the wallet opened there.
     /// </summary>
     Task<DomainCredit> GetDomainDaysAsync(
         IReadOnlyCollection<string> currencies, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The award keys with <paramref name="trigger"/> the ledger currently holds (keys that net
+    /// to non-zero) — what a subject-less award, a rank-up, has been paid.
+    /// </summary>
+    Task<IReadOnlySet<string>> GetPaidKeysAsync(string trigger, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The earn behind the latest credit of <paramref name="currency"/> on or before
+    /// <paramref name="day"/> (<c>bsk.v_award_credit</c>), or null — what a rank-up cites.
+    /// </summary>
+    Task<Guid?> GetLatestCreditEventAsync(
+        string currency, DateOnly day, CancellationToken cancellationToken = default);
 
     /// <summary>When the wallet was opened (its earliest <c>open</c> entry), or <c>null</c> before launch.</summary>
     Task<DateTimeOffset?> GetOpenedAtAsync(CancellationToken cancellationToken = default);

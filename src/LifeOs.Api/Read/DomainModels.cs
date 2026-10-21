@@ -1,0 +1,219 @@
+using System.Globalization;
+using LifeOs.Application.Rewards;
+using LifeOs.Domain;
+
+namespace LifeOs.Api.Read;
+
+/// <summary>
+/// <c>GET /api/domains</c> (REWARD-6 / REWARD-7, xp-domains plan §3.11): every life domain in
+/// display order, as of <see cref="Today"/> (<c>yyyy-MM-dd</c>) in the home zone. Dates are
+/// home-zone days, not the viewer's.
+/// </summary>
+public sealed class DomainsRead
+{
+    public string Today { get; set; } = "";
+    public IReadOnlyList<DomainRow> Domains { get; set; } = [];
+}
+
+/// <summary>
+/// One life domain: its currency, the XP it has collected, and whether it has rules. Only a
+/// configured domain (Health in the pilot) has <see cref="Lifetime"/>, <see cref="Current"/>
+/// and <see cref="Ranks"/>; <see cref="NextRank"/> is null at the last rank.
+/// </summary>
+public sealed class DomainRow
+{
+    public string Key { get; set; } = "";
+    public string Label { get; set; } = "";
+    /// <summary>The domain's name, e.g. "Health".</summary>
+    public string Name { get; set; } = "";
+    public long TotalXp { get; set; }
+    public bool Configured { get; set; }
+    public DomainLifetime? Lifetime { get; set; }
+    public DomainNextRank? NextRank { get; set; }
+    public DomainCurrent? Current { get; set; }
+    public IReadOnlyList<DomainRankRow>? Ranks { get; set; }
+}
+
+/// <summary>
+/// Lifetime advancement, which a bad month never lowers: the level (stopped at the top of the
+/// rank held), the level the XP alone reaches, the rank and the day it qualified (null for
+/// Novice), the XP into the level and still to go, and — while capped — the XP banked.
+/// </summary>
+public sealed class DomainLifetime
+{
+    /// <summary>The first day with paid XP, or null before there is any.</summary>
+    public string? Start { get; set; }
+    public int Level { get; set; }
+    public int RawLevel { get; set; }
+    /// <summary>The highest level the rank allows (9 for Novice).</summary>
+    public int TopLevel { get; set; }
+    public bool Capped { get; set; }
+    /// <summary>The rank held: 0 is Novice.</summary>
+    public int Rank { get; set; }
+    public string RankTitle { get; set; } = "";
+    public string? QualifiedOn { get; set; }
+    /// <summary>What the current level costs in all; the whole of it while capped.</summary>
+    public long LevelXp { get; set; }
+    public long XpIntoLevel { get; set; }
+    public long XpToNext { get; set; }
+    public long BankedXp { get; set; }
+}
+
+/// <summary>
+/// The next rank's gate as it reads today: its level, bar (0–1) and window, the window's
+/// successful days against those the bar takes, and the domain's age against the window.
+/// Today counts once it has succeeded.
+/// </summary>
+public sealed class DomainNextRank
+{
+    public int Rank { get; set; }
+    public string Title { get; set; } = "";
+    public int Level { get; set; }
+    public decimal Bar { get; set; }
+    public int WindowDays { get; set; }
+    public decimal Consistency { get; set; }
+    public int SuccessfulDays { get; set; }
+    public int RequiredDays { get; set; }
+    public int DaysNeeded { get; set; }
+    public int DaysOld { get; set; }
+    public bool LevelReached { get; set; }
+    public bool OldEnough { get; set; }
+    public bool BarMet { get; set; }
+}
+
+/// <summary>
+/// Current performance, which does drop: today's base XP against the success rule
+/// (<see cref="Target"/> is its number when it has one), consistency over the last 30
+/// complete days, the multiplier it sets, and the next tier with the days it still needs.
+/// </summary>
+public sealed class DomainCurrent
+{
+    public long TodayBase { get; set; }
+    public bool TodaySucceeded { get; set; }
+    /// <summary>The success rule in words, e.g. "at least 70 base XP".</summary>
+    public string Rule { get; set; } = "";
+    public long? Target { get; set; }
+    public decimal Consistency { get; set; }
+    public int SuccessfulDays { get; set; }
+    public int WindowDays { get; set; }
+    public decimal Multiplier { get; set; }
+    public DomainTierRow? NextTier { get; set; }
+}
+
+/// <summary>A multiplier tier above now: the share it takes, what it pays, and the successful days still needed.</summary>
+public sealed class DomainTierRow
+{
+    public decimal MinShare { get; set; }
+    public decimal Multiplier { get; set; }
+    public int DaysNeeded { get; set; }
+}
+
+/// <summary>One rung of the rank ladder: its gate, its Gems, and the day it qualified when it has.</summary>
+public sealed class DomainRankRow
+{
+    public int Rank { get; set; }
+    public string Title { get; set; } = "";
+    public int Level { get; set; }
+    public int TopLevel { get; set; }
+    public decimal Bar { get; set; }
+    public int WindowDays { get; set; }
+    public int Gems { get; set; }
+    public string? QualifiedOn { get; set; }
+}
+
+/// <summary>Maps the Application's domain readings onto the API's shapes.</summary>
+public static class DomainRows
+{
+    public static DomainsRead From(DomainsReading reading) => new()
+    {
+        Today = Day(reading.Today),
+        Domains = reading.Domains.Select(From).ToList()
+    };
+
+    public static DomainRow From(DomainReading reading)
+    {
+        var row = new DomainRow
+        {
+            Key = reading.Currency.Key,
+            Label = reading.Currency.Label,
+            Name = LifeDomains.Name(reading.Currency.Key),
+            TotalXp = reading.TotalXp,
+            Configured = reading.Configured
+        };
+        if (reading.Progress is not { } p)
+        {
+            return row;
+        }
+
+        var rules = p.Rules;
+        row.Lifetime = new DomainLifetime
+        {
+            Start = p.Start is { } start ? Day(start) : null,
+            Level = p.Level,
+            RawLevel = p.RawLevel,
+            TopLevel = p.TopLevel,
+            Capped = p.Capped,
+            Rank = p.Rank,
+            RankTitle = p.RankRule.Title,
+            QualifiedOn = p.RankQualifiedOn is { } on ? Day(on) : null,
+            LevelXp = rules.Curve.CostToNext(p.Level),
+            XpIntoLevel = p.XpIntoLevel,
+            XpToNext = p.XpToNext,
+            BankedXp = p.BankedXp
+        };
+        if (p.Next is { } next)
+        {
+            row.NextRank = new DomainNextRank
+            {
+                Rank = next.Rank,
+                Title = next.Rule.Title,
+                Level = next.Rule.StartLevel,
+                Bar = next.Rule.MinConsistency,
+                WindowDays = next.Rule.WindowDays,
+                Consistency = Math.Round(next.Window.Share, 4),
+                SuccessfulDays = next.Window.SuccessfulDays,
+                RequiredDays = next.Required,
+                DaysNeeded = next.DaysNeeded,
+                DaysOld = next.DaysOld,
+                LevelReached = next.LevelReached,
+                OldEnough = next.OldEnough,
+                BarMet = next.BarMet
+            };
+        }
+
+        row.Current = new DomainCurrent
+        {
+            TodayBase = p.TodayBase,
+            TodaySucceeded = p.TodaySucceeded,
+            Rule = rules.Success.Describe(),
+            Target = rules.Success is MinimumBaseXp minimum ? minimum.Minimum : null,
+            Consistency = Math.Round(p.Consistency.Share, 4),
+            SuccessfulDays = p.Consistency.SuccessfulDays,
+            WindowDays = p.Consistency.Days,
+            Multiplier = p.MultiplierNow,
+            NextTier = p.NextTier is { } tier
+                ? new DomainTierRow
+                {
+                    MinShare = tier.MinShare,
+                    Multiplier = tier.Multiplier,
+                    DaysNeeded = p.Consistency.DaysNeededFor(tier.MinShare)
+                }
+                : null
+        };
+        var qualified = p.RanksReached.ToDictionary(r => r.Rank, r => r.QualifiedOn);
+        row.Ranks = rules.Ranks.Select((rank, i) => new DomainRankRow
+        {
+            Rank = i,
+            Title = rank.Title,
+            Level = rank.StartLevel,
+            TopLevel = rules.TopLevelOf(i),
+            Bar = rank.MinConsistency,
+            WindowDays = rank.WindowDays,
+            Gems = i == 0 ? 0 : rules.GemsFor(i),
+            QualifiedOn = qualified.TryGetValue(i, out var day) ? Day(day) : null
+        }).ToList();
+        return row;
+    }
+
+    private static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+}

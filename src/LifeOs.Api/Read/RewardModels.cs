@@ -93,7 +93,9 @@ public sealed class RewardRow
 
 /// <summary>
 /// A ledger entry an earning write produced (REWARD-4's toast): an <c>earn</c> with positive
-/// amounts or a <c>reversal</c> with negative ones, for which item and trigger.
+/// amounts or a <c>reversal</c> with negative ones, for which item and trigger. A rank-up
+/// (trigger <c>rank</c>) has no item: its <see cref="Note"/> says which rank, e.g.
+/// "Health Apprentice".
 /// </summary>
 public sealed class AwardRow
 {
@@ -101,17 +103,34 @@ public sealed class AwardRow
     public string Entry { get; set; } = "";
     public string Trigger { get; set; } = "";
     public string AwardKey { get; set; } = "";
-    public CreatedSubject Subject { get; set; } = new();
+    public CreatedSubject? Subject { get; set; }
     public IReadOnlyDictionary<string, long> Amounts { get; set; } = new Dictionary<string, long>();
+    public string? Note { get; set; }
 }
 
 /// <summary>
-/// The response of a write that can earn (<c>POST /api/status</c>, <c>/api/adhere</c>): the
-/// ledger entries its reconcile wrote, empty when it changed nothing.
+/// A life domain whose level or rank a write changed (xp-domains plan §3.8): its currency key,
+/// the level (1–100) and rank (0 is Novice) before and after, and the title of the rank after.
+/// </summary>
+public sealed class DomainChangeRow
+{
+    public string Domain { get; set; } = "";
+    public int LevelFrom { get; set; }
+    public int LevelTo { get; set; }
+    public int RankFrom { get; set; }
+    public int RankTo { get; set; }
+    public string RankTitle { get; set; } = "";
+}
+
+/// <summary>
+/// The response of a write that can earn (<c>POST /api/status</c>, <c>/api/adhere</c>,
+/// <c>/api/domains/settle</c>): the ledger entries its reconcile wrote, empty when it changed
+/// nothing, and each life domain whose level or rank changed.
 /// </summary>
 public sealed class EarnResult
 {
     public IReadOnlyList<AwardRow> Awards { get; set; } = [];
+    public IReadOnlyList<DomainChangeRow> Progress { get; set; } = [];
 }
 
 /// <summary>
@@ -197,11 +216,26 @@ public static class RewardRows
         Entry = award.Entry,
         Trigger = award.Trigger,
         AwardKey = award.AwardKey,
-        Subject = Subject(award.Subject),
-        Amounts = award.Amounts
+        Subject = award.Subject is { } subject ? Subject(subject) : null,
+        Amounts = award.Amounts,
+        Note = award.Note
     };
 
-    public static EarnResult Earned(IEnumerable<Award> awards) => new() { Awards = awards.Select(From).ToList() };
+    public static DomainChangeRow From(DomainChange change) => new()
+    {
+        Domain = change.Domain,
+        LevelFrom = change.LevelFrom,
+        LevelTo = change.LevelTo,
+        RankFrom = change.RankFrom,
+        RankTo = change.RankTo,
+        RankTitle = change.RankTitle
+    };
+
+    public static EarnResult Earned(IEnumerable<Award> awards, IEnumerable<DomainChange> progress) => new()
+    {
+        Awards = awards.Select(From).ToList(),
+        Progress = progress.Select(From).ToList()
+    };
 
     public static RedemptionResult From(Redemption redemption) => new()
     {

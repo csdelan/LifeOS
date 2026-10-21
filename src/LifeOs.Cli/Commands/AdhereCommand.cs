@@ -66,7 +66,8 @@ internal static class AdhereCommand
                         habit = recorded.Habit.Urn,
                         result = recorded.Result,
                         occurrence = recorded.Occurrence.ToString("yyyy-MM-dd"),
-                        awards = RewardOutput.AwardsJson(recorded.Awards)
+                        awards = RewardOutput.AwardsJson(recorded.Awards),
+                        progress = RewardOutput.ProgressJson(recorded.Progress)
                     });
                 }
                 else
@@ -74,6 +75,7 @@ internal static class AdhereCommand
                     Console.WriteLine(
                         $"Recorded {recorded.Result} for {recorded.Habit.Urn} on {recorded.Occurrence:yyyy-MM-dd}.");
                     RewardOutput.WriteAwards(recorded.Awards);
+                    RewardOutput.WriteProgress(recorded.Progress);
                 }
 
                 return 0;

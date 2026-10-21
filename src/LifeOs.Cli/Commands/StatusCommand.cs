@@ -49,7 +49,8 @@ internal static class StatusCommand
                         eventId = result.EventId,
                         subject = new { result.Subject.Urn, result.Subject.Type },
                         status = result.Status,
-                        awards = RewardOutput.AwardsJson(result.Awards)
+                        awards = RewardOutput.AwardsJson(result.Awards),
+                        progress = RewardOutput.ProgressJson(result.Progress)
                     });
                 }
                 else
@@ -58,6 +59,7 @@ internal static class StatusCommand
                         $"Recorded status '{result.Status}' for {result.Subject.Urn} " +
                         $"(state_change {result.EventId}); run `bsk rebuild` to refresh the projection.");
                     RewardOutput.WriteAwards(result.Awards);
+                    RewardOutput.WriteProgress(result.Progress);
                 }
 
                 return 0;

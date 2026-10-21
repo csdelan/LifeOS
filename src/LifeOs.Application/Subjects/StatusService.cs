@@ -45,8 +45,8 @@ public sealed class StatusService(
             PayloadJson: payload);
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);
-        var awards = await rewards.ReconcileAsync(subject, eventId, cancellationToken);
-        return new StatusResult(eventId, subject, status, awards);
+        var earned = await rewards.ReconcileWithProgressAsync(subject, eventId, cancellationToken);
+        return new StatusResult(eventId, subject, status, earned.Awards, earned.Progress);
     }
 
     /// <summary>
@@ -74,7 +74,8 @@ public sealed class StatusService(
 }
 
 /// <summary>
-/// The outcome of a status change: the state_change event, the subject, and any ledger
-/// entries it earned or reversed.
+/// The outcome of a status change: the state_change event, the subject, any ledger entries it
+/// earned or reversed, and each life domain whose level or rank that changed.
 /// </summary>
-public sealed record StatusResult(Guid EventId, SubjectRef Subject, string Status, IReadOnlyList<Award> Awards);
+public sealed record StatusResult(
+    Guid EventId, SubjectRef Subject, string Status, IReadOnlyList<Award> Awards, IReadOnlyList<DomainChange> Progress);

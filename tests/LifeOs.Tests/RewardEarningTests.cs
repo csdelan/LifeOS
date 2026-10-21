@@ -375,13 +375,13 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
 
         var healed = await kernel.Rewards.ReconcileAllAsync(Ct);
 
-        var earn = Assert.Single(healed, a => a.Subject.Id == task.Id);
+        var earn = Assert.Single(healed, a => a.Subject?.Id == task.Id);
         Assert.Equal(LedgerEntries.Earn, earn.Entry);
-        Assert.DoesNotContain(await kernel.Rewards.ReconcileAllAsync(Ct), a => a.Subject.Id == task.Id);
+        Assert.DoesNotContain(await kernel.Rewards.ReconcileAllAsync(Ct), a => a.Subject?.Id == task.Id);
 
         // And the other way: reopened behind reconcile's back, the sweep gives it back.
         var reopen = await RecordStatusWithoutReconcileAsync(kernel, task, "In progress");
-        var reversal = Assert.Single(await kernel.Rewards.ReconcileAllAsync(Ct), a => a.Subject.Id == task.Id);
+        var reversal = Assert.Single(await kernel.Rewards.ReconcileAllAsync(Ct), a => a.Subject?.Id == task.Id);
         Assert.Equal(LedgerEntries.Reversal, reversal.Entry);
         Assert.Empty(await NetForAsync(kernel, task));
 

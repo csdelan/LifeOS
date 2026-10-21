@@ -47,6 +47,22 @@ describe("summarizeAwards", () => {
     expect(summary.big).toBe(false);
   });
 
+  it("names a rank-up by its note, since it belongs to no item, and celebrates it", () => {
+    const rankUp: Award = {
+      id: "rank",
+      entry: "earn",
+      trigger: "rank",
+      awardKey: "rank:health_xp:10",
+      subject: null,
+      note: "Health Apprentice",
+      amounts: { gems: 1 },
+    };
+    const summary = summarizeAwards([award("followed", { health_xp: 70 }), rankUp]);
+    expect(summary.earned).toEqual({ health_xp: 70, gems: 1 });
+    expect(summary.earnedFor).toBe("Morning mobility — day followed · Health Apprentice — rank-up");
+    expect(summary.big).toBe(true);
+  });
+
   it("is big for Gems, a streak milestone or establishing — not an ordinary day", () => {
     expect(summarizeAwards([award("followed", { xp: 5 })]).big).toBe(false);
     expect(summarizeAwards([award("completed", { gems: 1 })]).big).toBe(true);

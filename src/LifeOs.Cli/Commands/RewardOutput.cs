@@ -45,17 +45,52 @@ internal static class RewardOutput
         entry = a.Entry,
         trigger = a.Trigger,
         awardKey = a.AwardKey,
-        subject = new { urn = a.Subject.Urn, type = a.Subject.Type, title = a.Subject.Title },
-        amounts = a.Amounts
+        subject = a.Subject is { } s ? new { urn = s.Urn, type = s.Type, title = s.Title } : null,
+        amounts = a.Amounts,
+        note = a.Note
     });
 
-    /// <summary>Prints one line per award: "Earned +10 XP, +2 Coins (completed: Write report)."</summary>
+    /// <summary>
+    /// Prints one line per award: "Earned +10 XP, +2 Coins (completed: Write report)." — or, for
+    /// a rank-up, "(rank: Health Apprentice)".
+    /// </summary>
     public static void WriteAwards(IEnumerable<Award> awards)
     {
         foreach (var award in awards)
         {
             var verb = award.Entry == LedgerEntries.Reversal ? "Reversed" : "Earned";
-            Console.WriteLine($"{verb} {Amounts(award.Amounts)} ({award.Trigger}: {award.Subject.Title}).");
+            Console.WriteLine($"{verb} {Amounts(award.Amounts)} ({award.Trigger}: {award.Subject?.Title ?? award.Note}).");
+        }
+    }
+
+    /// <summary>Each life domain whose level or rank a write changed, as JSON-ready data.</summary>
+    public static object ProgressJson(IEnumerable<DomainChange> progress) => progress.Select(p => new
+    {
+        domain = p.Domain,
+        levelFrom = p.LevelFrom,
+        levelTo = p.LevelTo,
+        rankFrom = p.RankFrom,
+        rankTo = p.RankTo,
+        rankTitle = p.RankTitle
+    });
+
+    /// <summary>Prints one line per domain that moved: "Health: level 9 → 12, now Apprentice."</summary>
+    public static void WriteProgress(IEnumerable<DomainChange> progress)
+    {
+        foreach (var p in progress)
+        {
+            var parts = new List<string>();
+            if (p.LevelTo != p.LevelFrom)
+            {
+                parts.Add($"level {p.LevelFrom} → {p.LevelTo}");
+            }
+
+            if (p.RankTo != p.RankFrom)
+            {
+                parts.Add(p.RankTo > p.RankFrom ? $"now {p.RankTitle}" : $"back to {p.RankTitle}");
+            }
+
+            Console.WriteLine($"{LifeDomains.Name(p.Domain)}: {string.Join(", ", parts)}.");
         }
     }
 

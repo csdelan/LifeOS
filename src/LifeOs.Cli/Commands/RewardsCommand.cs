@@ -20,7 +20,8 @@ namespace LifeOs.Cli.Commands;
 /// <item><c>rewards reconcile [--subject &lt;ref&gt;]</c> — bring the ledger in line with the
 /// record (rewards plan §3.3): earn every award that is due and unpaid, and reverse every
 /// paid award that is no longer due. Status changes already do this for their own item;
-/// this heals one whose reconcile never ran. Safe to run any time — it never pays twice
+/// this heals one whose reconcile never ran. The full sweep also pays any life-domain
+/// rank-up still due (xp-domains plan §3.7). Safe to run any time — it never pays twice
 /// and never opens the wallet.</item>
 /// </list>
 /// Rename or archive a Reward like any subject (<c>bsk rename</c>, <c>bsk archive</c>);

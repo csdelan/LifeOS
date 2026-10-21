@@ -84,18 +84,25 @@ Level L needs the sum of `XPnext(1..L−1)`.
 | 90 | 193,900 | 5.3 years | 57 |
 | 100 | 254,925 | 7.0 years | (level 99→100 costs 6,530) |
 
-**Expected timelines** (simulated with the rank gates, a flat 70 minimum and the multiplier,
-20 runs each):
+**Expected timelines** (`DomainSimulator` as built in X4: 20 seeded runs each, with the rank
+gates, a flat 70 minimum and the multiplier; `bsk domains simulate` reproduces each line). A
+full day does the 70 XP of essentials plus extras that vary around the average; a half day
+does half the essentials plus its extras, so it usually misses the 70.
 
 | Pattern | Result |
 |---|---|
-| Steady: about 90 base XP a day, 5% of days off | Grandmaster in every run, in about 6 years; about 7.8 without the multiplier |
-| Steady, with 6 months off in year 3 | Grandmaster in about 6.5 years. Level and rank hold through the break. |
-| Human: 10% of days off and some half days | Always Legend; Grandmaster in about 1 run in 4, after 8+ years. Grandmaster's 90% bar allows only about 36 missed days a year. |
-| Exactly 70 every day | Grandmaster in 7.7 years, each rank as soon as its level arrives |
-| Always below 70 | Capped at level 9 however much XP it banks |
+| Steady: full days about 95 base XP (spread 15), 5% of days off, so about 90 a day overall | Grandmaster in every run at 5.9 years; 7.7 without the multiplier |
+| Steady, with 6 months off in year 3 | Grandmaster in every run at 6.5 years. Level and rank hold through the break. |
+| Human: full days about 90 (spread 15), 10% of days off, 4% half days | Legend in every run (median 5.7 years); Grandmaster in 7 runs of 20, the earliest at 6.9 years. About 87% of days succeed, just under Legend's 88% bar and Grandmaster's 90%, so a few days a year decide it. Grandmaster's bar allows only about 36 missed days a year. |
+| Improving: Human, with the extras growing 5 XP a day each year | Grandmaster in every run, median 6.2 years |
+| Exactly 70 every day | Grandmaster in 7.7 years, each rank the day its level arrives |
+| Always below 70 (a flat 60) | Capped at level 9 however much XP it banks |
 
 The level formula stays as it is: these land inside Chris's 5–10 year range.
+
+The X0 figures came from a Python sketch. X4's simulator agrees on every line but Human,
+which the sketch put at "always Legend; Grandmaster in about 1 run in 4, after 8+ years".
+Human sits right on the top two bars, so it's the first line to check at calibration (§2.4).
 
 ### 2.2 Ranks
 
@@ -207,6 +214,14 @@ read, so a change shows immediately. Editing the rules in the app is later (§6)
     rule in words.
   - The drift test also checks that rank titles are distinct, Novice has no gate, every tier
     pays more than 1.0, and a higher share never earns a smaller multiplier.
+- **As built (X4):**
+  - `Curve` joined. `ILevelCurve` also has `MaxLevel`. `RampCurve(Base, PerLevel, RampFrom,
+    RampPerLevel, MaxLevel = 100)` computes `TotalFor` in closed form and `LevelFor` by binary
+    search. The drift test checks that a curve runs to the last rank's level and no level is
+    cheaper than the one before.
+  - `DomainRules` also answers `TopLevelOf(rank)` (the level below the next rank's start; 100
+    for the last), `GemsFor(rank)` (`Top` for the last rank, `PerRank` otherwise) and
+    `RankAwardKey(rank)`.
 
 ### 3.3 The day an XP counts on
 
@@ -340,6 +355,21 @@ series. Every progression number in the app comes from it.
     it has succeeded.
   - Credit dated after today is left out.
   - Levels, the rank walk and the lifetime figures join in X4.
+- **As built (X4), the rest:**
+  - The walk records a `DomainStanding` (day, total XP, raw level, level, rank) for each day
+    from the start to today. `StandingOn(day)` reads one; a day after the last holds its
+    standing.
+  - A rank's gate: the raw level at its start level, no milestones, a window that fits wholly
+    on or after the start (the age check), and at least `ceil(bar × window)` successful days
+    in it. "Days old" counts today only once it has succeeded, like the windows.
+  - Lifetime outputs: `Level`, `RawLevel`, `Rank`, `RankRule`, `RankQualifiedOn`,
+    `RanksReached` (each with its `QualifiedOn`), `TopLevel`, `Capped`, `XpIntoLevel`,
+    `XpToNext` and `BankedXp`. While capped, the level's bar shows full (`XpIntoLevel` is its
+    cost, `XpToNext` 0) and banked XP is everything beyond what the next level takes. At level
+    100 nothing is banked.
+  - `Next`: the next rank's rule, its window now, days old, the parts of the gate met
+    (`LevelReached`, `OldEnough`, `BarMet`) and the successful days still needed.
+  - Windows read from a running count of successful days, so a fold is linear in days.
 
 ### 3.6 The multiplier on earns
 
@@ -385,6 +415,20 @@ series. Every progression number in the app comes from it.
   - from `POST /api/domains/settle`, which the Character page calls when it opens, so a rank
     reached by time alone (an old miss leaving the window, the domain turning old enough) pays
     and celebrates when Chris looks
+- **As built (X4):**
+  - The wallet's opening day is read in the home zone with the daily credit
+    (`DomainCredit.OpenedOn`). A rank that qualified before it never pays.
+  - `ILedgerRepository` gained `GetPaidKeysAsync(trigger)` (keys with a nonzero net) and
+    `GetLatestCreditEventAsync(currency, day)` (for `derived_from`).
+  - The earn has no subject and a `note` naming the rank ("Health Apprentice"), so the ledger
+    and the toast can say what it was for. It's credited on the qualifying day, provenance
+    Derived. A lost race re-reads and tries again.
+  - The sweep can't reverse one: it looks for reversals item by item, and a rank award has
+    no item. `ReconcileAllAsync` pays rank-ups at its end.
+  - It runs after a reconcile that wrote XP in a **configured** domain (unconfigured domains
+    have no ranks).
+  - `Award.Subject` is nullable and `Award` carries `Note`; the web's `Award` type and toast
+    follow ("Health Apprentice — rank-up", Gems, so the full celebration).
 
 ### 3.8 Level-up and rank-up feedback
 
@@ -396,6 +440,13 @@ series. Every progression number in the app comes from it.
   - A level-up gets the full celebration and a toast: "❤️ Health level 12!"
   - A rank-up gets a bigger one with the title: "You're now a Health Journeyman."
   - A level lost to a reversal gets a quiet toast, like "Gave back".
+- **As built (X4), the API half:**
+  - `progress` is on all four endpoints, and `bsk status`, `adhere` and `timer` print it:
+    "Health: level 9 → 12, now Apprentice." Each row also carries `rankTitle`.
+  - When a rank-up is paid in the same call, the row starts from the rank below the lowest
+    one paid, so a rank reached by time alone still announces on settle.
+  - A reversal that takes a level away shows too ("level 2 → 1").
+  - The web celebration waits for X6.
 
 ### 3.9 Established habits keep earning
 
@@ -468,6 +519,31 @@ synthetic daily series. It's both a regression suite and Chris's calibration too
   - `--avg 90 --sd 25 --off 8% --half 5% --growth 5 --lapse 3y:6m --years 10 --runs 20`
   - `--replay` starts from Chris's real history and projects the pattern forward from today.
 - Milestones join the simulator when their evaluator is built.
+- **As built (X4):**
+  - `DomainSimulator.Run(rules, pattern, options, from[, history])`, seeded per run. Full
+    days are normal draws, never below the essentials. A half day is half the essentials
+    plus its extras (half the XP when there are no essentials). A lapse is all zero days.
+  - Each day is priced at `MultiplierFor` from a fold of base XP, rounding halves up; a
+    second fold over the paid XP gives the levels and ranks.
+  - Output per rank: runs reaching it and p10 / p50 / p90 years and dates. Plus the final
+    level spread, final ranks, average consistency and each run's fold.
+  - The regression bands, as built:
+    - **Steady** (95 / 15, essentials 70, 5% off): Grandmaster in every run, median 5–8
+      years; the multiplier is worth more than a year.
+    - **Human** (90 / 15, essentials 70, 10% off, 4% half): Champion always, Legend in at
+      least 18 of 20, Grandmaster in 1–9 of 20 and never before 6.5 years, consistency 85–89%.
+      Loosened from "never before about 7.5 years": the C# runs land 6.9 at the earliest.
+    - **Improving** (+5 a year): Grandmaster in every run within 10 years.
+    - **Lapse** (6 months in year 3): the standing doesn't move through it; at its end 0%
+      and ×1.0; a month back, at least 70% and ×1.2.
+    - **Below the minimum** (60): level 9, Novice, the rest banked, never multiplied.
+    - **Perfect** (70): each rank the day its level arrives; Grandmaster in 7–8.5 years.
+  - `bsk domains simulate`: `--avg --sd --essentials --off --half --growth --lapse --years
+    --runs --seed --no-multiplier --replay`. `--off` and `--half` are percentages; `--lapse`
+    is `<start>:<length>` in d, w, m or y. Without `--replay` it needs no database.
+  - `--replay` folds the real days so far and projects from tomorrow. Without `--avg` and
+    `--sd`, full days are drawn from the real active days, and the off share comes from the
+    real complete days.
 
 ### 3.11 Reads
 
@@ -490,6 +566,16 @@ Dates are local days in the home zone, not the viewer's zone.
   - `bsk domains health --days N` lists the series, 14 days by default. `--days` without a
     domain lists every domain.
   - `GET /api/domains` and the lifetime figures come with X4.
+- **As built (X4):**
+  - `GET /api/domains` answers `{ today, domains }`. Each row has key, label, name, total XP
+    and `configured`. Configured rows add `lifetime`, `nextRank`, `current` (with the rule in
+    words and its target) and `ranks`: the ladder, each rank with its requirement and
+    `qualifiedOn` once reached.
+  - `POST /api/domains/settle` answers `{ awards, progress }`.
+  - `bsk domains` adds the lifetime lines: the level (or the top of the rank, with XP
+    banked), the rank and since when, and the next rank's gate part by part. `--json` carries
+    the same figures.
+  - The `days` endpoint and `--report` remain for X6 and X7.
 
 ### 3.12 The Character page (web)
 
@@ -621,7 +707,7 @@ Each of these has to earn its place through use of the pilot.
 - [x] X1 — Domain currencies + the credited day (migration 0030)
 - [x] X2 — Established habits keep earning (migration 0031)
 - [x] X3 — Rules + daily consistency (migration 0032)
-- [ ] X4 — Levels, ranks, rank-up Gems, simulator
+- [x] X4 — Levels, ranks, rank-up Gems, simulator (no migration). Next: calibrate (§2.4).
 - [ ] X5 — The multiplier on earns
 - [ ] X6 — Character page
 - [ ] X7 — Reports + charts
