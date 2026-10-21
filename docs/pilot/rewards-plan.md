@@ -30,7 +30,7 @@ the UI) and R7 (history and report) are done.
 | Karma and Resolve? | Two more amounts in the item's bounty (a good deed, or a task he's resisting, carries them). No automatic or standalone awards. |
 | Coins? | **Real money at a rate** (default $0.50 per coin). Redeeming coins into a savings goal means actually moving those dollars; the log keeps the coins, the dollars and the rate. |
 | When is a habit established? | Each habit has a target (default: 80% adherence over 60 days). When it's met LifeOS **suggests**, and Chris **confirms**. |
-| After a habit is established? | It **graduates** and leaves daily tracking. |
+| After a habit is established? | It **graduates** and leaves daily tracking. *Revised 2026-10-20:* it leaves the building workflow but keeps earning for logged days (a Maintaining group); see [xp-domains-plan.md](xp-domains-plan.md) §3.9. |
 | Streak milestones? | **Yes**: bonuses at 7 / 30 / 100 in a row, editable per habit. |
 | Overdraft? | **No.** Redeem is blocked until the balance covers it. |
 | Starting balance? | **Zero** on launch day; nothing completed earlier pays. |
@@ -227,7 +227,8 @@ awards them only for specific things, per item. Time on the timer has no default
     recorded history stays. (Built, 0027: scheduled dates stop the day *before* graduation, so
     the graduation day is never auto-missed; a day recorded on it still counts.)
   - Moving the habit back to Building resumes tracking and reverses the establishment award.
-  - Days recorded after graduation show in the history but don't pay. Abandoning pays nothing
+  - Days recorded after graduation show in the history but don't pay (*revised 2026-10-20:* an
+    Established habit's logged days pay again, xp-domains-plan.md §3.9). Abandoning pays nothing
     and keeps what the days earned.
   - Occurrences are folded from `bsk_derived.habit_occurrence_source`, which keeps archived
     habits, so archiving never takes a reward back; `v_habit_occurrence` hides them as before.
@@ -337,11 +338,11 @@ number from 0025.
 
 - **Penalties:** a ledger entry with negative amounts (for example, a missed Commitment).
   Nothing to migrate; off for now by decision.
-- **Tracked currencies and life balance** (REWARD-6, drafting): more unspendable currencies
-  like XP, shown as horizontal bars or compared on a radar / spider chart. Currencies are data
-  with a spendable flag, so the ledger doesn't change. One shape to weigh when it is specified
-  is a tracked currency per Area; not decided.
-- **Levels** from XP.
+- **Life-domain XP, levels, ranks and life balance** (REWARD-6 / REWARD-7 / D12, specified
+  2026-10-20): Health, Social, Environment and Finance XP as tracked currencies, each with
+  levels 1–100, consistency-gated ranks, a consistency multiplier and spider-chart reports.
+  Its own plan: [xp-domains-plan.md](xp-domains-plan.md). Domains are priced per item, not
+  tied to Areas.
 - **More earning sources:** Reviews, Inbox Zero, resolved Problems, fulfilled Commitments.
   Each is a new trigger in `v_reward_due` plus a default, not a rebuild.
 - **Editing the defaults and the coin rate in the UI.** v1 keeps them in code and

@@ -65,7 +65,7 @@ requirements cluster and the ID says where it lives:
 | `DASHBOARD-` | Dashboard view |
 | `TASKS-` | Tasks working view |
 | `CAL-` | Calendar / Appointments |
-| `REWARD-` | Rewards: currencies, redeeming, reward history |
+| `REWARD-` | Rewards: currencies, redeeming, reward history, life-domain progression |
 | `NAV-` | Navigation shell |
 | `GEN-` | Cross-cutting conventions **and** per-subject-type object specs (Goals, Projects, Tasks, Identity Statements, Commitments, Decisions, Problems, People, Vision, …) |
 
@@ -2401,7 +2401,7 @@ Build:      built
 ### REWARD-2 — Habits pay per day, at streak milestones, and when established
 Horizon:    Pilot
 Definition: active
-Build:      built
+Build:      building
 
 **Workflow (Chris):**
 - "When I successfully complete 1 instance of a habit, I get a small reward of some type.
@@ -2414,7 +2414,14 @@ Build:      built
   editable per habit. When the target is met, LifeOS suggests "Mark established?". The habit
   is established, and pays its establishment bounty, only when I confirm. I can decline and
   keep building.
-- An established habit **graduates**: it leaves daily tracking.
+- An established habit **graduates**: it leaves the building workflow (no scheduled days, no
+  missed marks, no streak milestones, no target).
+- **Revised (2026-10-20, with REWARD-7):** an established habit **keeps earning through logged
+  maintenance**. A collapsed **Maintaining** group on Today (and on the Habits page) gives
+  one-tap check-offs; each logged day pays the habit's day price. An unlogged day earns
+  nothing and is never shown as a failure. Habits don't become less valuable once
+  established: keeping them up for years is the behavior worth rewarding, and Health XP
+  shouldn't collapse when a habit becomes routine.
 - Correcting a day (GEN-5) corrects its reward too. A day changed from followed to missed
   gives that day's reward back; a backfilled followed day pays.
 
@@ -2435,6 +2442,12 @@ Build:      built
 - Implications: the suggestion is read-only (a "Ready to establish" badge), never an
   automatic status change. With a 60-day target, the 100-day milestone is reachable only by
   declining the suggestion and building on.
+- Maintenance (the 2026-10-20 revision): recorded days after graduation already exist in
+  `habit_occurrence_source`; only `v_reward_trigger`'s day-row filter stops them paying. The
+  change lets day rows through for habits that are currently Established (not Abandoned),
+  under the same `day:` key and price; streak rows keep the filter, and scheduled dates still
+  stop at graduation, so nothing is auto-missed. Phase X2 of
+  [xp-domains-plan.md](xp-domains-plan.md); Build returns to `built` with it.
 - Open decisions: none blocking.
 
 
@@ -2527,21 +2540,109 @@ Build:      built
 - Open decisions: none blocking.
 
 
-### REWARD-6 — Tracked currencies chart my life balance
-Horizon:    Someday Maybe
-Definition: drafting
-Build:      unmapped
+### REWARD-6 — Life domains earn their own XP and chart my life balance
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
 
 **Workflow (Chris):**
 - "I'm thinking of having certain 'Currencies' actually be more like 'XP' which isn't
   spendable but can be tracked over time and showed in either a horizontal bar visual control
   or compared against each other in a Radar/Spider chart to view my life balance."
   (2026-10-20)
-- A future feature: today the only tracked (unspendable) currencies are XP and Resolve.
+- "Let's add a few more XP-style currencies (currencies that are not actually 'spent' on
+  rewards)": **Health XP, Social XP, Environment XP** (clean, tidy, home maintenance,
+  decluttering) and **Finance XP** (income and expense, budgeting, net worth, savings and
+  financial discipline). "I will add more later." (2026-10-20)
+- Every default is 0 in each domain; Chris assigns domain XP item by item.
+- Plain XP stays as general **Life XP**.
+- Rolling reports per domain over the past 7 days, 30 days, 3 or 6 months, or a year, showing
+  the consistency of progress. Each period plots every domain on a **spider chart**, to show
+  which areas of life are going best. A second spider chart since the start shows each
+  domain's level.
+- Health is the pilot domain; the others follow over time.
+- **Revised after review (2026-10-20):** until a domain has rules of its own, it **collects XP
+  only**, with no level or consistency. A copy of Health's rules would show meaningless
+  percentages; Finance probably shouldn't need activity every day. Only configured domains
+  are plotted, as horizontal bars until there are three, then as spider charts. Each value
+  shows how much history backs it, so two good days never look like a year at 90%.
 
 **Ontology fit (Claude):**
-- _pending_ (held under the handoff rule). REWARD-1 doesn't block it: currencies are data with
-  a spendable / tracked flag, so new tracked currencies can be added without a migration.
+- Maps to: four more tracked currencies on the D11 ledger (vocabulary data, no migration),
+  priced per item through the existing bounty. Reports are read-only folds over the ledger
+  (D12): a period spider plots each configured domain's consistency %, the since-the-start
+  spider each one's level (REWARD-7).
+- Kernel delta: each earn records the day it counts on (the day it happened: a habit day's own
+  date, or the completion's date in one home time zone); a read of each domain's paid XP per
+  day; a period report with the days each value covers. Design and phases X1, X3 and X7:
+  [xp-domains-plan.md](xp-domains-plan.md).
+- Implications: domain days follow the record as it stands, so a reversal takes XP off the day
+  it was credited. That's unlike REWARD-5's History, which files entries by when they were
+  written and never changes a past day. Life XP, Resolve and unconfigured domains aren't
+  plotted. Because progression is computed from history, a domain configured later counts its
+  whole history at once.
+- Open decisions: none blocking (agreed 2026-10-20, plan §1).
+
+
+### REWARD-7 — Each life domain levels up, ranks up on consistency, and rewards a steady streak
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "For each XP category, I want to track 'levels' from 1-100 that represent RPG levels …
+  I start at level 1 with 0 XP, and level 100 represents Grandmaster and typically takes many
+  years to accomplish." Each domain has its own formula. (2026-10-20)
+- Health first: `XPnext(L) = 300 + 25(L−1) + 70·max(0, L−45)`, the XP to go from level L to
+  L+1. About 7 years to Grandmaster at 100 XP a day, before the multiplier.
+- **Ranks** (titles) every 10 levels, Novice to Grandmaster. Entering a rank needs a
+  consistency bar: the share of successful days over a window, up to 90% over 365 days for
+  Grandmaster. "Grandmaster requires a year of effort no matter what."
+- XP ahead of consistency: the level stops at the top of the current rank, the extra XP is
+  banked, and the level jumps up once the bar is met.
+- "You can't lose a rank." Clarified after review: never from inactivity. Ranks are
+  recalculated from history, so a rule change or a correction to old entries can change one.
+- **Lifetime vs current:** level and rank never drop because of a terrible month; rolling
+  30-day consistency and the multiplier do. Coming back after a long break shouldn't feel
+  like losing years of progress, but LifeOS shouldn't pretend current habits are still
+  excellent either.
+- **A successful Health day** is at least 70 base XP, flat at every rank, provisional until a
+  few weeks of real XP calibrate it. (Chris first set 100 + 5 per rank; simulation showed
+  realistic patterns stalling at level 19, so rank difficulty rises through the bars and
+  windows instead.) The success test is a replaceable rule per domain, so it can later
+  require core habits or allow an approved recovery-day routine. In the pilot, recovery days
+  are handled by pricing: all Health XP counts toward the 70.
+- **Rank milestones** (designed now, built later): a rank can also require objective
+  achievements, such as an endurance or strength Goal.
+- **Consistency multiplier** from the past 30 days, capped at +30%. Tiers start at 50% /
+  70% / 85% → 1.1× / 1.2× / 1.3×, to tune in real life. It's the multiplier of the day the
+  XP counts on, frozen when issued.
+- XP counts on the day it happened, even when logged later.
+- A rank-up pays Gems, once per rank, and they're never taken back.
+- "As long as we can modify the formula later and the effective level can instantly change as
+  a result, should be fine."
+- A 10-year simulator over realistic patterns guards the tuning and is part of the core
+  regression tests.
+
+**Ontology fit (Claude):**
+- Maps to: a pure fold over each configured domain's daily credit (D12). It walks the days
+  from the domain's start, tests each against the domain's success rule, and promotes when a
+  rank's level, age, consistency (and, later, milestones) are all met. Nothing about levels or
+  ranks is stored, so a retuned rule shows on the next read, and a rank, once the walk
+  qualifies it, holds through any later bad stretch.
+- Kernel delta: domain rules in Domain code (cadence, curve, success rule, ranks with
+  optional milestones, multiplier tiers, rank-up Gems); the credited day's multiplier applied
+  in reconcile and frozen on each earn (`base` / `multipliers`); earn-only
+  `rank:<domain>:<level>` awards paying Gems; `progress` (level and rank changes) on the
+  earning responses; `DomainSimulator` and `bsk domains simulate`. Phases X3–X6 of
+  [xp-domains-plan.md](xp-domains-plan.md).
+- Implications: this is **recomputed qualification**. A rank changes only if the past changes
+  (a retune, or a correction to old entries), and its Gems stay either way. A permanent
+  "highest rank achieved" record is a later option. Late logging can see a different
+  multiplier than logging on time when backfills move the window; that's documented and
+  tested. Tasks count on the day they're checked off, since a status change can't be
+  backdated.
+- Open decisions: none blocking.
 
 
 
@@ -2694,6 +2795,20 @@ one costs no migration. That covers a penalty later, or REWARD-6's tracked life-
 currencies. The catalog of things to redeem is its own `Reward` subject type. Design and build
 order: [rewards-plan.md](rewards-plan.md).
 
+**D12 — Life-domain progression is a reading of the ledger, never stored (REWARD-6 / REWARD-7,
+2026-10-20).** A life domain (Health, Social, Environment, Finance) is a tracked currency on
+the D11 ledger. Its level, rank, consistency and multiplier are computed on every read by a
+pure fold. The fold takes the domain's XP per day (filed on the day it happened, in one home
+time zone) and walks it under rules kept in Domain code. Those rules are a level curve, a
+replaceable success rule, and ranks gated by consistency, age and, later, milestones. A domain
+without rules only collects XP. The XP is the record; level and rank are lifetime readings of
+it, while consistency and the multiplier describe current performance. A retuned rule
+therefore shows immediately, and a rank, once the walk qualifies it, holds through any later
+bad stretch. A rank changes only if the past does (recomputed qualification, not a stored
+achievement). The only writes are ordinary ledger entries: each earn freezes the multiplier
+it was paid at, and a rank-up's Gems are an earn-only award, paid once and never reversed.
+Design and build order: [xp-domains-plan.md](xp-domains-plan.md).
+
 ### Method for the Habit ↔ Commitment discrepancy
 
 "Habit" (UI concept) and "Commitment" (storage type) are deliberately decoupled — Chris
@@ -2779,9 +2894,16 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   with savings progress, no-overdraft redeem under a wallet lock, `bsk redeem`. — **Shipped**
   (R4, migration 0028; `bsk rewards list / add / price / target`; the Rewards tab and Redeem
   dialog, R5).
+- **Life-domain XP + progression** (REWARD-6 / REWARD-7 / D12, and REWARD-2's maintenance
+  revision) — four tracked domain currencies, the day each earn counts on, established habits
+  paying for logged days, a per-domain daily credit read, the progression fold (levels, ranks,
+  consistency, multiplier) with replaceable success rules, the multiplier in reconcile,
+  earn-only rank-up Gem awards, the simulator, period reports. — **Open** (X1–X7 in
+  [xp-domains-plan.md](xp-domains-plan.md)).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
-scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1). Everything else above
+scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); **life-domain XP +
+progression** (REWARD-6 / REWARD-7). Everything else above
 has shipped, the rewards work included (R1–R7 in [rewards-plan.md](rewards-plan.md)). The user-facing UIs for the shipped kernel bits still vary by surface — see each
 requirement's Build field (e.g. CAP-2 / CAP-4 are `building`: kernel done, capture UI pending).
 
