@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/primitives/empty-state";
 import { ListRow } from "@/components/primitives/list-row";
 import { CardSkeleton, ListSkeleton } from "@/components/primitives/skeletons";
 import { AdherenceButtons } from "@/components/habits/adherence-buttons";
+import { MaintainingGroup } from "@/components/habits/maintaining-group";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
 import { cn } from "@/lib/utils";
 import { useDashboard, useWrites } from "@/lib/queries";
@@ -175,6 +176,13 @@ export function FocusPage() {
                 </li>
               ))}
             </ul>
+            <MaintainingGroup
+              rows={data.maintainingHabits}
+              onPick={(habitId, pick) => void writes.adhere(habitId, pick)}
+              onOpen={(habitId) =>
+                void navigate({ to: "/habits", search: { selected: habitId } })
+              }
+            />
           </section>
         </div>
 

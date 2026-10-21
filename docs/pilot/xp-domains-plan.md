@@ -386,6 +386,18 @@ rewarding for years. Instead:
     stops dropping Established habits and puts them in this group.
   - The Habits page's Established section gets the same check-offs.
   - The mock store pays maintained days.
+- **As built (X2):**
+  - Migration 0031 joins each day row to the habit's current status, so a day passes when
+    it's on or before graduation, or when the habit is Established now.
+  - A check-off has no "Not followed" button. Tapping the lit button again undoes the day:
+    it records `missed`, which pays nothing and gives back what the day paid, and the row
+    reads "Not logged today", never missed.
+  - The day a habit graduates is still a tracked day (0027's rule), so a day logged on the
+    abandoning date still pays.
+  - Established → Abandoned keeps what the maintained days paid. `graduated_on` moves to the
+    abandoning date, so the stretch between establishing and abandoning is scheduled again
+    (unlogged days read as missed). In theory its logged days could then complete a streak
+    milestone. That transition is rare, so it's left alone.
 
 ### 3.10 The simulator
 
@@ -559,7 +571,7 @@ Each of these has to earn its place through use of the pilot.
 
 - [x] X0 — Requirements (REWARD-6, REWARD-7, REWARD-2 revision, D12) + this plan
 - [x] X1 — Domain currencies + the credited day (migration 0030)
-- [ ] X2 — Established habits keep earning (migration 0031)
+- [x] X2 — Established habits keep earning (migration 0031)
 - [ ] X3 — Rules + daily consistency (migration 0032)
 - [ ] X4 — Levels, ranks, rank-up Gems, simulator
 - [ ] X5 — The multiplier on earns

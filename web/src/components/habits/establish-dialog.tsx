@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 /**
  * "Ready to establish" (REWARD-2): the habit met its target, so LifeOS suggests and Chris
  * confirms. Confirming moves it to Established, which pays the establishing bounty and
- * graduates it off the daily list.
+ * graduates it off the daily list into Maintaining, where logged days keep paying.
  */
 export function ReadyToEstablish({ habit, className }: { habit: HabitRow; className?: string }) {
   const [open, setOpen] = useState(false);
@@ -61,8 +61,9 @@ export function EstablishDialog({
           <AlertDialogTitle>Establish {habit.name}?</AlertDialogTitle>
           <AlertDialogDescription>
             {habit.establishment ? `${establishmentProgress(habit.establishment)}. ` : null}
-            Establishing graduates it: it leaves daily tracking{paysText}. Its history stays, and
-            moving it back to Building resumes tracking.
+            Establishing graduates it: it leaves daily tracking{paysText}. After that no day is ever
+            marked missed, and each day you check it off under Maintaining still pays. Its history
+            stays, and moving it back to Building resumes tracking.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

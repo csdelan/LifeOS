@@ -859,7 +859,8 @@ function EstablishmentPanel({
       <p className="type-scale-section text-muted-foreground">Establishing</p>
       {stage === "established" ? (
         <p className="mt-1 text-sm">
-          Established — graduated from daily tracking. Move it back to Building to track it again.
+          Established — graduated from daily tracking. Each day you check it off under
+          Maintaining still pays; move it back to Building to track it daily again.
         </p>
       ) : establishment ? (
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">

@@ -1630,13 +1630,18 @@ function followedRuns(habitId: string, today: string): Run[] {
 
 function reconcileDay(habitId: string, date: string, at: string): Award[] {
   const item = byId(habitId);
-  // Days recorded after graduation (or abandoning) show in the history but don't pay.
-  if (!item || isTerminal(item.status)) return [];
+  if (!item) return [];
+  // An Established habit keeps earning for the days it's logged (maintenance, migration
+  // 0031), but its streaks stopped at graduation. Days recorded after abandoning show in
+  // the history and don't pay.
+  const maintained = (item.status ?? "").trim().toLowerCase() === "established";
+  if (isTerminal(item.status) && !maintained) return [];
   const recorded = state.occurrences.find((o) => o.habitId === habitId && o.occurrenceDate === date)?.state;
   const awards: (Award | null)[] = [
     settle(item, `day:${habitId}:${date}:followed`, "followed", recorded === "followed", at),
     settle(item, `day:${habitId}:${date}:partial`, "partial", recorded === "partial", at),
   ];
+  if (maintained) return awards.filter((a): a is Award => !!a);
 
   const runs = followedRuns(habitId, todayIso());
   const reaches = (start: string, n: number) => runs.some((r) => r.start === start && r.dates.length >= n);

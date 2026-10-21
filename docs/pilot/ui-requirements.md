@@ -2401,7 +2401,13 @@ Build:      built
 ### REWARD-2 — Habits pay per day, at streak milestones, and when established
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-10-20 — maintenance landed, xp-domains plan X2):** migration 0031 lets an
+Established habit's logged days pay. Today has a collapsed Maintaining group, and the Habits
+page's Established section has one-tap check-offs: Followed, and Partial where the habit
+allows it. Tapping the lit button again undoes the day. An unlogged day reads "Not logged
+today", never missed, and no streak pays after graduation. Build returns `building → built`.
 
 **Workflow (Chris):**
 - "When I successfully complete 1 instance of a habit, I get a small reward of some type.
@@ -2907,8 +2913,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   paying for logged days, a per-domain daily credit read, the progression fold (levels, ranks,
   consistency, multiplier) with replaceable success rules, the multiplier in reconcile,
   earn-only rank-up Gem awards, the simulator, period reports. — **Open**: X1 shipped (the
-  currencies and the credited day, migration 0030); X2–X7 to go in
-  [xp-domains-plan.md](xp-domains-plan.md).
+  currencies and the credited day, migration 0030) and X2 (established habits keep earning,
+  migration 0031); X3–X7 to go in [xp-domains-plan.md](xp-domains-plan.md).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); **life-domain XP +

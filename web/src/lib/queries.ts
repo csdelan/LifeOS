@@ -405,13 +405,14 @@ function optimisticAdhere(
   const date = on ?? `${y}-${m}-${d}`;
   qc.setQueryData<DashboardRead>(qk.dashboard, (old) => {
     if (!old) return old;
+    const mark = (h: HabitOccurrenceRow) =>
+      (h.habitId === habit || h.habitUrn === habit) && h.occurrenceDate === date
+        ? { ...h, state }
+        : h;
     return {
       ...old,
-      todayHabits: old.todayHabits.map((h) =>
-        (h.habitId === habit || h.habitUrn === habit) && h.occurrenceDate === date
-          ? { ...h, state }
-          : h,
-      ),
+      todayHabits: old.todayHabits.map(mark),
+      maintainingHabits: old.maintainingHabits.map(mark),
     };
   });
   qc.setQueriesData<HabitOccurrenceRow[]>({ queryKey: qk.occurrences }, (old) => {

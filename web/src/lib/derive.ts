@@ -6,6 +6,7 @@
  * primitives (subjects + relation edges + inbox/habits); this module folds them.
  */
 
+import { habitStage } from "@/lib/establish";
 import { isTerminal } from "@/lib/production-ui-types";
 import type {
   HabitOccurrenceRow,
@@ -41,6 +42,11 @@ export interface DashboardRead {
   nextActions: SubjectListItem[];
   inboxCount: number;
   todayHabits: HabitOccurrenceRow[];
+  /**
+   * Established habits, each with today's logged state (REWARD-2 maintenance): one-tap
+   * check-offs that keep paying, never scheduled, so never missed.
+   */
+  maintainingHabits: HabitOccurrenceRow[];
   activeGoals: SubjectListItem[];
   activeProjects: SubjectListItem[];
 }
@@ -197,34 +203,62 @@ export function deriveDashboard(input: {
     nextActions,
     inboxCount,
     todayHabits: todayHabitRows(habits, occurrences, today),
+    maintainingHabits: maintainingHabitRows(habits, occurrences, today),
     activeGoals,
     activeProjects,
   };
 }
 
+/** Today's row for each Building habit: the daily tracking. */
 export function todayHabitRows(
   habits: HabitRow[],
   occurrences: HabitOccurrenceRow[],
   today: string,
 ): HabitOccurrenceRow[] {
-  return habits
-    // A graduated (or abandoned) habit has left daily tracking.
-    .filter((h) => !h.archived && !isTerminal(h.status))
-    .map((h) => {
-      const recorded = occurrences.find(
-        (o) => o.habitId === h.id && o.occurrenceDate === today,
-      );
-      return (
-        recorded ?? {
-          habitId: h.id,
-          habitUrn: h.urn,
-          habitName: h.name,
-          occurrenceDate: today,
-          state: "unrecorded" as const,
-          allowsPartial: h.allowsPartial,
-        }
-      );
-    });
+  // A graduated (or abandoned) habit has left daily tracking; Established ones are maintained.
+  return rowsFor(
+    habits.filter((h) => !h.archived && !isTerminal(h.status)),
+    occurrences,
+    today,
+  );
+}
+
+/**
+ * Today's row for each Established habit (REWARD-2 maintenance): a day it's logged pays its
+ * day price, and a day it isn't is simply unlogged.
+ */
+export function maintainingHabitRows(
+  habits: HabitRow[],
+  occurrences: HabitOccurrenceRow[],
+  today: string,
+): HabitOccurrenceRow[] {
+  return rowsFor(
+    habits.filter((h) => !h.archived && habitStage(h) === "established"),
+    occurrences,
+    today,
+  );
+}
+
+function rowsFor(
+  habits: HabitRow[],
+  occurrences: HabitOccurrenceRow[],
+  today: string,
+): HabitOccurrenceRow[] {
+  return habits.map((h) => {
+    const recorded = occurrences.find(
+      (o) => o.habitId === h.id && o.occurrenceDate === today,
+    );
+    return (
+      recorded ?? {
+        habitId: h.id,
+        habitUrn: h.urn,
+        habitName: h.name,
+        occurrenceDate: today,
+        state: "unrecorded" as const,
+        allowsPartial: h.allowsPartial,
+      }
+    );
+  });
 }
 
 export function mapForestStatus(

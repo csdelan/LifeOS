@@ -1,9 +1,16 @@
 /**
  * A habit's lifecycle (REWARD-2): Building → Established (graduated) | Abandoned. When a
  * Building habit meets its establish target, LifeOS suggests establishing it and Chris
- * confirms; confirming is an ordinary status change, which pays and graduates it.
+ * confirms; confirming is an ordinary status change, which pays and graduates it. A
+ * graduated habit leaves daily tracking but keeps earning for the days it's logged
+ * (maintenance, xp-domains plan X2).
  */
-import type { HabitEstablishment, HabitRow, HabitTargetRequest } from "@/lib/production-ui-types";
+import type {
+  AdherenceState,
+  HabitEstablishment,
+  HabitRow,
+  HabitTargetRequest,
+} from "@/lib/production-ui-types";
 import { isTerminal } from "@/lib/production-ui-types";
 
 export type HabitStage = "building" | "established" | "abandoned";
@@ -17,6 +24,21 @@ export function habitStage(habit: Pick<HabitRow, "status">): HabitStage {
 
 export function isReadyToEstablish(habit: Pick<HabitRow, "status" | "establishment">): boolean {
   return habitStage(habit) === "building" && !!habit.establishment?.targetMet;
+}
+
+/**
+ * How an Established habit's day reads (REWARD-2 maintenance): "Done today", "Partly done
+ * today" or "Not logged today" — never a miss, since a maintained habit has no schedule.
+ */
+export function maintainedDayLabel(state: AdherenceState): string {
+  if (state === "followed") return "Done today";
+  if (state === "partial") return "Partly done today";
+  return "Not logged today";
+}
+
+/** Whether a maintained day counts as done (followed or partial). */
+export function isMaintainedToday(state: AdherenceState): boolean {
+  return state === "followed" || state === "partial";
 }
 
 function percent(n: number): string {

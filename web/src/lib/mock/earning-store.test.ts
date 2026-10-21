@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addDays, todayIso } from "@/lib/dates";
-import { todayHabitRows } from "@/lib/derive";
+import { maintainingHabitRows, todayHabitRows } from "@/lib/derive";
 import {
   adhereHabit,
   applyTimer,
@@ -107,8 +107,13 @@ describe("mock earning (RewardService.ReconcileAsync, scoped to the write)", () 
     expect(mobility.establishment).toBeNull();
     const today = todayHabitRows(habits, getState().occurrences, todayIso()).map((h) => h.habitId);
     expect(today).not.toContain("habit-mobility");
-    // A graduated habit's days don't pay.
-    expect(adhereHabit("habit-mobility", "followed", todayIso())).toEqual([]);
+    // It's maintained instead: a logged day pays its day price, and no streak.
+    expect(maintainingHabitRows(habits, getState().occurrences, todayIso()).map((h) => h.habitId)).toContain(
+      "habit-mobility",
+    );
+    expect(adhereHabit("habit-mobility", "followed", todayIso())).toEqual([
+      expect.objectContaining({ entry: "earn", trigger: "followed", awardKey: `day:habit-mobility:${todayIso()}:followed` }),
+    ]);
 
     expect(setStatus("habit-mobility", "Building")[0]).toMatchObject({ entry: "reversal", trigger: "established" });
     expect(todayHabitRows(mockHabits(), getState().occurrences, todayIso()).map((h) => h.habitId)).toContain(

@@ -110,6 +110,40 @@ test.describe("golden paths", () => {
     const graduated = page.getByRole("region", { name: "Established" });
     await expect(graduated.getByText("Morning mobility")).toBeVisible();
     await expect(page.getByRole("list", { name: "Building" })).not.toContainText("Morning mobility");
+
+    // Maintained, not tracked: a one-tap check-off, nothing missed, and a second tap undoes it.
+    const mobility = graduated.getByRole("listitem").filter({ hasText: "Morning mobility" });
+    await expect(mobility.getByText("Not logged today")).toBeVisible();
+    await expect(mobility.getByRole("button", { name: /not followed/i })).toHaveCount(0);
+    const checkOff = mobility.getByRole("button", { name: "Morning mobility: followed today" });
+    await checkOff.click();
+    await expect(mobility.getByText("Done today")).toBeVisible({ timeout: 10_000 });
+    await expect(checkOff).toHaveAttribute("aria-pressed", "true");
+    await checkOff.click();
+    await expect(mobility.getByText("Not logged today")).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("Today keeps established habits in a collapsed Maintaining group", async ({ page }) => {
+    await page.goto("/habits");
+    await page.getByRole("button", { name: "Ready to establish Morning mobility" }).click();
+    await page
+      .getByRole("alertdialog", { name: "Establish Morning mobility?" })
+      .getByRole("button", { name: "Establish" })
+      .click();
+    await expect(page.getByRole("region", { name: "Established" }).getByText("Morning mobility")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // In-app navigation keeps the mock's state.
+    await page.getByRole("link", { name: "Focus" }).first().click();
+    const toggle = page.getByRole("button", { name: /Maintaining/ });
+    await expect(toggle).toHaveText(/0 of 1 done today/);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await toggle.click();
+    const group = page.getByRole("list", { name: "Maintaining" });
+    await group.getByRole("button", { name: "Morning mobility: followed today" }).click();
+    await expect(group.getByText("Done today")).toBeVisible({ timeout: 10_000 });
+    await expect(toggle).toHaveText(/1 of 1 done today/);
   });
 
   test("a habit day earned today shows in the rewards history, and opens its habit", async ({ page }) => {
