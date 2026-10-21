@@ -277,6 +277,14 @@ public interface ILedgerRepository
     Task<IReadOnlySet<string>> GetPaidKeysAsync(string trigger, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Every award key with one of <paramref name="triggers"/> the ledger has ever written,
+    /// paid now or not, with its net and latest earn — what a re-pricing reconcile compares
+    /// against (food days, food-log plan §3.3).
+    /// </summary>
+    Task<IReadOnlyList<KeyedAward>> GetKeyedAwardsAsync(
+        IReadOnlyCollection<string> triggers, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// The earn behind the latest credit of <paramref name="currency"/> on or before
     /// <paramref name="day"/> (<c>bsk.v_award_credit</c>), or null — what a rank-up cites.
     /// </summary>
@@ -299,8 +307,10 @@ public interface ILedgerRepository
     /// its currencies below zero, nothing is written and
     /// <see cref="InsufficientBalanceException"/> is thrown. If an entry's
     /// <see cref="LedgerWrite.AwardKey"/> is no longer in its
-    /// <see cref="LedgerWrite.ExpectPaid"/> state, nothing is written and
-    /// <see cref="LedgerConflictException"/> is thrown. Returns the new event ids.
+    /// <see cref="LedgerWrite.ExpectPaid"/> state, or its latest earn is no longer
+    /// <see cref="LedgerWrite.ExpectLatestEarn"/>, nothing is written and
+    /// <see cref="LedgerConflictException"/> is thrown. Entries are checked in order, each
+    /// against the ledger with the entries before it applied. Returns the new event ids.
     /// </summary>
     Task<IReadOnlyList<Guid>> AppendAsync(
         IReadOnlyList<LedgerWrite> writes, CancellationToken cancellationToken = default);

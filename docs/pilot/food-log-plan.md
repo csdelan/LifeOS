@@ -518,7 +518,7 @@ Each of these has to earn its place through use.
 
 - [x] F0 — Requirements (FOOD-1 to FOOD-5, D13) + this plan
 - [x] F1 — Food entries and fasts (migration 0034)
-- [ ] F2 — Diet XP on the ledger
+- [x] F2 — Diet XP on the ledger (no migration)
 - [ ] F3 — API
 - [ ] F4 — Day view
 - [ ] F5 — Week and month views
@@ -545,3 +545,30 @@ Each of these has to earn its place through use.
   surrounding spaces.
 - **Food events never reach other views:** they carry no `subject_id` and no edge, so the
   inbox, the diagnostics, the habit and timer views and the ledger never see them (tested).
+
+**F2 (2026-10-20).** As planned, plus:
+
+- **A paid day is re-scored only when what it read changes.** Each earn cites the event
+  versions its day was scored from. Settling leaves a paid key alone while its day still reads
+  exactly those versions, whatever `DietRules` scores it now. So a retune never rewrites a
+  past day, as §5 decided; comparing bases alone would have re-priced every past day after a
+  retune. Once the versions differ, a different base re-prices; the same base writes nothing.
+- **The ledger checks a batch in order.** `LedgerWrite` gained `ExpectPaid` and
+  `ExpectLatestEarn`; `AppendAsync` checks each write inside the transaction after inserting
+  the ones before it, so a reversal and an earn of one key pass together, and a re-price
+  decided against an earn that's since been replaced is refused. `RewardService.EarnAsync`
+  runs a plan, appends it, pays rank-ups and retries a lost race (3 tries), as reconcile does.
+- **Dating:** the first earn of a key is dated at its trigger: the fast's end, the close, or
+  for a day that closed itself its `last_recorded_at`. A re-price's reversal is dated at the
+  change and its earn 1 ms later, and every earn after the key's previous one.
+- **Opening the wallet:** only a food write opens it, dated at the earliest trigger among the
+  days that write touched that pays. A settle with nothing behind it (the page opening, the
+  sweep) never does. A fact whose trigger came before the opening never pays.
+- **Settling lives in the hosts, not in `ReconcileAllAsync`.** `FoodRewards` depends on
+  `RewardService`, so `bsk rewards reconcile` (without `--subject`) runs the item sweep and
+  then the food settle, and `POST /api/domains/settle` runs the food settle before the domain
+  one. Every food write settles all food days, not only the ones it touched, so yesterday
+  pays the moment anything is logged today.
+- **`bsk food` prints a re-price as one line**, "Re-scored Food day Tue Oct 20: 32 -> 18
+  Health XP.", and the day read prints what's paid ("Paid: 39 Health XP (food 32 x 1.2 = 38,
+  fast 7)"); `--week` / `--month` add a paid column and total.

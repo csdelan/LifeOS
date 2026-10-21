@@ -349,10 +349,12 @@ public sealed class FoodLogServiceTests(PostgresFixture postgres)
         await Assert.ThrowsAsync<ArgumentException>(() => food.GetDaysAsync(today.AddDays(-62), today, Ct));
         await Assert.ThrowsAsync<ArgumentException>(() => food.GetDaysAsync(today, today.AddDays(-1), Ct));
 
-        // Food events concern no item: no inbox, no diagnostic finding, no ledger entry.
+        // Food events concern no item: no inbox, no diagnostic finding, and the diet award the
+        // close paid (FoodRewardsTests) belongs to no item either.
         Assert.Equal(0, await CountAsync(db, "SELECT count(*) FROM bsk.v_inbox;"));
         Assert.Equal(0, await CountAsync(db, "SELECT count(*) FROM bsk.subject_event;"));
-        Assert.Equal(0, await CountAsync(db, "SELECT count(*) FROM bsk.event WHERE kind = 'ledger';"));
+        Assert.Equal(1, await CountAsync(db, "SELECT count(*) FROM bsk.v_ledger WHERE award_key IS NOT NULL;"));
+        Assert.Equal(0, await CountAsync(db, "SELECT count(*) FROM bsk.v_ledger WHERE subject_id IS NOT NULL;"));
         Assert.Equal(0, (await new DiagnosticRunner(db.ConnectionString).RunAsync(cancellationToken: Ct)).FindingCount);
 
         // The close is dated now and names its day.

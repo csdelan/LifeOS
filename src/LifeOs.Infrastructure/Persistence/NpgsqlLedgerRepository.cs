@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Rewards;
@@ -79,6 +80,69 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
             WHERE award_key = @key
             GROUP BY currency
             HAVING sum(amount) <> 0);
+        """;
+
+    // An award key's latest earn, as bsk.v_award_credit picks it.
+    private const string LatestEarnSql = """
+        SELECT e.id
+        FROM bsk.event e
+        WHERE e.kind = 'ledger'
+          AND e.payload->>'entry' = 'earn'
+          AND e.payload->>'award_key' = @key
+        ORDER BY e.occurred_at DESC, e.recorded_at DESC, e.id DESC
+        LIMIT 1;
+        """;
+
+    // Every award key with one of @triggers: its net per currency (an empty object once
+    // reversed), its latest earn as bsk.v_award_credit picks it, and its newest entry.
+    // Aliased to KeyedRow's names (no underscore matching in the CLI host).
+    private const string KeyedAwardsSql = """
+        WITH keyed AS (
+            SELECT e.id, e.occurred_at, e.recorded_at, e.payload, e.derived_from, e.payload->>'award_key' AS award_key
+            FROM bsk.event e
+            WHERE e.kind = 'ledger'
+              AND e.payload->>'award_key' IS NOT NULL
+              AND e.payload->>'trigger' = ANY(@triggers)
+        ),
+        net AS (
+            SELECT l.award_key,
+                   coalesce(jsonb_object_agg(l.currency, l.net) FILTER (WHERE l.net <> 0), '{}'::jsonb) AS net
+            FROM (
+                SELECT award_key, currency, sum(amount)::bigint AS net
+                FROM bsk.v_ledger
+                WHERE award_key IN (SELECT award_key FROM keyed)
+                GROUP BY award_key, currency
+            ) l
+            GROUP BY l.award_key
+        ),
+        latest_earn AS (
+            SELECT DISTINCT ON (k.award_key)
+                k.award_key, k.id, k.occurred_at, k.derived_from,
+                CASE WHEN jsonb_typeof(k.payload->'base') = 'object' THEN k.payload->'base' END       AS base,
+                CASE WHEN jsonb_typeof(k.payload->'amounts') = 'object' THEN k.payload->'amounts' END AS amounts,
+                CASE WHEN jsonb_typeof(k.payload->'multipliers') = 'object' THEN k.payload->'multipliers' END AS multipliers
+            FROM keyed k
+            WHERE k.payload->>'entry' = 'earn'
+            ORDER BY k.award_key, k.occurred_at DESC, k.recorded_at DESC, k.id DESC
+        ),
+        last_entry AS (
+            SELECT DISTINCT ON (k.award_key) k.award_key, k.id
+            FROM keyed k
+            ORDER BY k.award_key, k.occurred_at DESC, k.recorded_at DESC, k.id DESC
+        )
+        SELECT la.award_key AS awardkey,
+               coalesce(n.net, '{}'::jsonb)::text AS netjson,
+               le.id AS latestearnid,
+               le.occurred_at AS latestearnat,
+               le.base::text AS basejson,
+               le.amounts::text AS amountsjson,
+               le.multipliers::text AS multipliersjson,
+               coalesce(le.derived_from, '{}'::uuid[]) AS latestsources,
+               la.id AS lasteventid
+        FROM last_entry la
+        LEFT JOIN net n USING (award_key)
+        LEFT JOIN latest_earn le USING (award_key)
+        ORDER BY la.award_key;
         """;
 
     public async Task<IReadOnlyList<WalletBalance>> GetBalancesAsync(CancellationToken cancellationToken = default)
@@ -307,25 +371,13 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await LockAsync(connection, transaction, cancellationToken);
 
-        foreach (var write in writes)
-        {
-            if (write is not { AwardKey: { } awardKey, ExpectPaid: { } expectPaid })
-            {
-                continue;
-            }
-
-            var paid = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
-                IsPaidSql, new { key = awardKey }, transaction: transaction, cancellationToken: cancellationToken));
-            if (paid != expectPaid)
-            {
-                throw new LedgerConflictException(awardKey);
-            }
-        }
-
+        // Each write is checked, then inserted, in order: a later write's guard sees the
+        // earlier ones, so a re-price (a reversal, then an earn of the same key) passes.
         var ids = new List<Guid>(writes.Count);
         var guarded = new List<Guid>();
         foreach (var write in writes)
         {
+            await CheckAwardAsync(connection, transaction, write, cancellationToken);
             var eventId = await InsertEventAsync(connection, transaction, write.Event, cancellationToken);
             foreach (var edge in write.Edges)
             {
@@ -524,6 +576,116 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     // Days come back as text: Dapper has no DateOnly mapping in every host.
     private static DateOnly ParseDay(string day) => DateOnly.ParseExact(day, "yyyy-MM-dd", CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// Refuses <paramref name="write"/> when its award key is no longer in the state it was
+    /// decided against: paid or not (<see cref="LedgerWrite.ExpectPaid"/>), and its latest earn
+    /// (<see cref="LedgerWrite.ExpectLatestEarn"/>).
+    /// </summary>
+    private static async Task CheckAwardAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction, LedgerWrite write,
+        CancellationToken cancellationToken)
+    {
+        if (write.AwardKey is not { } awardKey)
+        {
+            return;
+        }
+
+        if (write.ExpectPaid is { } expectPaid)
+        {
+            var paid = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+                IsPaidSql, new { key = awardKey }, transaction: transaction, cancellationToken: cancellationToken));
+            if (paid != expectPaid)
+            {
+                throw new LedgerConflictException(awardKey);
+            }
+        }
+
+        if (write.ExpectLatestEarn is { } expectEarn)
+        {
+            var latest = await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition(
+                LatestEarnSql, new { key = awardKey }, transaction: transaction, cancellationToken: cancellationToken));
+            if (latest != expectEarn)
+            {
+                throw new LedgerConflictException(awardKey);
+            }
+        }
+    }
+
+    public async Task<IReadOnlyList<KeyedAward>> GetKeyedAwardsAsync(
+        IReadOnlyCollection<string> triggers, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var rows = await connection.QueryAsync<KeyedRow>(new CommandDefinition(
+            KeyedAwardsSql, new { triggers = triggers.ToArray() }, cancellationToken: cancellationToken));
+        return rows.Select(r =>
+            {
+                var basis = Amounts(r.BaseJson);
+                return new KeyedAward(
+                    r.AwardKey,
+                    Amounts(r.NetJson),
+                    r.LatestEarnId,
+                    AsUtc(r.LatestEarnAt),
+                    basis.Count > 0 ? basis : Amounts(r.AmountsJson),
+                    Multipliers(r.MultipliersJson),
+                    r.LatestSources,
+                    r.LastEventId);
+            })
+            .ToList();
+    }
+
+    /// <summary>A JSON object of currency to whole amount (an earn's amounts or base), read leniently.</summary>
+    private static Dictionary<string, long> Amounts(string? json)
+    {
+        var amounts = new Dictionary<string, long>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return amounts;
+        }
+
+        using var document = JsonDocument.Parse(json);
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return amounts;
+        }
+
+        foreach (var property in document.RootElement.EnumerateObject())
+        {
+            if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetInt64(out var amount))
+            {
+                amounts[property.Name] = amount;
+            }
+        }
+
+        return amounts;
+    }
+
+    /// <summary>A JSON object of currency to multiplier (an earn's <c>multipliers</c>), read leniently.</summary>
+    private static Dictionary<string, decimal> Multipliers(string? json)
+    {
+        var multipliers = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return multipliers;
+        }
+
+        using var document = JsonDocument.Parse(json);
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return multipliers;
+        }
+
+        foreach (var property in document.RootElement.EnumerateObject())
+        {
+            if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetDecimal(out var multiplier))
+            {
+                multipliers[property.Name] = multiplier;
+            }
+        }
+
+        return multipliers;
+    }
+
     private static Task LockAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken cancellationToken)
         => connection.ExecuteAsync(new CommandDefinition(
@@ -707,6 +869,19 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
         public decimal? RemainingUsd { get; set; }
         public string? Description { get; set; }
         public bool Archived { get; set; }
+    }
+
+    private sealed class KeyedRow
+    {
+        public string AwardKey { get; set; } = "";
+        public string NetJson { get; set; } = "{}";
+        public Guid? LatestEarnId { get; set; }
+        public DateTime? LatestEarnAt { get; set; }
+        public string? BaseJson { get; set; }
+        public string? AmountsJson { get; set; }
+        public string? MultipliersJson { get; set; }
+        public Guid[] LatestSources { get; set; } = [];
+        public Guid LastEventId { get; set; }
     }
 
     private sealed class OverdrawnRow

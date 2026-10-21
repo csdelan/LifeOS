@@ -139,6 +139,41 @@ public sealed record DietRules(
 }
 
 /// <summary>
+/// The two diet awards a day can pay (food-log plan §3.3), keyed by the home-zone day they're
+/// credited to. Neither belongs to an item, like a rank-up:
+/// <list type="bullet">
+/// <item><c>fast:&lt;yyyy-MM-dd&gt;</c> — the longest fast ending that day, paid when it ends</item>
+/// <item><c>diet:&lt;yyyy-MM-dd&gt;</c> — the day's food, paid once the day is closed</item>
+/// </list>
+/// Unlike every other award, a change to a day's entries re-prices them.
+/// </summary>
+public static class FoodAwards
+{
+    public const string FastTrigger = "fast";
+    public const string DietTrigger = "diet";
+
+    /// <summary>Both triggers.</summary>
+    public static readonly IReadOnlyList<string> Triggers = [FastTrigger, DietTrigger];
+
+    public static string FastKey(DateOnly day) => $"{FastTrigger}:{day:yyyy-MM-dd}";
+
+    public static string DietKey(DateOnly day) => $"{DietTrigger}:{day:yyyy-MM-dd}";
+
+    /// <summary>The day a food award key is for, or null when it isn't one.</summary>
+    public static DateOnly? DayOf(string awardKey)
+    {
+        var separator = awardKey.IndexOf(':');
+        return separator > 0
+               && Triggers.Contains(awardKey[..separator])
+               && DateOnly.TryParseExact(
+                   awardKey[(separator + 1)..], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                   System.Globalization.DateTimeStyles.None, out var day)
+            ? day
+            : null;
+    }
+}
+
+/// <summary>
 /// A live food entry as <c>bsk.v_meal</c> reads it (FOOD-1): the newest version of its id.
 /// <see cref="EatenLocal"/> is the wall-clock time it was eaten in the home zone, and
 /// <see cref="EatenOn"/> the day it counts on.

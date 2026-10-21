@@ -2794,7 +2794,15 @@ under a lock. Build moves `needs-kernel → building`: the fasting card (F4) is 
 ### FOOD-3 — My diet earns up to 40 Health XP a day
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-10-20 — kernel landed, F2):** `FoodRewards` pays `fast:<date>` and
+`diet:<date>` awards at the day's multiplier, re-prices a paid day when its entries change,
+and settles on every food write, in `bsk rewards reconcile` and from the Character page's
+settle. The ledger now checks a batch's writes on one key in order. No migration. Build moves
+`needs-kernel → building`: diet XP pays from `bsk food` today; the page's toasts (F4) are not
+built yet. A paid day is re-scored only when the entries it was scored from change, so a
+retune never rewrites it (plan, As built F2).
 
 **Workflow (Chris):**
 - "At the end of the day, a weighted health adjusted score can be computed based on how many

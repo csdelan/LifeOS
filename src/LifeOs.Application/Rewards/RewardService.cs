@@ -345,6 +345,51 @@ public sealed class RewardService(
         return new Earned(ranks.Select(r => r.Award).ToList(), DomainChanges(folds, folds, ranks));
     }
 
+    /// <summary>
+    /// Writes awards that belong to no item (food days, food-log plan §3.4) the way an item's
+    /// reconcile does: <paramref name="plan"/> decides the entries, given the domains as they
+    /// stand (read once, only if it asks) to price at; they're appended as one batch; and when
+    /// they carried life-domain XP, any rank-up reached is paid and each domain whose level or
+    /// rank moved comes back. A lost race re-plans from a fresh read.
+    /// </summary>
+    public async Task<Earned> EarnAsync(
+        Func<Func<Task<IReadOnlyList<DomainProgress>>>, CancellationToken, Task<IReadOnlyList<PlannedAward>>> plan,
+        CancellationToken cancellationToken = default)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            IReadOnlyList<DomainProgress>? domains = null;
+            async Task<IReadOnlyList<DomainProgress>> DomainsAsync()
+                => domains ??= Fold(await ReadDomainsAsync(cancellationToken));
+
+            try
+            {
+                var planned = await plan(DomainsAsync, cancellationToken);
+                if (planned.Count == 0)
+                {
+                    return Earned.Nothing;
+                }
+
+                var before = planned.Any(p => p.Award.Amounts.Keys.Any(k => LifeDomains.For(k) is not null))
+                    ? await DomainsAsync()
+                    : null;
+                var ids = await ledger.AppendAsync(planned.Select(p => p.Write).ToList(), cancellationToken);
+                var awards = planned.Select((p, i) => p.Award with { EventId = ids[i] }).ToList();
+                if (before is null)
+                {
+                    return new Earned(awards, []);
+                }
+
+                var (ranks, after) = await PayRankUpsAsync(cancellationToken);
+                return new Earned([.. awards, .. ranks.Select(r => r.Award)], DomainChanges(before, after, ranks));
+            }
+            catch (LedgerConflictException) when (attempt < ReconcileAttempts)
+            {
+                // Another writer changed one of these awards first; re-read and re-plan.
+            }
+        }
+    }
+
     /// <summary>Folds the configured domains, then pays their rank-ups, re-reading after a lost race.</summary>
     private async Task<(IReadOnlyList<RankUp> Awards, IReadOnlyList<DomainProgress> Folds)> PayRankUpsAsync(
         CancellationToken cancellationToken)
@@ -737,6 +782,12 @@ public sealed record Earned(IReadOnlyList<Award> Awards, IReadOnlyList<DomainCha
 {
     public static readonly Earned Nothing = new([], []);
 }
+
+/// <summary>
+/// One entry <see cref="RewardService.EarnAsync"/> writes: the ledger write, and the award it
+/// reports (its event id filled in once written).
+/// </summary>
+public sealed record PlannedAward(LedgerWrite Write, Award Award);
 
 /// <summary>When the wallet opened, and whether this call opened it.</summary>
 public sealed record WalletOpening(DateTimeOffset OpenedAt, bool Created);

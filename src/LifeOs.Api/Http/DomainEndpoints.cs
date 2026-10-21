@@ -1,5 +1,6 @@
 using LifeOs.Api.Auth;
 using LifeOs.Api.Read;
+using LifeOs.Application.Food;
 using LifeOs.Application.Rewards;
 
 namespace LifeOs.Api.Http;
@@ -46,14 +47,17 @@ public static class DomainEndpoints
         => Results.Ok(await rewards.GetDomainReportAsync(days ?? 30, cancellationToken));
 
     /// <summary>
-    /// Pays any rank-up the domains have reached and not been paid — one reached by time alone
-    /// (an old miss leaving the window, the domain turning old enough) included — and answers
-    /// what it paid and each domain whose rank that moved. The Character page calls it when it
-    /// opens. Safe to repeat: a rank pays once.
+    /// Settles the food days first (food-log plan §3.4: a day that closed itself pays its diet
+    /// XP), then pays any rank-up the domains have reached and not been paid — one reached by
+    /// time alone (an old miss leaving the window, the domain turning old enough) included — and
+    /// answers what it paid and each domain whose level or rank that moved. The Character page
+    /// calls it when it opens. Safe to repeat: nothing pays twice.
     /// </summary>
-    private static async Task<IResult> Settle(RewardService rewards, CancellationToken cancellationToken)
+    private static async Task<IResult> Settle(
+        FoodRewards food, RewardService rewards, CancellationToken cancellationToken)
     {
+        var fed = await food.SettleAsync(cancellationToken: cancellationToken);
         var settled = await rewards.SettleDomainsAsync(cancellationToken);
-        return Results.Ok(RewardRows.Earned(settled.Awards, settled.Progress));
+        return Results.Ok(RewardRows.Earned([.. fed.Awards, .. settled.Awards], [.. fed.Progress, .. settled.Progress]));
     }
 }

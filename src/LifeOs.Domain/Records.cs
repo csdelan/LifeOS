@@ -150,7 +150,10 @@ public sealed record LedgerEntry(
 /// <para>
 /// An earn or reversal names its <see cref="AwardKey"/> and whether that award must
 /// still be paid (<see cref="ExpectPaid"/>) when the write lands, so two reconciles
-/// racing on one item cannot both pay it or both give it back.
+/// racing on one item cannot both pay it or both give it back. A batch's guards are checked
+/// in order, each seeing the writes before it, so a re-price — a reversal then an earn of
+/// the same key — is one batch. A re-price's reversal also names the key's latest earn it
+/// read (<see cref="ExpectLatestEarn"/>), so two racing re-pricers can't both pass.
 /// </para>
 /// </summary>
 public sealed record LedgerWrite(
@@ -158,7 +161,31 @@ public sealed record LedgerWrite(
     IReadOnlyList<SubjectEventEdge> Edges,
     bool GuardBalance,
     string? AwardKey = null,
-    bool? ExpectPaid = null);
+    bool? ExpectPaid = null,
+    Guid? ExpectLatestEarn = null);
+
+/// <summary>
+/// An award key as the ledger holds it, for awards re-priced when their facts change (food
+/// days, food-log plan §3.3): what it nets to per currency (empty once reversed), and its
+/// latest earn — its id, when it's dated, what it paid before any multiplier
+/// (<see cref="LatestBase"/>: the earn's <c>base</c> where stamped, else its amounts), the
+/// multipliers it was paid at (empty at 1.0) and the events it cites
+/// (<see cref="LatestSources"/>, what it was scored from). <see cref="LastEventId"/> is the
+/// key's newest entry of any kind.
+/// </summary>
+public sealed record KeyedAward(
+    string AwardKey,
+    IReadOnlyDictionary<string, long> Net,
+    Guid? LatestEarnId,
+    DateTimeOffset? LatestEarnAt,
+    IReadOnlyDictionary<string, long> LatestBase,
+    IReadOnlyDictionary<string, decimal> LatestMultipliers,
+    IReadOnlyList<Guid> LatestSources,
+    Guid LastEventId)
+{
+    /// <summary>Whether the ledger pays this key now: some currency nets to non-zero.</summary>
+    public bool Paid => Net.Values.Any(v => v != 0);
+}
 
 /// <summary>
 /// An award <c>bsk.v_reward_due</c> says an item is due (rewards plan §3.2): its key,

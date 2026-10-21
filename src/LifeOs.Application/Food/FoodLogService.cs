@@ -19,7 +19,7 @@ namespace LifeOs.Application.Food;
 /// <c>recorded_at</c> wins, so nothing is ever rewritten. Refusals are in words, with nothing
 /// written. Days and wall-clock times are the home zone's.
 /// </summary>
-public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string sourceId)
+public sealed class FoodLogService(IFoodLogRepository food, FoodRewards rewards, IClock clock, string sourceId)
 {
     /// <summary>The widest range <see cref="GetDaysAsync"/> answers.</summary>
     public const int MaxRangeDays = 62;
@@ -75,7 +75,7 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
             guard = new FoodGuard(ending.Id, new FastSpan(ending.StartedAt, entry.EatenAt, ending.Id));
         }
 
-        await food.AppendAsync(events, guard, cancellationToken);
+        var ids = await food.AppendAsync(events, guard, cancellationToken);
         var days = new List<DateOnly> { entry.EatenOn };
         var fast = ending is null ? null : await food.GetFastAsync(ending.Id, cancellationToken);
         if (fast?.EndedOn is { } endedOn)
@@ -83,7 +83,8 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
             days.Add(endedOn);
         }
 
-        return Result(FoodActions.Logged, await food.GetMealAsync(mealId, cancellationToken), fast, null, days);
+        return await ResultAsync(
+            FoodActions.Logged, await food.GetMealAsync(mealId, cancellationToken), fast, null, days, ids[0], cancellationToken);
     }
 
     /// <summary>
@@ -96,10 +97,11 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
         var now = clock.UtcNow;
         var meal = await ResolveMealAsync(reference, cancellationToken);
         var entry = await NormalizeAsync(input, now, cancellationToken);
-        await food.AppendAsync([MealEvent(meal.Id, entry, meal.PhotoArtifactId, now)], FoodGuard.None, cancellationToken);
-        return Result(
+        var ids = await food.AppendAsync(
+            [MealEvent(meal.Id, entry, meal.PhotoArtifactId, now)], FoodGuard.None, cancellationToken);
+        return await ResultAsync(
             FoodActions.Edited, await food.GetMealAsync(meal.Id, cancellationToken), null, null,
-            [meal.EatenOn, entry.EatenOn]);
+            [meal.EatenOn, entry.EatenOn], ids[0], cancellationToken);
     }
 
     /// <summary>Deletes a food entry: a voided version, so the record keeps what it was.</summary>
@@ -107,8 +109,9 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
     {
         var now = clock.UtcNow;
         var meal = await ResolveMealAsync(reference, cancellationToken);
-        await food.AppendAsync([Voided(EventKinds.Measurement, "meal", meal.Id, now)], FoodGuard.None, cancellationToken);
-        return Result(FoodActions.Deleted, meal, null, null, [meal.EatenOn]);
+        var ids = await food.AppendAsync(
+            [Voided(EventKinds.Measurement, "meal", meal.Id, now)], FoodGuard.None, cancellationToken);
+        return await ResultAsync(FoodActions.Deleted, meal, null, null, [meal.EatenOn], ids[0], cancellationToken);
     }
 
     // ---------------------------------------------------------------------------------
@@ -129,9 +132,10 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
         var span = new FastSpan(start, null);
         await RefuseOverlapAsync(span, cancellationToken);
         var fastId = Guid.NewGuid();
-        await food.AppendAsync(
+        var ids = await food.AppendAsync(
             [FastEvent(fastId, start, null, occurredAt: start, now)], new FoodGuard(Guid.Empty, span), cancellationToken);
-        return Result(FoodActions.FastBegun, null, await food.GetFastAsync(fastId, cancellationToken), null, []);
+        return await ResultAsync(
+            FoodActions.FastBegun, null, await food.GetFastAsync(fastId, cancellationToken), null, [], ids[0], cancellationToken);
     }
 
     /// <summary>Ends the running fast at <paramref name="at"/> (default now).</summary>
@@ -149,11 +153,12 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
 
         var span = new FastSpan(running.StartedAt, end, running.Id);
         await RefuseOverlapAsync(span, cancellationToken);
-        await food.AppendAsync(
+        var ids = await food.AppendAsync(
             [FastEvent(running.Id, running.StartedAt, end, occurredAt: end, now)],
             new FoodGuard(running.Id, span), cancellationToken);
         var fast = await food.GetFastAsync(running.Id, cancellationToken);
-        return Result(FoodActions.FastEnded, null, fast, null, fast?.EndedOn is { } on ? [on] : []);
+        return await ResultAsync(
+            FoodActions.FastEnded, null, fast, null, Days(fast?.EndedOn), ids[0], cancellationToken);
     }
 
     /// <summary>Records a past fast from <paramref name="from"/> to <paramref name="to"/>.</summary>
@@ -165,10 +170,11 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
         var span = new FastSpan(start, end);
         await RefuseOverlapAsync(span, cancellationToken);
         var fastId = Guid.NewGuid();
-        await food.AppendAsync(
+        var ids = await food.AppendAsync(
             [FastEvent(fastId, start, end, occurredAt: end, now)], new FoodGuard(Span: span), cancellationToken);
         var fast = await food.GetFastAsync(fastId, cancellationToken);
-        return Result(FoodActions.FastRecorded, null, fast, null, fast?.EndedOn is { } on ? [on] : []);
+        return await ResultAsync(
+            FoodActions.FastRecorded, null, fast, null, Days(fast?.EndedOn), ids[0], cancellationToken);
     }
 
     /// <summary>
@@ -201,9 +207,11 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
         var span = new FastSpan(start, end, fast.Id);
         await RefuseOverlapAsync(span, cancellationToken);
         var guard = new FoodGuard(fast.Running ? fast.Id : null, span);
-        await food.AppendAsync([FastEvent(fast.Id, start, end, occurredAt: end ?? start, now)], guard, cancellationToken);
+        var ids = await food.AppendAsync(
+            [FastEvent(fast.Id, start, end, occurredAt: end ?? start, now)], guard, cancellationToken);
         var changed = await food.GetFastAsync(fast.Id, cancellationToken);
-        return Result(FoodActions.FastEdited, null, changed, null, Days(fast.EndedOn, changed?.EndedOn));
+        return await ResultAsync(
+            FoodActions.FastEdited, null, changed, null, Days(fast.EndedOn, changed?.EndedOn), ids[0], cancellationToken);
     }
 
     /// <summary>Deletes a fast: a voided version.</summary>
@@ -211,8 +219,10 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
     {
         var now = clock.UtcNow;
         var fast = await ResolveFastAsync(reference, cancellationToken);
-        await food.AppendAsync([Voided(EventKinds.Activity, "fast", fast.Id, now)], FoodGuard.None, cancellationToken);
-        return Result(FoodActions.FastDeleted, null, fast, null, Days(fast.EndedOn));
+        var ids = await food.AppendAsync(
+            [Voided(EventKinds.Activity, "fast", fast.Id, now)], FoodGuard.None, cancellationToken);
+        return await ResultAsync(
+            FoodActions.FastDeleted, null, fast, null, Days(fast.EndedOn), ids[0], cancellationToken);
     }
 
     // ---------------------------------------------------------------------------------
@@ -221,7 +231,8 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
 
     /// <summary>
     /// Closes <paramref name="day"/> (default today): its food pays (food-log plan §3.3). A day
-    /// already closed — by hand, or because it's over — writes nothing.
+    /// already closed — by hand, or because it's over — writes nothing, but still settles, so a
+    /// day that closed itself pays now if it hasn't.
     /// </summary>
     public async Task<FoodWriteResult> CloseDayAsync(DateOnly? day = null, CancellationToken cancellationToken = default)
     {
@@ -235,18 +246,19 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
         var existing = (await food.GetDaysAsync(target, target, cancellationToken)).FirstOrDefault();
         if (target < today || existing is { ClosedByHand: true })
         {
-            return Result(FoodActions.AlreadyClosed, null, null, target, [target]);
+            return await ResultAsync(FoodActions.AlreadyClosed, null, null, target, [target], null, cancellationToken);
         }
 
         var now = clock.UtcNow;
         var payload = JsonSerializer.Serialize(new { food_day = new { on = target.ToString("yyyy-MM-dd"), closed = true } });
-        await food.AppendAsync([Declared(EventKinds.Activity, now, now, payload)], FoodGuard.None, cancellationToken);
-        return Result(FoodActions.Closed, null, null, target, [target]);
+        var ids = await food.AppendAsync([Declared(EventKinds.Activity, now, now, payload)], FoodGuard.None, cancellationToken);
+        return await ResultAsync(FoodActions.Closed, null, null, target, [target], ids[0], cancellationToken);
     }
 
     /// <summary>
     /// One day of the Food Log (default today): its entries, the fasts that ended on it, the
-    /// running fast, when food with calories was last eaten (for Begin fast), and its score.
+    /// running fast, when food with calories was last eaten (for Begin fast), its score, and
+    /// what the ledger pays it.
     /// </summary>
     public async Task<FoodDayView> GetDayAsync(DateOnly? day = null, CancellationToken cancellationToken = default)
     {
@@ -258,9 +270,11 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
         var fasts = await food.GetFastsEndedAsync(target, target, cancellationToken);
         var running = await food.GetRunningFastAsync(cancellationToken);
         var last = (await food.GetLatestMealsAsync(1, withCalories: true, cancellationToken)).FirstOrDefault();
+        var paid = await rewards.GetPaidAsync(target, target, cancellationToken);
         return new FoodDayView(
             target, today, meals.OrderByDescending(m => m.EatenAt).ToList(), fasts, running, last, facts,
-            Rules.Score(facts.Facts), await EatenDuringFastsAsync(meals, cancellationToken));
+            Rules.Score(facts.Facts), await EatenDuringFastsAsync(meals, cancellationToken),
+            paid.GetValueOrDefault(target) ?? FoodDayPaid.None);
     }
 
     /// <summary>
@@ -310,11 +324,12 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
 
         var today = await food.TodayAsync(cancellationToken);
         var byDay = (await food.GetDaysAsync(from, to, cancellationToken)).ToDictionary(d => d.Day);
+        var paid = await rewards.GetPaidAsync(from, to, cancellationToken);
         var days = new List<FoodDaySummary>();
         for (var d = from; d <= to; d = d.AddDays(1))
         {
             var facts = byDay.TryGetValue(d, out var found) ? found : FoodDay.Empty(d, d < today);
-            days.Add(new FoodDaySummary(facts, Rules.Score(facts.Facts)));
+            days.Add(new FoodDaySummary(facts, Rules.Score(facts.Facts), paid.GetValueOrDefault(d) ?? FoodDayPaid.None));
         }
 
         return new FoodRange(from, to, today, days);
@@ -338,6 +353,13 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
             .Take(limit)
             .ToList();
     }
+
+    /// <summary>
+    /// Settles every food day with the ledger (food-log plan §3.4) — what the Food Log page
+    /// calls when it opens, so a day that closed itself pays then. Never opens the wallet.
+    /// </summary>
+    public Task<Earned> SettleAsync(CancellationToken cancellationToken = default)
+        => rewards.SettleAsync(cancellationToken: cancellationToken);
 
     /// <summary>A home-zone wall-clock time as an instant (for hosts reading "12:30").</summary>
     public Task<DateTimeOffset> InstantAtAsync(DateTime local, CancellationToken cancellationToken = default)
@@ -545,9 +567,18 @@ public sealed class FoodLogService(IFoodLogRepository food, IClock clock, string
     private static IReadOnlyList<DateOnly> Days(params DateOnly?[] days)
         => days.Where(d => d is not null).Select(d => d!.Value).Distinct().ToList();
 
-    private static FoodWriteResult Result(
-        string action, Meal? meal, Fast? fast, DateOnly? day, IReadOnlyList<DateOnly> days)
-        => new(action, meal, fast, day, days.Distinct().Order().ToList(), Earned.Nothing);
+    /// <summary>
+    /// A write's result, after settling the food days (food-log plan §3.4): every write
+    /// settles them all, so a day that closed itself pays the moment anything is logged.
+    /// </summary>
+    private async Task<FoodWriteResult> ResultAsync(
+        string action, Meal? meal, Fast? fast, DateOnly? day, IReadOnlyList<DateOnly> days, Guid? cause,
+        CancellationToken cancellationToken)
+    {
+        var touched = days.Distinct().Order().ToList();
+        var earned = await rewards.SettleAsync(cause, touched, cancellationToken);
+        return new FoodWriteResult(action, meal, fast, day, touched, earned);
+    }
 
     /// <summary>An entry after its checks: trimmed, its time and day settled, its type known.</summary>
     private sealed record NormalizedEntry(
@@ -607,10 +638,11 @@ public sealed record FoodDayView(
     Meal? LastMeal,
     FoodDay Facts,
     DietScore Score,
-    IReadOnlyDictionary<Guid, Guid> EatenDuringFast);
+    IReadOnlyDictionary<Guid, Guid> EatenDuringFast,
+    FoodDayPaid Paid);
 
-/// <summary>One day's facts and score, for the week and month views.</summary>
-public sealed record FoodDaySummary(FoodDay Facts, DietScore Score);
+/// <summary>One day's facts, its score, and what the ledger pays it, for the week and month views.</summary>
+public sealed record FoodDaySummary(FoodDay Facts, DietScore Score, FoodDayPaid Paid);
 
 /// <summary>Every day of a range, oldest first, with today in the home zone.</summary>
 public sealed record FoodRange(DateOnly From, DateOnly To, DateOnly Today, IReadOnlyList<FoodDaySummary> Days);

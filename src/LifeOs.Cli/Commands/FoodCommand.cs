@@ -484,8 +484,30 @@ internal static class FoodOutput
                 break;
         }
 
-        RewardOutput.WriteAwards(result.Earned.Awards);
-        RewardOutput.WriteProgress(result.Earned.Progress);
+        WriteEarned(result.Earned);
+    }
+
+    /// <summary>
+    /// What a food write earned. A re-price (a reversal and an earn of the same key) reads as one
+    /// line, "Re-scored Food day Tue Oct 20: 32 -> 29 Health XP"; everything else as
+    /// <c>bsk adhere</c> prints it.
+    /// </summary>
+    public static void WriteEarned(Earned earned)
+    {
+        var repriced = earned.Awards
+            .GroupBy(a => a.AwardKey)
+            .Where(g => g.Any(a => a.Entry == LedgerEntries.Reversal) && g.Any(a => a.Entry == LedgerEntries.Earn))
+            .Select(g => g.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var key in repriced)
+        {
+            var was = -earned.Awards.Where(a => a.AwardKey == key && a.Entry == LedgerEntries.Reversal).Sum(a => a.Amounts.Values.Sum());
+            var earn = earned.Awards.Last(a => a.AwardKey == key && a.Entry == LedgerEntries.Earn);
+            Console.WriteLine($"Re-scored {earn.Note}: {was} -> {earn.Amounts.Values.Sum()} Health XP.");
+        }
+
+        RewardOutput.WriteAwards(earned.Awards.Where(a => !repriced.Contains(a.AwardKey)));
+        RewardOutput.WriteProgress(earned.Progress);
     }
 
     public static void WriteDay(FoodDayView view, DietRules rules)
@@ -529,6 +551,23 @@ internal static class FoodOutput
         Console.WriteLine(
             $"  Diet: {score.Total} of {rules.Cap} base Health XP (food {score.FoodAward}, fast {score.FastAward})" +
             (view.Facts.Closed ? "." : ", if the day closed now."));
+        if (view.Paid.Fast is not null || view.Paid.Diet is not null)
+        {
+            Console.WriteLine($"  Paid: {Paid(view.Paid)}.");
+        }
+    }
+
+    /// <summary>What the ledger pays a day: "39 Health XP (food 32 x 1.2 = 38, fast 7)".</summary>
+    private static string Paid(FoodDayPaid paid)
+    {
+        static string? One(string what, FoodPaid? part)
+            => part is null ? null
+                : part.Multiplier is { } m
+                    ? $"{what} {part.Base} x {m.ToString("0.0#", CultureInfo.InvariantCulture)} = {part.Paid}"
+                    : $"{what} {part.Paid}";
+
+        var parts = new[] { One("food", paid.Diet), One("fast", paid.Fast) }.OfType<string>();
+        return $"{paid.Total} Health XP ({string.Join(", ", parts)})";
     }
 
     public static void WriteRange(FoodRange range, DietRules rules)
@@ -539,9 +578,10 @@ internal static class FoodOutput
             var average = day.Score.AverageScore is { } s ? s.ToString("0.0", CultureInfo.InvariantCulture) : "-";
             var fast = facts.LongestFastSeconds is { } seconds ? FoodText.Duration(seconds) : "-";
             var state = facts.ClosedByHand ? "closed" : facts.Day < range.Today ? "" : facts.Day == range.Today ? "today" : "ahead";
+            var paid = day.Paid.Total > 0 ? $"paid {day.Paid.Total,2}" : "       ";
             Console.WriteLine(
                 $"{facts.Day.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture)}  {facts.Calories,6:N0} cal  avg {average,3}  " +
-                $"fast {fast,-9}  {day.Score.Total,2}/{rules.Cap}  {state}".TrimEnd());
+                $"fast {fast,-9}  {day.Score.Total,2}/{rules.Cap}  {paid}  {state}".TrimEnd());
         }
 
         var past = range.Days.Where(d => d.Facts.Day <= range.Today).ToList();
@@ -550,6 +590,7 @@ internal static class FoodOutput
         Console.WriteLine(
             $"Total {total} base Health XP over {past.Count} days" +
             (past.Count > 0 ? $" ({((decimal)total / past.Count).ToString("0.0", CultureInfo.InvariantCulture)} a day)" : "") +
+            $"; {range.Days.Sum(d => d.Paid.Total)} Health XP paid" +
             (logged.Count > 0 ? $"; {logged.Average(d => d.Facts.Calories):N0} cal a logged day" : "") + ".");
     }
 
@@ -561,7 +602,7 @@ internal static class FoodOutput
         fasts = view.Fasts.Select(FastJson),
         running = view.Running is { } r ? FastJson(r) : null,
         lastMeal = view.LastMeal is { } l ? MealJson(l) : null,
-        summary = SummaryJson(view.Facts, view.Score)
+        summary = SummaryJson(view.Facts, view.Score, view.Paid)
     };
 
     public static object RangeJson(FoodRange range) => new
@@ -569,7 +610,7 @@ internal static class FoodOutput
         from = range.From.ToString("yyyy-MM-dd"),
         to = range.To.ToString("yyyy-MM-dd"),
         today = range.Today.ToString("yyyy-MM-dd"),
-        days = range.Days.Select(d => SummaryJson(d.Facts, d.Score))
+        days = range.Days.Select(d => SummaryJson(d.Facts, d.Score, d.Paid))
     };
 
     public static object MealJson(Meal meal) => MealJson(meal, Guid.Empty);
@@ -604,7 +645,7 @@ internal static class FoodOutput
         mealsDuring = fast.MealsDuring
     };
 
-    private static object SummaryJson(FoodDay facts, DietScore score) => new
+    private static object SummaryJson(FoodDay facts, DietScore score, FoodDayPaid paid) => new
     {
         day = facts.Day.ToString("yyyy-MM-dd"),
         meals = facts.Meals,
@@ -619,7 +660,13 @@ internal static class FoodOutput
         fasting = Math.Round(score.Fasting, 2),
         foodAward = score.FoodAward,
         fastAward = score.FastAward,
-        total = score.Total
+        total = score.Total,
+        paid = new
+        {
+            fast = paid.Fast is { } f ? new { @base = f.Base, paid = f.Paid, multiplier = f.Multiplier } : null,
+            diet = paid.Diet is { } d ? new { @base = d.Base, paid = d.Paid, multiplier = d.Multiplier } : null,
+            total = paid.Total
+        }
     };
 
     private static string Describe(Meal meal)
