@@ -23,6 +23,9 @@
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
   --color-chart-earned: var(--chart-earned);
+  --color-diet-quality: var(--diet-quality);
+  --color-diet-calories: var(--diet-calories);
+  --color-diet-fasting: var(--diet-fasting);
   --color-chart-spent: var(--chart-spent);
   --color-score-1: var(--score-1);
   --color-score-2: var(--score-2);
@@ -104,6 +107,11 @@
   --score-5: oklch(0.39 0.09 168);
   --score-ink-low: oklch(0.23 0.03 168);
   --score-ink-high: oklch(0.99 0.01 85);
+  /* Food Log Week view (FOOD-4): a day's diet XP stacked by part, in this order. Categorical,
+     validated on the card across all pairs (CVD ΔE 11.6, normal-vision 20.8, each >= 3:1). */
+  --diet-quality: oklch(0.46 0.12 168);
+  --diet-calories: oklch(0.66 0.15 48);
+  --diet-fasting: oklch(0.52 0.13 285);
   --radius: 0.7rem;
   --sidebar: oklch(0.96 0.014 85);
   --sidebar-foreground: oklch(0.23 0.02 50);
@@ -171,6 +179,11 @@
   --score-5: oklch(0.82 0.09 168);
   --score-ink-low: oklch(0.97 0.01 85);
   --score-ink-high: oklch(0.18 0.02 170);
+  /* Fasting steps down into the dark band (L <= 0.67); validated on the dark card across all
+     pairs (CVD ΔE 10.5, normal-vision 20.6, each >= 3:1). */
+  --diet-quality: oklch(0.64 0.11 168);
+  --diet-calories: oklch(0.66 0.15 50);
+  --diet-fasting: oklch(0.66 0.13 285);
   --sidebar: oklch(0.16 0.016 170);
   --sidebar-foreground: oklch(0.945 0.012 85);
   --sidebar-primary: oklch(0.78 0.08 168);

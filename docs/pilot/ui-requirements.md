@@ -2867,7 +2867,13 @@ retune never rewrites it (plan, As built F2).
 ### FOOD-4 — The Food Log shows each day, week and month with the diet XP earned
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-10-20 — the Week and Month views landed, F5):** Day / Week / Month under the
+title. The week is a row per day with its diet XP stacked by part out of 40 and what it paid;
+the month is a Monday-first calendar shaded by base. Both have a Table view and totals (paid,
+average a closed day, average calories, days closed), and picking a day opens it. Build moves
+`building → built`; photos in the gallery are FOOD-5 (F6).
 
 **Update (2026-10-20 — API landed, F3):** `GET /api/food/day`, `/api/food/days` (up to 62
 days; the week so far by default) and `/api/food/recent` read on the reader connection, each
@@ -3192,9 +3198,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;
-  `bsk food`; the `/food` Day view. — **Open** (F1–F4 done in
-  [food-log-plan.md](food-log-plan.md), migration 0034; the Week and Month views (F5) and
-  photos (F6) left).
+  `bsk food`; the `/food` Day, Week and Month views. — **Open** (F1–F5 done in
+  [food-log-plan.md](food-log-plan.md), migration 0034; photos (F6) left).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **Food log + diet

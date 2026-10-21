@@ -238,6 +238,33 @@ test.describe("golden paths", () => {
     await expect(page.getByText("39 base → 46 Health XP (×1.2)")).toBeVisible();
   });
 
+  test("Food Log: switch to the week, step back a month, and open a day", async ({ page }) => {
+    await page.goto("/food");
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Week" }).click();
+    await expect(page).toHaveURL(/view=week/);
+    await expect(page.getByRole("heading", { name: /^Week of /, level: 1 })).toBeVisible();
+    const days = page.getByRole("list", { name: "Diet XP each day, out of 40" }).getByRole("button");
+    await expect(days).toHaveCount(7);
+    await expect(page.getByRole("definition").filter({ hasText: /^\d+ of \d+$/ })).toBeVisible();
+
+    // The month view holds every seeded day (from six days back); two days back paid 46.
+    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Month" }).click();
+    const twoBack = new Date();
+    twoBack.setDate(twoBack.getDate() - 2);
+    if (twoBack.getMonth() !== new Date().getMonth()) {
+      await page.getByRole("button", { name: "Previous month" }).click();
+    }
+    const day = page.getByRole("group", { name: "Diet XP each day" }).getByRole("button", { name: /: 46 Health XP paid \(39 base\)/ });
+    await expect(day).toBeVisible({ timeout: 10_000 });
+    await day.click();
+
+    await expect(page).not.toHaveURL(/view=/);
+    await expect(page.getByText("39 base → 46 Health XP (×1.2)")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("list", { name: /^Entries for / }).getByRole("listitem")).toHaveCount(2);
+  });
+
   test("theme toggle switches the document class", async ({ page }) => {
     await page.goto("/");
     const html = page.locator("html");

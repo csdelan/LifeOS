@@ -109,6 +109,41 @@ test.describe("accessibility", () => {
     });
   }
 
+  // The Food Log's Week (stacked bars) and Month (calendar) views, and the Table view, in both
+  // themes, around two days back, where the seed logged its last day of food.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /food week and month, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      const twoBack = new Date();
+      twoBack.setDate(twoBack.getDate() - 2);
+      const date = `${twoBack.getFullYear()}-${String(twoBack.getMonth() + 1).padStart(2, "0")}-${String(twoBack.getDate()).padStart(2, "0")}`;
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto(`/food?view=week&date=${date}`);
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      const week = page.getByRole("list", { name: "Diet XP each day, out of 40" });
+      await expect(week.getByRole("button", { name: /: 46 Health XP paid/ })).toBeVisible({ timeout: 10_000 });
+      const weekScan = await scan();
+      expect(weekScan, JSON.stringify(weekScan, null, 2)).toEqual([]);
+
+      await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Month" }).click();
+      const month = page.getByRole("group", { name: "Diet XP each day" });
+      await expect(month.getByRole("button", { name: /: 46 Health XP paid/ })).toBeVisible({ timeout: 10_000 });
+      // The week stays up, dimmed, while the month loads.
+      await expect(page.locator("[aria-busy=true]")).toHaveCount(0, { timeout: 10_000 });
+      const monthScan = await scan();
+      expect(monthScan, JSON.stringify(monthScan, null, 2)).toEqual([]);
+
+      await page.getByRole("button", { name: "Table", exact: true }).click();
+      await expect(page.getByRole("table", { name: "Diet XP each day, oldest first" })).toBeVisible();
+      const tableScan = await scan();
+      expect(tableScan, JSON.stringify(tableScan, null, 2)).toEqual([]);
+    });
+  }
+
   // The Food Log on a phone: Log food sits at the bottom, and the sheet rises from there.
   test("axe serious/critical: /food on a phone with the log sheet open", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });

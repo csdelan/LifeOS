@@ -521,7 +521,7 @@ Each of these has to earn its place through use.
 - [x] F2 — Diet XP on the ledger (no migration)
 - [x] F3 — API
 - [x] F4 — Day view
-- [ ] F5 — Week and month views
+- [x] F5 — Week and month views
 - [ ] F6 — Photos
 
 ### As built
@@ -617,3 +617,21 @@ Each of these has to earn its place through use.
 - **Accessibility:** the food scans emulate reduced motion, which `index.css` already honours
   by switching transitions off, so axe reads settled colours. Opening the page stacks the
   settle's toasts, and the day buttons fade between enabled and disabled.
+
+**F5 (2026-10-20).** As planned, plus:
+
+- **One switch, one URL.** Day / Week / Month sit under the title; `?view=week|month&date=`
+  names the period, and ‹ › step a day, a week (from its Monday) or a month (from its first).
+  The date is dropped from the URL once the period holds today. In the Week and Month views,
+  Log food logs to today.
+- **The parts' colours** (quality teal, calories orange, fasting violet) are categorical
+  tokens validated on the card across all pairs in both themes; dark fasting steps down to
+  L 0.66 to sit in the dark band. Segments are 2 px apart, the data end rounded, the rest of
+  the 40 a muted track. Today's segments are lighter and read "on track"; numbers always show.
+- **Each day's button says it in words**, e.g. "Sun, Oct 18, 2026: 46 Health XP paid (39 base)
+  · 2 entries, 1,200 cal, average score 5, fasted 23 h 00 m", and a tooltip breaks it into its
+  parts. Days ahead are disabled; the Table leaves them out.
+- **The month calendar** shades by base in four fixed steps of 10 (not relative to the
+  month's best), in the Rewards History's teal.
+- **Totals:** Health XP paid, the average a closed day (empty closed days count), average
+  calories a logged day, and days closed of the days so far.
