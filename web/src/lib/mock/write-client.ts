@@ -18,6 +18,8 @@ import {
   mockEditFood,
   mockFastAction,
   mockLogFood,
+  mockRemoveFoodPhoto,
+  mockSetFoodPhoto,
   mockSettleFood,
   appendJournal,
   applyTimer,
@@ -204,6 +206,22 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async editFood(meal, req) {
       await wait();
       const result = mockEditFood(meal, req);
+      notify(foodWriteMessage(result));
+      bump();
+      return result;
+    },
+
+    async setFoodPhoto(meal, photo, filename) {
+      await wait();
+      const result = mockSetFoodPhoto(meal, photo, filename);
+      notify(foodWriteMessage(result));
+      bump();
+      return result;
+    },
+
+    async removeFoodPhoto(meal) {
+      await wait();
+      const result = mockRemoveFoodPhoto(meal);
       notify(foodWriteMessage(result));
       bump();
       return result;

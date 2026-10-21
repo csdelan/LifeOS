@@ -9,6 +9,7 @@ using LifeOs.Infrastructure.Diagnostics;
 using LifeOs.Infrastructure.Migrations;
 using LifeOs.Infrastructure.Persistence;
 using LifeOs.Infrastructure.Rebuild;
+using LifeOs.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LifeOs.Infrastructure.DependencyInjection;
@@ -28,6 +29,13 @@ namespace LifeOs.Infrastructure.DependencyInjection;
 /// It comes from the host's <c>Rewards:HomeTimeZone</c> the same way, else the
 /// <c>Rewards__HomeTimeZone</c> environment variable, else <see cref="HomeZone.Default"/>.
 /// </para>
+/// <para>
+/// <c>objectStorage</c>, when given, keeps new artifact bytes in Supabase Storage rather than
+/// the database (migration 0035); artifacts already in the database still read from there. A
+/// host passes it explicitly (<see cref="SupabaseStorageOptions.Resolve"/>) — nothing here reads
+/// it from the environment, so a test never uploads. <c>allowPhotosInDatabase</c> false refuses
+/// food photos when there is no object storage, so they never fill a small hosted database.
+/// </para>
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -39,7 +47,8 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddLifeOsKernel(
         this IServiceCollection services, string connectionString, string sourceId = KernelSources.Cli,
-        decimal? coinValueUsd = null, string? homeTimeZone = null)
+        decimal? coinValueUsd = null, string? homeTimeZone = null,
+        SupabaseStorageOptions? objectStorage = null, bool allowPhotosInDatabase = true)
     {
         var coinValue = coinValueUsd ?? ParseCoinValueUsd(Environment.GetEnvironmentVariable(CoinValueVariable));
         var homeZone = ParseHomeTimeZone(homeTimeZone ?? Environment.GetEnvironmentVariable(HomeTimeZoneVariable));
@@ -47,7 +56,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IClock, SystemClock>();
 
         services.AddSingleton<IArtifactStore>(_ => new NpgsqlArtifactStore(connectionString));
-        services.AddSingleton<IArtifactBlobStore>(_ => new NpgsqlArtifactBlobStore(connectionString));
+        if (objectStorage is not null)
+        {
+            services.AddSingleton<IObjectStorage>(_ =>
+                new SupabaseObjectStorage(SupabaseObjectStorage.CreateHttpClient(), objectStorage));
+        }
+
+        services.AddSingleton<IArtifactBlobStore>(sp =>
+            new NpgsqlArtifactBlobStore(connectionString, sp.GetService<IObjectStorage>()));
         services.AddSingleton<IEventStore>(_ => new NpgsqlEventStore(connectionString));
         services.AddSingleton<IEventReader>(_ => new NpgsqlEventReader(connectionString));
         services.AddSingleton<ISubjectRepository>(_ => new NpgsqlSubjectRepository(connectionString));
@@ -160,6 +176,13 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<FoodReads>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
+
+        services.AddSingleton(sp => new FoodPhotoService(
+            sp.GetRequiredService<IArtifactBlobStore>(),
+            sp.GetRequiredService<FoodLogService>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId,
+            enabled: allowPhotosInDatabase || sp.GetService<IObjectStorage>() is not null));
 
         services.AddSingleton(sp => new RewardService(
             sp.GetRequiredService<ILedgerRepository>(),

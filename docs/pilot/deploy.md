@@ -67,6 +67,9 @@ only — never commit real values.
 | `VITE_SUPABASE_ANON_KEY` | Supabase **anon** key (public by design). **Never** the service-role key. |
 | `CORS_ALLOWED_ORIGINS` | Only if the SPA is *not* same-origin. Omit in production. |
 | `PORT` | Listen port. Fly sets this; the API honors it. Container default is `8080`. |
+| `Storage__SupabaseSecretKey` | Optional. A Supabase **secret** key (`sb_secret_…`, Project Settings → API Keys → Secret keys). Food photos and other artifact bytes then go to Supabase Storage instead of the database (migration 0035). Server-only: it bypasses row-level security, so never a `VITE_` value. Without it the API refuses photos outside Development. |
+| `Storage__SupabaseUrl` | Optional. Defaults to `VITE_SUPABASE_URL`. |
+| `Storage__Bucket` | Optional. Defaults to `lifeos-artifacts`, created **private** on the first upload. |
 | `Rewards__HomeTimeZone` | Optional. The IANA zone whose dates rewards and check-offs use (default `America/Los_Angeles`). If you change it, also run `ALTER DATABASE postgres SET bsk.home_zone = '<zone>'`, so the habit views agree (migration 0033). |
 
 Same-origin API base is `/` (the client uses `window.location.origin`). Optional Docker build-arg `VITE_API_BASE_URL=/` is already the image default.
@@ -140,11 +143,13 @@ you, so these steps are yours; the script does the wiring in between.
 
    It reads the app name from `fly.staging.toml`, the connection strings from
    `.env`, the Supabase URL/anon key from `web/.env.local`, and
-   `ALLOWED_EMAILS` from the API user-secrets. It checks that they all name the
+   `ALLOWED_EMAILS` from the API user-secrets, and the Storage secret key
+   (`Storage__SupabaseSecretKey`, or `SUPABASE_SECRET_KEY`) from `.env` when
+   it's there; without it, the app runs but refuses food photos. It checks that they all name the
    same Supabase project, shows what it will do, and asks before it:
    - creates the Fly app if it does not exist,
-   - imports the seven runtime secrets (`fly secrets import --stage`; values go
-     over stdin, never a command line),
+   - imports the seven runtime secrets, eight with the Storage key
+     (`fly secrets import --stage`; values go over stdin, never a command line),
    - sets `BSK_CONNECTION_STRING` and `FLY_API_TOKEN` (a deploy token scoped to
      this one app) on the `staging` GitHub Environment.
 

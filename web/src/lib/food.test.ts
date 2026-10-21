@@ -106,6 +106,11 @@ describe("foodWriteMessage", () => {
     expect(foodWriteMessage(write({ action: "closed" }))).toBe("Day closed");
     expect(foodWriteMessage(write({ action: "already_closed" }))).toBe("That day is already closed");
   });
+
+  it("says where a photo went", () => {
+    expect(foodWriteMessage(write({ action: "photo_set", meal: salmon }))).toBe("Photo added to Salmon salad");
+    expect(foodWriteMessage(write({ action: "photo_removed", meal: salmon }))).toBe("Photo removed from Salmon salad");
+  });
 });
 
 describe("local times", () => {

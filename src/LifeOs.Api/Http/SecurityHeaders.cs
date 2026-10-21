@@ -17,8 +17,10 @@ public static class SecurityHeaders
                 headers.XContentTypeOptions = "nosniff";
                 headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
                 headers.XFrameOptions = "DENY";
-                headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
-                if (!string.IsNullOrEmpty(csp))
+                // The app's own pages may use the camera: a food photo is taken from the Log food sheet.
+                headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()";
+                // An endpoint that set its own policy (a sandboxed download) keeps it.
+                if (!string.IsNullOrEmpty(csp) && string.IsNullOrEmpty(headers.ContentSecurityPolicy))
                 {
                     headers.ContentSecurityPolicy = csp;
                 }

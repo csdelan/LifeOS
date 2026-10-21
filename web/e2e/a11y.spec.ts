@@ -144,6 +144,57 @@ test.describe("accessibility", () => {
     });
   }
 
+  // A food entry's photo (FOOD-5), in both themes: picked in the Log food sheet, as a
+  // thumbnail on the entry, and full size in the viewer.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /food with a photo, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/food");
+      await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+      const png = Buffer.from(
+        await page.evaluate(() => {
+          const canvas = document.createElement("canvas");
+          canvas.width = 800;
+          canvas.height = 600;
+          const g = canvas.getContext("2d")!;
+          g.fillStyle = "#15803d";
+          g.fillRect(0, 0, 800, 600);
+          return canvas.toDataURL("image/png").split(",")[1];
+        }),
+        "base64",
+      );
+
+      await page.getByRole("button", { name: "Log food", exact: true }).click();
+      const sheet = page.getByRole("dialog", { name: "Log food" });
+      await sheet.getByLabel("Name").fill("Green salad");
+      await sheet.getByRole("radio", { name: "5 · very healthy" }).check();
+      await sheet.getByLabel("Calories").fill("300");
+      const chooser = page.waitForEvent("filechooser");
+      await sheet.getByRole("button", { name: "Choose photo" }).click();
+      await (await chooser).setFiles({ name: "salad.png", mimeType: "image/png", buffer: png });
+      await expect(sheet.getByRole("button", { name: "Remove photo" })).toBeVisible();
+      const picked = await scan();
+      expect(picked, JSON.stringify(picked, null, 2)).toEqual([]);
+
+      await sheet.getByRole("button", { name: "Log", exact: true }).click();
+      await expect(sheet).toBeHidden();
+      const thumbnail = page.getByRole("button", { name: "Show the photo of Green salad full size" });
+      await expect(thumbnail.locator("img")).toBeVisible({ timeout: 10_000 });
+      const gallery = await scan();
+      expect(gallery, JSON.stringify(gallery, null, 2)).toEqual([]);
+
+      await thumbnail.click();
+      await expect(page.getByRole("dialog", { name: "Green salad" }).getByRole("img")).toBeVisible();
+      const viewer = await scan();
+      expect(viewer, JSON.stringify(viewer, null, 2)).toEqual([]);
+    });
+  }
+
   // The Food Log on a phone: Log food sits at the bottom, and the sheet rises from there.
   test("axe serious/critical: /food on a phone with the log sheet open", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });

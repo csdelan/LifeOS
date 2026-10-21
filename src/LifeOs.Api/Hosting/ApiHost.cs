@@ -3,7 +3,10 @@ using LifeOs.Api.Http;
 using LifeOs.Api.Read;
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
+using LifeOs.Application.Abstractions;
 using LifeOs.Infrastructure.DependencyInjection;
+using LifeOs.Infrastructure.Persistence;
+using LifeOs.Infrastructure.Storage;
 using Microsoft.AspNetCore.HttpOverrides;
 
 namespace LifeOs.Api.Hosting;
@@ -51,14 +54,22 @@ public static class ApiHost
         // fails startup rather than mis-pricing deposits. Rewards:HomeTimeZone (default
         // America/Los_Angeles) decides which day an earn counts on; a malformed one fails too.
         var homeZone = ServiceCollectionExtensions.ParseHomeTimeZone(builder.Configuration[HomeZone.ConfigurationKey]);
+        // Artifact bytes (food photos) go to Supabase Storage when Storage:SupabaseSecretKey is
+        // set; a malformed setting fails startup. Outside Development, photos without it are
+        // refused rather than kept in the database (Supabase's free plan holds 500 MB).
+        var storage = SupabaseStorageOptions.Resolve(key => builder.Configuration[key]);
         builder.Services.AddLifeOsKernel(
             owner, KernelSources.Api,
             ServiceCollectionExtensions.ParseCoinValueUsd(builder.Configuration[CoinRates.ConfigurationKey]),
-            homeZone);
+            homeZone,
+            storage,
+            allowPhotosInDatabase: builder.Environment.IsDevelopment());
         builder.Services.AddSingleton(new SubjectReader(reader));
         builder.Services.AddSingleton(sp => new RewardReader(
             reader, sp.GetRequiredService<RewardService>().CoinValueUsd, homeZone));
         builder.Services.AddSingleton(new FoodReader(reader, homeZone));
+        builder.Services.AddSingleton(sp => new ArtifactReader(
+            new NpgsqlArtifactBlobStore(reader, sp.GetService<IObjectStorage>())));
 
         // Fail closed: missing issuer/audience/JWKS-or-secret/ALLOWED_EMAILS throws.
         builder.Services.AddLifeOsAuth(builder.Configuration);
@@ -137,6 +148,7 @@ public static class ApiHost
         app.MapRewardEndpoints();
         app.MapDomainEndpoints();
         app.MapFoodEndpoints();
+        app.MapArtifactEndpoints();
         app.MapSpaFallback();
     }
 }

@@ -6,6 +6,7 @@ using LifeOs.Infrastructure;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -28,11 +29,13 @@ internal sealed class ApiTestHost(WebApplication app, HttpClient client) : IAsyn
 
     /// <summary>
     /// Starts the host. <paramref name="configuration"/> adds or overrides settings, e.g.
-    /// <c>Rewards:CoinValueUsd</c>.
+    /// <c>Rewards:CoinValueUsd</c>; <paramref name="services"/> adds services after the host's
+    /// own, e.g. an in-memory object store.
     /// </summary>
     public static async Task<ApiTestHost> StartAsync(
         string connectionString, CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, string?>? configuration = null)
+        IReadOnlyDictionary<string, string?>? configuration = null,
+        Action<IServiceCollection>? services = null)
     {
         // Program.Main sets this before building the host; the read endpoints need it
         // to map snake_case columns (item_id -> ItemId).
@@ -64,6 +67,7 @@ internal sealed class ApiTestHost(WebApplication app, HttpClient client) : IAsyn
         builder.Configuration.AddInMemoryCollection(settings);
 
         ApiHost.ConfigureServices(builder);
+        services?.Invoke(builder.Services);
         builder.Logging.ClearProviders();
         var app = builder.Build();
         ApiHost.ConfigurePipeline(app);

@@ -132,6 +132,10 @@ export function foodWriteMessage(result: FoodWriteResult): string {
       return "Day closed";
     case "already_closed":
       return "That day is already closed";
+    case "photo_set":
+      return `Photo added to ${result.meal?.name ?? "the entry"}`;
+    case "photo_removed":
+      return `Photo removed from ${result.meal?.name ?? "the entry"}`;
     default:
       return "Saved";
   }

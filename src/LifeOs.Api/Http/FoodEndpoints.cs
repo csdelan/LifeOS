@@ -1,6 +1,7 @@
 using LifeOs.Api.Auth;
 using LifeOs.Api.Read;
 using LifeOs.Application.Food;
+using Microsoft.AspNetCore.Mvc;
 
 namespace LifeOs.Api.Http;
 
@@ -11,10 +12,19 @@ namespace LifeOs.Api.Http;
 /// (<c>awards</c>) and each life domain whose level or rank moved (<c>progress</c>). A refusal
 /// (a bad score, a future time, an overlapping fast) is a 400 in words, with nothing written.
 /// Days are home-zone <c>yyyy-MM-dd</c>; times are ISO instants with an offset.
+/// <para>
+/// A photo (FOOD-5) is sent as <c>multipart/form-data</c> with a <c>photo</c> file field and
+/// stored through <see cref="FoodPhotoService"/>; its bytes come back from
+/// <c>GET /api/artifacts/{id}/content</c>. Uploads use the bearer token, not cookies, so they
+/// need no antiforgery token.
+/// </para>
 /// </summary>
 public static class FoodEndpoints
 {
     private const int DefaultRecent = 20;
+
+    // Room in a photo upload for the multipart framing around the file.
+    private const int PhotoRequestOverhead = 64 * 1024;
 
     public static void MapFoodEndpoints(this WebApplication app)
     {
@@ -33,6 +43,14 @@ public static class FoodEndpoints
         api.MapPost("/meals/{id}", EditMeal).WithName("EditFood")
             .Produces<FoodWriteResultRow>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/meals/{id}/delete", DeleteMeal).WithName("DeleteFood")
+            .Produces<FoodWriteResultRow>().Produces<ApiError>(StatusCodes.Status400BadRequest);
+        api.MapPost("/meals/{id}/photo", SetPhoto).WithName("SetFoodPhoto")
+            .DisableAntiforgery()
+            .WithMetadata(new RequestSizeLimitAttribute(FoodPhotoService.MaxBytes + PhotoRequestOverhead))
+            .Produces<FoodWriteResultRow>()
+            .Produces<ApiError>(StatusCodes.Status400BadRequest)
+            .Produces<ApiError>(StatusCodes.Status502BadGateway);
+        api.MapPost("/meals/{id}/photo/delete", RemovePhoto).WithName("RemoveFoodPhoto")
             .Produces<FoodWriteResultRow>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/fasts", Fast).WithName("FastAction")
             .Produces<FoodWriteResultRow>().Produces<ApiError>(StatusCodes.Status400BadRequest);
@@ -94,6 +112,34 @@ public static class FoodEndpoints
     /// <summary>Deletes a food entry: a voided version, so the record keeps what it was.</summary>
     private static async Task<IResult> DeleteMeal(string id, FoodLogService food, CancellationToken cancellationToken)
         => Results.Ok(FoodRows.From(await food.DeleteAsync(id, cancellationToken)));
+
+    /// <summary>
+    /// Sets an entry's photo (replacing any it had): a JPEG, PNG or WebP of at most 5 MB in the
+    /// <c>photo</c> field. The web app sends a 1,200-pixel JPEG.
+    /// </summary>
+    private static async Task<IResult> SetPhoto(
+        string id, IFormFile? photo, FoodPhotoService photos, CancellationToken cancellationToken)
+    {
+        if (photo is null)
+        {
+            return Results.BadRequest(new ApiError("Send the photo as multipart/form-data, in a field named photo."));
+        }
+
+        if (photo.Length > FoodPhotoService.MaxBytes)
+        {
+            return Results.BadRequest(new ApiError(
+                $"That photo is {photo.Length / (1024.0 * 1024.0):0.0} MB; a photo can be at most {FoodPhotoService.MaxBytes / (1024 * 1024)} MB."));
+        }
+
+        using var buffer = new MemoryStream((int)photo.Length);
+        await photo.CopyToAsync(buffer, cancellationToken);
+        var result = await photos.AttachAsync(id, buffer.ToArray(), photo.FileName, cancellationToken);
+        return Results.Ok(FoodRows.From(result));
+    }
+
+    /// <summary>Removes an entry's photo. Its bytes stay in the record; the entry just stops showing them.</summary>
+    private static async Task<IResult> RemovePhoto(string id, FoodPhotoService photos, CancellationToken cancellationToken)
+        => Results.Ok(FoodRows.From(await photos.RemoveAsync(id, cancellationToken)));
 
     /// <summary>
     /// A fast action: <c>begin</c> or <c>end</c> (at <c>at</c>, default now), <c>record</c> a

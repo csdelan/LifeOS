@@ -160,6 +160,31 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       return result;
     },
 
+    async setFoodPhoto(meal, photo, filename) {
+      const form = new FormData();
+      form.append("photo", photo, filename ?? "photo.jpg");
+      const result = normalizeFoodWrite(
+        await unwrap(
+          api().POST("/api/food/meals/{id}/photo", {
+            params: { path: { id: meal } },
+            // The browser sets the multipart boundary; openapi-fetch leaves FormData as it is.
+            body: form as unknown as { photo?: string },
+            bodySerializer: (body) => body as unknown as FormData,
+          }),
+        ),
+      );
+      notify(foodWriteMessage(result));
+      return result;
+    },
+
+    async removeFoodPhoto(meal) {
+      const result = normalizeFoodWrite(
+        await unwrap(api().POST("/api/food/meals/{id}/photo/delete", { params: { path: { id: meal } } })),
+      );
+      notify(foodWriteMessage(result));
+      return result;
+    },
+
     async fast(req) {
       const result = normalizeFoodWrite(await unwrap(api().POST("/api/food/fasts", { body: req })));
       notify(foodWriteMessage(result));

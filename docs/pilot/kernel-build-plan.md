@@ -73,6 +73,8 @@ recurrence, adherence/occurrence projections, materialized occurrences).
   `bsk voice` / `bsk artifact get`). Bytes live in `bsk.artifact_blob` (append-only), behind a
   swappable port so object storage can be added later without schema churn. JOURNAL-2 inline
   media (Production) reuses this same infra. See [binary-artifacts.md](binary-artifacts.md).
+  **Object storage added 2026-10-21** (migration 0035, `bsk.artifact_object`): with a Storage
+  secret key the bytes go to a private Supabase Storage bucket instead (food photos, FOOD-5).
 - INBOX-2 (still `drafting`, unmapped)
 - **Vocabulary single-source (production, behind the REST API).** Today the status vocabulary
   is authored in the Domain ontology (`StatusVocabulary`) and hand-mirrored into the Pilot

@@ -12,6 +12,11 @@ bytes.
 layer, behind a swappable port — chosen as recommended. Object storage (Supabase Storage /
 S3) is explicitly *not* built now; the port is the seam that lets it be added later.
 
+**Update 2026-10-21.** The Supabase free plan caps the database at 500 MB, and food photos
+(FOOD-5) would fill it. Chris asked for photos to go to Supabase Storage, so the
+object-storage adapter is now built: see [Object storage](#object-storage-migration-0035)
+below. `bytea` stays the default wherever no Storage key is set (local dev, tests).
+
 ## The problem
 
 Today `bsk.artifact` holds text `content` only. A voice note, a PDF, or an image has no home:
@@ -55,7 +60,7 @@ The default adapter, `NpgsqlArtifactBlobStore`, implements this against `bytea` 
 transaction. A future **Supabase-Storage / S3 adapter** implements the *same* interface —
 writing bytes to the object store and the artifact / blob-metadata / event rows to Postgres —
 with no change to the Application services, CLI, or reader views above it, and no schema churn.
-That adapter is deliberately **not** built yet.
+That adapter was built on 2026-10-21 as an option on the same class (below).
 
 ## The schema (migration 0022)
 
@@ -109,9 +114,48 @@ The content type is inferred from the file extension when not given; the caller'
 `--content-type` always wins. A configurable size guard (`BSK_MAX_ARTIFACT_BYTES`, default 25 MiB)
 rejects oversized payloads before any bytes are written.
 
+## Object storage (migration 0035)
+
+When the host has a Supabase **secret** key (`Storage__SupabaseSecretKey`; see
+[deploy.md](deploy.md#environment-variables)), `NpgsqlArtifactBlobStore` is given an
+`IObjectStorage` (`SupabaseObjectStorage`, in `LifeOs.Infrastructure/Storage`) and new bytes go
+there instead of `artifact_blob`:
+
+1. **Probe** for the same `(source_id, sha256)`, exactly as before. A hit writes nothing.
+2. **Upload** to the private bucket (default `lifeos-artifacts`, created on first use) at the
+   content-addressed key `artifacts/<sha256>`, never overwriting (`x-upsert: false`). An object
+   already there counts as uploaded: same key, same bytes.
+3. **One transaction**: the artifact, a `bsk.artifact_object` row (store, bucket, key, content
+   type, size, sha256, filename) and the event.
+
+A failed upload writes nothing to Postgres. A transaction that fails after the upload leaves an
+object no row points at; it's harmless, and the next try of the same bytes reuses it.
+
+`bsk.artifact_object` is append-only like `artifact_blob` (`deny_mutation` on UPDATE and
+DELETE), and a trigger keeps an artifact's bytes in exactly one of the two tables.
+`bsk.v_artifact` reads both and adds `stored_in` (`database`, or the store's name). Rows
+already in `artifact_blob` stay there: nothing moves.
+
+**Reads** check both tables. Bytes from the store are checked against the recorded size and
+sha256 before they're returned, so an object changed or lost outside `bsk` reads as an error,
+not as wrong bytes. A host with bytes in Storage but no key says so in words. Storage failures
+surface as `ObjectStorageException`, which the API answers with 502.
+
+**What Postgres can't promise here.** The bucket isn't under `deny_mutation`: anyone with the
+secret key could delete an object. `bsk` never deletes or overwrites one, and the hash check
+on every read catches a change.
+
+**Serving.** `GET /api/artifacts/{id}/content` streams an artifact's bytes to the signed-in
+owner, with `Cache-Control: private, max-age=31536000, immutable` and the sha256 as its ETag
+(`If-None-Match` answers 304 before any download). A non-image is served sandboxed, as a
+download.
+
+**Without a key**, the API refuses food photos outside Development rather than filling the
+database. The CLI (`bsk attach`, `bsk voice`, `bsk food photo`) reads the same `Storage__*`
+environment variables; without them its bytes go to `bytea` as before.
+
 ## Out of scope
 
-- The object-storage adapter (the port seam is left clean for it).
 - Transcription (app-side; the kernel stores whatever transcript it is given).
-- The web API that will stream bytes to a browser.
+- Moving existing `artifact_blob` rows into object storage.
 - CAP-5 (URL capture) — a URL is plain text, not a binary artifact.

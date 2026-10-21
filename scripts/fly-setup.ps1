@@ -17,7 +17,8 @@
     Reads:
       -EnvFile (default .env)   BSK_CONNECTION_STRING, BSK_READER_CONNECTION_STRING,
                                 and optionally VITE_SUPABASE_URL,
-                                VITE_SUPABASE_ANON_KEY, ALLOWED_EMAILS
+                                VITE_SUPABASE_ANON_KEY, ALLOWED_EMAILS, and
+                                Storage__SupabaseSecretKey (or SUPABASE_SECRET_KEY)
       web/.env.local            VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY when
                                 the env file does not set them
       LifeOs.Api user-secrets   ALLOWED_EMAILS when the env file does not set it
@@ -26,10 +27,15 @@
     script stops unless every value points at the same Supabase project, so
     staging and production values cannot be mixed.
 
+    Storage__SupabaseSecretKey is the server-only key (sb_secret_...) that keeps
+    food photos in Supabase Storage rather than the database. Without it the
+    API refuses photos. The script refuses a publishable or anon key there.
+
     Sets:
       Fly app secrets           BSK_CONNECTION_STRING, BSK_READER_CONNECTION_STRING,
                                 Auth__Issuer, Auth__JwksUrl, ALLOWED_EMAILS,
-                                VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+                                VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY,
+                                Storage__SupabaseSecretKey (when given)
       GitHub environment        BSK_CONNECTION_STRING (for bsk migrate) and
       secrets                   FLY_API_TOKEN (a deploy token scoped to this app)
 
@@ -74,6 +80,15 @@ function Read-DotEnv([string] $path) {
         $values[$trimmed.Substring(0, $eq).Trim()] = $trimmed.Substring($eq + 1).Trim().Trim('"')
     }
     return $values
+}
+
+# The claims of a Supabase JWT key (the legacy anon / service_role keys), or $null.
+function Get-JwtClaims([string] $jwt) {
+    $parts = $jwt.Split('.')
+    if ($parts.Count -ne 3) { return $null }
+    $payload = $parts[1].Replace('-', '+').Replace('_', '/')
+    $payload = $payload.PadRight($payload.Length + (4 - $payload.Length % 4) % 4, '=')
+    return [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json
 }
 
 # Runs a native command with exactly $text on stdin. Piping a string from
@@ -159,13 +174,34 @@ if ($values['BSK_READER_CONNECTION_STRING'] -match 'Password=bsk_reader(;|$)') {
 # The SPA key is served to every browser, so it must be the public anon key.
 $anonKey = $values['VITE_SUPABASE_ANON_KEY']
 if ($anonKey.StartsWith('sb_secret_')) { throw "VITE_SUPABASE_ANON_KEY is a secret key. Use the anon (publishable) key." }
-$jwtParts = $anonKey.Split('.')
-if ($jwtParts.Count -eq 3) {
-    $payload = $jwtParts[1].Replace('-', '+').Replace('_', '/')
-    $payload = $payload.PadRight($payload.Length + (4 - $payload.Length % 4) % 4, '=')
-    $claims = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json
-    if ($claims.role -ne 'anon') {
-        throw "VITE_SUPABASE_ANON_KEY is a '$($claims.role)' key. Use the anon key, never service_role."
+$claims = Get-JwtClaims $anonKey
+if ($claims -and $claims.role -ne 'anon') {
+    throw "VITE_SUPABASE_ANON_KEY is a '$($claims.role)' key. Use the anon key, never service_role."
+}
+
+# Optional: the server-only key for Supabase Storage (food photos). It is a Fly
+# secret only, never a VITE_ value, so it never reaches a browser.
+$storageKey = $null
+foreach ($name in 'Storage__SupabaseSecretKey', 'SUPABASE_SECRET_KEY') {
+    if (-not $storageKey -and $fromEnvFile[$name]) {
+        $storageKey = $fromEnvFile[$name]
+        $sourceOf['Storage__SupabaseSecretKey'] = if ($name -eq 'SUPABASE_SECRET_KEY') { "$EnvFile (SUPABASE_SECRET_KEY)" } else { $EnvFile }
+    }
+}
+if ($storageKey) {
+    if ($storageKey -eq $anonKey -or $storageKey.StartsWith('sb_publishable_')) {
+        throw "Storage__SupabaseSecretKey is the publishable key. Storage needs a secret key (sb_secret_...) from Supabase -> Project Settings -> API Keys."
+    }
+    $storageClaims = Get-JwtClaims $storageKey
+    if ($storageClaims) {
+        if ($storageClaims.role -ne 'service_role') {
+            throw "Storage__SupabaseSecretKey is a '$($storageClaims.role)' key. Use a secret key (sb_secret_...)."
+        }
+        if ($storageClaims.ref -and $storageClaims.ref -ne $ref) {
+            throw "Storage__SupabaseSecretKey is for Supabase project '$($storageClaims.ref)' but VITE_SUPABASE_URL is '$ref'. Do not mix environments."
+        }
+    } elseif (-not $storageKey.StartsWith('sb_secret_')) {
+        throw "Storage__SupabaseSecretKey doesn't look like a Supabase secret key (sb_secret_...)."
     }
 }
 
@@ -178,6 +214,8 @@ $flySecrets = [ordered]@{
     VITE_SUPABASE_URL            = $supabaseUrl
     VITE_SUPABASE_ANON_KEY       = $anonKey
 }
+if ($storageKey) { $flySecrets['Storage__SupabaseSecretKey'] = $storageKey }
+$storageKey = $null
 
 # ---------- confirm ----------
 $repo = gh repo view --json nameWithOwner --jq .nameWithOwner
@@ -190,6 +228,12 @@ Write-Host "GitHub environment $GitHubEnvironment ($repo)" -ForegroundColor Cyan
 Write-Host "Supabase project   $ref via $poolerHost" -ForegroundColor Cyan
 Write-Host "Allowlist          $emailCount address(es)" -ForegroundColor Cyan
 foreach ($name in $required) { Write-Host ("  {0,-29} from {1}" -f $name, $sourceOf[$name]) }
+if ($flySecrets.Contains('Storage__SupabaseSecretKey')) {
+    Write-Host ("  {0,-29} from {1}" -f 'Storage__SupabaseSecretKey', $sourceOf['Storage__SupabaseSecretKey'])
+    Write-Host "Food photos        Supabase Storage, private bucket lifeos-artifacts (made on first upload)" -ForegroundColor Cyan
+} else {
+    Write-Host "Food photos        OFF: no Storage__SupabaseSecretKey in $EnvFile, so the API refuses photos" -ForegroundColor Yellow
+}
 Write-Host ''
 if (-not $Yes) {
     $answer = Read-Host 'Proceed? [y/N]'

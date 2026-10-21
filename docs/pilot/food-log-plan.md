@@ -155,10 +155,10 @@ score, nutrients). This gives `measurement` its first write path. Payload:
 - **The newest version wins by `recorded_at`, then `id`, never by `occurred_at`.** An edit
   that moves the time earlier must still win, so this is unlike the habit folds, which order
   by `occurred_at`.
-- Photos (F6) are an artifact whose bytes live in `bsk.artifact_blob`. The payload carries
-  `meal.photo` (the artifact id) forward on every version, so editing the calories never
-  drops the photo. F6 checks how artifacts link to events and decides whether the version
-  that adds the photo also sets the event's `artifact_id`.
+- Photos (F6) are an artifact with bytes (in Supabase Storage on staging; see F6 as built).
+  The payload carries `meal.photo` (the artifact id) forward on every version, so editing the
+  calories never drops the photo. The version that adds the photo doesn't set the event's
+  `artifact_id`: the photo's own `observation` event does (F6 as built).
 
 **Fasts are `activity` events** (something I do), like the task timer. Payload:
 
@@ -522,7 +522,7 @@ Each of these has to earn its place through use.
 - [x] F3 — API
 - [x] F4 — Day view
 - [x] F5 — Week and month views
-- [ ] F6 — Photos
+- [x] F6 — Photos (migration 0035, Supabase Storage)
 
 ### As built
 
@@ -635,3 +635,41 @@ Each of these has to earn its place through use.
   month's best), in the Rewards History's teal.
 - **Totals:** Health XP paid, the average a closed day (empty closed days count), average
   calories a logged day, and days closed of the days so far.
+
+**F6 (2026-10-21).** As planned, plus:
+
+- **The bytes go to Supabase Storage, not the database.** We're on the Supabase free plan
+  (500 MB of database, 1 GB of Storage), so Chris asked for photos in Storage. Migration 0035
+  adds `bsk.artifact_object`, and the blob store uploads to a private bucket
+  (`lifeos-artifacts`) when the host has `Storage__SupabaseSecretKey`, then writes the rows in
+  one transaction. At about 150 KB a photo, three a day is about 165 MB a year, so 1 GB is
+  roughly six years. Details in [binary-artifacts.md](binary-artifacts.md#object-storage-migration-0035).
+  Without the key the API refuses photos outside Development, in words, rather than filling
+  the database. Local dev and tests keep `bytea`.
+- **How a photo links to its entry.** The photo is its own `observation` event (payload
+  `{"food_photo": {"meal": "<id>"}}`, no inbox flag) whose `artifact_id` is the photo. The
+  entry's next version carries `meal.photo`; its event doesn't set `artifact_id`, since one
+  event already owns the artifact and a later version would point at it a second time.
+  Picking the same photo again writes nothing; Remove photo writes a version without it, and
+  the bytes stay in the record.
+- **Refusals** (400, in words): no field named `photo`, an empty file, over 5 MB, or bytes
+  that aren't JPEG, PNG or WebP (read from the bytes, not the name or the content type).
+  The request limit is 5 MB plus 64 KB for the form. Storage down is a 502.
+- **Serving:** `GET /api/artifacts/{id}/content` with `Cache-Control: private,
+  max-age=31536000, immutable` and the sha256 as its ETag; `If-None-Match` answers 304 before
+  any download. The SPA fetches with its bearer token and shows an object URL, kept per
+  artifact, since an `<img>` can't send the token.
+- **The browser** draws the picked image onto a white canvas no more than 1,200 px on its long
+  side and sends a JPEG at 0.8. Re-encoding drops EXIF, so a photo's location never leaves the
+  phone. On a new entry the photo is held and sent once the entry is logged (if only the photo
+  fails, a toast says the entry is in and how to add it again); on an entry already logged it
+  saves the moment it's picked.
+- **Take photo and Choose photo.** On Android, `capture="environment"` opens the camera with
+  no way to the gallery, so a phone gets both buttons and a desktop only Choose photo.
+  `Permissions-Policy` now allows the camera for the app's own origin (`camera=(self)`).
+- **The gallery's thumbnail is its own button** ("Show the photo of Grain bowl full size"),
+  beside the button that opens the entry, and opens the photo in a dialog.
+- **CLI:** `bsk food photo <entry> --file <path>` and `bsk food photo <entry> --remove`. The
+  CLI reads the same `Storage__*` environment variables.
+- **Not reused yet:** the live client's multipart write is built to serve document capture,
+  but `captureDocument` is still a stub.

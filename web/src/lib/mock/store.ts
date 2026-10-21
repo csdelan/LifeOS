@@ -2359,6 +2359,59 @@ export function mockDeleteFood(ref: string): FoodWriteResult {
   return foodResult("deleted", { meal: meal.id, asWas: meal }, null, [meal.eatenOn], cause);
 }
 
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/** A new version of an entry, the same in every other way, pointing at `photo`. */
+function mealWithPhoto(meal: FoldedMeal, photo: string | null): Omit<MockFoodEvent, "id"> {
+  return {
+    occurredAt: meal.eatenAt,
+    recordedAt: new Date().toISOString(),
+    meal: {
+      id: meal.id,
+      name: meal.name,
+      score: meal.score,
+      calories: meal.calories,
+      proteinG: meal.proteinG,
+      carbsG: meal.carbsG,
+      fatG: meal.fatG,
+      mealType: meal.mealType,
+      photo,
+    },
+  };
+}
+
+/**
+ * `POST /api/food/meals/{id}/photo` (FOOD-5): keep the photo as an artifact (an object URL,
+ * as the live client shows one) and point the entry at it. The kernel reads the type from the
+ * bytes; the mock trusts the blob's.
+ */
+export function mockSetFoodPhoto(ref: string, photo: Blob, filename = "photo.jpg"): FoodWriteResult {
+  const meal = foodMeal(foodFold(), ref);
+  if (photo.size === 0) throw new Error("That photo is empty.");
+  if (photo.size > PHOTO_MAX_BYTES) {
+    throw new Error(`That photo is ${(photo.size / (1024 * 1024)).toFixed(1)} MB; a photo can be at most 5 MB.`);
+  }
+  if (!PHOTO_TYPES.includes(photo.type)) throw new Error("That isn't a photo: send a JPEG, PNG or WebP image.");
+  const artifact = putArtifact({
+    eventId: newId(),
+    eventKind: "observation",
+    blob: photo,
+    filename,
+    contentType: photo.type,
+  });
+  const [cause] = appendFood(mealWithPhoto(meal, artifact.id));
+  return foodResult("photo_set", { meal: meal.id }, null, [meal.eatenOn], cause);
+}
+
+/** `POST /api/food/meals/{id}/photo/delete`: a version without the photo; the bytes stay. */
+export function mockRemoveFoodPhoto(ref: string): FoodWriteResult {
+  const meal = foodMeal(foodFold(), ref);
+  if (!meal.photoArtifactId) throw new Error(`${meal.name} has no photo to remove.`);
+  const [cause] = appendFood(mealWithPhoto(meal, null));
+  return foodResult("photo_removed", { meal: meal.id }, null, [meal.eatenOn], cause);
+}
+
 function fastSpan(fromRaw: string, toRaw: string, now: number): { from: string; to: string } {
   const from = foodTime(fromRaw, now, "A fast");
   const to = foodTime(toRaw, now, "A fast's end");

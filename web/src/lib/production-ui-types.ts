@@ -1097,7 +1097,9 @@ export type FoodAction =
   | "fast_edited"
   | "fast_deleted"
   | "closed"
-  | "already_closed";
+  | "already_closed"
+  | "photo_set"
+  | "photo_removed";
 
 /** A food write's outcome, with what it earned, gave back or re-scored. */
 export interface FoodWriteResult extends Earned {
@@ -1146,6 +1148,13 @@ export interface LifeOsWriteClient {
   /** Replace a food entry as a whole; a day that already paid is re-scored. */
   editFood(meal: string, req: FoodEntryRequest): Promise<FoodWriteResult>;
   deleteFood(meal: string): Promise<FoodWriteResult>;
+  /**
+   * Set a food entry's photo (FOOD-5), replacing any it had: `POST /api/food/meals/{id}/photo`
+   * (multipart). Send it resized (`resizePhoto`): a JPEG, PNG or WebP of at most 5 MB.
+   */
+  setFoodPhoto(meal: string, photo: Blob, filename?: string): Promise<FoodWriteResult>;
+  /** Remove a food entry's photo; the bytes stay in the record. */
+  removeFoodPhoto(meal: string): Promise<FoodWriteResult>;
   /** Begin, end, record, edit or delete a fast (FOOD-2). An ended fast pays on its day. */
   fast(req: FastActionRequest): Promise<FoodWriteResult>;
   /** Close a day (today by default) so its food pays (FOOD-3). */

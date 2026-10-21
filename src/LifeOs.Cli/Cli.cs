@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LifeOs.Application.Subjects;
 using LifeOs.Infrastructure.DependencyInjection;
+using LifeOs.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LifeOs.Cli;
@@ -14,8 +15,15 @@ internal static class Cli
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// The kernel on <paramref name="connectionString"/>. With <c>Storage__SupabaseSecretKey</c>
+    /// (and <c>Storage__SupabaseUrl</c> or <c>VITE_SUPABASE_URL</c>) in the environment, new
+    /// artifact bytes go to Supabase Storage and stored ones read from there, as the API does.
+    /// </summary>
     public static ServiceProvider BuildServices(string connectionString)
-        => new ServiceCollection().AddLifeOsKernel(connectionString).BuildServiceProvider();
+        => new ServiceCollection()
+            .AddLifeOsKernel(connectionString, objectStorage: SupabaseStorageOptions.FromEnvironment())
+            .BuildServiceProvider();
 
     public static void WriteJson(object payload)
         => Console.WriteLine(JsonSerializer.Serialize(payload, JsonOptions));

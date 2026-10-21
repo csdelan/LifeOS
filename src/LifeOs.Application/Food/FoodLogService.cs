@@ -115,6 +115,38 @@ public sealed class FoodLogService(
         return await ResultAsync(FoodActions.Deleted, meal, null, null, [meal.EatenOn], ids[0], cancellationToken);
     }
 
+    /// <summary>
+    /// Sets or removes a food entry's photo (FOOD-5): a new version of the entry, the same in
+    /// every other way, pointing at <paramref name="photoArtifactId"/> (an artifact with bytes)
+    /// or at none. Setting the photo it already has writes nothing. Called by
+    /// <see cref="FoodPhotoService"/>, which stores the bytes first.
+    /// </summary>
+    public async Task<FoodWriteResult> SetPhotoAsync(
+        string reference, Guid? photoArtifactId, CancellationToken cancellationToken = default)
+    {
+        var now = clock.UtcNow;
+        var meal = await ResolveMealAsync(reference, cancellationToken);
+        var action = photoArtifactId is null ? FoodActions.PhotoRemoved : FoodActions.PhotoSet;
+        if (photoArtifactId is null && meal.PhotoArtifactId is null)
+        {
+            throw new InvalidOperationException($"{meal.Name} has no photo to remove.");
+        }
+
+        if (meal.PhotoArtifactId == photoArtifactId)
+        {
+            return await ResultAsync(action, meal, null, null, [meal.EatenOn], null, cancellationToken);
+        }
+
+        var entry = new NormalizedEntry(
+            meal.Name, meal.Score, meal.Calories, meal.EatenAt, meal.EatenOn, meal.MealType,
+            meal.ProteinG, meal.CarbsG, meal.FatG);
+        var ids = await food.AppendAsync(
+            [MealEvent(meal.Id, entry, photoArtifactId, now)], FoodGuard.None, cancellationToken);
+        return await ResultAsync(
+            action, await food.GetMealAsync(meal.Id, cancellationToken), null, null, [meal.EatenOn], ids[0],
+            cancellationToken);
+    }
+
     // ---------------------------------------------------------------------------------
     // Fasts
     // ---------------------------------------------------------------------------------
@@ -521,6 +553,8 @@ public static class FoodActions
     public const string Logged = "logged";
     public const string Edited = "edited";
     public const string Deleted = "deleted";
+    public const string PhotoSet = "photo_set";
+    public const string PhotoRemoved = "photo_removed";
     public const string FastBegun = "fast_begun";
     public const string FastEnded = "fast_ended";
     public const string FastRecorded = "fast_recorded";

@@ -1,5 +1,7 @@
-import { useId, useMemo, useState } from "react";
-import { HistoryIcon } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { CameraIcon, HistoryIcon, ImageIcon } from "lucide-react";
+import { toast } from "sonner";
+import { MealPhoto, PhotoViewer } from "@/components/food/meal-photo";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +30,7 @@ import {
 } from "@/lib/diet-score";
 import { formatClock, fromLocalInput, mealTypeWord, SCORE_FILL, toLocalInput } from "@/lib/food";
 import { useIsDesktop } from "@/lib/media-query";
+import { resizePhoto } from "@/lib/photo";
 import type { FastRow, FoodEntryRequest, FoodMealType, MealRow } from "@/lib/production-ui-types";
 import { useFoodRecent, useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -39,6 +42,9 @@ import { cn } from "@/lib/utils";
  * - The health score 1-5 with its examples, calories from quick sizes or typed, the time with
  *   quick picks, the meal type (guessed from the time until it's chosen), nutrients folded away.
  * - With a fast running and calories above 0, "Ends your 17 h fast at 12:30 pm", on by default.
+ * - A photo (FOOD-5): Take photo opens the phone's camera, Choose photo its library. It's shrunk
+ *   to 1,200 px in the browser first. On a new entry it's sent once the entry is logged; on an
+ *   entry already logged it saves as soon as it's picked, and Remove photo takes it off.
  *
  * Opened on an entry, it edits it as a whole and offers Delete.
  */
@@ -73,6 +79,7 @@ export function LogFoodSheet({
             day={day}
             today={today}
             running={running}
+            camera={!desktop}
             onDone={() => onOpenChange(false)}
           />
         ) : null}
@@ -86,6 +93,11 @@ function minutesAgo(minutes: number): string {
   return toLocalInput(Date.now() - minutes * 60_000);
 }
 
+/** The name a photo is sent under: the picked file's, as a JPEG once resized. */
+function jpegName(filename: string): string {
+  return `${filename.replace(/\.[^.]*$/, "") || "photo"}.jpg`;
+}
+
 function wholeOrNull(raw: string): number | null | "bad" {
   if (raw.trim() === "") return null;
   const n = Number(raw);
@@ -97,12 +109,15 @@ function FoodForm({
   day,
   today,
   running,
+  camera,
   onDone,
 }: {
   meal: MealRow | null;
   day: string;
   today: string;
   running: FastRow | null;
+  /** Offer Take photo (a phone); a desktop has Choose photo only. */
+  camera: boolean;
   onDone: () => void;
 }) {
   const writes = useWrites();
@@ -125,6 +140,22 @@ function FoodForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The entry's stored photo, kept here: a change saves at once, while `meal` is as it opened.
+  const [photoId, setPhotoId] = useState<string | null>(meal?.photoArtifactId ?? null);
+  // A new entry's photo, resized and held until the entry is logged.
+  const [held, setHeld] = useState<{ blob: Blob; url: string; name: string } | null>(null);
+  // What the photo is busy doing, said under the buttons; null when idle.
+  const [photoBusy, setPhotoBusy] = useState<string | null>(null);
+  const [viewing, setViewing] = useState(false);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const libraryInput = useRef<HTMLInputElement>(null);
+  const heldUrl = useRef<string | null>(null);
+  useEffect(
+    () => () => {
+      if (heldUrl.current) URL.revokeObjectURL(heldUrl.current);
+    },
+    [],
+  );
 
   const at = fromLocalInput(eatenAt);
   const cal = wholeOrNull(calories);
@@ -165,6 +196,48 @@ function FoodForm({
     setMealType("");
   }
 
+  function hold(next: { blob: Blob; name: string } | null) {
+    if (heldUrl.current) URL.revokeObjectURL(heldUrl.current);
+    heldUrl.current = next ? URL.createObjectURL(next.blob) : null;
+    setHeld(next && heldUrl.current ? { ...next, url: heldUrl.current } : null);
+  }
+
+  async function pickPhoto(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    setPhotoBusy(meal ? "Saving the photo…" : "Preparing the photo…");
+    try {
+      const blob = await resizePhoto(file);
+      if (meal) {
+        const result = await writes.setFoodPhoto(meal.id, blob, jpegName(file.name));
+        setPhotoId(result.meal?.photoArtifactId ?? null);
+      } else {
+        hold({ blob, name: jpegName(file.name) });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That photo didn't save.");
+    } finally {
+      setPhotoBusy(null);
+    }
+  }
+
+  async function removePhoto() {
+    if (!meal) {
+      hold(null);
+      return;
+    }
+    setError(null);
+    setPhotoBusy("Removing the photo…");
+    try {
+      await writes.removeFoodPhoto(meal.id);
+      setPhotoId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The photo is still there: removing it didn't save.");
+    } finally {
+      setPhotoBusy(null);
+    }
+  }
+
   async function run(write: () => Promise<unknown>) {
     setError(null);
     setPending(true);
@@ -191,8 +264,25 @@ function FoodForm({
       fatG: grams[2] as number | null,
       endFast: !!endsFast && endFast,
     };
-    void run(() => (meal ? writes.editFood(meal.id, req) : writes.logFood(req)));
+    if (meal) {
+      void run(() => writes.editFood(meal.id, req));
+      return;
+    }
+    void run(async () => {
+      const logged = await writes.logFood(req);
+      if (!held || !logged.meal) return;
+      try {
+        await writes.setFoodPhoto(logged.meal.id, held.blob, held.name);
+      } catch (e) {
+        // The entry is in; only its photo isn't. Say so, and how to add it again.
+        const why = e instanceof Error ? e.message : "it didn't upload.";
+        toast.error(`Logged ${logged.meal.name}, but its photo didn't save: ${why} Open the entry to add it again.`);
+      }
+    });
   }
+
+  const shownPhoto = meal ? photoId : (held?.url ?? null);
+  const photoName = name.trim() || meal?.name || "this entry";
 
   const chosen = SCORES.find((s) => s.score === score);
 
@@ -243,6 +333,103 @@ function FoodForm({
               ))}
             </div>
           ) : null}
+        </div>
+
+        <div role="group" aria-labelledby={`${ids}-photo`} className="space-y-1.5">
+          <p id={`${ids}-photo`} className="text-sm font-medium">
+            Photo
+          </p>
+          <div className="flex items-start gap-3">
+            {shownPhoto ? (
+              <button
+                type="button"
+                onClick={() => setViewing(true)}
+                aria-label={`Show the photo of ${photoName} full size`}
+                className="size-20 shrink-0 overflow-hidden rounded-lg ring-1 ring-foreground/10 focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                {meal && photoId ? (
+                  <MealPhoto artifactId={photoId} alt="" className="size-full" />
+                ) : (
+                  <img src={shownPhoto} alt="" className="size-full object-cover" />
+                )}
+              </button>
+            ) : null}
+            <div className="flex flex-wrap gap-1.5">
+              {camera ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-9 md:min-h-0"
+                  disabled={pending || !!photoBusy}
+                  onClick={() => cameraInput.current?.click()}
+                >
+                  <CameraIcon />
+                  Take photo
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-9 md:min-h-0"
+                disabled={pending || !!photoBusy}
+                onClick={() => libraryInput.current?.click()}
+              >
+                <ImageIcon />
+                {shownPhoto ? "Choose another" : "Choose photo"}
+              </Button>
+              {shownPhoto ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-9 md:min-h-0"
+                  disabled={pending || !!photoBusy}
+                  onClick={() => void removePhoto()}
+                >
+                  Remove photo
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            {photoBusy ??
+              (meal
+                ? "A photo saves as soon as you pick it."
+                : held
+                  ? "It's saved with the entry when you log it."
+                  : "Optional. It's shrunk to 1,200 px before it's sent.")}
+          </p>
+          {/* Hidden: the buttons above open them. capture asks a phone for its rear camera. */}
+          <input
+            ref={cameraInput}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(e) => {
+              void pickPhoto(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={libraryInput}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              void pickPhoto(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          <PhotoViewer
+            artifactId={meal ? photoId : null}
+            src={meal ? null : held?.url}
+            name={photoName}
+            open={viewing && !!shownPhoto}
+            onOpenChange={setViewing}
+          />
         </div>
 
         <fieldset className="space-y-1.5">
@@ -431,7 +618,7 @@ function FoodForm({
           <Button type="button" variant="outline" className="min-h-11 md:min-h-0" onClick={onDone}>
             Cancel
           </Button>
-          <Button type="submit" className="min-h-11 md:min-h-0" disabled={!!problem || pending}>
+          <Button type="submit" className="min-h-11 md:min-h-0" disabled={!!problem || pending || !!photoBusy}>
             {pending ? "Saving…" : meal ? "Save" : "Log"}
           </Button>
         </div>

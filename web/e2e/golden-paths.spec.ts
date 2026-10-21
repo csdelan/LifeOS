@@ -265,6 +265,62 @@ test.describe("golden paths", () => {
     await expect(page.getByRole("list", { name: /^Entries for / }).getByRole("listitem")).toHaveCount(2);
   });
 
+  test("Food Log: log an entry with a photo, see it full size, and remove it", async ({ page }) => {
+    await page.goto("/food");
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    // A 2400 x 1600 PNG, as a phone might take: the browser shrinks it to 1,200 px.
+    const png = Buffer.from(
+      await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 2400;
+        canvas.height = 1600;
+        const g = canvas.getContext("2d")!;
+        g.fillStyle = "#c2410c";
+        g.fillRect(0, 0, 2400, 1600);
+        g.fillStyle = "#fde68a";
+        g.beginPath();
+        g.arc(1200, 800, 500, 0, Math.PI * 2);
+        g.fill();
+        return canvas.toDataURL("image/png").split(",")[1];
+      }),
+      "base64",
+    );
+
+    await page.getByRole("button", { name: "Log food", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Log food" });
+    await sheet.getByLabel("Name").fill("Grain bowl");
+    await sheet.getByRole("radio", { name: "4 · good" }).check();
+    await sheet.getByLabel("Calories").fill("650");
+    const chooser = page.waitForEvent("filechooser");
+    await sheet.getByRole("button", { name: "Choose photo" }).click();
+    await (await chooser).setFiles({ name: "IMG_4021.png", mimeType: "image/png", buffer: png });
+    await expect(sheet.getByRole("button", { name: "Show the photo of Grain bowl full size" })).toBeVisible();
+    await expect(sheet.getByText("It's saved with the entry when you log it.")).toBeVisible();
+    await sheet.getByRole("button", { name: "Log", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText("Photo added to Grain bowl")).toBeVisible({ timeout: 10_000 });
+
+    // The entry's thumbnail opens the photo full size, shrunk to 1,200 px.
+    const entries = page.getByRole("list", { name: "Entries for today" });
+    await entries.getByRole("button", { name: "Show the photo of Grain bowl full size" }).click();
+    const viewer = page.getByRole("dialog", { name: "Grain bowl" });
+    const photo = viewer.getByRole("img", { name: "Photo of Grain bowl" });
+    await expect(photo).toBeVisible();
+    expect(await photo.evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([1200, 800]);
+    await page.keyboard.press("Escape");
+    await expect(viewer).toBeHidden();
+
+    // Remove photo saves at once; the entry stays.
+    await entries.getByRole("button", { name: /^Grain bowl/ }).click();
+    const edit = page.getByRole("dialog", { name: "Change Grain bowl" });
+    await edit.getByRole("button", { name: "Remove photo" }).click();
+    await expect(page.getByText("Photo removed from Grain bowl")).toBeVisible({ timeout: 10_000 });
+    await expect(edit.getByRole("button", { name: "Choose photo" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(entries.getByRole("button", { name: /^Grain bowl/ })).toBeVisible();
+    await expect(entries.getByRole("button", { name: /^Show the photo/ })).toHaveCount(0);
+  });
+
   test("theme toggle switches the document class", async ({ page }) => {
     await page.goto("/");
     const html = page.locator("html");

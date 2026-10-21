@@ -2907,7 +2907,17 @@ Week and Month views are F5; Build stays `building`.
 ### FOOD-5 — A food entry can carry a photo
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
+
+**Update (2026-10-21 — photos landed, F6, in Supabase Storage):** the Log food sheet has Take
+photo (phones) and Choose photo; the browser shrinks the photo to 1,200 px and re-encodes it
+as JPEG, which drops its location. The gallery shows a thumbnail that opens the photo full
+size, and Remove photo takes it off. `POST /api/food/meals/{id}/photo` (multipart, JPEG / PNG
+/ WebP up to 5 MB), `/photo/delete` and `GET /api/artifacts/{id}/content`, plus
+`bsk food photo`. The free Supabase plan's 500 MB database is too small for photos, so at
+Chris's request the bytes go to a private Supabase Storage bucket (migration 0035,
+`bsk.artifact_object`) when the host has a Storage secret key; without one the API refuses
+photos. Build moves `mapped → built`.
 
 **Workflow (Chris):**
 - "Photos of food (photos can be last priority)." (2026-10-20)
@@ -2921,7 +2931,8 @@ Build:      mapped
   the browser resizes photos first. Phase F6, last.
 - Implications: photos live in Postgres, so check the Supabase plan's database limit before
   F6. At about 150 KB each and three a day, that's roughly 165 MB a year. The blob store is
-  a port, so moving bytes to object storage later doesn't touch the events.
+  a port, so moving bytes to object storage later doesn't touch the events. *(Settled in F6:
+  the bytes go to Supabase Storage; the photo's own `observation` event owns the artifact.)*
 - Open decisions: none blocking.
 
 

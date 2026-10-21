@@ -39,12 +39,12 @@ public interface IEventStore
 
 /// <summary>
 /// Stores and retrieves an artifact's <em>binary</em> payload — the swap seam for
-/// where the bytes physically live. The default adapter stores them as Postgres
-/// <c>bytea</c> and writes the event + artifact + blob as one transaction, so the
-/// bytes commit atomically with their event and the append-only guarantee covers
-/// them. A future object-storage adapter (Supabase Storage / S3) implements this
-/// same interface — writing bytes to the object store and the artifact / blob-metadata
-/// / event rows to Postgres — with no change to anything above it and no schema churn.
+/// where the bytes physically live. Without object storage the adapter stores them as
+/// Postgres <c>bytea</c> and writes the event + artifact + blob as one transaction, so the
+/// bytes commit atomically with their event and the append-only guarantee covers them.
+/// With an <see cref="IObjectStorage"/> (Supabase Storage, migration 0035) it uploads the
+/// bytes first, then writes the artifact, where the object is and the event as one
+/// transaction; nothing above it changes.
 /// </summary>
 public interface IArtifactBlobStore
 {
@@ -69,6 +69,33 @@ public interface IArtifactBlobStore
 
     /// <summary>Reads an artifact's binary metadata without the bytes, or <c>null</c> when it has none.</summary>
     Task<ArtifactBlobMetadata?> GetMetadataAsync(Guid artifactId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// An object store for artifact bytes (Supabase Storage, binary-artifacts.md). Objects are
+/// written once, under content-addressed keys, and never replaced or deleted.
+/// </summary>
+public interface IObjectStorage
+{
+    /// <summary>The store's name, recorded with each object (<c>supabase</c>).</summary>
+    string Store { get; }
+
+    /// <summary>The bucket new objects go in.</summary>
+    string Bucket { get; }
+
+    /// <summary>
+    /// Writes <paramref name="bytes"/> at <paramref name="key"/> in <see cref="Bucket"/>, creating
+    /// the bucket (private) the first time. An object already at the key is left as it is: keys
+    /// are content-addressed, so it holds the same bytes. Throws
+    /// <see cref="ObjectStorageException"/> when the store refuses or can't be reached.
+    /// </summary>
+    Task PutAsync(string key, byte[] bytes, string contentType, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The object's bytes, or <c>null</c> when the bucket or the object isn't there. Throws
+    /// <see cref="ObjectStorageException"/> when the store refuses or can't be reached.
+    /// </summary>
+    Task<byte[]?> GetAsync(string bucket, string key, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Reads source events. Read-only; the source stream is never mutated.</summary>

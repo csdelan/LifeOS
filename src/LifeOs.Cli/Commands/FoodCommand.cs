@@ -15,6 +15,7 @@ namespace LifeOs.Cli.Commands;
 ///              [--protein 40 --carbs 20 --fat 30] [--end-fast]
 /// bsk food edit &lt;entry&gt; [--name …] [--score …] [--cal …] [--at …] [--type …] [nutrients]
 /// bsk food delete &lt;entry&gt;
+/// bsk food photo &lt;entry&gt; --file &lt;path&gt; | --remove
 /// bsk food fast begin [--at …] | end [--at …] | record --from … --to …
 /// bsk food fast edit &lt;fast&gt; [--from …] [--to …] | delete &lt;fast&gt;
 /// bsk food close [&lt;date&gt;]
@@ -44,6 +45,7 @@ internal static class FoodCommand
         command.Subcommands.Add(CreateLog(connectionOption, jsonOption));
         command.Subcommands.Add(CreateEdit(connectionOption, jsonOption));
         command.Subcommands.Add(CreateDelete(connectionOption, jsonOption));
+        command.Subcommands.Add(CreatePhoto(connectionOption, jsonOption));
         command.Subcommands.Add(CreateFast(connectionOption, jsonOption));
         command.Subcommands.Add(CreateClose(connectionOption, jsonOption));
 
@@ -224,6 +226,54 @@ internal static class FoodCommand
                 await using var provider = Cli.BuildServices(connectionString);
                 var result = await provider.GetRequiredService<FoodLogService>()
                     .DeleteAsync(parseResult.GetValue(entryArgument)!, cancellationToken);
+                FoodOutput.WriteResult(result, asJson);
+                return 0;
+            });
+        });
+
+        return command;
+    }
+
+    private static Command CreatePhoto(Option<string?> connectionOption, Option<bool> jsonOption)
+    {
+        var entryArgument = new Argument<string>("entry") { Description = "The entry (its id or first 8 characters)." };
+        var fileOption = new Option<string?>("--file", "-f")
+        {
+            Description = "A JPEG, PNG or WebP of at most 5 MB. Replaces the photo the entry has."
+        };
+        var removeOption = new Option<bool>("--remove") { Description = "Remove the entry's photo." };
+        var command = new Command("photo", "Set or remove a food entry's photo.");
+        command.Arguments.Add(entryArgument);
+        command.Options.Add(fileOption);
+        command.Options.Add(removeOption);
+
+        command.SetAction((parseResult, cancellationToken) =>
+        {
+            var connectionString = KernelConnectionString.Resolve(parseResult.GetValue(connectionOption));
+            var asJson = parseResult.GetValue(jsonOption);
+            var entry = parseResult.GetValue(entryArgument)!;
+            var path = parseResult.GetValue(fileOption);
+            var remove = parseResult.GetValue(removeOption);
+            return Cli.RunAsync(asJson, async () =>
+            {
+                if (remove == (path is not null))
+                {
+                    Cli.WriteError(asJson, "Give --file <path> to set the photo, or --remove to remove it.");
+                    return 1;
+                }
+
+                if (path is not null && !File.Exists(path))
+                {
+                    Cli.WriteError(asJson, $"File not found: {path}");
+                    return 1;
+                }
+
+                await using var provider = Cli.BuildServices(connectionString);
+                var photos = provider.GetRequiredService<FoodPhotoService>();
+                var result = path is null
+                    ? await photos.RemoveAsync(entry, cancellationToken)
+                    : await photos.AttachAsync(
+                        entry, await File.ReadAllBytesAsync(path, cancellationToken), Path.GetFileName(path), cancellationToken);
                 FoodOutput.WriteResult(result, asJson);
                 return 0;
             });
@@ -459,6 +509,12 @@ internal static class FoodOutput
                 break;
             case FoodActions.Deleted:
                 Console.WriteLine($"Deleted {Describe(result.Meal!)}.");
+                break;
+            case FoodActions.PhotoSet:
+                Console.WriteLine($"Set the photo of {result.Meal!.Name}. [{FoodLogService.Short(result.Meal.Id)}] (photo {result.Meal.PhotoArtifactId})");
+                break;
+            case FoodActions.PhotoRemoved:
+                Console.WriteLine($"Removed the photo of {result.Meal!.Name}. [{FoodLogService.Short(result.Meal.Id)}]");
                 break;
             case FoodActions.FastBegun:
                 Console.WriteLine($"Began a fast at {FoodText.When(result.Fast!.StartedLocal)}. [{FoodLogService.Short(result.Fast.Id)}]");

@@ -4,7 +4,7 @@ import {
   deriveDashboard,
   type AlignmentEdge,
 } from "@/lib/derive";
-import { api, unwrap } from "@/lib/live/http";
+import { api, ApiRequestError, unwrap } from "@/lib/live/http";
 import type { RecapSection } from "@/lib/review-recap";
 import {
   normalizeBountyDefaults,
@@ -60,6 +60,26 @@ export function normalizeTimer(timer: TaskTimer): TaskTimer {
     sessionSeconds: Number(timer.sessionSeconds) || 0,
     sessions: Number(timer.sessions) || 0,
   };
+}
+
+// An artifact's bytes never change, so each is fetched once a session and kept as an object
+// URL: an <img> can't send the bearer token. A failed fetch is forgotten, so the next look
+// tries again; one that isn't there is null.
+const objectUrls = new Map<string, Promise<string | null>>();
+
+function artifactObjectUrl(id: string): Promise<string | null> {
+  const known = objectUrls.get(id);
+  if (known) return known;
+  const url = unwrap(api().GET("/api/artifacts/{id}/content", { params: { path: { id } }, parseAs: "blob" })).then(
+    (blob) => URL.createObjectURL(blob as Blob),
+    (error: unknown) => {
+      if (error instanceof ApiRequestError && error.status === 404) return null;
+      objectUrls.delete(id);
+      throw error;
+    },
+  );
+  objectUrls.set(id, url);
+  return url;
 }
 
 export const liveReads: LifeOsReads = {
@@ -149,9 +169,7 @@ export const liveReads: LifeOsReads = {
   },
 
   async artifactBytesUrl(id) {
-    // TODO(api): stream from the kernel's bytes-fetch / `bsk artifact get` export path.
-    void id;
-    return null;
+    return artifactObjectUrl(id);
   },
 
   async subjectFiles(_subjectId) {

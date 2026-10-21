@@ -27,6 +27,8 @@ public static class KernelExceptionHandler
             ambiguous.Candidates.Select(c => new { id = c.Id, urn = c.Urn, type = c.Type, title = c.Title }))),
         DuplicateSubjectException duplicate => (StatusCodes.Status409Conflict, new ApiError(duplicate.Message)),
         TimerConflictException conflict => (StatusCodes.Status409Conflict, new ApiError(conflict.Message)),
+        ObjectStorageException storage => (StatusCodes.Status502BadGateway, new ApiError(storage.Message)),
+        BadHttpRequestException bad => (bad.StatusCode, new ApiError(bad.Message)),
         ArgumentException or InvalidOperationException => (
             StatusCodes.Status400BadRequest, new ApiError(ex.Message)),
         _ => (StatusCodes.Status500InternalServerError, new ApiError(ex?.Message ?? "Unexpected error."))

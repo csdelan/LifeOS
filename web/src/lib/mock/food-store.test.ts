@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, todayIso } from "@/lib/dates";
 import {
+  getArtifact,
   getState,
   mockCloseFoodDay,
   mockDeleteFood,
@@ -11,6 +12,8 @@ import {
   mockFoodDays,
   mockFoodRecent,
   mockLogFood,
+  mockRemoveFoodPhoto,
+  mockSetFoodPhoto,
   mockSettleDomains,
   mockSettleFood,
   resetStore,
@@ -187,5 +190,31 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
     expect(health().totalXp).toBe(3_560);
     mockSettleFood();
     expect(health().totalXp).toBeGreaterThan(3_560);
+  });
+  it("keeps a photo as an artifact on a new version, through an edit, until it's removed (FOOD-5)", () => {
+    const meal = mockLogFood({ name: "Ramen", score: 3, calories: 900 }).meal!;
+    const photo = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3])], { type: "image/jpeg" });
+
+    const set = mockSetFoodPhoto(meal.id, photo, "ramen.jpg");
+    expect(set.action).toBe("photo_set");
+    const id = set.meal!.photoArtifactId!;
+    expect(getArtifact(id)).toMatchObject({ eventKind: "observation", contentType: "image/jpeg", byteSize: 6, filename: "ramen.jpg" });
+    expect(set.meal).toMatchObject({ name: "Ramen", score: 3, calories: 900, versions: 2 });
+
+    expect(mockEditFood(meal.id, { name: "Ramen", score: 2, calories: 950 }).meal?.photoArtifactId).toBe(id);
+
+    const removed = mockRemoveFoodPhoto(meal.id);
+    expect(removed).toMatchObject({ action: "photo_removed", meal: { photoArtifactId: null, score: 2 } });
+    expect(() => mockRemoveFoodPhoto(meal.id)).toThrow("Ramen has no photo to remove.");
+  });
+
+  it("refuses a photo that's too big or isn't an image, writing nothing", () => {
+    const meal = mockLogFood({ name: "Toast", score: 2, calories: 300 }).meal!;
+    const before = getState().foodEvents.length;
+    expect(() => mockSetFoodPhoto(meal.id, new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: "image/jpeg" }))).toThrow(
+      /at most 5 MB/,
+    );
+    expect(() => mockSetFoodPhoto(meal.id, new Blob(["%PDF"], { type: "application/pdf" }))).toThrow(/JPEG, PNG or WebP/);
+    expect(getState().foodEvents).toHaveLength(before);
   });
 });

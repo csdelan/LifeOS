@@ -273,6 +273,14 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       return foodWrite(qc, () => client.editFood(meal, req));
     },
 
+    async setFoodPhoto(meal, photo, filename) {
+      return foodWrite(qc, () => client.setFoodPhoto(meal, photo, filename));
+    },
+
+    async removeFoodPhoto(meal) {
+      return foodWrite(qc, () => client.removeFoodPhoto(meal));
+    },
+
     async deleteFood(meal) {
       return foodWrite(qc, () => client.deleteFood(meal));
     },
@@ -573,6 +581,19 @@ export function useArtifact(id: string | undefined) {
     queryKey: qk.artifact(id ?? ""),
     queryFn: () => reads().artifact(id!),
     enabled: !!id,
+  });
+}
+
+/**
+ * An object URL for an artifact's bytes (a food photo), or null when it has none. Bytes never
+ * change, so the URL is never refetched.
+ */
+export function useArtifactBytesUrl(id: string | null | undefined) {
+  return useQuery({
+    queryKey: [...qk.artifact(id ?? ""), "bytes"] as const,
+    queryFn: () => reads().artifactBytesUrl(id!),
+    enabled: !!id,
+    staleTime: Infinity,
   });
 }
 
