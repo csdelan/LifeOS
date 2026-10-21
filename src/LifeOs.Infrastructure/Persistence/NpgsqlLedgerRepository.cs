@@ -177,6 +177,43 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
         }
     }
 
+    public async Task<DomainCredit> GetDomainDaysAsync(
+        IReadOnlyCollection<string> currencies, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        // Aliased to CreditRow's names (no underscore matching in the CLI host).
+        const string daysSql = """
+            SELECT c.currency,
+                   to_char(coalesce(c.credited_on, (c.occurred_at AT TIME ZONE @tz)::date), 'YYYY-MM-DD') AS day,
+                   sum(c.base)::bigint AS base,
+                   sum(c.paid)::bigint AS paid
+            FROM bsk.v_award_credit c
+            WHERE c.currency = ANY(@currencies)
+            GROUP BY 1, 2
+            ORDER BY 1, 2;
+            """;
+
+        try
+        {
+            var today = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
+                "SELECT to_char((now() AT TIME ZONE @tz)::date, 'YYYY-MM-DD');",
+                new { tz = homeTimeZone }, cancellationToken: cancellationToken));
+            var rows = await connection.QueryAsync<CreditRow>(new CommandDefinition(
+                daysSql,
+                new { tz = homeTimeZone, currencies = currencies.ToArray() },
+                cancellationToken: cancellationToken));
+            return new DomainCredit(
+                ParseDay(today!),
+                rows.Select(r => new CreditDay(r.Currency, ParseDay(r.Day), r.Base, r.Paid)).ToList());
+        }
+        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
+        {
+            throw UnknownHomeZone(e);
+        }
+    }
+
     public async Task<DateTimeOffset?> GetOpenedAtAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = new NpgsqlConnection(connectionString);
@@ -407,7 +444,6 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     {
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
-        // The credited day comes back as text: Dapper has no DateOnly mapping in every host.
         IEnumerable<AwardRow> rows;
         try
         {
@@ -426,18 +462,24 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
         }
         catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
         {
-            // `time zone "…" not recognized`: the configured home zone is well formed but unknown.
-            throw new InvalidOperationException(
-                $"{HomeZone.ConfigurationKey} '{homeTimeZone}' is not a time zone the database knows; use an IANA name such as {HomeZone.Default}.",
-                e);
+            throw UnknownHomeZone(e);
         }
 
         return rows
             .Select(r => new DueAward(
                 r.AwardKey, r.Trigger, r.SourceEventIds, AsUtc(r.TriggeredAt)!.Value, r.TimedSeconds,
-                DateOnly.ParseExact(r.CreditedOn, "yyyy-MM-dd", CultureInfo.InvariantCulture)))
+                ParseDay(r.CreditedOn)))
             .ToList();
     }
+
+    // `time zone "…" not recognized`: the configured home zone is well formed but unknown.
+    private InvalidOperationException UnknownHomeZone(PostgresException e)
+        => new(
+            $"{HomeZone.ConfigurationKey} '{homeTimeZone}' is not a time zone the database knows; use an IANA name such as {HomeZone.Default}.",
+            e);
+
+    // Days come back as text: Dapper has no DateOnly mapping in every host.
+    private static DateOnly ParseDay(string day) => DateOnly.ParseExact(day, "yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static Task LockAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken cancellationToken)
@@ -571,6 +613,14 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
         public DateTime TriggeredAt { get; set; }
         public long? TimedSeconds { get; set; }
         public string CreditedOn { get; set; } = "";
+    }
+
+    private sealed class CreditRow
+    {
+        public string Currency { get; set; } = "";
+        public string Day { get; set; } = "";
+        public long Base { get; set; }
+        public long Paid { get; set; }
     }
 
     private sealed class PaidRow

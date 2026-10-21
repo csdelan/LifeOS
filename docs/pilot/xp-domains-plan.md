@@ -201,6 +201,13 @@ The drift test checks that:
 Retuning means editing these numbers and deploying. Every reader computes from the XP on each
 read, so a change shows immediately. Editing the rules in the app is later (§6).
 
+- **As built (X3):**
+  - `LifeDomains.Health` holds everything above except `Curve`, which arrives with levels in
+    X4. `ISuccessRule` also has `Describe()` ("at least 70 base XP"), so readers can show the
+    rule in words.
+  - The drift test also checks that rank titles are distinct, Novice has no gate, every tier
+    pays more than 1.0, and a higher share never earns a smaller multiplier.
+
 ### 3.3 The day an XP counts on
 
 Chris's rule is that XP counts on **the day it happened**. Each earn records that day:
@@ -263,6 +270,10 @@ per day, filling a null `credited_on` from `occurred_at` in the zone.
 
 - Only award keys count: redeems can't touch tracked currencies, and `open` carries no
   amounts.
+- **As built (X3):** the view lists every currency, and readers pick the domain ones. It
+  also carries the latest earn's `event_id`. The repository is built with the home zone
+  (§3.3), so `GetDomainDaysAsync(currencies)` takes no zone. It returns today's date in that
+  zone along with the days, so every reader agrees on what today is.
 - Rank-up awards pay Gems, not domain XP, so they never feed back into a domain.
 - Penalties, when they come, will need a rule here (§6).
 
@@ -302,6 +313,16 @@ series. Every progression number in the app comes from it.
   `qualifiedOn`, not "achieved".
 - **Cost:** seven years is about 2,600 days, so folding the configured domains on each read
   is trivial. Readers, reconcile and the simulator all call it; nothing is cached or stored.
+- **As built (X3), the daily part:**
+  - `DomainProgress.Fold` gives `Start`, `TotalXp`, `Periods`, today's base and success,
+    `Consistency` (the 30 complete days before today), `MultiplierNow` and `NextTier` (with
+    the successful days it still needs).
+  - `MultiplierFor(day)` reads the window before that day, so a day never lifts its own
+    multiplier.
+  - `WindowEndingOn(end, days)` is the window rank gates will read: today joins it only once
+    it has succeeded.
+  - Credit dated after today is left out.
+  - Levels, the rank walk and the lifetime figures join in X4.
 
 ### 3.6 The multiplier on earns
 
@@ -443,6 +464,16 @@ synthetic daily series. It's both a regression suite and Chris's calibration too
 
 Dates are local days in the home zone, not the viewer's zone.
 
+- **As built (X3):**
+  - `DomainService` (Application) serves the reads: `GetAsync` for every domain and
+    `GetDaysAsync(domain, days)` for one domain's series. A domain can be named by key,
+    label or first word ("health").
+  - `bsk domains` shows each domain's XP. For Health it adds today against the rule, 30-day
+    consistency, the multiplier now, and the next tier with the days it needs.
+  - `bsk domains health --days N` lists the series, 14 days by default. `--days` without a
+    domain lists every domain.
+  - `GET /api/domains` and the lifetime figures come with X4.
+
 ### 3.12 The Character page (web)
 
 - **`/character`**, called "Character", in the nav and the command palette.
@@ -572,7 +603,7 @@ Each of these has to earn its place through use of the pilot.
 - [x] X0 — Requirements (REWARD-6, REWARD-7, REWARD-2 revision, D12) + this plan
 - [x] X1 — Domain currencies + the credited day (migration 0030)
 - [x] X2 — Established habits keep earning (migration 0031)
-- [ ] X3 — Rules + daily consistency (migration 0032)
+- [x] X3 — Rules + daily consistency (migration 0032)
 - [ ] X4 — Levels, ranks, rank-up Gems, simulator
 - [ ] X5 — The multiplier on earns
 - [ ] X6 — Character page

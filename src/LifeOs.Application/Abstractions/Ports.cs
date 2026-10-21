@@ -246,6 +246,16 @@ public interface ILedgerRepository
     Task<IReadOnlyList<LedgerDayTotal>> GetDailyTotalsAsync(
         DateOnly from, DateOnly to, string timeZone, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The credit of each of <paramref name="currencies"/> per local day (<c>bsk.v_award_credit</c>,
+    /// xp-domains plan §3.4): every currently paid award counts on its latest earn's credited
+    /// day, or, for an earn from before credited days, on its instant's date in the home zone.
+    /// Days without credit have no row. Also answers today's date in the home zone, so a fold
+    /// and its data agree on what today is.
+    /// </summary>
+    Task<DomainCredit> GetDomainDaysAsync(
+        IReadOnlyCollection<string> currencies, CancellationToken cancellationToken = default);
+
     /// <summary>When the wallet was opened (its earliest <c>open</c> entry), or <c>null</c> before launch.</summary>
     Task<DateTimeOffset?> GetOpenedAtAsync(CancellationToken cancellationToken = default);
 

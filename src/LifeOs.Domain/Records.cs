@@ -113,6 +113,16 @@ public sealed record WalletBalance(string Currency, long Earned, long Reversed, 
 public sealed record LedgerDayTotal(DateOnly Date, string Currency, long Earned, long Reversed, long Spent, long Net);
 
 /// <summary>
+/// One currency's credit on one local day (xp-domains plan §3.4): what the ledger pays now for
+/// the awards credited to that day in the home zone — <see cref="Base"/> before any
+/// life-domain multiplier, <see cref="Paid"/> as paid.
+/// </summary>
+public sealed record CreditDay(string Currency, DateOnly Day, long Base, long Paid);
+
+/// <summary>The life-domain credit per currency and day, with today's date in the home zone.</summary>
+public sealed record DomainCredit(DateOnly Today, IReadOnlyList<CreditDay> Days);
+
+/// <summary>
 /// One ledger entry as <c>bsk.v_ledger</c> reads it (REWARD-5): what it was
 /// (<see cref="LedgerEntries"/>), its signed amounts per currency, and what it concerns —
 /// the item that earned it, or the reward it bought.

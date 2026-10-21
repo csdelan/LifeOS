@@ -2559,6 +2559,12 @@ earns on the right day. Build moves `needs-kernel → building`: levels, ranks, 
 the Character page and the reports (X2–X7 in [xp-domains-plan.md](xp-domains-plan.md)) are
 still to come.
 
+**Update (2026-10-20 — X3 landed):** each domain's daily credit is now readable. Migration
+0032 `v_award_credit` files what the ledger pays now on the day each award happened: a
+reversal takes it off that day, and earning again files it on the new day. `bsk domains`
+shows every domain's XP, and `--days N` adds the day-by-day series. Social, Environment and
+Finance report XP only until they get rules. Build stays `building`.
+
 **Workflow (Chris):**
 - "I'm thinking of having certain 'Currencies' actually be more like 'XP' which isn't
   spendable but can be tracked over time and showed in either a horizontal bar visual control
@@ -2601,7 +2607,15 @@ still to come.
 ### REWARD-7 — Each life domain levels up, ranks up on consistency, and rewards a steady streak
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-10-20 — X3 landed):** Health's rules are in code (`LifeDomains`): a
+successful day is 70+ base XP, plus the eleven ranks, the multiplier tiers and the rank-up
+Gems, all held consistent by a drift test. The fold's daily part is built: which days
+succeeded, consistency over the last 30 complete days, and the multiplier for any day.
+`bsk domains` shows today against the rule, consistency and the multiplier now. Build moves
+`needs-kernel → building`. Levels, ranks and rank-up Gems (X4), the multiplier on earns (X5)
+and the Character page (X6) are still to come.
 
 **Workflow (Chris):**
 - "For each XP category, I want to track 'levels' from 1-100 that represent RPG levels …
@@ -2913,8 +2927,9 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   paying for logged days, a per-domain daily credit read, the progression fold (levels, ranks,
   consistency, multiplier) with replaceable success rules, the multiplier in reconcile,
   earn-only rank-up Gem awards, the simulator, period reports. — **Open**: X1 shipped (the
-  currencies and the credited day, migration 0030) and X2 (established habits keep earning,
-  migration 0031); X3–X7 to go in [xp-domains-plan.md](xp-domains-plan.md).
+  currencies and the credited day, migration 0030), X2 (established habits keep earning,
+  migration 0031) and X3 (Health's rules and daily consistency, migration 0032); X4–X7 to go
+  in [xp-domains-plan.md](xp-domains-plan.md).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); **life-domain XP +

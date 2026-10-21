@@ -147,6 +147,8 @@ public static class ServiceCollectionExtensions
             sourceId,
             coinValue));
 
+        services.AddSingleton(sp => new DomainService(sp.GetRequiredService<ILedgerRepository>()));
+
         services.AddSingleton(sp => new RewardCatalogService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>(),
