@@ -456,9 +456,12 @@ describe("Activity XP on the page (activity plan A9)", () => {
     await todayXp();
 
     const steps = await card("Steps");
-    const tile = steps.getByText("Steps XP").closest("div")!;
+    // The tile waits for the days, a read of its own that can land after the Today card's.
+    const tile = (await steps.findByText("Steps XP")).closest("div")!;
     expect(within(tile).getByText("Health XP earned, last 30 days")).toBeInTheDocument();
-    expect(Number(within(tile).getByText(/^[\d,]+$/).textContent!.replace(/,/g, ""))).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(Number(within(tile).getByText(/^[\d,]+$/).textContent!.replace(/,/g, ""))).toBeGreaterThan(0),
+    );
 
     await userEvent.click(steps.getByRole("button", { name: "Table" }));
     const stepRows = await within(await steps.findByRole("table")).findAllByTestId("metric-row");
@@ -482,7 +485,8 @@ describe("Activity XP on the page (activity plan A9)", () => {
     renderPage();
     await todayXp();
     const exercise = await card("Exercise");
-    const compare = within(exercise.getByText("Exercise XP").closest("div")!);
+    // Shown once the days are read, which can land after the Today card's read.
+    const compare = within((await exercise.findByText("Exercise XP")).closest("div")!);
     expect(compare.getByText(/^\d+$/)).toBeInTheDocument();
     expect(compare.getByText(/^Last week \d+$/)).toBeInTheDocument();
 
