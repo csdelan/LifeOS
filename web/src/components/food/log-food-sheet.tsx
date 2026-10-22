@@ -50,12 +50,15 @@ import { cn } from "@/lib/utils";
  *   to 1,200 px in the browser first. On a new entry it's sent once the entry is logged; on an
  *   entry already logged it saves as soon as it's picked, and Remove photo takes it off.
  *
- * Opened on an entry, it edits it as a whole and offers Delete.
+ * Opened on an entry, it edits it as a whole and offers Delete. Opened with a `template` (Have
+ * another, on a combined card), it's a new entry filled in from it as Log again fills one; its
+ * time is now on today, or the template's own time on a past day.
  */
 export function LogFoodSheet({
   open,
   onOpenChange,
   meal,
+  template = null,
   day,
   today,
   running,
@@ -64,6 +67,8 @@ export function LogFoodSheet({
   onOpenChange: (open: boolean) => void;
   /** Null: a new entry. */
   meal: MealRow | null;
+  /** A new entry's starting point (Have another). */
+  template?: MealRow | null;
   /** The day the page shows: a new entry on a past day starts at noon there. */
   day: string;
   today: string;
@@ -78,8 +83,9 @@ export function LogFoodSheet({
       >
         {open ? (
           <FoodForm
-            key={meal?.id ?? "new"}
+            key={meal?.id ?? (template ? `another-${template.id}` : "new")}
             meal={meal}
+            template={meal ? null : template}
             day={day}
             today={today}
             running={running}
@@ -110,6 +116,7 @@ function wholeOrNull(raw: string): number | null | "bad" {
 
 function FoodForm({
   meal,
+  template,
   day,
   today,
   running,
@@ -117,6 +124,7 @@ function FoodForm({
   onDone,
 }: {
   meal: MealRow | null;
+  template: MealRow | null;
   day: string;
   today: string;
   running: FastRow | null;
@@ -127,21 +135,26 @@ function FoodForm({
   const writes = useWrites();
   const ids = useId();
   const recent = useFoodRecent(!meal);
-  const [name, setName] = useState(meal?.name ?? "");
+  // What the form starts from: the entry being changed, or the one Have another copies.
+  const from = meal ?? template;
+  const [name, setName] = useState(from?.name ?? "");
   // The score picked; a drink shows and sends 1 instead, and gets this back when it's turned off.
-  const [score, setScore] = useState<number | null>(meal && !meal.alcoholic ? meal.score : null);
-  const [alcoholic, setAlcoholic] = useState(meal?.alcoholic ?? false);
-  const [calories, setCalories] = useState(meal ? String(meal.calories) : "");
+  const [score, setScore] = useState<number | null>(from && !from.alcoholic ? from.score : null);
+  const [alcoholic, setAlcoholic] = useState(from?.alcoholic ?? false);
+  const [calories, setCalories] = useState(from ? String(from.calories) : "");
   const [eatenAt, setEatenAt] = useState(() =>
-    toLocalInput(meal?.eatenAt ?? (day === today ? Date.now() : new Date(`${day}T12:00`))),
+    toLocalInput(
+      meal?.eatenAt ?? (day === today ? Date.now() : (template?.eatenAt ?? new Date(`${day}T12:00`))),
+    ),
   );
+  // Have another re-guesses the meal type from the time, as Log again does.
   const [mealType, setMealType] = useState<FoodMealType | "">(meal?.mealType ?? "");
   const [showNutrients, setShowNutrients] = useState(
-    !!meal && (meal.proteinG !== null || meal.carbsG !== null || meal.fatG !== null),
+    !!from && (from.proteinG !== null || from.carbsG !== null || from.fatG !== null),
   );
-  const [protein, setProtein] = useState(meal?.proteinG?.toString() ?? "");
-  const [carbs, setCarbs] = useState(meal?.carbsG?.toString() ?? "");
-  const [fat, setFat] = useState(meal?.fatG?.toString() ?? "");
+  const [protein, setProtein] = useState(from?.proteinG?.toString() ?? "");
+  const [carbs, setCarbs] = useState(from?.carbsG?.toString() ?? "");
+  const [fat, setFat] = useState(from?.fatG?.toString() ?? "");
   const [endFast, setEndFast] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -315,7 +328,9 @@ function FoodForm({
         <SheetDescription>
           {meal
             ? "Changes keep the record: the entry gets a newer version, and a day that already paid is re-scored."
-            : "What you ate or drank, how healthy it was, and roughly how many calories."}
+            : template
+              ? `Another ${template.name}, filled in from the last one: change anything that's different.`
+              : "What you ate or drank, how healthy it was, and roughly how many calories."}
         </SheetDescription>
       </SheetHeader>
 

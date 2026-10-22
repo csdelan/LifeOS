@@ -654,7 +654,7 @@ fast, 39 of 40) plus beers of 150 calories each.
 - [x] F6 — Photos (migration 0035, Supabase Storage)
 - [x] F7 — Drinks in the kernel (migration 0038)
 - [x] F8 — Drinks on the page
-- [ ] F9 — Combined entries
+- [x] F9 — Combined entries
 
 ### As built
 
@@ -880,3 +880,28 @@ fast, 39 of 40) plus beers of 150 calories each.
     the Table.
   - An a11y scan in both themes: the sheet with the switch on, a day with drinks, the week
     and the month.
+
+**F9 (2026-10-22).** As planned in §7.4, display only (no kernel, API or mock change), plus:
+
+- **`lib/meal-groups.ts`** groups a day's entries by name (ignoring case and surrounding
+  spaces), score, calories, protein, carbs, fat and the alcohol flag. Each card sits at its
+  first copy's time.
+- **What the card shows:**
+  - the first copy's name with the count ("IPA ×4") and its meal type
+  - the calories and nutrients summed
+  - the time as a range ("7:10 PM–9:30 PM"), or one time when the copies share the minute
+  - the first copy's photo that has one
+  - "One was eaten during a recorded fast" when any copy was
+- **Its button** reads "IPA ×4 (alcoholic drink), 7:10 PM–9:30 PM: show the 4 entries".
+  It opens a dialog listing each copy by time, meal type and calories; picking one opens it to
+  change or delete. There's no chevron on the card: in three columns it squeezed the text, and
+  the "×4" already says there's more.
+- **Have another** opens Log food filled in from the last copy: the name, the score or the
+  drink flag, the calories and the nutrients. The meal type is re-guessed. The time is now on
+  today, or the last copy's time on a past day. The sheet's description reads "Another IPA,
+  filled in from the last one: change anything that's different."
+- **Tests:**
+  - `meal-groups.test.ts`: the key, the order, the sums, the range and the fast flag.
+  - `meal-gallery.test.tsx`: the combined card, a single entry, the copies and Have another.
+  - The drinks e2e path: Have another adds a fifth IPA, and deleting a copy takes it back.
+  - An a11y scan of the copies dialog in both themes.

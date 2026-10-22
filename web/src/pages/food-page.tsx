@@ -46,7 +46,11 @@ export function FoodPage() {
   const writes = useWrites();
   const settled = useRef(false);
   useOuraSyncOnOpen();
-  const [sheet, setSheet] = useState<{ open: boolean; meal: MealRow | null }>({ open: false, meal: null });
+  // `template` fills a new entry from one already logged (Have another on a combined card).
+  const [sheet, setSheet] = useState<{ open: boolean; meal: MealRow | null; template?: MealRow }>({
+    open: false,
+    meal: null,
+  });
 
   useEffect(() => {
     if (settled.current) return;
@@ -148,6 +152,7 @@ export function FoodPage() {
                     meals={day.meals}
                     dayLabel={day.day === day.today ? "today" : formatDayFull(day.day)}
                     onOpen={(meal) => setSheet({ open: true, meal })}
+                    onAnother={(template) => setSheet({ open: true, meal: null, template })}
                   />
                 </section>
               </div>
@@ -168,6 +173,7 @@ export function FoodPage() {
           open={sheet.open}
           onOpenChange={(open) => setSheet((s) => ({ ...s, open }))}
           meal={sheet.meal}
+          template={sheet.template}
           day={day.day}
           today={day.today}
           running={day.running}

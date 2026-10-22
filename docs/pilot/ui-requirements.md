@@ -2993,7 +2993,12 @@ day's entries read oldest first. Build moves `needs-kernel → building`: the pa
 ### FOOD-7 — Identical entries on a day show as one card, and the day reads oldest first
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-10-22 — combined cards, F9):** identical entries on a day show as one card,
+"IPA ×4", with the calories and nutrients summed and the time as a range. Tapping it lists the
+copies, each opening to change or delete, and Have another fills in Log food from the last
+one. Build moves `building → built`.
 
 **Update (2026-10-22 — oldest first, F7–F8):** the day's entries read oldest first in the API,
 `bsk food` and the page's gallery. Build moves `mapped → building`: combined cards are F9.
@@ -3602,9 +3607,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   [food-log-plan.md](food-log-plan.md), migrations 0034–0035, photos in Supabase Storage).
 - **Drinks, the sobriety streak and combined entries** (FOOD-6 / FOOD-7): the alcohol flag on
   a food entry, the cut above two drinks a day, the streak, a drinks count over any range,
-  identical entries combined on the day's page, entries oldest first. — **Building** (F7, the
-  kernel, landed with migration 0038, and F8, drinks on the page; F9, combined entries, in
-  [food-log-plan.md](food-log-plan.md) §7).
+  identical entries combined on the day's page, entries oldest first. — **Shipped** (F7–F9 in
+  [food-log-plan.md](food-log-plan.md) §7, migration 0038).
 - **Oura integration** (ACTIVITY-1..4 / D14):
   - an OAuth connection with encrypted tokens in `bsk_ops`
   - Oura records as `observed` events from source `oura`, versioned by content

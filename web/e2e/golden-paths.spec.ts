@@ -286,6 +286,29 @@ test.describe("golden paths", () => {
     }
     await expect(page.getByText("4 drinks · 20% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
 
+    // The four show as one card (FOOD-7). Have another adds a fifth; deleting a copy takes it back.
+    const card = entries.getByRole("button", { name: /^IPA ×4 \(alcoholic drink\), .+: show the 4 entries$/ });
+    await expect(card).toContainText("800 cal");
+    await card.click();
+    const copies = page.getByRole("dialog", { name: "IPA ×4" });
+    await expect(copies.getByRole("list", { name: "Each IPA" }).getByRole("button")).toHaveCount(4);
+    await copies.getByRole("button", { name: "Have another" }).click();
+    await expect(sheet.getByLabel("Name")).toHaveValue("IPA");
+    await expect(sheet.getByRole("switch", { name: "Alcoholic drink" })).toBeChecked();
+    await expect(sheet.getByLabel("Calories")).toHaveValue("200");
+    await sheet.getByRole("button", { name: "Log", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText("5 drinks · 30% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
+
+    await entries.getByRole("button", { name: /^IPA ×5 / }).click();
+    await page.getByRole("dialog", { name: "IPA ×5" }).getByRole("list", { name: "Each IPA" }).getByRole("button").first().click();
+    const change = page.getByRole("dialog", { name: "Change IPA" });
+    await change.getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
+    await expect(change).toBeHidden();
+    await expect(entries.getByRole("button", { name: /^IPA ×4 / })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("4 drinks · 20% off the day's diet XP")).toBeVisible();
+
     // The week counts them, and the streak as of today.
     await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Week" }).click();
     const totals = page.getByRole("definition");

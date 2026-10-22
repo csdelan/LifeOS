@@ -113,8 +113,8 @@ test.describe("accessibility", () => {
   }
 
   // Drinks (FOOD-6), in both themes: the Log food sheet with Alcoholic drink on (the score
-  // greyed out at 1), then today with three drinks (the drink tiles, the cut and the streak),
-  // and the week and month with them counted.
+  // greyed out at 1), then today with three drinks (one combined card, the cut and the streak),
+  // the card's list of copies (FOOD-7), and the week and month with them counted.
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /food with drinks, ${theme} theme`, async ({ page }) => {
       const scan = async () => {
@@ -146,6 +146,15 @@ test.describe("accessibility", () => {
       await expect(page.getByText("3 drinks · 10% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
       const dayScan = await scan();
       expect(dayScan, JSON.stringify(dayScan, null, 2)).toEqual([]);
+
+      // The three show as one card (FOOD-7), which lists its copies.
+      await page.getByRole("button", { name: /^Lager ×3 / }).click();
+      const copies = page.getByRole("dialog", { name: "Lager ×3" });
+      await expect(copies.getByRole("button", { name: "Have another" })).toBeVisible();
+      const copiesScan = await scan();
+      expect(copiesScan, JSON.stringify(copiesScan, null, 2)).toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(copies).toBeHidden();
 
       await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Week" }).click();
       await expect(page.getByRole("definition").filter({ hasText: /^3 drinks$/ })).toBeVisible({ timeout: 10_000 });
