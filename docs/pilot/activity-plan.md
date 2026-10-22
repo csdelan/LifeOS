@@ -182,7 +182,8 @@ Checked against Oura's API v2 docs and OpenAPI spec 1.42 on 2026-10-22 (§7).
   in the same transaction. The API and the CLI can't both spend it, and a crash can't lose
   it.
 - **A real refresh is tried on the first day of A6.** One third-party report says apps made
-  in Oura's new portal must refresh at a different, undocumented token URL.
+  in Oura's new portal must refresh at a different, undocumented token URL. *Tried
+  2026-10-22: a new-portal app refreshes at `api.ouraring.com/oauth/token` as documented.*
 - **A spent or revoked token** (`invalid_grant`, or a 401) marks the connection as needing
   to reconnect. The page then shows **Reconnect Oura**.
 - **Disconnect** revokes the token at Oura and clears it. Data already synced stays, since
@@ -1096,11 +1097,11 @@ plus:
     `workout`, which were granted.
   - Agents don't read Chris's real Oura data (§7), so his token wasn't used to probe Oura.
     LifeOS now keeps what Oura says instead.
-  - **The likely cause:** LifeOS sent the browser straight to
+  - **The cause (confirmed when the reconnect worked):** LifeOS sent the browser straight to
     `cloud.ouraring.com/oauth/authorize`. The new portal's documented
     `developer.ouraring.com/authorize` redirects there, but adds `prompt=consent` and
     `acr_values=…default_ext`: by its name, the sign-in for the external API. A token signed
-    in without it may be one the data API won't take. Checked with a made-up client id, the
+    in without it is one the data API won't take. Checked with a made-up client id, the
     redirect keeps every parameter LifeOS sends, PKCE included. Oura's token URL stays
     `api.ouraring.com/oauth/token`; the portal has none of its own.
 - **What changed after it:**
@@ -1115,13 +1116,13 @@ plus:
     documented clients do.
   - The page's banner no longer ends a reason that has its own period with a second one
     (`asSentence`).
-- **Left for Chris:**
-  1. Reconnect Oura on staging's Activity page. Oura asks for consent again. If the read is
-     refused again, the banner and `bsk oura status` now say which collection and why.
-  2. On day one, force a real refresh with `bsk oura refresh`, with `.env` loaded. If Oura
-     refuses it, the refresh URL moves to `moi.ouraring.com` with the `Oura__RefreshUrl`
-     secret (A1).
-  3. For a week, compare the page with the Oura app, imported workouts included if there
-     are any.
-- **Not built yet:** the `bsk oura forget` purge (§7), which this plan says is best done
-  before real data reaches staging.
+- **Working on staging (2026-10-22):**
+  - Chris reconnected through the portal's sign-in, and the Activity page filled in.
+  - A forced refresh (`bsk oura refresh`, with `.env` loaded) worked at
+    `api.ouraring.com/oauth/token`, so the `moi.ouraring.com` fallback isn't needed.
+  - A sync on the refreshed token worked, and the history is all in, back to 2023-04-27.
+    The sync's output was discarded, so no agent saw the data (§7).
+- **Left for Chris:** for a week, compare the page with the Oura app, imported workouts
+  included if there are any. Then A6 is ticked.
+- **Not built yet:** the `bsk oura forget` purge (§7). Real data is on staging now, so a
+  deletion request would have to wait for it to be built.
