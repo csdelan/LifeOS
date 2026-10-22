@@ -29,6 +29,8 @@ function summary(overrides: Partial<FoodDaySummary> = {}): FoodDaySummary {
     fastAward: 7,
     total: 39,
     cap: 40,
+    drinks: 0,
+    drinkFactor: 1,
     paid: { fast: null, diet: null, total: 0, baseTotal: 0 },
     ...overrides,
   };

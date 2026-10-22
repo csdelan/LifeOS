@@ -653,7 +653,7 @@ fast, 39 of 40) plus beers of 150 calories each.
 - [x] F5 — Week and month views
 - [x] F6 — Photos (migration 0035, Supabase Storage)
 - [x] F7 — Drinks in the kernel (migration 0038)
-- [ ] F8 — Drinks on the page
+- [x] F8 — Drinks on the page
 - [ ] F9 — Combined entries
 
 ### As built
@@ -834,3 +834,49 @@ fast, 39 of 40) plus beers of 150 calories each.
   `bsk food drinks` prints the count and today's streak, `--json` everywhere.
 - **Oldest first** reached `bsk food` and the API at once, since both read
   `FoodReads.GetDayAsync`; the page's gallery follows in F8.
+
+**F8 (2026-10-22).** As planned in §7, plus:
+
+- **The Log food sheet's Alcoholic drink switch** sits just above the score, with what a drink
+  is and what more than two cost. On, the score greys out at 1 and the meal type reads "Drink
+  (it's alcoholic)" on a new entry, or Drink on one already logged. Off, the score picked
+  before comes back. Log again carries the flag, and its chip says "drink" in place of the
+  score ("IPA · drink · 200 cal").
+- **The gallery** shows a drink as a glass of beer on its score tile, with "1 · alcoholic" where
+  other entries name their score's word. The entry's button says "(alcoholic drink)".
+- **The Diet XP card** adds the drinks under the parts ("4 drinks · 20% off the day's diet
+  XP"; "2 drinks · the cut starts above 2"). While the day is open with a cut and a paid fast,
+  it adds that the fast is re-scored when the day closes. "On track for" is already cut.
+- **The Sobriety streak card** sits under the Diet XP card on the Day view. It shows "12 days
+  sober" or "A drink today", then "Drink-free since Oct 14 · best 30 days", and a line on the
+  first day and unlogged days. Its heading names the day when it isn't today, and it's hidden
+  before the Food Log's first day.
+- **Week and Month** add two totals from the Food Log's first day:
+  - **Drinks:** "4 drinks", with "Drink-free 2 of 3 days".
+  - **Sobriety streak:** "0 days", with "A drink today · best 6 days". It's labelled with its
+    day ("on Oct 25") for a past period.
+
+  The totals grid goes to three columns when they show. Each day's bar is shortened by its
+  cut, like its XP. Its facts and its button add the drinks, and its tooltip adds the cut. A
+  calendar day with drinks shows a glass and the count, and the Table has a Drinks column.
+- **The page adds up the range's days** for the period's drinks; it doesn't call
+  `GET /api/food/drinks`, which waits for a later report.
+- **Ports:**
+  - `lib/diet-score.ts` gains `drinksFree`, `drinkCutPercent`, `drinkFactorFor`,
+    `DRINKS_TO_NOTHING` and `fastAwardUncut`. The cut is applied as whole percent before
+    rounding, so it matches the kernel's decimals.
+  - `lib/sobriety.ts` ports `Sobriety`.
+  - Both are tested on the kernel's tables.
+- **The mock** follows the kernel:
+  - the flag on the entry's payload, kept through an edit or a photo
+  - a drink stored at 1 and typed as a drink
+  - the fast paid in full until the close, then cut, citing the drinks
+  - entries oldest first
+  - the streak on the day and range reads (`firstDay` is the earliest folded day)
+- **Tests:**
+  - Vitest: the drinks table and the rounding in `diet-score.test.ts`, `sobriety.test.ts`, the
+    mock's drinks (as the kernel's `FoodDrinksTests`), and the totals' drinks.
+  - An e2e path: four IPAs with the score locked, the cut, the streak, the week's count and
+    the Table.
+  - An a11y scan in both themes: the sheet with the switch on, a day with drinks, the week
+    and the month.

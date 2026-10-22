@@ -2942,7 +2942,13 @@ photos. Build moves `mapped → built`.
 ### FOOD-6 — Alcoholic drinks are flagged, cut the day's diet XP above two, and keep a sobriety streak
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-10-22 — on the page, F8):** the Log food sheet's Alcoholic drink switch greys
+the score out at 1 and types the entry a drink; the gallery shows a drink as a glass; the Diet
+XP card names the drinks and their cut; a Sobriety streak card sits under it; Week and Month
+add the period's drinks, its drink-free days and the streak, mark each day's drinks, and add a
+Drinks column to the Table. Build moves `building → built`.
 
 **Update (2026-10-22 — the kernel landed, F7):** migration 0038 adds `alcoholic` to
 `v_meal` and `drinks` / `drink_event_ids` to `v_food_day`. A drink is stored at score 1 with
@@ -2987,7 +2993,10 @@ day's entries read oldest first. Build moves `needs-kernel → building`: the pa
 ### FOOD-7 — Identical entries on a day show as one card, and the day reads oldest first
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      building
+
+**Update (2026-10-22 — oldest first, F7–F8):** the day's entries read oldest first in the API,
+`bsk food` and the page's gallery. Build moves `mapped → building`: combined cards are F9.
 
 **Workflow (Chris):**
 - "If I copy a food log and apply it to the same day, it will record the new log with the new
@@ -3594,7 +3603,7 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 - **Drinks, the sobriety streak and combined entries** (FOOD-6 / FOOD-7): the alcohol flag on
   a food entry, the cut above two drinks a day, the streak, a drinks count over any range,
   identical entries combined on the day's page, entries oldest first. — **Building** (F7, the
-  kernel, landed with migration 0038; F8–F9, the page, in
+  kernel, landed with migration 0038, and F8, drinks on the page; F9, combined entries, in
   [food-log-plan.md](food-log-plan.md) §7).
 - **Oura integration** (ACTIVITY-1..4 / D14):
   - an OAuth connection with encrypted tokens in `bsk_ops`

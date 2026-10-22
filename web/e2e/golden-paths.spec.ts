@@ -250,6 +250,52 @@ test.describe("golden paths", () => {
     await expect(page.getByText("39 base → 46 Health XP (×1.2)")).toBeVisible();
   });
 
+  test("Food Log: log drinks with the score locked, see the cut and the streak, and count them in the week", async ({
+    page,
+  }) => {
+    await beforeActivityXp(page);
+    await page.goto("/food");
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("region", { name: "Sobriety streak" })).toContainText(/\d+ days sober/);
+
+    // An alcoholic drink scores 1, greyed out, and is typed as a drink.
+    await page.getByRole("button", { name: "Log food", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Log food" });
+    await sheet.getByLabel("Name").fill("IPA");
+    await sheet.getByRole("radio", { name: "4 · good" }).check();
+    await sheet.getByRole("switch", { name: "Alcoholic drink" }).click();
+    await expect(sheet.getByRole("radio", { name: "1 · junk" })).toBeChecked();
+    await expect(sheet.getByRole("radio", { name: "4 · good" })).toBeDisabled();
+    await expect(sheet.getByText("A drink always scores 1.")).toBeVisible();
+    await expect(sheet.getByLabel("Meal type")).toHaveValue("");
+    await expect(sheet.getByRole("option", { name: "Drink (it's alcoholic)" })).toBeAttached();
+    await sheet.getByLabel("Calories").fill("200");
+    await sheet.getByRole("button", { name: "Log", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    const entries = page.getByRole("list", { name: "Entries for today" });
+    await expect(entries.getByRole("button", { name: /^IPA \(alcoholic drink\), / })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("region", { name: "Sobriety streak" })).toContainText("A drink today");
+
+    // Three more with Log again: four drinks take 20% off the day.
+    for (let i = 0; i < 3; i++) {
+      await page.getByRole("button", { name: "Log food", exact: true }).click();
+      await sheet.getByRole("button", { name: "Log again: IPA · drink · 200 cal" }).click();
+      await expect(sheet.getByRole("switch", { name: "Alcoholic drink" })).toBeChecked();
+      await sheet.getByRole("button", { name: "Log", exact: true }).click();
+      await expect(sheet).toBeHidden();
+    }
+    await expect(page.getByText("4 drinks · 20% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
+
+    // The week counts them, and the streak as of today.
+    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Week" }).click();
+    const totals = page.getByRole("definition");
+    await expect(totals.filter({ hasText: /^4 drinks$/ })).toBeVisible({ timeout: 10_000 });
+    await expect(totals.filter({ hasText: /^Drink-free \d+ of \d+ days$/ })).toBeVisible();
+    await expect(totals.filter({ hasText: /^A drink today · best \d+ days$/ })).toBeVisible();
+    await page.getByRole("button", { name: "Table", exact: true }).click();
+    await expect(page.getByRole("row", { name: /\(today\)/ })).toContainText(/4$/);
+  });
+
   test("Food Log: switch to the week, step back a month, and open a day", async ({ page }) => {
     await beforeActivityXp(page);
     await page.goto("/food");

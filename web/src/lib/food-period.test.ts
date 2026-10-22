@@ -30,6 +30,8 @@ function day(on: string, overrides: Partial<FoodDaySummary> = {}): FoodDaySummar
     fastAward: 0,
     total: 0,
     cap: 40,
+    drinks: 0,
+    drinkFactor: 1,
     paid: { fast: null, diet: null, total: 0, baseTotal: 0 },
     ...overrides,
   };
@@ -117,7 +119,29 @@ describe("foodTotals", () => {
       averagePaid: 46,
       loggedDays: 2,
       averageCalories: 900,
+      drinks: 0,
+      countedDays: 0,
+      drinkFreeDays: 0,
     });
+  });
+
+  it("counts drinks over the days so far, and drink-free days from the Food Log's first day", () => {
+    const days = [
+      day("2026-10-17"), // before the first day: not counted
+      day("2026-10-18", { meals: 3, drinks: 4 }),
+      day("2026-10-19"), // nothing logged: drink-free
+      day(TODAY, { meals: 2, drinks: 1 }),
+      day("2026-10-21", { drinks: 9 }), // ahead: ignored
+    ];
+    expect(foodTotals(days, TODAY, "2026-10-18")).toMatchObject({ drinks: 5, countedDays: 3, drinkFreeDays: 1 });
+    // Without the first day there's nothing to count drink-free days against.
+    expect(foodTotals(days, TODAY)).toMatchObject({ drinks: 5, countedDays: 0, drinkFreeDays: 0 });
+  });
+
+  it("names a day's drinks in words", () => {
+    expect(dayInWords(day("2026-10-19", { meals: 2, calories: 300, drinks: 2, total: 0 }), TODAY)).toContain(
+      "2 drinks",
+    );
   });
 
   it("has no averages with nothing to average", () => {

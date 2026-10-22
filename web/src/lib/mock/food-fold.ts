@@ -1,6 +1,6 @@
 /**
- * The mock's food views (migration 0034): food entries, fasts and day closes as append-only
- * events, folded the way `bsk.v_meal`, `bsk.v_fast` and `bsk.v_food_day` fold them.
+ * The mock's food views (migrations 0034 and 0038): food entries, fasts and day closes as
+ * append-only events, folded the way `bsk.v_meal`, `bsk.v_fast` and `bsk.v_food_day` fold them.
  *
  * - Each entry or fast is versioned by its own id; the newest version by `recordedAt` (then
  *   write order) wins, never by when it was eaten, and a voided newest version deletes it.
@@ -21,6 +21,8 @@ export interface MockMealPayload {
   fatG?: number | null;
   mealType?: FoodMealType;
   photo?: string | null;
+  /** An alcoholic drink (FOOD-6), left out when false. */
+  alcoholic?: boolean;
   voided?: boolean;
 }
 
@@ -68,6 +70,9 @@ export interface FoodDayFacts {
   lastRecordedAt: string | null;
   /** The entry versions the day reads, by when they were eaten. */
   foodEventIds: string[];
+  /** The day's alcoholic drinks, and their versions by when they were drunk. */
+  drinks: number;
+  drinkEventIds: string[];
 }
 
 export interface FoodFold {
@@ -121,6 +126,7 @@ export function foldFood(events: readonly MockFoodEvent[], today: string, now: s
       eatenAt: e.occurredAt,
       eatenOn: localDay(e.occurredAt),
       photoArtifactId: m.photo ?? null,
+      alcoholic: m.alcoholic === true,
       duringFast: null,
       firstLoggedAt: seen.first,
       loggedAt: e.recordedAt,
@@ -173,6 +179,10 @@ export function foldFood(events: readonly MockFoodEvent[], today: string, now: s
     d.calories += m.calories;
     d.scoreCalories += m.score * m.calories;
     d.foodEventIds.push(m.eventId);
+    if (m.alcoholic) {
+      d.drinks += 1;
+      d.drinkEventIds.push(m.eventId);
+    }
     d.lastRecordedAt = later(d.lastRecordedAt, m.loggedAt);
   }
   for (const f of fasts) {
@@ -218,6 +228,8 @@ export function emptyDay(day: string, closed: boolean): FoodDayFacts {
     closed,
     lastRecordedAt: null,
     foodEventIds: [],
+    drinks: 0,
+    drinkEventIds: [],
   };
 }
 
@@ -226,6 +238,7 @@ export function scoreFacts(facts: FoodDayFacts): DietScore {
     calories: facts.calories,
     scoreCalories: facts.scoreCalories,
     longestFastSeconds: facts.longestFastSeconds,
+    drinks: facts.drinks,
   });
 }
 
@@ -250,6 +263,8 @@ export function toSummary(facts: FoodDayFacts, paid: FoodPaid, cap: number): Foo
     fastAward: score.fastAward,
     total: score.total,
     cap,
+    drinks: score.drinks,
+    drinkFactor: score.drinkFactor,
     paid,
   };
 }

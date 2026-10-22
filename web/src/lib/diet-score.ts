@@ -6,8 +6,10 @@
  * - Quality is a straight line on the calorie-weighted average score: 1 pays 0, 5 pays 28.
  * - Calories pay 4 from 500 to 2,000, fading evenly to 0 at 2,500.
  * - Fasting pays nothing up to 12 hours, then evenly up to 8 at 24 hours, by the second.
+ * - Drinks (FOOD-6, plan §7.2): an alcoholic entry scores 1, and each drink above two cuts the
+ *   day's diet XP by 10%, both awards, so twelve leave nothing.
  *
- * The food award (quality + calories) and the fast award are each rounded, halves up.
+ * The food award (quality + calories) and the fast award are each cut, then rounded, halves up.
  */
 import type { FoodMealType } from "@/lib/production-ui-types";
 
@@ -21,9 +23,15 @@ export const DIET_RULES = {
   calorieZeroAt: 2500,
   fastFromHours: 12,
   fastFullAtHours: 24,
+  /** Drinks a day takes before the cut starts. */
+  drinksFree: 2,
+  /** What each drink above `drinksFree` takes off the day's diet XP, in percent. */
+  drinkCutPercent: 10,
 } as const;
 
 export const SCORE_MIN = 1;
+/** A drink's score: always the lowest. */
+export const DRINK_SCORE = SCORE_MIN;
 export const SCORE_MAX = 5;
 export const CALORIES_MAX = 5000;
 export const GRAMS_MAX = 1000;
@@ -32,14 +40,15 @@ export const NAME_MAX = 80;
 /** The most base Health XP a day's diet can pay. */
 export const DIET_CAP = DIET_RULES.qualityMax + DIET_RULES.caloriesMax + DIET_RULES.fastingMax;
 
-/** What the score reads of a day: its calories, Σ score × calories, and its longest fast. */
+/** What the score reads of a day: its calories, Σ score × calories, its longest fast and its drinks. */
 export interface DietFacts {
   calories: number;
   scoreCalories: number;
   longestFastSeconds: number | null;
+  drinks?: number;
 }
 
-/** A day's score: the three parts unrounded, the two awards rounded, and the average. */
+/** A day's score: the three parts unrounded, the two awards cut and rounded, and the average. */
 export interface DietScore {
   quality: number;
   caloriesPart: number;
@@ -49,6 +58,11 @@ export interface DietScore {
   total: number;
   /** The calorie-weighted average score, or null when the day has no calories. */
   averageScore: number | null;
+  drinks: number;
+  /** What's left after the drinks cut: 1 up to two drinks, 0 from twelve. */
+  drinkFactor: number;
+  /** The fast award before the cut: what a fast pays while its day is open. */
+  fastAwardUncut: number;
 }
 
 /**
@@ -77,7 +91,21 @@ export function fastingFor(seconds: number): number {
   return (r.fastingMax * over) / span;
 }
 
-/** Scores one day (food-log plan §2.1). */
+/** The drinks at which the cut leaves nothing (12). */
+export const DRINKS_TO_NOTHING =
+  DIET_RULES.drinksFree + Math.ceil(100 / DIET_RULES.drinkCutPercent);
+
+/** The percent of the day's diet XP `drinks` leave: 100 up to two, 10 less for each one more. */
+function percentLeft(drinks: number): number {
+  return Math.max(0, 100 - DIET_RULES.drinkCutPercent * Math.max(0, drinks - DIET_RULES.drinksFree));
+}
+
+/** What's left of the day's diet XP after `drinks`: 1, 0.9, … 0. */
+export function drinkFactorFor(drinks: number): number {
+  return percentLeft(drinks) / 100;
+}
+
+/** Scores one day (food-log plan §2.1, the cut in §7.2). */
 export function scoreDay(facts: DietFacts): DietScore {
   const r = DIET_RULES;
   const steps = SCORE_MAX - SCORE_MIN;
@@ -90,9 +118,40 @@ export function scoreDay(facts: DietFacts): DietScore {
       : 0;
   const caloriesPart = caloriesPartFor(facts.calories);
   const fasting = fastingFor(facts.longestFastSeconds ?? 0);
-  const foodAward = roundHalfUp(quality + caloriesPart);
-  const fastAward = roundHalfUp(fasting);
-  return { quality, caloriesPart, fasting, foodAward, fastAward, total: foodAward + fastAward, averageScore };
+  const drinks = Math.max(0, facts.drinks ?? 0);
+  const left = percentLeft(drinks);
+  // Cut, then rounded: as one division by 100, so 90% of 7.33 is 6.6 and rounds to 7.
+  const foodAward = roundHalfUp(((quality + caloriesPart) * left) / 100);
+  const fastAward = roundHalfUp((fasting * left) / 100);
+  return {
+    quality,
+    caloriesPart,
+    fasting,
+    foodAward,
+    fastAward,
+    total: foodAward + fastAward,
+    averageScore,
+    drinks,
+    drinkFactor: left / 100,
+    fastAwardUncut: roundHalfUp(fasting),
+  };
+}
+
+/** "1 drink", "4 drinks". */
+export function drinksText(drinks: number): string {
+  return `${drinks} drink${drinks === 1 ? "" : "s"}`;
+}
+
+/**
+ * A day's drinks in words: "2 drinks · the cut starts above 2", "4 drinks · 20% off the day's
+ * diet XP", or null with none.
+ */
+export function drinksLine(drinks: number): string | null {
+  if (drinks <= 0) return null;
+  const left = percentLeft(drinks);
+  return left === 100
+    ? `${drinksText(drinks)} · the cut starts above ${DIET_RULES.drinksFree}`
+    : `${drinksText(drinks)} · ${100 - left}% off the day's diet XP`;
 }
 
 // ---------------------------------------------------------------------------

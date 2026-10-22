@@ -6,6 +6,7 @@ import { FastingCard } from "@/components/food/fasting-card";
 import { FoodPeriodView } from "@/components/food/food-period-view";
 import { LogFoodSheet } from "@/components/food/log-food-sheet";
 import { MealGallery } from "@/components/food/meal-gallery";
+import { SobrietyCard } from "@/components/food/sobriety-card";
 import { SummaryCard } from "@/components/food/summary-card";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton } from "@/components/primitives/skeletons";
@@ -26,9 +27,11 @@ const VIEWS: { id: FoodView; label: string }[] = [
  * The Food Log (FOOD-1..4, food-log plan §3.7): a day at a time by default, or the week or
  * month around `date` (`?view=week|month`).
  *
- * - Day: the fasting card (a running fast, Begin or End, past fasts), the day's diet score
- *   and its entries as a gallery; tapping one opens it for editing.
- * - Week and Month: the period's totals and each day's diet XP; picking a day opens it.
+ * - Day: the fasting card (a running fast, Begin or End, past fasts), the day's diet score,
+ *   the sobriety streak as of the day, and its entries as a gallery, oldest first; tapping one
+ *   opens it for editing.
+ * - Week and Month: the period's totals (its drinks and the streak among them) and each day's
+ *   diet XP; picking a day opens it.
  * - Log food opens the sheet; on a phone it sits at the bottom of the screen, under the thumb.
  *
  * Opening the page settles the food days that are due (`POST /api/food/settle`): a day that
@@ -135,6 +138,7 @@ export function FoodPage() {
                 <div className="space-y-4">
                   <FastingCard day={day} />
                   <SummaryCard summary={day.summary} isToday={day.day === day.today} />
+                  <SobrietyCard sobriety={day.sobriety} today={day.today} />
                 </div>
                 <section aria-labelledby="entries-title">
                   <h2 id="entries-title" className="type-scale-section mb-3 text-muted-foreground">

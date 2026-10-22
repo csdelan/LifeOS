@@ -1,5 +1,6 @@
 import {
   AppleIcon,
+  BeerIcon,
   CupSodaIcon,
   EggIcon,
   HourglassIcon,
@@ -34,11 +35,11 @@ function nutrients(meal: MealRow): string | null {
 }
 
 /**
- * The day's entries as a gallery (FOOD-4), newest first: the photo's thumbnail (FOOD-5), or a
- * tile coloured by score with the meal type's icon; the name, time and calories, and the score
- * as a number and a word, so colour is never the only cue. An entry eaten inside a recorded
- * fast is flagged. Tapping a thumbnail shows the photo full size; tapping the rest opens the
- * entry for editing.
+ * The day's entries as a gallery (FOOD-4), oldest first (FOOD-7): the photo's thumbnail
+ * (FOOD-5), or a tile coloured by score with the meal type's icon (a glass of beer for an
+ * alcoholic drink, FOOD-6); the name, time and calories, and the score as a number and a word,
+ * so colour is never the only cue. An entry eaten inside a recorded fast is flagged. Tapping a
+ * thumbnail shows the photo full size; tapping the rest opens the entry for editing.
  */
 export function MealGallery({
   meals,
@@ -65,7 +66,7 @@ export function MealGallery({
     <>
       <ul aria-label={`Entries for ${dayLabel}`} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {meals.map((meal) => {
-          const Icon = MEAL_ICONS[meal.mealType] ?? UtensilsIcon;
+          const Icon = meal.alcoholic ? BeerIcon : (MEAL_ICONS[meal.mealType] ?? UtensilsIcon);
           const extra = nutrients(meal);
           const photo = meal.photoArtifactId;
           return (
@@ -73,7 +74,7 @@ export function MealGallery({
               <button
                 type="button"
                 onClick={() => onOpen(meal)}
-                aria-label={`${meal.name}, ${formatClock(meal.eatenAt)}: change or delete`}
+                aria-label={`${meal.name}${meal.alcoholic ? " (alcoholic drink)" : ""}, ${formatClock(meal.eatenAt)}: change or delete`}
                 className="flex h-full w-full items-stretch gap-3 rounded-xl bg-card p-3 text-left ring-1 ring-foreground/10 transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50"
               >
                 {photo ? (
@@ -93,7 +94,7 @@ export function MealGallery({
                     {formatClock(meal.eatenAt)} · {mealTypeWord(meal.mealType)} · {meal.calories.toLocaleString()} cal
                   </span>
                   <span className="mt-1 inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
-                    {scoreLabel(meal.score)}
+                    {meal.alcoholic ? `${meal.score} · alcoholic` : scoreLabel(meal.score)}
                   </span>
                   {extra ? <span className="mt-1 block text-xs text-muted-foreground">{extra}</span> : null}
                   {meal.duringFast ? (

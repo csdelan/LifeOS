@@ -20,6 +20,8 @@ import { Switch } from "@/components/ui/switch";
 import {
   CALORIE_SIZES,
   CALORIES_MAX,
+  DIET_RULES,
+  DRINK_SCORE,
   formatDuration,
   GRAMS_MAX,
   guessMealType,
@@ -41,6 +43,8 @@ import { cn } from "@/lib/utils";
  * - Name, with recent entries under it ("Log again" fills the rest; the time stays now).
  * - The health score 1-5 with its examples, calories from quick sizes or typed, the time with
  *   quick picks, the meal type (guessed from the time until it's chosen), nutrients folded away.
+ * - Alcoholic drink (FOOD-6): the score greys out at 1 and the meal type becomes Drink; turned
+ *   off, the score picked before comes back. Log again carries the flag.
  * - With a fast running and calories above 0, "Ends your 17 h fast at 12:30 pm", on by default.
  * - A photo (FOOD-5): Take photo opens the phone's camera, Choose photo its library. It's shrunk
  *   to 1,200 px in the browser first. On a new entry it's sent once the entry is logged; on an
@@ -124,7 +128,9 @@ function FoodForm({
   const ids = useId();
   const recent = useFoodRecent(!meal);
   const [name, setName] = useState(meal?.name ?? "");
-  const [score, setScore] = useState<number | null>(meal?.score ?? null);
+  // The score picked; a drink shows and sends 1 instead, and gets this back when it's turned off.
+  const [score, setScore] = useState<number | null>(meal && !meal.alcoholic ? meal.score : null);
+  const [alcoholic, setAlcoholic] = useState(meal?.alcoholic ?? false);
   const [calories, setCalories] = useState(meal ? String(meal.calories) : "");
   const [eatenAt, setEatenAt] = useState(() =>
     toLocalInput(meal?.eatenAt ?? (day === today ? Date.now() : new Date(`${day}T12:00`))),
@@ -160,7 +166,8 @@ function FoodForm({
   const at = fromLocalInput(eatenAt);
   const cal = wholeOrNull(calories);
   const grams = [wholeOrNull(protein), wholeOrNull(carbs), wholeOrNull(fat)];
-  const guessed = at ? guessMealType(new Date(at)) : "snack";
+  const shownScore = alcoholic ? DRINK_SCORE : score;
+  const guessed = alcoholic ? "drink" : at ? guessMealType(new Date(at)) : "snack";
   const endsFast =
     !meal && running && typeof cal === "number" && cal > 0 && at && Date.parse(at) > Date.parse(running.startedAt)
       ? { seconds: Math.floor((Date.parse(at) - Date.parse(running.startedAt)) / 1000), at }
@@ -168,7 +175,7 @@ function FoodForm({
 
   const problem = !name.trim()
     ? "Say what it was."
-    : score === null
+    : shownScore === null
       ? "Pick a health score."
       : cal === null || cal === "bad" || cal < 0 || cal > CALORIES_MAX
         ? `Calories are a whole number from 0 to ${CALORIES_MAX.toLocaleString()}.`
@@ -187,13 +194,21 @@ function FoodForm({
 
   function logAgain(m: MealRow) {
     setName(m.name);
-    setScore(m.score);
+    setAlcoholic(m.alcoholic);
+    if (!m.alcoholic) setScore(m.score);
     setCalories(String(m.calories));
     setProtein(m.proteinG?.toString() ?? "");
     setCarbs(m.carbsG?.toString() ?? "");
     setFat(m.fatG?.toString() ?? "");
     setShowNutrients(m.proteinG !== null || m.carbsG !== null || m.fatG !== null);
     setMealType("");
+  }
+
+  /** Turned on, the meal type becomes Drink; turned off, it goes back to what it was. */
+  function changeAlcoholic(on: boolean) {
+    setAlcoholic(on);
+    if (on) setMealType(meal ? "drink" : "");
+    else if (meal) setMealType(meal.alcoholic ? mealType : meal.mealType);
   }
 
   function hold(next: { blob: Blob; name: string } | null) {
@@ -252,10 +267,11 @@ function FoodForm({
   }
 
   function submit() {
-    if (problem || pending || score === null || typeof cal !== "number" || !at) return;
+    if (problem || pending || shownScore === null || typeof cal !== "number" || !at) return;
     const req: FoodEntryRequest = {
       name: name.trim(),
-      score,
+      score: shownScore,
+      alcoholic,
       calories: cal,
       eatenAt: at,
       mealType: mealType || undefined,
@@ -284,7 +300,7 @@ function FoodForm({
   const shownPhoto = meal ? photoId : (held?.url ?? null);
   const photoName = name.trim() || meal?.name || "this entry";
 
-  const chosen = SCORES.find((s) => s.score === score);
+  const chosen = SCORES.find((s) => s.score === shownScore);
 
   return (
     <form
@@ -327,7 +343,7 @@ function FoodForm({
                   <HistoryIcon className="size-3" aria-hidden />
                   <span>
                     <span className="sr-only">Log again: </span>
-                    {m.name} · {m.score} · {m.calories.toLocaleString()} cal
+                    {m.name} · {m.alcoholic ? "drink" : m.score} · {m.calories.toLocaleString()} cal
                   </span>
                 </button>
               ))}
@@ -432,15 +448,37 @@ function FoodForm({
           />
         </div>
 
-        <fieldset className="space-y-1.5">
+        <div className="flex items-start gap-3 rounded-lg bg-muted/60 px-3 py-2.5">
+          <Switch
+            id={`${ids}-alcoholic`}
+            checked={alcoholic}
+            onCheckedChange={changeAlcoholic}
+            disabled={pending}
+            aria-describedby={`${ids}-alcoholic-help`}
+            className="mt-0.5"
+          />
+          <div className="space-y-0.5">
+            <Label htmlFor={`${ids}-alcoholic`} className="font-normal">
+              Alcoholic drink
+            </Label>
+            <p id={`${ids}-alcoholic-help`} className="text-xs text-muted-foreground">
+              A beer, a glass of wine or a shot: one entry is one drink. It always scores 1, and more than{" "}
+              {DIET_RULES.drinksFree} in a day cut the day's diet XP.
+            </p>
+          </div>
+        </div>
+
+        <fieldset className="space-y-1.5" disabled={alcoholic || pending}>
           <legend className="text-sm font-medium">Health score</legend>
-          <div className="grid grid-cols-5 gap-1.5">
+          <div className={cn("grid grid-cols-5 gap-1.5", alcoholic && "opacity-50")}>
             {SCORES.map((s) => (
               <label
                 key={s.score}
                 className={cn(
-                  "relative flex min-h-14 cursor-pointer flex-col items-center justify-center rounded-lg px-1 py-1.5 text-center has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50",
-                  score === s.score ? "bg-muted ring-2 ring-primary" : "bg-card ring-1 ring-foreground/10 hover:bg-muted",
+                  "relative flex min-h-14 cursor-pointer flex-col items-center justify-center rounded-lg px-1 py-1.5 text-center has-[:disabled]:cursor-not-allowed has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50",
+                  shownScore === s.score
+                    ? "bg-muted ring-2 ring-primary"
+                    : "bg-card ring-1 ring-foreground/10 hover:bg-muted has-[:disabled]:hover:bg-card",
                 )}
               >
                 <input
@@ -448,10 +486,9 @@ function FoodForm({
                   name={`${ids}-score`}
                   value={s.score}
                   aria-label={scoreLabel(s.score)}
-                  checked={score === s.score}
+                  checked={shownScore === s.score}
                   onChange={() => setScore(s.score)}
-                  disabled={pending}
-                  className="absolute inset-0 z-10 cursor-pointer appearance-none rounded-lg opacity-0"
+                  className="absolute inset-0 z-10 cursor-pointer appearance-none rounded-lg opacity-0 disabled:cursor-not-allowed"
                 />
                 <span aria-hidden className={cn("mb-1 h-1.5 w-6 rounded-full", SCORE_FILL[s.score])} />
                 <span className="text-lg leading-none font-semibold">{s.score}</span>
@@ -460,7 +497,11 @@ function FoodForm({
             ))}
           </div>
           <p className="text-xs text-muted-foreground" aria-live="polite">
-            {chosen ? `${chosen.word[0].toUpperCase()}${chosen.word.slice(1)}: ${chosen.examples}.` : "1 junk · 3 average · 5 very healthy"}
+            {alcoholic
+              ? "A drink always scores 1."
+              : chosen
+                ? `${chosen.word[0].toUpperCase()}${chosen.word.slice(1)}: ${chosen.examples}.`
+                : "1 junk · 3 average · 5 very healthy"}
           </p>
         </fieldset>
 
@@ -534,7 +575,9 @@ function FoodForm({
             onChange={(e) => setMealType(e.target.value as FoodMealType | "")}
             className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
           >
-            {!meal ? <option value="">{`${mealTypeWord(guessed)} (from the time)`}</option> : null}
+            {!meal ? (
+              <option value="">{`${mealTypeWord(guessed)} (${alcoholic ? "it's alcoholic" : "from the time"})`}</option>
+            ) : null}
             {MEAL_TYPES.map((t) => (
               <option key={t} value={t}>
                 {mealTypeWord(t)}

@@ -1,16 +1,17 @@
 import { useMemo, useState } from "react";
-import { CalendarDaysIcon } from "lucide-react";
+import { BeerIcon, CalendarDaysIcon } from "lucide-react";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton } from "@/components/primitives/skeletons";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { addDays, formatDay } from "@/lib/dates";
-import { DIET_CAP, DIET_RULES, formatDuration, formatPart } from "@/lib/diet-score";
+import { DIET_CAP, DIET_RULES, drinksLine, drinksText, formatDuration, formatPart } from "@/lib/diet-score";
 import { multiplierLabel } from "@/lib/domains";
 import { dayInWords, dayStanding, dietHeat, foodTotals, type FoodPeriod } from "@/lib/food-period";
-import type { FoodDaySummary } from "@/lib/production-ui-types";
+import type { FoodDaySummary, SobrietyRow } from "@/lib/production-ui-types";
 import { useFoodDays } from "@/lib/queries";
 import { monthCells } from "@/lib/rewards-history";
+import { daysText, sobrietyHeadline } from "@/lib/sobriety";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -45,6 +46,7 @@ function dayFacts(day: FoodDaySummary): string {
     `${day.calories.toLocaleString()} cal`,
     day.averageScore !== null ? `score ${formatPart(day.averageScore)}` : null,
     day.longestFastSeconds ? `fast ${formatDuration(day.longestFastSeconds)}` : null,
+    day.drinks > 0 ? drinksText(day.drinks) : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -53,7 +55,9 @@ function dayFacts(day: FoodDaySummary): string {
 /**
  * The Food Log's Week and Month views (FOOD-4, food-log plan §3.7): the period's totals, then
  * the week as a row per day with its diet XP stacked by part out of 40, or the month as a
- * Monday-first calendar shaded by base; either as a table. Picking a day opens it.
+ * Monday-first calendar shaded by base; either as a table. Picking a day opens it. From the
+ * Food Log's first day, the totals add the period's drinks and the sobriety streak as of its
+ * last day so far, and each day shows its drinks (FOOD-6, plan §7.3).
  */
 export function FoodPeriodView({
   period,
@@ -91,7 +95,7 @@ export function FoodPeriodView({
 
   return (
     <div className={cn("space-y-6 transition-opacity", stale && "opacity-60")} aria-busy={stale || undefined}>
-      <PeriodTotals days={days} today={today} unit={unit} />
+      <PeriodTotals days={days} today={today} unit={unit} sobriety={range.data?.sobriety ?? null} />
 
       <section aria-labelledby="period-title" className="min-w-0 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -120,9 +124,20 @@ export function FoodPeriodView({
   );
 }
 
-function PeriodTotals({ days, today, unit }: { days: FoodDaySummary[]; today: string; unit: string }) {
-  const t = foodTotals(days, today);
-  const stats = [
+function PeriodTotals({
+  days,
+  today,
+  unit,
+  sobriety,
+}: {
+  days: FoodDaySummary[];
+  today: string;
+  unit: string;
+  /** The streak as of the period's last day so far; null when the period is before the Food Log began. */
+  sobriety: SobrietyRow | null;
+}) {
+  const t = foodTotals(days, today, sobriety?.firstDay ?? null);
+  const stats: { label: string; value: string; note?: string }[] = [
     { label: "Diet XP paid", value: `${t.paid.toLocaleString()} Health XP` },
     { label: "A closed day", value: t.averagePaid !== null ? `${t.averagePaid} on average` : "None closed yet" },
     {
@@ -131,15 +146,36 @@ function PeriodTotals({ days, today, unit }: { days: FoodDaySummary[]; today: st
     },
     { label: "Days closed", value: `${t.closedDays} of ${t.daysSoFar}` },
   ];
+  if (sobriety) {
+    stats.push(
+      {
+        label: "Drinks",
+        value: drinksText(t.drinks),
+        note: `Drink-free ${t.drinkFreeDays} of ${daysText(t.countedDays)}`,
+      },
+      {
+        label: sobriety.asOf === today ? "Sobriety streak" : `Sobriety streak on ${formatDay(sobriety.asOf)}`,
+        value: daysText(sobriety.days),
+        note:
+          sobriety.days === 0
+            ? `${sobrietyHeadline(sobriety, today)} · best ${daysText(sobriety.bestDays)}`
+            : `Best ${daysText(sobriety.bestDays)}`,
+      },
+    );
+  }
   return (
     <dl
       aria-label={`Totals for this ${unit}`}
-      className="grid grid-cols-2 gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10 md:grid-cols-4"
+      className={cn(
+        "grid grid-cols-2 gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10",
+        sobriety ? "md:grid-cols-3" : "md:grid-cols-4",
+      )}
     >
       {stats.map((s) => (
         <div key={s.label}>
           <dt className="text-xs text-muted-foreground">{s.label}</dt>
           <dd className="font-heading text-lg tabular-nums">{s.value}</dd>
+          {s.note ? <dd className="text-xs text-muted-foreground">{s.note}</dd> : null}
         </div>
       ))}
     </dl>
@@ -175,7 +211,8 @@ function WeekChart({
         {days.map((d) => {
           const standing = dayStanding(d, today);
           const figure = dayFigure(d, today);
-          const filled = PARTS.map((p) => ({ ...p, value: d[p.key] })).filter((p) => p.value > 0);
+          // More than two drinks shorten each part by the cut, as they do the day's XP.
+          const filled = PARTS.map((p) => ({ ...p, value: d[p.key] * d.drinkFactor })).filter((p) => p.value > 0);
           const used = filled.reduce((s, p) => s + p.value, 0);
           const isToday = d.day === today;
           return (
@@ -222,6 +259,7 @@ function WeekChart({
                     <span>
                       {PARTS.map((p) => `${p.label} ${formatPart(d[p.key])}`).join(" · ")}
                     </span>
+                    {d.drinks > 0 ? <span>{drinksLine(d.drinks)}</span> : null}
                     <span>
                       {standing.kind === "open"
                         ? `On track for ${standing.base} of ${DIET_CAP}`
@@ -235,8 +273,8 @@ function WeekChart({
         })}
       </ul>
       <p className="mt-2 text-[0.6875rem] text-muted-foreground">
-        Each bar is the day's base diet XP out of {DIET_CAP}; the number is what it paid, after the multiplier.
-        Today is on track until it closes. Pick a day to open it.
+        Each bar is the day's base diet XP out of {DIET_CAP}, after any drinks cut; the number is what it paid,
+        after the multiplier. Today is on track until it closes. Pick a day to open it.
       </p>
     </div>
   );
@@ -291,8 +329,17 @@ function MonthCalendar({
                 HEAT[dietHeat(base)],
               )}
             >
-              <span className={cn("text-[0.625rem] leading-none", isToday && "font-bold underline underline-offset-2")}>
-                {Number(date.slice(8))}
+              <span className="flex items-start justify-between gap-0.5">
+                <span className={cn("text-[0.625rem] leading-none", isToday && "font-bold underline underline-offset-2")}>
+                  {Number(date.slice(8))}
+                </span>
+                {d.drinks > 0 ? (
+                  // The button's name says the drinks in words.
+                  <span className="flex items-center text-[0.625rem] leading-none tabular-nums" aria-hidden>
+                    <BeerIcon className="size-2.5" />
+                    {d.drinks}
+                  </span>
+                ) : null}
               </span>
               {standing.kind !== "future" && (d.meals > 0 || d.paid.total > 0 || base > 0) ? (
                 <span className="flex flex-col items-end leading-tight tabular-nums" aria-hidden>
@@ -305,7 +352,8 @@ function MonthCalendar({
         })}
       </div>
       <p className="mt-2 text-[0.6875rem] text-muted-foreground">
-        Each day is shaded by its base diet XP out of {DIET_CAP} and shows what it paid. Pick a day to open it.
+        Each day is shaded by its base diet XP out of {DIET_CAP} and shows what it paid, with a glass and a count on
+        a day with drinks. Pick a day to open it.
       </p>
     </div>
   );
@@ -323,7 +371,7 @@ function PeriodTable({
   const shown = days.filter((d) => d.day <= today);
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[32rem] text-sm">
+      <table className="w-full min-w-[36rem] text-sm">
         <caption className="sr-only">Diet XP each day, oldest first</caption>
         <thead>
           <tr className="text-left text-xs text-muted-foreground">
@@ -344,6 +392,9 @@ function PeriodTable({
             </th>
             <th scope="col" className="py-1 text-right font-medium">
               Longest fast
+            </th>
+            <th scope="col" className="py-1 text-right font-medium">
+              Drinks
             </th>
           </tr>
         </thead>
@@ -373,6 +424,7 @@ function PeriodTable({
                 <td className="py-1.5 text-right tabular-nums">
                   {d.longestFastSeconds ? formatDuration(d.longestFastSeconds) : "—"}
                 </td>
+                <td className="py-1.5 text-right tabular-nums">{d.drinks > 0 ? d.drinks : "—"}</td>
               </tr>
             );
           })}

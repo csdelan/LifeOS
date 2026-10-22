@@ -969,7 +969,7 @@ export type DeferKind = "date" | "days" | "hours" | "someday" | "postponed";
 export interface DeferRequest { kind: DeferKind; value?: string | number }
 
 // ---------------------------------------------------------------------------
-// Food Log (FOOD-1..5, food-log plan §3.6): `/api/food`. Days are home-zone days
+// Food Log (FOOD-1..7, food-log plan §3.6 and §7): `/api/food`. Days are home-zone days
 // (`yyyy-MM-dd`); times are ISO instants. Score parts are unrounded to 2 places; awards are
 // whole base Health XP.
 // ---------------------------------------------------------------------------
@@ -989,6 +989,8 @@ export interface MealRow {
   eatenAt: string;
   eatenOn: string;
   photoArtifactId: string | null;
+  /** An alcoholic drink (FOOD-6): it always scores 1 and counts toward the day's drinks. */
+  alcoholic: boolean;
   /** The recorded fast it was eaten inside, if any (the day read only). */
   duringFast: string | null;
   firstLoggedAt: string;
@@ -1041,13 +1043,33 @@ export interface FoodDaySummary {
   fastAward: number;
   total: number;
   cap: number;
+  /** The day's alcoholic drinks (FOOD-6). */
+  drinks: number;
+  /** What's left of the diet XP after the drinks cut: 1 with two drinks or fewer, 0 at twelve. */
+  drinkFactor: number;
   paid: FoodPaid;
+}
+
+/**
+ * The sobriety streak as of a day (FOOD-6, food-log plan §7.3): the drink-free days in a row
+ * ending on `asOf`, counted from the day after the last drink, or from the Food Log's first
+ * day; a day with nothing logged counts as drink-free. `best` is the longest such run.
+ */
+export interface SobrietyRow {
+  asOf: string;
+  days: number;
+  bestDays: number;
+  /** The run's first day. */
+  since: string;
+  lastDrinkOn: string | null;
+  /** The Food Log's first day: its earliest entry, fast or close. */
+  firstDay: string;
 }
 
 export interface FoodDayRead {
   day: string;
   today: string;
-  /** Newest first. */
+  /** Oldest first (FOOD-7). */
   meals: MealRow[];
   /** The fasts that ended on the day. */
   fasts: FastRow[];
@@ -1055,6 +1077,8 @@ export interface FoodDayRead {
   /** The newest entry with calories, anywhere: Begin fast offers its time. */
   lastMeal: MealRow | null;
   summary: FoodDaySummary;
+  /** The streak as of the day; null before the Food Log's first day. */
+  sobriety: SobrietyRow | null;
 }
 
 export interface FoodDaysRead {
@@ -1063,6 +1087,8 @@ export interface FoodDaysRead {
   today: string;
   /** Every day of the range, oldest first. */
   days: FoodDaySummary[];
+  /** The streak as of the range's last day so far (today, when it holds today); null before the first day. */
+  sobriety: SobrietyRow | null;
 }
 
 /** A food entry as the page sends it; `eatenAt` defaults to now, `mealType` to a guess. */
@@ -1075,6 +1101,8 @@ export interface FoodEntryRequest {
   proteinG?: number | null;
   carbsG?: number | null;
   fatG?: number | null;
+  /** An alcoholic drink: stored at score 1. Left out of an edit, the entry keeps its flag. */
+  alcoholic?: boolean;
   /** Ends the running fast at the entry's time ("Ends your 17 h fast at 12:30"). */
   endFast?: boolean;
 }

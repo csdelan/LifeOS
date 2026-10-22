@@ -3,7 +3,7 @@
  * how ‹ › step through them, what to call them, and their totals. Weeks run Monday to Sunday.
  */
 import { addDays, addMonths, daysInMonth, formatDay, formatDayFull, startOfMonth, startOfWeekMonday } from "@/lib/dates";
-import { DIET_CAP, formatDuration } from "@/lib/diet-score";
+import { DIET_CAP, drinksText, formatDuration } from "@/lib/diet-score";
 import type { FoodDaySummary } from "@/lib/production-ui-types";
 import { monthLabel } from "@/lib/rewards-history";
 
@@ -79,6 +79,7 @@ export function dayInWords(day: FoodDaySummary, today: string): string {
     `${day.calories.toLocaleString()} cal`,
     day.averageScore !== null ? `average score ${roundTenth(day.averageScore)}` : null,
     day.longestFastSeconds ? `fasted ${formatDuration(day.longestFastSeconds)}` : null,
+    day.drinks > 0 ? drinksText(day.drinks) : null,
   ].filter(Boolean);
   return `${when}: ${score} · ${facts.join(", ")}`;
 }
@@ -99,14 +100,27 @@ export interface FoodTotals {
   /** Days with an entry, and their average calories. */
   loggedDays: number;
   averageCalories: number | null;
+  /** Alcoholic drinks over the days so far (FOOD-6). */
+  drinks: number;
+  /**
+   * The days so far from the Food Log's first day, and those without a drink: a day with
+   * nothing logged counts as drink-free. Both 0 when the period is wholly before the first day.
+   */
+  countedDays: number;
+  drinkFreeDays: number;
 }
 
-export function foodTotals(days: readonly FoodDaySummary[], today: string): FoodTotals {
+/** The period's totals; `firstDay` is the Food Log's first day (the streak's), null when unknown. */
+export function foodTotals(days: readonly FoodDaySummary[], today: string, firstDay: string | null = null): FoodTotals {
   const soFar = days.filter((d) => d.day <= today);
   const closed = soFar.filter((d) => d.closed);
   const logged = soFar.filter((d) => d.meals > 0);
   const paid = soFar.reduce((sum, d) => sum + d.paid.total, 0);
+  const counted = firstDay ? soFar.filter((d) => d.day >= firstDay) : [];
   return {
+    drinks: soFar.reduce((sum, d) => sum + d.drinks, 0),
+    countedDays: counted.length,
+    drinkFreeDays: counted.filter((d) => d.drinks === 0).length,
     paid,
     closedDays: closed.length,
     daysSoFar: soFar.length,

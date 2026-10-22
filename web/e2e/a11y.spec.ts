@@ -112,6 +112,56 @@ test.describe("accessibility", () => {
     });
   }
 
+  // Drinks (FOOD-6), in both themes: the Log food sheet with Alcoholic drink on (the score
+  // greyed out at 1), then today with three drinks (the drink tiles, the cut and the streak),
+  // and the week and month with them counted.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /food with drinks, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/food");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+
+      const sheet = page.getByRole("dialog", { name: "Log food" });
+      await page.getByRole("button", { name: "Log food", exact: true }).click();
+      await sheet.getByLabel("Name").fill("Lager");
+      await sheet.getByRole("switch", { name: "Alcoholic drink" }).click();
+      await sheet.getByLabel("Calories").fill("150");
+      await expect(sheet.getByText("A drink always scores 1.")).toBeVisible();
+      const sheetScan = await scan();
+      expect(sheetScan, JSON.stringify(sheetScan, null, 2)).toEqual([]);
+      await sheet.getByRole("button", { name: "Log", exact: true }).click();
+      await expect(sheet).toBeHidden();
+      for (let i = 0; i < 2; i++) {
+        await page.getByRole("button", { name: "Log food", exact: true }).click();
+        await sheet.getByRole("button", { name: /^Log again: Lager/ }).click();
+        await sheet.getByRole("button", { name: "Log", exact: true }).click();
+        await expect(sheet).toBeHidden();
+      }
+      await expect(page.getByText("3 drinks · 10% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
+      const dayScan = await scan();
+      expect(dayScan, JSON.stringify(dayScan, null, 2)).toEqual([]);
+
+      await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Week" }).click();
+      await expect(page.getByRole("definition").filter({ hasText: /^3 drinks$/ })).toBeVisible({ timeout: 10_000 });
+      const weekScan = await scan();
+      expect(weekScan, JSON.stringify(weekScan, null, 2)).toEqual([]);
+
+      await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Month" }).click();
+      await expect(page.getByRole("group", { name: "Diet XP each day" }).getByRole("button", { name: /3 drinks$/ })).toBeVisible({
+        timeout: 10_000,
+      });
+      await expect(page.locator("[aria-busy=true]")).toHaveCount(0, { timeout: 10_000 });
+      const monthScan = await scan();
+      expect(monthScan, JSON.stringify(monthScan, null, 2)).toEqual([]);
+    });
+  }
+
   // The Food Log's Week (stacked bars) and Month (calendar) views, and the Table view, in both
   // themes, around two days back, where the seed logged its last day of food.
   for (const theme of ["dark", "light"] as const) {

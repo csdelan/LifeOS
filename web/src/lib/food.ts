@@ -14,6 +14,7 @@ import type {
   FoodMealType,
   FoodWriteResult,
   MealRow,
+  SobrietyRow,
 } from "@/lib/production-ui-types";
 
 function num(value: unknown): number {
@@ -34,6 +35,7 @@ export function normalizeMeal(raw: MealRow): MealRow {
     carbsG: numOrNull(raw.carbsG),
     fatG: numOrNull(raw.fatG),
     photoArtifactId: raw.photoArtifactId ?? null,
+    alcoholic: raw.alcoholic === true,
     duringFast: raw.duringFast ?? null,
     versions: num(raw.versions),
   };
@@ -77,8 +79,16 @@ export function normalizeFoodSummary(raw: FoodDaySummary): FoodDaySummary {
     fastAward: num(raw.fastAward),
     total: num(raw.total),
     cap: num(raw.cap),
+    drinks: num(raw.drinks),
+    drinkFactor: raw.drinkFactor === undefined || raw.drinkFactor === null ? 1 : num(raw.drinkFactor),
     paid: normalizePaid(raw.paid),
   };
+}
+
+export function normalizeSobriety(raw: SobrietyRow | null | undefined): SobrietyRow | null {
+  return raw
+    ? { ...raw, days: num(raw.days), bestDays: num(raw.bestDays), lastDrinkOn: raw.lastDrinkOn ?? null }
+    : null;
 }
 
 export function normalizeFoodDay(raw: FoodDayRead): FoodDayRead {
@@ -89,11 +99,12 @@ export function normalizeFoodDay(raw: FoodDayRead): FoodDayRead {
     running: raw.running ? normalizeFast(raw.running) : null,
     lastMeal: raw.lastMeal ? normalizeMeal(raw.lastMeal) : null,
     summary: normalizeFoodSummary(raw.summary),
+    sobriety: normalizeSobriety(raw.sobriety),
   };
 }
 
 export function normalizeFoodDays(raw: FoodDaysRead): FoodDaysRead {
-  return { ...raw, days: (raw.days ?? []).map(normalizeFoodSummary) };
+  return { ...raw, days: (raw.days ?? []).map(normalizeFoodSummary), sobriety: normalizeSobriety(raw.sobriety) };
 }
 
 export function normalizeFoodWrite(raw: unknown): FoodWriteResult {

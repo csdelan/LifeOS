@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { LockIcon } from "lucide-react";
+import { BeerIcon, LockIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DIET_RULES, formatPart } from "@/lib/diet-score";
+import { DIET_RULES, drinksLine, formatPart } from "@/lib/diet-score";
 import { formatClock, summaryHeadline } from "@/lib/food";
 import type { FoodDaySummary } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
@@ -35,7 +35,8 @@ function Part({ label, value, max, detail }: { label: string; value: number; max
 /**
  * The day's diet score (FOOD-3): before the close, what it's on track for, with its three
  * parts as meters, its calories and average score; Close day once it has an entry. After the
- * close, what it paid, at the day's multiplier.
+ * close, what it paid, at the day's multiplier. A day's drinks show under the parts, with the
+ * cut more than two take (FOOD-6); a fast paid in full is re-scored when the day closes.
  */
 export function SummaryCard({ summary, isToday }: { summary: FoodDaySummary; isToday: boolean }) {
   const writes = useWrites();
@@ -91,6 +92,18 @@ export function SummaryCard({ summary, isToday }: { summary: FoodDaySummary; isT
         />
         <Part label="Fasting" value={summary.fasting} max={DIET_RULES.fastingMax} />
       </div>
+
+      {summary.drinks > 0 ? (
+        <p className="mt-3 flex items-start gap-1.5 text-xs">
+          <BeerIcon className="mt-px size-3.5 shrink-0" aria-hidden />
+          <span>
+            {drinksLine(summary.drinks)}
+            {summary.drinkFactor < 1 && !summary.closed && summary.paid.fast
+              ? "; the fast's XP is re-scored with it when the day closes"
+              : ""}
+          </span>
+        </p>
+      ) : null}
 
       <p className="mt-3 text-xs text-muted-foreground">
         {summary.meals === 0

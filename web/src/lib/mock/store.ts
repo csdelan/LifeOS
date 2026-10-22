@@ -11,6 +11,7 @@ import {
   CALORIES_MAX,
   DIET_CAP,
   DIET_RULES,
+  DRINK_SCORE,
   formatDuration,
   GRAMS_MAX,
   guessMealType,
@@ -66,6 +67,7 @@ import type {
   LedgerDay,
   LedgerRow,
   MealRow,
+  SobrietyRow,
   NewRewardRequest,
   NewSubjectRequest,
   RecurrenceSpec,
@@ -114,6 +116,7 @@ import {
 import { applyStreakToHabit } from "@/lib/habit-streak";
 import { creditDays, creditedOnFor, foldDomains, localDay } from "@/lib/mock/domain-credit";
 import { CURRENCIES, coinsToUsd, currency, orderedAmounts, shortfall } from "@/lib/rewards";
+import { sobrietyOn } from "@/lib/sobriety";
 import { foldTimer, timedSecondsBefore, type TimerEvent } from "@/lib/timer";
 import {
   createSeed,
@@ -2149,10 +2152,11 @@ export function mockSetBounty(req: BountyRequest): BountyResult {
 }
 
 // ---------------------------------------------------------------------------
-// Food Log (FOOD-1..4, food-log plan §3): FoodLogService, FoodReads and FoodRewards. Entries,
-// fasts and closes are versioned events (`lib/mock/food-fold.ts`). Every write settles every
-// food day with the ledger: `fast:<day>` and `diet:<day>` pay base Health XP at the day's
+// Food Log (FOOD-1..7, food-log plan §3 and §7): FoodLogService, FoodReads and FoodRewards.
+// Entries, fasts and closes are versioned events (`lib/mock/food-fold.ts`). Every write settles
+// every food day with the ledger: `fast:<day>` and `diet:<day>` pay base Health XP at the day's
 // multiplier, and a paid day whose events changed is re-priced (given back, then earned again).
+// More than two drinks cut both: the food award at the close, the fast once the day closes.
 // The mock's domain settle leaves food alone, so the seeded Health history reads as the
 // Character page's tests expect; the live `POST /api/domains/settle` settles food first.
 // ---------------------------------------------------------------------------
@@ -2207,6 +2211,7 @@ interface NormalizedFood {
   proteinG: number | null;
   carbsG: number | null;
   fatG: number | null;
+  alcoholic: boolean;
 }
 
 function checkGrams(grams: number | null | undefined, what: string): number | null {
@@ -2222,8 +2227,11 @@ function normalizeFood(req: FoodEntryRequest, now: number): NormalizedFood {
   const name = (req.name ?? "").trim();
   if (!name) throw new Error("Say what it was: a name is required.");
   if (name.length > NAME_MAX) throw new Error(`Keep the name to ${NAME_MAX} characters.`);
-  if (!Number.isInteger(req.score) || req.score < SCORE_MIN || req.score > SCORE_MAX) {
-    throw new Error(`The health score is ${SCORE_MIN} to ${SCORE_MAX} (1 = junk, 5 = very healthy); got ${req.score}.`);
+  // A drink always scores 1, whatever was sent (FOOD-6).
+  const alcoholic = req.alcoholic === true;
+  const score = alcoholic ? DRINK_SCORE : req.score;
+  if (!Number.isInteger(score) || score < SCORE_MIN || score > SCORE_MAX) {
+    throw new Error(`The health score is ${SCORE_MIN} to ${SCORE_MAX} (1 = junk, 5 = very healthy); got ${score}.`);
   }
   if (!Number.isInteger(req.calories) || req.calories < 0 || req.calories > CALORIES_MAX) {
     throw new Error(`Calories are a whole number from 0 to ${CALORIES_MAX.toLocaleString("en-US")}; got ${req.calories}.`);
@@ -2238,14 +2246,15 @@ function normalizeFood(req: FoodEntryRequest, now: number): NormalizedFood {
   const eatenAt = foodTime(req.eatenAt, now, "A food entry");
   return {
     name,
-    score: req.score,
+    score,
     calories: req.calories,
     eatenAt,
     eatenOn: localDay(eatenAt),
-    mealType: (wanted as FoodMealType | undefined) || guessMealType(new Date(eatenAt)),
+    mealType: (wanted as FoodMealType | undefined) || (alcoholic ? "drink" : guessMealType(new Date(eatenAt))),
     proteinG,
     carbsG,
     fatG,
+    alcoholic,
   };
 }
 
@@ -2260,6 +2269,7 @@ function mealPayload(id: string, entry: NormalizedFood, photo: string | null): M
     fatG: entry.fatG,
     mealType: entry.mealType,
     photo,
+    ...(entry.alcoholic ? { alcoholic: true } : {}),
   };
 }
 
@@ -2352,7 +2362,12 @@ export function mockEditFood(ref: string, req: FoodEntryRequest): FoodWriteResul
   const now = Date.now();
   const meal = foodMeal(foodFold(), ref);
   const entry = normalizeFood(
-    { ...req, eatenAt: req.eatenAt ?? meal.eatenAt, mealType: req.mealType ?? meal.mealType },
+    {
+      ...req,
+      eatenAt: req.eatenAt ?? meal.eatenAt,
+      mealType: req.mealType ?? meal.mealType,
+      alcoholic: req.alcoholic ?? meal.alcoholic,
+    },
     now,
   );
   const [cause] = appendFood({
@@ -2389,6 +2404,7 @@ function mealWithPhoto(meal: FoldedMeal, photo: string | null): Omit<MockFoodEve
       fatG: meal.fatG,
       mealType: meal.mealType,
       photo,
+      ...(meal.alcoholic ? { alcoholic: true } : {}),
     },
   };
 }
@@ -2543,13 +2559,18 @@ function foodCandidates(fold: FoodFold): DueFood[] {
     const score = scoreFacts(facts);
     const fast = fold.fasts.find((f) => f.id === facts.longestFastId);
     if (fast?.endedAt && facts.fastEventId) {
+      // The fast pays in full when it ends; once the day closes, the drinks cut it, and a day
+      // with any drinks cites them (and its close), so a retune leaves a paid fast alone.
+      const cut = facts.closed && facts.drinks > 0;
       due.push({
         key: `${FAST_TRIGGER}:${facts.day}`,
         trigger: FAST_TRIGGER,
         day: facts.day,
-        base: score.fastAward,
+        base: facts.closed ? score.fastAward : score.fastAwardUncut,
         triggeredAt: fast.endedAt,
-        sources: [facts.fastEventId],
+        sources: cut
+          ? [facts.fastEventId, ...facts.drinkEventIds, ...(facts.closeEventId ? [facts.closeEventId] : [])]
+          : [facts.fastEventId],
         note: `${foodNote(FAST_TRIGGER, facts.day)} (${formatDuration(fast.seconds ?? 0)})`,
       });
     }
@@ -2867,14 +2888,24 @@ function foodPaidByDay(from: string, to: string): Map<string, FoodPaid> {
   return byDay;
 }
 
-/** `GET /api/food/day`: a day's entries (newest first), its fasts, the running fast and its summary. */
+/** The sobriety streak as of `asOf` (`DrinkHistory`): from the Food Log's first day over its drink days. */
+function foodSobriety(fold: FoodFold, asOf: string): SobrietyRow | null {
+  const first = fold.days.keys().next();
+  if (first.done) return null;
+  const drinkDays = [...fold.days.values()].filter((d) => d.drinks > 0).map((d) => d.day);
+  return sobrietyOn(asOf, first.value, drinkDays);
+}
+
+/** `GET /api/food/day`: a day's entries (oldest first), its fasts, the running fast, its summary and the streak. */
 export function mockFoodDay(date?: string): FoodDayRead {
   const today = todayIso();
   const day = date ?? today;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error(`'${day}' isn't a date (yyyy-MM-dd).`);
   const fold = foodFold();
   const facts = fold.days.get(day) ?? emptyDay(day, day < today);
-  const meals = fold.meals.filter((m) => m.eatenOn === day).sort((a, b) => b.eatenAt.localeCompare(a.eatenAt));
+  const meals = fold.meals
+    .filter((m) => m.eatenOn === day)
+    .sort((a, b) => a.eatenAt.localeCompare(b.eatenAt) || a.id.localeCompare(b.id));
   const during = (m: FoldedMeal) =>
     m.calories > 0
       ? (fold.fasts.find(
@@ -2896,6 +2927,7 @@ export function mockFoodDay(date?: string): FoodDayRead {
     running: running ? fastRow(running) : null,
     lastMeal: last ? mealRow(last) : null,
     summary: toSummary(facts, foodPaidByDay(day, day).get(day) ?? NOTHING_PAID, DIET_CAP),
+    sobriety: foodSobriety(fold, day),
   };
 }
 
@@ -2912,7 +2944,9 @@ export function mockFoodDays(from?: string, to?: string): FoodDaysRead {
     if (days.length >= FOOD_MAX_RANGE_DAYS) throw new Error(`Ask for at most ${FOOD_MAX_RANGE_DAYS} days at a time.`);
     days.push(toSummary(fold.days.get(d) ?? emptyDay(d, d < today), paid.get(d) ?? NOTHING_PAID, DIET_CAP));
   }
-  return { from: start, to: end, today, days };
+  // The streak as of the range's last day so far: today, when the range holds it.
+  const asOf = end < today ? end : today;
+  return { from: start, to: end, today, days, sobriety: asOf < start ? null : foodSobriety(fold, asOf) };
 }
 
 /** `GET /api/food/recent`: the newest version of each distinct name, for "Log again". */
