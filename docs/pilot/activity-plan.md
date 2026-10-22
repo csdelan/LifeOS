@@ -699,7 +699,7 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
 ## Status
 
 - [x] A0 — Requirements (ACTIVITY-1 to ACTIVITY-5, D14) + this plan
-- [ ] A1 — Oura connection (migration 0036)
+- [x] A1 — Oura connection (migration 0036)
 - [ ] A2 — Sync and storage (migration 0037)
 - [ ] A3 — API
 - [ ] A4 — Activity page: steps and exercise
@@ -708,3 +708,45 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
 - [ ] A7 — Phase 2 Q&A + rules
 - [ ] A8 — Activity XP on the ledger
 - [ ] A9 — Activity XP on the page
+
+### As built
+
+**A1 (2026-10-22).** As planned, plus:
+
+- **The connection row has three more columns:** `pending_redirect_uri` (the code exchange
+  must repeat it), `reconnect_reason` (what the page says) and `updated_at`. Checks keep the
+  two tokens and their expiry together, and the four pending fields together.
+- **The page sends its own redirect URI** (its origin plus `/activity/connected`), so dev
+  and staging each connect with their own registration. LifeOS accepts only that path, over
+  https (http only on localhost), with no query; Oura checks it against the registered list.
+- **A state is good once.** Taking it clears it, even when it has expired or Oura then
+  refuses the code.
+- **Which refusals ask to reconnect:** `invalid_grant`, or a 401 that isn't about the client.
+  `invalid_client` and other 400s leave the tokens alone, since the refresh token wasn't
+  spent. A 429, a 5xx, a timeout or no connection leaves everything as it was.
+- **Tokens that won't open under this host's key** (the key changed) mark the connection for
+  reconnecting too, in words that name `Integrations:TokenKey`.
+- **Oura's endpoints are settings** (`Oura:AuthorizeUrl`, `Oura:TokenUrl`, `Oura:RevokeUrl`,
+  and `Oura:RefreshUrl`, which defaults to the token URL). If refreshing fails on the first
+  day of A6, as the third-party report suggests it might for a new-portal app, the refresh
+  moves to `moi.ouraring.com` with a Fly secret and no release.
+- **Status codes:** Oura not set up, not connected, needing to reconnect, or refusing a
+  sign-in is a 409 in words; Oura down is a 502; a malformed request is a 400.
+- **A host without Oura still runs:** no `Oura:ClientId` answers `not_configured`. A client
+  id without `Integrations:TokenKey`, or a malformed setting, fails startup.
+- **The CLI reads `Oura__*` without regard to case**, so `Oura__ClientID` works.
+- **`bsk oura refresh`** was added beside `bsk oura status`, so A6 can try a real refresh
+  from the command line.
+- **Left for later phases:** the first sync after connecting (A2 adds it to
+  `POST /api/oura/connect`), the web's typed client (regenerated in A3 with the activity
+  endpoints), and `fly-setup.ps1` importing the three secrets (A6).
+- **Tests:**
+  - the settings, and that no secret prints
+  - sealing round-trips, and refuses another column, another key or a changed byte
+  - what the HTTP client sends, and how each refusal and outage surfaces
+  - against Postgres: connecting, a wrong, used or expired state, PKCE, refreshing when
+    stale, two racing refreshers spending the token once, a spent grant asking to
+    reconnect, an outage keeping the tokens, a changed key, and disconnecting while Oura is
+    down
+  - the endpoints, including startup failing without a token key
+  - `bsk_reader` refused on `bsk_ops.integration`

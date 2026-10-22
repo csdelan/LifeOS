@@ -28,6 +28,8 @@ public static class KernelExceptionHandler
         DuplicateSubjectException duplicate => (StatusCodes.Status409Conflict, new ApiError(duplicate.Message)),
         TimerConflictException conflict => (StatusCodes.Status409Conflict, new ApiError(conflict.Message)),
         ObjectStorageException storage => (StatusCodes.Status502BadGateway, new ApiError(storage.Message)),
+        OuraUnavailableException oura => (StatusCodes.Status502BadGateway, new ApiError(oura.Message)),
+        OuraConnectionException oura => (StatusCodes.Status409Conflict, new ApiError(oura.Message)),
         BadHttpRequestException bad => (bad.StatusCode, new ApiError(bad.Message)),
         ArgumentException or InvalidOperationException => (
             StatusCodes.Status400BadRequest, new ApiError(ex.Message)),

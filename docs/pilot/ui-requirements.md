@@ -2940,7 +2940,14 @@ photos. Build moves `mapped → built`.
 ### ACTIVITY-1 — LifeOS reads my Oura Ring data and keeps it in step
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-10-22 — connection landed, A1):** migration 0036 adds `bsk_ops.integration`,
+which `bsk_reader` can't read, with Oura's tokens sealed under `Integrations:TokenKey`.
+`POST /api/oura/authorize` and `/connect` run the OAuth connect; `GET /api/oura/status` and
+`POST /api/oura/disconnect` complete it. `bsk oura status` and `bsk oura refresh` use the
+stored connection. A refresh runs under a row lock, so the single-use refresh token is spent
+once. Build moves `needs-kernel → building`: syncing (A2) is not built yet.
 
 **Workflow (Chris):**
 - "I would like to pull Oura ring data into my app, and add a page for showing health related

@@ -489,3 +489,125 @@ public interface ITagRepository
     Task<(int Renamed, int Merged)> RenameAsync(
         string oldTag, string newTag, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Tokens from an OAuth token endpoint (activity plan §3.1). Secrets: never logged and never
+/// answered by the API, so <see cref="ToString"/> leaves them out.
+/// </summary>
+/// <param name="Scopes">The scopes granted, without Oura's <c>extapi:</c> prefix.</param>
+public sealed record OAuthTokens(
+    string AccessToken, string RefreshToken, DateTimeOffset ExpiresAt, IReadOnlyList<string> Scopes)
+{
+    public override string ToString()
+        => $"OAuthTokens {{ ExpiresAt = {ExpiresAt:O}, Scopes = [{string.Join(' ', Scopes)}] }}";
+}
+
+/// <summary>
+/// Oura's API v2 (activity plan §3.1, §3.3): for now the OAuth calls. The data collections
+/// arrive with the sync (A2). Errors: <see cref="OuraGrantException"/> when Oura refuses a
+/// grant, <see cref="OuraUnavailableException"/> when it can't be reached or fails.
+/// </summary>
+public interface IOuraClient
+{
+    /// <summary>
+    /// Where to send the browser to approve LifeOS: Oura's authorize URL with this client,
+    /// the scopes LifeOS reads, <paramref name="state"/> and the S256 PKCE challenge.
+    /// </summary>
+    Uri AuthorizeUrl(string state, string codeChallenge, Uri redirectUri);
+
+    /// <summary>Trades the code Oura sent back for tokens.</summary>
+    Task<OAuthTokens> ExchangeCodeAsync(
+        string code, string codeVerifier, Uri redirectUri, CancellationToken cancellationToken = default);
+
+    /// <summary>Spends <paramref name="refreshToken"/> (single-use) for a new pair.</summary>
+    Task<OAuthTokens> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default);
+
+    /// <summary>Asks Oura to revoke the grant behind <paramref name="accessToken"/>.</summary>
+    Task RevokeAsync(string accessToken, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// A connect in progress (activity plan §3.1): the OAuth <c>state</c> sent to Oura, the PKCE
+/// verifier and redirect URI the code exchange needs, and when it lapses.
+/// </summary>
+public sealed record PendingConnect(string State, string CodeVerifier, Uri RedirectUri, DateTimeOffset Until)
+{
+    public override string ToString() => $"PendingConnect {{ RedirectUri = {RedirectUri}, Until = {Until:O} }}";
+}
+
+/// <summary>
+/// A connection's state as stored (<c>bsk_ops.integration</c>, migration 0036), without its
+/// tokens.
+/// </summary>
+/// <param name="Connected">Tokens are stored (they may still need reconnecting).</param>
+public sealed record IntegrationState(
+    string Service,
+    bool Connected,
+    DateTimeOffset? ConnectedAt,
+    DateTimeOffset? ExpiresAt,
+    IReadOnlyList<string> Scopes,
+    bool NeedsReconnect,
+    string? ReconnectReason,
+    DateTimeOffset? LastSyncedAt,
+    string? LastSyncError,
+    DateOnly? HistoryFrom);
+
+/// <summary>
+/// Connections to outside services (<c>bsk_ops.integration</c>, migration 0036). Tokens are
+/// encrypted at rest; the repository encrypts and decrypts them, so callers only ever see
+/// <see cref="OAuthTokens"/>.
+/// </summary>
+public interface IIntegrationRepository
+{
+    /// <summary>The connection's state, or null when the service has never been connected.</summary>
+    Task<IntegrationState?> GetAsync(string service, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Keeps <paramref name="pending"/> as the connect in progress, replacing any earlier one.
+    /// Stored tokens are left alone until the new ones arrive.
+    /// </summary>
+    Task BeginConnectAsync(string service, PendingConnect pending, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Takes the connect in progress whose state is <paramref name="state"/>, clearing it so it
+    /// can't be used twice: null when there's none with that state. The caller checks
+    /// <see cref="PendingConnect.Until"/>.
+    /// </summary>
+    Task<PendingConnect?> TakePendingAsync(string service, string state, CancellationToken cancellationToken = default);
+
+    /// <summary>Stores newly granted tokens: connected as of <paramref name="connectedAt"/>, no longer needing to reconnect.</summary>
+    Task SaveConnectionAsync(
+        string service, OAuthTokens tokens, DateTimeOffset connectedAt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Locks the connection's row until the lock commits or is disposed (rolled back), so a
+    /// single-use refresh token is spent once: null when the service has no row.
+    /// </summary>
+    Task<IIntegrationLock?> LockAsync(string service, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// A connection locked for a refresh or a disconnect (<see cref="IIntegrationRepository.LockAsync"/>).
+/// Changes take effect at <see cref="CommitAsync"/>; disposing without it rolls them back.
+/// </summary>
+public interface IIntegrationLock : IAsyncDisposable
+{
+    /// <summary>The stored tokens, or null when there are none or they can't be read.</summary>
+    OAuthTokens? Tokens { get; }
+
+    /// <summary>Tokens are stored but can't be decrypted with this host's token key.</summary>
+    bool TokensUnreadable { get; }
+
+    bool NeedsReconnect { get; }
+
+    /// <summary>Replaces the stored tokens with a refreshed pair.</summary>
+    Task SaveTokensAsync(OAuthTokens tokens, CancellationToken cancellationToken = default);
+
+    /// <summary>Marks the connection as needing to reconnect, saying why.</summary>
+    Task MarkReconnectAsync(string reason, CancellationToken cancellationToken = default);
+
+    /// <summary>Forgets the tokens and any connect in progress (a disconnect). What was synced stays.</summary>
+    Task ClearTokensAsync(CancellationToken cancellationToken = default);
+
+    Task CommitAsync(CancellationToken cancellationToken = default);
+}

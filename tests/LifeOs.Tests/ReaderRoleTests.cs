@@ -68,4 +68,19 @@ public sealed class ReaderRoleTests(PostgresFixture postgres)
 
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, ex.SqlState);
     }
+
+    // Integration tokens live in bsk_ops (migration 0036), which the reader can't touch at all.
+    [Theory]
+    [InlineData("SELECT count(*) FROM bsk_ops.integration")]
+    [InlineData("SELECT access_token_enc FROM bsk_ops.integration")]
+    [InlineData("INSERT INTO bsk_ops.integration (service) VALUES ('x')")]
+    public async Task Reader_cannot_reach_ops(string statement)
+    {
+        await using var reader = await OpenReaderAsync();
+
+        var ex = await Assert.ThrowsAsync<PostgresException>(async () =>
+            await reader.ExecuteAsync(new CommandDefinition(statement, cancellationToken: Ct)));
+
+        Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, ex.SqlState);
+    }
 }

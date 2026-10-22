@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LifeOs.Application.Subjects;
 using LifeOs.Infrastructure.DependencyInjection;
+using LifeOs.Infrastructure.Integrations;
 using LifeOs.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,10 +20,15 @@ internal static class Cli
     /// The kernel on <paramref name="connectionString"/>. With <c>Storage__SupabaseSecretKey</c>
     /// (and <c>Storage__SupabaseUrl</c> or <c>VITE_SUPABASE_URL</c>) in the environment, new
     /// artifact bytes go to Supabase Storage and stored ones read from there, as the API does.
+    /// With <c>Oura__ClientId</c>, <c>Oura__ClientSecret</c> and <c>Integrations__TokenKey</c>,
+    /// <c>bsk oura</c> uses the Oura connection made on the Activity page.
     /// </summary>
     public static ServiceProvider BuildServices(string connectionString)
         => new ServiceCollection()
-            .AddLifeOsKernel(connectionString, objectStorage: SupabaseStorageOptions.FromEnvironment())
+            .AddLifeOsKernel(
+                connectionString,
+                objectStorage: SupabaseStorageOptions.FromEnvironment(),
+                integrations: IntegrationSettings.FromEnvironment())
             .BuildServiceProvider();
 
     public static void WriteJson(object payload)

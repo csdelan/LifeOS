@@ -5,6 +5,7 @@ using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 using LifeOs.Application.Abstractions;
 using LifeOs.Infrastructure.DependencyInjection;
+using LifeOs.Infrastructure.Integrations;
 using LifeOs.Infrastructure.Persistence;
 using LifeOs.Infrastructure.Storage;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -58,12 +59,16 @@ public static class ApiHost
         // set; a malformed setting fails startup. Outside Development, photos without it are
         // refused rather than kept in the database (Supabase's free plan holds 500 MB).
         var storage = SupabaseStorageOptions.Resolve(key => builder.Configuration[key]);
+        // Oura (activity plan §3.1) is optional: without Oura:ClientId the Activity page says it
+        // isn't set up. A client id without Integrations:TokenKey, or a malformed one, fails startup.
+        var integrations = IntegrationSettings.Resolve(key => builder.Configuration[key]);
         builder.Services.AddLifeOsKernel(
             owner, KernelSources.Api,
             ServiceCollectionExtensions.ParseCoinValueUsd(builder.Configuration[CoinRates.ConfigurationKey]),
             homeZone,
             storage,
-            allowPhotosInDatabase: builder.Environment.IsDevelopment());
+            allowPhotosInDatabase: builder.Environment.IsDevelopment(),
+            integrations: integrations);
         builder.Services.AddSingleton(new SubjectReader(reader));
         builder.Services.AddSingleton(sp => new RewardReader(
             reader, sp.GetRequiredService<RewardService>().CoinValueUsd, homeZone));
@@ -149,6 +154,7 @@ public static class ApiHost
         app.MapDomainEndpoints();
         app.MapFoodEndpoints();
         app.MapArtifactEndpoints();
+        app.MapOuraEndpoints();
         app.MapSpaFallback();
     }
 }

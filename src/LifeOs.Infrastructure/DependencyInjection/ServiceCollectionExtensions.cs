@@ -1,11 +1,13 @@
 using System.Globalization;
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Activity;
 using LifeOs.Application.Capture;
 using LifeOs.Application.Food;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.Diagnostics;
+using LifeOs.Infrastructure.Integrations;
 using LifeOs.Infrastructure.Migrations;
 using LifeOs.Infrastructure.Persistence;
 using LifeOs.Infrastructure.Rebuild;
@@ -36,6 +38,12 @@ namespace LifeOs.Infrastructure.DependencyInjection;
 /// it from the environment, so a test never uploads. <c>allowPhotosInDatabase</c> false refuses
 /// food photos when there is no object storage, so they never fill a small hosted database.
 /// </para>
+/// <para>
+/// <c>integrations</c> connects outside services (activity plan §3.1): with an Oura app it
+/// registers <see cref="IOuraClient"/>, and with a token key the repository can store tokens.
+/// A host passes it explicitly (<see cref="IntegrationSettings.Resolve"/>), so a test never
+/// calls Oura. Without it, <see cref="OuraConnectionService"/> says Oura isn't set up.
+/// </para>
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -48,7 +56,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddLifeOsKernel(
         this IServiceCollection services, string connectionString, string sourceId = KernelSources.Cli,
         decimal? coinValueUsd = null, string? homeTimeZone = null,
-        SupabaseStorageOptions? objectStorage = null, bool allowPhotosInDatabase = true)
+        SupabaseStorageOptions? objectStorage = null, bool allowPhotosInDatabase = true,
+        IntegrationSettings? integrations = null)
     {
         var coinValue = coinValueUsd ?? ParseCoinValueUsd(Environment.GetEnvironmentVariable(CoinValueVariable));
         var homeZone = ParseHomeTimeZone(homeTimeZone ?? Environment.GetEnvironmentVariable(HomeTimeZoneVariable));
@@ -76,6 +85,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ILedgerRepository>(_ => new NpgsqlLedgerRepository(connectionString, homeZone));
         services.AddSingleton<IHomeCalendar>(_ => new NpgsqlHomeCalendar(connectionString, homeZone));
         services.AddSingleton<IFoodLogRepository>(_ => new NpgsqlFoodLogRepository(connectionString));
+        services.AddSingleton<IIntegrationRepository>(_ =>
+            new NpgsqlIntegrationRepository(connectionString, integrations?.TokenCipher));
+        if (integrations?.Oura is { } oura)
+        {
+            services.AddSingleton<IOuraClient>(sp =>
+                new OuraHttpClient(OuraHttpClient.CreateHttpClient(), oura, sp.GetRequiredService<IClock>()));
+        }
 
         services.AddSingleton(sp => new CaptureService(
             sp.GetRequiredService<IEventStore>(),
@@ -232,6 +248,11 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IClock>(),
             sourceId,
             sp.GetRequiredService<StatusService>()));
+
+        services.AddSingleton(sp => new OuraConnectionService(
+            sp.GetRequiredService<IIntegrationRepository>(),
+            sp.GetService<IOuraClient>(),
+            sp.GetRequiredService<IClock>()));
 
         // Operational services that work directly against the store.
         services.AddSingleton(_ => new MigrationRunner(connectionString));
