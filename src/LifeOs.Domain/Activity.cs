@@ -236,6 +236,51 @@ public sealed record ActivityRules(
 }
 
 /// <summary>
+/// The three activity awards a day can pay (activity plan §3.8), keyed by the Oura day they're
+/// credited to. None belongs to an item, like the Food Log's (<see cref="FoodAwards"/>):
+/// <list type="bullet">
+/// <item><c>steps:&lt;yyyy-MM-dd&gt;</c> — the day's steps, once Oura's day is over</item>
+/// <item><c>exercise:&lt;yyyy-MM-dd&gt;</c> — the day's counted exercise, once Oura's day is over</item>
+/// <item><c>sleep:&lt;yyyy-MM-dd&gt;</c> — the night ending that morning, once it has a sleep score</item>
+/// </list>
+/// Like the food awards, a change to the Oura data a key was priced from re-prices it.
+/// </summary>
+public static class ActivityAwards
+{
+    public const string StepsTrigger = "steps";
+    public const string ExerciseTrigger = "exercise";
+    public const string SleepTrigger = "sleep";
+
+    /// <summary>All three triggers.</summary>
+    public static readonly IReadOnlyList<string> Triggers = [StepsTrigger, ExerciseTrigger, SleepTrigger];
+
+    /// <summary>The hour Oura's activity day starts, local time: a day is over at this hour the next morning.</summary>
+    public const int DayStartHour = 4;
+
+    public static string StepsKey(DateOnly day) => Key(StepsTrigger, day);
+
+    public static string ExerciseKey(DateOnly day) => Key(ExerciseTrigger, day);
+
+    public static string SleepKey(DateOnly day) => Key(SleepTrigger, day);
+
+    /// <summary>The key for <paramref name="trigger"/> on <paramref name="day"/>.</summary>
+    public static string Key(string trigger, DateOnly day) => $"{trigger}:{day:yyyy-MM-dd}";
+
+    /// <summary>The day an activity award key is for, or null when it isn't one.</summary>
+    public static DateOnly? DayOf(string awardKey)
+    {
+        var separator = awardKey.IndexOf(':');
+        return separator > 0
+               && Triggers.Contains(awardKey[..separator])
+               && DateOnly.TryParseExact(
+                   awardKey[(separator + 1)..], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                   System.Globalization.DateTimeStyles.None, out var day)
+            ? day
+            : null;
+    }
+}
+
+/// <summary>
 /// One of the Oura collections LifeOS keeps (D14, activity plan §3.2): where its records go in
 /// an event's payload, what identifies one, and its event kind. A record LifeOS holds that Oura
 /// no longer answers is voided only in a <see cref="Voidable"/> collection: daily records are
@@ -388,7 +433,9 @@ public sealed record Workout(
 
 /// <summary>
 /// A day's sleep as LifeOS holds it (<c>bsk.v_sleep_day</c>): the score, and the night — the
-/// day's longest <c>long_sleep</c> — plus naps, added up separately.
+/// day's longest <c>long_sleep</c> — plus naps, added up separately. <see cref="ScoreEventId"/>
+/// is the version of the score it read, which sleep XP cites (activity plan §3.8); null with no
+/// score.
 /// </summary>
 public sealed record SleepDay(
     DateOnly Day,
@@ -407,7 +454,8 @@ public sealed record SleepDay(
     int? LowestHr,
     int Naps,
     int NapS,
-    DateTimeOffset SyncedAt);
+    DateTimeOffset SyncedAt,
+    Guid? ScoreEventId = null);
 
 /// <summary>
 /// A live sleep period as LifeOS holds it (<c>bsk.v_sleep_period</c>): a night or a nap, never

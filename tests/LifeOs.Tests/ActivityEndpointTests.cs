@@ -5,6 +5,7 @@ using System.Text.Json;
 using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Activity;
+using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.Integrations;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,8 +16,8 @@ namespace LifeOs.Tests;
 /// <summary>
 /// The Activity page's API (ACTIVITY-2..4, activity plan A3, §3.6): the days with their step
 /// bands and the thresholds, workouts with whether they count and why not, one day in full,
-/// this week against last, the note (LifeOS's one write), and the page's sync with its
-/// 5-minute throttle. Oura is played by <see cref="FakeOuraClient"/>, connected over HTTP, so
+/// this week against last, the note (LifeOS's one write), the page's sync with its 5-minute
+/// throttle, and the activity XP it and settling pay (A8). Oura is played by <see cref="FakeOuraClient"/>, connected over HTTP, so
 /// the first sync puts its records in. Each test has a database of its own, in UTC, with the
 /// clock at noon on Thursday 2026-10-22.
 /// </summary>
@@ -380,6 +381,40 @@ public sealed class ActivityEndpointTests(PostgresFixture postgres)
         var day = await JsonAsync(await site.Client.GetAsync("/api/activity/day", Ct));
         Assert.Equal(6_500, Int(day.GetProperty("summary"), "steps"));
         Assert.Equal(["w-run"], Strings(day.GetProperty("workouts"), "id"));
+    }
+
+    [Fact]
+    public async Task The_page_s_sync_and_settling_pay_activity_xp_once_it_is_due()
+    {
+        // 4,000 steps, a 40-minute run, and last night's sleep score of 80, on the day XP starts.
+        await using var site = await StartAsync(oura =>
+        {
+            oura.ActivityDays.Add(OuraHarness.Steps(Today, 4_000));
+            oura.Workouts.Add(OuraHarness.Workout("w-run", Today));
+            oura.SleepScores.Add(OuraHarness.SleepScore(Today, 80));
+        });
+        await site.Db.Get<RewardService>().OpenAsync(Noon.AddDays(-1), Ct);
+
+        static List<(string?, long)> Awards(JsonElement earned)
+            => [.. earned.GetProperty("awards").EnumerateArray()
+                .Where(a => ActivityAwards.Triggers.Contains(a.GetProperty("trigger").GetString()))
+                .Select(a => (a.GetProperty("awardKey").GetString(), a.GetProperty("amounts").GetProperty(Currencies.HealthXp).GetInt64()))];
+
+        // The page's sync settles even when it's skipped: last night's sleep pays now.
+        var synced = await JsonAsync(await site.Client.PostAsync("/api/activity/sync", null, Ct));
+        Assert.False(synced.GetProperty("ran").GetBoolean());
+        Assert.Equal([("sleep:2026-10-22", 15L)], Awards(synced));
+        Assert.Equal(JsonValueKind.Array, synced.GetProperty("progress").ValueKind);
+        Assert.Empty(Awards(await JsonAsync(await site.Client.PostAsync("/api/activity/sync", null, Ct))));
+
+        // Today's steps and exercise wait for Oura's day to end at 4 a.m.; then settling pays them.
+        site.Clock.Advance(new DateTimeOffset(2026, 10, 23, 3, 59, 0, TimeSpan.Zero) - site.Clock.UtcNow);
+        Assert.Empty(Awards(await JsonAsync(await site.Client.PostAsync("/api/domains/settle", null, Ct))));
+        site.Clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.Equal(
+            [("exercise:2026-10-22", 25L), ("steps:2026-10-22", 9L)],
+            Awards(await JsonAsync(await site.Client.PostAsync("/api/domains/settle", null, Ct))));
+        Assert.Empty(Awards(await JsonAsync(await site.Client.PostAsync("/api/domains/settle", null, Ct))));
     }
 
     [Fact]

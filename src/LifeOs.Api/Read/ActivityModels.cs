@@ -1,5 +1,6 @@
 using System.Globalization;
 using LifeOs.Application.Activity;
+using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 
 namespace LifeOs.Api.Read;
@@ -255,7 +256,9 @@ public sealed class ActivitySummaryRead
 
 /// <summary>
 /// <c>POST /api/activity/sync</c>: whether the sync ran (one on opening the page is skipped when
-/// LifeOS synced under 5 minutes ago), what it changed, and when LifeOS last synced.
+/// LifeOS synced under 5 minutes ago), what it changed, when LifeOS last synced, and what
+/// settling activity XP wrote afterwards (activity plan §3.8): the ledger entries, empty when
+/// nothing changed, and each life domain whose level or rank moved.
 /// </summary>
 public sealed class ActivitySyncRead
 {
@@ -282,6 +285,8 @@ public sealed class ActivitySyncRead
     public string? HistoryFrom { get; set; }
     public bool HistoryDone { get; set; }
     public DateTimeOffset? LastSyncedAt { get; set; }
+    public IReadOnlyList<AwardRow> Awards { get; set; } = [];
+    public IReadOnlyList<DomainChangeRow> Progress { get; set; } = [];
 }
 
 /// <summary>Maps <see cref="ActivityReads"/>' answers to the API's rows.</summary>
@@ -370,7 +375,7 @@ public static class ActivityRows
         AverageReadiness = week.AverageReadiness,
     };
 
-    public static ActivitySyncRead From(OuraPageSync sync)
+    public static ActivitySyncRead From(OuraPageSync sync, Earned earned)
     {
         var result = sync.Result;
         return new ActivitySyncRead
@@ -385,6 +390,8 @@ public static class ActivityRows
             HistoryFrom = result?.HistoryFrom is { } history ? Day(history) : null,
             HistoryDone = result?.HistoryDone ?? false,
             LastSyncedAt = sync.LastSyncedAt,
+            Awards = earned.Awards.Select(RewardRows.From).ToList(),
+            Progress = earned.Progress.Select(RewardRows.From).ToList(),
         };
     }
 }

@@ -14,8 +14,10 @@ namespace LifeOs.Api.Http;
 /// <item><c>POST /workouts/{id}/note</c> sets the note (an empty text clears it) and answers the
 /// workout. A note LifeOS refuses is a 400 in words; a workout it doesn't hold, a 404.</item>
 /// <item><c>POST /sync</c> is the page's sync: on opening the page it's skipped when LifeOS
-/// synced under 5 minutes ago; <c>force</c> (Sync now) always runs it. Oura not connected or
-/// refusing access is a 409 in words; Oura down or limiting requests, a 502.</item>
+/// synced under 5 minutes ago; <c>force</c> (Sync now) always runs it. Either way, activity XP
+/// is settled afterwards (<see cref="ActivityRewards"/>), since a day can come due with nothing
+/// new from Oura (its 4 a.m. passing). Oura not connected or refusing access is a 409 in words;
+/// Oura down or limiting requests, a 502.</item>
 /// </list>
 /// </summary>
 public static class ActivityEndpoints
@@ -82,8 +84,11 @@ public static class ActivityEndpoints
     }
 
     private static async Task<IResult> Sync(
-        ActivitySyncBody? body, OuraSyncService oura, CancellationToken cancellationToken)
-        => Results.Ok(ActivityRows.From(await oura.SyncForPageAsync(body?.Force ?? false, cancellationToken)));
+        ActivitySyncBody? body, OuraSyncService oura, ActivityRewards rewards, CancellationToken cancellationToken)
+    {
+        var sync = await oura.SyncForPageAsync(body?.Force ?? false, cancellationToken);
+        return Results.Ok(ActivityRows.From(sync, await rewards.SettleAsync(cancellationToken)));
+    }
 }
 
 /// <summary><c>POST /api/activity/workouts/{id}/note</c>: the note, one line of up to 140 characters; empty clears it.</summary>

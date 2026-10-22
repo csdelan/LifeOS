@@ -44,12 +44,16 @@ internal sealed class OuraHarness : IAsyncDisposable
     public WorkoutNoteService Notes { get; }
     public ActivityReads Reads { get; }
 
-    /// <summary>A new database with Oura connected (unless <paramref name="connect"/> is false).</summary>
+    /// <summary>
+    /// A new database with Oura connected (unless <paramref name="connect"/> is false), the clock
+    /// at <paramref name="start"/> (noon on 2026-10-22 unless given).
+    /// </summary>
     public static async Task<OuraHarness> CreateAsync(
-        PostgresFixture postgres, CancellationToken ct, bool connect = true, bool configured = true)
+        PostgresFixture postgres, CancellationToken ct, bool connect = true, bool configured = true,
+        DateTimeOffset? start = null)
     {
         var db = await DomainTestDatabase.CreateAsync(postgres, ct);
-        var clock = new TimerTestClock(new DateTimeOffset(2026, 10, 22, 12, 0, 0, TimeSpan.Zero));
+        var clock = new TimerTestClock(start ?? new DateTimeOffset(2026, 10, 22, 12, 0, 0, TimeSpan.Zero));
         var oura = new FakeOuraClient(clock);
         var harness = new OuraHarness(db, clock, oura, configured ? oura : null);
         if (connect)

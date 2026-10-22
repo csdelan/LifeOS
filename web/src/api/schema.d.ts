@@ -1244,6 +1244,8 @@ export interface components {
             historyDone?: boolean;
             /** Format: date-time */
             lastSyncedAt?: null | string;
+            awards?: components["schemas"]["AwardRow"][];
+            progress?: components["schemas"]["DomainChangeRow"][];
         };
         ActivityWeekRow: {
             from?: string;

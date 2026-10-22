@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.Globalization;
+using LifeOs.Application.Activity;
 using LifeOs.Application.Food;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
@@ -23,7 +24,8 @@ namespace LifeOs.Cli.Commands;
 /// paid award that is no longer due. Status changes already do this for their own item;
 /// this heals one whose reconcile never ran. The full sweep also pays any life-domain
 /// rank-up still due (xp-domains plan §3.7) and settles the food days' diet XP (food-log
-/// plan §3.4). Safe to run any time — it never pays twice and never opens the wallet.</item>
+/// plan §3.4) and the Oura days' activity XP (activity plan §3.8). Safe to run any time — it
+/// never pays twice and never opens the wallet.</item>
 /// </list>
 /// Rename or archive a Reward like any subject (<c>bsk rename</c>, <c>bsk archive</c>);
 /// redeem against one with <c>bsk redeem</c>.
@@ -261,7 +263,8 @@ internal static class RewardsCommand
                 var awards = reference is null
                     ? [
                         .. await rewards.ReconcileAllAsync(cancellationToken),
-                        .. (await provider.GetRequiredService<FoodRewards>().SettleAsync(cancellationToken: cancellationToken)).Awards
+                        .. (await provider.GetRequiredService<FoodRewards>().SettleAsync(cancellationToken: cancellationToken)).Awards,
+                        .. (await provider.GetRequiredService<ActivityRewards>().SettleAsync(cancellationToken)).Awards
                     ]
                     : await rewards.ReconcileAsync(
                         await provider.GetRequiredService<SubjectService>().ResolveAsync(reference, cancellationToken),

@@ -43,7 +43,9 @@ public sealed class NpgsqlActivityRepository(string connectionString) : IActivit
                bed_at AS bedat, woke_at AS wokeat, in_bed_s AS inbeds, asleep_s AS asleeps,
                deep_s AS deeps, light_s AS lights, rem_s AS rems, awake_s AS awakes, efficiency,
                average_hrv AS averagehrv, lowest_hr AS lowesthr, naps, nap_s AS naps_seconds,
-               synced_at AS syncedat
+               synced_at AS syncedat,
+               -- The score's version leads event_ids whenever the day has a score (0037).
+               CASE WHEN score IS NOT NULL THEN event_ids[1] END AS scoreeventid
         FROM bsk.v_sleep_day
         """;
 
@@ -360,11 +362,12 @@ public sealed class NpgsqlActivityRepository(string connectionString) : IActivit
         public int Naps { get; set; }
         public int Naps_Seconds { get; set; }
         public DateTime SyncedAt { get; set; }
+        public Guid? ScoreEventId { get; set; }
 
         public SleepDay ToDay() => new(
             ParseDay(Day), Score, NpgsqlActivityRepository.Contributors(Contributors), Utc(BedAt), Utc(WokeAt),
             InBedS, AsleepS, DeepS, LightS, RemS, AwakeS, Efficiency, AverageHrv, LowestHr, Naps, Naps_Seconds,
-            Utc(SyncedAt));
+            Utc(SyncedAt), ScoreEventId);
     }
 
     private sealed class SleepPeriodRow

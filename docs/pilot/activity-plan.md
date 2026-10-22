@@ -525,9 +525,12 @@ Food Log's `diet:` and `fast:` (food-log plan §3.3):
 
 | Key | Due | Dated at | Cites |
 |---|---|---|---|
-| `steps:<day>` | Once Oura's day is over, at 4 a.m. the next morning. Oura's day starts at 4 a.m. local, and the start comes with each day. | The day's end | The day's activity event |
-| `exercise:<day>` | The same | The day's end | The counted workouts' events |
+| `steps:<day>` | Once Oura's day is over, at 4 a.m. the next morning in the home zone. Oura's day runs from 4 a.m. to 4 a.m. local. | When LifeOS last stored the day's steps | The day's activity event |
+| `exercise:<day>` | The same | The last counted workout's end | The counted workouts' events |
 | `sleep:<day>` | Once the day has a sleep score | The night's wake time, or else when LifeOS stored the score | The day's sleep-score event |
+
+The "Dated at" column is what A8 built. The first plan dated steps and exercise at the day's
+end; see A8 under As built.
 
 - **Payment and credit.** Each award pays Health XP and is credited to its Oura day
   (`credited_on`).
@@ -540,9 +543,10 @@ Food Log's `diet:` and `fast:` (food-log plan §3.3):
     batch. Revisions include more steps synced after 4 a.m., a workout added, edited,
     deleted or restored, and a revised sleep score.
   - A key whose day no longer pays, such as a deleted day's only workout, is reversed.
-- **Settling:** after a sync that wrote something, from `POST /api/domains/settle` (the
-  Character page), and in `bsk rewards reconcile`. Award keys are unique, so a repeated sync
-  or settle never pays twice.
+- **Settling:** on every Activity page sync, even one the throttle skips, so a day that
+  ended at 4 a.m. pays when the page next opens. Also after `bsk oura sync`, from
+  `POST /api/domains/settle` (the Character page), and in `bsk rewards reconcile`. Award keys
+  are unique, so a repeated sync or settle never pays twice.
 - **Toasts** are grouped as the Food Log's are, for example "👟 Steps Thu Oct 22: +20
   Health XP".
 
@@ -585,8 +589,8 @@ The Today card adds the three up. Nothing else on the page changes.
 10. **Days with the ring off:**
     - They're not excused. A part with no data pays nothing, and the consistency rules
       don't change.
-    - **This is a known limit:** a day with the ring off can fall short of 70 and count as
-      missed.
+    - **This is a known limit:** a day with the ring off can fall short of the 60-XP bar
+      and count as missed.
 
 **Calibration (2026-10-22).** The planning notes aim for about 100 paid Health XP a day and
 Level 100 in about 7 years for a healthy routine. Chris's notes ask to report a gap rather
@@ -885,7 +889,7 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
 - [x] A5 — Activity page: sleep and readiness
 - [ ] A6 — Live on staging
 - [x] A7 — Phase 2 rules (`ActivityRules` and its TypeScript port)
-- [ ] A8 — Activity XP on the ledger
+- [x] A8 — Activity XP on the ledger
 - [ ] A9 — Activity XP on the page
 
 ### As built
@@ -1291,3 +1295,53 @@ plus:
   `XpFrom`.
 - **Not changed:** the ledger, the sync, the Activity page, the Food Log's rules, the level
   curve and the 70-XP bar.
+
+**A8 (2026-10-22).** `ActivityAwards` (the keys) and `ActivityRewards` (settling), with no
+migration. As planned in §3.8, plus:
+
+- **When Oura's day ends:** the home-zone date 4 hours earlier
+  (`ActivityRewards.OuraDayAtAsync`). Steps and exercise for a day pay once that date has
+  moved past it. Oura's own day start isn't stored, so 4 a.m. is a constant
+  (`ActivityAwards.DayStartHour`).
+- **Dates on the earns** (the §3.8 table):
+  - Steps are dated when LifeOS last stored the day's steps, and exercise at the last counted
+    workout's end. Both are known without the day start, and both are on or before the
+    moment the award became due.
+  - A re-price is dated when it's written, always after the key's last earn, as the Food
+    Log's are.
+  - An earn whose date falls before the wallet opened doesn't pay.
+- **The sleep score's event:** `v_sleep_day` lists the score's event first, so
+  `SleepDay.ScoreEventId` reads `event_ids[1]` when the day has a score. No view changed.
+- **The notes carry no Oura numbers:** "Steps Thu Oct 22", "Exercise Thu Oct 22", "Sleep Thu
+  Oct 22". The ledger is append-only, so purging Oura's data (§7) never has to touch it.
+  - The amount, base and multiplier are on the award as usual.
+  - Each earn cites the Oura events it was priced from, so the numbers can be found while
+    LifeOS holds them.
+- **Where it settles:**
+  - `POST /api/activity/sync` settles after every call, even a skipped one, and answers
+    `awards` and `progress` beside the sync (`gen:api` regenerated).
+  - `POST /api/domains/settle` settles the food days, then activity, then the ranks.
+  - `bsk oura sync` settles after the sync and lists what it paid (`awards` in `--json`).
+    When running it against staging, keep discarding its output (§7).
+  - `bsk rewards reconcile` settles activity too.
+- **Tests:**
+  - `ActivityRewardsTests`, each on a database of its own, with XP starting 10 days before
+    the real date, since the domains read the real clock:
+    - each part pays once due and is credited to its day
+    - overlapping counted workouts are merged, and a walk or a detection adds nothing
+    - today's sleep pays, but today's steps and exercise wait for 4 a.m. (3:59 pays nothing,
+      4:00 pays both)
+    - days before `XpFrom` never pay; readiness and an unscored night pay nothing
+    - a repeat settle or sync pays nothing twice
+    - re-pricing: more steps, a second session, a workout deleted then restored, and a
+      revised score; a new score version at the same number writes nothing
+    - a retune leaves a paid day alone until Oura revises it
+    - the ×1.3 multiplier, rounded halves up (26 + 33 + 20 on a 60-base day), with the day
+      counted as successful on activity alone
+    - nothing pays before the wallet opens, and activity never opens it
+    - the kernel's rules start on 2026-10-22
+  - Over HTTP (`ActivityEndpointTests`): a skipped page sync pays last night's sleep, a
+    second pays nothing, and settling pays the day's steps and exercise at 4:00, not at 3:59,
+    then nothing more.
+- **Not changed:** the web, beyond the regenerated types (A9 shows the XP), the Food Log, the
+  level curve and the views.

@@ -270,6 +270,13 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IActivityRepository>(),
             sp.GetRequiredService<IHomeCalendar>(),
             sp.GetRequiredService<IClock>()));
+        services.AddSingleton(sp => new ActivityRewards(
+            sp.GetRequiredService<IActivityRepository>(),
+            sp.GetRequiredService<ILedgerRepository>(),
+            sp.GetRequiredService<RewardService>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
 
         // Operational services that work directly against the store.
         services.AddSingleton(_ => new MigrationRunner(connectionString));

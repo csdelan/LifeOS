@@ -3197,6 +3197,18 @@ Build:      building
 - **The successful day is now 60 base XP (2026-10-22).** The calibration found 70 held a
   healthy routine to about 70% successful days and level 59 after 10 years. Chris chose 60.
 
+**Update (2026-10-22 — XP on the ledger, A8):** `ActivityRewards` pays the three keys.
+
+- Steps and exercise pay once Oura's day ends, at 4 a.m. the next morning. Sleep pays once
+  the day has a score.
+- Each award is credited to its day at that day's multiplier, and re-priced when Oura revises
+  the day.
+- It settles on every Activity page sync (even a skipped one), after `bsk oura sync`, from
+  `POST /api/domains/settle` and in `bsk rewards reconcile`. Nothing pays twice.
+- The award notes name the part and the day only ("Steps Thu Oct 22"), so no Oura number goes
+  into the append-only ledger.
+- No migration. Showing paid and projected XP on the page (A9) is next.
+
 
 
 ---

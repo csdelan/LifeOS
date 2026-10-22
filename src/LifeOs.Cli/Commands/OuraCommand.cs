@@ -74,7 +74,9 @@ internal static class OuraCommand
             Description = "Read every day from this one (YYYY-MM-DD) through today, instead of the last 14 days and the history."
         };
         var command = new Command(
-            "sync", "Read Oura's last 14 days, then the rest of the history until it's all in. Only what changed is written.");
+            "sync",
+            "Read Oura's last 14 days, then the rest of the history until it's all in. Only what changed is written. "
+            + "Then settle activity XP.");
         command.Options.Add(fromOption);
         command.SetAction((parseResult, cancellationToken) =>
         {
@@ -84,9 +86,10 @@ internal static class OuraCommand
                 var from = fromText is null ? (DateOnly?)null : ParseDay(fromText);
                 var result = await services.GetRequiredService<OuraSyncService>().SyncAsync(
                     new OuraSyncOptions(from, HistoryWindows: int.MaxValue), ct);
+                var earned = await services.GetRequiredService<ActivityRewards>().SettleAsync(ct);
                 if (asJson)
                 {
-                    Cli.WriteJson(result);
+                    Cli.WriteJson(new { sync = result, awards = RewardOutput.AwardsJson(earned.Awards) });
                     return;
                 }
 
@@ -102,6 +105,11 @@ internal static class OuraCommand
                     Console.WriteLine(result.HistoryDone
                         ? $"History: all in, back to {Day(historyFrom)}."
                         : $"History: back to {Day(historyFrom)} so far; the next sync reads further.");
+                }
+
+                if (earned.Awards.Count > 0)
+                {
+                    RewardOutput.WriteAwards(earned.Awards);
                 }
             }, cancellationToken);
         });
