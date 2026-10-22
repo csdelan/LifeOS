@@ -67,6 +67,7 @@ requirements cluster and the ID says where it lives:
 | `CAL-` | Calendar / Appointments |
 | `REWARD-` | Rewards: currencies, redeeming, reward history, life-domain progression |
 | `FOOD-` | Food Log: food entries, fasts, diet XP |
+| `ACTIVITY-` | Activity: Oura steps, exercise, sleep and readiness, activity XP |
 | `NAV-` | Navigation shell |
 | `GEN-` | Cross-cutting conventions **and** per-subject-type object specs (Goals, Projects, Tasks, Identity Statements, Commitments, Decisions, Problems, People, Vision, …) |
 
@@ -2936,6 +2937,138 @@ photos. Build moves `mapped → built`.
 - Open decisions: none blocking.
 
 
+### ACTIVITY-1 — LifeOS reads my Oura Ring data and keeps it in step
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "I would like to pull Oura ring data into my app, and add a page for showing health related
+  stuff from Oura ring, including workouts and steps." (2026-10-22)
+- "Pull in the actual Oura data and summarize in an Activity page … This is read only."
+- Agreed (2026-10-22):
+  - I have an active Oura Membership.
+  - I connect my Oura account once, from the Activity page.
+  - LifeOS pulls my daily activity, workouts, sleep and readiness, with all history on the
+    first connect.
+  - It catches up whenever I open the page or tap Sync now.
+
+**Ontology fit (Claude):**
+- Maps to: each Oura record is an `observed` event from source `oura`, with no subject and no
+  edge.
+  - A day's activity, a day's sleep score and readiness, and each sleep period are
+    `measurement` events.
+  - A workout is an `activity` event.
+  - Daily records are identified by their Oura day; workouts and sleep periods by Oura's id.
+  - A sync appends a version only when a record changed, and the newest by `recorded_at`
+    wins. A record that disappears from Oura gets a voided version (D14).
+- Kernel delta, phases A1–A3 of [activity-plan.md](activity-plan.md):
+  - an OAuth connection in a new `bsk_ops` schema, with encrypted tokens that `bsk_reader`
+    can't read
+  - `IOuraClient`, `OuraSyncService`, `KernelSources.Oura` and `bsk oura`
+  - the views `v_activity_day`, `v_workout`, `v_sleep_period`, `v_sleep_day` and
+    `v_readiness_day` (migrations 0036 and 0037)
+- Implications:
+  - Oura's own days are kept. An activity day starts at 4 a.m., and a night belongs to the
+    morning it ends, so they don't line up exactly with LifeOS's midnight days.
+  - Data is only as fresh as the Oura app's last sync, and nothing syncs in the background in
+    phase 1.
+  - Oura no longer issues personal tokens, so Chris registers LifeOS as an Oura app once.
+- Open decisions: none blocking (plan §2, §5).
+
+
+### ACTIVITY-2 — Steps show as a trend against my 5,000 minimum and 7,500 goal
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "Steps is a key indicator that I want to actually show a trend chart for." (2026-10-22)
+- "Daily ideal step goal should be 7500. More is better. But minimum should be 5000. Less is
+  worse."
+- Agreed (2026-10-22): the chart shows 30 or 90 days (a bar per day) or a year (a bar per
+  week). It has the 7-day average and both thresholds as lines, and today shows as "so far".
+
+**Ontology fit (Claude):**
+- Maps to: a read-only fold of `v_activity_day`. The two thresholds live in Domain
+  (`ActivityTargets`) and are answered with the days, so the page never hard-codes them.
+- Kernel delta: `GET /api/activity/days` and `/summary`, and the Activity page's Steps card
+  (A3, A4).
+- Implications: a day with a lot of non-wear time says so beside its step count.
+- Open decisions: none blocking.
+
+
+### ACTIVITY-3 — Exercise I record in Oura is tracked by week, with an optional note
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "Logged exercise is another key thing to record and track also. … Assumption: All of my
+  'exercise' activity will be logged through the Oura app, so it should show up in the API."
+  (2026-10-22)
+- "Only workouts I record explicitly. … I think it makes sense to only log Oura exercises
+  that are beyond just walking.... like jogging, running, or other cardio exercises."
+- "I would like 1 more feature, a quick text note for each workout that is optional. Oura
+  doesn't have this, but I'd like to be able to optionally add a 1 line note in the LifeOS
+  activity page."
+
+**Ontology fit (Claude):**
+- Maps to: `v_workout`.
+  - What counts is a Domain rule, `ExerciseRules`. A workout entered in the Oura app or
+    recorded live counts. One Oura detected, whether confirmed or not, doesn't count, and
+    neither does any walk.
+  - The note is a `declared` `note` event keyed by the workout's Oura id. The newest version
+    wins, and an empty one clears it.
+- Kernel delta: `ExerciseRules`, `WorkoutNoteService`, `bsk oura workouts` and
+  `bsk oura note`, `GET /api/activity/workouts`, `POST /api/activity/workouts/{id}/note`,
+  and the Exercise card (A2–A4).
+- Implications:
+  - The note is LifeOS's only write, and it never goes to Oura. It's one line, up to 140
+    characters, and syncs never touch it.
+  - Walks logged as workouts in the past don't count either.
+  - Workouts Oura imports from other apps aren't confirmed to reach the API; A6 checks.
+- Open decisions: none blocking.
+
+
+### ACTIVITY-4 — My sleep score and readiness are tracked every day
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "I forgot about sleep altogether!!! It's important. I want to track sleep score also, and
+  readiness. Let's add it into phase 1." (2026-10-22)
+- Agreed (2026-10-22): last night's sleep score, readiness score, time asleep, and bed and
+  wake times, with a chart of each over 30 days, 90 days or a year.
+
+**Ontology fit (Claude):**
+- Maps to:
+  - `v_sleep_day`: the sleep score and its contributors, the night (the longest
+    `long_sleep` period), and naps.
+  - `v_readiness_day`: the readiness score, its contributors and the temperature deviation.
+- Kernel delta: part of A2's sync, plus the Sleep and readiness card (A5).
+- Implications: sleep and readiness arrive only once the Oura app has synced the ring. The
+  charts show Oura's own bands (70 and 85) until Chris sets his own.
+- Open decisions: none blocking.
+
+
+### ACTIVITY-5 — My Oura data earns Health XP automatically
+Horizon:    Pilot
+Definition: drafting
+Build:      unmapped
+
+**Workflow (Chris):**
+- "Assigning health XP (or other rewards) automatically based on the data. I don't know
+  formulas yet, but this will come next." (2026-10-22)
+- Thresholds so far: 5,000 steps minimum, 7,500 goal (ACTIVITY-2).
+
+**Ontology fit (Claude):**
+- _pending_ until the formulas are set. The likely shape is item-less award keys per day,
+  re-priced like D13's; [activity-plan.md](activity-plan.md) §3.8 sketches it, with the
+  questions to settle.
+
+
 
 ---
 
@@ -3112,6 +3245,30 @@ two keys are the ledger's first **re-priced** awards: when a day's entries chang
 is given back and earned again at the new base. A retune of the rules never rewrites a past
 day. Design and build order: [food-log-plan.md](food-log-plan.md).
 
+**D14 — Oura data is observed events, versioned by content (ACTIVITY-1..4, 2026-10-22).**
+
+- **What's stored:** each record LifeOS pulls from Oura is an append-only event from source
+  `oura`, with provenance `observed`. That covers a day's activity, a day's sleep score and
+  readiness, a sleep period, and a workout. It's the first use of `observed`.
+- **Not subjects:** they record what the ring measured, and nothing about them is managed
+  over time.
+- **Versions:** a sync appends a new version only when a record's content changed.
+  - The newest by `recorded_at` wins.
+  - A record Oura no longer has gets a voided version.
+  - So a past day Oura revises becomes a newer version, never an overwrite.
+- **Deduping:** `external_id` carries the content's hash and the version it replaces. A
+  retried sync never doubles, and the `(source_id, external_id)` index (invariant 7) does the
+  deduping it was built for.
+- **Days:** Oura's own day is kept as is.
+- **LifeOS's only write** is Chris's optional note on a workout: a `declared` `note` event
+  keyed by the workout's Oura id.
+- **Tokens:** OAuth tokens are operational state, not part of the record. They're kept
+  encrypted in a new `bsk_ops` schema that the reader role can't see.
+- **Phase 2:** activity XP will cite the versions it was priced from, so a revised day is
+  re-priced as a food day is (D13).
+
+Design and build order: [activity-plan.md](activity-plan.md).
+
 ### Method for the Habit ↔ Commitment discrepancy
 
 "Habit" (UI concept) and "Commitment" (storage type) are deliberately decoupled — Chris
@@ -3209,14 +3366,24 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;
-  `bsk food`; the `/food` Day, Week and Month views. — **Open** (F1–F5 done in
-  [food-log-plan.md](food-log-plan.md), migration 0034; photos (F6) left).
+  `bsk food`; the `/food` Day, Week and Month views. — **Shipped** (F1–F6 in
+  [food-log-plan.md](food-log-plan.md), migrations 0034–0035, photos in Supabase Storage).
+- **Oura integration** (ACTIVITY-1..4 / D14):
+  - an OAuth connection with encrypted tokens in `bsk_ops`
+  - Oura records as `observed` events from source `oura`, versioned by content
+  - `v_activity_day`, `v_workout`, `v_sleep_period`, `v_sleep_day`, `v_readiness_day`
+  - `ExerciseRules`, workout notes and `bsk oura`
+  - the `/activity` page
+
+  — **Open** (planned in [activity-plan.md](activity-plan.md), A1–A6; activity XP,
+  ACTIVITY-5, follows).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
-scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **Food log + diet
-XP** (FOOD-1..5 / D13). Everything else
+scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **Oura
+integration** (ACTIVITY-1..4 / D14). Everything else
 above has shipped, the rewards work included (R1–R7 in [rewards-plan.md](rewards-plan.md))
-and life-domain XP (X1–X7 in [xp-domains-plan.md](xp-domains-plan.md)). The user-facing UIs for the shipped kernel bits still vary by surface — see each
+and life-domain XP (X1–X7 in [xp-domains-plan.md](xp-domains-plan.md)), and the Food Log
+(F1–F6 in [food-log-plan.md](food-log-plan.md)). The user-facing UIs for the shipped kernel bits still vary by surface — see each
 requirement's Build field (e.g. CAP-2 / CAP-4 are `building`: kernel done, capture UI pending).
 
 *(Prior mapping gaps already closed: the `concerns` write path — shipped as `bsk relate`.)*
