@@ -17,8 +17,10 @@
     Reads:
       -EnvFile (default .env)   BSK_CONNECTION_STRING, BSK_READER_CONNECTION_STRING,
                                 and optionally VITE_SUPABASE_URL,
-                                VITE_SUPABASE_ANON_KEY, ALLOWED_EMAILS, and
-                                Storage__SupabaseSecretKey (or SUPABASE_SECRET_KEY)
+                                VITE_SUPABASE_ANON_KEY, ALLOWED_EMAILS,
+                                Storage__SupabaseSecretKey (or SUPABASE_SECRET_KEY),
+                                and the Oura app: Oura__ClientId, Oura__ClientSecret,
+                                Integrations__TokenKey (and Oura__StartDate if set)
       web/.env.local            VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY when
                                 the env file does not set them
       LifeOs.Api user-secrets   ALLOWED_EMAILS when the env file does not set it
@@ -31,11 +33,17 @@
     food photos in Supabase Storage rather than the database. Without it the
     API refuses photos. The script refuses a publishable or anon key there.
 
+    Oura__ClientId and Oura__ClientSecret come from the app registered at
+    developer.ouraring.com; Integrations__TokenKey (32 random bytes, base64) seals
+    Oura's tokens in the database. All three or none: without them the Activity
+    page says Oura isn't set up. Names match without regard to case.
+
     Sets:
       Fly app secrets           BSK_CONNECTION_STRING, BSK_READER_CONNECTION_STRING,
                                 Auth__Issuer, Auth__JwksUrl, ALLOWED_EMAILS,
                                 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY,
-                                Storage__SupabaseSecretKey (when given)
+                                Storage__SupabaseSecretKey (when given),
+                                the Oura settings (when given)
       GitHub environment        BSK_CONNECTION_STRING (for bsk migrate) and
       secrets                   FLY_API_TOKEN (a deploy token scoped to this app)
 
@@ -205,6 +213,26 @@ if ($storageKey) {
     }
 }
 
+# Optional: the Oura app (activity plan §3.1). Server-only, never a VITE_ value.
+# The hashtable ignores case, so Oura__ClientID is found too.
+$ouraNames = 'Oura__ClientId', 'Oura__ClientSecret', 'Integrations__TokenKey'
+$ouraGiven = @($ouraNames | Where-Object { -not [string]::IsNullOrWhiteSpace($fromEnvFile[$_]) })
+if ($ouraGiven.Count -gt 0 -and $ouraGiven.Count -lt $ouraNames.Count) {
+    $ouraMissing = $ouraNames | Where-Object { $ouraGiven -notcontains $_ }
+    throw "$EnvFile sets $($ouraGiven -join ', ') but not $($ouraMissing -join ', '). Set all three to switch Oura on, or none to leave it off."
+}
+$oura = $ouraGiven.Count -eq $ouraNames.Count
+if ($oura) {
+    try { $keyBytes = [Convert]::FromBase64String($fromEnvFile['Integrations__TokenKey']) } catch { $keyBytes = @() }
+    if ($keyBytes.Length -ne 32) { throw "Integrations__TokenKey must be 32 random bytes in base64." }
+    $keyBytes = $null
+    if ($fromEnvFile['Oura__ClientId'] -match '\s' -or $fromEnvFile['Oura__ClientSecret'] -match '\s') {
+        throw "Oura__ClientId and Oura__ClientSecret can't contain spaces."
+    }
+    $ouraStart = $fromEnvFile['Oura__StartDate']
+    if ($ouraStart -and $ouraStart -notmatch '^\d{4}-\d{2}-\d{2}$') { throw "Oura__StartDate must be a date written YYYY-MM-DD." }
+}
+
 $flySecrets = [ordered]@{
     BSK_CONNECTION_STRING        = $values['BSK_CONNECTION_STRING']
     BSK_READER_CONNECTION_STRING = $values['BSK_READER_CONNECTION_STRING']
@@ -216,6 +244,10 @@ $flySecrets = [ordered]@{
 }
 if ($storageKey) { $flySecrets['Storage__SupabaseSecretKey'] = $storageKey }
 $storageKey = $null
+if ($oura) {
+    foreach ($name in $ouraNames) { $flySecrets[$name] = $fromEnvFile[$name] }
+    if ($ouraStart) { $flySecrets['Oura__StartDate'] = $ouraStart }
+}
 
 # ---------- confirm ----------
 $repo = gh repo view --json nameWithOwner --jq .nameWithOwner
@@ -233,6 +265,12 @@ if ($flySecrets.Contains('Storage__SupabaseSecretKey')) {
     Write-Host "Food photos        Supabase Storage, private bucket lifeos-artifacts (made on first upload)" -ForegroundColor Cyan
 } else {
     Write-Host "Food photos        OFF: no Storage__SupabaseSecretKey in $EnvFile, so the API refuses photos" -ForegroundColor Yellow
+}
+if ($oura) {
+    $start = if ($ouraStart) { "from $ouraStart (Oura__StartDate)" } else { 'from the default start date (2026-10-22)' }
+    Write-Host "Oura               ON: client id and secret from $EnvFile, tokens sealed with Integrations__TokenKey, read $start" -ForegroundColor Cyan
+} else {
+    Write-Host "Oura               OFF: no Oura__ClientId in $EnvFile, so the Activity page says Oura isn't set up" -ForegroundColor Yellow
 }
 Write-Host ''
 if (-not $Yes) {
@@ -279,3 +317,7 @@ Write-Host 'Done. Remaining by hand:' -ForegroundColor Green
 Write-Host "  1. Supabase ($ref) -> Authentication -> URL Configuration: Site URL = https://$app.fly.dev (no trailing slash);"
 Write-Host "     keep http://localhost:5173 under Redirect URLs for local Vite."
 Write-Host "  2. Deploy: gh workflow run deploy.yml   (or push to main), then open https://$app.fly.dev"
+if ($oura) {
+    Write-Host "  3. developer.ouraring.com -> your app -> Redirect URIs: add https://$app.fly.dev/activity/connected,"
+    Write-Host "     then Connect Oura on https://$app.fly.dev/activity."
+}
