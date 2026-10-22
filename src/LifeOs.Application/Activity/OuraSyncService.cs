@@ -7,7 +7,8 @@ namespace LifeOs.Application.Activity;
 /// What a sync covers (activity plan §3.3). By default: the last <see cref="OuraSyncService.RecentDays"/>
 /// days through tomorrow, then up to <paramref name="HistoryWindows"/> more windows of history
 /// until it's all in. With <paramref name="From"/>: every day from then through tomorrow
-/// (<c>bsk oura sync --from</c>), and nothing else.
+/// (<c>bsk oura sync --from</c>), and nothing else. Neither goes before the start date
+/// (<see cref="OuraConnectionService.StartDate"/>).
 /// </summary>
 public sealed record OuraSyncOptions(DateOnly? From = null, int HistoryWindows = OuraSyncService.HistoryWindowsPerSync);
 
@@ -51,8 +52,11 @@ public sealed record OuraPageSync(OuraSyncResult? Result, DateTimeOffset? LastSy
 /// differs by collection.</item>
 /// <item><b>History:</b> after the window, the sync reads back <see cref="HistoryWindowDays"/>
 /// days at a time, <see cref="HistoryWindowsPerSync"/> windows per sync, until a window holds
-/// nothing (or it reaches <see cref="HistoryFloor"/>). Where it got to is kept on the
-/// connection, so the next sync carries on.</item>
+/// nothing (or it reaches <see cref="Floor"/>). Where it got to is kept on the connection, so
+/// the next sync carries on.</item>
+/// <item><b>The start date</b> (<c>Oura:StartDate</c>, activity plan §3.3): nothing from before
+/// it is read or kept. The window starts there while it's under 14 days old, and the history is
+/// all in once it reaches it.</item>
 /// <item><b>Versions:</b> a record gets a new version only when its trimmed content differs
 /// from the newest LifeOS holds. A workout or sleep period LifeOS holds on a day in the window
 /// that Oura no longer answers gets a voided version; if it comes back, a new version restores
@@ -87,6 +91,12 @@ public sealed class OuraSyncService(
 
     /// <summary>The earliest day a sync reads: before the first Oura Ring with an API.</summary>
     public static readonly DateOnly HistoryFloor = new(2015, 1, 1);
+
+    /// <summary>
+    /// The earliest day a sync reads: the start date (<see cref="OuraConnectionService.StartDate"/>),
+    /// or <see cref="HistoryFloor"/> without one.
+    /// </summary>
+    public DateOnly Floor => connection.StartDate is { } start && start > HistoryFloor ? start : HistoryFloor;
 
     /// <summary>How recent a sync lets the page's sync on opening be skipped (activity plan §3.3).</summary>
     public static readonly TimeSpan PageSyncInterval = TimeSpan.FromMinutes(5);
@@ -155,15 +165,17 @@ public sealed class OuraSyncService(
             var to = today.AddDays(1);
             var tally = new Tally();
 
+            var floor = Floor;
             DateOnly from;
             DateOnly? historyFrom;
             var historyDone = false;
             if (options.From is { } explicitFrom)
             {
-                if (explicitFrom < HistoryFloor || explicitFrom > today)
+                if (explicitFrom < floor || explicitFrom > today)
                 {
-                    throw new ArgumentException(
-                        $"Sync from a day between {OuraPayloads.Text(HistoryFloor)} and today ({OuraPayloads.Text(today)}).");
+                    throw new ArgumentException(connection.StartDate is not null && floor > HistoryFloor
+                        ? $"LifeOS reads Oura from {OuraPayloads.Text(floor)} (Oura:StartDate): sync from a day between then and today ({OuraPayloads.Text(today)})."
+                        : $"Sync from a day between {OuraPayloads.Text(HistoryFloor)} and today ({OuraPayloads.Text(today)}).");
                 }
 
                 from = explicitFrom;
@@ -177,28 +189,33 @@ public sealed class OuraSyncService(
             }
             else
             {
-                from = today.AddDays(-RecentDays);
-                await SyncWindowAsync(oura, token, from, to, tally, cancellationToken);
+                from = Max(today.AddDays(-RecentDays), floor);
+                if (from <= to)
+                {
+                    // A start date after tomorrow has nothing to read yet.
+                    await SyncWindowAsync(oura, token, from, to, tally, cancellationToken);
+                }
 
                 var stored = await integrations.GetAsync(service, cancellationToken);
                 historyDone = stored?.HistoryDone ?? false;
                 var reached = Min(stored?.HistoryFrom ?? from, from);
                 for (var i = 0; i < options.HistoryWindows && !historyDone; i++)
                 {
-                    if (reached <= HistoryFloor)
+                    if (reached <= floor)
                     {
                         historyDone = true;
                         break;
                     }
 
                     var end = reached.AddDays(-1);
-                    var start = Max(end.AddDays(-(HistoryWindowDays - 1)), HistoryFloor);
+                    var start = Max(end.AddDays(-(HistoryWindowDays - 1)), floor);
                     var found = await SyncWindowAsync(oura, token, start, end, tally, cancellationToken);
                     reached = start;
-                    historyDone = found == 0 || start <= HistoryFloor;
+                    historyDone = found == 0 || start <= floor;
                 }
 
-                historyFrom = reached;
+                historyDone = historyDone || reached <= floor;
+                historyFrom = Max(reached, floor);
             }
 
             var syncedAt = clock.UtcNow;

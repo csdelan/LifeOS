@@ -1,3 +1,5 @@
+using System.Globalization;
+using LifeOs.Application.Activity;
 using Microsoft.Extensions.Configuration;
 
 namespace LifeOs.Infrastructure.Integrations;
@@ -14,11 +16,14 @@ namespace LifeOs.Infrastructure.Integrations;
 /// apps from Oura's new portal must refresh elsewhere, so it can be moved without a release.</item>
 /// <item><c>Oura:CollectionsUrl</c> — where the data collections are read; Oura's
 /// <c>/v2/usercollection/</c> by default (its sandbox is <c>/v2/sandbox/usercollection/</c>).</item>
+/// <item><c>Oura:StartDate</c> — the first day LifeOS reads Oura for (YYYY-MM-DD): nothing from
+/// before it is synced. <see cref="DefaultStartDate"/> by default, the day Chris began the Food
+/// Log, so both feed Health XP from the same day; <c>2015-01-01</c> reads Oura's whole history.</item>
 /// </list>
 /// </summary>
 public sealed record OuraOptions(
     string ClientId, string ClientSecret, Uri AuthorizeUrl, Uri TokenUrl, Uri RefreshUrl, Uri RevokeUrl,
-    Uri CollectionsUrl)
+    Uri CollectionsUrl, DateOnly StartDate)
 {
     public const string ClientIdKey = "Oura:ClientId";
     public const string ClientSecretKey = "Oura:ClientSecret";
@@ -27,6 +32,14 @@ public sealed record OuraOptions(
     public const string RefreshUrlKey = "Oura:RefreshUrl";
     public const string RevokeUrlKey = "Oura:RevokeUrl";
     public const string CollectionsUrlKey = "Oura:CollectionsUrl";
+    public const string StartDateKey = "Oura:StartDate";
+
+    /// <summary>
+    /// The day LifeOS starts reading Oura when <c>Oura:StartDate</c> isn't set: 2026-10-22, when
+    /// Chris started the Food Log, so activity and food count toward Health XP from the same day
+    /// (activity plan §3.3).
+    /// </summary>
+    public static readonly DateOnly DefaultStartDate = new(2026, 10, 22);
 
     public static readonly Uri DefaultAuthorizeUrl = new("https://cloud.ouraring.com/oauth/authorize");
     public static readonly Uri DefaultTokenUrl = new("https://api.ouraring.com/oauth/token");
@@ -66,12 +79,35 @@ public sealed record OuraOptions(
             tokenUrl,
             Endpoint(get, RefreshUrlKey, tokenUrl),
             Endpoint(get, RevokeUrlKey, DefaultRevokeUrl),
-            Folder(Endpoint(get, CollectionsUrlKey, DefaultCollectionsUrl)));
+            Folder(Endpoint(get, CollectionsUrlKey, DefaultCollectionsUrl)),
+            Day(get, StartDateKey, DefaultStartDate));
     }
 
     // Never print the secret.
     public override string ToString()
-        => $"OuraOptions {{ ClientId = {ClientId}, AuthorizeUrl = {AuthorizeUrl}, TokenUrl = {TokenUrl}, RefreshUrl = {RefreshUrl}, RevokeUrl = {RevokeUrl}, CollectionsUrl = {CollectionsUrl} }}";
+        => $"OuraOptions {{ ClientId = {ClientId}, AuthorizeUrl = {AuthorizeUrl}, TokenUrl = {TokenUrl}, RefreshUrl = {RefreshUrl}, RevokeUrl = {RevokeUrl}, CollectionsUrl = {CollectionsUrl}, StartDate = {StartDate:yyyy-MM-dd} }}";
+
+    private static DateOnly Day(Func<string, string?> get, string key, DateOnly fallback)
+    {
+        var text = get(key)?.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            return fallback;
+        }
+
+        if (!DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+        {
+            throw new InvalidOperationException($"{key} must be a date written YYYY-MM-DD, got '{text}'.");
+        }
+
+        if (day < OuraSyncService.HistoryFloor)
+        {
+            throw new InvalidOperationException(
+                $"{key} can't be before {OuraSyncService.HistoryFloor:yyyy-MM-dd}, the first day Oura has; got '{text}'.");
+        }
+
+        return day;
+    }
 
     // A base a collection's name is resolved against: it must end in a slash.
     private static Uri Folder(Uri uri)

@@ -251,6 +251,29 @@ describe("Activity page (activity plan §3.7)", () => {
   });
 });
 
+describe("The Oura start date (activity plan §3.3)", () => {
+  it("says the day LifeOS reads Oura from while it's within the year the charts show", async () => {
+    setMockOura({ startDate: addDays(todayIso(), -5) });
+    renderPage();
+    const note = await screen.findByTestId("oura-start");
+    expect(note).toHaveTextContent(
+      `LifeOS reads Oura from ${dayName(addDays(todayIso(), -5), "")}, so the days before it are empty.`,
+    );
+  });
+
+  it("says nothing when LifeOS reads all of Oura, or started over a year ago", async () => {
+    const view = renderPage();
+    await card("Steps");
+    expect(screen.queryByTestId("oura-start")).not.toBeInTheDocument();
+    view.unmount();
+
+    setMockOura({ startDate: addDays(todayIso(), -400) });
+    renderPage();
+    await card("Steps");
+    expect(screen.queryByTestId("oura-start")).not.toBeInTheDocument();
+  });
+});
+
 describe("Sleep and readiness (activity plan §3.7, ACTIVITY-4)", () => {
   const sleepCard = () => card("Sleep and readiness");
 

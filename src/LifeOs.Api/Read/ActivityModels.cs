@@ -40,8 +40,14 @@ public sealed class OuraStatusRead
     /// <summary>The earliest day (yyyy-MM-dd) the history has been read back to; each sync reads further until it's done.</summary>
     public string? HistoryFrom { get; set; }
 
-    /// <summary>The history is all in: the sync found where Oura's history starts.</summary>
+    /// <summary>The history is all in: the sync found where Oura's history starts, or reached the start date.</summary>
     public bool HistoryDone { get; set; }
+
+    /// <summary>
+    /// The first day (yyyy-MM-dd) LifeOS reads Oura for (<c>Oura:StartDate</c>): it holds nothing
+    /// from before it. Null when this host reads Oura's whole history, or has no Oura app.
+    /// </summary>
+    public string? StartDate { get; set; }
 
     public static OuraStatusRead From(OuraStatus status) => new()
     {
@@ -58,6 +64,7 @@ public sealed class OuraStatusRead
         LastSyncError = status.LastSyncError,
         HistoryFrom = status.HistoryFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         HistoryDone = status.HistoryDone,
+        StartDate = status.StartDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
     };
 }
 

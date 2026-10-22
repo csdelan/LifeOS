@@ -22,6 +22,8 @@ import {
   rollingAverage,
   stepBand,
   stepDayText,
+  beforeStart,
+  BEFORE_START,
   stepWeeks,
   weekTitle,
   type MetricRange,
@@ -59,6 +61,7 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
   const today = summary.today;
   const days = useActivityDays(rangeFrom(range, today), today);
   const targets: StepTargets = summary;
+  const start = summary.oura.startDate;
 
   const setRange = (next: MetricRange) => {
     setRangeState(next);
@@ -102,7 +105,9 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
       title: weekTitle(w.from, today),
       text:
         w.average == null
-          ? "no steps recorded"
+          ? beforeStart(w.to, start)
+            ? BEFORE_START
+            : "no steps recorded"
           : `${w.average.toLocaleString()} steps a day${w.partial ? " so far" : ""}, ${bandWords(stepBand(w.average, targets))}`,
       detail: w.days > 0 ? `averaged over ${w.days} day${w.days === 1 ? "" : "s"}` : w.partial ? "today so far" : undefined,
       axis: w.partial ? "This week" : formatDay(w.from),
@@ -120,7 +125,7 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
       tone: day.steps != null ? BAND_TONE[stepBand(day.steps, targets)] : "",
       partial: day.day === today,
       title: dayName(day.day, today),
-      text: stepDayText(day, targets, today),
+      text: stepDayText(day, targets, today, start),
       detail: average != null ? `7-day average ${average.toLocaleString()}` : undefined,
       axis: day.day === today ? "Today" : formatDay(day.day),
     }));

@@ -48,6 +48,7 @@ public sealed class OuraEndpointTests(PostgresFixture postgres)
         var status = await JsonAsync(await host.Client.GetAsync("/api/oura/status", Ct));
         Assert.Equal("not_configured", status.GetProperty("state").GetString());
         Assert.False(status.GetProperty("configured").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, status.GetProperty("startDate").ValueKind);
 
         var refused = await JsonAsync(
             await host.Client.PostAsJsonAsync("/api/oura/authorize", new { redirectUri = Redirect }, Ct),
@@ -106,6 +107,25 @@ public sealed class OuraEndpointTests(PostgresFixture postgres)
         var noCode = await JsonAsync(await host.Client.PostAsJsonAsync(
             "/api/oura/connect", new { state = oura.AuthorizedState }, Ct), HttpStatusCode.BadRequest);
         Assert.Contains("code", noCode.GetProperty("error").GetString());
+    }
+
+    [Theory]
+    [InlineData(null, "2026-10-22")]
+    [InlineData("2026-11-01", "2026-11-01")]
+    public async Task The_status_says_the_day_LifeOS_reads_Oura_from(string? setting, string expected)
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var settings = new Dictionary<string, string?>(WithTokenKey)
+        {
+            [OuraOptions.ClientIdKey] = "client-123",
+            [OuraOptions.ClientSecretKey] = "secret-456",
+            [OuraOptions.StartDateKey] = setting,
+        };
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, settings);
+
+        var status = await JsonAsync(await host.Client.GetAsync("/api/oura/status", Ct));
+        Assert.Equal("not_connected", status.GetProperty("state").GetString());
+        Assert.Equal(expected, status.GetProperty("startDate").GetString());
     }
 
     [Fact]

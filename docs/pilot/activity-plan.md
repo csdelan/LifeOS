@@ -128,7 +128,7 @@ Checked against Oura's API v2 docs and OpenAPI spec 1.42 on 2026-10-22 (§7).
 | Which day | **Oura's own day.** Activity days start at 4 a.m.; a night counts on the morning it ends. Steps can't be re-cut to LifeOS's midnight, because Oura gives a day's total, not steps by the hour. |
 | Today | Today's steps and workouts are "so far", and last night's sleep and readiness appear once the Oura app has synced. LifeOS is never fresher than the Oura app. |
 | When it syncs | When the Activity page opens (at most once every 5 minutes), on **Sync now**, and from `bsk oura sync`. No background job in phase 1 (§3.3). |
-| History | On first connect, everything Oura has. A few MB at most. |
+| **Start date** | **Oura is read from 2026-10-22**, the day Chris started the Food Log, so activity and food feed Health XP from the same day. Nothing from before it is synced (`Oura:StartDate`, §3.3). *(Changed 2026-10-22, at the start of A6: it was everything Oura has.)* |
 | **Step thresholds** | **A minimum of 5,000 and a goal of 7,500.** More is better; less is worse. A day reads as under the minimum, at the minimum, or at the goal. |
 | Steps chart | 30 days by default, or 90: a bar per day, the 7-day average as a line, and dashed lines at 5,000 and 7,500. Bars are toned by band (under the minimum, the minimum met, the goal met). 1 year: a bar per week (Monday to Sunday) of the average a day, since 365 bars don't fit on a phone. Today is a lighter "so far" bar. |
 | **What counts as exercise** | **Only workouts Chris records himself**: entered in the Oura app (`manual`) or recorded live (`workout_heart_rate`, `live_oura_heart_rate`, `live_third_party_heart_rate`). Not counted: workouts Oura detected, confirmed or not, and **any walk** (`walking`), since its steps already count. A source Oura adds later isn't counted until it's classified. |
@@ -307,6 +307,17 @@ activity ones change on every sync. A later view that needs one can fetch it.
 - **One sync at a time:** a sync runs under a transaction-scoped advisory lock. A second
   sync waits, then finds nothing new. That covers the page opening while Sync now is
   pressed, and the API racing the CLI.
+- **The start date** (`Oura:StartDate`, 2026-10-22 by default): no sync reads or keeps
+  anything from before it.
+  - The window starts there while it's under 14 days old, and the history counts as all in
+    once it reaches it, so there's no backfill.
+  - `bsk oura sync --from` can't go before it, and says so.
+  - The API's status and `bsk oura status` say it, and the page says "LifeOS reads Oura from
+    Thu, Oct 22" while the charts' year reaches before it. Days before it read "before
+    LifeOS read Oura", not "no steps recorded".
+  - Anything LifeOS read before a start date was set stays (the record is append-only).
+  - It's a setting, not a constant, so a host can move it. `2015-01-01` reads Oura's whole
+    history.
 - **Throttle:** the page-open sync is skipped when the last sync is under 5 minutes old.
   Sync now and the CLI always run.
 - **The outcome** is kept on the connection row (`last_synced_at`, `last_sync_error`, §3.5).
@@ -511,7 +522,10 @@ The machinery is D13's. Only the rules are new.
 6. **Double counting:** a Health habit that is itself exercise or sleep would pay twice.
 7. **History:** XP only from the day phase 2 ships (recommended), or for past days too. A
    year of backfilled data paying at once would jump several levels and fill the
-   consistency window in one go.
+   consistency window in one go. *Partly settled (2026-10-22):* LifeOS holds nothing from
+   before the start date (2026-10-22, when the Food Log began), so there's no year to pay.
+   What's left is whether the days between then and phase 2 shipping pay, as the Food
+   Log's do.
 8. **Other rewards:** Gems for step streaks, Freedom, Life XP.
 9. **A background sync:** XP lands only when something syncs. If that turns out to matter,
    add a daily scheduled sync (a GitHub Actions cron, or Oura's webhooks waking the machine).
@@ -538,7 +552,7 @@ Each phase is one commit:
 | A3 | API | `ActivityReads` / `ActivityReader`, the §3.6 endpoints including the note, the page-open throttle, `gen:api`. Tests: shapes, the range limit, the throttle, `counted` and its reasons, the note's refusals as 400s, Oura's errors as clear messages. | A2 |
 | A4 | Activity page: steps and exercise | §3.7's header, connect card and return route, the Today card's steps and workouts, the shared daily-metric chart, the Steps card, the Exercise card with its workout sheet and note; `lib/exercise-rules.ts`; the mock store's activity half, notes included. Vitest, e2e, a11y in both themes and on a phone. | A3 (mock-first can start after A2) |
 | A5 | Activity page: sleep and readiness | §3.7's Sleep and readiness card, the Today card's last night, the day detail sheet. Vitest, e2e, a11y. | A4 |
-| A6 | Live on staging | `fly-setup.ps1` imports the Oura settings; Chris connects on staging; a real refresh on day one; the history backfills; a week of comparing the page with the Oura app, imported workouts included if there are any. | A5 |
+| A6 | Live on staging | The start date (2026-10-22: nothing earlier is read); `fly-setup.ps1` imports the Oura settings; Chris connects on staging; a real refresh on day one; a week of comparing the page with the Oura app, imported workouts included if there are any. | A5 |
 
 **Phase 2 (activity XP), after the formulas:**
 
@@ -605,10 +619,20 @@ note in the LifeOS activity page."
 - **Sync when the page opens, plus Sync now.** No background job until phase 2 shows it
   needs one.
 - **All history on first connect.** It's a few MB. Whether past days pay XP is phase 2's
-  question 7.
+  question 7. *Replaced at the start of A6, below.*
 - **The night is the longest `long_sleep`.** Naps add up separately.
 - **Oura's own score bands** (70 and 85) on the sleep and readiness charts, since Chris
   hasn't set his own.
+
+**Changed at the start of A6 (2026-10-22):** "Do A6 next. But I would like to put in a
+cut-off begin date that only starts today, because today is when I started logging food, and
+I want to start using both at the same time to avoid half life XP contributions missing."
+
+- So Oura is read from 2026-10-22 and nothing earlier is synced (§2, §3.3). Health XP from
+  activity and from food then cover the same days, with no stretch where only one of them
+  could pay.
+- It's the setting `Oura:StartDate`, defaulting to 2026-10-22 in code, so every host (the
+  API, `bsk`, staging and production) honours it without anything to remember.
 
 ## 6. Later
 

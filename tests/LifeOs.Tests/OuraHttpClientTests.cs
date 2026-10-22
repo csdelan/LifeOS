@@ -23,7 +23,7 @@ public sealed class OuraHttpClientTests
     private static readonly OuraOptions Options = new(
         "client-123", Secret, OuraOptions.DefaultAuthorizeUrl, OuraOptions.DefaultTokenUrl,
         new Uri("https://moi.ouraring.com/oauth/v2/ext/oauth-token"), OuraOptions.DefaultRevokeUrl,
-        OuraOptions.DefaultCollectionsUrl);
+        OuraOptions.DefaultCollectionsUrl, OuraOptions.DefaultStartDate);
 
     private static (OuraHttpClient Client, StubHandler Handler) Create(params Func<HttpRequestMessage, HttpResponseMessage>[] answers)
     {

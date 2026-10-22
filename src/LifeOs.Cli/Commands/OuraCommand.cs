@@ -71,7 +71,7 @@ internal static class OuraCommand
     {
         var fromOption = new Option<string?>("--from")
         {
-            Description = "Read every day from this one (YYYY-MM-DD) through today, instead of the last 14 days and the history."
+            Description = "Read every day from this one (YYYY-MM-DD) through today, instead of the last 14 days and the history. Not before Oura:StartDate."
         };
         var command = new Command(
             "sync", "Read Oura's last 14 days, then the rest of the history until it's all in. Only what changed is written.");
@@ -423,6 +423,11 @@ internal static class OuraCommand
         else if (status.Connected)
         {
             Console.WriteLine("  Last sync     never");
+        }
+
+        if (status.StartDate is { } startDate)
+        {
+            Console.WriteLine($"  Reads from    {Day(startDate)} (Oura:StartDate)");
         }
 
         if (status.HistoryFrom is { } historyFrom)

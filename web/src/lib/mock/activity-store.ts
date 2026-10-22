@@ -252,6 +252,8 @@ function seedActivity(): ActivityState {
       lastSyncError: null,
       historyFrom: addDays(today, -SEEDED_DAYS + 1),
       historyDone: true,
+      // The mock holds its whole seeded history; a test sets a start date to see one.
+      startDate: null,
     },
     days,
     workouts: seedWorkouts(today),

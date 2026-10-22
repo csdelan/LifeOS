@@ -253,7 +253,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new OuraConnectionService(
             sp.GetRequiredService<IIntegrationRepository>(),
             sp.GetService<IOuraClient>(),
-            sp.GetRequiredService<IClock>()));
+            sp.GetRequiredService<IClock>(),
+            startDate: integrations?.Oura?.StartDate));
         services.AddSingleton(sp => new OuraSyncService(
             sp.GetRequiredService<OuraConnectionService>(),
             sp.GetService<IOuraClient>(),
