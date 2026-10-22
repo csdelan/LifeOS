@@ -1,6 +1,6 @@
 /**
  * The mock store's activity half (ACTIVITY-1..4, activity plan §3.7): about 120 days of steps,
- * sleep and readiness, and 40 workouts of every source, walks and detections included, all
+ * sleep and readiness (each night with its stages, heart and both scores' contributors), and 40 workouts of every source, walks and detections included, all
  * relative to today and the same on every load. It answers as `/api/oura` and `/api/activity`
  * do — the thresholds, `counted` and its reasons, this week against last, the note's
  * refusals, the page's sync skipped under 5 minutes — so the page behaves the same on either.
@@ -9,18 +9,22 @@
 import {
   ACTIVITY_TARGETS,
   NOTE_MAX,
+  READINESS_CONTRIBUTORS,
+  SLEEP_CONTRIBUTORS,
   stepBand,
   summarizeWeek,
 } from "@/lib/activity";
 import { addDays, nowIso, startOfWeekMonday, todayIso } from "@/lib/dates";
 import { exerciseVerdict } from "@/lib/exercise-rules";
 import type {
+  ActivityDayDetailRead,
   ActivityDayRow,
   ActivityDaysRead,
   ActivitySummaryRead,
   ActivitySyncResult,
   ActivityWorkoutsRead,
   OuraStatus,
+  SleepPeriodRow,
   WorkoutRow,
 } from "@/lib/production-ui-types";
 
@@ -256,6 +260,86 @@ function seedActivity(): ActivityState {
 }
 
 // ---------------------------------------------------------------------------
+// A day in full: made up from the day's row, the same way on every load
+// ---------------------------------------------------------------------------
+
+/** A stable number for a day, so its night is seeded the same whatever "today" is. */
+function dayNumber(day: string): number {
+  return Math.round(Date.parse(`${day}T00:00:00Z`) / 86_400_000);
+}
+
+function around(score: number, r: () => number, spread = 30): number {
+  return Math.min(100, Math.max(15, Math.round(score + (r() - 0.5) * spread)));
+}
+
+// The eight readiness contributors the sandbox answers; `sleep_regularity` is newer.
+const MOCK_READINESS = READINESS_CONTRIBUTORS.filter((k) => k !== "sleep_regularity");
+
+function seedDetail(row: ActivityDayRow): Omit<ActivityDayDetailRead, "day" | "today" | "minimumSteps" | "goalSteps" | "summary" | "workouts"> {
+  const r = random(dayNumber(row.day) * 2_654_435 + 11);
+  const sleepContributors: Record<string, number | null> = {};
+  const readinessContributors: Record<string, number | null> = {};
+  if (row.sleepScore != null) for (const k of SLEEP_CONTRIBUTORS) sleepContributors[k] = around(row.sleepScore, r);
+  if (row.readinessScore != null) for (const k of MOCK_READINESS) readinessContributors[k] = around(row.readinessScore, r);
+
+  let night: SleepPeriodRow | null = null;
+  if (row.bedAt && row.wokeAt && row.asleepS != null && row.inBedS != null) {
+    const deep = Math.round(row.asleepS * (0.14 + r() * 0.08));
+    const rem = Math.round(row.asleepS * (0.18 + r() * 0.07));
+    night = {
+      id: `mock-night-${row.day}`,
+      type: "long_sleep",
+      startedAt: row.bedAt,
+      endedAt: row.wokeAt,
+      inBedS: row.inBedS,
+      asleepS: row.asleepS,
+      deepS: deep,
+      lightS: row.asleepS - deep - rem,
+      remS: rem,
+      awakeS: row.inBedS - row.asleepS,
+      latencyS: Math.round(4 + r() * 20) * 60,
+      efficiency: Math.round((row.asleepS / row.inBedS) * 100),
+      averageHrv: Math.round(32 + r() * 38),
+      averageHr: Math.round((51 + r() * 10) * 10) / 10,
+      lowestHr: Math.round(44 + r() * 9),
+    };
+  }
+
+  const naps: SleepPeriodRow[] = [];
+  if (row.napCount > 0) {
+    const startedAt = at(row.day, 14, Math.round(r() * 30));
+    const inBed = row.napAsleepS + 6 * 60;
+    naps.push({
+      id: `mock-nap-${row.day}`,
+      type: "sleep",
+      startedAt,
+      endedAt: new Date(Date.parse(startedAt) + inBed * 1_000).toISOString(),
+      inBedS: inBed,
+      asleepS: row.napAsleepS,
+      deepS: 0,
+      lightS: Math.round(row.napAsleepS * 0.8),
+      remS: row.napAsleepS - Math.round(row.napAsleepS * 0.8),
+      awakeS: inBed - row.napAsleepS,
+      latencyS: 4 * 60,
+      efficiency: Math.round((row.napAsleepS / inBed) * 100),
+      averageHrv: Math.round(30 + r() * 30),
+      averageHr: Math.round((58 + r() * 8) * 10) / 10,
+      lowestHr: Math.round(50 + r() * 8),
+    });
+  }
+
+  const hasReadiness = row.readinessScore != null;
+  return {
+    sleepContributors,
+    readinessContributors,
+    temperatureDeviation: hasReadiness ? Math.round((r() - 0.5) * 100) / 100 : null,
+    temperatureTrendDeviation: hasReadiness ? Math.round((r() - 0.5) * 60) / 100 : null,
+    night,
+    naps,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
 
@@ -297,6 +381,27 @@ export function mockActivityWorkouts(from?: string, to?: string): ActivityWorkou
     to: end,
     today,
     workouts: store().workouts.filter((w) => w.day >= start && w.day <= end).map((w) => ({ ...w })),
+  };
+}
+
+/** One day in full (default today): its row, both scores' contributors, the night, naps and workouts. */
+export function mockActivityDay(date?: string): ActivityDayDetailRead {
+  const today = todayIso();
+  const day = date ?? today;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(`${day}T00:00:00Z`))) {
+    throw new Error(`'${day}' isn't a date: use YYYY-MM-DD.`);
+  }
+  const row = { ...(store().days.get(day) ?? emptyDay(day)) };
+  return {
+    day,
+    today,
+    ...ACTIVITY_TARGETS,
+    summary: row,
+    ...seedDetail(row),
+    workouts: store()
+      .workouts.filter((w) => w.day === day)
+      .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+      .map((w) => ({ ...w })),
   };
 }
 

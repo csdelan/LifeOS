@@ -31,6 +31,14 @@
   --color-steps-minimum: var(--steps-minimum);
   --color-steps-goal: var(--steps-goal);
   --color-metric-average: var(--metric-average);
+  --color-sleep-attention: var(--sleep-attention);
+  --color-sleep-good: var(--sleep-good);
+  --color-sleep-optimal: var(--sleep-optimal);
+  --color-sleep-time: var(--sleep-good);
+  --color-sleep-deep: var(--sleep-deep);
+  --color-sleep-light: var(--sleep-light);
+  --color-sleep-rem: var(--sleep-rem);
+  --color-sleep-awake: var(--sleep-awake);
   --color-score-1: var(--score-1);
   --color-score-2: var(--score-2);
   --color-score-3: var(--score-3);
@@ -124,6 +132,18 @@
   --steps-minimum: oklch(0.57 0.12 168);
   --steps-goal: oklch(0.39 0.09 168);
   --metric-average: oklch(0.62 0.14 45);
+  /* Sleep and readiness (ACTIVITY-4), in blue-indigo so they don't read as steps. Oura's score
+     bands, pay attention (under 70) to optimal (85 and up), are an ordinal ramp, light to dark
+     (validated --ordinal on the card: monotone, steps >= 0.06 L apart, the light end 2.2:1);
+     the ember average line clears them by CVD ΔE 20.6. The night's stages are a second ramp
+     by depth, awake to deep (the light end 2.1:1). Bands and stages are always said in words. */
+  --sleep-attention: oklch(0.75 0.08 265);
+  --sleep-good: oklch(0.57 0.12 265);
+  --sleep-optimal: oklch(0.39 0.11 265);
+  --sleep-awake: oklch(0.76 0.07 265);
+  --sleep-rem: oklch(0.62 0.11 265);
+  --sleep-light: oklch(0.48 0.13 265);
+  --sleep-deep: oklch(0.35 0.1 265);
   --radius: 0.7rem;
   --sidebar: oklch(0.96 0.014 85);
   --sidebar-foreground: oklch(0.23 0.02 50);
@@ -202,6 +222,15 @@
   --steps-minimum: oklch(0.64 0.12 168);
   --steps-goal: oklch(0.82 0.09 168);
   --metric-average: oklch(0.72 0.14 50);
+  /* Both sleep ramps flip in the dark, as the step ramp does: optimal, and deep sleep, glow
+     brightest (validated --ordinal on the dark card, the dark ends 2.4:1 and 2.2:1). */
+  --sleep-attention: oklch(0.46 0.1 265);
+  --sleep-good: oklch(0.64 0.12 265);
+  --sleep-optimal: oklch(0.82 0.08 265);
+  --sleep-awake: oklch(0.44 0.1 265);
+  --sleep-rem: oklch(0.58 0.13 265);
+  --sleep-light: oklch(0.71 0.11 265);
+  --sleep-deep: oklch(0.84 0.07 265);
   --sidebar: oklch(0.16 0.016 170);
   --sidebar-foreground: oklch(0.945 0.012 85);
   --sidebar-primary: oklch(0.78 0.08 168);

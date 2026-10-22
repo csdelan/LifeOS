@@ -211,8 +211,9 @@ test.describe("accessibility", () => {
     expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
   });
 
-  // The Activity page (ACTIVITY-1..4): the steps and exercise charts, then the Tables and the
-  // year of weeks with the workouts not counted, then a workout's sheet, in both themes.
+  // The Activity page (ACTIVITY-1..4): the steps, sleep and exercise charts, then the Tables and
+  // the year of weeks with the workouts not counted, then a workout's sheet and a night's, in
+  // both themes.
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /activity with charts, tables and a workout, ${theme} theme`, async ({ page }) => {
       const scan = async () => {
@@ -224,8 +225,11 @@ test.describe("accessibility", () => {
       await page.goto("/activity");
       await expect(page.locator("html")).toHaveClass(new RegExp(theme));
       const steps = page.getByRole("region", { name: "Steps" });
+      const sleep = page.getByRole("region", { name: "Sleep and readiness", exact: true });
       const exercise = page.getByRole("region", { name: "Exercise" });
       await expect(steps.getByRole("group", { name: /^Steps by day/ })).toBeVisible({ timeout: 10_000 });
+      await expect(sleep.getByRole("list", { name: "Stages" })).toBeVisible();
+      await expect(sleep.getByRole("group", { name: /^Sleep score by day/ })).toBeVisible();
       await expect(exercise.getByRole("group", { name: /^Minutes of counted exercise/ })).toBeVisible();
       await expect(page.getByText(/^Synced from Oura /)).toBeVisible();
       // A bar read out, so the readout's tooltip is scanned too.
@@ -235,6 +239,8 @@ test.describe("accessibility", () => {
 
       await steps.getByRole("button", { name: "Table" }).click();
       await expect(steps.getByRole("table")).toBeVisible();
+      await sleep.getByRole("button", { name: "Table" }).click();
+      await expect(sleep.getByRole("table")).toBeVisible();
       await exercise.getByRole("button", { name: "Table" }).click();
       await exercise.getByRole("button", { name: /^Show \d+ not counted$/ }).click();
       await expect(exercise.getByText(/^Not counted: /).first()).toBeVisible();
@@ -256,11 +262,21 @@ test.describe("accessibility", () => {
       await expect(sheet.getByText("Saved")).toBeVisible();
       const workout = await scan();
       expect(workout, JSON.stringify(workout, null, 2)).toEqual([]);
+
+      // A night in full, with a nap: the contributor meters and the stages.
+      await page.keyboard.press("Escape");
+      await expect(sheet).toBeHidden();
+      await sleep.getByTestId("metric-row").nth(4).getByRole("button").click();
+      await expect(page.getByRole("dialog").getByRole("heading", { name: "A nap" })).toBeVisible();
+      await expect(page.getByRole("dialog").getByRole("meter", { name: "HRV balance" })).toBeVisible();
+      const night = await scan();
+      expect(night, JSON.stringify(night, null, 2)).toEqual([]);
     });
   }
 
-  // The Activity page on a phone: one column, and a workout's sheet rising from the bottom.
-  test("axe serious/critical: /activity on a phone with a workout open", async ({ page }) => {
+  // The Activity page on a phone: one column, and a workout's sheet and last night's rising from
+  // the bottom.
+  test("axe serious/critical: /activity on a phone with a workout and last night open", async ({ page }) => {
     const scan = async () => {
       const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
@@ -283,6 +299,16 @@ test.describe("accessibility", () => {
     expect(box && box.y + box.height).toBeGreaterThan(800);
     const open = await scan();
     expect(open, JSON.stringify(open, null, 2)).toEqual([]);
+
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await page.getByRole("region", { name: "Today", exact: true }).getByRole("button", { name: "Last night in full" }).click();
+    const night = page.getByRole("dialog", { name: "Today" });
+    await expect(night.getByRole("list", { name: "Readiness contributors" })).toBeVisible();
+    const nightBox = await night.boundingBox();
+    expect(nightBox && nightBox.y + nightBox.height).toBeGreaterThan(800);
+    const lastNight = await scan();
+    expect(lastNight, JSON.stringify(lastNight, null, 2)).toEqual([]);
   });
 
   // States the routes above don't reach: an Established habit checked off on the Habits

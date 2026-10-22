@@ -66,6 +66,7 @@ export const qk = {
   activitySummary: ["activity", "summary"] as const,
   activityDays: (from: string, to: string) => ["activity", "days", from, to] as const,
   activityWorkouts: (from: string, to: string) => ["activity", "workouts", from, to] as const,
+  activityDay: (date: string) => ["activity", "day", date] as const,
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
@@ -799,6 +800,15 @@ export function useActivityWorkouts(from: string, to: string, enabled = true) {
     queryFn: () => reads().activityWorkouts(from, to),
     enabled,
     placeholderData: keepPreviousData,
+  });
+}
+
+/** One day in full: last night on the Sleep card, and the day sheet. */
+export function useActivityDay(date: string | null, enabled = true) {
+  return useQuery({
+    queryKey: qk.activityDay(date ?? ""),
+    queryFn: () => reads().activityDay(date!),
+    enabled: enabled && date != null,
   });
 }
 

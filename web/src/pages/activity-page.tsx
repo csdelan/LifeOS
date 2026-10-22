@@ -3,7 +3,9 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ActivityIcon, Loader2Icon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import { ConnectCard } from "@/components/activity/connect-card";
+import { DaySheet } from "@/components/activity/day-sheet";
 import { ExerciseCard } from "@/components/activity/exercise-card";
+import { SleepCard } from "@/components/activity/sleep-card";
 import { StepsCard } from "@/components/activity/steps-card";
 import { TodayCard } from "@/components/activity/today-card";
 import { errorText, returnError, useConnectOura } from "@/components/activity/use-connect-oura";
@@ -51,9 +53,9 @@ function syncWords(oura: OuraStatus, syncing: boolean, now: number): string {
 
 /**
  * The Activity page (ACTIVITY-1..4, activity plan §3.7): Oura's steps, the exercise Chris
- * records, and last night, read-only. Before connecting it shows the Connect Oura card. Opening
+ * records, and his sleep and readiness, read-only. Before connecting it shows the Connect Oura card. Opening
  * it syncs (skipped when LifeOS synced under 5 minutes ago); Sync now always runs. A row opens
- * the workout's sheet, where its note is.
+ * the workout's sheet, where its note is; a day on the sleep chart or table opens the day's.
  */
 export function ActivityPage() {
   const summary = useActivitySummary();
@@ -63,6 +65,7 @@ export function ActivityPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<{ open: boolean; workout: WorkoutRow | null }>({ open: false, workout: null });
+  const [daySheet, setDaySheet] = useState<{ open: boolean; day: string | null }>({ open: false, day: null });
   const now = useNow(true, 60_000);
 
   const data = summary.data;
@@ -90,6 +93,7 @@ export function ActivityPage() {
   }, [oura?.state, runSync]);
 
   const openWorkout = (workout: WorkoutRow) => setSheet({ open: true, workout });
+  const openDay = (day: string) => setDaySheet({ open: true, day });
   const connected = oura?.connected ?? false;
   // Data synced before a disconnect stays: show it under the Connect card.
   const hasHistory = oura?.lastSyncedAt != null;
@@ -164,10 +168,11 @@ export function ActivityPage() {
             {connected || hasHistory ? (
               <div className="grid items-start gap-4 lg:grid-cols-2">
                 <div className="min-w-0 space-y-4">
-                  <TodayCard summary={data} onOpenWorkout={openWorkout} />
+                  <TodayCard summary={data} onOpenWorkout={openWorkout} onOpenDay={openDay} />
                   <StepsCard summary={data} />
                 </div>
                 <div className="min-w-0 space-y-4">
+                  <SleepCard summary={data} onOpenDay={openDay} />
                   <ExerciseCard summary={data} onOpenWorkout={openWorkout} />
                 </div>
               </div>
@@ -177,12 +182,20 @@ export function ActivityPage() {
       </div>
 
       {data ? (
-        <WorkoutSheet
-          workout={sheet.workout}
-          today={data.today}
-          open={sheet.open}
-          onOpenChange={(open) => setSheet((s) => ({ ...s, open }))}
-        />
+        <>
+          <WorkoutSheet
+            workout={sheet.workout}
+            today={data.today}
+            open={sheet.open}
+            onOpenChange={(open) => setSheet((s) => ({ ...s, open }))}
+          />
+          <DaySheet
+            day={daySheet.day}
+            today={data.today}
+            open={daySheet.open}
+            onOpenChange={(open) => setDaySheet((s) => ({ ...s, open }))}
+          />
+        </>
       ) : null}
     </div>
   );

@@ -303,6 +303,33 @@ test.describe("golden paths", () => {
     await expect(exercise.getByTestId("workout-note").filter({ hasText: "Negative splits, felt easy" })).toBeVisible();
   });
 
+  test("Activity: last night, the sleep chart as Readiness, and a night in full with its contributors", async ({ page }) => {
+    await page.goto("/activity");
+    const sleep = page.getByRole("region", { name: "Sleep and readiness", exact: true });
+    await expect(sleep.getByRole("list", { name: "Stages" })).toBeVisible({ timeout: 10_000 });
+    await expect(sleep.getByRole("group", { name: /^Sleep score by day, last 30 days/ })).toBeVisible();
+
+    // Switch the sleep chart to Readiness: Oura's lines at 70 and 85 stay.
+    await sleep.getByRole("button", { name: "Readiness", exact: true }).click();
+    await expect(sleep.getByRole("group", { name: /^Readiness by day, last 30 days/ })).toBeVisible();
+    await expect(sleep.getByText("85 optimal")).toBeVisible();
+
+    // A night from the Table, in full: the night, and both scores' contributors as meters.
+    await sleep.getByRole("button", { name: "Table" }).click();
+    await expect(sleep.getByTestId("metric-row")).toHaveCount(30);
+    await sleep.getByTestId("metric-row").nth(2).getByRole("button").click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("heading", { name: "The night" })).toBeVisible();
+    await expect(sheet.getByRole("list", { name: "Sleep score contributors" }).getByRole("meter")).toHaveCount(7);
+    await expect(sheet.getByRole("meter", { name: "HRV balance" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+
+    // Last night in full, from the Today card.
+    await page.getByRole("region", { name: "Today", exact: true }).getByRole("button", { name: "Last night in full" }).click();
+    await expect(page.getByRole("dialog", { name: "Today" }).getByText(/^Last night, ending this morning: /)).toBeVisible();
+  });
+
   test("Food Log: log an entry with a photo, see it full size, and remove it", async ({ page }) => {
     await page.goto("/food");
     await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });

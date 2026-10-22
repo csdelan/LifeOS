@@ -1238,6 +1238,49 @@ export interface ActivitySummaryRead {
   oura: OuraStatus;
 }
 
+/**
+ * A sleep period: the night (Oura's longest `long_sleep`) or a nap, with its stages and heart.
+ * Durations in seconds; `efficiency` is a percentage, HRV in ms, heart rate in beats a minute.
+ */
+export interface SleepPeriodRow {
+  id: string;
+  /** Oura's own value: `long_sleep`, `sleep`, `late_nap`, `rest`… */
+  type: string;
+  startedAt: string;
+  endedAt: string;
+  inBedS: number | null;
+  asleepS: number | null;
+  deepS: number | null;
+  lightS: number | null;
+  remS: number | null;
+  awakeS: number | null;
+  latencyS: number | null;
+  efficiency: number | null;
+  averageHrv: number | null;
+  averageHr: number | null;
+  lowestHr: number | null;
+}
+
+/**
+ * One day in full (`GET /api/activity/day`, ACTIVITY-4): its row, both scores' contributors by
+ * Oura's names (`deep_sleep`, `hrv_balance`…, each 0–100), the temperature deviation in °C,
+ * the night ending that morning, the naps, and the day's workouts, earliest first.
+ */
+export interface ActivityDayDetailRead {
+  day: string;
+  today: string;
+  minimumSteps: number;
+  goalSteps: number;
+  summary: ActivityDayRow;
+  sleepContributors: Record<string, number | null>;
+  readinessContributors: Record<string, number | null>;
+  temperatureDeviation: number | null;
+  temperatureTrendDeviation: number | null;
+  night: SleepPeriodRow | null;
+  naps: SleepPeriodRow[];
+  workouts: WorkoutRow[];
+}
+
 /** What the page's sync did: skipped when LifeOS synced under 5 minutes ago, unless forced. */
 export interface ActivitySyncResult {
   ran: boolean;

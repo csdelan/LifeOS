@@ -5,6 +5,7 @@ import { exerciseVerdict } from "@/lib/exercise-rules";
 import {
   MAX_RANGE_DAYS,
   SEEDED_DAYS,
+  mockActivityDay,
   mockActivityDays,
   mockActivitySummary,
   mockActivityWorkouts,
@@ -144,5 +145,60 @@ describe("workout notes in the mock", () => {
     expect(() => mockSetWorkoutNote(id, "x".repeat(141))).toThrow(/up to 140 characters; that one is 141/);
     expect(mockSetWorkoutNote(id, "x".repeat(140)).note).toHaveLength(140);
     expect(() => mockSetWorkoutNote("nope", "hi")).toThrow(/holds no workout 'nope'/);
+  });
+});
+
+describe("one day in the mock", () => {
+  it("answers today by default, with the thresholds and the day's row", () => {
+    const read = mockActivityDay();
+    expect(read).toMatchObject({ day: today, today, minimumSteps: 5_000, goalSteps: 7_500 });
+    expect(read.summary).toEqual(mockActivityDays(today, today).days[0]);
+  });
+
+  it("splits the night into stages that add up to the time asleep, and the rest awake", () => {
+    const { summary, night } = mockActivityDay(addDays(today, -2));
+    expect(night).not.toBeNull();
+    const n = night!;
+    expect(n).toMatchObject({ type: "long_sleep", startedAt: summary.bedAt, endedAt: summary.wokeAt });
+    expect(n.deepS! + n.lightS! + n.remS!).toBe(summary.asleepS);
+    expect(n.awakeS).toBe(summary.inBedS! - summary.asleepS!);
+    expect(n.lowestHr).toBeGreaterThanOrEqual(40);
+  });
+
+  it("gives both scores' contributors between 15 and 100, without the newest readiness one", () => {
+    const { sleepContributors, readinessContributors } = mockActivityDay(addDays(today, -2));
+    expect(Object.keys(sleepContributors)).toHaveLength(7);
+    expect(Object.keys(readinessContributors)).toHaveLength(8);
+    expect(readinessContributors).not.toHaveProperty("sleep_regularity");
+    for (const v of [...Object.values(sleepContributors), ...Object.values(readinessContributors)]) {
+      expect(v).toBeGreaterThanOrEqual(15);
+      expect(v).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it("gives a nap on a day that had one, and nothing on a day without the ring", () => {
+    const napDay = mockActivityDay(addDays(today, -4));
+    expect(napDay.summary.napCount).toBe(1);
+    expect(napDay.naps).toHaveLength(1);
+    expect(napDay.naps[0].asleepS).toBe(napDay.summary.napAsleepS);
+
+    const empty = mockActivityDay(addDays(today, -23));
+    expect(empty).toMatchObject({ night: null, naps: [], sleepContributors: {}, readinessContributors: {} });
+    expect(empty.temperatureDeviation).toBeNull();
+  });
+
+  it("lists the day's workouts earliest first", () => {
+    const { workouts } = mockActivityWorkouts(addDays(today, -60), today);
+    const busy = workouts.find((w) => workouts.filter((x) => x.day === w.day).length > 1) ?? workouts[0];
+    const read = mockActivityDay(busy.day);
+    expect(read.workouts.length).toBeGreaterThan(0);
+    expect(read.workouts.every((w) => w.day === busy.day)).toBe(true);
+    const starts = read.workouts.map((w) => w.startedAt);
+    expect(starts).toEqual([...starts].sort());
+  });
+
+  it("refuses something that isn't a date", () => {
+    expect(() => mockActivityDay("yesterday")).toThrow("'yesterday' isn't a date: use YYYY-MM-DD.");
+    expect(() => mockActivityDay("2026-02-30x")).toThrow(/isn't a date/);
   });
 });

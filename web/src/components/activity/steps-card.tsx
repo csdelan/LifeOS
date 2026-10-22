@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { StatTile } from "@/components/activity/sleep-parts";
 import {
   DailyMetricChart,
   MetricTable,
@@ -15,37 +16,24 @@ import {
   formatDuration,
   formatWeekday,
   HIGH_NON_WEAR_S,
+  METRIC_RANGES,
+  rangeFrom,
+  rangeStart,
   rollingAverage,
   stepBand,
   stepDayText,
   stepWeeks,
   weekTitle,
+  type MetricRange,
   type StepTargets,
 } from "@/lib/activity";
-import { addDays, formatDay, startOfWeekMonday } from "@/lib/dates";
+import { formatDay } from "@/lib/dates";
 import type { ActivityDayRow, ActivitySummaryRead } from "@/lib/production-ui-types";
 import { useActivityDays } from "@/lib/queries";
 import { loadView, saveView } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 
-const RANGES = [
-  { id: "30", label: "30 days" },
-  { id: "90", label: "90 days" },
-  { id: "365", label: "1 year" },
-] as const;
-type Range = (typeof RANGES)[number]["id"];
-
 const VIEW = "activity.steps";
-
-/** The 7-day average needs the six days before the first one shown. */
-const LEAD_DAYS = 6;
-
-/** The first day a range asks for: the lead-in for the average, or the Monday a year of weeks starts on. */
-function stepsFrom(range: Range, today: string): string {
-  return range === "365"
-    ? addDays(startOfWeekMonday(today), -7 * 51)
-    : addDays(today, -(Number(range) - 1) - LEAD_DAYS);
-}
 
 function bandCell(steps: number | null, targets: StepTargets) {
   if (steps == null) return <span className="text-muted-foreground">—</span>;
@@ -58,16 +46,6 @@ function bandCell(steps: number | null, targets: StepTargets) {
   );
 }
 
-function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div className="rounded-lg bg-muted/60 p-3">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-lg font-semibold tabular-nums">{value}</dd>
-      {note ? <dd className="text-xs text-muted-foreground">{note}</dd> : null}
-    </div>
-  );
-}
-
 /**
  * Steps (ACTIVITY-2, activity plan §3.7): the chart over 30 days, 90 days or a year (a bar per
  * week), toned by band, with the 7-day average and the two thresholds; a Table view of every
@@ -75,14 +53,14 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
  * the minimum, and the best day.
  */
 export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
-  const [range, setRangeState] = useState<Range>(() => loadView<{ range: Range }>(VIEW, { range: "30" }).range);
+  const [range, setRangeState] = useState<MetricRange>(() => loadView<{ range: MetricRange }>(VIEW, { range: "30" }).range);
   const [mode, setMode] = useState<"chart" | "table">("chart");
   const titleId = useId();
   const today = summary.today;
-  const days = useActivityDays(stepsFrom(range, today), today);
+  const days = useActivityDays(rangeFrom(range, today), today);
   const targets: StepTargets = summary;
 
-  const setRange = (next: Range) => {
+  const setRange = (next: MetricRange) => {
     setRangeState(next);
     try {
       saveView(VIEW, { range: next });
@@ -94,9 +72,9 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
   const all = days.data?.days ?? [];
   const averages = rollingAverage(all, today);
   const yearly = range === "365";
-  const first = yearly ? stepsFrom(range, today) : addDays(today, -(Number(range) - 1));
+  const first = rangeStart(range, today);
   const shown = all.map((d, i) => ({ day: d, average: averages[i] })).filter(({ day }) => day.day >= first);
-  const label = RANGES.find((r) => r.id === range)!.label;
+  const label = METRIC_RANGES.find((r) => r.id === range)!.label;
 
   const references: MetricReference[] = [
     { value: targets.minimumSteps, label: "Minimum", pattern: "dotted" },
@@ -173,7 +151,7 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
           Steps
         </h2>
         <div className="flex flex-wrap items-center gap-3">
-          <ToggleGroup label="Range" value={range} onChange={setRange} options={[...RANGES]} />
+          <ToggleGroup label="Range" value={range} onChange={setRange} options={[...METRIC_RANGES]} />
           <ToggleGroup
             label="Show as"
             value={mode}
@@ -199,19 +177,19 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
           className={cn("space-y-4 transition-opacity", days.isPlaceholderData && "opacity-60")}
         >
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <Tile
+            <StatTile
               label="7-day average"
               value={latestAverage != null ? latestAverage.toLocaleString() : "—"}
               note={latestAverage != null ? bandWords(stepBand(latestAverage, targets)) : "No days yet"}
             />
-            <Tile
+            <StatTile
               label="This week, a day"
               value={thisWeek != null ? thisWeek.toLocaleString() : "—"}
               note={lastWeek != null ? `Last week ${lastWeek.toLocaleString()}` : "Nothing last week"}
             />
-            <Tile label="At the goal" value={String(goalDays)} note={`of ${withSteps.length} days with steps`} />
-            <Tile label="Under the minimum" value={String(underDays)} note={`of ${complete.length} full days`} />
-            <Tile
+            <StatTile label="At the goal" value={String(goalDays)} note={`of ${withSteps.length} days with steps`} />
+            <StatTile label="Under the minimum" value={String(underDays)} note={`of ${complete.length} full days`} />
+            <StatTile
               label="Best day"
               value={best ? best.steps.toLocaleString() : "—"}
               note={best ? dayName(best.day, today) : undefined}

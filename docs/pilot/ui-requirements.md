@@ -3119,6 +3119,19 @@ night's sleep and readiness scores with Oura's band in words, and time asleep ag
 in bed. Or, when the night hasn't arrived, "Open the Oura app to sync last night." Build
 stays `building`: the Sleep and readiness card (A5) is next.
 
+**Update (2026-10-22 — Sleep and readiness card landed, A5):** the Activity page's Sleep and
+readiness card shows last night in full: both scores with Oura's band in words, time asleep
+against time in bed, the stages as one bar with each one's time and share, bed to wake,
+average HRV and the lowest heart rate. Two tiles give this week's average sleep score and
+readiness against last week. Its chart switches between Sleep score, Readiness and Time
+asleep over 30 days, 90 days or a year (a bar per week), with the 7-day average and, on the
+scores, Oura's lines at 70 and 85. Hover or the arrow keys read a night in words, and a Table
+lists them. A night opens in a sheet, from the chart, the Table, or "In full" on the Today
+card: both scores, the night's stages, heart rate, efficiency and how long it took to fall
+asleep, each score's contributors as small meters, the temperature, and the naps. Checked
+live against a fake Oura on localhost with synthetic data. Build stays `building`: the
+numbers from a real ring (A6) are next.
+
 **Workflow (Chris):**
 - "I forgot about sleep altogether!!! It's important. I want to track sleep score also, and
   readiness. Let's add it into phase 1." (2026-10-22)

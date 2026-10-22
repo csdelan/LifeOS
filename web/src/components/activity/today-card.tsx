@@ -1,6 +1,8 @@
 import { MoonIcon } from "lucide-react";
+import { ScoreFigure } from "@/components/activity/sleep-parts";
 import { WorkoutRowButton } from "@/components/activity/workout-parts";
-import { BAND_TONE, describeSteps, formatDuration, ouraScoreWords, stepBand, stepsVerdict } from "@/lib/activity";
+import { Button } from "@/components/ui/button";
+import { BAND_TONE, describeSteps, formatDuration, stepBand, stepsVerdict } from "@/lib/activity";
 import type { ActivitySummaryRead, WorkoutRow } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
 
@@ -47,16 +49,6 @@ function StepProgress({ steps, minimum, goal }: { steps: number; minimum: number
   );
 }
 
-function Score({ label, value }: { label: string; value: number | null }) {
-  return (
-    <div>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-xl font-semibold tabular-nums">{value ?? "—"}</dd>
-      {value != null ? <dd className="text-xs text-muted-foreground">{ouraScoreWords(value)}</dd> : null}
-    </div>
-  );
-}
-
 /**
  * Today (activity plan §3.7): steps so far as the big number with progress past the minimum
  * toward the goal; last night's sleep, readiness and time asleep, or a nudge to open the Oura
@@ -65,9 +57,11 @@ function Score({ label, value }: { label: string; value: number | null }) {
 export function TodayCard({
   summary,
   onOpenWorkout,
+  onOpenDay,
 }: {
   summary: ActivitySummaryRead;
   onOpenWorkout: (w: WorkoutRow) => void;
+  onOpenDay: (day: string) => void;
 }) {
   const day = summary.todaySoFar;
   const counted = summary.todayWorkouts.filter((w) => w.counted);
@@ -89,11 +83,24 @@ export function TodayCard({
       </div>
 
       <div className="border-t pt-3">
-        <h3 className="mb-2 text-sm font-medium">Last night</h3>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-medium">Last night</h3>
+          {night ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-my-1 text-xs"
+              aria-label="Last night in full"
+              onClick={() => onOpenDay(summary.today)}
+            >
+              In full
+            </Button>
+          ) : null}
+        </div>
         {night ? (
           <dl className="grid grid-cols-3 gap-3">
-            <Score label="Sleep" value={day.sleepScore} />
-            <Score label="Readiness" value={day.readinessScore} />
+            <ScoreFigure label="Sleep" value={day.sleepScore} />
+            <ScoreFigure label="Readiness" value={day.readinessScore} />
             <div>
               <dt className="text-xs text-muted-foreground">Asleep</dt>
               <dd className="text-xl font-semibold tabular-nums">

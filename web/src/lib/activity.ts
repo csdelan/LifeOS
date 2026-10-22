@@ -6,6 +6,7 @@
  */
 import { addDays, startOfWeekMonday } from "@/lib/dates";
 import type {
+  ActivityDayDetailRead,
   ActivityDayRow,
   ActivityDaysRead,
   ActivitySummaryRead,
@@ -14,6 +15,7 @@ import type {
   ActivityWorkoutsRead,
   OuraState,
   OuraStatus,
+  SleepPeriodRow,
   StepBand,
   WorkoutRow,
 } from "@/lib/production-ui-types";
@@ -146,6 +148,47 @@ export function normalizeSummary(raw: ActivitySummaryRead): ActivitySummaryRead 
   };
 }
 
+export function normalizeSleepPeriod(raw: SleepPeriodRow): SleepPeriodRow {
+  return {
+    id: raw.id,
+    type: raw.type ?? "",
+    startedAt: raw.startedAt,
+    endedAt: raw.endedAt,
+    inBedS: numOrNull(raw.inBedS),
+    asleepS: numOrNull(raw.asleepS),
+    deepS: numOrNull(raw.deepS),
+    lightS: numOrNull(raw.lightS),
+    remS: numOrNull(raw.remS),
+    awakeS: numOrNull(raw.awakeS),
+    latencyS: numOrNull(raw.latencyS),
+    efficiency: numOrNull(raw.efficiency),
+    averageHrv: numOrNull(raw.averageHrv),
+    averageHr: numOrNull(raw.averageHr),
+    lowestHr: numOrNull(raw.lowestHr),
+  };
+}
+
+function contributors(raw: Record<string, unknown> | null | undefined): Record<string, number | null> {
+  return Object.fromEntries(Object.entries(raw ?? {}).map(([k, v]) => [k, numOrNull(v)]));
+}
+
+export function normalizeDayDetail(raw: ActivityDayDetailRead): ActivityDayDetailRead {
+  return {
+    day: raw.day,
+    today: raw.today,
+    minimumSteps: num(raw.minimumSteps) || ACTIVITY_TARGETS.minimumSteps,
+    goalSteps: num(raw.goalSteps) || ACTIVITY_TARGETS.goalSteps,
+    summary: normalizeActivityDay(raw.summary),
+    sleepContributors: contributors(raw.sleepContributors),
+    readinessContributors: contributors(raw.readinessContributors),
+    temperatureDeviation: numOrNull(raw.temperatureDeviation),
+    temperatureTrendDeviation: numOrNull(raw.temperatureTrendDeviation),
+    night: raw.night ? normalizeSleepPeriod(raw.night) : null,
+    naps: (raw.naps ?? []).map(normalizeSleepPeriod),
+    workouts: (raw.workouts ?? []).map(normalizeWorkout),
+  };
+}
+
 export function normalizeSync(raw: ActivitySyncResult): ActivitySyncResult {
   return {
     ran: Boolean(raw.ran),
@@ -159,6 +202,33 @@ export function normalizeSync(raw: ActivitySyncResult): ActivitySyncResult {
     historyDone: Boolean(raw.historyDone),
     lastSyncedAt: raw.lastSyncedAt ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// The charts' ranges (the Steps card and the Sleep and readiness card)
+// ---------------------------------------------------------------------------
+
+export const METRIC_RANGES = [
+  { id: "30", label: "30 days" },
+  { id: "90", label: "90 days" },
+  { id: "365", label: "1 year" },
+] as const;
+
+export type MetricRange = (typeof METRIC_RANGES)[number]["id"];
+
+/** The 7-day average needs the six days before the first one shown. */
+export const LEAD_DAYS = 6;
+
+/** The first day a range asks for: the lead-in for the average, or the Monday a year of weeks starts on. */
+export function rangeFrom(range: MetricRange, today: string): string {
+  return range === "365"
+    ? addDays(startOfWeekMonday(today), -7 * 51)
+    : addDays(today, -(Number(range) - 1) - LEAD_DAYS);
+}
+
+/** The first day a range shows. */
+export function rangeStart(range: MetricRange, today: string): string {
+  return range === "365" ? rangeFrom(range, today) : addDays(today, -(Number(range) - 1));
 }
 
 // ---------------------------------------------------------------------------
@@ -413,9 +483,198 @@ export function weekTitle(from: string, today: string): string {
 // Sleep and readiness
 // ---------------------------------------------------------------------------
 
-/** Oura's band for a sleep or readiness score: 85 and up optimal, 70 and up good. */
+/** Oura's bands for a sleep or readiness score (and each contributor): 85 optimal, 70 good. */
+export const OURA_SCORE_LINES = { good: 70, optimal: 85 } as const;
+
+export type ScoreBand = "attention" | "good" | "optimal";
+
+export function scoreBand(score: number): ScoreBand {
+  return score >= OURA_SCORE_LINES.optimal ? "optimal" : score >= OURA_SCORE_LINES.good ? "good" : "attention";
+}
+
+/** Each band's tone (index.css `--sleep-*`, an ordinal ramp validated in both themes). */
+export const SCORE_TONE: Record<ScoreBand, string> = {
+  attention: "bg-sleep-attention",
+  good: "bg-sleep-good",
+  optimal: "bg-sleep-optimal",
+};
+
+/** Oura's band for a sleep or readiness score, in its words: "Optimal", "Good", "Pay attention". */
 export function ouraScoreWords(score: number): string {
-  return score >= 85 ? "Optimal" : score >= 70 ? "Good" : "Pay attention";
+  const band = scoreBand(score);
+  return band === "optimal" ? "Optimal" : band === "good" ? "Good" : "Pay attention";
+}
+
+export type SleepMetric = "sleep" | "readiness" | "asleep";
+
+export const SLEEP_METRICS: { id: SleepMetric; label: string }[] = [
+  { id: "sleep", label: "Sleep score" },
+  { id: "readiness", label: "Readiness" },
+  { id: "asleep", label: "Time asleep" },
+];
+
+/** A day's value on a sleep metric, in the chart's unit: a score, or hours asleep. */
+export function sleepValue(day: ActivityDayRow, metric: SleepMetric): number | null {
+  if (metric === "sleep") return day.sleepScore;
+  if (metric === "readiness") return day.readinessScore;
+  return day.asleepS != null ? day.asleepS / 3_600 : null;
+}
+
+/** "7 h 12 min" from hours. */
+export function formatHours(hours: number): string {
+  return formatDuration(hours * 3_600);
+}
+
+/**
+ * The 7-day mean ending on each value: of the known values among it and the six before, or
+ * null when there are none. Unlike steps, a night is over by morning, so today counts.
+ */
+export function rollingMean(values: (number | null)[], window = 7): (number | null)[] {
+  return values.map((_, i) => {
+    const known = values.slice(Math.max(0, i - window + 1), i + 1).filter((v): v is number => v != null);
+    return known.length === 0 ? null : known.reduce((a, b) => a + b, 0) / known.length;
+  });
+}
+
+/** A metric's value said in words: "73", or "7 h 12 min". */
+export function sleepValueWords(value: number, metric: SleepMetric): string {
+  return metric === "asleep" ? formatHours(value) : String(Math.round(value));
+}
+
+/** A day on a sleep metric, without its name: "sleep score 73, good"; "6 h 41 min asleep of 7 h 21 min in bed". */
+export function sleepDayText(day: ActivityDayRow, metric: SleepMetric, today: string): string {
+  if (metric === "asleep") {
+    if (day.asleepS == null) return day.day === today ? "last night hasn't synced yet" : "no sleep recorded";
+    const inBed = day.inBedS != null ? ` of ${formatDuration(day.inBedS)} in bed` : "";
+    const naps =
+      day.napCount > 0
+        ? `, and ${day.napCount === 1 ? "a nap" : `${day.napCount} naps`} (${formatDuration(day.napAsleepS)})`
+        : "";
+    return `${formatDuration(day.asleepS)} asleep${inBed}${naps}`;
+  }
+  const score = metric === "sleep" ? day.sleepScore : day.readinessScore;
+  const name = metric === "sleep" ? "sleep score" : "readiness";
+  if (score == null) return day.day === today ? "last night hasn't synced yet" : `no ${name}`;
+  return `${name} ${score}, ${ouraScoreWords(score).toLowerCase()}`;
+}
+
+/** A week on a sleep metric for the year view: the average over its nights so far. */
+export interface MetricWeek {
+  /** The Monday it starts on. */
+  from: string;
+  to: string;
+  average: number | null;
+  nights: number;
+  /** It holds today, so its average isn't final. */
+  partial: boolean;
+}
+
+/** The days grouped into Monday-to-Sunday weeks, oldest first, each averaged over its known values. */
+export function metricWeeks(
+  days: ActivityDayRow[],
+  today: string,
+  value: (day: ActivityDayRow) => number | null,
+): MetricWeek[] {
+  const weeks = new Map<string, ActivityDayRow[]>();
+  for (const d of days) {
+    if (d.day > today) continue;
+    const monday = startOfWeekMonday(d.day);
+    weeks.set(monday, [...(weeks.get(monday) ?? []), d]);
+  }
+  return [...weeks.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([from, rows]) => {
+      const known = rows.map(value).filter((v): v is number => v != null);
+      return {
+        from,
+        to: addDays(from, 6),
+        average: known.length === 0 ? null : known.reduce((a, b) => a + b, 0) / known.length,
+        nights: known.length,
+        partial: rows.some((d) => d.day === today),
+      };
+    });
+}
+
+// Oura's contributors, in the order the Oura app lists them; any new one follows.
+export const SLEEP_CONTRIBUTORS = [
+  "total_sleep",
+  "efficiency",
+  "restfulness",
+  "rem_sleep",
+  "deep_sleep",
+  "latency",
+  "timing",
+] as const;
+
+export const READINESS_CONTRIBUTORS = [
+  "resting_heart_rate",
+  "hrv_balance",
+  "body_temperature",
+  "recovery_index",
+  "previous_night",
+  "sleep_balance",
+  "sleep_regularity",
+  "previous_day_activity",
+  "activity_balance",
+] as const;
+
+const CONTRIBUTOR_NAMES: Record<string, string> = {
+  rem_sleep: "REM sleep",
+  hrv_balance: "HRV balance",
+};
+
+/** "hrv_balance" → "HRV balance", "previous_day_activity" → "Previous day activity". */
+export function contributorName(key: string): string {
+  return CONTRIBUTOR_NAMES[key] ?? readableActivity(key);
+}
+
+/** A score's contributors in Oura's order, then any Oura has added since, by name. */
+export function orderedContributors(
+  values: Record<string, number | null>,
+  order: readonly string[],
+): { key: string; name: string; value: number | null }[] {
+  const known = order.filter((k) => k in values);
+  const rest = Object.keys(values)
+    .filter((k) => !order.includes(k))
+    .sort((a, b) => contributorName(a).localeCompare(contributorName(b)));
+  return [...known, ...rest].map((key) => ({ key, name: contributorName(key), value: values[key] }));
+}
+
+export type SleepStage = "deep" | "light" | "rem" | "awake";
+
+/** Each stage's tone (index.css `--sleep-*`): an ordinal ramp by depth, validated in both themes. */
+export const STAGE_TONE: Record<SleepStage, string> = {
+  deep: "bg-sleep-deep",
+  light: "bg-sleep-light",
+  rem: "bg-sleep-rem",
+  awake: "bg-sleep-awake",
+};
+
+export const STAGE_NAMES: Record<SleepStage, string> = { deep: "Deep", light: "Light", rem: "REM", awake: "Awake" };
+
+/** A period's time in bed by stage, deepest first, with each one's share; empty when Oura has none. */
+export function sleepStages(period: SleepPeriodRow): { stage: SleepStage; seconds: number; share: number }[] {
+  const parts: [SleepStage, number | null][] = [
+    ["deep", period.deepS],
+    ["light", period.lightS],
+    ["rem", period.remS],
+    ["awake", period.awakeS],
+  ];
+  const total = parts.reduce((s, [, v]) => s + (v ?? 0), 0);
+  if (total <= 0) return [];
+  return parts.map(([stage, v]) => ({ stage, seconds: v ?? 0, share: (v ?? 0) / total }));
+}
+
+/** "11:05 PM to 7:10 AM": when a period started and ended. */
+export function bedToWake(period: Pick<SleepPeriodRow, "startedAt" | "endedAt">): string {
+  return `${formatTime(period.startedAt)} to ${formatTime(period.endedAt)}`;
+}
+
+/** "+0.3 °C", "−0.2 °C", "±0.0 °C": the temperature against Chris's usual. */
+export function formatTemperature(deviation: number): string {
+  const rounded = Math.round(deviation * 10) / 10;
+  const sign = rounded > 0 ? "+" : rounded < 0 ? "−" : "±";
+  return `${sign}${Math.abs(rounded).toFixed(1)} °C`;
 }
 
 // ---------------------------------------------------------------------------

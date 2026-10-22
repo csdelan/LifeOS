@@ -19,8 +19,9 @@ import {
 import type { LifeOsReads } from "@/lib/mock/api";
 import { normalizeDomainDays, normalizeDomainReport, normalizeDomains } from "@/lib/domains";
 import { normalizeFoodDay, normalizeFoodDays, normalizeMeal } from "@/lib/food";
-import { normalizeActivityDays, normalizeSummary, normalizeWorkouts } from "@/lib/activity";
+import { normalizeActivityDays, normalizeDayDetail, normalizeSummary, normalizeWorkouts } from "@/lib/activity";
 import type {
+  ActivityDayDetailRead,
   ActivityDaysRead,
   ActivitySummaryRead,
   ActivityWorkoutsRead,
@@ -266,6 +267,11 @@ export const liveReads: LifeOsReads = {
   async activityWorkouts(from, to) {
     const data = await unwrap(api().GET("/api/activity/workouts", { params: { query: { from, to } } }));
     return normalizeWorkouts(asType<ActivityWorkoutsRead>(data));
+  },
+
+  async activityDay(date) {
+    const data = await unwrap(api().GET("/api/activity/day", { params: { query: { date } } }));
+    return normalizeDayDetail(asType<ActivityDayDetailRead>(data));
   },
 
   async ledger(opts) {

@@ -45,6 +45,22 @@ describe("DailyMetricChart", () => {
     expect(within(screen.getByRole("list", { name: "Legend" })).getAllByRole("listitem")).toHaveLength(2);
   });
 
+  it("takes a fixed top and says the axis in the chart's own unit", () => {
+    render(
+      <DailyMetricChart
+        label="Time asleep by day"
+        bars={[{ key: "a", value: 7.5, tone: "bg-sleep-time", title: "Mon", text: "7 h 30 min asleep", axis: "Mon" }]}
+        top={10}
+        formatValue={(n) => `${n} h`}
+        references={[{ value: 8, label: "Eight", pattern: "dashed" }]}
+        legend={[]}
+      />,
+    );
+    expect(screen.getByText("10 h")).toBeInTheDocument();
+    expect(screen.getByText("8 h")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-bar").style.height).toBe("max(2px, 75%)");
+  });
+
   it("reads bars with the arrow keys and opens one with Enter", async () => {
     const onSelect = vi.fn();
     render(<DailyMetricChart label="Steps by day" bars={bars} legend={[]} onSelect={onSelect} />);

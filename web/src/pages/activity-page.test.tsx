@@ -3,9 +3,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { mockActivityWorkouts, mockAuthorizeOura, setMockOura } from "@/lib/mock/activity-store";
+import { dayName } from "@/lib/activity";
+import { addDays, todayIso } from "@/lib/dates";
+import { mockReads } from "@/lib/mock/api";
+import { mockActivityDay, mockActivityWorkouts, mockAuthorizeOura, setMockOura } from "@/lib/mock/activity-store";
 import { resetStore } from "@/lib/mock/store";
 import { createMockWriteClient } from "@/lib/mock/write-client";
 import type { LifeOsWriteClient } from "@/lib/production-ui-types";
@@ -245,6 +248,159 @@ describe("Activity page (activity plan §3.7)", () => {
     expect(within(banner).getByRole("button", { name: "Reconnect Oura" })).toBeInTheDocument();
     expect(await card("Steps")).toBeTruthy();
     expect(sync).not.toHaveBeenCalled();
+  });
+});
+
+describe("Sleep and readiness (activity plan §3.7, ACTIVITY-4)", () => {
+  const sleepCard = () => card("Sleep and readiness");
+
+  it("shows last night in full, with both scores' bands, the stages and this week", async () => {
+    renderPage();
+    const sleep = await sleepCard();
+    expect(await sleep.findByRole("list", { name: "Stages" })).toBeInTheDocument();
+    expect(sleep.getAllByTestId("sleep-stage").map((s) => s.textContent)).toEqual([
+      expect.stringMatching(/^Deep\d/),
+      expect.stringMatching(/^Light\d/),
+      expect.stringMatching(/^REM\d/),
+      expect.stringMatching(/^Awake\d/),
+    ]);
+    const score = sleep.getByText("Sleep score", { selector: "dt" }).parentElement!;
+    expect(score).toHaveTextContent(/^Sleep score\d+(Optimal|Good|Pay attention)$/);
+    expect(sleep.getByText("Lowest heart rate")).toBeInTheDocument();
+    expect(sleep.getByText("Sleep score, this week")).toBeInTheDocument();
+    expect(sleep.getByText("Readiness, this week")).toBeInTheDocument();
+  });
+
+  it("switches the chart to Readiness and Time asleep, with Oura's lines only on the scores, and remembers it", async () => {
+    const view = renderPage();
+    const sleep = await sleepCard();
+    expect(await sleep.findByRole("group", { name: /^Sleep score by day, last 30 days/ })).toBeInTheDocument();
+    expect(sleep.getByText("85 optimal")).toBeInTheDocument();
+
+    await userEvent.click(sleep.getByRole("button", { name: "Readiness" }));
+    expect(await sleep.findByRole("group", { name: /^Readiness by day, last 30 days/ })).toBeInTheDocument();
+    expect(sleep.getByText("70 good")).toBeInTheDocument();
+
+    await userEvent.click(sleep.getByRole("button", { name: "Time asleep" }));
+    expect(await sleep.findByRole("group", { name: /^Time asleep by day, last 30 days/ })).toBeInTheDocument();
+    expect(sleep.queryByText("70 good")).not.toBeInTheDocument();
+    expect(sleep.getAllByText(/^\d+ h$/).length).toBeGreaterThan(0);
+
+    view.unmount();
+    renderPage();
+    expect(await (await sleepCard()).findByRole("group", { name: /^Time asleep by day/ })).toBeInTheDocument();
+  });
+
+  it("reads a night in words, and opens it with Enter", async () => {
+    renderPage();
+    const sleep = await sleepCard();
+    const chart = await sleep.findByRole("group", { name: /^Sleep score by day/ });
+    chart.focus();
+    const readout = document.getElementById(chart.getAttribute("aria-describedby")!)!;
+    await waitFor(() => expect(readout).toHaveTextContent(/^Today: sleep score \d+, (optimal|good|pay attention)/));
+    expect(readout.textContent).toMatch(/7-day average \d+$/);
+
+    await userEvent.keyboard("{Enter}");
+    const sheet = await screen.findByRole("dialog", { name: "Today" });
+    expect(await within(sheet).findByText(/^Last night, ending this morning: /)).toBeInTheDocument();
+  });
+
+  it("lists every night in the Table and opens one with both scores' contributors as meters", async () => {
+    renderPage();
+    const sleep = await sleepCard();
+    await userEvent.click(sleep.getByRole("button", { name: "Table" }));
+    expect(sleep.queryByRole("group", { name: "Measure" })).not.toBeInTheDocument();
+    const table = await sleep.findByRole("table");
+    const rows = await within(table).findAllByTestId("metric-row");
+    expect(rows).toHaveLength(30);
+    expect(rows[0]).toHaveTextContent(/^Today\d+(Optimal|Good|Pay attention)/);
+
+    const day = addDays(todayIso(), -2);
+    await userEvent.click(within(rows[2]).getByRole("button", { name: dayName(day, todayIso()) }));
+    const sheet = await screen.findByRole("dialog", { name: dayName(day, todayIso()) });
+    expect(within(sheet).getByText(/^The night ending that morning/)).toBeInTheDocument();
+    expect(await within(sheet).findByRole("heading", { name: "The night" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("list", { name: "Stages" })).toBeInTheDocument();
+    expect(within(sheet).getByText("Fell asleep in")).toBeInTheDocument();
+
+    const sleepMeters = within(within(sheet).getByRole("list", { name: "Sleep score contributors" })).getAllByRole("meter");
+    expect(sleepMeters.map((m) => m.getAttribute("aria-label"))).toEqual([
+      "Total sleep",
+      "Efficiency",
+      "Restfulness",
+      "REM sleep",
+      "Deep sleep",
+      "Latency",
+      "Timing",
+    ]);
+    const readiness = within(within(sheet).getByRole("list", { name: "Readiness contributors" }));
+    expect(readiness.getAllByRole("meter")).toHaveLength(8);
+    expect(readiness.getByRole("meter", { name: "HRV balance" })).toHaveAttribute(
+      "aria-valuetext",
+      expect.stringMatching(/^\d+, (optimal|good|pay attention)$/),
+    );
+    expect(within(sheet).getByText(/^Body temperature [+−±]\d\.\d °C from your usual/)).toBeInTheDocument();
+  });
+
+  it("shows a day's nap in its sheet", async () => {
+    renderPage();
+    const sleep = await sleepCard();
+    await userEvent.click(sleep.getByRole("button", { name: "Table" }));
+    const rows = await within(await sleep.findByRole("table")).findAllByTestId("metric-row");
+    await userEvent.click(within(rows[4]).getByRole("button"));
+    const sheet = await screen.findByRole("dialog");
+    expect(await within(sheet).findByRole("heading", { name: "A nap" })).toBeInTheDocument();
+    expect(within(sheet).getByTestId("nap")).toHaveTextContent(/ to .* asleep$/);
+  });
+
+  it("opens last night in full from the Today card", async () => {
+    renderPage();
+    const today = await card("Today");
+    await userEvent.click(await today.findByRole("button", { name: "Last night in full" }));
+    const sheet = await screen.findByRole("dialog", { name: "Today" });
+    expect(await within(sheet).findByRole("list", { name: "Sleep score contributors" })).toBeInTheDocument();
+  });
+
+  it("shows a year of nights as a bar a week, and the Table by week", async () => {
+    renderPage();
+    const sleep = await sleepCard();
+    await userEvent.click(sleep.getByRole("button", { name: "1 year" }));
+    expect(
+      await sleep.findByRole("group", { name: /^Sleep score, average a night by week, last year/ }),
+    ).toBeInTheDocument();
+    expect(sleep.getByText("This week, so far")).toBeInTheDocument();
+
+    await userEvent.click(sleep.getByRole("button", { name: "Table" }));
+    const rows = await within(await sleep.findByRole("table")).findAllByTestId("metric-row");
+    expect(rows.length).toBeGreaterThanOrEqual(52);
+    expect(rows[0]).toHaveTextContent(/^This week, so far/);
+    expect(within(rows[0]).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("says when last night hasn't reached LifeOS yet", async () => {
+    const spy = vi.spyOn(mockReads, "activityDay").mockImplementation(async (date) => {
+      const d = mockActivityDay(date);
+      return {
+        ...d,
+        summary: { ...d.summary, sleepScore: null, readinessScore: null, asleepS: null, inBedS: null },
+        sleepContributors: {},
+        readinessContributors: {},
+        night: null,
+        naps: [],
+      };
+    });
+    onTestFinished(() => spy.mockRestore());
+
+    renderPage();
+    const sleep = await sleepCard();
+    expect(await sleep.findByText("Open the Oura app to sync last night.")).toBeInTheDocument();
+    expect(sleep.queryByRole("button", { name: "Last night in full" })).not.toBeInTheDocument();
+
+    await userEvent.click(await (await card("Today")).findByRole("button", { name: "Last night in full" }));
+    const sheet = await screen.findByRole("dialog", { name: "Today" });
+    expect(
+      await within(sheet).findByText("Last night hasn't reached LifeOS yet: open the Oura app to sync it."),
+    ).toBeInTheDocument();
   });
 });
 

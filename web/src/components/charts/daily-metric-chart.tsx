@@ -74,7 +74,7 @@ function LegendSwatch({ item }: { item: MetricLegendItem }) {
 
 /**
  * The daily-metric chart (activity plan §3.7), grown from `DomainDailyChart` for the Activity
- * page's steps and, in A5, sleep: bars toned by band, a rolling-average line, labelled
+ * page's steps, sleep and readiness: bars toned by band, a rolling-average line, labelled
  * threshold lines, and a hatched bar for a day or week still going. Hover or the arrow keys
  * read a bar in words; Enter (or a click) opens it when `onSelect` is given. The card around
  * it owns the range switch and the Table view ({@link MetricTable}).
@@ -86,6 +86,8 @@ export function DailyMetricChart({
   references = [],
   legend,
   onSelect,
+  top: fixedTop,
+  formatValue = (n) => n.toLocaleString(),
   className,
 }: {
   /** What the chart shows, for screen readers: "Steps by day, last 30 days". */
@@ -96,6 +98,10 @@ export function DailyMetricChart({
   references?: MetricReference[];
   legend: MetricLegendItem[];
   onSelect?: (index: number) => void;
+  /** A fixed axis top (a score's 100); otherwise a clean number above the tallest mark. */
+  top?: number;
+  /** How the axis says a value: "7,500", or "8 h". */
+  formatValue?: (n: number) => string;
   className?: string;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
@@ -104,7 +110,7 @@ export function DailyMetricChart({
   const values = bars.map((b) => b.value ?? 0);
   const averages = (average ?? []).filter((v): v is number => v != null);
   // A little headroom above the tallest mark, so it never touches the top line.
-  const top = niceTop(Math.max(...references.map((r) => r.value), ...values, ...averages, 1) * 1.1);
+  const top = fixedTop ?? niceTop(Math.max(...references.map((r) => r.value), ...values, ...averages, 1) * 1.1);
   const dense = bars.length > 90;
   const shown = hovered != null ? bars[hovered] : null;
   const runs = average ? lineRuns(average, top) : [];
@@ -140,14 +146,14 @@ export function DailyMetricChart({
     <div className={className}>
       <div className="flex gap-2">
         <div className="relative h-48 w-10 shrink-0 text-right text-[0.625rem] tabular-nums text-muted-foreground" aria-hidden>
-          <span className="absolute right-0 top-0 -translate-y-1/2">{top.toLocaleString()}</span>
+          <span className="absolute right-0 top-0 -translate-y-1/2">{formatValue(top)}</span>
           {references.map((r) => (
             <span
               key={r.label}
               className="absolute right-0 translate-y-1/2 font-semibold text-foreground"
               style={{ bottom: `${(r.value / top) * 100}%` }}
             >
-              {r.value.toLocaleString()}
+              {formatValue(r.value)}
             </span>
           ))}
           <span className="absolute bottom-0 right-0 translate-y-1/2">0</span>

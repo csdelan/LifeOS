@@ -15,6 +15,7 @@ import {
   type MapLens,
 } from "@/lib/derive";
 import type {
+  ActivityDayDetailRead,
   ActivityDaysRead,
   ActivitySummaryRead,
   ActivityWorkoutsRead,
@@ -71,7 +72,7 @@ import {
   mockDomainReport,
   withBounty,
 } from "@/lib/mock/store";
-import { mockActivityDays, mockActivitySummary, mockActivityWorkouts } from "@/lib/mock/activity-store";
+import { mockActivityDay, mockActivityDays, mockActivitySummary, mockActivityWorkouts } from "@/lib/mock/activity-store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 
@@ -162,6 +163,8 @@ export interface LifeOsReads {
   activityDays(from?: string, to?: string): Promise<ActivityDaysRead>;
   /** Workouts on those days (the last 12 whole weeks by default), newest first, counted or not. */
   activityWorkouts(from?: string, to?: string): Promise<ActivityWorkoutsRead>;
+  /** One day in full (today by default): both scores' contributors, the night, naps and workouts. */
+  activityDay(date?: string): Promise<ActivityDayDetailRead>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /**
@@ -366,6 +369,11 @@ export const mockReads: LifeOsReads = {
   async activityWorkouts(from?: string, to?: string): Promise<ActivityWorkoutsRead> {
     await wait();
     return mockActivityWorkouts(from, to);
+  },
+
+  async activityDay(date?: string): Promise<ActivityDayDetailRead> {
+    await wait();
+    return mockActivityDay(date);
   },
 
   async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {

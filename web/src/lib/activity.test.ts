@@ -2,14 +2,30 @@ import { describe, expect, it } from "vitest";
 import {
   ACTIVITY_TARGETS,
   bandWords,
+  contributorName,
   describeStepDay,
   describeSteps,
   formatDistance,
   formatDuration,
+  formatTemperature,
+  metricWeeks,
   normalizeActivityDays,
+  normalizeDayDetail,
   normalizeSummary,
+  orderedContributors,
+  ouraScoreWords,
+  rangeFrom,
+  rangeStart,
+  READINESS_CONTRIBUTORS,
   readableActivity,
   rollingAverage,
+  rollingMean,
+  scoreBand,
+  SLEEP_CONTRIBUTORS,
+  sleepDayText,
+  sleepStages,
+  sleepValue,
+  sleepValueWords,
   stepBand,
   stepWeeks,
   summarizeWeek,
@@ -20,7 +36,14 @@ import {
   workoutWeeks,
 } from "@/lib/activity";
 import { exerciseVerdict } from "@/lib/exercise-rules";
-import type { ActivityDayRow, ActivitySummaryRead, ActivityDaysRead, WorkoutRow } from "@/lib/production-ui-types";
+import type {
+  ActivityDayDetailRead,
+  ActivityDayRow,
+  ActivitySummaryRead,
+  ActivityDaysRead,
+  SleepPeriodRow,
+  WorkoutRow,
+} from "@/lib/production-ui-types";
 
 function day(date: string, steps: number | null, extra: Partial<ActivityDayRow> = {}): ActivityDayRow {
   return {
@@ -303,5 +326,212 @@ describe("normalizers", () => {
     expect(summary.thisWeek).toMatchObject({ averageSteps: 6_000, stepDays: 3, sessions: 0, averageSleep: null });
     expect(summary.lastWeek.averageSteps).toBeNull();
     expect(summary.oura).toMatchObject({ state: "not_connected", connected: false, scopes: [] });
+  });
+});
+
+describe("the charts' ranges", () => {
+  const today = "2026-10-22"; // a Thursday
+  it("asks for six days before the first one shown, for the 7-day average", () => {
+    expect(rangeStart("30", today)).toBe("2026-09-23");
+    expect(rangeFrom("30", today)).toBe("2026-09-17");
+    expect(rangeStart("90", today)).toBe("2026-07-25");
+    expect(rangeFrom("90", today)).toBe("2026-07-19");
+  });
+
+  it("starts a year of weeks on the Monday 51 weeks before this one", () => {
+    expect(rangeFrom("365", today)).toBe("2025-10-27");
+    expect(rangeStart("365", today)).toBe("2025-10-27");
+  });
+});
+
+describe("Oura's score bands", () => {
+  it("puts a score under 70 to pay attention to, 70 good, and 85 optimal", () => {
+    expect([0, 69, 70, 84, 85, 100].map(scoreBand)).toEqual([
+      "attention",
+      "attention",
+      "good",
+      "good",
+      "optimal",
+      "optimal",
+    ]);
+    expect([69, 70, 85].map(ouraScoreWords)).toEqual(["Pay attention", "Good", "Optimal"]);
+  });
+});
+
+describe("sleep metrics", () => {
+  const today = "2026-10-22";
+
+  it("reads a day's scores, and its time asleep in hours", () => {
+    const d = day("2026-10-21", 6_000, { sleepScore: 73, readinessScore: 65, asleepS: 6.5 * 3_600 });
+    expect(sleepValue(d, "sleep")).toBe(73);
+    expect(sleepValue(d, "readiness")).toBe(65);
+    expect(sleepValue(d, "asleep")).toBe(6.5);
+    expect(sleepValue(day("2026-10-21", null), "asleep")).toBeNull();
+    expect(sleepValueWords(72.6, "sleep")).toBe("73");
+    expect(sleepValueWords(7.2, "asleep")).toBe("7 h 12 min");
+  });
+
+  it("averages each value with the six before, counting the last one, and skips the gaps", () => {
+    expect(rollingMean([70, null, 80, 90], 2)).toEqual([70, 70, 80, 85]);
+    expect(rollingMean([null, null])).toEqual([null, null]);
+    const week = rollingMean([60, 70, 80, 90, 100, 60, 70, 80]);
+    expect(week[6]).toBeCloseTo(530 / 7);
+    expect(week[7]).toBeCloseTo(550 / 7);
+  });
+
+  it("says a day's score with its band, and its time asleep against time in bed with the naps", () => {
+    const d = day("2026-10-21", 6_000, {
+      sleepScore: 73,
+      readinessScore: 65,
+      asleepS: 6 * 3_600 + 41 * 60,
+      inBedS: 7 * 3_600 + 21 * 60,
+      napCount: 1,
+      napAsleepS: 25 * 60,
+    });
+    expect(sleepDayText(d, "sleep", today)).toBe("sleep score 73, good");
+    expect(sleepDayText(d, "readiness", today)).toBe("readiness 65, pay attention");
+    expect(sleepDayText(d, "asleep", today)).toBe("6 h 41 min asleep of 7 h 21 min in bed, and a nap (25 min)");
+    expect(sleepDayText({ ...d, napCount: 2, napAsleepS: 50 * 60, inBedS: null }, "asleep", today)).toBe(
+      "6 h 41 min asleep, and 2 naps (50 min)",
+    );
+  });
+
+  it("says a night that hasn't synced, and a day without one", () => {
+    const empty = day(today, null);
+    expect(sleepDayText(empty, "sleep", today)).toBe("last night hasn't synced yet");
+    expect(sleepDayText(empty, "asleep", today)).toBe("last night hasn't synced yet");
+    const old = day("2026-10-01", null);
+    expect(sleepDayText(old, "sleep", today)).toBe("no sleep score");
+    expect(sleepDayText(old, "readiness", today)).toBe("no readiness");
+    expect(sleepDayText(old, "asleep", today)).toBe("no sleep recorded");
+  });
+
+  it("groups nights into Monday weeks, averages the known ones, and marks this week partial", () => {
+    const days = [
+      day("2026-10-12", null, { sleepScore: 70 }),
+      day("2026-10-13", null, { sleepScore: 80 }),
+      day("2026-10-14", null),
+      day("2026-10-18", null, { sleepScore: 90 }),
+      day("2026-10-19", null),
+      day("2026-10-22", null, { sleepScore: 61 }),
+      day("2026-10-23", null, { sleepScore: 99 }),
+    ];
+    expect(metricWeeks(days, today, (d) => d.sleepScore)).toEqual([
+      { from: "2026-10-12", to: "2026-10-18", average: 80, nights: 3, partial: false },
+      { from: "2026-10-19", to: "2026-10-25", average: 61, nights: 1, partial: true },
+    ]);
+    expect(metricWeeks([day("2026-10-19", null)], today, (d) => d.sleepScore)[0]).toMatchObject({
+      average: null,
+      nights: 0,
+      partial: false,
+    });
+  });
+});
+
+describe("contributors", () => {
+  it("names Oura's contributors as the app does", () => {
+    expect(contributorName("hrv_balance")).toBe("HRV balance");
+    expect(contributorName("rem_sleep")).toBe("REM sleep");
+    expect(contributorName("previous_day_activity")).toBe("Previous day activity");
+    for (const key of [...SLEEP_CONTRIBUTORS, ...READINESS_CONTRIBUTORS]) {
+      expect(contributorName(key)).not.toMatch(/_/);
+    }
+  });
+
+  it("lists them in Oura's order, leaves out the missing, and puts new ones after by name", () => {
+    const rows = orderedContributors(
+      { timing: 80, zebra_index: 50, deep_sleep: null, total_sleep: 90, apple_score: 40 },
+      SLEEP_CONTRIBUTORS,
+    );
+    expect(rows).toEqual([
+      { key: "total_sleep", name: "Total sleep", value: 90 },
+      { key: "deep_sleep", name: "Deep sleep", value: null },
+      { key: "timing", name: "Timing", value: 80 },
+      { key: "apple_score", name: "Apple score", value: 40 },
+      { key: "zebra_index", name: "Zebra index", value: 50 },
+    ]);
+    expect(orderedContributors({}, READINESS_CONTRIBUTORS)).toEqual([]);
+  });
+});
+
+describe("a night's stages and temperature", () => {
+  const period = (extra: Partial<SleepPeriodRow>): SleepPeriodRow => ({
+    id: "p",
+    type: "long_sleep",
+    startedAt: "2026-10-21T23:00:00Z",
+    endedAt: "2026-10-22T07:00:00Z",
+    inBedS: null,
+    asleepS: null,
+    deepS: null,
+    lightS: null,
+    remS: null,
+    awakeS: null,
+    latencyS: null,
+    efficiency: null,
+    averageHrv: null,
+    averageHr: null,
+    lowestHr: null,
+    ...extra,
+  });
+
+  it("splits the time in bed by stage, deepest first, with each one's share", () => {
+    expect(sleepStages(period({ deepS: 3_600, lightS: 7_200, remS: 5_400, awakeS: 1_800 }))).toEqual([
+      { stage: "deep", seconds: 3_600, share: 0.2 },
+      { stage: "light", seconds: 7_200, share: 0.4 },
+      { stage: "rem", seconds: 5_400, share: 0.3 },
+      { stage: "awake", seconds: 1_800, share: 0.1 },
+    ]);
+    expect(sleepStages(period({ deepS: 1_800, lightS: 1_800 })).map((s) => s.share)).toEqual([0.5, 0.5, 0, 0]);
+  });
+
+  it("has no stages when Oura gave none", () => {
+    expect(sleepStages(period({}))).toEqual([]);
+    expect(sleepStages(period({ deepS: 0, lightS: 0, remS: 0, awakeS: 0 }))).toEqual([]);
+  });
+
+  it("says the temperature against the usual to a tenth, with its sign", () => {
+    expect(formatTemperature(0.26)).toBe("+0.3 °C");
+    expect(formatTemperature(-0.2)).toBe("−0.2 °C");
+    expect(formatTemperature(0.04)).toBe("±0.0 °C");
+    expect(formatTemperature(-0.04)).toBe("±0.0 °C");
+  });
+});
+
+describe("normalizeDayDetail", () => {
+  it("turns the API's string numbers into numbers and fills what's missing", () => {
+    const detail = normalizeDayDetail({
+      day: "2026-10-21",
+      today: "2026-10-22",
+      minimumSteps: "5000",
+      goalSteps: "7500",
+      summary: { ...day("2026-10-21", null), steps: "6100", sleepScore: "73" },
+      sleepContributors: { total_sleep: "88", timing: null },
+      readinessContributors: null,
+      temperatureDeviation: "-0.2",
+      temperatureTrendDeviation: null,
+      night: {
+        id: "n",
+        startedAt: "2026-10-20T23:00:00Z",
+        endedAt: "2026-10-21T07:00:00Z",
+        inBedS: "28800",
+        asleepS: "25200",
+        deepS: "5000",
+        lowestHr: "48",
+      },
+    } as unknown as ActivityDayDetailRead);
+    expect(detail).toMatchObject({ minimumSteps: 5_000, goalSteps: 7_500, temperatureDeviation: -0.2 });
+    expect(detail.summary).toMatchObject({ steps: 6_100, sleepScore: 73 });
+    expect(detail.sleepContributors).toEqual({ total_sleep: 88, timing: null });
+    expect(detail.readinessContributors).toEqual({});
+    expect(detail.night).toMatchObject({
+      type: "",
+      inBedS: 28_800,
+      asleepS: 25_200,
+      deepS: 5_000,
+      remS: null,
+      lowestHr: 48,
+    });
+    expect(detail.naps).toEqual([]);
+    expect(detail.workouts).toEqual([]);
   });
 });

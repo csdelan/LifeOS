@@ -722,7 +722,7 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
 - [x] A2 — Sync and storage (migration 0037)
 - [x] A3 — API
 - [x] A4 — Activity page: steps and exercise
-- [ ] A5 — Activity page: sleep and readiness
+- [x] A5 — Activity page: sleep and readiness
 - [ ] A6 — Live on staging
 - [ ] A7 — Phase 2 Q&A + rules
 - [ ] A8 — Activity XP on the ledger
@@ -965,3 +965,85 @@ against the API. As planned, plus:
   and on a phone, with the year view, the tables and the sheet open.
 - **Left for later:** a Disconnect button (the API has `POST /api/oura/disconnect`), and the
   Sleep and readiness card with the day sheet (A5).
+
+**A5 (2026-10-22).** The Sleep and readiness card, the day sheet, and "In full" on the Today
+card. Mock first, then live against the API. No migration and no API change. As planned,
+plus:
+
+- **Last night on the card:**
+  - The sleep score and readiness, each with a swatch and Oura's band in words, and time
+    asleep against time in bed.
+  - The stages as one bar split by share (deep, light, REM, awake; deepest first, with a 2px
+    gap between), listed under it with each one's time and share.
+  - Bed to wake, average HRV and the lowest heart rate.
+  - "Last night in full" opens the day. When the night hasn't synced: "Open the Oura app to
+    sync last night."
+- **This week against last:** two tiles, the sleep score and readiness averaged over this
+  week's nights, each with its band and last week's number.
+- **The chart** is the Steps card's chart. Measure switches between Sleep score, Readiness
+  and Time asleep, and is remembered in the browser with the range.
+  - The scores have a fixed 0–100 axis with Oura's lines at 70 (dotted, Good) and 85 (dashed,
+    Optimal), and bars toned by band. Time asleep is in hours, on an axis of at least 10 h,
+    in one tone with no lines.
+  - **The 7-day average counts today:** a night is over by morning. (The steps average
+    doesn't count today, which is still going.)
+  - The year is a bar per week (the average a night), with this week hatched as "so far" and
+    no average line, as for steps.
+  - Readouts say the night in words ("Tue, Oct 20: sleep score 76, good; 7-day average 74").
+    Time asleep adds time in bed and the naps. A night not synced yet says so.
+  - Enter or a click opens a night (not on the year view).
+- **The Table** lists every night, newest first: the day (a button that opens it), both
+  scores with their band in words, and time asleep. The year's Table lists weeks with all
+  three averages.
+- **The day sheet** (`components/activity/day-sheet.tsx`) opens on the right on a desktop and
+  from the bottom on a phone. It's titled by day ("Today", "Tue, Oct 20"), with "The night
+  ending that morning: 11:52 PM to 8:19 AM" under it. It shows:
+  - both scores with their bands
+  - the night: the stage bar, then asleep of in bed, bed to wake, how long it took to fall
+    asleep, efficiency, average HRV, and average and lowest heart rate
+  - what made each score: Oura's contributors as small meters toned by band, each with its
+    number and word. They're in the Oura app's order, any new one after by name; one Oura
+    didn't give says "Not given".
+  - the body temperature against the usual, and its trend ("+0.3 °C")
+  - the naps, each with its times and time asleep
+  - A day Oura has nothing for says so.
+- **The Today card** got "In full" beside Last night, opening today's sheet. Its scores use
+  the card's swatch-and-words figure.
+- **Colour:** one blue-indigo ramp for the score bands and another for the stages. Each was
+  checked with the dataviz validator against the card in both themes, with dark steps of its
+  own: on dark, the stages flip so deep is brightest. Both pass the ordinal check. The ember
+  average line against the blue bars is well apart for colour-blind readers (ΔE 20.6 light,
+  21.2 dark). Every band is also said in words.
+- **Shared pieces:**
+  - The range helpers (`METRIC_RANGES`, `rangeFrom`, `rangeStart`) moved into
+    `lib/activity.ts` for both cards.
+  - The chart takes a fixed `top` and a `formatValue` for its axis (hours).
+  - `components/activity/sleep-parts.tsx` holds the stat tile, the score figure, the stage
+    bar, the contributor meter and the night's facts.
+- **Reads:** `useActivityDay(date)` on `GET /api/activity/day`, normalized like the other
+  reads. The mock store answers it with:
+  - a night split into stages that add up to the time asleep
+  - contributors around each score (the eight readiness contributors the sandbox gives,
+    without `sleep_regularity`)
+  - the temperature
+  - a nap on nap days
+  - the day's workouts
+- **Checked live** against the API on a throwaway database. The fake Oura's nights were given
+  realistic stages, heart rates and varied contributors (no real Oura data). Last night, the
+  chart, Readiness and a night's sheet all read from the API, in both themes, with no console
+  errors. A day without the ring answers no night and no contributors.
+- **Tests:**
+  - Vitest for the bands' edges (69, 70, 84, 85), the 7-day mean, the weeks, the words, the
+    contributors' order and names, the stages, the temperature, the ranges and the
+    normalizer
+  - the mock's day, and the chart's fixed top and hours
+  - the page: last night; switching the measure and remembering it; reading a night and
+    opening it with Enter; the Table opening a night with its meters; a nap; the Today
+    card's In full; the year; and a night not synced
+  - the e2e golden path's step 5: the sleep chart switched to Readiness, a night opened from
+    the Table, and last night from the Today card
+  - the a11y scan: the sleep card's chart and Table and a night's sheet in both themes, and
+    last night's sheet on a phone
+- **Found in passing:** `GET /api/activity/day?date=nope` answers ASP.NET's own binding
+  message ("Failed to bind parameter…") as its 400, not a 400 in words. The page never sends
+  a bad date. Left for later.
