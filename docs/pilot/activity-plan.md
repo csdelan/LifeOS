@@ -890,7 +890,7 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
 - [ ] A6 — Live on staging
 - [x] A7 — Phase 2 rules (`ActivityRules` and its TypeScript port)
 - [x] A8 — Activity XP on the ledger
-- [ ] A9 — Activity XP on the page
+- [x] A9 — Activity XP on the page
 
 ### As built
 
@@ -1345,3 +1345,66 @@ migration. As planned in §3.8, plus:
     then nothing more.
 - **Not changed:** the web, beyond the regenerated types (A9 shows the XP), the Food Log, the
   level curve and the views.
+
+**A9 (2026-10-22).** The Activity page shows each day's activity XP, paid or projected, with
+no migration. As planned in §3.8, plus:
+
+- **The reads carry what was paid.** `ActivityPaidReads` (Application) reads the ledger's
+  `steps:`, `exercise:` and `sleep:` keys over the reader connection, as `FoodReader` does.
+  - Each day row (`GET /api/activity/days`, the day detail and the summary's `todaySoFar`)
+    has `paid`: each part's base, what it paid and its multiplier (null at ×1.0), with the
+    day's total and base total.
+  - `gen:api` regenerated.
+- **Paid or projected** (`lib/activity-xp.ts`):
+  - A paid part shows what the ledger paid, multiplier included: "26 (20 ×1.3)".
+  - A part not paid yet is projected from the day so far by `lib/activity-score.ts`, as base
+    XP, and always says "projected", never "earned". It says when it pays: "Pays when the
+    day ends, at 4 a.m." for today's steps and exercise, "Pays at the next sync" once
+    they're due, and for sleep.
+  - A part that pays nothing says why: no steps or no score from Oura, under 10 minutes of
+    exercise, a sleep score of 50 or less. Days before 2026-10-22 show "—".
+- **Where it shows:**
+  - **Today card:** a "Health XP today" section with the three parts and the total in words
+    ("46 Health XP: 12 earned, 34 projected").
+  - **Steps card:** a Steps XP tile (earned in the range) and a Health XP column in both
+    Tables (by day, and by week for a year).
+  - **Sleep card:** last night's sleep XP in words, and a Health XP column in both Tables.
+  - **Exercise card:** Exercise XP this week against last, a Health XP column by week (this
+    week adds today's projected), and each week's heading adds its XP. It reads
+    `/api/activity/days` for the 12 weeks.
+  - **The day sheet:** the day's three parts, also when Oura has no night for it.
+- **Toasts:** an activity award's toast names its note alone ("Sleep Thu Oct 22"), with the
+  working at a multiplier ("❤️ 25 × 1.3").
+  - The icon is a moon for sleep alone, a shoe for the rest of activity, a plate for diet XP,
+    and a coin for a mix.
+  - A day Oura revised is one toast: "Steps Thu Oct 22 re-scored: 20 → 25 Health XP".
+  - In the rewards history, the trigger reads "from Oura".
+- **The sync from other pages:** the Food Log and Character pages read `GET /api/oura/status`
+  and, when Oura is connected, ask once for the throttled sync (`useOuraSyncOnOpen`). A
+  failed sync is left to the Activity page to report. The sync's paid awards refresh the
+  wallet, the ledger and the domains.
+- **The mock pays as the kernel does,** from 2026-10-22 by the real date: the food
+  planner's keyed-award plan is shared, and the page sync, the domain settle and the reads
+  carry the activity keys.
+  - Tests about anything else empty the mock's Oura days (`clearMockActivity`) so they stay
+    the same on every date.
+  - The e2e paths that read Health's numbers run on 2026-10-21 (Playwright's clock). The
+    Character page's a11y scans run with reduced motion, so the sync's toasts are scanned
+    settled, as the Food Log's are.
+- **Tests:**
+  - .NET: the summary, day rows and day detail carry `paid` over HTTP; `ActivityPaidReads`
+    gives each part's base, paid and ×1.3 multiplier.
+  - `activity-xp.test.ts`: the 4 a.m. day end; projected, paid and nothing, each with its
+    words; days before `XpFrom`; the totals.
+  - The mock store, at a fixed date: each part pays once due and once, not before the wallet
+    opens, steps wait for 4 a.m., and the page sync (even skipped) and the domain settle pay.
+  - The Activity page at a fixed date: the Today card, the Tables, the tiles and the day
+    sheet. The Character page asks for the sync only when Oura is connected. Activity
+    toasts in `earn-feedback.test.ts`.
+  - An e2e path at a fixed date for the Today card and the Steps Table.
+- **Checked live** against a throwaway database, the fake Oura and a test sign-in. The
+  page's first sync paid last night's sleep ("🌙 Earned +12 Health XP, Sleep Thu Oct 22"),
+  the Today card showed it earned beside the steps and the run projected, the Tables showed
+  "—" before Oct 22, and the Food Log and Character pages each asked for the sync.
+- **Not changed:** the rules, the ledger keys, the level curve, the Food Log's own XP and the
+  views.

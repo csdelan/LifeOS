@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { stepBand, summarizeWeek } from "@/lib/activity";
 import { addDays, startOfWeekMonday, todayIso } from "@/lib/dates";
+import { exerciseSeconds, exerciseXp, sleepXp, stepsXp } from "@/lib/activity-score";
 import { exerciseVerdict } from "@/lib/exercise-rules";
 import {
   MAX_RANGE_DAYS,
@@ -16,7 +17,8 @@ import {
   mockSyncActivity,
   setMockOura,
 } from "@/lib/mock/activity-store";
-import { resetStore } from "@/lib/mock/store";
+import { getState, mockActivityPaid, mockSettleActivity, mockSettleDomains, resetStore } from "@/lib/mock/store";
+import { createMockWriteClient } from "@/lib/mock/write-client";
 
 const today = todayIso();
 
@@ -200,5 +202,102 @@ describe("one day in the mock", () => {
   it("refuses something that isn't a date", () => {
     expect(() => mockActivityDay("yesterday")).toThrow("'yesterday' isn't a date: use YYYY-MM-DD.");
     expect(() => mockActivityDay("2026-02-30x")).toThrow(/isn't a date/);
+  });
+});
+
+describe("the mock's activity XP (activity plan A8–A9)", () => {
+  /** Sunday Oct 25, 2026, 10 a.m. local: three days after activity XP started. */
+  const NOW = new Date(2026, 9, 25, 10);
+  const day = (d: number) => `2026-10-${d}`;
+  const isActivity = (a: { awardKey?: string | null }) => /^(steps|exercise|sleep):/.test(a.awardKey ?? "");
+  const activityKeys = () =>
+    getState()
+      .ledger.filter((e) => e.entry === "earn" && /^(steps|exercise|sleep):/.test(e.awardKey ?? ""))
+      .map((e) => e.awardKey)
+      .sort();
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    resetStore();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    resetStore();
+  });
+
+  it("pays each part once it's due, from the day XP started, at the day's multiplier, once", () => {
+    const earned = mockSettleActivity();
+    // Health's level and any rank it reaches come with them, as `RewardService.EarnAsync` pays them.
+    const activity = earned.awards.filter(isActivity);
+    expect(earned.awards.filter((a) => !isActivity(a)).every((a) => a.trigger === "rank")).toBe(true);
+    const { days } = mockActivityDays(day(19), day(25));
+    const { workouts } = mockActivityWorkouts(day(19), day(25));
+    const exerciseDays = [...new Set(workouts.filter((w) => w.counted && w.day >= day(22) && w.day < day(25)).map((w) => w.day))];
+
+    // Steps and exercise once Oura's day is over (not today's); sleep once the night is.
+    expect(activityKeys()).toEqual(
+      [
+        ...[22, 23, 24].map((d) => `steps:${day(d)}`),
+        ...exerciseDays.map((d) => `exercise:${d}`),
+        ...[22, 23, 24, 25].map((d) => `sleep:${day(d)}`),
+      ].sort(),
+    );
+    for (const a of activity) {
+      const [trigger, on] = a.awardKey!.split(":");
+      const row = days.find((d) => d.day === on)!;
+      const base =
+        trigger === "steps"
+          ? stepsXp(row.steps!)
+          : trigger === "sleep"
+            ? sleepXp(row.sleepScore!)
+            : exerciseXp(exerciseSeconds(workouts.filter((w) => w.day === on)));
+      expect(a).toMatchObject({ entry: "earn", subject: null, note: expect.stringMatching(/^(Steps|Exercise|Sleep) \w{3} \w{3} \d+$/) });
+      expect(a.base?.health_xp ?? a.amounts.health_xp).toBe(base);
+    }
+    // Paid as the ledger has it, part by part.
+    const paid = mockActivityPaid(day(22), day(25));
+    const total = [...paid.values()].reduce((sum, p) => sum + p.total, 0);
+    expect(total).toBe(activity.reduce((sum, a) => sum + (a.amounts.health_xp ?? 0), 0));
+    expect(paid.get(day(25))).toMatchObject({ steps: null, exercise: null, sleep: expect.objectContaining({ paid: expect.any(Number) }) });
+    expect(mockActivityPaid(day(1), day(21)).size).toBe(0);
+
+    expect(mockSettleActivity().awards).toEqual([]);
+  });
+
+  it("waits for 4 a.m. before paying a day's steps", () => {
+    vi.setSystemTime(new Date(2026, 9, 23, 3, 59));
+    resetStore();
+    mockSettleActivity();
+    expect(activityKeys().filter((k) => k!.startsWith("steps:"))).toEqual([]);
+
+    vi.setSystemTime(new Date(2026, 9, 23, 4, 0));
+    mockSettleActivity();
+    expect(activityKeys().filter((k) => k!.startsWith("steps:"))).toEqual([`steps:${day(22)}`]);
+  });
+
+  it("pays nothing before the wallet opens", () => {
+    getState().ledger = getState().ledger.filter((e) => e.entry !== "open");
+    expect(mockSettleActivity().awards).toEqual([]);
+  });
+
+  it("settles on the page's sync, even a skipped one, and in the domain settle", async () => {
+    const writes = createMockWriteClient();
+    const first = await writes.syncActivity(false);
+    expect(first.ran).toBe(true);
+    expect(first.awards.filter(isActivity).length).toBeGreaterThan(0);
+    expect((await writes.syncActivity(false)).awards).toEqual([]);
+
+    resetStore();
+    const skipped = mockSyncActivity();
+    expect(skipped.ran).toBe(true);
+    const settled = await writes.syncActivity(false);
+    expect(settled.ran).toBe(false);
+    expect(settled.awards.filter(isActivity).length).toBeGreaterThan(0);
+
+    resetStore();
+    const domains = mockSettleDomains();
+    expect(domains.awards.filter((a) => a.trigger === "sleep").map((a) => a.awardKey)).toContain(`sleep:${day(25)}`);
   });
 });

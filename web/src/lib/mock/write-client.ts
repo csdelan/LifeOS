@@ -20,6 +20,7 @@ import {
   mockLogFood,
   mockRemoveFoodPhoto,
   mockSetFoodPhoto,
+  mockSettleActivity,
   mockSettleFood,
   appendJournal,
   applyTimer,
@@ -279,8 +280,10 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async syncActivity(force) {
       await wait();
       const result = mockSyncActivity(force);
-      if (result.ran) bump();
-      return result;
+      // Like the API, it settles activity XP even when the sync itself is skipped.
+      const earned = mockSettleActivity();
+      if (result.ran || earned.awards.length > 0) bump();
+      return { ...result, ...earned };
     },
 
     async setWorkoutNote(workout, text) {

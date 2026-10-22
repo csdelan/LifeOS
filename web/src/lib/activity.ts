@@ -5,10 +5,13 @@
  * the kernel does.
  */
 import { addDays, startOfWeekMonday } from "@/lib/dates";
+import { normalizeEarned } from "@/lib/domains";
 import type {
+  ActivityAwardPaid,
   ActivityDayDetailRead,
   ActivityDayRow,
   ActivityDaysRead,
+  ActivityPaid,
   ActivitySummaryRead,
   ActivitySyncResult,
   ActivityWeekRow,
@@ -67,6 +70,25 @@ export function normalizeOuraStatus(raw: OuraStatus): OuraStatus {
   };
 }
 
+/** What a day paid nothing yet reads as. */
+export const NOTHING_PAID: ActivityPaid = { steps: null, exercise: null, sleep: null, total: 0, baseTotal: 0 };
+
+function normalizeAwardPaid(raw: ActivityAwardPaid | null | undefined): ActivityAwardPaid | null {
+  if (!raw) return null;
+  return { base: num(raw.base), paid: num(raw.paid), multiplier: numOrNull(raw.multiplier) };
+}
+
+export function normalizeActivityPaid(raw: ActivityPaid | null | undefined): ActivityPaid {
+  if (!raw) return { ...NOTHING_PAID };
+  return {
+    steps: normalizeAwardPaid(raw.steps),
+    exercise: normalizeAwardPaid(raw.exercise),
+    sleep: normalizeAwardPaid(raw.sleep),
+    total: num(raw.total),
+    baseTotal: num(raw.baseTotal),
+  };
+}
+
 export function normalizeActivityDay(raw: ActivityDayRow): ActivityDayRow {
   return {
     day: raw.day,
@@ -88,6 +110,7 @@ export function normalizeActivityDay(raw: ActivityDayRow): ActivityDayRow {
     wokeAt: raw.wokeAt ?? null,
     napCount: num(raw.napCount),
     napAsleepS: num(raw.napAsleepS),
+    paid: normalizeActivityPaid(raw.paid),
   };
 }
 
@@ -201,6 +224,7 @@ export function normalizeSync(raw: ActivitySyncResult): ActivitySyncResult {
     historyFrom: raw.historyFrom ?? null,
     historyDone: Boolean(raw.historyDone),
     lastSyncedAt: raw.lastSyncedAt ?? null,
+    ...normalizeEarned(raw),
   };
 }
 

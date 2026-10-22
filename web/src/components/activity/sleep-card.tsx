@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { MoonIcon } from "lucide-react";
 import { ScoreCell, ScoreFigure, StageBar, StatTile } from "@/components/activity/sleep-parts";
+import { XpCell } from "@/components/activity/xp-parts";
 import {
   DailyMetricChart,
   MetricTable,
@@ -34,6 +35,8 @@ import {
   type MetricRange,
   type SleepMetric,
 } from "@/lib/activity";
+import { ACTIVITY_RULES } from "@/lib/activity-score";
+import { dayPartXp, paidBetween, partXpWords } from "@/lib/activity-xp";
 import { formatDay } from "@/lib/dates";
 import type { ActivitySummaryRead, ActivityWeekRow } from "@/lib/production-ui-types";
 import { useActivityDay, useActivityDays } from "@/lib/queries";
@@ -56,8 +59,8 @@ function weekNote(thisWeek: number | null, lastWeek: number | null): string {
 
 /**
  * Last night in full (activity plan §3.7): both scores with Oura's band, time asleep against
- * time in bed, bed and wake, the stages, HRV and the lowest heart rate; "Last night in full"
- * opens the day.
+ * time in bed, bed and wake, the stages, HRV and the lowest heart rate, and the Health XP the
+ * night's score earned or is projected to (A9); "Last night in full" opens the day.
  */
 function LastNight({ today, onOpenDay }: { today: string; onOpenDay: (day: string) => void }) {
   const detail = useActivityDay(today);
@@ -73,6 +76,7 @@ function LastNight({ today, onOpenDay }: { today: string; onOpenDay: (day: strin
   const data = detail.data;
   if (!data) return null;
   const { summary: day, night } = data;
+  const xp = dayPartXp(day, "sleep");
   if (day.sleepScore == null && day.readinessScore == null && night == null) {
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -114,6 +118,11 @@ function LastNight({ today, onOpenDay }: { today: string; onOpenDay: (day: strin
           </dl>
         </>
       ) : null}
+      {xp.state !== "none" || day.sleepScore != null ? (
+        <p className="text-sm text-muted-foreground" data-testid="sleep-xp">
+          {partXpWords(xp)}
+        </p>
+      ) : null}
       <Button variant="outline" size="sm" onClick={() => onOpenDay(today)}>
         Last night in full
       </Button>
@@ -142,7 +151,7 @@ function WeekTiles({ thisWeek, lastWeek }: { thisWeek: ActivityWeekRow; lastWeek
  * Sleep and readiness (ACTIVITY-4, activity plan §3.7): last night in full, this week against
  * last, and a chart of the sleep score, readiness or time asleep over 30 days, 90 days or a year
  * (a bar per week), with the 7-day average and, on the scores, Oura's lines at 70 and 85. A
- * Table lists every day; a day opens in full from either.
+ * Table lists every day with the Health XP its sleep earned; a day opens in full from either.
  */
 export function SleepCard({
   summary,
@@ -259,6 +268,7 @@ export function SleepCard({
               <ScoreCell key="s" value={rounded(w.average)} />,
               <ScoreCell key="r" value={rounded(readiness[i].average)} />,
               asleep[i].average != null ? formatHours(asleep[i].average) : "—",
+              w.to < ACTIVITY_RULES.xpFrom ? "—" : paidBetween(shownDays, "sleep", w.from, w.to),
             ],
           }))
           .reverse();
@@ -326,6 +336,7 @@ export function SleepCard({
                 { key: "sleep", label: "Sleep score", numeric: true },
                 { key: "readiness", label: "Readiness", numeric: true },
                 { key: "asleep", label: "Asleep", numeric: true },
+                { key: "xp", label: "Health XP", numeric: true },
               ]}
               rows={weekRows}
             />
@@ -338,6 +349,7 @@ export function SleepCard({
                 { key: "sleep", label: "Sleep score", numeric: true },
                 { key: "readiness", label: "Readiness", numeric: true },
                 { key: "asleep", label: "Asleep", numeric: true },
+                { key: "xp", label: "Health XP", numeric: true },
               ]}
               rows={[...shown].reverse().map(({ day }) => ({
                 key: day.day,
@@ -353,6 +365,7 @@ export function SleepCard({
                   <ScoreCell key="s" value={day.sleepScore} />,
                   <ScoreCell key="r" value={day.readinessScore} />,
                   day.asleepS != null ? formatDuration(day.asleepS) : "—",
+                  <XpCell key="xp" part={dayPartXp(day, "sleep")} />,
                 ],
               }))}
             />

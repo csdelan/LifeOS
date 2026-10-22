@@ -1145,7 +1145,26 @@ export interface OuraStatus {
 /** Under the 5,000 minimum, at the minimum, or at the 7,500 goal. */
 export type StepBand = "under" | "minimum" | "goal";
 
-/** One Oura day: its steps and band, its activity, and the sleep and readiness on it. */
+/** One paid activity award (activity plan §3.8): its base, what it paid, and the multiplier (null at 1.0). */
+export interface ActivityAwardPaid {
+  base: number;
+  paid: number;
+  multiplier: number | null;
+}
+
+/**
+ * What the ledger pays an Oura day's activity in Health XP: steps and exercise once Oura's day
+ * is over (4 a.m. the next morning), sleep once the day has a score. A part not paid yet is null.
+ */
+export interface ActivityPaid {
+  steps: ActivityAwardPaid | null;
+  exercise: ActivityAwardPaid | null;
+  sleep: ActivityAwardPaid | null;
+  total: number;
+  baseTotal: number;
+}
+
+/** One Oura day: its steps and band, its activity, the sleep and readiness on it, and what it paid. */
 export interface ActivityDayRow {
   day: string;
   steps: number | null;
@@ -1166,6 +1185,7 @@ export interface ActivityDayRow {
   wokeAt: string | null;
   napCount: number;
   napAsleepS: number;
+  paid: ActivityPaid;
 }
 
 export interface ActivityDaysRead {
@@ -1281,8 +1301,11 @@ export interface ActivityDayDetailRead {
   workouts: WorkoutRow[];
 }
 
-/** What the page's sync did: skipped when LifeOS synced under 5 minutes ago, unless forced. */
-export interface ActivitySyncResult {
+/**
+ * What the page's sync did: skipped when LifeOS synced under 5 minutes ago, unless forced. Either
+ * way it settles activity XP afterwards: `awards` and `progress` are what that wrote.
+ */
+export interface ActivitySyncResult extends Earned {
   ran: boolean;
   /** Something was written: the cards should be read again. */
   changed: boolean;

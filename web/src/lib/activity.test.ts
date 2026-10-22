@@ -67,6 +67,7 @@ function day(date: string, steps: number | null, extra: Partial<ActivityDayRow> 
     wokeAt: null,
     napCount: 0,
     napAsleepS: 0,
+    paid: { steps: null, exercise: null, sleep: null, total: 0, baseTotal: 0 },
     ...extra,
   };
 }

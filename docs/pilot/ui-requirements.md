@@ -3209,6 +3209,19 @@ Build:      building
   into the append-only ledger.
 - No migration. Showing paid and projected XP on the page (A9) is next.
 
+**Update (2026-10-22 — XP on the page, A9):** the Activity page shows each day's activity XP.
+
+- **Paid** parts show what the ledger paid, multiplier included. **Projected** parts are
+  worked out from the day so far, always say "projected", never "earned", and say when they
+  pay.
+- The Today card adds the three up ("46 Health XP: 12 earned, 34 projected"). The Steps,
+  Sleep and Exercise cards, their Tables and the day sheet show the XP by day or by week.
+- The sync's toasts name each part and day ("🌙 Earned +12 Health XP, Sleep Thu Oct 22").
+- The Food Log and Character pages ask for the throttled sync when Oura is connected, so XP
+  lands when either opens.
+- Build stays `building` until A6's week of comparing the page with the Oura app, as
+  ACTIVITY-1 to ACTIVITY-4 do.
+
 
 
 ---

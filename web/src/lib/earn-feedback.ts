@@ -10,7 +10,9 @@
  * at the size of the biggest thing it did.
  *
  * A food day re-scored in one write (given back, then earned at its new score) is one toast:
- * "Food day Tue Oct 20 re-scored: 38 → 35 Health XP".
+ * "Food day Tue Oct 20 re-scored: 38 → 35 Health XP". Activity XP from Oura (activity plan
+ * §3.8) toasts the same way, its note saying the part and the day: "Steps Thu Oct 22",
+ * "Steps Thu Oct 22 re-scored: 20 → 25 Health XP".
  */
 import { toast } from "sonner";
 import { celebrate, chime } from "@/lib/celebrate";
@@ -35,15 +37,39 @@ function add(into: Amounts, amounts: Amounts) {
   for (const [k, n] of Object.entries(amounts)) into[k] = (into[k] ?? 0) + n;
 }
 
+/** Activity XP from Oura: its note already says what it was for. */
+const ACTIVITY_TRIGGERS = new Set(["steps", "exercise", "sleep"]);
+
 function forWhat(awards: Award[]): string {
   const byItem = new Map<string, string[]>();
   for (const a of awards) {
     const title = a.subject?.title ?? a.note ?? "Reward";
     const multiplied = multipliedLabel(a);
-    const why = multiplied ? `${triggerLabel(a.trigger)} (${multiplied})` : triggerLabel(a.trigger);
+    const why = ACTIVITY_TRIGGERS.has(a.trigger)
+      ? multiplied
+      : multiplied
+        ? `${triggerLabel(a.trigger)} (${multiplied})`
+        : triggerLabel(a.trigger);
     byItem.set(title, [...(byItem.get(title) ?? []), why]);
   }
-  return [...byItem].map(([title, why]) => `${title} — ${why.join(", ")}`).join(" · ");
+  return [...byItem]
+    .map(([title, why]) => {
+      const reasons = why.filter(Boolean);
+      return reasons.length > 0 ? `${title} — ${reasons.join(", ")}` : title;
+    })
+    .join(" · ");
+}
+
+/**
+ * The toast's icon for awards that belong to no item: a plate for diet XP, a moon for sleep,
+ * a shoe for the rest of activity XP; null when anything else is among them.
+ */
+function itemlessIcon(awards: Award[]): string | null {
+  if (awards.length === 0) return null;
+  if (awards.every((a) => a.trigger === "diet" || a.trigger === "fast")) return "🍽️";
+  if (awards.every((a) => a.trigger === "sleep")) return "🌙";
+  if (awards.every((a) => ACTIVITY_TRIGGERS.has(a.trigger))) return "👟";
+  return null;
 }
 
 /**
@@ -53,6 +79,8 @@ function forWhat(awards: Award[]): string {
  */
 export interface Rescore {
   title: string;
+  /** The award's trigger: `diet`, `fast`, `steps`… */
+  trigger: string;
   from: Amounts;
   to: Amounts;
 }
@@ -72,6 +100,7 @@ export function splitRescores(awards: Award[]): { rescores: Rescore[]; rest: Awa
     paired.add(earn);
     rescores.push({
       title: earn.subject?.title ?? earn.note ?? reversal.note ?? "Reward",
+      trigger: earn.trigger,
       from: negated(reversal.amounts),
       to: earn.amounts,
     });
@@ -130,15 +159,15 @@ export function announceEarned(earned: { awards?: Award[]; progress?: DomainChan
   if (awards.length > 0) {
     const { rescores, rest } = splitRescores(awards);
     for (const r of rescores) {
-      toast(rescoreMessage(r), { icon: "🍽️" });
+      toast(rescoreMessage(r), { icon: r.trigger === "sleep" ? "🌙" : ACTIVITY_TRIGGERS.has(r.trigger) ? "👟" : "🍽️" });
       if (sum(r.to) > sum(r.from)) celebration = "chime";
     }
     const summary = summarizeAwards(rest);
     if (Object.keys(summary.earned).length > 0) {
-      // Diet XP (a day's food or its fast) belongs to no item: a plate says what it was for.
-      const food = rest.filter((a) => a.entry === "earn").every((a) => a.trigger === "diet" || a.trigger === "fast");
+      // Diet and activity XP belong to no item: a plate, a moon or a shoe says what it was for.
+      const itemless = itemlessIcon(rest.filter((a) => a.entry === "earn"));
       toast(`Earned ${formatAmounts(summary.earned, { signed: true })}`, {
-        icon: summary.big ? "🎉" : food ? "🍽️" : "🪙",
+        icon: summary.big ? "🎉" : (itemless ?? "🪙"),
         description: summary.earnedFor,
       });
       celebration = summary.big ? "full" : "chime";

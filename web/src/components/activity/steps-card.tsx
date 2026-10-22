@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { StatTile } from "@/components/activity/sleep-parts";
+import { XpCell } from "@/components/activity/xp-parts";
 import {
   DailyMetricChart,
   MetricTable,
@@ -27,6 +28,8 @@ import {
   type MetricRange,
   type StepTargets,
 } from "@/lib/activity";
+import { ACTIVITY_RULES } from "@/lib/activity-score";
+import { dayPartXp, paidBetween, paidFor } from "@/lib/activity-xp";
 import { formatDay } from "@/lib/dates";
 import type { ActivityDayRow, ActivitySummaryRead } from "@/lib/production-ui-types";
 import { useActivityDays } from "@/lib/queries";
@@ -50,7 +53,8 @@ function bandCell(steps: number | null, targets: StepTargets) {
  * Steps (ACTIVITY-2, activity plan §3.7): the chart over 30 days, 90 days or a year (a bar per
  * week), toned by band, with the 7-day average and the two thresholds; a Table view of every
  * day; and tiles for the 7-day average, this week against last, days at the goal, days under
- * the minimum, and the best day.
+ * the minimum, the best day, and the Health XP the steps earned (A9). The Table gives each day's
+ * steps XP: earned, or projected while it isn't paid yet.
  */
 export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
   const [range, setRangeState] = useState<MetricRange>(() => loadView<{ range: MetricRange }>(VIEW, { range: "30" }).range);
@@ -141,6 +145,7 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
   const goalDays = withSteps.filter((d) => d.steps >= targets.goalSteps).length;
   const underDays = complete.filter((d) => d.steps < targets.minimumSteps).length;
   const best = withSteps.reduce<(typeof withSteps)[number] | null>((b, d) => (b == null || d.steps > b.steps ? d : b), null);
+  const stepsPaid = paidFor(inRange, "steps");
   const thisWeek = summary.thisWeek.averageSteps;
   const lastWeek = summary.lastWeek.averageSteps;
 
@@ -194,6 +199,7 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
               value={best ? best.steps.toLocaleString() : "—"}
               note={best ? dayName(best.day, today) : undefined}
             />
+            <StatTile label="Steps XP" value={stepsPaid.toLocaleString()} note={`Health XP earned, last ${label}`} />
           </dl>
 
           {mode === "chart" ? (
@@ -213,6 +219,7 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
                 { key: "steps", label: "Steps a day", numeric: true },
                 { key: "band", label: "Band" },
                 { key: "days", label: "Days", numeric: true },
+                { key: "xp", label: "Health XP", numeric: true },
               ]}
               rows={stepWeeks(inRange, today)
                 .reverse()
@@ -223,6 +230,7 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
                     w.average != null ? `${w.average.toLocaleString()}${w.partial ? " so far" : ""}` : "—",
                     bandCell(w.average, targets),
                     w.days,
+                    w.to < ACTIVITY_RULES.xpFrom ? "—" : paidBetween(inRange, "steps", w.from, w.to),
                   ],
                 }))}
             />
@@ -236,6 +244,7 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
                 { key: "band", label: "Band" },
                 { key: "average", label: "7-day average", numeric: true },
                 { key: "ring", label: "Without the ring", numeric: true },
+                { key: "xp", label: "Health XP", numeric: true },
               ]}
               rows={[...shown].reverse().map(({ day, average }) => ({
                 key: day.day,
@@ -245,6 +254,7 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
                   bandCell(day.steps, targets),
                   average != null ? average.toLocaleString() : "—",
                   day.nonWearS != null && day.nonWearS >= HIGH_NON_WEAR_S ? formatDuration(day.nonWearS) : "—",
+                  <XpCell key="xp" part={dayPartXp(day, "steps")} />,
                 ],
               }))}
             />

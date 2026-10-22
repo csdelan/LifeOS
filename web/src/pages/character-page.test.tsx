@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { celebrate } from "@/lib/celebrate";
 import { addDays, todayIso } from "@/lib/dates";
+import { clearMockActivity, setMockOura } from "@/lib/mock/activity-store";
 import { getState, resetStore } from "@/lib/mock/store";
 import { createMockWriteClient } from "@/lib/mock/write-client";
 import type { LifeOsWriteClient } from "@/lib/production-ui-types";
@@ -37,6 +38,7 @@ vi.mock("@/lib/client", async (importOriginal) => ({
 
 beforeEach(() => {
   resetStore();
+  clearMockActivity();
   localStorage.clear();
   vi.clearAllMocks();
   router.search = {};
@@ -78,6 +80,24 @@ describe("Character page (xp-domains plan §3.12)", () => {
 
     expect(settle).toHaveBeenCalledTimes(1);
     expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("asks for the throttled Oura sync once on opening while Oura is connected (activity plan §3.8)", async () => {
+    const sync = vi.spyOn(writes, "syncActivity");
+    renderPage();
+    await healthCard();
+    await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+    expect(sync).toHaveBeenCalledWith(false);
+  });
+
+  it("leaves Oura alone when it isn't connected", async () => {
+    setMockOura({ state: "not_connected", connected: false });
+    const sync = vi.spyOn(writes, "syncActivity");
+    const settle = vi.spyOn(writes, "settleDomains");
+    renderPage();
+    await healthCard();
+    await waitFor(() => expect(settle).toHaveBeenCalledTimes(1));
+    expect(sync).not.toHaveBeenCalled();
   });
 
   it("lists all 11 ranks with the one held marked and each requirement", async () => {

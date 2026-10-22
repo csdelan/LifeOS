@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, todayIso } from "@/lib/dates";
+import { clearMockActivity } from "@/lib/mock/activity-store";
 import {
   getArtifact,
   getState,
@@ -27,6 +28,7 @@ const health = () => mockDomains().domains.find((d) => d.key === "health_xp")!;
 describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
   beforeEach(() => {
     resetStore();
+    clearMockActivity();
   });
 
   it("reads the seeded days: closed by time, scored, and unpaid until a settle", () => {

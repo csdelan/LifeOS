@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, todayIso } from "@/lib/dates";
+import { clearMockActivity } from "@/lib/mock/activity-store";
 import {
   earnDay,
   earnStatus,
@@ -21,6 +22,7 @@ const health = () => mockDomains().domains.find((d) => d.key === "health_xp")!;
 describe("mock life domains (DomainService, RewardService's domain half)", () => {
   beforeEach(() => {
     resetStore();
+    clearMockActivity();
   });
 
   it("reads the seeded Health history: a level 9 Novice, 40 XP short of Apprentice", () => {

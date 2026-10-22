@@ -1,8 +1,10 @@
 import { MoonIcon } from "lucide-react";
 import { ScoreFigure } from "@/components/activity/sleep-parts";
 import { WorkoutRowButton } from "@/components/activity/workout-parts";
+import { ActivityXpList } from "@/components/activity/xp-parts";
 import { Button } from "@/components/ui/button";
 import { BAND_TONE, describeSteps, formatDuration, stepBand, stepsVerdict } from "@/lib/activity";
+import { dayXp } from "@/lib/activity-xp";
 import type { ActivitySummaryRead, WorkoutRow } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +54,8 @@ function StepProgress({ steps, minimum, goal }: { steps: number; minimum: number
 /**
  * Today (activity plan §3.7): steps so far as the big number with progress past the minimum
  * toward the goal; last night's sleep, readiness and time asleep, or a nudge to open the Oura
- * app when it hasn't synced; and today's counted workouts.
+ * app when it hasn't synced; today's counted workouts; and today's Health XP from them (A9):
+ * each part earned or projected, never a projection shown as earned.
  */
 export function TodayCard({
   summary,
@@ -66,6 +69,7 @@ export function TodayCard({
   const day = summary.todaySoFar;
   const counted = summary.todayWorkouts.filter((w) => w.counted);
   const night = day.sleepScore != null || day.readinessScore != null || day.asleepS != null;
+  const xp = dayXp(day, summary.todayWorkouts);
 
   return (
     <section aria-labelledby="today-title" className="space-y-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
@@ -132,6 +136,10 @@ export function TodayCard({
         ) : (
           <p className="text-sm text-muted-foreground">No exercise recorded yet today.</p>
         )}
+      </div>
+
+      <div className="border-t pt-3">
+        <ActivityXpList xp={xp} title="Health XP today" />
       </div>
     </section>
   );

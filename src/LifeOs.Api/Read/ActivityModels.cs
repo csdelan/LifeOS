@@ -105,6 +105,31 @@ public sealed class ActivityDayRow
 
     /// <summary>The naps' time asleep, in seconds.</summary>
     public int NapAsleepS { get; set; }
+
+    /// <summary>
+    /// What the ledger pays the day's activity in Health XP (activity plan §3.8): steps and
+    /// exercise once Oura's day is over, sleep once it has a score. A part not paid yet is null;
+    /// the page projects it from the day so far.
+    /// </summary>
+    public ActivityPaidRow Paid { get; set; } = new();
+}
+
+/// <summary>What the ledger pays an Oura day's activity: each part, and the day's total before and after the multiplier.</summary>
+public sealed class ActivityPaidRow
+{
+    public ActivityAwardPaidRow? Steps { get; set; }
+    public ActivityAwardPaidRow? Exercise { get; set; }
+    public ActivityAwardPaidRow? Sleep { get; set; }
+    public long Total { get; set; }
+    public long BaseTotal { get; set; }
+}
+
+/// <summary>One paid activity award: its base, what it paid, and the multiplier (null at 1.0).</summary>
+public sealed class ActivityAwardPaidRow
+{
+    public long Base { get; set; }
+    public long Paid { get; set; }
+    public decimal? Multiplier { get; set; }
 }
 
 /// <summary>
@@ -294,8 +319,9 @@ public static class ActivityRows
 {
     public static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-    public static ActivityDayRow From(ActivityDaily daily) => new()
+    public static ActivityDayRow From(ActivityDaily daily, ActivityDayPaid paid) => new()
     {
+        Paid = From(paid),
         Day = Day(daily.Day),
         Steps = daily.Activity?.Steps,
         Band = daily.Activity?.Steps is { } steps ? ActivityTargets.Band(steps) : null,
@@ -316,6 +342,18 @@ public static class ActivityRows
         NapCount = daily.Sleep?.Naps ?? 0,
         NapAsleepS = daily.Sleep?.NapS ?? 0,
     };
+
+    public static ActivityPaidRow From(ActivityDayPaid paid) => new()
+    {
+        Steps = From(paid.Steps),
+        Exercise = From(paid.Exercise),
+        Sleep = From(paid.Sleep),
+        Total = paid.Total,
+        BaseTotal = paid.BaseTotal,
+    };
+
+    private static ActivityAwardPaidRow? From(ActivityPaid? paid)
+        => paid is null ? null : new ActivityAwardPaidRow { Base = paid.Base, Paid = paid.Paid, Multiplier = paid.Multiplier };
 
     public static WorkoutRow From(Workout workout)
     {

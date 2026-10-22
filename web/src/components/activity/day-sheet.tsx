@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { MoonIcon } from "lucide-react";
 import { ContributorMeter, NightFacts, ScoreFigure, StageBar } from "@/components/activity/sleep-parts";
+import { ActivityXpList } from "@/components/activity/xp-parts";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -12,6 +13,7 @@ import {
   READINESS_CONTRIBUTORS,
   SLEEP_CONTRIBUTORS,
 } from "@/lib/activity";
+import { dayXp } from "@/lib/activity-xp";
 import { useIsDesktop } from "@/lib/media-query";
 import type { ActivityDayDetailRead } from "@/lib/production-ui-types";
 import { useActivityDay } from "@/lib/queries";
@@ -41,14 +43,19 @@ function Contributors({ label, values, order }: { label: string; values: Record<
 function DayDetail({ detail }: { detail: ActivityDayDetailRead }) {
   const { summary: day, night, naps } = detail;
   const nothing = day.sleepScore == null && day.readinessScore == null && night == null && naps.length === 0;
+  const xp = dayXp(day, detail.workouts);
+  const health = xp.pays ? <ActivityXpList xp={xp} title="Health XP" /> : null;
   if (nothing) {
     return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <MoonIcon className="size-4" aria-hidden />
-        {detail.day === detail.today
-          ? "Last night hasn't reached LifeOS yet: open the Oura app to sync it."
-          : "Oura has nothing for this night."}
-      </p>
+      <div className="space-y-6">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <MoonIcon className="size-4" aria-hidden />
+          {detail.day === detail.today
+            ? "Last night hasn't reached LifeOS yet: open the Oura app to sync it."
+            : "Oura has nothing for this night."}
+        </p>
+        {health}
+      </div>
     );
   }
 
@@ -110,6 +117,8 @@ function DayDetail({ detail }: { detail: ActivityDayDetailRead }) {
         </Section>
       ) : null}
 
+      {health}
+
       <p className="text-xs text-muted-foreground">
         A night counts on the morning it ends. Scores and contributors are Oura's: 85 and up is optimal, 70 good.
       </p>
@@ -119,7 +128,8 @@ function DayDetail({ detail }: { detail: ActivityDayDetailRead }) {
 
 /**
  * One day in full (activity plan §3.7): both scores, the night ending that morning with its
- * stages and heart, each score's contributors as small meters, the temperature, and the naps.
+ * stages and heart, each score's contributors as small meters, the temperature, the naps, and
+ * the day's Health XP from steps, exercise and sleep, earned or projected (A9).
  */
 export function DaySheet({
   day,

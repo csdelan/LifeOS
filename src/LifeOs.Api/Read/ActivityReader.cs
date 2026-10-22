@@ -9,7 +9,8 @@ namespace LifeOs.Api.Read;
 /// <summary>
 /// The Activity page's reads (ACTIVITY-2..4, activity plan §3.6) on the <c>bsk_reader</c>
 /// connection, like every other API read: <see cref="ActivityReads"/> over the Oura views of
-/// migration 0037, so a day reads exactly as <c>bsk oura</c> prints it. The step thresholds go
+/// migration 0037, so a day reads exactly as <c>bsk oura</c> prints it, and the ledger's
+/// activity awards, so each day carries what it paid (activity plan A9). The step thresholds go
 /// out with the days. The one write, a workout's note, goes through
 /// <see cref="WorkoutNoteService"/>; syncing goes through <see cref="OuraSyncService"/>.
 /// </summary>
@@ -26,6 +27,8 @@ public sealed class ActivityReader(string readerConnectionString, string homeTim
         new NpgsqlHomeCalendar(readerConnectionString, homeTimeZone),
         clock ?? new SystemClock());
 
+    private readonly ActivityPaidReads paid = new(new NpgsqlLedgerRepository(readerConnectionString, homeTimeZone));
+
     /// <summary>
     /// Every day from <paramref name="from"/> to <paramref name="to"/>, oldest first, at most
     /// <see cref="ActivityReads.MaxRangeDays"/>; a missing end defaults to today, a missing start
@@ -37,6 +40,7 @@ public sealed class ActivityReader(string readerConnectionString, string homeTim
         var end = to ?? today;
         var start = from ?? end.AddDays(1 - DefaultDays);
         var days = await reads.GetDailyAsync(start, end, cancellationToken);
+        var paidByDay = await paid.GetPaidAsync(start, end, cancellationToken);
         return new ActivityDaysRead
         {
             From = ActivityRows.Day(start),
@@ -44,7 +48,7 @@ public sealed class ActivityReader(string readerConnectionString, string homeTim
             Today = ActivityRows.Day(today),
             MinimumSteps = ActivityTargets.MinimumSteps,
             GoalSteps = ActivityTargets.GoalSteps,
-            Days = days.Select(ActivityRows.From).ToList(),
+            Days = days.Select(d => ActivityRows.From(d, paidByDay.GetValueOrDefault(d.Day) ?? ActivityDayPaid.None)).ToList(),
         };
     }
 
@@ -83,7 +87,7 @@ public sealed class ActivityReader(string readerConnectionString, string homeTim
             Today = ActivityRows.Day(today),
             MinimumSteps = ActivityTargets.MinimumSteps,
             GoalSteps = ActivityTargets.GoalSteps,
-            Summary = ActivityRows.From(detail.Daily),
+            Summary = ActivityRows.From(detail.Daily, await paid.GetDayAsync(detail.Daily.Day, cancellationToken)),
             SleepContributors = detail.Daily.Sleep?.Contributors ?? new Dictionary<string, int?>(),
             ReadinessContributors = detail.Daily.Readiness?.Contributors ?? new Dictionary<string, int?>(),
             TemperatureDeviation = detail.Daily.Readiness?.TemperatureDeviation,
@@ -103,7 +107,7 @@ public sealed class ActivityReader(string readerConnectionString, string homeTim
             Today = ActivityRows.Day(summary.Today),
             MinimumSteps = ActivityTargets.MinimumSteps,
             GoalSteps = ActivityTargets.GoalSteps,
-            TodaySoFar = ActivityRows.From(summary.TodaySoFar),
+            TodaySoFar = ActivityRows.From(summary.TodaySoFar, await paid.GetDayAsync(summary.TodaySoFar.Day, cancellationToken)),
             TodayWorkouts = summary.TodayWorkouts.Select(ActivityRows.From).ToList(),
             ThisWeek = ActivityRows.From(summary.ThisWeek),
             LastWeek = ActivityRows.From(summary.LastWeek),

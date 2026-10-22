@@ -226,6 +226,7 @@ export function triggerLabel(trigger: string): string {
   if (trigger === "rank") return "rank-up";
   if (trigger === "diet") return "diet score";
   if (trigger === "fast") return "fasting";
+  if (trigger === "steps" || trigger === "exercise" || trigger === "sleep") return "from Oura";
   const streak = /^streak_(\d+)$/.exec(trigger);
   return streak ? `${streak[1]}-day streak` : trigger;
 }

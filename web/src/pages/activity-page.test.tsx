@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
-import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { dayName } from "@/lib/activity";
 import { addDays, todayIso } from "@/lib/dates";
@@ -68,7 +68,8 @@ describe("Activity page (activity plan §3.7)", () => {
       expect.stringMatching(/^[\d,]+ steps so far, /),
     );
     expect(today.getByText("Last night")).toBeInTheDocument();
-    expect(today.getByText("Sleep")).toBeInTheDocument();
+    expect(today.getByText("Readiness")).toBeInTheDocument();
+    expect(today.getByRole("region", { name: "Health XP today" })).toBeInTheDocument();
 
     const steps = await card("Steps");
     expect(await steps.findByRole("group", { name: /^Steps by day, last 30 days/ })).toBeInTheDocument();
@@ -415,6 +416,90 @@ describe("Sleep and readiness (activity plan §3.7, ACTIVITY-4)", () => {
     expect(
       await within(sheet).findByText("Last night hasn't reached LifeOS yet: open the Oura app to sync it."),
     ).toBeInTheDocument();
+  });
+});
+
+describe("Activity XP on the page (activity plan A9)", () => {
+  // Sunday Oct 25, 2026, 10 a.m.: three days after activity XP started, last night's sleep in.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 25, 10));
+    resetStore();
+    writes = createMockWriteClient();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    resetStore();
+  });
+
+  /** The Today card's XP once the sync on opening has paid last night's sleep. */
+  async function todayXp() {
+    const today = await card("Today");
+    const xp = within(today.getByRole("region", { name: "Health XP today" }));
+    await waitFor(() => expect(xp.getByTestId("activity-xp-sleep")).toHaveTextContent(/earned/));
+    return xp;
+  }
+
+  it("shows today's XP: last night's sleep earned once the sync pays it, steps and exercise projected", async () => {
+    renderPage();
+    const xp = await todayXp();
+    expect(xp.getByTestId("activity-xp-steps")).toHaveTextContent(/^Steps\d+ of 25 projectedPays when the day ends, at 4 a\.m\.$/);
+    // This morning's 32-minute run.
+    expect(xp.getByTestId("activity-xp-exercise")).toHaveTextContent(/^Exercise25 of 35 projectedPays when the day ends/);
+    expect(xp.getByTestId("activity-xp-total")).toHaveTextContent(/^\d+ Health XP: \d+ earned, \d+ projected$/);
+    expect(toast).toHaveBeenCalled();
+  });
+
+  it("gives each day's steps and sleep XP in the Tables: earned, projected today, nothing before Oct 22", async () => {
+    renderPage();
+    await todayXp();
+
+    const steps = await card("Steps");
+    const tile = steps.getByText("Steps XP").closest("div")!;
+    expect(within(tile).getByText("Health XP earned, last 30 days")).toBeInTheDocument();
+    expect(Number(within(tile).getByText(/^[\d,]+$/).textContent!.replace(/,/g, ""))).toBeGreaterThan(0);
+
+    await userEvent.click(steps.getByRole("button", { name: "Table" }));
+    const stepRows = await within(await steps.findByRole("table")).findAllByTestId("metric-row");
+    expect(stepRows[0]).toHaveTextContent(/^Today.*\d+ projected$/);
+    // Paid, at the day's multiplier: "14 (12 ×1.2)".
+    for (const r of stepRows.slice(1, 4)) {
+      expect(r.textContent).toMatch(/\d+( \(\d+ ×\d\.\d\))?$/);
+      expect(r.textContent).not.toMatch(/projected$/);
+    }
+    expect(stepRows[4]).toHaveTextContent(/—$/);
+
+    const sleep = await card("Sleep and readiness");
+    expect(sleep.getByTestId("sleep-xp")).toHaveTextContent(/^Sleep: \d+ Health XP earned/);
+    await userEvent.click(sleep.getByRole("button", { name: "Table" }));
+    const sleepRows = await within(await sleep.findByRole("table")).findAllByTestId("metric-row");
+    for (const r of sleepRows.slice(0, 4)) expect(r.textContent).not.toMatch(/(projected|—)$/);
+    expect(sleepRows[4]).toHaveTextContent(/—$/);
+  });
+
+  it("shows exercise XP against last week and by week, with today's projected", async () => {
+    renderPage();
+    await todayXp();
+    const exercise = await card("Exercise");
+    const compare = within(exercise.getByText("Exercise XP").closest("div")!);
+    expect(compare.getByText(/^\d+$/)).toBeInTheDocument();
+    expect(compare.getByText(/^Last week \d+$/)).toBeInTheDocument();
+
+    await userEvent.click(exercise.getByRole("button", { name: "Table" }));
+    const rows = await within(await exercise.findByRole("table")).findAllByTestId("metric-row");
+    expect(rows[0]).toHaveTextContent(/\d+ \+ 25 projected$/);
+    expect(rows[1]).toHaveTextContent(/—$/);
+  });
+
+  it("shows a day's XP in its sheet", async () => {
+    renderPage();
+    await todayXp();
+    await userEvent.click(await (await card("Today")).findByRole("button", { name: "Last night in full" }));
+    const sheet = within(await screen.findByRole("dialog", { name: "Today" }));
+    const xp = within(await sheet.findByRole("region", { name: "Health XP" }));
+    expect(xp.getByTestId("activity-xp-sleep")).toHaveTextContent(/earned/);
+    expect(xp.getByTestId("activity-xp-steps")).toHaveTextContent(/projected/);
   });
 });
 

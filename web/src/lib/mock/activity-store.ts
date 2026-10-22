@@ -4,11 +4,13 @@
  * relative to today and the same on every load. It answers as `/api/oura` and `/api/activity`
  * do — the thresholds, `counted` and its reasons, this week against last, the note's
  * refusals, the page's sync skipped under 5 minutes — so the page behaves the same on either.
- * Its sync changes nothing.
+ * Its sync changes nothing here; the store pays activity XP after it (`mockSettleActivity`) and
+ * fills in what each day paid.
  */
 import {
   ACTIVITY_TARGETS,
   NOTE_MAX,
+  NOTHING_PAID,
   READINESS_CONTRIBUTORS,
   SLEEP_CONTRIBUTORS,
   stepBand,
@@ -55,6 +57,16 @@ function store(): ActivityState {
 
 export function resetActivityStore() {
   seeded = null;
+}
+
+/**
+ * Test seam: no Oura days or workouts, so nothing pays activity XP. Activity XP pays from
+ * the real date, so tests about anything else clear it to stay the same on every day.
+ */
+export function clearMockActivity() {
+  const state = store();
+  state.days = new Map();
+  state.workouts = [];
 }
 
 /** Test seam: put the connection in any state (not connected, reconnect, a sync error…). */
@@ -106,6 +118,7 @@ function emptyDay(day: string): ActivityDayRow {
     wokeAt: null,
     napCount: 0,
     napAsleepS: 0,
+    paid: { ...NOTHING_PAID },
   };
 }
 
@@ -357,6 +370,11 @@ function daysBetween(from: string, to: string): ActivityDayRow[] {
   return rows;
 }
 
+/** The mock's Oura days and live workouts, for the store's activity XP. */
+export function mockActivityRecords(): { days: ActivityDayRow[]; workouts: WorkoutRow[] } {
+  return { days: [...store().days.values()], workouts: [...store().workouts] };
+}
+
 export function mockOuraStatus(): OuraStatus {
   return { ...store().oura };
 }
@@ -481,6 +499,8 @@ export function mockSyncActivity(force = false): ActivitySyncResult {
       historyFrom: null,
       historyDone: false,
       lastSyncedAt: oura.lastSyncedAt,
+      awards: [],
+      progress: [],
     };
   }
 
@@ -498,6 +518,8 @@ export function mockSyncActivity(force = false): ActivitySyncResult {
     historyFrom: oura.historyFrom,
     historyDone: oura.historyDone,
     lastSyncedAt: now,
+    awards: [],
+    progress: [],
   };
 }
 

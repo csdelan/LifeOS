@@ -1,4 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+/**
+ * The mock pays activity XP from Oura from 2026-10-22 by the page's date (activity plan A9), and
+ * the Food Log and Character pages ask for that sync on opening, so Health's numbers would move
+ * with the real date. The paths that read them run on the day before activity XP started.
+ */
+async function beforeActivityXp(page: Page) {
+  await page.clock.install({ time: new Date("2026-10-21T12:00:00") });
+}
 
 test.describe("golden paths", () => {
   test("create via New dialog", async ({ page }) => {
@@ -169,6 +178,7 @@ test.describe("golden paths", () => {
   });
 
   test("following a habit day lifts Health a rank, celebrated, and the Character page shows it", async ({ page }) => {
+    await beforeActivityXp(page);
     await page.goto("/character");
     const health = page.getByRole("region", { name: "Health", exact: true });
     await expect(health.getByText("Level 9", { exact: true })).toBeVisible({ timeout: 10_000 });
@@ -190,6 +200,7 @@ test.describe("golden paths", () => {
   });
 
   test("Character Reports compare Health over a longer period than its history", async ({ page }) => {
+    await beforeActivityXp(page);
     await page.goto("/character");
     await page.getByRole("tab", { name: "Reports" }).click();
     await expect(page).toHaveURL(/view=reports/);
@@ -204,6 +215,7 @@ test.describe("golden paths", () => {
   });
 
   test("record a fast, log food and close the day for diet XP", async ({ page }) => {
+    await beforeActivityXp(page);
     await page.goto("/food");
     await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
 
@@ -239,6 +251,7 @@ test.describe("golden paths", () => {
   });
 
   test("Food Log: switch to the week, step back a month, and open a day", async ({ page }) => {
+    await beforeActivityXp(page);
     await page.goto("/food");
     await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
 
@@ -330,7 +343,28 @@ test.describe("golden paths", () => {
     await expect(page.getByRole("dialog", { name: "Today" }).getByText(/^Last night, ending this morning: /)).toBeVisible();
   });
 
+  test("Activity: today's Health XP, earned once the sync pays it and projected until then", async ({ page }) => {
+    // Sunday Oct 25, 10 a.m.: three days into activity XP, last night's sleep in.
+    await page.clock.install({ time: new Date("2026-10-25T10:00:00") });
+    await page.goto("/activity");
+
+    // The sync on opening pays last night's sleep; today's steps and run wait for 4 a.m.
+    const xp = page.getByRole("region", { name: "Health XP today" });
+    await expect(xp.getByTestId("activity-xp-sleep")).toContainText("earned", { timeout: 10_000 });
+    await expect(xp.getByTestId("activity-xp-steps")).toContainText(/\d+ of 25 projected/);
+    await expect(xp.getByTestId("activity-xp-steps")).toContainText("Pays when the day ends, at 4 a.m.");
+    await expect(xp.getByTestId("activity-xp-total")).toHaveText(/^\d+ Health XP: \d+ earned, \d+ projected$/);
+
+    // Each day's steps XP in the Table: projected today, earned the days before.
+    const steps = page.getByRole("region", { name: "Steps" });
+    await steps.getByRole("button", { name: "Table" }).click();
+    await expect(steps.getByTestId("metric-row").first()).toContainText(/\d+ projected$/);
+    await expect(steps.getByTestId("metric-row").nth(1)).not.toContainText("projected");
+    await expect(steps.getByText("Steps XP")).toBeVisible();
+  });
+
   test("Food Log: log an entry with a photo, see it full size, and remove it", async ({ page }) => {
+    await beforeActivityXp(page);
     await page.goto("/food");
     await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
     // A 2400 x 1600 PNG, as a phone might take: the browser shrinks it to 1,200 px.

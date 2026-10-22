@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ChartColumnIcon, ChevronDownIcon, MedalIcon } from "lucide-react";
+import { useOuraSyncOnOpen } from "@/components/activity/use-oura-sync-on-open";
 import { DomainDailyChart } from "@/components/character/domain-daily-chart";
 import { DomainReports } from "@/components/character/domain-reports";
 import { EmptyState } from "@/components/primitives/empty-state";
@@ -34,6 +35,7 @@ export function CharacterPage() {
   const domains = useDomains();
   const writes = useWrites();
   const settled = useRef(false);
+  useOuraSyncOnOpen();
 
   useEffect(() => {
     if (settled.current) return;

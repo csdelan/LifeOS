@@ -19,7 +19,13 @@ import {
 import type { LifeOsReads } from "@/lib/mock/api";
 import { normalizeDomainDays, normalizeDomainReport, normalizeDomains } from "@/lib/domains";
 import { normalizeFoodDay, normalizeFoodDays, normalizeMeal } from "@/lib/food";
-import { normalizeActivityDays, normalizeDayDetail, normalizeSummary, normalizeWorkouts } from "@/lib/activity";
+import {
+  normalizeActivityDays,
+  normalizeDayDetail,
+  normalizeOuraStatus,
+  normalizeSummary,
+  normalizeWorkouts,
+} from "@/lib/activity";
 import type {
   ActivityDayDetailRead,
   ActivityDaysRead,
@@ -34,6 +40,7 @@ import type {
   FoodDayRead,
   FoodDaysRead,
   MealRow,
+  OuraStatus,
   HabitOccurrenceRow,
   HabitRow,
   InboxItem,
@@ -267,6 +274,10 @@ export const liveReads: LifeOsReads = {
   async activityWorkouts(from, to) {
     const data = await unwrap(api().GET("/api/activity/workouts", { params: { query: { from, to } } }));
     return normalizeWorkouts(asType<ActivityWorkoutsRead>(data));
+  },
+
+  async ouraStatus() {
+    return normalizeOuraStatus(asType<OuraStatus>(await unwrap(api().GET("/api/oura/status"))));
   },
 
   async activityDay(date) {

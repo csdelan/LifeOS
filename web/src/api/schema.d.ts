@@ -1144,6 +1144,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ActivityAwardPaidRow: {
+            /** Format: int64 */
+            base?: number | string;
+            /** Format: int64 */
+            paid?: number | string;
+            /** Format: double */
+            multiplier?: null | number | string;
+        };
         ActivityDayDetailRead: {
             day?: string;
             today?: string;
@@ -1203,6 +1211,7 @@ export interface components {
             napCount?: number | string;
             /** Format: int32 */
             napAsleepS?: number | string;
+            paid?: components["schemas"]["ActivityPaidRow"];
         };
         ActivityDaysRead: {
             from?: string;
@@ -1213,6 +1222,15 @@ export interface components {
             /** Format: int32 */
             goalSteps?: number | string;
             days?: components["schemas"]["ActivityDayRow"][];
+        };
+        ActivityPaidRow: {
+            steps?: null | components["schemas"]["ActivityAwardPaidRow"];
+            exercise?: null | components["schemas"]["ActivityAwardPaidRow"];
+            sleep?: null | components["schemas"]["ActivityAwardPaidRow"];
+            /** Format: int64 */
+            total?: number | string;
+            /** Format: int64 */
+            baseTotal?: number | string;
         };
         ActivitySummaryRead: {
             today?: string;

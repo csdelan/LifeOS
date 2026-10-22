@@ -16,6 +16,7 @@ import {
 } from "@/lib/derive";
 import type {
   ActivityDayDetailRead,
+  ActivityDayRow,
   ActivityDaysRead,
   ActivitySummaryRead,
   ActivityWorkoutsRead,
@@ -28,6 +29,7 @@ import type {
   FoodDayRead,
   FoodDaysRead,
   MealRow,
+  OuraStatus,
   HabitOccurrenceRow,
   HabitRow,
   InboxItem,
@@ -70,9 +72,16 @@ import {
   mockFoodRecent,
   mockDomainDays,
   mockDomainReport,
+  mockActivityPaid,
   withBounty,
 } from "@/lib/mock/store";
-import { mockActivityDay, mockActivityDays, mockActivitySummary, mockActivityWorkouts } from "@/lib/mock/activity-store";
+import {
+  mockActivityDay,
+  mockActivityDays,
+  mockActivitySummary,
+  mockActivityWorkouts,
+  mockOuraStatus,
+} from "@/lib/mock/activity-store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 
@@ -165,6 +174,8 @@ export interface LifeOsReads {
   activityWorkouts(from?: string, to?: string): Promise<ActivityWorkoutsRead>;
   /** One day in full (today by default): both scores' contributors, the night, naps and workouts. */
   activityDay(date?: string): Promise<ActivityDayDetailRead>;
+  /** The Oura connection (`GET /api/oura/status`): other pages ask for the throttled sync when it's connected. */
+  ouraStatus(): Promise<OuraStatus>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /**
@@ -189,6 +200,14 @@ export interface LifeOsReads {
     includeArchived?: boolean;
     lens?: MapLens;
   }): Promise<import("@/lib/derive").AlignmentNode[]>;
+}
+
+
+/** The days with what the mock's ledger pays each (`ActivityPaidReads`). */
+function withActivityPaid(days: ActivityDayRow[]): ActivityDayRow[] {
+  if (days.length === 0) return days;
+  const paid = mockActivityPaid(days[0].day, days[days.length - 1].day);
+  return days.map((d) => ({ ...d, paid: paid.get(d.day) ?? d.paid }));
 }
 
 export const mockReads: LifeOsReads = {
@@ -358,12 +377,14 @@ export const mockReads: LifeOsReads = {
 
   async activitySummary(): Promise<ActivitySummaryRead> {
     await wait();
-    return mockActivitySummary();
+    const summary = mockActivitySummary();
+    return { ...summary, todaySoFar: withActivityPaid([summary.todaySoFar])[0] };
   },
 
   async activityDays(from?: string, to?: string): Promise<ActivityDaysRead> {
     await wait();
-    return mockActivityDays(from, to);
+    const read = mockActivityDays(from, to);
+    return { ...read, days: withActivityPaid(read.days) };
   },
 
   async activityWorkouts(from?: string, to?: string): Promise<ActivityWorkoutsRead> {
@@ -371,9 +392,15 @@ export const mockReads: LifeOsReads = {
     return mockActivityWorkouts(from, to);
   },
 
+  async ouraStatus(): Promise<OuraStatus> {
+    await wait();
+    return mockOuraStatus();
+  },
+
   async activityDay(date?: string): Promise<ActivityDayDetailRead> {
     await wait();
-    return mockActivityDay(date);
+    const detail = mockActivityDay(date);
+    return { ...detail, summary: withActivityPaid([detail.summary])[0] };
   },
 
   async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {

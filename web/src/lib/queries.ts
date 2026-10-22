@@ -67,6 +67,7 @@ export const qk = {
   activityDays: (from: string, to: string) => ["activity", "days", from, to] as const,
   activityWorkouts: (from: string, to: string) => ["activity", "workouts", from, to] as const,
   activityDay: (date: string) => ["activity", "day", date] as const,
+  ouraStatus: ["activity", "oura"] as const,
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
@@ -266,8 +267,8 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async settleDomains() {
       const earned = await client.settleDomains();
       announceEarned(earned);
-      // The live settle pays food days that closed themselves, too.
-      if (earned.awards.length > 0) await invalidate(qc, [qk.wallet, qk.ledger, qk.domains, qk.food]);
+      // The settle pays food days that closed themselves and activity XP that's due, too.
+      if (earned.awards.length > 0) await invalidate(qc, [qk.wallet, qk.ledger, qk.domains, qk.food, qk.activity]);
       return earned;
     },
 
@@ -320,13 +321,18 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
 
     async syncActivity(force) {
       let ran = true;
+      let paid = false;
       try {
         const result = await client.syncActivity(force);
         ran = result.ran;
+        // It settles activity XP even when the sync itself is skipped (activity plan A8).
+        paid = result.awards.length > 0;
+        announceEarned(result);
         return result;
       } finally {
-        // A skipped sync changed nothing; a refused one may have marked the connection.
-        if (ran) await invalidate(qc, [qk.activity]);
+        // A skipped sync that paid nothing changed nothing; a refused one may have marked the connection.
+        if (paid) await invalidate(qc, [qk.activity, qk.wallet, qk.ledger, qk.domains]);
+        else if (ran) await invalidate(qc, [qk.activity]);
       }
     },
 
@@ -780,6 +786,14 @@ export function useActivitySummary() {
   return useQuery({
     queryKey: qk.activitySummary,
     queryFn: () => reads().activitySummary(),
+  });
+}
+
+/** The Oura connection: the Food Log and Character pages ask for the throttled sync when it's connected. */
+export function useOuraStatus() {
+  return useQuery({
+    queryKey: qk.ouraStatus,
+    queryFn: () => reads().ouraStatus(),
   });
 }
 

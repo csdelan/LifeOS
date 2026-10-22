@@ -407,6 +407,14 @@ public sealed class ActivityEndpointTests(PostgresFixture postgres)
         Assert.Equal(JsonValueKind.Array, synced.GetProperty("progress").ValueKind);
         Assert.Empty(Awards(await JsonAsync(await site.Client.PostAsync("/api/activity/sync", null, Ct))));
 
+        // The reads carry what each part paid (A9): sleep so far, steps and exercise not yet.
+        var paid = (await JsonAsync(await site.Client.GetAsync("/api/activity/summary", Ct)))
+            .GetProperty("todaySoFar").GetProperty("paid");
+        Assert.Equal((15L, 15L, JsonValueKind.Null), (paid.GetProperty("sleep").GetProperty("paid").GetInt64(),
+            paid.GetProperty("sleep").GetProperty("base").GetInt64(), paid.GetProperty("sleep").GetProperty("multiplier").ValueKind));
+        Assert.Equal((JsonValueKind.Null, JsonValueKind.Null, 15L), (paid.GetProperty("steps").ValueKind,
+            paid.GetProperty("exercise").ValueKind, paid.GetProperty("total").GetInt64()));
+
         // Today's steps and exercise wait for Oura's day to end at 4 a.m.; then settling pays them.
         site.Clock.Advance(new DateTimeOffset(2026, 10, 23, 3, 59, 0, TimeSpan.Zero) - site.Clock.UtcNow);
         Assert.Empty(Awards(await JsonAsync(await site.Client.PostAsync("/api/domains/settle", null, Ct))));
@@ -415,6 +423,19 @@ public sealed class ActivityEndpointTests(PostgresFixture postgres)
             [("exercise:2026-10-22", 25L), ("steps:2026-10-22", 9L)],
             Awards(await JsonAsync(await site.Client.PostAsync("/api/domains/settle", null, Ct))));
         Assert.Empty(Awards(await JsonAsync(await site.Client.PostAsync("/api/domains/settle", null, Ct))));
+
+        static (long?, long?, long?, long, long) Parts(JsonElement paid)
+        {
+            static long? Part(JsonElement part) => part.ValueKind == JsonValueKind.Null ? null : part.GetProperty("paid").GetInt64();
+            return (Part(paid.GetProperty("steps")), Part(paid.GetProperty("exercise")), Part(paid.GetProperty("sleep")),
+                paid.GetProperty("total").GetInt64(), paid.GetProperty("baseTotal").GetInt64());
+        }
+
+        var days = (await JsonAsync(await site.Client.GetAsync("/api/activity/days?from=2026-10-21&to=2026-10-23", Ct)))
+            .GetProperty("days").EnumerateArray().Select(d => Parts(d.GetProperty("paid"))).ToList();
+        Assert.Equal([(null, null, null, 0L, 0L), (9L, 25L, 15L, 49L, 49L), (null, null, null, 0L, 0L)], days);
+        var detail = await JsonAsync(await site.Client.GetAsync("/api/activity/day?date=2026-10-22", Ct));
+        Assert.Equal((9L, 25L, 15L, 49L, 49L), Parts(detail.GetProperty("summary").GetProperty("paid")));
     }
 
     [Fact]

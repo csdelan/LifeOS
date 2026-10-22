@@ -248,6 +248,13 @@ public sealed class ActivityRewardsTests(PostgresFixture postgres)
         Assert.All(Activity(earned), a => Assert.Equal(1.3m, a.Multipliers![Currencies.HealthXp]));
         Assert.Equal((60L, 79L), await CreditAsync(w, day));
 
+        // What the page reads it paid (A9): each part's base, paid and multiplier.
+        var paid = await new ActivityPaidReads(w.Db.Get<ILedgerRepository>()).GetDayAsync(day, Ct);
+        Assert.Equal(
+            (new ActivityPaid(20, 26, 1.3m), new ActivityPaid(25, 33, 1.3m), new ActivityPaid(15, 20, 1.3m), 79L, 60L),
+            (paid.Steps, paid.Exercise, paid.Sleep, paid.Total, paid.BaseTotal));
+        Assert.Equal(ActivityDayPaid.None, await new ActivityPaidReads(w.Db.Get<ILedgerRepository>()).GetDayAsync(w.Today, Ct));
+
         // 60 base XP: a successful day on activity alone.
         var health = (await w.Db.Get<DomainService>().GetAsync(Ct)).Domains
             .Single(d => d.Currency.Key == Currencies.HealthXp).Progress!;

@@ -3,7 +3,9 @@ import {
   revokeIfBlobUrl,
 } from "@/lib/artifacts";
 import { deriveTitle } from "@/lib/capture";
-import { resetActivityStore } from "@/lib/mock/activity-store";
+import { ACTIVITY_RULES, exerciseSeconds, exerciseXp, sleepXp, stepsXp } from "@/lib/activity-score";
+import { ouraDayAt } from "@/lib/activity-xp";
+import { mockActivityRecords, resetActivityStore } from "@/lib/mock/activity-store";
 import { addDays, nowIso, slugify, todayIso, startOfWeekMonday, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
 import {
   CALORIES_MAX,
@@ -31,6 +33,7 @@ import {
   type MockFoodEvent,
 } from "@/lib/mock/food-fold";
 import type {
+  ActivityPaid,
   Amounts,
   ArtifactRecord,
   Award,
@@ -1827,11 +1830,18 @@ export function mockDomainReport(days = 30): DomainReportRead {
   };
 }
 
-/** `POST /api/domains/settle`: pays any rank-up time alone has reached. */
+/**
+ * `POST /api/domains/settle`: settles the activity XP that's due (as the API does after the
+ * food days), then pays any rank-up time alone has reached.
+ */
 export function mockSettleDomains(): Earned {
+  const activity = settleActivityDays();
   const { rankUps, folds } = payRankUps();
-  if (rankUps.length > 0) emit();
-  return { awards: rankUps.map((r) => r.award), progress: domainChanges(folds, folds, rankUps) };
+  if (activity.awards.length > 0 || rankUps.length > 0) emit();
+  return {
+    awards: [...activity.awards, ...rankUps.map((r) => r.award)],
+    progress: [...activity.progress, ...domainChanges(folds, folds, rankUps)],
+  };
 }
 
 /** The configured domains as they read now (tests and the seed). */
@@ -2568,9 +2578,14 @@ interface HeldFood {
 }
 
 function heldFood(): Map<string, HeldFood> {
+  return heldKeyed(FOOD_KEY);
+}
+
+/** The keyed awards on the ledger whose keys match `pattern`: each one's net and latest earn. */
+function heldKeyed(pattern: RegExp): Map<string, HeldFood> {
   const held = new Map<string, HeldFood>();
   for (const e of state.ledger) {
-    if (!e.awardKey || !FOOD_KEY.test(e.awardKey) || (e.entry !== "earn" && e.entry !== "reversal")) continue;
+    if (!e.awardKey || !pattern.test(e.awardKey) || (e.entry !== "earn" && e.entry !== "reversal")) continue;
     const h = held.get(e.awardKey) ?? { key: e.awardKey, net: {}, paid: false, latestEarn: null };
     for (const [k, n] of Object.entries(e.amounts)) h.net[k] = (h.net[k] ?? 0) + n;
     if (e.entry === "earn" && (!h.latestEarn || e.occurredAt >= h.latestEarn.occurredAt)) h.latestEarn = e;
@@ -2617,8 +2632,23 @@ function settleFoodDays(cause?: string, touched: string[] = []): Earned {
  * of what it pays, then an earn at the base due (if any); unpaid with a base due: an earn.
  */
 function planFood(fold: FoodFold, openedAt: number): Award[] {
-  const candidates = new Map(foodCandidates(fold).map((c) => [c.key, c]));
-  const held = heldFood();
+  return planKeyed(foodCandidates(fold), heldFood(), openedAt, (key) => {
+    const [, trigger, day] = FOOD_KEY.exec(key)!;
+    return { trigger, note: foodNote(trigger, day) };
+  });
+}
+
+/**
+ * The plan `FoodRewards` and `ActivityRewards` share (D13): for each key that could pay or is
+ * paid, the entries that bring the ledger in line. `reversalOf` names a key's trigger and note.
+ */
+function planKeyed(
+  due: DueFood[],
+  held: Map<string, HeldFood>,
+  openedAt: number,
+  reversalOf: (key: string) => { trigger: string; note: string },
+): Award[] {
+  const candidates = new Map(due.map((c) => [c.key, c]));
   const paidKeys = [...held.values()].filter((h) => h.paid).map((h) => h.key);
   const keys = [...new Set([...candidates.keys(), ...paidKeys])].sort();
   const now = Date.now();
@@ -2633,16 +2663,16 @@ function planFood(fold: FoodFold, openedAt: number): Award[] {
       if (candidate && sameSources(candidate.sources, paid.latestEarn?.sources ?? [])) continue;
       if (due && latestBase(paid) === due.base) continue;
       // The new earn follows the reversal, so the ledger reads them in that order.
-      awards.push(foodReversal(paid, now));
+      awards.push(keyedReversal(paid, now, reversalOf(paid.key)));
       earnAt = now + 1;
     }
-    if (due) awards.push(foodEarn(due, paid, earnAt));
+    if (due) awards.push(keyedEarn(due, paid, earnAt));
   }
   return awards;
 }
 
 /** An earn at the credited day's multiplier, dated at its trigger the first time, else at the change. */
-function foodEarn(due: DueFood, previous: HeldFood | undefined, now: number): Award {
+function keyedEarn(due: DueFood, previous: HeldFood | undefined, now: number): Award {
   const { amounts, base, multipliers } = priceDomains({ [DIET_RULES.currency]: due.base }, due.day);
   let at = previous?.latestEarn ? now : Date.parse(due.triggeredAt);
   const last = previous?.latestEarn ? Date.parse(previous.latestEarn.occurredAt) : null;
@@ -2677,14 +2707,12 @@ function foodEarn(due: DueFood, previous: HeldFood | undefined, now: number): Aw
 }
 
 /** A reversal of everything the key pays. */
-function foodReversal(paid: HeldFood, now: number): Award {
+function keyedReversal(paid: HeldFood, now: number, { trigger, note }: { trigger: string; note: string }): Award {
   const amounts = Object.fromEntries(
     Object.entries(paid.net)
       .filter(([, n]) => n !== 0)
       .map(([k, n]) => [k, -n]),
   );
-  const [, trigger, day] = FOOD_KEY.exec(paid.key)!;
-  const note = foodNote(trigger, day);
   const id = newId();
   state.ledger = [
     ...state.ledger,
@@ -2700,6 +2728,121 @@ function foodReversal(paid: HeldFood, now: number): Award {
     },
   ];
   return { id, entry: "reversal", trigger, awardKey: paid.key, subject: null, note, amounts: { ...amounts } };
+}
+
+// ---------------------------------------------------------------------------
+// Activity XP (activity plan §3.8, A8–A9): `ActivityRewards` over the mock's Oura days
+// ---------------------------------------------------------------------------
+
+const ACTIVITY_KEY = /^(steps|exercise|sleep):(\d{4}-\d{2}-\d{2})$/;
+const ACTIVITY_NOTES: Record<string, string> = { steps: "Steps", exercise: "Exercise", sleep: "Sleep" };
+
+function activityNote(trigger: string, day: string): string {
+  return `${ACTIVITY_NOTES[trigger] ?? "Sleep"} ${noteDay(day)}`;
+}
+
+/** An instant on `day` at local `hh:00`. */
+function localAt(day: string, hour: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y, m - 1, d, hour).toISOString();
+}
+
+/**
+ * `ActivityRewards.CandidatesAsync`: from the day activity XP starts, the steps and counted
+ * exercise of each day Oura has finished (at 4 a.m. the next morning), and the sleep of each
+ * day with a score once its night is over. The mock's Oura days never change, so each part
+ * cites one fixed source.
+ */
+function activityCandidates(): DueFood[] {
+  const now = new Date();
+  const today = todayIso();
+  const from = ACTIVITY_RULES.xpFrom;
+  if (today < from) return [];
+  const ouraToday = ouraDayAt(now);
+  const { days, workouts } = mockActivityRecords();
+  const due: DueFood[] = [];
+  for (const d of days) {
+    if (d.day < from || d.day > today) continue;
+    if (d.day < ouraToday && d.steps != null) {
+      due.push({
+        key: `steps:${d.day}`,
+        trigger: "steps",
+        day: d.day,
+        base: stepsXp(d.steps),
+        triggeredAt: localAt(addDays(d.day, 1), 4),
+        sources: [`mock-activity-${d.day}`],
+        note: activityNote("steps", d.day),
+      });
+    }
+    const woke = d.wokeAt ?? localAt(d.day, 8);
+    if (d.sleepScore != null && Date.parse(woke) <= now.getTime()) {
+      due.push({
+        key: `sleep:${d.day}`,
+        trigger: "sleep",
+        day: d.day,
+        base: sleepXp(d.sleepScore),
+        triggeredAt: woke,
+        sources: [`mock-sleep-${d.day}`],
+        note: activityNote("sleep", d.day),
+      });
+    }
+  }
+  const byDay = new Map<string, typeof workouts>();
+  for (const w of workouts) {
+    if (!w.counted || w.day < from || w.day >= ouraToday) continue;
+    byDay.set(w.day, [...(byDay.get(w.day) ?? []), w]);
+  }
+  for (const [day, counted] of byDay) {
+    due.push({
+      key: `exercise:${day}`,
+      trigger: "exercise",
+      day,
+      base: exerciseXp(exerciseSeconds(counted)),
+      triggeredAt: counted.map((w) => w.endedAt).sort().at(-1)!,
+      sources: counted.map((w) => w.id),
+      note: activityNote("exercise", day),
+    });
+  }
+  return due;
+}
+
+/** `ActivityRewards.SettleAsync`: activity never opens the wallet. */
+function settleActivityDays(): Earned {
+  const open = state.ledger.find((e) => e.entry === "open");
+  if (!open) return { awards: [], progress: [] };
+  return earning(() =>
+    planKeyed(activityCandidates(), heldKeyed(ACTIVITY_KEY), Date.parse(open.occurredAt), (key) => {
+      const [, trigger, day] = ACTIVITY_KEY.exec(key)!;
+      return { trigger, note: activityNote(trigger, day) };
+    }),
+  );
+}
+
+/** Settles activity XP, as the page's sync and `POST /api/domains/settle` do. */
+export function mockSettleActivity(): Earned {
+  const earned = settleActivityDays();
+  if (earned.awards.length > 0) emit();
+  return earned;
+}
+
+/** What the ledger pays each Oura day from `from` to `to` (`ActivityPaidReads`). */
+export function mockActivityPaid(from: string, to: string): Map<string, ActivityPaid> {
+  const byDay = new Map<string, ActivityPaid>();
+  for (const held of heldKeyed(ACTIVITY_KEY).values()) {
+    const [, trigger, day] = ACTIVITY_KEY.exec(held.key)!;
+    if (!held.paid || day < from || day > to) continue;
+    const award = {
+      base: latestBase(held),
+      paid: held.net[ACTIVITY_RULES.currency] ?? 0,
+      multiplier: held.latestEarn?.multipliers?.[ACTIVITY_RULES.currency] ?? null,
+    };
+    const current = byDay.get(day) ?? { steps: null, exercise: null, sleep: null, total: 0, baseTotal: 0 };
+    const next: ActivityPaid = { ...current, [trigger]: award };
+    next.total = (next.steps?.paid ?? 0) + (next.exercise?.paid ?? 0) + (next.sleep?.paid ?? 0);
+    next.baseTotal = (next.steps?.base ?? 0) + (next.exercise?.base ?? 0) + (next.sleep?.base ?? 0);
+    byDay.set(day, next);
+  }
+  return byDay;
 }
 
 const NOTHING_PAID: FoodPaid = { fast: null, diet: null, total: 0, baseTotal: 0 };

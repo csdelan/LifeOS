@@ -33,13 +33,15 @@ test.describe("accessibility", () => {
   }
 
   // The Character page with Health's daily chart open, as a chart and as a table, in both
-  // themes (next-themes keeps the choice under "theme").
+  // themes (next-themes keeps the choice under "theme"). Opening the page asks for the Oura
+  // sync, whose activity XP toasts: reduced motion (no transitions) scans the toasts settled.
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /character with the daily chart, ${theme} theme`, async ({ page }) => {
       const scan = async () => {
         const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
       };
+      await page.emulateMedia({ reducedMotion: "reduce" });
       await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
       await page.goto("/character");
       await expect(page.locator("html")).toHaveClass(new RegExp(theme));
@@ -56,9 +58,10 @@ test.describe("accessibility", () => {
   }
 
   // The Character page's Reports, over a period longer than Health's history (a hollow bar)
-  // against a second period (a tick), in both themes.
+  // against a second period (a tick), in both themes, with any activity XP toast settled.
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /character?view=reports compared, ${theme} theme`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
       await page.addInitScript((t) => {
         localStorage.setItem("theme", t);
         localStorage.setItem("lifeos.view.character.reports", JSON.stringify({ period: "90", compare: "30" }));

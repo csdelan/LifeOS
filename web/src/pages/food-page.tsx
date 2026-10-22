@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, UtensilsIcon } from "lucide-react";
+import { useOuraSyncOnOpen } from "@/components/activity/use-oura-sync-on-open";
 import { FastingCard } from "@/components/food/fasting-card";
 import { FoodPeriodView } from "@/components/food/food-period-view";
 import { LogFoodSheet } from "@/components/food/log-food-sheet";
@@ -41,6 +42,7 @@ export function FoodPage() {
   const food = useFoodDay(view === "day" ? search.date : undefined);
   const writes = useWrites();
   const settled = useRef(false);
+  useOuraSyncOnOpen();
   const [sheet, setSheet] = useState<{ open: boolean; meal: MealRow | null }>({ open: false, meal: null });
 
   useEffect(() => {

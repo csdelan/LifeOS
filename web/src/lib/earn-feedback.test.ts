@@ -164,6 +164,60 @@ describe("food awards (food-log plan §3.3)", () => {
   });
 });
 
+describe("activity awards (activity plan §3.8, A9)", () => {
+  const NOTES: Record<string, string> = { steps: "Steps", exercise: "Exercise", sleep: "Sleep" };
+  const activity = (entry: Award["entry"], trigger: string, health_xp: number, extra?: Partial<Award>): Award => ({
+    id: `${entry}-${trigger}-${health_xp}`,
+    entry,
+    trigger,
+    awardKey: `${trigger}:2026-10-22`,
+    subject: null,
+    note: `${NOTES[trigger]} Thu Oct 22`,
+    amounts: { health_xp },
+    ...extra,
+  });
+
+  it("names each part by its note alone, with the working at a multiplier, and a shoe", () => {
+    announceAwards([
+      activity("earn", "steps", 20),
+      activity("earn", "exercise", 33, { base: { health_xp: 25 }, multipliers: { health_xp: 1.3 } }),
+    ]);
+    expect(toast).toHaveBeenCalledWith("Earned +53 Health XP", {
+      icon: "👟",
+      description: "Steps Thu Oct 22 · Exercise Thu Oct 22 — ❤️ 25 × 1.3",
+    });
+    expect(chime).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives sleep alone a moon, and a mix of food and activity a coin", () => {
+    announceAwards([activity("earn", "sleep", 15)]);
+    expect(toast).toHaveBeenLastCalledWith("Earned +15 Health XP", { icon: "🌙", description: "Sleep Thu Oct 22" });
+
+    announceAwards([
+      activity("earn", "sleep", 15),
+      { ...activity("earn", "diet", 30), note: "Food day Thu Oct 22", awardKey: "diet:2026-10-22" },
+    ]);
+    expect(toast).toHaveBeenLastCalledWith("Earned +45 Health XP", {
+      icon: "🪙",
+      description: "Sleep Thu Oct 22 · Food day Thu Oct 22 — diet score",
+    });
+  });
+
+  it("shows a day Oura revised as one change, with its part's icon", () => {
+    announceAwards([activity("reversal", "steps", -20), activity("earn", "steps", 25)]);
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith("Steps Thu Oct 22 re-scored: 20 → 25 Health XP", { icon: "👟" });
+
+    announceAwards([activity("reversal", "sleep", -15), activity("earn", "sleep", 12)]);
+    expect(toast).toHaveBeenLastCalledWith("Sleep Thu Oct 22 re-scored: 15 → 12 Health XP", { icon: "🌙" });
+  });
+
+  it("gives back by the part's note alone", () => {
+    announceAwards([activity("reversal", "exercise", -15)]);
+    expect(toast).toHaveBeenCalledWith("Gave back −15 Health XP", { icon: "↩", description: "Exercise Thu Oct 22" });
+  });
+});
+
 describe("announceEarned (xp-domains plan §3.8)", () => {
   const change = (levelFrom: number, levelTo: number, rankFrom = 0, rankTo = rankFrom, rankTitle = "Novice"): DomainChange => ({
     domain: "health_xp",
