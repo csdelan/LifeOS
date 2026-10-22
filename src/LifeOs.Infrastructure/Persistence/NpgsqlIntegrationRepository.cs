@@ -107,6 +107,12 @@ public sealed class NpgsqlIntegrationRepository(string connectionString, TokenCi
                 refresh_token_enc = EXCLUDED.refresh_token_enc,
                 expires_at = EXCLUDED.expires_at,
                 scopes = EXCLUDED.scopes,
+                -- A scope the stored grant didn't have: read the history again, so the new
+                -- collection's past comes in (activity plan §3.9).
+                history_from = CASE WHEN EXCLUDED.scopes <@ bsk_ops.integration.scopes
+                                    THEN bsk_ops.integration.history_from END,
+                history_done = EXCLUDED.scopes <@ bsk_ops.integration.scopes
+                               AND bsk_ops.integration.history_done,
                 connected_at = EXCLUDED.connected_at,
                 needs_reconnect = false,
                 reconnect_reason = NULL,

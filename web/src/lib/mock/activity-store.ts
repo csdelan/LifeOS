@@ -1,6 +1,8 @@
 /**
- * The mock store's activity half (ACTIVITY-1..4, activity plan §3.7): about 120 days of steps,
- * sleep and readiness (each night with its stages, heart and both scores' contributors), and 40 workouts of every source, walks and detections included, all
+ * The mock store's activity half (ACTIVITY-1..4 and 6, activity plan §3.7 and §3.9): about 120
+ * days of steps, sleep and readiness (each night with its stages, heart and both scores'
+ * contributors), 40 workouts of every source, walks and detections included, and tags from the
+ * Oura app (a coffee most mornings, drinks, the sauna, a custom tag, a note, a few days sick), all
  * relative to today and the same on every load. It answers as `/api/oura` and `/api/activity`
  * do — the thresholds, `counted` and its reasons, this week against last, the note's
  * refusals, the page's sync skipped under 5 minutes — so the page behaves the same on either.
@@ -24,6 +26,8 @@ import type {
   ActivityDaysRead,
   ActivitySummaryRead,
   ActivitySyncResult,
+  ActivityTagRow,
+  ActivityTagsRead,
   ActivityWorkoutsRead,
   OuraStatus,
   SleepPeriodRow,
@@ -45,6 +49,8 @@ interface ActivityState {
   days: Map<string, ActivityDayRow>;
   /** Newest first. */
   workouts: WorkoutRow[];
+  /** Newest first. */
+  tags: ActivityTagRow[];
   pendingState: string | null;
 }
 
@@ -60,13 +66,14 @@ export function resetActivityStore() {
 }
 
 /**
- * Test seam: no Oura days or workouts, so nothing pays activity XP. Activity XP pays from
+ * Test seam: no Oura days, workouts or tags, so nothing pays activity XP. Activity XP pays from
  * the real date, so tests about anything else clear it to stay the same on every day.
  */
 export function clearMockActivity() {
   const state = store();
   state.days = new Map();
   state.workouts = [];
+  state.tags = [];
 }
 
 /** Test seam: put the connection in any state (not connected, reconnect, a sync error…). */
@@ -241,6 +248,130 @@ function seedWorkouts(today: string): WorkoutRow[] {
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
+// ---------------------------------------------------------------------------
+// Tags from the Oura app (activity plan §3.9)
+// ---------------------------------------------------------------------------
+
+const TAG_PREFIXES = ["tag_", "generic_"];
+
+/**
+ * How a tag reads, as the kernel's `OuraTags.Name` words it (the API answers the name; only the
+ * mock needs this): a custom tag by its own name, a text-only tag as "Note", and Oura's code
+ * made readable: its `tag_` and `generic_` prefixes off, split on `_` and capitals, in
+ * sentence case.
+ */
+export function ouraTagName(typeCode: string | null, customName: string | null): string {
+  const code = typeCode?.trim();
+  if (!code) return "Note";
+  if (code.toLowerCase() === "custom") return customName?.trim() || "Custom tag";
+
+  let rest = code;
+  for (let stripped = true; stripped; ) {
+    stripped = false;
+    for (const prefix of TAG_PREFIXES) {
+      if (rest.length > prefix.length && rest.toLowerCase().startsWith(prefix)) {
+        rest = rest.slice(prefix.length);
+        stripped = true;
+      }
+    }
+  }
+
+  const words: string[] = [];
+  let word = "";
+  const flush = () => {
+    if (word) words.push(word);
+    word = "";
+  };
+  const isUpper = (c: string) => c !== c.toLowerCase() && c === c.toUpperCase();
+  for (const c of rest) {
+    if (c === "_" || c === "-" || c === " ") {
+      flush();
+      continue;
+    }
+    if (isUpper(c) && word.length > 0 && !isUpper(word[word.length - 1])) flush();
+    word += c;
+  }
+  flush();
+  if (words.length === 0) return code;
+  const text = words.join(" ").toLowerCase();
+  return text[0].toUpperCase() + text.slice(1);
+}
+
+interface SeedTag {
+  ago: number;
+  hour: number;
+  minute?: number;
+  typeCode: string | null;
+  customName?: string;
+  /** A length in minutes, or for a stretch over days, `days`. */
+  minutes?: number;
+  days?: number;
+  comment?: string;
+}
+
+function seedTags(today: string): ActivityTagRow[] {
+  const seeds: SeedTag[] = [];
+  for (let ago = 0; ago < SEEDED_DAYS; ago++) {
+    const r = random(ago * 48_271 + 29);
+    // A coffee most mornings.
+    if (ago % 7 !== 6) seeds.push({ ago, hour: 7, minute: Math.round(r() * 50), typeCode: "tag_generic_caffeine" });
+    // Drinks some evenings.
+    if (ago % 5 === 2) {
+      seeds.push({
+        ago,
+        hour: 20,
+        minute: Math.round(r() * 40),
+        typeCode: "tag_generic_alcohol",
+        comment: ago === 2 ? "Two IPAs with dinner" : undefined,
+      });
+    }
+    // A late meal now and then.
+    if (ago % 11 === 3) seeds.push({ ago, hour: 22, minute: 15, typeCode: "tag_generic_late_meal" });
+    // The sauna, with its length.
+    if (ago % 9 === 1) {
+      seeds.push({
+        ago,
+        hour: 18,
+        minute: 30,
+        typeCode: "tag_generic_sauna",
+        minutes: 20,
+        comment: ago === 1 ? "Felt great after" : undefined,
+      });
+    }
+  }
+  // A custom tag, a note with only words, a few days of being sick and a good day.
+  seeds.push({ ago: 4, hour: 21, typeCode: "custom", customName: "Cold plunge", minutes: 5 });
+  seeds.push({ ago: 6, hour: 13, minute: 10, typeCode: null, comment: "New mattress arrived" });
+  seeds.push({ ago: 33, hour: 9, typeCode: "generic_sick", days: 3, comment: "Head cold" });
+  seeds.push({ ago: 45, hour: 19, typeCode: "generic_happy", comment: "Good day at work" });
+
+  return seeds
+    .map((s, i): ActivityTagRow => {
+      const day = addDays(today, -s.ago);
+      const startedAt = at(day, s.hour, s.minute ?? 0);
+      const endedAt =
+        s.days != null
+          ? at(addDays(day, s.days), s.hour)
+          : s.minutes != null
+            ? new Date(Date.parse(startedAt) + s.minutes * 60_000).toISOString()
+            : null;
+      return {
+        id: `mock-tag-${String(i + 1).padStart(3, "0")}`,
+        day,
+        endDay: s.days != null ? addDays(day, s.days) : endedAt ? day : null,
+        typeCode: s.typeCode,
+        customName: s.customName ?? null,
+        name: ouraTagName(s.typeCode, s.customName ?? null),
+        startedAt,
+        endedAt,
+        seconds: endedAt ? Math.round((Date.parse(endedAt) - Date.parse(startedAt)) / 1_000) : null,
+        comment: s.comment ?? null,
+        syncedAt: at(day, 23),
+      };
+    })
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt) || a.id.localeCompare(b.id));
+}
+
 function seedActivity(): ActivityState {
   const today = todayIso();
   const days = new Map<string, ActivityDayRow>();
@@ -258,7 +389,7 @@ function seedActivity(): ActivityState {
       reconnectReason: null,
       connectedAt: at(addDays(today, -SEEDED_DAYS), 20),
       expiresAt: new Date(Date.now() + 20 * 3_600_000).toISOString(),
-      scopes: ["daily", "workout"],
+      scopes: ["daily", "workout", "tag"],
       missingScopes: [],
       // Two hours ago, so opening the page syncs.
       lastSyncedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
@@ -268,6 +399,7 @@ function seedActivity(): ActivityState {
     },
     days,
     workouts: seedWorkouts(today),
+    tags: seedTags(today),
     pendingState: null,
   };
 }
@@ -288,7 +420,9 @@ function around(score: number, r: () => number, spread = 30): number {
 // The eight readiness contributors the sandbox answers; `sleep_regularity` is newer.
 const MOCK_READINESS = READINESS_CONTRIBUTORS.filter((k) => k !== "sleep_regularity");
 
-function seedDetail(row: ActivityDayRow): Omit<ActivityDayDetailRead, "day" | "today" | "minimumSteps" | "goalSteps" | "summary" | "workouts"> {
+function seedDetail(
+  row: ActivityDayRow,
+): Omit<ActivityDayDetailRead, "day" | "today" | "minimumSteps" | "goalSteps" | "summary" | "workouts" | "tags"> {
   const r = random(dayNumber(row.day) * 2_654_435 + 11);
   const sleepContributors: Record<string, number | null> = {};
   const readinessContributors: Record<string, number | null> = {};
@@ -402,7 +536,23 @@ export function mockActivityWorkouts(from?: string, to?: string): ActivityWorkou
   };
 }
 
-/** One day in full (default today): its row, both scores' contributors, the night, naps and workouts. */
+/** Live tags starting on those days (default the 30 days through today), newest first. */
+export function mockActivityTags(from?: string, to?: string): ActivityTagsRead {
+  const today = todayIso();
+  const end = to ?? today;
+  const start = from ?? addDays(end, -29);
+  checkRange(start, end);
+  return {
+    from: start,
+    to: end,
+    today,
+    tags: store()
+      .tags.filter((t) => t.day >= start && t.day <= end)
+      .map((t) => ({ ...t })),
+  };
+}
+
+/** One day in full (default today): its row, both scores' contributors, the night, naps, workouts and tags. */
 export function mockActivityDay(date?: string): ActivityDayDetailRead {
   const today = todayIso();
   const day = date ?? today;
@@ -420,6 +570,10 @@ export function mockActivityDay(date?: string): ActivityDayDetailRead {
       .workouts.filter((w) => w.day === day)
       .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
       .map((w) => ({ ...w })),
+    tags: store()
+      .tags.filter((t) => t.day === day)
+      .sort((a, b) => a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id))
+      .map((t) => ({ ...t })),
   };
 }
 

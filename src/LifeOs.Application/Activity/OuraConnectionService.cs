@@ -29,8 +29,14 @@ namespace LifeOs.Application.Activity;
 public sealed class OuraConnectionService(
     IIntegrationRepository integrations, IOuraClient? client, IClock clock, string service = Integrations.Oura)
 {
-    /// <summary>The scopes LifeOS asks for: daily summaries (activity, sleep, readiness) and workouts.</summary>
-    public static readonly IReadOnlyList<string> Scopes = ["daily", "workout"];
+    /// <summary>The scope for the tags Chris adds in the Oura app (activity plan §3.9).</summary>
+    public const string TagScope = "tag";
+
+    /// <summary>
+    /// The scopes LifeOS asks for: daily summaries (activity, sleep, readiness), workouts and,
+    /// since A10, tags.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Scopes = ["daily", "workout", TagScope];
 
     /// <summary>The SPA route Oura sends the browser back to.</summary>
     public const string CallbackPath = "/activity/connected";

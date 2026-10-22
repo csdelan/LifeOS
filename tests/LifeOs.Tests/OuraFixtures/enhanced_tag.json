@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "id": "enhanced_tag-0-2026-10-1",
+      "tag_type_code": "generic_happy",
+      "start_time": "2026-10-01T00:00:00+00:00",
+      "end_time": null,
+      "start_day": "2026-10-01",
+      "end_day": null,
+      "comment": "I work at Oura",
+      "custom_name": null
+    },
+    {
+      "id": "enhanced_tag-1-2026-10-2",
+      "tag_type_code": "generic_excited",
+      "start_time": "2026-10-02T00:00:00+00:00",
+      "end_time": null,
+      "start_day": "2026-10-02",
+      "end_day": null,
+      "comment": "I wear an Oura Ring",
+      "custom_name": null
+    }
+  ],
+  "next_token": null
+}

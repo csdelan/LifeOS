@@ -8,10 +8,13 @@ import {
   formatDistance,
   formatDuration,
   formatTemperature,
+  formatTime,
+  formatWeekday,
   metricWeeks,
   normalizeActivityDays,
   normalizeDayDetail,
   normalizeSummary,
+  normalizeTags,
   orderedContributors,
   ouraScoreWords,
   rangeFrom,
@@ -20,6 +23,7 @@ import {
   readableActivity,
   rollingAverage,
   rollingMean,
+  scopeWords,
   scoreBand,
   SLEEP_CONTRIBUTORS,
   sleepDayText,
@@ -31,6 +35,11 @@ import {
   summarizeWeek,
   syncedAgo,
   asSentence,
+  tagCounts,
+  tagDays,
+  tagLength,
+  tagRangeWords,
+  tagWhen,
   weekTitle,
   weeklyExercise,
   workoutName,
@@ -42,6 +51,8 @@ import type {
   ActivityDayRow,
   ActivitySummaryRead,
   ActivityDaysRead,
+  ActivityTagRow,
+  ActivityTagsRead,
   SleepPeriodRow,
   WorkoutRow,
 } from "@/lib/production-ui-types";
@@ -548,5 +559,110 @@ describe("normalizeDayDetail", () => {
     });
     expect(detail.naps).toEqual([]);
     expect(detail.workouts).toEqual([]);
+    expect(detail.tags).toEqual([]);
+  });
+});
+
+/** A local instant on 2026-10-`date` at `hh:mm`, as the API sends it. */
+function local(date: number, hour: number, minute = 0): string {
+  return new Date(2026, 9, date, hour, minute).toISOString();
+}
+
+function tag(id: string, extra: Partial<ActivityTagRow> = {}): ActivityTagRow {
+  return {
+    id,
+    day: "2026-10-21",
+    endDay: null,
+    typeCode: "tag_generic_caffeine",
+    customName: null,
+    name: "Caffeine",
+    startedAt: local(21, 7, 5),
+    endedAt: null,
+    seconds: null,
+    comment: null,
+    syncedAt: local(21, 23),
+    ...extra,
+  };
+}
+
+describe("tags from the Oura app", () => {
+  it("normalizes the API's tags, and a day's", () => {
+    const read = normalizeTags({
+      from: "2026-09-22",
+      to: "2026-10-21",
+      today: "2026-10-21",
+      tags: [
+        { ...tag("a"), seconds: "1200", endedAt: local(21, 18, 50), comment: undefined },
+        { ...tag("b"), name: "  ", typeCode: undefined, customName: undefined, endDay: undefined },
+      ],
+    } as unknown as ActivityTagsRead);
+    expect(read.tags[0]).toMatchObject({ seconds: 1_200, comment: null });
+    expect(read.tags[1]).toMatchObject({ name: "Tag", typeCode: null, customName: null, endDay: null, seconds: null });
+    expect(normalizeTags({ from: "a", to: "b", today: "b" } as unknown as ActivityTagsRead).tags).toEqual([]);
+
+    const detail = normalizeDayDetail({
+      day: "2026-10-21",
+      today: "2026-10-21",
+      summary: day("2026-10-21", null),
+      tags: [{ ...tag("c"), seconds: "300" }],
+    } as unknown as ActivityDayDetailRead);
+    expect(detail.tags).toEqual([tag("c", { seconds: 300 })]);
+  });
+
+  it("says when a tag was: a moment, a length, or over days", () => {
+    expect(tagWhen(tag("a"))).toBe(formatTime(local(21, 7, 5)));
+    expect(
+      tagWhen(tag("b", { startedAt: local(21, 18, 30), endedAt: local(21, 18, 50), endDay: "2026-10-21", seconds: 1_200 })),
+    ).toBe(`${formatTime(local(21, 18, 30))}–${formatTime(local(21, 18, 50))} · 20 min`);
+    expect(
+      tagWhen(
+        tag("c", {
+          day: "2026-10-18",
+          endDay: "2026-10-21",
+          startedAt: local(18, 9),
+          endedAt: local(21, 9),
+          seconds: 3 * 86_400,
+        }),
+      ),
+    ).toBe(`${formatTime(local(18, 9))} – ${formatWeekday("2026-10-21")}, ${formatTime(local(21, 9))} · 3 days`);
+    expect(tagLength(300)).toBe("5 min");
+    expect(tagLength(5_400)).toBe("1 h 30 min");
+    expect(tagLength(86_400)).toBe("1 day");
+    expect(tagLength(86_400 + 4 * 3_600)).toBe("1 day 4 h");
+  });
+
+  it("counts tags most used first, then by name", () => {
+    const tags = [tag("a"), tag("b", { name: "Alcohol" }), tag("c"), tag("d", { name: "Sauna" }), tag("e", { name: "Alcohol" }), tag("f")];
+    expect(tagCounts(tags)).toEqual([
+      { name: "Caffeine", count: 3 },
+      { name: "Alcohol", count: 2 },
+      { name: "Sauna", count: 1 },
+    ]);
+    expect(tagCounts([])).toEqual([]);
+  });
+
+  it("groups tags by the day they start, newest first", () => {
+    const groups = tagDays([
+      tag("a", { day: "2026-10-20", startedAt: local(20, 7) }),
+      tag("b", { day: "2026-10-21", startedAt: local(21, 7) }),
+      tag("c", { day: "2026-10-21", startedAt: local(21, 20) }),
+      tag("d", { day: "2026-10-18", startedAt: local(18, 9) }),
+    ]);
+    expect(groups.map((g) => [g.day, g.tags.map((t) => t.id)])).toEqual([
+      ["2026-10-21", ["c", "b"]],
+      ["2026-10-20", ["a"]],
+      ["2026-10-18", ["d"]],
+    ]);
+  });
+
+  it("words Oura's scopes and the card's ranges", () => {
+    expect(scopeWords(["tag"])).toBe("tags");
+    expect(scopeWords(["workout", "tag"])).toBe("workouts and tags");
+    expect(scopeWords(["daily", "workout", "tag"])).toBe("daily summaries, workouts and tags");
+    expect(scopeWords(["heartrate"])).toBe("heartrate");
+    expect(scopeWords([])).toBe("");
+    expect(tagRangeWords("30")).toBe("the last 30 days");
+    expect(tagRangeWords("90")).toBe("the last 90 days");
+    expect(tagRangeWords("365")).toBe("the last year");
   });
 });

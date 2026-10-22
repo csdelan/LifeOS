@@ -385,6 +385,30 @@ test.describe("golden paths", () => {
     await expect(exercise.getByTestId("workout-note").filter({ hasText: "Negative splits, felt easy" })).toBeVisible();
   });
 
+  test("Activity: tags from the Oura app counted, over 90 days, and a day's tags in its sheet", async ({ page }) => {
+    await page.goto("/activity");
+    const tags = page.getByRole("region", { name: "Tags", exact: true });
+    await expect(tags.getByTestId("tag-counts")).toContainText(/Caffeine \d+ · Alcohol \d+/, { timeout: 10_000 });
+    await expect(tags.getByTestId("tag-day")).toHaveCount(7);
+
+    // 90 days: the few days of a cold a month back come into the counts.
+    await tags.getByRole("button", { name: "90 days" }).click();
+    await expect(tags.getByTestId("tag-counts")).toContainText("in the last 90 days");
+    await expect(tags.getByTestId("tag-counts")).toContainText("Sick 1");
+    await expect(tags.getByRole("button", { name: "90 days" })).toHaveAttribute("aria-pressed", "true");
+
+    // A day from its heading: its tags in the sheet, earliest first, the comment under its tag.
+    await tags.getByTestId("tag-day").nth(2).getByRole("button", { name: /, open the day$/ }).click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("heading", { name: "2 tags" })).toBeVisible();
+    await expect(sheet.getByRole("list", { name: "Tags from the Oura app" }).getByTestId("day-tag")).toHaveText([
+      /^Caffeine/,
+      /^Alcohol.*Two IPAs with dinner$/,
+    ]);
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+  });
+
   test("Activity: last night, the sleep chart as Readiness, and a night in full with its contributors", async ({ page }) => {
     await page.goto("/activity");
     const sleep = page.getByRole("region", { name: "Sleep and readiness", exact: true });

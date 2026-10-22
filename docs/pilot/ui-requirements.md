@@ -67,7 +67,7 @@ requirements cluster and the ID says where it lives:
 | `CAL-` | Calendar / Appointments |
 | `REWARD-` | Rewards: currencies, redeeming, reward history, life-domain progression |
 | `FOOD-` | Food Log: food entries, fasts, diet XP |
-| `ACTIVITY-` | Activity: Oura steps, exercise, sleep and readiness, activity XP |
+| `ACTIVITY-` | Activity: Oura steps, exercise, sleep and readiness, activity XP, tags |
 | `NAV-` | Navigation shell |
 | `GEN-` | Cross-cutting conventions **and** per-subject-type object specs (Goals, Projects, Tasks, Identity Statements, Commitments, Decisions, Problems, People, Vision, …) |
 
@@ -3305,6 +3305,44 @@ Build:      building
 - Build stays `building` until A6's week of comparing the page with the Oura app, as
   ACTIVITY-1 to ACTIVITY-4 do.
 
+### ACTIVITY-6 — Tags I add in the Oura app are kept beside my health data
+Horizon:    Pilot
+Definition: active
+Build:      building
+
+**Workflow (Chris):**
+- "Does the Oura Ring API also report tagged events? In the Oura App, I can apply a tag to a
+  specific time which adds metadata that can correlate to the automatic health data. Is
+  this in the API too?" (2026-10-22)
+- "Yes I'd like to support recording tags too. Please implement" (2026-10-22)
+
+**Ontology fit (Claude):**
+- Maps to: each tag is an `observed` `observation` event from source `oura`, keyed by Oura's
+  id and versioned by content as workouts are (D14). `bsk.v_oura_tag` (migration 0039) folds
+  the newest version of each, leaving out tags deleted in the Oura app.
+- Kernel delta: the `tag` scope, Oura's Enhanced Tags in the client and the sync, `OuraTags`
+  (how a tag reads: "Late meal" from `tag_generic_late_meal`, a custom tag by its own name, a
+  text-only tag as "Note"), `GET /api/activity/tags`, the day's tags on `GET
+  /api/activity/day`, and `bsk oura tags`.
+- Implications:
+  - The connection made before this asked only for `daily workout`, so Chris reconnects Oura
+    once and allows tags. Until then the other data syncs as before, and the page asks for
+    the reconnect. The reconnect reads the history again, so past tags come in too.
+  - These aren't GEN-1 tags, which label items. Oura's tags are moments in a day and don't
+    become LifeOS tags.
+  - A comment on a tag is Chris's own words. Like the rest of Oura's data it never goes to an
+    AI model, and the purge covers it.
+  - Tags pay no XP.
+- Open decisions: none blocking. Reading a tag against the night after it ("sleep after
+  Alcohol") is later work (activity plan §6).
+
+**Update (2026-10-22 — tags landed, A10):** the sync reads tags once Oura allows them, and
+the Activity page has a Tags card (how often each came up over 30 days, 90 days or a year,
+and each day's tags with their times, lengths and comments). The day sheet lists the day's
+tags beside its sleep, readiness, steps and workouts. Build is `building` until Chris
+reconnects and compares the page with his tags in the Oura app.
+
+
 
 
 ---
@@ -3499,6 +3537,10 @@ day. Design and build order: [food-log-plan.md](food-log-plan.md).
 - **Days:** Oura's own day is kept as is.
 - **LifeOS's only write** is Chris's optional note on a workout: a `declared` `note` event
   keyed by the workout's Oura id.
+- **Tags (ACTIVITY-6, added 2026-10-22):** the tags Chris adds in the Oura app are
+  `observation` events from source `oura`, keyed by Oura's id, versioned and voided as
+  workouts are. They're read only once Oura grants the `tag` scope, and a connect that adds a
+  scope reads the history again.
 - **Tokens:** OAuth tokens are operational state, not part of the record. They're kept
   encrypted in a new `bsk_ops` schema that the reader role can't see.
 - **Phase 2:** activity XP will cite the versions it was priced from, so a revised day is
@@ -3609,10 +3651,11 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   a food entry, the cut above two drinks a day, the streak, a drinks count over any range,
   identical entries combined on the day's page, entries oldest first. — **Shipped** (F7–F9 in
   [food-log-plan.md](food-log-plan.md) §7, migration 0038).
-- **Oura integration** (ACTIVITY-1..4 / D14):
+- **Oura integration** (ACTIVITY-1..4, ACTIVITY-6 / D14):
   - an OAuth connection with encrypted tokens in `bsk_ops`
   - Oura records as `observed` events from source `oura`, versioned by content
-  - `v_activity_day`, `v_workout`, `v_sleep_period`, `v_sleep_day`, `v_readiness_day`
+  - `v_activity_day`, `v_workout`, `v_sleep_period`, `v_sleep_day`, `v_readiness_day`,
+    and the Oura app's tags in `v_oura_tag` (A10, migration 0039)
   - `ExerciseRules`, workout notes and `bsk oura`
   - the `/activity` page
 

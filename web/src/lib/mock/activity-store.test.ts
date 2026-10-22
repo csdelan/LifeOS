@@ -9,12 +9,14 @@ import {
   mockActivityDay,
   mockActivityDays,
   mockActivitySummary,
+  mockActivityTags,
   mockActivityWorkouts,
   mockAuthorizeOura,
   mockConnectOura,
   mockOuraStatus,
   mockSetWorkoutNote,
   mockSyncActivity,
+  ouraTagName,
   setMockOura,
 } from "@/lib/mock/activity-store";
 import { getState, mockActivityPaid, mockSettleActivity, mockSettleDomains, resetStore } from "@/lib/mock/store";
@@ -75,6 +77,64 @@ describe("the mock's workouts", () => {
     const reasons = new Set(workouts.filter((w) => !w.counted).map((w) => w.reason));
     expect(reasons).toEqual(new Set(["A walk: it's in your steps", "Detected by Oura", "Unknown source"]));
     expect(workouts.some((w) => w.note)).toBe(true);
+  });
+});
+
+describe("the mock's tags (activity plan §3.9)", () => {
+  it.each([
+    ["generic_happy", null, "Happy"],
+    ["generic_excited", null, "Excited"],
+    ["tag_generic_late_meal", null, "Late meal"],
+    ["tag_generic_alcohol", null, "Alcohol"],
+    ["tag_sauna", null, "Sauna"],
+    ["tableTennis", null, "Table tennis"],
+    ["generic_HIIT_class", null, "Hiit class"],
+    ["  generic_happy  ", null, "Happy"],
+    ["custom", "Hot tub", "Hot tub"],
+    ["CUSTOM", "  Hot tub ", "Hot tub"],
+    ["custom", null, "Custom tag"],
+    ["custom", "  ", "Custom tag"],
+    [null, null, "Note"],
+    ["", "Ignored", "Note"],
+    ["generic_", null, "Generic"],
+    ["tag_", null, "Tag"],
+  ])("names %j (custom name %j) as the kernel's OuraTags.Name does: %j", (code, customName, expected) => {
+    expect(ouraTagName(code, customName)).toBe(expected);
+  });
+
+  it("answers the 30 days through today, newest first", () => {
+    const read = mockActivityTags();
+    expect(read).toMatchObject({ from: addDays(today, -29), to: today, today });
+    expect(read.tags.length).toBeGreaterThan(20);
+    expect(read.tags.every((t) => t.day >= read.from && t.day <= read.to)).toBe(true);
+    const starts = read.tags.map((t) => t.startedAt);
+    expect(starts).toEqual([...starts].sort().reverse());
+    expect(read.tags.every((t) => t.name === ouraTagName(t.typeCode, t.customName))).toBe(true);
+  });
+
+  it("has a moment, a length, a custom tag, a note and days of being sick", () => {
+    const { tags } = mockActivityTags(addDays(today, -89), today);
+    const coffee = tags.find((t) => t.name === "Caffeine")!;
+    expect(coffee).toMatchObject({ endedAt: null, seconds: null, endDay: null });
+    expect(tags.find((t) => t.name === "Sauna")).toMatchObject({ seconds: 1_200 });
+    expect(tags.find((t) => t.typeCode === "custom")).toMatchObject({ name: "Cold plunge", customName: "Cold plunge", seconds: 300 });
+    expect(tags.find((t) => t.typeCode == null)).toMatchObject({ name: "Note", comment: "New mattress arrived" });
+    const sick = tags.find((t) => t.name === "Sick")!;
+    expect(sick).toMatchObject({ day: addDays(today, -33), endDay: addDays(today, -30), comment: "Head cold" });
+    expect(sick.seconds).toBeGreaterThanOrEqual(3 * 86_400 - 3_600);
+  });
+
+  it("is the same on every load and refuses a range the API wouldn't", () => {
+    const first = mockActivityTags();
+    resetStore();
+    expect(mockActivityTags()).toEqual(first);
+    expect(() => mockActivityTags(today, addDays(today, -1))).toThrow(/before it starts/);
+    expect(() => mockActivityTags(addDays(today, -MAX_RANGE_DAYS), today)).toThrow(/up to 731 days/);
+  });
+
+  it("allows tags when connected", () => {
+    expect(mockActivitySummary().oura.scopes).toEqual(["daily", "workout", "tag"]);
+    expect(mockActivitySummary().oura.missingScopes).toEqual([]);
   });
 });
 
@@ -197,6 +257,13 @@ describe("one day in the mock", () => {
     expect(read.workouts.every((w) => w.day === busy.day)).toBe(true);
     const starts = read.workouts.map((w) => w.startedAt);
     expect(starts).toEqual([...starts].sort());
+  });
+
+  it("lists the day's tags earliest first", () => {
+    const read = mockActivityDay(addDays(today, -2));
+    expect(read.tags.map((t) => t.name)).toEqual(["Caffeine", "Alcohol"]);
+    expect(read.tags.every((t) => t.day === read.day)).toBe(true);
+    expect(read.tags[1].comment).toBe("Two IPAs with dinner");
   });
 
   it("refuses something that isn't a date", () => {

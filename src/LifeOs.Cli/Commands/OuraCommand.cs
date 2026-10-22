@@ -8,8 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace LifeOs.Cli.Commands;
 
 /// <summary>
-/// <c>bsk oura</c> — the Oura connection and what it brings in (ACTIVITY-1..4, activity plan
-/// §3.1, §3.6). The CLI never connects: it uses the connection made on the Activity page, with
+/// <c>bsk oura</c> — the Oura connection and what it brings in (ACTIVITY-1..4, ACTIVITY-6,
+/// activity plan §3.1, §3.6, §3.9). The CLI never connects: it uses the connection made on the Activity page, with
 /// <c>Oura__ClientId</c>, <c>Oura__ClientSecret</c> and <c>Integrations__TokenKey</c> from the
 /// environment. The database it points at decides which connection that is (dev and staging
 /// each have their own).
@@ -19,7 +19,7 @@ namespace LifeOs.Cli.Commands;
 /// refreshing works (activity plan A6).</item>
 /// <item><c>bsk oura sync [--from &lt;date&gt;]</c> — reads the last 14 days and the rest of
 /// the history; with <c>--from</c>, every day since then.</item>
-/// <item><c>bsk oura steps | workouts | sleep [--days N]</c> — what LifeOS holds.</item>
+/// <item><c>bsk oura steps | workouts | sleep | tags [--days N]</c> — what LifeOS holds.</item>
 /// <item><c>bsk oura note &lt;workout&gt; "text" | --clear</c> — a one-line note on a workout.</item>
 /// </list>
 /// </summary>
@@ -30,13 +30,15 @@ internal static class OuraCommand
     public static Command Create(Option<string?> connectionOption, Option<bool> jsonOption)
     {
         var command = new Command(
-            "oura", "Your Oura Ring: 'oura status', 'oura sync', 'oura steps', 'oura workouts', 'oura sleep', 'oura note'.");
+            "oura",
+            "Your Oura Ring: 'oura status', 'oura sync', 'oura steps', 'oura workouts', 'oura sleep', 'oura tags', 'oura note'.");
         command.Subcommands.Add(CreateStatus(connectionOption, jsonOption));
         command.Subcommands.Add(CreateRefresh(connectionOption, jsonOption));
         command.Subcommands.Add(CreateSync(connectionOption, jsonOption));
         command.Subcommands.Add(CreateSteps(connectionOption, jsonOption));
         command.Subcommands.Add(CreateWorkouts(connectionOption, jsonOption));
         command.Subcommands.Add(CreateSleep(connectionOption, jsonOption));
+        command.Subcommands.Add(CreateTags(connectionOption, jsonOption));
         command.Subcommands.Add(CreateNote(connectionOption, jsonOption));
         return command;
     }
@@ -283,6 +285,55 @@ internal static class OuraCommand
         return command;
     }
 
+    private static Command CreateTags(Option<string?> connectionOption, Option<bool> jsonOption)
+    {
+        var daysOption = DaysOption(30);
+        var command = new Command("tags", "Tags you added in the Oura app, newest first, with their comments.");
+        command.Options.Add(daysOption);
+        command.SetAction((parseResult, cancellationToken) =>
+        {
+            var days = parseResult.GetValue(daysOption);
+            return Run(parseResult, connectionOption, jsonOption, async (services, asJson, ct) =>
+            {
+                var reads = services.GetRequiredService<ActivityReads>();
+                var (from, to) = await reads.LastDaysAsync(days, ct);
+                var tags = await reads.GetTagsAsync(from, to, ct);
+                if (asJson)
+                {
+                    Cli.WriteJson(tags.Select(TagJson));
+                    return;
+                }
+
+                if (tags.Count == 0)
+                {
+                    var status = await services.GetRequiredService<OuraConnectionService>().GetStatusAsync(ct);
+                    Console.WriteLine(status.MissingScopes.Contains(OuraConnectionService.TagScope)
+                        ? "Oura hasn't allowed LifeOS to read tags: reconnect Oura on the Activity page and allow them."
+                        : $"No Oura tags from {Day(from)} to {Day(to)}. Run 'bsk oura sync'.");
+                    return;
+                }
+
+                foreach (var day in tags.GroupBy(t => t.Day))
+                {
+                    Console.WriteLine($"{Day(day.Key)} {WeekDay(day.Key)}");
+                    foreach (var tag in day.OrderBy(t => t.StartedAt))
+                    {
+                        var when = tag.EndedAt is { } end
+                            ? $"{Clock(tag.StartedAt)}–{Clock(end)}"
+                            : Clock(tag.StartedAt);
+                        var length = tag.Seconds is { } seconds ? $" ({Minutes(seconds)})" : "";
+                        Console.WriteLine($"  {when,-11} {tag.Name}{length}");
+                        if (tag.Comment is { } comment)
+                        {
+                            Console.WriteLine($"              “{comment}”");
+                        }
+                    }
+                }
+            }, cancellationToken);
+        });
+        return command;
+    }
+
     // ---------------------------------------------------------------------------------
     // note
     // ---------------------------------------------------------------------------------
@@ -366,6 +417,21 @@ internal static class OuraCommand
         workout.Note,
         workout.NoteAt,
         workout.SyncedAt
+    };
+
+    private static object TagJson(ActivityTag tag) => new
+    {
+        tag.Id,
+        tag.Day,
+        tag.EndDay,
+        tag.TypeCode,
+        tag.CustomName,
+        tag.Name,
+        tag.StartedAt,
+        tag.EndedAt,
+        tag.Seconds,
+        tag.Comment,
+        tag.SyncedAt
     };
 
     private static void WriteWorkout(Workout workout)

@@ -66,6 +66,7 @@ export const qk = {
   activitySummary: ["activity", "summary"] as const,
   activityDays: (from: string, to: string) => ["activity", "days", from, to] as const,
   activityWorkouts: (from: string, to: string) => ["activity", "workouts", from, to] as const,
+  activityTags: (from: string, to: string) => ["activity", "tags", from, to] as const,
   activityDay: (date: string) => ["activity", "day", date] as const,
   ouraStatus: ["activity", "oura"] as const,
   ledger: ["ledger"] as const,
@@ -812,6 +813,16 @@ export function useActivityWorkouts(from: string, to: string, enabled = true) {
   return useQuery({
     queryKey: qk.activityWorkouts(from, to),
     queryFn: () => reads().activityWorkouts(from, to),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Tags from the Oura app starting from `from` to `to`, newest first: the Tags card. */
+export function useActivityTags(from: string, to: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.activityTags(from, to),
+    queryFn: () => reads().activityTags(from, to),
     enabled,
     placeholderData: keepPreviousData,
   });

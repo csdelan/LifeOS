@@ -7,13 +7,14 @@ import { DaySheet } from "@/components/activity/day-sheet";
 import { ExerciseCard } from "@/components/activity/exercise-card";
 import { SleepCard } from "@/components/activity/sleep-card";
 import { StepsCard } from "@/components/activity/steps-card";
+import { TagsCard } from "@/components/activity/tags-card";
 import { TodayCard } from "@/components/activity/today-card";
 import { errorText, returnError, useConnectOura } from "@/components/activity/use-connect-oura";
 import { WorkoutSheet } from "@/components/activity/workout-sheet";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton } from "@/components/primitives/skeletons";
 import { Button } from "@/components/ui/button";
-import { asSentence, syncedAgo } from "@/lib/activity";
+import { asSentence, scopeWords, syncedAgo } from "@/lib/activity";
 import type { OuraStatus, WorkoutRow } from "@/lib/production-ui-types";
 import { useActivitySummary, useWrites } from "@/lib/queries";
 import { useNow } from "@/lib/timer";
@@ -152,7 +153,7 @@ export function ActivityPage() {
                   </Button>
                 }
               >
-                Oura didn't allow {oura.missingScopes.join(" and ")}: reconnect and allow it so LifeOS can read
+                Oura didn't allow {scopeWords(oura.missingScopes)}: reconnect and allow them so LifeOS can read
                 everything.
               </Banner>
             ) : null}
@@ -170,6 +171,7 @@ export function ActivityPage() {
                 <div className="min-w-0 space-y-4">
                   <TodayCard summary={data} onOpenWorkout={openWorkout} onOpenDay={openDay} />
                   <StepsCard summary={data} />
+                  <TagsCard summary={data} onOpenDay={openDay} />
                 </div>
                 <div className="min-w-0 space-y-4">
                   <SleepCard summary={data} onOpenDay={openDay} />

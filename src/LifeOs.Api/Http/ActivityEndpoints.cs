@@ -9,7 +9,8 @@ namespace LifeOs.Api.Http;
 /// <see cref="ActivityReader"/> on the reader connection; the one write, a workout's note,
 /// through <see cref="WorkoutNoteService"/>; syncing through <see cref="OuraSyncService"/>.
 /// <list type="bullet">
-/// <item><c>GET /days?from&amp;to</c>, <c>GET /workouts?from&amp;to</c>, <c>GET /day?date=</c> and
+/// <item><c>GET /days?from&amp;to</c>, <c>GET /workouts?from&amp;to</c>, <c>GET /tags?from&amp;to</c>
+/// (the tags Chris adds in the Oura app, activity plan §3.9), <c>GET /day?date=</c> and
 /// <c>GET /summary</c> answer what LifeOS holds; they never call Oura.</item>
 /// <item><c>POST /workouts/{id}/note</c> sets the note (an empty text clears it) and answers the
 /// workout. A note LifeOS refuses is a 400 in words; a workout it doesn't hold, a 404.</item>
@@ -34,6 +35,9 @@ public static class ActivityEndpoints
         api.MapGet("/workouts", GetWorkouts).WithName("GetActivityWorkouts")
             .Produces<ActivityWorkoutsRead>()
             .Produces<ApiError>(StatusCodes.Status400BadRequest);
+        api.MapGet("/tags", GetTags).WithName("GetActivityTags")
+            .Produces<ActivityTagsRead>()
+            .Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/workouts/{id}/note", SetNote).WithName("SetWorkoutNote")
             .Produces<WorkoutRow>()
             .Produces<ApiError>(StatusCodes.Status400BadRequest)
@@ -57,6 +61,10 @@ public static class ActivityEndpoints
     private static async Task<IResult> GetWorkouts(
         DateOnly? from, DateOnly? to, ActivityReader activity, CancellationToken cancellationToken)
         => Results.Ok(await activity.GetWorkoutsAsync(from, to, cancellationToken));
+
+    private static async Task<IResult> GetTags(
+        DateOnly? from, DateOnly? to, ActivityReader activity, CancellationToken cancellationToken)
+        => Results.Ok(await activity.GetTagsAsync(from, to, cancellationToken));
 
     private static async Task<IResult> GetDay(DateOnly? date, ActivityReader activity, CancellationToken cancellationToken)
         => Results.Ok(await activity.GetDayAsync(date, cancellationToken));

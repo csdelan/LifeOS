@@ -10,8 +10,8 @@ using LifeOs.Domain;
 namespace LifeOs.Infrastructure.Integrations;
 
 /// <summary>
-/// Oura's API v2 over HTTP (activity plan §3.1, §3.3): a small hand-written client for the OAuth
-/// calls and the five collections LifeOS keeps, read into trimmed records.
+/// Oura's API v2 over HTTP (activity plan §3.1, §3.3, §3.9): a small hand-written client for the
+/// OAuth calls and the collections LifeOS keeps, read into trimmed records.
 /// <list type="bullet">
 /// <item>Token calls post a form with the client id and secret, as Oura documents.</item>
 /// <item>A 400, 401 or 403 from the token endpoint is <see cref="OuraGrantException"/>;
@@ -122,6 +122,10 @@ public sealed class OuraHttpClient(HttpClient http, OuraOptions options, IClock 
     public Task<IReadOnlyList<OuraSleepPeriod>> GetSleepPeriodsAsync(
         string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
         => GetCollectionAsync(accessToken, OuraCollections.Sleep.Name, start, end, ReadSleepPeriod, cancellationToken);
+
+    public Task<IReadOnlyList<OuraTag>> GetTagsAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => GetCollectionAsync(accessToken, OuraCollections.Tag.Name, start, end, ReadTag, cancellationToken);
 
     private async Task<IReadOnlyList<T>> GetCollectionAsync<T>(
         string accessToken, string collection, DateOnly start, DateOnly end, Func<JsonElement, T?> read,
@@ -284,8 +288,24 @@ public sealed class OuraHttpClient(HttpClient http, OuraOptions options, IClock 
                 Number(item, "average_heart_rate") is { } hr ? Math.Round(hr, 1) : null,
                 Int(item, "lowest_heart_rate"));
 
-    private static DateOnly? Day(JsonElement item)
-        => Text(item, "day") is { } text
+    // An Enhanced Tag (spec 1.42's EnhancedTagModel): its day is the one it starts on.
+    private static OuraTag? ReadTag(JsonElement item)
+        => Text(item, "id") is not { Length: > 0 } id
+           || Day(item, "start_day") is not { } day
+           || Time(item, "start_time") is not { } start
+            ? null
+            : new OuraTag(
+                id,
+                day,
+                Day(item, "end_day"),
+                Text(item, "tag_type_code"),
+                Text(item, "custom_name"),
+                start,
+                Time(item, "end_time"),
+                Text(item, "comment"));
+
+    private static DateOnly? Day(JsonElement item, string name = "day")
+        => Text(item, name) is { } text
            && DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day)
             ? day
             : null;

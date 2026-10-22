@@ -8,7 +8,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { dayName } from "@/lib/activity";
 import { addDays, todayIso } from "@/lib/dates";
 import { mockReads } from "@/lib/mock/api";
-import { mockActivityDay, mockActivityWorkouts, mockAuthorizeOura, setMockOura } from "@/lib/mock/activity-store";
+import {
+  mockActivityDay,
+  mockActivityTags,
+  mockActivityWorkouts,
+  mockAuthorizeOura,
+  setMockOura,
+} from "@/lib/mock/activity-store";
 import { resetStore } from "@/lib/mock/store";
 import { createMockWriteClient } from "@/lib/mock/write-client";
 import type { LifeOsWriteClient } from "@/lib/production-ui-types";
@@ -415,6 +421,133 @@ describe("Sleep and readiness (activity plan §3.7, ACTIVITY-4)", () => {
     const sheet = await screen.findByRole("dialog", { name: "Today" });
     expect(
       await within(sheet).findByText("Last night hasn't reached LifeOS yet: open the Oura app to sync it."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("Tags from the Oura app (activity plan §3.9, ACTIVITY-6)", () => {
+  const tagsCard = () => card("Tags");
+
+  it("counts the tags, most used first, and lists them newest first by day", async () => {
+    renderPage();
+    const tags = await tagsCard();
+    const counts = await tags.findByTestId("tag-counts");
+    expect(counts).toHaveTextContent(/^How often each tag came up in the last 30 days: Caffeine \d+ · Alcohol \d+ · /);
+
+    const days = tags.getAllByTestId("tag-day");
+    expect(days).toHaveLength(7);
+    expect(within(days[0]).getByRole("heading", { level: 3 })).toHaveTextContent(/^Today/);
+    expect(within(days[2]).getAllByTestId("tag-row").map((r) => r.textContent)).toEqual([
+      expect.stringMatching(/^Alcohol.*Two IPAs with dinner$/),
+      expect.stringMatching(/^Caffeine/),
+    ]);
+
+    const more = tags.getByRole("button", { name: /^Show \d+ more days$/ });
+    expect(more).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(more);
+    expect(tags.getAllByTestId("tag-day").length).toBeGreaterThan(20);
+    expect(tags.getByRole("button", { name: "Show fewer days" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("shows a tag's length, and a note by its words", async () => {
+    renderPage();
+    const tags = await tagsCard();
+    await tags.findByTestId("tag-counts");
+    await userEvent.click(tags.getByRole("button", { name: /^Show \d+ more days$/ }));
+    const rows = tags.getAllByTestId("tag-row");
+    expect(rows.find((r) => r.textContent?.startsWith("Cold plunge"))).toHaveTextContent(/–.* · 5 min$/);
+    expect(rows.find((r) => r.textContent?.startsWith("Sauna"))).toHaveTextContent(/ · 20 min/);
+    expect(rows.find((r) => r.textContent?.startsWith("Note"))).toHaveTextContent(/New mattress arrived$/);
+  });
+
+  it("opens a day from its heading, with the day's tags in the sheet", async () => {
+    renderPage();
+    const tags = await tagsCard();
+    const day = addDays(todayIso(), -2);
+    await userEvent.click(await tags.findByRole("button", { name: `${dayName(day, todayIso())}, open the day` }));
+    const sheet = await screen.findByRole("dialog", { name: dayName(day, todayIso()) });
+    expect(await within(sheet).findByRole("heading", { name: "2 tags" })).toBeInTheDocument();
+    const list = within(sheet).getByRole("list", { name: "Tags from the Oura app" });
+    expect(within(list).getAllByTestId("day-tag").map((r) => r.textContent)).toEqual([
+      expect.stringMatching(/^Caffeine/),
+      expect.stringMatching(/^Alcohol.*Two IPAs with dinner$/),
+    ]);
+  });
+
+  it("shows a day's tags when Oura has nothing for its night", async () => {
+    const spy = vi.spyOn(mockReads, "activityDay").mockImplementation(async (date) => {
+      const d = mockActivityDay(date);
+      return {
+        ...d,
+        summary: { ...d.summary, sleepScore: null, readinessScore: null, asleepS: null, inBedS: null },
+        night: null,
+        naps: [],
+      };
+    });
+    onTestFinished(() => spy.mockRestore());
+
+    renderPage();
+    await userEvent.click(await (await card("Today")).findByRole("button", { name: "Last night in full" }));
+    const sheet = await screen.findByRole("dialog", { name: "Today" });
+    expect(await within(sheet).findByText(/^Last night hasn't reached LifeOS yet/)).toBeInTheDocument();
+    expect(within(sheet).getByRole("heading", { name: "A tag" })).toBeInTheDocument();
+    expect(within(sheet).getByTestId("day-tag")).toHaveTextContent(/^Caffeine/);
+  });
+
+  it("switches to 90 days and remembers it", async () => {
+    const view = renderPage();
+    const tags = await tagsCard();
+    await tags.findByTestId("tag-counts");
+    await userEvent.click(tags.getByRole("button", { name: "90 days" }));
+    await waitFor(() => expect(tags.getByTestId("tag-counts")).toHaveTextContent(/in the last 90 days: .*Sick 1/));
+
+    view.unmount();
+    renderPage();
+    const again = await tagsCard();
+    expect(await again.findByTestId("tag-counts")).toHaveTextContent(/Sick 1/);
+    expect(again.getByRole("button", { name: "90 days" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("says when there are no tags", async () => {
+    const spy = vi
+      .spyOn(mockReads, "activityTags")
+      .mockImplementation(async (from, to) => ({ ...mockActivityTags(from, to), tags: [] }));
+    onTestFinished(() => spy.mockRestore());
+    renderPage();
+    expect(
+      await (await tagsCard()).findByText(
+        "No tags in the last 30 days. Tags you add in the Oura app, like a coffee, a drink or the sauna, show here after a sync.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("asks to reconnect when Oura didn't allow tags, in words", async () => {
+    setMockOura({ scopes: ["daily", "workout"], missingScopes: ["tag"] });
+    const spy = vi
+      .spyOn(mockReads, "activityTags")
+      .mockImplementation(async (from, to) => ({ ...mockActivityTags(from, to), tags: [] }));
+    onTestFinished(() => spy.mockRestore());
+    renderPage();
+    const banner = await screen.findByRole("alert");
+    expect(banner).toHaveTextContent("Oura didn't allow tags: reconnect and allow them so LifeOS can read everything.");
+    expect(within(banner).getByRole("button", { name: "Reconnect Oura" })).toBeInTheDocument();
+    expect(
+      await (await tagsCard()).findByText(
+        "Oura didn't allow tags, so LifeOS can't read them. Reconnect Oura and allow tags to see them here.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("words more than one missing scope", async () => {
+    setMockOura({ scopes: ["daily"], missingScopes: ["workout", "tag"] });
+    renderPage();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Oura didn't allow workouts and tags: reconnect and allow them so LifeOS can read everything.",
+    );
+    expect(
+      await (await tagsCard()).findByText(
+        "Oura didn't allow tags, so new ones won't show until you reconnect Oura and allow them.",
+      ),
     ).toBeInTheDocument();
   });
 });

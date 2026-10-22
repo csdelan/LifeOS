@@ -14,6 +14,8 @@ import type {
   ActivityPaid,
   ActivitySummaryRead,
   ActivitySyncResult,
+  ActivityTagRow,
+  ActivityTagsRead,
   ActivityWeekRow,
   ActivityWorkoutsRead,
   OuraState,
@@ -195,6 +197,26 @@ function contributors(raw: Record<string, unknown> | null | undefined): Record<s
   return Object.fromEntries(Object.entries(raw ?? {}).map(([k, v]) => [k, numOrNull(v)]));
 }
 
+export function normalizeTag(raw: ActivityTagRow): ActivityTagRow {
+  return {
+    id: raw.id,
+    day: raw.day,
+    endDay: raw.endDay ?? null,
+    typeCode: raw.typeCode ?? null,
+    customName: raw.customName ?? null,
+    name: raw.name?.trim() || "Tag",
+    startedAt: raw.startedAt,
+    endedAt: raw.endedAt ?? null,
+    seconds: numOrNull(raw.seconds),
+    comment: raw.comment ?? null,
+    syncedAt: raw.syncedAt,
+  };
+}
+
+export function normalizeTags(raw: ActivityTagsRead): ActivityTagsRead {
+  return { from: raw.from, to: raw.to, today: raw.today, tags: (raw.tags ?? []).map(normalizeTag) };
+}
+
 export function normalizeDayDetail(raw: ActivityDayDetailRead): ActivityDayDetailRead {
   return {
     day: raw.day,
@@ -209,6 +231,7 @@ export function normalizeDayDetail(raw: ActivityDayDetailRead): ActivityDayDetai
     night: raw.night ? normalizeSleepPeriod(raw.night) : null,
     naps: (raw.naps ?? []).map(normalizeSleepPeriod),
     workouts: (raw.workouts ?? []).map(normalizeWorkout),
+    tags: (raw.tags ?? []).map(normalizeTag),
   };
 }
 
@@ -699,6 +722,72 @@ export function formatTemperature(deviation: number): string {
   const rounded = Math.round(deviation * 10) / 10;
   const sign = rounded > 0 ? "+" : rounded < 0 ? "−" : "±";
   return `${sign}${Math.abs(rounded).toFixed(1)} °C`;
+}
+
+// ---------------------------------------------------------------------------
+// Tags from the Oura app (ACTIVITY-6, activity plan §3.9)
+// ---------------------------------------------------------------------------
+
+/** A tag's length: "20 min", "1 h 30 min", or over a day "3 days" and "1 day 4 h". */
+export function tagLength(seconds: number): string {
+  if (seconds < 86_400) return formatDuration(seconds);
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.round((seconds % 86_400) / 3_600);
+  return `${days} day${days === 1 ? "" : "s"}${hours > 0 && hours < 24 ? ` ${hours} h` : ""}`;
+}
+
+/**
+ * When a tag was: "7:02 AM" for a moment, "6:30 PM–6:50 PM · 20 min" for one with a length, and
+ * "9:00 AM – Sat, Oct 4, 9:00 AM · 3 days" for one that ends on another day.
+ */
+export function tagWhen(tag: Pick<ActivityTagRow, "day" | "endDay" | "startedAt" | "endedAt" | "seconds">): string {
+  if (!tag.endedAt) return formatTime(tag.startedAt);
+  const length = tag.seconds != null && tag.seconds > 0 ? ` · ${tagLength(tag.seconds)}` : "";
+  if (tag.endDay && tag.endDay !== tag.day) {
+    return `${formatTime(tag.startedAt)} – ${formatWeekday(tag.endDay)}, ${formatTime(tag.endedAt)}${length}`;
+  }
+  return `${formatTime(tag.startedAt)}–${formatTime(tag.endedAt)}${length}`;
+}
+
+/** How often each tag came up, most used first, then by name. */
+export function tagCounts(tags: Pick<ActivityTagRow, "name">[]): { name: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const t of tags) counts.set(t.name, (counts.get(t.name) ?? 0) + 1);
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+/** Tags grouped by the day they start, newest day first, each day's newest first. */
+export function tagDays<T extends Pick<ActivityTagRow, "day" | "startedAt">>(tags: T[]): { day: string; tags: T[] }[] {
+  const days = new Map<string, T[]>();
+  for (const t of [...tags].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))) {
+    days.set(t.day, [...(days.get(t.day) ?? []), t]);
+  }
+  return [...days.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([day, list]) => ({ day, tags: list }));
+}
+
+/** The first day the Tags card asks for: the range's days, or a year of whole weeks. */
+export function tagsFrom(range: MetricRange, today: string): string {
+  return rangeStart(range, today);
+}
+
+/** The Tags card's range in words: "the last 30 days", "the last 90 days", "the last year". */
+export function tagRangeWords(range: MetricRange): string {
+  return range === "365" ? "the last year" : `the last ${range} days`;
+}
+
+const SCOPE_WORDS: Record<string, string> = {
+  daily: "daily summaries",
+  workout: "workouts",
+  tag: "tags",
+};
+
+/** Oura's scopes in words: "tags", "workouts and tags", "daily summaries, workouts and tags". */
+export function scopeWords(scopes: string[]): string {
+  const words = scopes.map((s) => SCOPE_WORDS[s.trim().toLowerCase()] ?? s);
+  if (words.length <= 1) return words.join("");
+  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }
 
 // ---------------------------------------------------------------------------

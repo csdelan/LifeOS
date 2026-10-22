@@ -29,7 +29,7 @@ public sealed class OuraStatusRead
     /// <summary>When the current access token lapses; it's refreshed before then.</summary>
     public DateTimeOffset? ExpiresAt { get; set; }
 
-    /// <summary>The scopes Oura granted (<c>daily</c>, <c>workout</c>).</summary>
+    /// <summary>The scopes Oura granted (<c>daily</c>, <c>workout</c>, <c>tag</c>).</summary>
     public IReadOnlyList<string> Scopes { get; set; } = [];
 
     /// <summary>Scopes LifeOS asked for that Oura didn't grant: the page asks to reconnect with them.</summary>
@@ -183,6 +183,52 @@ public sealed class ActivityWorkoutsRead
     public IReadOnlyList<WorkoutRow> Workouts { get; set; } = [];
 }
 
+/// <summary>
+/// A tag Chris added in the Oura app (ACTIVITY-6, activity plan §3.9): a moment, or a stretch
+/// when it has an end. <see cref="Name"/> is how LifeOS words it; <see cref="TypeCode"/> and
+/// <see cref="CustomName"/> are Oura's own.
+/// </summary>
+public sealed class ActivityTagRow
+{
+    public string Id { get; set; } = "";
+
+    /// <summary>The day it starts (yyyy-MM-dd), Oura's <c>start_day</c>.</summary>
+    public string Day { get; set; } = "";
+
+    /// <summary>The day it ends, for a tag with a length.</summary>
+    public string? EndDay { get; set; }
+
+    /// <summary>Oura's tag code: the tag picked, <c>custom</c> for one Chris named, or null for a text-only tag.</summary>
+    public string? TypeCode { get; set; }
+
+    public string? CustomName { get; set; }
+
+    /// <summary>How it reads ("Late meal", a custom tag's own name, or "Note" for a text-only tag).</summary>
+    public string Name { get; set; } = "";
+
+    public DateTimeOffset StartedAt { get; set; }
+
+    /// <summary>When it ended; null for a moment.</summary>
+    public DateTimeOffset? EndedAt { get; set; }
+
+    /// <summary>How long it lasted, in seconds; null for a moment.</summary>
+    public int? Seconds { get; set; }
+
+    /// <summary>Chris's own words on it in the Oura app.</summary>
+    public string? Comment { get; set; }
+
+    public DateTimeOffset SyncedAt { get; set; }
+}
+
+/// <summary><c>GET /api/activity/tags?from&amp;to</c>: live tags starting on those days, newest first.</summary>
+public sealed class ActivityTagsRead
+{
+    public string From { get; set; } = "";
+    public string To { get; set; } = "";
+    public string Today { get; set; } = "";
+    public IReadOnlyList<ActivityTagRow> Tags { get; set; } = [];
+}
+
 /// <summary>A sleep period: the night or a nap, with its stages. Durations are in seconds.</summary>
 public sealed class SleepPeriodRow
 {
@@ -209,7 +255,8 @@ public sealed class SleepPeriodRow
 /// <summary>
 /// <c>GET /api/activity/day?date=</c>: one day in full, for the detail sheet — the day's row,
 /// both scores' contributors (by Oura's names, null where Oura gave none), the temperature
-/// deviation, the night with its stages, the naps, and the day's workouts, earliest first.
+/// deviation, the night with its stages, the naps, and the day's workouts and tags from the Oura
+/// app, each earliest first.
 /// </summary>
 public sealed class ActivityDayDetailRead
 {
@@ -228,6 +275,9 @@ public sealed class ActivityDayDetailRead
     public SleepPeriodRow? Night { get; set; }
     public IReadOnlyList<SleepPeriodRow> Naps { get; set; } = [];
     public IReadOnlyList<WorkoutRow> Workouts { get; set; } = [];
+
+    /// <summary>The tags starting on the day (activity plan §3.9), earliest first.</summary>
+    public IReadOnlyList<ActivityTagRow> Tags { get; set; } = [];
 }
 
 /// <summary>
@@ -378,6 +428,21 @@ public static class ActivityRows
             SyncedAt = workout.SyncedAt,
         };
     }
+
+    public static ActivityTagRow From(ActivityTag tag) => new()
+    {
+        Id = tag.Id,
+        Day = Day(tag.Day),
+        EndDay = tag.EndDay is { } end ? Day(end) : null,
+        TypeCode = tag.TypeCode,
+        CustomName = tag.CustomName,
+        Name = tag.Name,
+        StartedAt = tag.StartedAt,
+        EndedAt = tag.EndedAt,
+        Seconds = tag.Seconds,
+        Comment = tag.Comment,
+        SyncedAt = tag.SyncedAt,
+    };
 
     public static SleepPeriodRow From(SleepPeriod period) => new()
     {

@@ -52,7 +52,7 @@ public sealed class OuraHttpClientTests
         Assert.Equal("code", query["response_type"]);
         Assert.Equal("client-123", query["client_id"]);
         Assert.Equal(Redirect.AbsoluteUri, query["redirect_uri"]);
-        Assert.Equal("daily workout", query["scope"]);
+        Assert.Equal("daily workout tag", query["scope"]);
         Assert.Equal("state-1", query["state"]);
         Assert.Equal("challenge-1", query["code_challenge"]);
         Assert.Equal("S256", query["code_challenge_method"]);
@@ -258,6 +258,50 @@ public sealed class OuraHttpClientTests
         var nap = periods[1];
         Assert.Equal((3000, 2370, 30, 200, 58, 24), (nap.InBedS, nap.AsleepS, nap.DeepS, nap.LightS, nap.RemS, nap.AwakeS));
         Assert.Equal((50, 70, 56, 64.0, 54), (nap.LatencyS, nap.Efficiency, nap.AverageHrv, nap.AverageHr, nap.LowestHr));
+    }
+
+    [Fact]
+    public async Task Tags_read_from_the_sandbox_shape_and_keep_what_oura_gives()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (sandbox, handler) = Create(Json(HttpStatusCode.OK, Fixture("enhanced_tag")));
+
+        var tags = await sandbox.GetTagsAsync("access-1", Start, End, ct);
+
+        Assert.Equal(
+            "https://api.ouraring.com/v2/usercollection/enhanced_tag?start_date=2026-09-29&end_date=2026-10-04",
+            Assert.Single(handler.Requests).Uri);
+        Assert.Equal(["enhanced_tag-0-2026-10-1", "enhanced_tag-1-2026-10-2"], tags.Select(t => t.Id));
+        var happy = tags[0];
+        Assert.Equal((new DateOnly(2026, 10, 1), "generic_happy", "I work at Oura"), (happy.Day, happy.TypeCode, happy.Comment));
+        Assert.Equal(new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero), happy.Start);
+        Assert.Null(happy.End);
+        Assert.Null(happy.EndDay);
+        Assert.Null(happy.CustomName);
+
+        // A custom tag with a length, a text-only one, and records without an id, a start day
+        // or a start time, which are skipped.
+        var (client, _) = Create(Json(HttpStatusCode.OK, """
+            {"data":[
+              {"id":"t1","tag_type_code":"custom","custom_name":"Hot tub","start_time":"2026-10-01T21:00:00-07:00",
+               "end_time":"2026-10-01T21:25:00-07:00","start_day":"2026-10-01","end_day":"2026-10-01","comment":null},
+              {"id":"t2","tag_type_code":null,"start_time":"2026-10-02T08:00:00-07:00","start_day":"2026-10-02",
+               "comment":"Knee sore after the run"},
+              {"tag_type_code":"generic_happy","start_time":"2026-10-02T08:00:00-07:00","start_day":"2026-10-02"},
+              {"id":"t4","tag_type_code":"generic_happy","start_time":"2026-10-02T08:00:00-07:00"},
+              {"id":"t5","tag_type_code":"generic_happy","start_day":"2026-10-02"}
+            ],"next_token":null}
+            """));
+
+        var mixed = await client.GetTagsAsync("a", Start, End, ct);
+
+        Assert.Equal(["t1", "t2"], mixed.Select(t => t.Id));
+        var tub = mixed[0];
+        Assert.Equal(("custom", "Hot tub"), (tub.TypeCode, tub.CustomName));
+        Assert.Equal(TimeSpan.FromMinutes(25), tub.End - tub.Start);
+        Assert.Equal(TimeSpan.FromHours(-7), tub.Start.Offset);
+        Assert.Equal(new DateOnly(2026, 10, 1), tub.EndDay);
+        Assert.Equal((null, "Knee sore after the run"), (mixed[1].TypeCode, mixed[1].Comment));
     }
 
     [Fact]

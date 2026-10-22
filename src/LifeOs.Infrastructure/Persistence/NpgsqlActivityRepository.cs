@@ -66,6 +66,13 @@ public sealed class NpgsqlActivityRepository(string connectionString) : IActivit
         FROM bsk.v_sleep_period
         """;
 
+    private const string TagSql = """
+        SELECT tag_id AS id, to_char(day, 'YYYY-MM-DD') AS day, to_char(end_day, 'YYYY-MM-DD') AS endday,
+               type_code AS typecode, custom_name AS customname, started_at AS startedat,
+               ended_at AS endedat, comment, synced_at AS syncedat, event_id AS eventid
+        FROM bsk.v_oura_tag
+        """;
+
     public async Task<IOuraSyncLock> BeginSyncAsync(CancellationToken cancellationToken = default)
     {
         var connection = new NpgsqlConnection(connectionString);
@@ -137,6 +144,13 @@ public sealed class NpgsqlActivityRepository(string connectionString) : IActivit
                 SleepPeriodSql + " WHERE day BETWEEN @from::date AND @to::date ORDER BY started_at, period_id",
                 Range(from, to), cancellationToken))
             .Select(r => r.ToPeriod()).ToList();
+
+    public async Task<IReadOnlyList<ActivityTag>> GetTagsAsync(
+        DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+        => (await QueryAsync<TagRow>(
+                TagSql + " WHERE day BETWEEN @from::date AND @to::date ORDER BY started_at DESC, tag_id",
+                Range(from, to), cancellationToken))
+            .Select(r => r.ToTag()).ToList();
 
     private async Task<IEnumerable<T>> QueryAsync<T>(string sql, object args, CancellationToken cancellationToken)
     {
@@ -393,6 +407,24 @@ public sealed class NpgsqlActivityRepository(string connectionString) : IActivit
         public SleepPeriod ToPeriod() => new(
             Id, ParseDay(Day), Type, Utc(StartedAt), Utc(EndedAt), InBedS, AsleepS, DeepS, LightS, RemS, AwakeS,
             LatencyS, Efficiency, AverageHrv, AverageHr, LowestHr, Utc(SyncedAt));
+    }
+
+    private sealed class TagRow
+    {
+        public string Id { get; set; } = "";
+        public string Day { get; set; } = "";
+        public string? EndDay { get; set; }
+        public string? TypeCode { get; set; }
+        public string? CustomName { get; set; }
+        public DateTime StartedAt { get; set; }
+        public DateTime? EndedAt { get; set; }
+        public string? Comment { get; set; }
+        public DateTime SyncedAt { get; set; }
+        public Guid EventId { get; set; }
+
+        public ActivityTag ToTag() => new(
+            Id, ParseDay(Day), EndDay is null ? null : ParseDay(EndDay), TypeCode, CustomName, Utc(StartedAt),
+            Utc(EndedAt), Comment, Utc(SyncedAt), EventId);
     }
 
     private sealed class ReadinessDayRow

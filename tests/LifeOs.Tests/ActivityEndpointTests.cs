@@ -14,8 +14,9 @@ using Npgsql;
 namespace LifeOs.Tests;
 
 /// <summary>
-/// The Activity page's API (ACTIVITY-2..4, activity plan A3, §3.6): the days with their step
-/// bands and the thresholds, workouts with whether they count and why not, one day in full,
+/// The Activity page's API (ACTIVITY-2..4, ACTIVITY-6, activity plan A3, §3.6, §3.9): the days
+/// with their step bands and the thresholds, workouts with whether they count and why not, the
+/// tags from the Oura app, one day in full,
 /// this week against last, the note (LifeOS's one write), the page's sync with its 5-minute
 /// throttle, and the activity XP it and settling pay (A8). Oura is played by <see cref="FakeOuraClient"/>, connected over HTTP, so
 /// the first sync puts its records in. Each test has a database of its own, in UTC, with the
@@ -154,8 +155,52 @@ public sealed class ActivityEndpointTests(PostgresFixture postgres)
             await site.Client.GetAsync("/api/activity/days?from=2024-10-21&to=2026-10-22", Ct), HttpStatusCode.BadRequest));
         Assert.Contains("up to 731 days", await RefusedAsync(
             await site.Client.GetAsync("/api/activity/workouts?from=2024-10-21&to=2026-10-22", Ct), HttpStatusCode.BadRequest));
+        Assert.Contains("up to 731 days", await RefusedAsync(
+            await site.Client.GetAsync("/api/activity/tags?from=2024-10-21&to=2026-10-22", Ct), HttpStatusCode.BadRequest));
+        Assert.Contains("before it starts", await RefusedAsync(
+            await site.Client.GetAsync("/api/activity/tags?from=2026-10-22&to=2026-10-21", Ct), HttpStatusCode.BadRequest));
         Assert.Contains("before it starts", await RefusedAsync(
             await site.Client.GetAsync("/api/activity/days?from=2026-10-22&to=2026-10-21", Ct), HttpStatusCode.BadRequest));
+    }
+
+    [Fact]
+    public async Task Tags_answer_newest_first_with_their_names_lengths_and_comments()
+    {
+        await using var site = await StartAsync(oura => oura.Tags.AddRange([
+            OuraHarness.Tag("t-coffee", Day(-40), "tag_generic_caffeine", hour: 8),
+            OuraHarness.Tag("t-drinks", Day(-1), comment: "Two IPAs with dinner"),
+            OuraHarness.Tag("t-tub", Day(-1), "custom", hour: 21, minutes: 25, customName: "Hot tub"),
+            OuraHarness.Tag("t-note", Today, null, hour: 9, comment: "Knee sore after the run")]));
+
+        // With no range: the 30 days through today, newest first.
+        var read = await JsonAsync(await site.Client.GetAsync("/api/activity/tags", Ct));
+
+        Assert.Equal(("2026-09-23", "2026-10-22", "2026-10-22"),
+            (read.GetProperty("from").GetString(), read.GetProperty("to").GetString(), read.GetProperty("today").GetString()));
+        var tags = read.GetProperty("tags");
+        Assert.Equal(["t-note", "t-tub", "t-drinks"], Strings(tags, "id"));
+        Assert.Equal(["Note", "Hot tub", "Alcohol"], Strings(tags, "name"));
+
+        var note = tags[0];
+        Assert.Equal(("2026-10-22", null, null), (note.GetProperty("day").GetString(), note.GetProperty("typeCode").GetString(),
+            note.GetProperty("endDay").GetString()));
+        Assert.Equal("Knee sore after the run", note.GetProperty("comment").GetString());
+        Assert.Null(Int(note, "seconds"));
+        Assert.Equal(JsonValueKind.Null, note.GetProperty("endedAt").ValueKind);
+
+        var tub = tags[1];
+        Assert.Equal(("custom", "Hot tub", "2026-10-21"),
+            (tub.GetProperty("typeCode").GetString(), tub.GetProperty("customName").GetString(), tub.GetProperty("endDay").GetString()));
+        Assert.Equal(25 * 60, Int(tub, "seconds"));
+        Assert.Equal(OuraHarness.At(Day(-1), 21), tub.GetProperty("startedAt").GetDateTimeOffset());
+        Assert.Equal(OuraHarness.At(Day(-1), 21).AddMinutes(25), tub.GetProperty("endedAt").GetDateTimeOffset());
+        Assert.Equal(JsonValueKind.Null, tub.GetProperty("comment").ValueKind);
+        Assert.NotEqual(default, tags[2].GetProperty("syncedAt").GetDateTimeOffset());
+
+        // A wider range reaches the older tag.
+        var wider = await JsonAsync(await site.Client.GetAsync("/api/activity/tags?from=2026-09-01&to=2026-10-22", Ct));
+        Assert.Equal(["t-note", "t-tub", "t-drinks", "t-coffee"], Strings(wider.GetProperty("tags"), "id"));
+        Assert.Equal("Caffeine", wider.GetProperty("tags")[3].GetProperty("name").GetString());
     }
 
     [Fact]
@@ -246,6 +291,10 @@ public sealed class ActivityEndpointTests(PostgresFixture postgres)
                 OuraHarness.Workout("w-run", Today),
                 new OuraWorkout("w-yoga", Today, "yoga", "Morning flow", OuraHarness.At(Today, 6),
                     OuraHarness.At(Today, 6).AddMinutes(30), null, null, "easy", "manual")]);
+            oura.Tags.AddRange([
+                OuraHarness.Tag("t-drinks", Today, hour: 20),
+                OuraHarness.Tag("t-coffee", Today, "tag_generic_caffeine", hour: 8),
+                OuraHarness.Tag("t-yesterday", Day(-1))]);
         });
 
         var day = await JsonAsync(await site.Client.GetAsync("/api/activity/day?date=2026-10-22", Ct));
@@ -273,9 +322,11 @@ public sealed class ActivityEndpointTests(PostgresFixture postgres)
         var nap = Assert.Single(day.GetProperty("naps").EnumerateArray());
         Assert.Equal(("s-nap", 25 * 60), (nap.GetProperty("id").GetString(), Int(nap, "asleepS")));
 
-        // The day's workouts read earliest first.
+        // The day's workouts and tags read earliest first; a tag on another day isn't the day's.
         Assert.Equal(["w-yoga", "w-run"], Strings(day.GetProperty("workouts"), "id"));
         Assert.Equal("Morning flow", day.GetProperty("workouts")[0].GetProperty("label").GetString());
+        Assert.Equal(["t-coffee", "t-drinks"], Strings(day.GetProperty("tags"), "id"));
+        Assert.Equal(["Caffeine", "Alcohol"], Strings(day.GetProperty("tags"), "name"));
 
         // A day with nothing, and no date (today).
         var nothing = await JsonAsync(await site.Client.GetAsync("/api/activity/day?date=2026-10-20", Ct));
@@ -283,6 +334,7 @@ public sealed class ActivityEndpointTests(PostgresFixture postgres)
         Assert.Equal(JsonValueKind.Null, nothing.GetProperty("night").ValueKind);
         Assert.Empty(nothing.GetProperty("naps").EnumerateArray());
         Assert.Empty(nothing.GetProperty("sleepContributors").EnumerateObject());
+        Assert.Empty(nothing.GetProperty("tags").EnumerateArray());
         Assert.Equal("2026-10-22", (await JsonAsync(await site.Client.GetAsync("/api/activity/day", Ct))).GetProperty("day").GetString());
     }
 

@@ -110,6 +110,16 @@ internal sealed class OuraHarness : IAsyncDisposable
 
     public static OuraSleepPeriod Night(string id, DateOnly day, int asleepMinutes)
         => Period(id, day, SleepTypes.LongSleep, asleepMinutes, At(day.AddDays(-1), 23));
+
+    /// <summary>A tag from the Oura app at <paramref name="hour"/> on <paramref name="day"/>, lasting <paramref name="minutes"/> when given.</summary>
+    public static OuraTag Tag(
+        string id, DateOnly day, string? code = "tag_generic_alcohol", int hour = 20, int? minutes = null,
+        string? comment = null, string? customName = null)
+    {
+        var start = At(day, hour);
+        var end = minutes is { } m ? start.AddMinutes(m) : (DateTimeOffset?)null;
+        return new OuraTag(id, day, end is null ? null : DateOnly.FromDateTime(end.Value.DateTime), code, customName, start, end, comment);
+    }
 }
 
 /// <summary>
@@ -196,6 +206,110 @@ public sealed class OuraSyncTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Tags_are_observations_versioned_withdrawn_and_restored_like_workouts()
+    {
+        await using var h = await CreateAsync();
+        var drinks = OuraHarness.Tag("t-drinks", Today.AddDays(-1), comment: "Two IPAs with dinner");
+        var tub = OuraHarness.Tag("t-tub", Today.AddDays(-1), "custom", hour: 21, minutes: 25, customName: "Hot tub");
+        h.Oura.Tags.AddRange([drinks, tub]);
+
+        var first = await h.Sync.SyncAsync(Recent, Ct);
+
+        Assert.Equal((2, 2), (first.Records, first.Written));
+        var events = await h.QueryAsync<(string Kind, string Provenance, string ExternalId)>(
+            "SELECT kind, provenance, external_id FROM bsk.event WHERE source_id = 'oura' ORDER BY external_id;");
+        Assert.All(events, e => Assert.Equal((EventKinds.Observation, Provenances.Observed), (e.Kind, e.Provenance)));
+        Assert.Collection(
+            events,
+            e => Assert.StartsWith("enhanced_tag:t-drinks:", e.ExternalId),
+            e => Assert.StartsWith("enhanced_tag:t-tub:", e.ExternalId));
+        Assert.Equal(
+            OuraHarness.At(Today.AddDays(-1), 20).UtcDateTime,
+            DateTime.SpecifyKind(Assert.Single(await h.QueryAsync<DateTime>(
+                "SELECT occurred_at FROM bsk.event WHERE external_id LIKE 'enhanced_tag:t-drinks:%';")), DateTimeKind.Utc));
+
+        // Newest first; each reads as LifeOS words it, with its length when it has one.
+        var held = await h.Activity.GetTagsAsync(Today.AddDays(-7), Today, Ct);
+        Assert.Equal(["t-tub", "t-drinks"], held.Select(t => t.Id));
+        Assert.Equal(("Hot tub", (int?)(25 * 60)), (held[0].Name, held[0].Seconds));
+        Assert.Equal(Today.AddDays(-1), held[0].EndDay);
+        Assert.Equal(("Alcohol", (int?)null, "Two IPAs with dinner"), (held[1].Name, held[1].Seconds, held[1].Comment));
+        Assert.Equal(OuraHarness.At(Today.AddDays(-1), 20), held[1].StartedAt);
+        Assert.Null(held[1].EndedAt);
+
+        // Unchanged: nothing written. A comment changed in the Oura app: a new version that wins.
+        Assert.Equal(0, (await h.Sync.SyncAsync(Recent, Ct)).Written);
+        Replace(h.Oura.Tags, t => t.Id == "t-drinks", drinks with { Comment = "Three IPAs" });
+        Assert.Equal(1, (await h.Sync.SyncAsync(Recent, Ct)).Written);
+        Assert.Equal("Three IPAs", (await h.Activity.GetTagsAsync(Today.AddDays(-1), Today.AddDays(-1), Ct))
+            .Single(t => t.Id == "t-drinks").Comment);
+
+        // Deleted in the Oura app: withdrawn. Back again: restored.
+        h.Oura.Tags.RemoveAll(t => t.Id == "t-tub");
+        var deleted = await h.Sync.SyncAsync(Recent, Ct);
+        Assert.Equal((1, 1), (deleted.Written, deleted.Voided));
+        Assert.Equal(["t-drinks"], (await h.Activity.GetTagsAsync(Today.AddDays(-7), Today, Ct)).Select(t => t.Id));
+        h.Oura.Tags.Add(tub);
+        var back = await h.Sync.SyncAsync(Recent, Ct);
+        Assert.Equal((1, 0), (back.Written, back.Voided));
+        Assert.Equal(2, (await h.Activity.GetTagsAsync(Today.AddDays(-7), Today, Ct)).Count);
+        Assert.Equal(3, await h.CountAsync("SELECT count(*) FROM bsk.event WHERE external_id LIKE 'enhanced_tag:t-tub:%';"));
+    }
+
+    [Fact]
+    public async Task Tags_are_read_only_when_oura_granted_the_tag_scope()
+    {
+        await using var h = await OuraHarness.CreateAsync(postgres, Ct, connect: false);
+        h.Oura.Grants = ["daily", "workout"];
+        await h.Connection.BeginConnectAsync(OuraHarness.Redirect, Ct);
+        await h.Connection.ConnectAsync("code-1", h.Oura.AuthorizedState!, Ct);
+        h.Oura.ActivityDays.Add(OuraHarness.Steps(Today, 4200));
+        h.Oura.Tags.Add(OuraHarness.Tag("t-drinks", Today));
+
+        var result = await h.Sync.SyncAsync(Recent, Ct);
+
+        // The rest syncs as before; the tag collection is never asked for.
+        Assert.Equal((1, 1), (result.Records, result.Written));
+        Assert.DoesNotContain(h.Oura.Reads, r => r.Collection == OuraCollections.Tag.Name);
+        Assert.Equal(5, h.Oura.Reads.Count);
+        Assert.Empty(await h.Activity.GetTagsAsync(Today.AddDays(-7), Today, Ct));
+        var status = await h.Connection.GetStatusAsync(Ct);
+        Assert.Equal(["tag"], status.MissingScopes);
+        Assert.Null(status.LastSyncError);
+    }
+
+    [Fact]
+    public async Task A_connect_that_adds_a_scope_reads_the_history_again_and_one_that_doesnt_carries_on()
+    {
+        await using var h = await OuraHarness.CreateAsync(postgres, Ct, connect: false);
+        h.Oura.Grants = ["daily", "workout"];
+        await h.Connection.BeginConnectAsync(OuraHarness.Redirect, Ct);
+        h.Oura.ActivityDays.AddRange([OuraHarness.Steps(Today, 4200), OuraHarness.Steps(Today.AddDays(-100), 9000)]);
+        h.Oura.Tags.AddRange([OuraHarness.Tag("t-old", Today.AddDays(-100)), OuraHarness.Tag("t-new", Today)]);
+        var before = await h.Sync.ConnectAsync("code-1", h.Oura.AuthorizedState!, Ct);
+        Assert.True(before.HistoryDone);
+        Assert.Equal(2, await h.CountAsync("SELECT count(*) FROM bsk.event WHERE source_id = 'oura';"));
+
+        // The same scopes again: the history stays read.
+        await h.Connection.BeginConnectAsync(OuraHarness.Redirect, Ct);
+        await h.Connection.ConnectAsync("code-2", h.Oura.AuthorizedState!, Ct);
+        var same = await h.Integrations.GetAsync(Integrations.Oura, Ct);
+        Assert.Equal((before.HistoryFrom, true), (same!.HistoryFrom, same.HistoryDone));
+
+        // Allowing tags: the history is read again, so the old tag comes in with the new, and
+        // the days LifeOS already holds write nothing.
+        h.Oura.Grants = OuraConnectionService.Scopes;
+        await h.Connection.BeginConnectAsync(OuraHarness.Redirect, Ct);
+        var after = await h.Sync.ConnectAsync("code-3", h.Oura.AuthorizedState!, Ct);
+
+        Assert.Empty(after.MissingScopes);
+        Assert.True(after.HistoryDone);
+        Assert.Equal(["t-new", "t-old"], (await h.Activity.GetTagsAsync(Today.AddDays(-200), Today, Ct)).Select(t => t.Id));
+        Assert.Equal(4, await h.CountAsync("SELECT count(*) FROM bsk.event WHERE source_id = 'oura';"));
+        Assert.Equal(2, await h.CountAsync("SELECT count(*) FROM bsk.event WHERE external_id LIKE 'daily_activity:%';"));
+    }
+
+    [Fact]
     public async Task The_window_is_read_two_days_wider_and_filtered_on_day()
     {
         await using var h = await CreateAsync();
@@ -207,7 +321,7 @@ public sealed class OuraSyncTests(PostgresFixture postgres)
 
         var result = await h.Sync.SyncAsync(Recent, Ct);
 
-        Assert.Equal(5, h.Oura.Reads.Count);
+        Assert.Equal(OuraCollections.All.Count, h.Oura.Reads.Count);
         Assert.All(h.Oura.Reads, r => Assert.Equal((Today.AddDays(-16), Today.AddDays(3)), (r.Start, r.End)));
         Assert.Equal(["access-1"], h.Oura.Reads.Select(r => r.Token).Distinct());
         Assert.Equal((2, 2), (result.Records, result.Written));
@@ -606,10 +720,11 @@ public sealed class OuraSyncTests(PostgresFixture postgres)
         h.Oura.SleepScores.Add(OuraHarness.SleepScore(Today, 82));
         h.Oura.Readiness.Add(OuraHarness.Ready(Today, 76));
         h.Oura.SleepPeriods.Add(OuraHarness.Night("s-night", Today, 400));
+        h.Oura.Tags.Add(OuraHarness.Tag("t-drinks", Today, comment: "Two IPAs"));
         await h.Sync.SyncAsync(Recent, Ct);
         await h.Notes.SetAsync("w-run-0001", "Hill repeats", Ct);
 
-        Assert.Equal(5, await h.CountAsync("SELECT count(*) FROM bsk.event WHERE source_id = 'oura';"));
+        Assert.Equal(6, await h.CountAsync("SELECT count(*) FROM bsk.event WHERE source_id = 'oura';"));
         Assert.Equal(1, await h.CountAsync("SELECT count(*) FROM bsk.event WHERE kind = 'note';"));
         Assert.Equal(0, await h.CountAsync("SELECT count(*) FROM bsk.v_inbox;"));
         Assert.Equal(0, await h.CountAsync("SELECT count(*) FROM bsk.v_inbox_resolved;"));
@@ -621,7 +736,11 @@ public sealed class OuraSyncTests(PostgresFixture postgres)
 
         await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(h.Db.ConnectionString));
         await reader.OpenAsync(Ct);
-        foreach (var view in new[] { "bsk.v_activity_day", "bsk.v_workout", "bsk.v_sleep_period", "bsk.v_sleep_day", "bsk.v_readiness_day" })
+        foreach (var view in new[]
+                 {
+                     "bsk.v_activity_day", "bsk.v_workout", "bsk.v_sleep_period", "bsk.v_sleep_day", "bsk.v_readiness_day",
+                     "bsk.v_oura_tag"
+                 })
         {
             Assert.Equal(1, await reader.ExecuteScalarAsync<long>(new CommandDefinition(
                 $"SELECT count(*) FROM {view};", cancellationToken: Ct)));

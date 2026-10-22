@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { MoonIcon } from "lucide-react";
 import { ContributorMeter, NightFacts, ScoreFigure, StageBar } from "@/components/activity/sleep-parts";
+import { TagLine } from "@/components/activity/tags-card";
 import { ActivityXpList } from "@/components/activity/xp-parts";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -45,6 +46,19 @@ function DayDetail({ detail }: { detail: ActivityDayDetailRead }) {
   const nothing = day.sleepScore == null && day.readinessScore == null && night == null && naps.length === 0;
   const xp = dayXp(day, detail.workouts);
   const health = xp.pays ? <ActivityXpList xp={xp} title="Health XP" /> : null;
+  // Tags from the Oura app starting this day, earliest first (activity plan §3.9).
+  const tags =
+    detail.tags.length > 0 ? (
+      <Section title={detail.tags.length === 1 ? "A tag" : `${detail.tags.length} tags`}>
+        <ul aria-label="Tags from the Oura app" className="space-y-2 text-sm">
+          {detail.tags.map((t) => (
+            <li key={t.id} data-testid="day-tag">
+              <TagLine tag={t} />
+            </li>
+          ))}
+        </ul>
+      </Section>
+    ) : null;
   if (nothing) {
     return (
       <div className="space-y-6">
@@ -54,6 +68,7 @@ function DayDetail({ detail }: { detail: ActivityDayDetailRead }) {
             ? "Last night hasn't reached LifeOS yet: open the Oura app to sync it."
             : "Oura has nothing for this night."}
         </p>
+        {tags}
         {health}
       </div>
     );
@@ -117,6 +132,8 @@ function DayDetail({ detail }: { detail: ActivityDayDetailRead }) {
         </Section>
       ) : null}
 
+      {tags}
+
       {health}
 
       <p className="text-xs text-muted-foreground">
@@ -128,8 +145,9 @@ function DayDetail({ detail }: { detail: ActivityDayDetailRead }) {
 
 /**
  * One day in full (activity plan §3.7): both scores, the night ending that morning with its
- * stages and heart, each score's contributors as small meters, the temperature, the naps, and
- * the day's Health XP from steps, exercise and sleep, earned or projected (A9).
+ * stages and heart, each score's contributors as small meters, the temperature, the naps, the
+ * tags from the Oura app (A10), and the day's Health XP from steps, exercise and sleep, earned
+ * or projected (A9).
  */
 export function DaySheet({
   day,

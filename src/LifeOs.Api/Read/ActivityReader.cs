@@ -7,7 +7,7 @@ using LifeOs.Infrastructure.Persistence;
 namespace LifeOs.Api.Read;
 
 /// <summary>
-/// The Activity page's reads (ACTIVITY-2..4, activity plan §3.6) on the <c>bsk_reader</c>
+/// The Activity page's reads (ACTIVITY-2..4, ACTIVITY-6, activity plan §3.6, §3.9) on the <c>bsk_reader</c>
 /// connection, like every other API read: <see cref="ActivityReads"/> over the Oura views of
 /// migration 0037, so a day reads exactly as <c>bsk oura</c> prints it, and the ledger's
 /// activity awards, so each day carries what it paid (activity plan A9). The step thresholds go
@@ -72,6 +72,26 @@ public sealed class ActivityReader(string readerConnectionString, string homeTim
         };
     }
 
+    /// <summary>
+    /// Live tags from the Oura app starting from <paramref name="from"/> to <paramref name="to"/>,
+    /// newest first (activity plan §3.9); a missing end defaults to today, a missing start to
+    /// <see cref="DefaultDays"/> days before the end.
+    /// </summary>
+    public async Task<ActivityTagsRead> GetTagsAsync(DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
+    {
+        var today = await reads.TodayAsync(cancellationToken);
+        var end = to ?? today;
+        var start = from ?? end.AddDays(1 - DefaultDays);
+        var tags = await reads.GetTagsAsync(start, end, cancellationToken);
+        return new ActivityTagsRead
+        {
+            From = ActivityRows.Day(start),
+            To = ActivityRows.Day(end),
+            Today = ActivityRows.Day(today),
+            Tags = tags.Select(ActivityRows.From).ToList(),
+        };
+    }
+
     /// <summary>LifeOS holds a live workout with exactly that Oura id.</summary>
     public async Task<bool> HasWorkoutAsync(string id, CancellationToken cancellationToken = default)
         => await reads.GetWorkoutAsync(id, cancellationToken) is not null;
@@ -95,6 +115,7 @@ public sealed class ActivityReader(string readerConnectionString, string homeTim
             Night = detail.Night is { } night ? ActivityRows.From(night) : null,
             Naps = detail.Naps.Select(ActivityRows.From).ToList(),
             Workouts = detail.Workouts.Select(ActivityRows.From).ToList(),
+            Tags = detail.Tags.Select(ActivityRows.From).ToList(),
         };
     }
 

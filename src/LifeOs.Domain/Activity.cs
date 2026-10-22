@@ -284,14 +284,17 @@ public static class ActivityAwards
 /// One of the Oura collections LifeOS keeps (D14, activity plan §3.2): where its records go in
 /// an event's payload, what identifies one, and its event kind. A record LifeOS holds that Oura
 /// no longer answers is voided only in a <see cref="Voidable"/> collection: daily records are
-/// never withdrawn, workouts and sleep periods can be deleted in the Oura app.
+/// never withdrawn, workouts, sleep periods and tags can be deleted in the Oura app.
 /// </summary>
 /// <param name="Name">Oura's collection (<c>/v2/usercollection/&lt;name&gt;</c>), also the first part of an event's <c>external_id</c>.</param>
 /// <param name="PayloadKey">The payload's one key (<c>oura_activity</c>, …).</param>
 /// <param name="KeyField">What identifies a record: its <c>day</c>, or Oura's <c>id</c>.</param>
 public sealed record OuraCollection(string Name, string PayloadKey, string KeyField, string Kind, bool Voidable);
 
-/// <summary>The five Oura collections LifeOS keeps (activity plan §3.2).</summary>
+/// <summary>
+/// The Oura collections LifeOS keeps (activity plan §3.2): five since A2, and the tags Chris adds
+/// in the Oura app since A10 (§3.9), read only when Oura granted the <c>tag</c> scope.
+/// </summary>
 public static class OuraCollections
 {
     public static readonly OuraCollection DailyActivity = new("daily_activity", "oura_activity", "day", EventKinds.Measurement, false);
@@ -300,7 +303,10 @@ public static class OuraCollections
     public static readonly OuraCollection DailyReadiness = new("daily_readiness", "oura_readiness", "day", EventKinds.Measurement, false);
     public static readonly OuraCollection Sleep = new("sleep", "oura_sleep", "id", EventKinds.Measurement, true);
 
-    public static readonly IReadOnlyList<OuraCollection> All = [DailyActivity, Workout, DailySleep, DailyReadiness, Sleep];
+    /// <summary>Oura's Enhanced Tags: something Chris noted about himself, so an <c>observation</c>.</summary>
+    public static readonly OuraCollection Tag = new("enhanced_tag", "oura_tag", "id", EventKinds.Observation, true);
+
+    public static readonly IReadOnlyList<OuraCollection> All = [DailyActivity, Workout, DailySleep, DailyReadiness, Sleep, Tag];
 }
 
 /// <summary>
@@ -380,6 +386,108 @@ public sealed record OuraSleepPeriod(
     int? AverageHrv,
     double? AverageHr,
     int? LowestHr);
+
+/// <summary>
+/// A tag Chris added in the Oura app (<c>enhanced_tag</c>, activity plan §3.9): a moment, or a
+/// stretch when it has an <see cref="End"/>. <see cref="TypeCode"/> is the tag he picked,
+/// <c>custom</c> for one he named himself (<see cref="CustomName"/>), or null for a text-only
+/// tag; it stays a plain string, since Oura doesn't publish its codes. <see cref="Day"/> is
+/// Oura's <c>start_day</c>.
+/// </summary>
+public sealed record OuraTag(
+    string Id,
+    DateOnly Day,
+    DateOnly? EndDay,
+    string? TypeCode,
+    string? CustomName,
+    DateTimeOffset Start,
+    DateTimeOffset? End,
+    string? Comment);
+
+/// <summary>
+/// How a tag from the Oura app reads (activity plan §3.9). Oura doesn't publish its tag codes,
+/// so a code is made readable rather than looked up: its <c>tag_</c> and <c>generic_</c>
+/// prefixes come off, and its words split on <c>_</c> and on capitals, in sentence case
+/// (<c>tag_generic_late_meal</c> → "Late meal", <c>generic_happy</c> → "Happy").
+/// </summary>
+public static class OuraTags
+{
+    /// <summary>The code of a tag Chris named himself.</summary>
+    public const string Custom = "custom";
+
+    /// <summary>What a custom tag without a name reads as.</summary>
+    public const string UnnamedCustom = "Custom tag";
+
+    /// <summary>What a text-only tag (no code) reads as; its comment carries it.</summary>
+    public const string TextOnly = "Note";
+
+    private static readonly string[] Prefixes = ["tag_", "generic_"];
+
+    /// <summary>The tag's name as LifeOS shows it.</summary>
+    public static string Name(string? typeCode, string? customName)
+    {
+        var code = typeCode?.Trim();
+        if (string.IsNullOrEmpty(code))
+        {
+            return TextOnly;
+        }
+
+        if (string.Equals(code, Custom, StringComparison.OrdinalIgnoreCase))
+        {
+            return string.IsNullOrWhiteSpace(customName) ? UnnamedCustom : customName.Trim();
+        }
+
+        var rest = code;
+        for (var stripped = true; stripped;)
+        {
+            stripped = false;
+            foreach (var prefix in Prefixes)
+            {
+                if (rest.Length > prefix.Length && rest.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    rest = rest[prefix.Length..];
+                    stripped = true;
+                }
+            }
+        }
+
+        var words = new List<string>();
+        var word = new System.Text.StringBuilder();
+        foreach (var c in rest)
+        {
+            if (c is '_' or '-' or ' ')
+            {
+                Flush();
+                continue;
+            }
+
+            if (char.IsUpper(c) && word.Length > 0 && !char.IsUpper(word[^1]))
+            {
+                Flush();
+            }
+
+            word.Append(c);
+        }
+
+        Flush();
+        if (words.Count == 0)
+        {
+            return code;
+        }
+
+        var text = string.Join(' ', words).ToLowerInvariant();
+        return char.ToUpperInvariant(text[0]) + text[1..];
+
+        void Flush()
+        {
+            if (word.Length > 0)
+            {
+                words.Add(word.ToString());
+                word.Clear();
+            }
+        }
+    }
+}
 
 /// <summary>Oura's sleep period types (activity plan §1).</summary>
 public static class SleepTypes
@@ -480,6 +588,29 @@ public sealed record SleepPeriod(
     double? AverageHr,
     int? LowestHr,
     DateTimeOffset SyncedAt);
+
+/// <summary>
+/// A live tag from the Oura app as LifeOS holds it (<c>bsk.v_oura_tag</c>, migration 0039,
+/// activity plan §3.9). <see cref="Day"/> is the day it starts.
+/// </summary>
+public sealed record ActivityTag(
+    string Id,
+    DateOnly Day,
+    DateOnly? EndDay,
+    string? TypeCode,
+    string? CustomName,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? EndedAt,
+    string? Comment,
+    DateTimeOffset SyncedAt,
+    Guid EventId)
+{
+    /// <summary>How the tag reads (<see cref="OuraTags.Name"/>).</summary>
+    public string Name => OuraTags.Name(TypeCode, CustomName);
+
+    /// <summary>How long it lasted, in seconds; null for a moment.</summary>
+    public int? Seconds => EndedAt is { } end ? (int)Math.Max(0, Math.Floor((end - StartedAt).TotalSeconds)) : null;
+}
 
 /// <summary>A day's readiness as LifeOS holds it (<c>bsk.v_readiness_day</c>).</summary>
 public sealed record ReadinessDay(

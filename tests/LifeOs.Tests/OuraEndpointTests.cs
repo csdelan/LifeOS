@@ -72,7 +72,7 @@ public sealed class OuraEndpointTests(PostgresFixture postgres)
         var connected = await JsonAsync(await host.Client.PostAsJsonAsync(
             "/api/oura/connect", new { code = "code-1", state = oura.AuthorizedState }, Ct));
         Assert.Equal("connected", connected.GetProperty("state").GetString());
-        Assert.Equal(["daily", "workout"], connected.GetProperty("scopes").EnumerateArray().Select(s => s.GetString()));
+        Assert.Equal(["daily", "workout", "tag"], connected.GetProperty("scopes").EnumerateArray().Select(s => s.GetString()));
         Assert.Empty(connected.GetProperty("missingScopes").EnumerateArray());
 
         var status = await JsonAsync(await host.Client.GetAsync("/api/oura/status", Ct));

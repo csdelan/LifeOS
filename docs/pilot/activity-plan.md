@@ -650,6 +650,107 @@ simulator's regression bands.
 It was lowered after A7, ahead of A8 (xp-domains plan §2.4). The simulator's regression
 scenarios are now set against the bar, so they keep their meaning when it moves.
 
+### 3.9 Tags from the Oura app (A10, ACTIVITY-6)
+
+Chris asked whether the API has the tags he adds in the Oura app ("I can apply a tag to a
+specific time which adds metadata that can correlate to the automatic health data"), then:
+"Yes I'd like to support recording tags too. Please implement" (2026-10-22).
+
+**What Oura gives** (spec 1.42, §7):
+
+- `GET /v2/usercollection/enhanced_tag`, under the `tag` scope ("User entered tags"). It
+  takes `start_date` / `end_date` and pages through `next_token`, like the other
+  collections.
+- Each tag has:
+  - `id`
+  - `tag_type_code`: the tag Chris picked, `custom` for one he named himself, or null for a
+    text-only tag
+  - `custom_name`: the name of a custom tag
+  - `start_time` and `start_day`: when it happened, or when it started if it has a duration
+  - `end_time` and `end_day`: when it ended, or null without a duration
+  - `comment`: his free text on it
+- The older `/v2/usercollection/tag` is deprecated in favour of Enhanced Tag, so LifeOS
+  doesn't read it.
+- Oura doesn't publish its list of tag codes. The sandbox answers `generic_happy` and
+  `generic_excited`.
+
+**Decided here, because one option was clearly better:**
+
+- **The scope.** LifeOS asks for `daily workout tag`.
+  - The connection made before A10 was granted `daily workout`, so the page asks to
+    reconnect ("Oura didn't allow tags"). Until then, the sync reads the other five
+    collections as before and skips tags. Nothing breaks, and no sync fails for it.
+  - Tags are read only when the stored grant includes `tag`. A token without the scope is
+    never sent to the collection, so a refusal can't be mistaken for a bad token.
+- **Their history.** A connect that grants a scope the stored grant didn't have starts the
+  history backfill over, so the tags' past comes in. The collections LifeOS already holds
+  are read again and write nothing new.
+- **Storage (D14), as for workouts:**
+  - Each tag is an `observation` event: something Chris noted about himself. Provenance
+    `observed`, source `oura`, no subject and no edge.
+  - It's keyed by Oura's id and versioned by content. A tag deleted in the Oura app, on a
+    day in the window, gets a voided version; one that comes back is restored.
+  - `occurred_at` is its start, and its day is Oura's `start_day`.
+  - The payload:
+
+    ```json
+    { "oura_tag": { "id": "<oura id>", "day": "2026-10-21", "end_day": null,
+        "type_code": "generic_happy", "custom_name": null,
+        "start": "2026-10-21T20:30:00-07:00", "end": null,
+        "comment": "Good day at work" } }
+    ```
+- **Migration 0039:** `bsk.v_oura_tag`, one row per live tag: `tag_id`, `day`, `end_day`,
+  `type_code`, `custom_name`, `started_at`, `ended_at`, `comment`, `synced_at`,
+  `event_id`. It has a partial index on the id and is granted to `bsk_reader`.
+- **Names** (`OuraTags.Name`, Domain):
+  - A custom tag reads as its own name, or "Custom tag" without one.
+  - A text-only tag reads as "Note", and its comment carries it.
+  - Otherwise the code is made readable: Oura's `tag_` and `generic_` prefixes come off,
+    words split on `_` and on capitals, in sentence case. So `tag_generic_late_meal` reads
+    "Late meal" and `generic_happy` reads "Happy".
+  - Since Oura's codes aren't published, they're made readable rather than looked up. A
+    code that reads badly can be given its own wording when one turns up.
+  - The API answers the name, so the CLI and the page never word a tag differently.
+- **Which day:** Oura's `start_day`. A tag at 9 p.m. sits on that day, and the night after
+  it on the next day's sheet, as Oura puts nights on the morning they end.
+- **Not GEN-1 tags.** GEN-1's tags label items in `bsk.item_tag`. Oura's are moments in a
+  day, and they don't become LifeOS tags.
+- **Comments** are Chris's own words, kept as Oura has them. Like the rest of Oura's data,
+  they never go to an AI model, and the purge (§7) covers them, since they're `oura`
+  events.
+- **No XP.** Tags pay nothing, and the activity rules don't read them.
+
+**Reads, API and CLI:**
+
+| Where | What |
+|---|---|
+| `ActivityReads.GetTagsAsync(from, to)` | Live tags starting on those days, newest first. |
+| `GET /api/activity/tags?from&to` | `{ from, to, today, tags }`. With no range it's the 30 days through today, at most 731 days. |
+| `GET /api/activity/day?date=` | Adds `tags`: the day's tags, earliest first. |
+| `bsk oura tags [--days N] [--json]` | The tags by day, newest first. |
+
+Each tag row has `id`, `day`, `endDay`, `typeCode`, `customName`, `name`, `startedAt`,
+`endedAt`, `seconds` (its length, or null without one), `comment` and `syncedAt`.
+
+**The page:**
+
+- **A Tags card**, in the left column under Steps:
+  - the range: 30 days, 90 days or 1 year, remembered in the browser
+  - how often each tag came up in the range ("Caffeine 12 · Alcohol 5"), most used first
+  - the tags newest first, grouped by day. Each row shows the name, the time (or start to
+    end, with the length) and the comment on its own line. A day's heading opens the day
+    sheet.
+  - Before reconnecting, it says that tags need the reconnect.
+- **The day sheet** gets a Tags section with the day's tags, so a tag sits beside that day's
+  sleep, readiness, steps and workouts.
+- **The missing-scope banner** names scopes in words ("Oura didn't allow tags").
+- **The mock store** seeds tags over its 120 days: a daily coffee, evening drinks, a sauna
+  with a length, a custom tag, a text-only note, a few days of being sick, and comments on
+  some.
+
+**Later (§6):** reading a tag against the night after it, for example the average sleep
+score after nights tagged Alcohol against the rest.
+
 ## 4. Phases
 
 Each phase is one commit:
@@ -682,6 +783,12 @@ Each phase is one commit:
 
 - **A1 and A2 are kernel only.** From A2, `bsk oura sync` works end to end, so the numbers
   can be checked from the CLI before the page exists.
+**Tags (added 2026-10-22, §3.9):**
+
+| # | Phase | Delivers | Depends on |
+|---|---|---|---|
+| A10 | Tags | §3.9. The `tag` scope, the history read again after a connect that adds a scope, `enhanced_tag` in the client and the sync, `OuraTags`, migration 0039 (`v_oura_tag`), `GET /api/activity/tags` and the day's tags, `bsk oura tags`, the Tags card and the day sheet's tags, the mock's tags. Tests: the client's fields and paging; tags read only with the scope; versions, voiding and restoring; the history read again after a new scope; names; the API's shapes and range; the events kept out of every view about items; Vitest, e2e, a11y. | A9 |
+
 - **A4 and A5 touch the same page,** so they run one after the other.
 - **Migrations** continue from 0036. Merging to `main` promotes them to staging through CI.
 
@@ -789,6 +896,8 @@ Each of these has to earn its place through use.
 - **Other sources** (Apple Health, Strava) through the same `source_id` pattern.
 - **A step goal that adapts** to recent weeks.
 - **Exercise as evidence for a Habit:** an Oura run checking off a "Run 3× a week" habit.
+- **A tag against the night after it** (§3.9): the sleep score or readiness after days with
+  a tag, against days without it.
 
 ## 7. Oura API notes
 
@@ -823,7 +932,7 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
   ([support](https://support.ouraring.com/hc/en-us/articles/4415266939155-The-Oura-API)).
   Without one, the API answers 403.
 - **Collections:** `GET /v2/usercollection/daily_activity`, `/workout`, `/daily_sleep`,
-  `/daily_readiness` and `/sleep`.
+  `/daily_readiness` and `/sleep`, and from A10 `/enhanced_tag` (§3.9).
   - They take `start_date` / `end_date` and answer `{ data, next_token }`. Paging continues
     until `next_token` is null.
   - **[third-party, measured 2026-08]** `daily_activity`, `sleep` and `workout` exclude the
@@ -891,6 +1000,7 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
 - [x] A7 — Phase 2 rules (`ActivityRules` and its TypeScript port)
 - [x] A8 — Activity XP on the ledger
 - [x] A9 — Activity XP on the page
+- [x] A10 — Tags from the Oura app (migration 0039)
 
 ### As built
 
@@ -1408,3 +1518,87 @@ no migration. As planned in §3.8, plus:
   "—" before Oct 22, and the Food Log and Character pages each asked for the sync.
 - **Not changed:** the rules, the ledger keys, the level curve, the Food Log's own XP and the
   views.
+
+**A10 (2026-10-22).** Tags from the Oura app, as planned in §3.9, with migration 0039. Plus:
+
+- **The scope:**
+  - `OuraConnectionService.Scopes` is `daily workout tag`.
+  - The sync reads `enhanced_tag` only when the stored grant includes `tag`, and reads it
+    last in each window. Without it the other five collections sync as before, and the
+    status's `missingScopes` is `["tag"]`.
+- **The history read again:** `SaveConnectionAsync` clears `history_from` and
+  `history_done` when the new grant isn't a subset of the stored one
+  (`EXCLUDED.scopes <@ scopes`). A connect with the same scopes, or fewer, carries on where
+  it was.
+- **The client:** `IOuraClient.GetTagsAsync` reads `/v2/usercollection/enhanced_tag` with
+  the other collections' paging. A record needs `id`, `start_day` and `start_time`; one
+  without them is skipped, as for the others.
+- **The domain:**
+  - `OuraCollections.Tag` is `enhanced_tag`, payload key `oura_tag`, keyed by `id`, kind
+    `observation`, voidable. `OuraTag` is what Oura sent.
+  - `ActivityTag` is the held tag, with its `Name` from `OuraTags.Name` and its length in
+    `Seconds`, null without an end.
+- **The reads:**
+  - `IActivityRepository.GetTagsAsync` reads `v_oura_tag` newest first.
+  - `ActivityReads.GetTagsAsync` checks the range as the other reads do (at most 731 days,
+    not backwards).
+  - The day detail carries the day's tags, earliest first.
+- **API:** `GET /api/activity/tags` (`ActivityTagsRead`, 30 days through today by default)
+  and `tags` on `GET /api/activity/day`. `gen:api` regenerated.
+- **CLI:** `bsk oura tags [--days N] [--json]`, days newest first and each day's tags
+  earliest first. Each line shows the time, or start to end with the length, then the name,
+  with the comment on its own line. With no tags and the scope missing, it says to
+  reconnect.
+- **Tests (.NET):**
+  - The client reads the sandbox's shape (`OuraFixtures/enhanced_tag.json`), a custom tag
+    with a length and a text-only tag, and skips broken records.
+  - The payload and its hash; the names table; a tag's length.
+  - The sync: versions, a changed comment, withdrawn and restored; tags read only with the
+    scope; the history read again after a connect that adds a scope, and not after one that
+    doesn't.
+  - The events stay out of every view about items, and `bsk_reader` can read `v_oura_tag`.
+  - The API's shapes, order, default range and refusals; the day's tags.
+- **The page:**
+  - **The Tags card** (`components/activity/tags-card.tsx`), in the left column under
+    Steps:
+    - the range (30 days, 90 days or 1 year, remembered in the browser)
+    - the counts line, most used first ("Caffeine 24 · Alcohol 8 · Sauna 5")
+    - the tags by the day they start, newest day first and each day's newest first. Each
+      day's heading is a button that opens the day sheet, with "3 tags" beside it.
+    - The latest 7 days with tags show first, then "Show 21 more days", so a year of
+      daily coffees doesn't make the card endless. The counts always cover the whole
+      range.
+  - **Each tag** reads its name and when: "7:45 AM" for a moment, "7:00 PM–7:25 PM · 25 min"
+    with a length, or "9:00 AM – Sat, Oct 4, 9:00 AM · 3 days" when it ends on another
+    day. A comment sits on its own line under it.
+  - **Without the scope**, the card says Oura didn't allow tags and to reconnect, or, with
+    tags already held, shows them and says new ones won't arrive until then. The
+    missing-scope banner words the scopes ("Oura didn't allow workouts and tags",
+    `scopeWords`).
+  - **The day sheet** has a section headed "A tag" or "3 tags", earliest first, also on a
+    day Oura has no night for.
+  - `lib/activity.ts`: `normalizeTag(s)`, `tagWhen`, `tagLength`, `tagCounts`, `tagDays`,
+    `tagRangeWords` and `scopeWords`.
+  - The tags query sits under `["activity"]`, so a sync or a connect refreshes it.
+- **The mock:**
+  - It grants `daily workout tag`.
+  - It seeds about 120 days of tags: a coffee most mornings, drinks some evenings, the odd
+    late meal, a 20-minute sauna, a 5-minute custom "Cold plunge", a text-only note, three
+    days of "Sick" with a comment, and comments on a few others.
+  - `ouraTagName` copies `OuraTags.Name`, tested on the kernel's 16 cases.
+  - `clearMockActivity` clears tags too.
+- **Tests (web):**
+  - Vitest: the tag helpers, the mock's tags and names, and 8 Activity page tests (the
+    counts and order with "Show more days", a length and a note, a day's tags in its sheet
+    with and without a night, 90 days remembered, the empty and not-allowed states, and the
+    banner's words for one scope and two).
+  - An e2e path through the card and a day's sheet.
+  - a11y scans of the card and the day sheet with tags, in both themes. Neither pins the
+    clock, since tags pay nothing and the seed counts back from today.
+- **Checked live** against a throwaway database, the fake Oura and a test sign-in.
+  - Connected without `tag`: the sync never asked for tags, and the status named the
+    missing scope. The page's banner read "Oura didn't allow tags", and the card said new
+    ones need the reconnect.
+  - Reconnected with it: the banner went, and the history brought in 255 synthetic tags and
+    nothing else new. A second reconnect wrote nothing.
+  - The card, a day's sheet and `bsk oura tags` read them back, also at 375 px wide.

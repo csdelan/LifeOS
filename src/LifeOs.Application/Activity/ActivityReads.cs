@@ -12,10 +12,14 @@ public sealed record ActivityDaily(DateOnly Day, ActivityDay? Activity, SleepDay
 /// <summary>
 /// One day in full, for the page's detail sheet: the day, its night (the sleep period
 /// <c>bsk.v_sleep_day</c> takes as the night) with its stages, every other period as a nap,
-/// and its workouts, earliest first.
+/// and its workouts and the tags starting on it (activity plan §3.9), each earliest first.
 /// </summary>
 public sealed record ActivityDayDetail(
-    ActivityDaily Daily, SleepPeriod? Night, IReadOnlyList<SleepPeriod> Naps, IReadOnlyList<Workout> Workouts);
+    ActivityDaily Daily,
+    SleepPeriod? Night,
+    IReadOnlyList<SleepPeriod> Naps,
+    IReadOnlyList<Workout> Workouts,
+    IReadOnlyList<ActivityTag> Tags);
 
 /// <summary>
 /// A week, Monday to Sunday, as the Activity page compares it with the one before. Today is
@@ -100,6 +104,16 @@ public sealed class ActivityReads(IActivityRepository activity, IHomeCalendar ca
     public Task<Workout?> GetWorkoutAsync(string id, CancellationToken cancellationToken = default)
         => activity.GetWorkoutAsync(id, cancellationToken);
 
+    /// <summary>
+    /// Live tags from the Oura app starting on the days [<paramref name="from"/>,
+    /// <paramref name="to"/>], newest first (activity plan §3.9).
+    /// </summary>
+    public Task<IReadOnlyList<ActivityTag>> GetTagsAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+    {
+        CheckRange(from, to);
+        return activity.GetTagsAsync(from, to, cancellationToken);
+    }
+
     /// <summary>Each day in [<paramref name="from"/>, <paramref name="to"/>] with a sleep or readiness record, oldest first.</summary>
     public async Task<IReadOnlyList<SleepAndReadiness>> GetSleepAsync(
         DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
@@ -145,7 +159,10 @@ public sealed class ActivityReads(IActivityRepository activity, IHomeCalendar ca
         var workouts = (await activity.GetWorkoutsAsync(day, day, cancellationToken))
             .OrderBy(w => w.StartedAt).ThenBy(w => w.Id, StringComparer.Ordinal)
             .ToList();
-        return new ActivityDayDetail(daily, night, naps, workouts);
+        var tags = (await activity.GetTagsAsync(day, day, cancellationToken))
+            .OrderBy(t => t.StartedAt).ThenBy(t => t.Id, StringComparer.Ordinal)
+            .ToList();
+        return new ActivityDayDetail(daily, night, naps, workouts, tags);
     }
 
     /// <summary>Today so far and this week (Monday to Sunday) against last (<see cref="ActivitySummary"/>).</summary>

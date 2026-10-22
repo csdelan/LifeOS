@@ -106,8 +106,24 @@ public static class OuraPayloads
         return new OuraRecord(OuraCollections.Sleep, period.Id, period.Day, period.Start, json, Hash(json));
     }
 
+    public static OuraRecord Tag(OuraTag tag)
+    {
+        var json = Write(w =>
+        {
+            w.WriteString("id", tag.Id);
+            w.WriteString("day", Text(tag.Day));
+            w.WriteString("end_day", tag.EndDay is { } endDay ? Text(endDay) : null);
+            w.WriteString("type_code", tag.TypeCode);
+            w.WriteString("custom_name", tag.CustomName);
+            w.WriteString("start", Text(tag.Start));
+            w.WriteString("end", tag.End is { } end ? Text(end) : null);
+            w.WriteString("comment", tag.Comment);
+        });
+        return new OuraRecord(OuraCollections.Tag, tag.Id, tag.Day, tag.Start, json, Hash(json));
+    }
+
     /// <summary>
-    /// The version that withdraws a workout or sleep period Oura no longer has:
+    /// The version that withdraws a workout, sleep period or tag Oura no longer has:
     /// <c>{id, day, voided: true}</c>, dated as the version it replaces was.
     /// </summary>
     public static OuraRecord Voided(OuraCollection collection, string key, DateOnly day, DateTimeOffset occurredAt)

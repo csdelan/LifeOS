@@ -33,6 +33,9 @@ internal sealed class FakeOuraClient(IClock clock) : IOuraClient
     public TimeSpan RefreshDelay { get; set; }
     public TimeSpan Lifetime { get; set; } = TimeSpan.FromHours(24);
 
+    /// <summary>The scopes a code exchange grants: all LifeOS asks for, unless a test says otherwise.</summary>
+    public IReadOnlyList<string> Grants { get; set; } = OuraConnectionService.Scopes;
+
     public Uri AuthorizeUrl(string state, string codeChallenge, Uri redirectUri)
     {
         AuthorizedState = state;
@@ -49,7 +52,7 @@ internal sealed class FakeOuraClient(IClock clock) : IOuraClient
         }
 
         Exchanged = (code, codeVerifier, redirectUri);
-        return Task.FromResult(Issue(["daily", "workout"]));
+        return Task.FromResult(Issue(Grants));
     }
 
     public async Task<OAuthTokens> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default)
@@ -90,6 +93,7 @@ internal sealed class FakeOuraClient(IClock clock) : IOuraClient
     public List<OuraSleepScore> SleepScores { get; } = [];
     public List<OuraReadiness> Readiness { get; } = [];
     public List<OuraSleepPeriod> SleepPeriods { get; } = [];
+    public List<OuraTag> Tags { get; } = [];
 
     /// <summary>Every read: the collection, the token it carried and the days it asked for.</summary>
     public ConcurrentQueue<(string Collection, string Token, DateOnly Start, DateOnly End)> Reads { get; } = new();
@@ -124,6 +128,10 @@ internal sealed class FakeOuraClient(IClock clock) : IOuraClient
     public Task<IReadOnlyList<OuraSleepPeriod>> GetSleepPeriodsAsync(
         string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
         => ReadAsync(OuraCollections.Sleep, accessToken, start, end, SleepPeriods, p => p.Day, cancellationToken);
+
+    public Task<IReadOnlyList<OuraTag>> GetTagsAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => ReadAsync(OuraCollections.Tag, accessToken, start, end, Tags, t => t.Day, cancellationToken);
 
     private async Task<IReadOnlyList<T>> ReadAsync<T>(
         OuraCollection collection, string accessToken, DateOnly start, DateOnly end, List<T> records,
@@ -214,7 +222,7 @@ public sealed class OuraConnectionTests(PostgresFixture postgres)
         Assert.Contains(oura.AuthorizedState!, url.AbsoluteUri);
         Assert.Equal(OuraStatus.ConnectedState, status.State);
         Assert.True(status.Connected);
-        Assert.Equal(["daily", "workout"], status.Scopes);
+        Assert.Equal(["daily", "workout", "tag"], status.Scopes);
         Assert.Empty(status.MissingScopes);
         Assert.Equal(clock.UtcNow, status.ConnectedAt);
 
@@ -301,7 +309,7 @@ public sealed class OuraConnectionTests(PostgresFixture postgres)
 
         // The refresh kept the original grant's scopes, which Oura didn't repeat.
         var status = await connection.GetStatusAsync(Ct);
-        Assert.Equal(["daily", "workout"], status.Scopes);
+        Assert.Equal(["daily", "workout", "tag"], status.Scopes);
         Assert.Equal(clock.UtcNow + oura.Lifetime, status.ExpiresAt);
     }
 

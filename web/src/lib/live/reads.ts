@@ -24,12 +24,14 @@ import {
   normalizeDayDetail,
   normalizeOuraStatus,
   normalizeSummary,
+  normalizeTags,
   normalizeWorkouts,
 } from "@/lib/activity";
 import type {
   ActivityDayDetailRead,
   ActivityDaysRead,
   ActivitySummaryRead,
+  ActivityTagsRead,
   ActivityWorkoutsRead,
   AreaRow,
   ArtifactRecord,
@@ -274,6 +276,11 @@ export const liveReads: LifeOsReads = {
   async activityWorkouts(from, to) {
     const data = await unwrap(api().GET("/api/activity/workouts", { params: { query: { from, to } } }));
     return normalizeWorkouts(asType<ActivityWorkoutsRead>(data));
+  },
+
+  async activityTags(from, to) {
+    const data = await unwrap(api().GET("/api/activity/tags", { params: { query: { from, to } } }));
+    return normalizeTags(asType<ActivityTagsRead>(data));
   },
 
   async ouraStatus() {

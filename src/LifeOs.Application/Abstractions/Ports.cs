@@ -516,15 +516,15 @@ public sealed record OAuthTokens(
 }
 
 /// <summary>
-/// Oura's API v2 (activity plan §3.1, §3.3): the OAuth calls and the five collections LifeOS
-/// keeps. Errors: <see cref="OuraGrantException"/> when Oura refuses a grant,
+/// Oura's API v2 (activity plan §3.1, §3.3): the OAuth calls and the collections LifeOS keeps
+/// (§3.9 added the tags). Errors: <see cref="OuraGrantException"/> when Oura refuses a grant,
 /// <see cref="OuraAccessDeniedException"/> when it refuses an access token (401) or access
 /// (403), <see cref="OuraUnavailableException"/> when it can't be reached or fails.
 /// <para>
 /// A collection read asks for the days [<c>start</c>, <c>end</c>] as Oura filters them —
 /// which differs by collection — and pages through <c>next_token</c>; the caller widens the
 /// window and filters on each record's day. A record without what identifies it (its day, or
-/// a workout's or sleep period's id) is skipped.
+/// a workout's, sleep period's or tag's id) is skipped.
 /// </para>
 /// </summary>
 public interface IOuraClient
@@ -558,6 +558,10 @@ public interface IOuraClient
         string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<OuraSleepPeriod>> GetSleepPeriodsAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default);
+
+    /// <summary>The tags Chris added in the Oura app (<c>enhanced_tag</c>); needs the <c>tag</c> scope.</summary>
+    Task<IReadOnlyList<OuraTag>> GetTagsAsync(
         string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default);
 }
 
@@ -613,7 +617,11 @@ public interface IIntegrationRepository
     /// </summary>
     Task<PendingConnect?> TakePendingAsync(string service, string state, CancellationToken cancellationToken = default);
 
-    /// <summary>Stores newly granted tokens: connected as of <paramref name="connectedAt"/>, no longer needing to reconnect.</summary>
+    /// <summary>
+    /// Stores newly granted tokens: connected as of <paramref name="connectedAt"/>, no longer
+    /// needing to reconnect. A grant with a scope the stored one didn't have starts the history
+    /// backfill over, so the new collection's past comes in (activity plan §3.9).
+    /// </summary>
     Task SaveConnectionAsync(
         string service, OAuthTokens tokens, DateTimeOffset connectedAt, CancellationToken cancellationToken = default);
 
@@ -678,8 +686,8 @@ public sealed record OuraVersion(string Kind, DateTimeOffset OccurredAt, string 
 /// <summary>
 /// Oura's records and Chris's workout notes as LifeOS holds them (ACTIVITY-1..4, D14, migration
 /// 0037): versioned observed events, folded by <c>bsk.v_activity_day</c>, <c>bsk.v_workout</c>,
-/// <c>bsk.v_sleep_period</c>, <c>bsk.v_sleep_day</c> and <c>bsk.v_readiness_day</c>. Days are
-/// Oura's own.
+/// <c>bsk.v_sleep_period</c>, <c>bsk.v_sleep_day</c>, <c>bsk.v_readiness_day</c> and, since
+/// migration 0039, <c>bsk.v_oura_tag</c>. Days are Oura's own.
 /// </summary>
 public interface IActivityRepository
 {
@@ -709,6 +717,9 @@ public interface IActivityRepository
 
     /// <summary>Live sleep periods counting on the days [<paramref name="from"/>, <paramref name="to"/>], earliest first.</summary>
     Task<IReadOnlyList<SleepPeriod>> GetSleepPeriodsAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
+
+    /// <summary>Live tags starting on the days [<paramref name="from"/>, <paramref name="to"/>], newest first.</summary>
+    Task<IReadOnlyList<ActivityTag>> GetTagsAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

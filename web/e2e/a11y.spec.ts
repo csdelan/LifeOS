@@ -336,6 +336,35 @@ test.describe("accessibility", () => {
     });
   }
 
+  // Tags from the Oura app (ACTIVITY-6): the Tags card with its counts and every day shown, and
+  // a day's sheet with its tags, in both themes.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /activity tags and a day's tags, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/activity");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      const tags = page.getByRole("region", { name: "Tags", exact: true });
+      await expect(tags.getByTestId("tag-counts")).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(/^Synced from Oura /)).toBeVisible();
+      await tags.getByRole("button", { name: /^Show \d+ more days$/ }).click();
+      await expect(tags.getByTestId("tag-comment").first()).toBeVisible();
+      const card = await scan();
+      expect(card, JSON.stringify(card, null, 2)).toEqual([]);
+
+      await tags.getByTestId("tag-day").nth(2).getByRole("button", { name: /, open the day$/ }).click();
+      const sheet = page.getByRole("dialog");
+      await expect(sheet.getByRole("list", { name: "Tags from the Oura app" })).toBeVisible();
+      await expect(sheet.getByRole("heading", { name: "The night" })).toBeVisible();
+      const day = await scan();
+      expect(day, JSON.stringify(day, null, 2)).toEqual([]);
+    });
+  }
+
   // The Activity page on a phone: one column, and a workout's sheet and last night's rising from
   // the bottom.
   test("axe serious/critical: /activity on a phone with a workout and last night open", async ({ page }) => {

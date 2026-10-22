@@ -1256,6 +1256,39 @@ export interface ActivityWorkoutsRead {
 }
 
 /**
+ * A tag Chris added in the Oura app (ACTIVITY-6, activity plan §3.9): a moment, or a stretch when
+ * it has an end. `name` is how LifeOS words it; `typeCode` and `customName` are Oura's own.
+ */
+export interface ActivityTagRow {
+  id: string;
+  /** The day it starts (Oura's `start_day`). */
+  day: string;
+  /** The day it ends, for a tag with a length. */
+  endDay: string | null;
+  /** Oura's code: the tag picked, `custom` for one Chris named, or null for a text-only tag. */
+  typeCode: string | null;
+  customName: string | null;
+  /** "Late meal", a custom tag's own name, or "Note" for a text-only tag. */
+  name: string;
+  startedAt: string;
+  /** Null for a moment. */
+  endedAt: string | null;
+  /** How long it lasted, in seconds; null for a moment. */
+  seconds: number | null;
+  /** Chris's own words on it in the Oura app. */
+  comment: string | null;
+  syncedAt: string;
+}
+
+export interface ActivityTagsRead {
+  from: string;
+  to: string;
+  today: string;
+  /** Live tags starting on those days, newest first. */
+  tags: ActivityTagRow[];
+}
+
+/**
  * A week, Monday to Sunday. Today is still going: it counts toward `goalDays` once it gets
  * there, but isn't averaged or counted under the minimum until it's over.
  */
@@ -1312,7 +1345,8 @@ export interface SleepPeriodRow {
 /**
  * One day in full (`GET /api/activity/day`, ACTIVITY-4): its row, both scores' contributors by
  * Oura's names (`deep_sleep`, `hrv_balance`…, each 0–100), the temperature deviation in °C,
- * the night ending that morning, the naps, and the day's workouts, earliest first.
+ * the night ending that morning, the naps, and the day's workouts and tags from the Oura app
+ * (ACTIVITY-6), each earliest first.
  */
 export interface ActivityDayDetailRead {
   day: string;
@@ -1327,6 +1361,7 @@ export interface ActivityDayDetailRead {
   night: SleepPeriodRow | null;
   naps: SleepPeriodRow[];
   workouts: WorkoutRow[];
+  tags: ActivityTagRow[];
 }
 
 /**

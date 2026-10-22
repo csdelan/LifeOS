@@ -5,9 +5,10 @@ using LifeOs.Domain;
 namespace LifeOs.Tests;
 
 /// <summary>
-/// The activity rules in code (ACTIVITY-2, ACTIVITY-3, activity plan §2, §3.4): which workouts
-/// count as exercise and why not, the step bands, and the payloads a sync writes — the same
-/// record always making the same JSON and hash (D14, §3.2).
+/// The activity rules in code (ACTIVITY-2, ACTIVITY-3, ACTIVITY-6, activity plan §2, §3.4, §3.9):
+/// which workouts count as exercise and why not, the step bands, how a tag from the Oura app
+/// reads, and the payloads a sync writes — the same record always making the same JSON and hash
+/// (D14, §3.2).
 /// </summary>
 public sealed class ActivityRulesTests
 {
@@ -112,6 +113,62 @@ public sealed class ActivityRulesTests
     }
 
     [Fact]
+    public void A_tag_keeps_what_oura_gives_and_its_id_is_its_key()
+    {
+        var start = new DateTimeOffset(2026, 10, 21, 21, 0, 0, TimeSpan.FromHours(-7));
+        var tub = OuraPayloads.Tag(new OuraTag(
+            "t-1", Day, Day, "custom", "Hot tub", start, start.AddMinutes(25), "With the neighbours"));
+
+        Assert.Equal(("t-1", start, Day), (tub.Key, tub.OccurredAt, tub.Day));
+        Assert.Equal(OuraCollections.Tag, tub.Collection);
+        Assert.Equal(EventKinds.Observation, tub.Collection.Kind);
+        Assert.Equal(
+            """{"oura_tag":{"id":"t-1","day":"2026-10-21","end_day":"2026-10-21","type_code":"custom","custom_name":"Hot tub","start":"2026-10-21T21:00:00-07:00","end":"2026-10-21T21:25:00-07:00","comment":"With the neighbours"}}""",
+            tub.PayloadJson);
+
+        // A moment: no end and no end day, written as nulls, so the hash is the same every time.
+        var happy = OuraPayloads.Tag(new OuraTag("t-2", Day, null, "generic_happy", null, start, null, null));
+        Assert.Equal(
+            """{"id":"t-2","day":"2026-10-21","end_day":null,"type_code":"generic_happy","custom_name":null,"start":"2026-10-21T21:00:00-07:00","end":null,"comment":null}""",
+            happy.Json);
+        Assert.Equal(happy.Hash, OuraPayloads.Tag(new OuraTag("t-2", Day, null, "generic_happy", null, start, null, null)).Hash);
+        Assert.NotEqual(happy.Hash, OuraPayloads.Tag(new OuraTag("t-2", Day, null, "generic_happy", null, start, null, "Good day")).Hash);
+    }
+
+    [Theory]
+    [InlineData("generic_happy", null, "Happy")]
+    [InlineData("generic_excited", null, "Excited")]
+    [InlineData("tag_generic_late_meal", null, "Late meal")]
+    [InlineData("tag_generic_alcohol", null, "Alcohol")]
+    [InlineData("tag_sauna", null, "Sauna")]
+    [InlineData("tableTennis", null, "Table tennis")]
+    [InlineData("generic_HIIT_class", null, "Hiit class")]
+    [InlineData("  generic_happy  ", null, "Happy")]
+    [InlineData("custom", "Hot tub", "Hot tub")]
+    [InlineData("CUSTOM", "  Hot tub ", "Hot tub")]
+    [InlineData("custom", null, OuraTags.UnnamedCustom)]
+    [InlineData("custom", "  ", OuraTags.UnnamedCustom)]
+    [InlineData(null, null, OuraTags.TextOnly)]
+    [InlineData("", "Ignored", OuraTags.TextOnly)]
+    [InlineData("generic_", null, "Generic")]
+    [InlineData("tag_", null, "Tag")]
+    public void A_tag_reads_as_its_code_made_readable_its_own_name_or_a_note(string? code, string? customName, string expected)
+        => Assert.Equal(expected, OuraTags.Name(code, customName));
+
+    [Fact]
+    public void A_held_tag_knows_its_length()
+    {
+        var start = new DateTimeOffset(2026, 10, 21, 21, 0, 0, TimeSpan.Zero);
+        ActivityTag Held(DateTimeOffset? end) => new(
+            "t-1", Day, null, "tag_sauna", null, start, end, null, start, Guid.Empty);
+
+        Assert.Null(Held(null).Seconds);
+        Assert.Equal(25 * 60, Held(start.AddMinutes(25)).Seconds);
+        Assert.Equal(0, Held(start.AddMinutes(-5)).Seconds);
+        Assert.Equal("Sauna", Held(null).Name);
+    }
+
+    [Fact]
     public void An_external_id_names_the_collection_key_hash_and_the_version_it_replaces()
     {
         var record = OuraPayloads.Activity(Activity(9234));
@@ -122,7 +179,7 @@ public sealed class ActivityRulesTests
     }
 
     [Fact]
-    public void Only_workouts_and_sleep_periods_can_be_withdrawn()
+    public void Only_workouts_sleep_periods_and_tags_can_be_withdrawn()
     {
         var voided = OuraPayloads.Voided(OuraCollections.Workout, "w-1", Day, DateTimeOffset.UnixEpoch);
 
@@ -131,7 +188,10 @@ public sealed class ActivityRulesTests
         Assert.NotNull(OuraPayloads.Voided(OuraCollections.Sleep, "s-1", Day, DateTimeOffset.UnixEpoch));
         Assert.Throws<ArgumentException>(() => OuraPayloads.Voided(OuraCollections.DailyActivity, "2026-10-21", Day, DateTimeOffset.UnixEpoch));
         Assert.Equal(
-            ["workout", "sleep"],
+            """{"oura_tag":{"id":"t-1","day":"2026-10-21","voided":true}}""",
+            OuraPayloads.Voided(OuraCollections.Tag, "t-1", Day, DateTimeOffset.UnixEpoch).PayloadJson);
+        Assert.Equal(
+            ["workout", "sleep", "enhanced_tag"],
             OuraCollections.All.Where(c => c.Voidable).Select(c => c.Name));
     }
 

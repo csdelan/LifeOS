@@ -17,7 +17,7 @@ public sealed record OuraSyncOptions(DateOnly? From = null, int HistoryWindows =
 /// <param name="Windows">How many windows were read, history included.</param>
 /// <param name="Records">How many records Oura answered for those days.</param>
 /// <param name="Written">How many versions were written: new and changed records, and withdrawals.</param>
-/// <param name="Voided">How many of those withdraw a workout or sleep period Oura no longer has.</param>
+/// <param name="Voided">How many of those withdraw a workout, sleep period or tag Oura no longer has.</param>
 /// <param name="HistoryFrom">The earliest day the history has been read back to.</param>
 /// <param name="HistoryDone">The history backfill found where Oura's history starts.</param>
 public sealed record OuraSyncResult(
@@ -43,8 +43,12 @@ public sealed record OuraPageSync(OuraSyncResult? Result, DateTimeOffset? LastSy
 }
 
 /// <summary>
-/// Reads Oura's five collections into LifeOS (ACTIVITY-1..4, D14, activity plan §3.2, §3.3).
+/// Reads Oura's collections into LifeOS (ACTIVITY-1..4, ACTIVITY-6, D14, activity plan §3.2,
+/// §3.3, §3.9).
 /// <list type="bullet">
+/// <item><b>What's read:</b> daily activity, workouts, sleep scores, readiness and sleep
+/// periods, and the tags Chris adds in the Oura app when Oura granted the <c>tag</c> scope. A
+/// connection without it reads the rest as before.</item>
 /// <item><b>The window:</b> the last 14 days through tomorrow, for every collection, which
 /// catches a ring that synced late and edits made in the Oura app. Each request asks for two
 /// days more on each side and LifeOS filters on <c>day</c> itself, since Oura's own filter
@@ -54,9 +58,9 @@ public sealed record OuraPageSync(OuraSyncResult? Result, DateTimeOffset? LastSy
 /// nothing (or it reaches <see cref="HistoryFloor"/>). Where it got to is kept on the
 /// connection, so the next sync carries on.</item>
 /// <item><b>Versions:</b> a record gets a new version only when its trimmed content differs
-/// from the newest LifeOS holds. A workout or sleep period LifeOS holds on a day in the window
-/// that Oura no longer answers gets a voided version; if it comes back, a new version restores
-/// it. Daily records are never withdrawn.</item>
+/// from the newest LifeOS holds. A workout, sleep period or tag LifeOS holds on a day in the
+/// window that Oura no longer answers gets a voided version; if it comes back, a new version
+/// restores it. Daily records are never withdrawn.</item>
 /// <item><b>One at a time:</b> each window is read and written under a lock every sync
 /// shares, so a second sync waits, then finds nothing new.</item>
 /// <item><b>Tokens:</b> a token Oura refuses (401) is refreshed once and the request tried
@@ -151,6 +155,11 @@ public sealed class OuraSyncService(
         try
         {
             var token = new Token(await connection.GetAccessTokenAsync(cancellationToken));
+
+            // Tags only under the scope Oura granted for them: a token without it is never sent
+            // to the collection, so its refusal can't read as a bad token.
+            var granted = (await integrations.GetAsync(service, cancellationToken))?.Scopes ?? [];
+            var tags = granted.Contains(OuraConnectionService.TagScope, StringComparer.OrdinalIgnoreCase);
             var today = await calendar.DateAtAsync(clock.UtcNow, cancellationToken);
             var to = today.AddDays(1);
             var tally = new Tally();
@@ -170,7 +179,7 @@ public sealed class OuraSyncService(
                 for (var start = from; start <= to; start = start.AddDays(HistoryWindowDays))
                 {
                     var end = Min(start.AddDays(HistoryWindowDays - 1), to);
-                    await SyncWindowAsync(oura, token, start, end, tally, cancellationToken);
+                    await SyncWindowAsync(oura, token, tags, start, end, tally, cancellationToken);
                 }
 
                 historyFrom = from;
@@ -178,7 +187,7 @@ public sealed class OuraSyncService(
             else
             {
                 from = today.AddDays(-RecentDays);
-                await SyncWindowAsync(oura, token, from, to, tally, cancellationToken);
+                await SyncWindowAsync(oura, token, tags, from, to, tally, cancellationToken);
 
                 var stored = await integrations.GetAsync(service, cancellationToken);
                 historyDone = stored?.HistoryDone ?? false;
@@ -193,7 +202,7 @@ public sealed class OuraSyncService(
 
                     var end = reached.AddDays(-1);
                     var start = Max(end.AddDays(-(HistoryWindowDays - 1)), HistoryFloor);
-                    var found = await SyncWindowAsync(oura, token, start, end, tally, cancellationToken);
+                    var found = await SyncWindowAsync(oura, token, tags, start, end, tally, cancellationToken);
                     reached = start;
                     historyDone = found == 0 || start <= HistoryFloor;
                 }
@@ -215,10 +224,11 @@ public sealed class OuraSyncService(
         }
     }
 
-    // Reads one window of every collection and writes what changed, under the sync lock.
-    // Answers how many records Oura has on the window's days.
+    // Reads one window of every collection (tags too, with their scope) and writes what changed,
+    // under the sync lock. Answers how many records Oura has on the window's days.
     private async Task<int> SyncWindowAsync(
-        IOuraClient oura, Token token, DateOnly from, DateOnly to, Tally tally, CancellationToken cancellationToken)
+        IOuraClient oura, Token token, bool readTags, DateOnly from, DateOnly to, Tally tally,
+        CancellationToken cancellationToken)
     {
         var start = from.AddDays(-PadDays);
         var end = to.AddDays(PadDays);
@@ -229,6 +239,9 @@ public sealed class OuraSyncService(
         var sleepScores = await FetchAsync(t => oura.GetDailySleepAsync(t, start, end, cancellationToken), token, cancellationToken);
         var readiness = await FetchAsync(t => oura.GetDailyReadinessAsync(t, start, end, cancellationToken), token, cancellationToken);
         var periods = await FetchAsync(t => oura.GetSleepPeriodsAsync(t, start, end, cancellationToken), token, cancellationToken);
+        var tags = readTags
+            ? await FetchAsync(t => oura.GetTagsAsync(t, start, end, cancellationToken), token, cancellationToken)
+            : null;
 
         var found = 0;
         found += await ApplyAsync(sync, OuraCollections.DailyActivity, days.Select(OuraPayloads.Activity), from, to, tally, cancellationToken);
@@ -236,6 +249,11 @@ public sealed class OuraSyncService(
         found += await ApplyAsync(sync, OuraCollections.DailySleep, sleepScores.Select(OuraPayloads.SleepScore), from, to, tally, cancellationToken);
         found += await ApplyAsync(sync, OuraCollections.DailyReadiness, readiness.Select(OuraPayloads.Readiness), from, to, tally, cancellationToken);
         found += await ApplyAsync(sync, OuraCollections.Sleep, periods.Select(OuraPayloads.SleepPeriod), from, to, tally, cancellationToken);
+        if (tags is not null)
+        {
+            found += await ApplyAsync(sync, OuraCollections.Tag, tags.Select(OuraPayloads.Tag), from, to, tally, cancellationToken);
+        }
+
         await sync.CommitAsync(cancellationToken);
 
         tally.Windows++;

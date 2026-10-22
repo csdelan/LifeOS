@@ -1092,6 +1092,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/activity/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetActivityTags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/activity/workouts/{id}/note": {
         parameters: {
             query?: never;
@@ -1189,6 +1205,7 @@ export interface components {
             night?: null | components["schemas"]["SleepPeriodRow"];
             naps?: components["schemas"]["SleepPeriodRow"][];
             workouts?: components["schemas"]["WorkoutRow"][];
+            tags?: components["schemas"]["ActivityTagRow"][];
         };
         ActivityDayRow: {
             day?: string;
@@ -1280,6 +1297,29 @@ export interface components {
             lastSyncedAt?: null | string;
             awards?: components["schemas"]["AwardRow"][];
             progress?: components["schemas"]["DomainChangeRow"][];
+        };
+        ActivityTagRow: {
+            id?: string;
+            day?: string;
+            endDay?: null | string;
+            typeCode?: null | string;
+            customName?: null | string;
+            name?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            endedAt?: null | string;
+            /** Format: int32 */
+            seconds?: null | number | string;
+            comment?: null | string;
+            /** Format: date-time */
+            syncedAt?: string;
+        };
+        ActivityTagsRead: {
+            from?: string;
+            to?: string;
+            today?: string;
+            tags?: components["schemas"]["ActivityTagRow"][];
         };
         ActivityWeekRow: {
             from?: string;
@@ -4312,6 +4352,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivityWorkoutsRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetActivityTags: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityTagsRead"];
                 };
             };
             /** @description Bad Request */

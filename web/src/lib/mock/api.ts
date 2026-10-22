@@ -19,6 +19,7 @@ import type {
   ActivityDayRow,
   ActivityDaysRead,
   ActivitySummaryRead,
+  ActivityTagsRead,
   ActivityWorkoutsRead,
   AreaRow,
   ArtifactRecord,
@@ -79,6 +80,7 @@ import {
   mockActivityDay,
   mockActivityDays,
   mockActivitySummary,
+  mockActivityTags,
   mockActivityWorkouts,
   mockOuraStatus,
 } from "@/lib/mock/activity-store";
@@ -172,7 +174,9 @@ export interface LifeOsReads {
   activityDays(from?: string, to?: string): Promise<ActivityDaysRead>;
   /** Workouts on those days (the last 12 whole weeks by default), newest first, counted or not. */
   activityWorkouts(from?: string, to?: string): Promise<ActivityWorkoutsRead>;
-  /** One day in full (today by default): both scores' contributors, the night, naps and workouts. */
+  /** Tags from the Oura app starting on those days (the 30 days through today by default), newest first. */
+  activityTags(from?: string, to?: string): Promise<ActivityTagsRead>;
+  /** One day in full (today by default): both scores' contributors, the night, naps, workouts and tags. */
   activityDay(date?: string): Promise<ActivityDayDetailRead>;
   /** The Oura connection (`GET /api/oura/status`): other pages ask for the throttled sync when it's connected. */
   ouraStatus(): Promise<OuraStatus>;
@@ -390,6 +394,11 @@ export const mockReads: LifeOsReads = {
   async activityWorkouts(from?: string, to?: string): Promise<ActivityWorkoutsRead> {
     await wait();
     return mockActivityWorkouts(from, to);
+  },
+
+  async activityTags(from?: string, to?: string): Promise<ActivityTagsRead> {
+    await wait();
+    return mockActivityTags(from, to);
   },
 
   async ouraStatus(): Promise<OuraStatus> {
