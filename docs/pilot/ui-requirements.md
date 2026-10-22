@@ -3151,8 +3151,8 @@ numbers from a real ring (A6) are next.
 
 ### ACTIVITY-5 — My Oura data earns Health XP automatically
 Horizon:    Pilot
-Definition: drafting
-Build:      unmapped
+Definition: active
+Build:      building
 
 **Workflow (Chris):**
 - "Assigning health XP (or other rewards) automatically based on the data. I don't know
@@ -3164,10 +3164,37 @@ Build:      unmapped
   - Oura's history before then is still read and shown on the Activity page (ACTIVITY-1);
     it just never pays (activity plan §3.8, question 7).
 
+- **The formulas (2026-10-22),** from Chris's planning notes ("Use these decisions as input
+  to the remaining phase 2 content"):
+  - **Steps:** up to 25, on a straight line through 2,500 → 5, 5,000 → 12, 7,500 → 20 and
+    10,000 → 25.
+  - **Exercise:** up to 35, from the day's counted minutes: 10 → 8, 20 → 15, 30 → 25,
+    45 → 35.
+  - **Sleep:** up to 20, from the sleep score: 50 → 0, 60 → 5, 70 → 10, 80 → 15, 85 → 20.
+  - **Readiness and Oura's Activity Score** pay nothing.
+  - **Health XP only,** with no new balance. Missing data is unknown, not 0. There are no
+    penalties.
+
 **Ontology fit (Claude):**
-- _pending_ until the formulas are set. The likely shape is item-less award keys per day,
-  re-priced like D13's; [activity-plan.md](activity-plan.md) §3.8 sketches it, with the
-  questions to settle.
+- **The rules** are `ActivityRules` in Domain, beside `DietRules`, with a drift test and a
+  TypeScript port tested on the same table.
+- **On the ledger,** each day has three item-less award keys: `steps:<day>`,
+  `exercise:<day>` and `sleep:<day>`.
+  - They're credited to the Oura day at its multiplier, and re-priced when the Oura versions
+    they cite change, as D13's food keys are.
+  - Steps and exercise pay once Oura's day is over. Sleep pays once the day has a score.
+- **Nothing new in the kernel:** no new currency, table or event kind.
+- [activity-plan.md](activity-plan.md) §3.8 has the detail, the questions answered and the
+  calibration.
+
+**Update (2026-10-22 — rules landed, A7):** `ActivityRules` and
+`web/src/lib/activity-score.ts` score a day as above, each tested on the same table.
+
+- Build moves `unmapped → building`. Paying on the ledger (A8) and showing it on the page
+  (A9) are next.
+- **One open question for Chris:** the 70-XP successful day. The calibration found it holds
+  a healthy routine to about 70% successful days and level 59 after 10 years. The plan
+  recommends 60.
 
 
 

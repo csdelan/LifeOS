@@ -82,6 +82,159 @@ public static class ExerciseRules
     }
 }
 
+/// <summary>A point on one of <see cref="ActivityRules"/>' straight-line curves: <see cref="At"/> pays <see cref="Xp"/>.</summary>
+public sealed record CurvePoint(int At, int Xp);
+
+/// <summary>An exercise tier: a day with at least <see cref="FromMinutes"/> of counted exercise pays <see cref="Xp"/>.</summary>
+public sealed record ExerciseTier(int FromMinutes, int Xp);
+
+/// <summary>
+/// What the activity score reads of one Oura day (activity plan §3.8): its steps, its counted
+/// exercise in seconds (<see cref="ActivityRules.ExerciseSeconds"/>), and its sleep score.
+/// A null is data Oura doesn't have, which is never read as 0.
+/// </summary>
+public sealed record ActivityDayFacts(int? Steps, long ExerciseSeconds, int? SleepScore);
+
+/// <summary>
+/// A day's activity XP before the multiplier (activity plan §3.8): each part rounded to whole
+/// base Health XP, halves up, and each paid as its own award. <see cref="Steps"/> and
+/// <see cref="Sleep"/> are null when Oura has no data for them.
+/// </summary>
+public sealed record ActivityScore(long? Steps, long Exercise, long? Sleep)
+{
+    /// <summary>The day's activity XP before the multiplier: all three parts.</summary>
+    public long Total => (Steps ?? 0) + Exercise + (Sleep ?? 0);
+}
+
+/// <summary>
+/// The activity XP rules (ACTIVITY-5, activity plan §3.8): up to <see cref="Cap"/> base Health
+/// XP a day from steps, counted exercise and the sleep score. Readiness and Oura's Activity
+/// Score pay nothing. Tunable numbers kept in code like <see cref="DietRules"/>, with a drift
+/// test and a TypeScript port (<c>lib/activity-score.ts</c>) tested on the same table. A retune
+/// never rewrites a past day: only a change to the day's Oura data re-scores it.
+/// </summary>
+/// <param name="StepsCurve">Steps to XP, a straight line between the points; past the last point it pays the last.</param>
+/// <param name="ExerciseTiers">The day's counted minutes to XP, lowest first; under the first tier pays 0.</param>
+/// <param name="SleepCurve">The sleep score to XP, a straight line between the points; below the first it pays the first, past the last the last.</param>
+/// <param name="XpFrom">The first day activity pays (question 7): earlier days are shown but never pay.</param>
+public sealed record ActivityRules(
+    string Currency,
+    IReadOnlyList<CurvePoint> StepsCurve,
+    IReadOnlyList<ExerciseTier> ExerciseTiers,
+    IReadOnlyList<CurvePoint> SleepCurve,
+    DateOnly XpFrom)
+{
+    /// <summary>Chris's planning notes (2026-10-22): 25 steps + 35 exercise + 20 sleep = 80, from 2026-10-22.</summary>
+    public static readonly ActivityRules Default = new(
+        Currency: Currencies.HealthXp,
+        StepsCurve: [new(0, 0), new(2_500, 5), new(5_000, 12), new(7_500, 20), new(10_000, 25)],
+        ExerciseTiers: [new(10, 8), new(20, 15), new(30, 25), new(45, 35)],
+        SleepCurve: [new(50, 0), new(60, 5), new(70, 10), new(80, 15), new(85, 20)],
+        XpFrom: new DateOnly(2026, 10, 22));
+
+    /// <summary>The most a day's steps can pay.</summary>
+    public int StepsMax => StepsCurve[^1].Xp;
+
+    /// <summary>The most a day's exercise can pay.</summary>
+    public int ExerciseMax => ExerciseTiers[^1].Xp;
+
+    /// <summary>The most a day's sleep score can pay.</summary>
+    public int SleepMax => SleepCurve[^1].Xp;
+
+    /// <summary>The most base Health XP a day's activity can pay.</summary>
+    public int Cap => StepsMax + ExerciseMax + SleepMax;
+
+    /// <summary>Whether <paramref name="day"/> can pay at all: on or after <see cref="XpFrom"/>.</summary>
+    public bool Pays(DateOnly day) => day >= XpFrom;
+
+    /// <summary>Scores one Oura day (activity plan §3.8).</summary>
+    public ActivityScore Score(ActivityDayFacts facts)
+        => new(
+            facts.Steps is { } steps ? StepsXp(steps) : null,
+            ExerciseXp(facts.ExerciseSeconds),
+            facts.SleepScore is { } score ? SleepXp(score) : null);
+
+    /// <summary>The steps part, unrounded: along <see cref="StepsCurve"/>.</summary>
+    public decimal StepsPart(int steps) => Along(StepsCurve, steps);
+
+    /// <summary>What <paramref name="steps"/> pay: the steps part, halves up.</summary>
+    public long StepsXp(int steps) => DietRules.Round(StepsPart(steps));
+
+    /// <summary>The sleep part, unrounded: along <see cref="SleepCurve"/>.</summary>
+    public decimal SleepPart(int score) => Along(SleepCurve, score);
+
+    /// <summary>What a sleep score pays: the sleep part, halves up.</summary>
+    public long SleepXp(int score) => DietRules.Round(SleepPart(score));
+
+    /// <summary>
+    /// What a day's counted exercise pays: the highest tier its <paramref name="seconds"/>
+    /// reach, counted to the second (10 minutes is 600 seconds), else 0.
+    /// </summary>
+    public long ExerciseXp(long seconds)
+        => ExerciseTiers.LastOrDefault(t => seconds >= t.FromMinutes * 60L)?.Xp ?? 0;
+
+    /// <summary>
+    /// One Oura day's counted exercise in seconds: the workouts that count
+    /// (<see cref="ExerciseRules"/>), with any times they overlap merged, so a workout split in
+    /// two pays no more and two overlapping records count once. Only the duration counts.
+    /// </summary>
+    public static long ExerciseSeconds(IEnumerable<Workout> workouts)
+        => MergedSeconds(workouts.Where(w => w.Verdict.Counted).Select(w => (w.StartedAt, w.EndedAt)));
+
+    /// <summary>The seconds covered by <paramref name="spans"/>, overlaps counted once; a span that ends before it starts covers nothing.</summary>
+    public static long MergedSeconds(IEnumerable<(DateTimeOffset Start, DateTimeOffset End)> spans)
+    {
+        var total = TimeSpan.Zero;
+        DateTimeOffset? from = null, to = null;
+        foreach (var (start, end) in spans.Where(s => s.End > s.Start).OrderBy(s => s.Start))
+        {
+            if (to is { } reach && start <= reach)
+            {
+                if (end > reach)
+                {
+                    to = end;
+                }
+
+                continue;
+            }
+
+            if (from is { } a && to is { } b)
+            {
+                total += b - a;
+            }
+
+            (from, to) = (start, end);
+        }
+
+        if (from is { } first && to is { } last)
+        {
+            total += last - first;
+        }
+
+        return (long)total.TotalSeconds;
+    }
+
+    /// <summary>A straight line through <paramref name="curve"/>'s points, flat before the first and after the last.</summary>
+    private static decimal Along(IReadOnlyList<CurvePoint> curve, int x)
+    {
+        if (x <= curve[0].At)
+        {
+            return curve[0].Xp;
+        }
+
+        for (var i = 1; i < curve.Count; i++)
+        {
+            var (low, high) = (curve[i - 1], curve[i]);
+            if (x <= high.At)
+            {
+                return low.Xp + (decimal)(high.Xp - low.Xp) * (x - low.At) / (high.At - low.At);
+            }
+        }
+
+        return curve[^1].Xp;
+    }
+}
+
 /// <summary>
 /// One of the Oura collections LifeOS keeps (D14, activity plan §3.2): where its records go in
 /// an event's payload, what identifies one, and its event kind. A record LifeOS holds that Oura

@@ -472,55 +472,174 @@ Run `npm run gen:api` after the endpoints land.
     4. Add a note to a run and see it under the row.
     5. Switch the sleep chart to Readiness.
 
-### 3.8 Phase 2: activity XP (shape only)
+### 3.8 Phase 2: activity XP
 
-The machinery is D13's. Only the rules are new.
+Settled on 2026-10-22 from Chris's planning notes (§5). The machinery is D13's: only the
+rules are new. Activity pays **Health XP only**, into the same balance, levels and ranks the
+Food Log feeds. There's no new currency, balance or level curve, and the Food Log's rules
+don't change.
 
-- **`ActivityRules`** in Domain, like `DietRules`: the numbers, a `Score` over a day's facts,
-  a drift test, and a TypeScript port (`lib/activity-score.ts`) tested on the same table.
-- **Award keys** are item-less and re-priced:
-  - such as `steps:<day>`, `exercise:<day>` and `sleep:<day>`, or one per workout
-    (`workout:<oura id>`)
-  - paid in Health XP, credited to the Oura day, at that day's multiplier
-  - citing the versions they were priced from
+**The rules (`ActivityRules`, A7).** Up to 80 base Health XP a day from three parts. Each
+part is its own award, rounded to whole XP, halves up (`DietRules.Round`), before the
+multiplier.
 
-  A paid day is re-priced only when those versions change, so a retune never rewrites a
-  past day.
-- **Settling:** after every sync, from `POST /api/domains/settle` (the Character page), and
-  in `bsk rewards reconcile`.
-- **Feedback:** earn toasts on the Activity page ("👟 9,234 steps: +12 Health XP"), and
-  projected against paid per day on the page.
+| Part | Most a day | How it pays | Pays nothing when |
+|---|---:|---|---|
+| Steps | 25 | A straight line through 0 → 0, 2,500 → 5, 5,000 → 12, 7,500 → 20 and 10,000 → 25. More than 10,000 pays 25. | Oura has no step count for the day |
+| Exercise | 35 | The day's counted exercise, in tiers: under 10 minutes 0, 10–19 minutes 8, 20–29 minutes 15, 30–44 minutes 25, 45 minutes or more 35. | No workout counts |
+| Sleep | 20 | Oura's sleep score on a straight line through 50 → 0, 60 → 5, 70 → 10, 80 → 15 and 85 → 20. 50 or less pays 0, 85 or more pays 20. | Oura has no sleep score for the day |
+| Readiness | 0 | Never pays. It measures recovery, and a hard workout can lower it. | Always |
 
-**Questions for the phase 2 Q&A**, to settle with the formulas:
+Some worked examples:
 
-1. **Activity's share of the 70-XP successful day.** Food pays up to 40, and habits fill the
-   rest today. Steps, exercise and sleep would share what's left, or raise the bar.
-2. **The steps curve around Chris's thresholds** (5,000 minimum, 7,500 goal, more is
-   better, less is worse):
-   - **Below 5,000:** nothing, or a penalty? There are no penalties on the ledger yet.
-   - **From 5,000 to 7,500:** a straight line or a step.
-   - **Above 7,500:** keeps paying, and up to what cap?
+- 6,000 steps pay 15 (15.2), and 3,750 pay 9 (8.5, halves up).
+- A sleep score of 75 pays 13 (12.5), and 82 pays 17.
+- Two runs of 12 and 20 minutes make 32 minutes, which pays 25.
 
-   Steps (tiers) re-price less often while a day is in progress.
-3. **When steps pay:** live as the day goes (re-priced on each sync), or once the day is
-   over, like the Food Log's close.
-4. **How counted workouts pay** (§3.4 decides which count): duration, intensity, calories,
-   or a flat amount per session, and a daily cap. A manual workout can be back-dated with
-   any intensity, so it's scout's honor (GEN-5).
-5. **Sleep and readiness:** do they pay, and on what? The sleep score, time asleep, a
-   bedtime target, or readiness. Readiness reflects recovery more than effort.
-6. **Double counting:** a Health habit that is itself exercise or sleep would pay twice.
-7. **History:** XP only from the day phase 2 ships (recommended), or for past days too. A
-   year of backfilled data paying at once would jump several levels and fill the
-   consistency window in one go. **Settled (2026-10-22): XP from 2026-10-22**, the day Chris
-   began the Food Log, so activity and food pay Health XP from the same day (§5). Days
-   before it are read and shown but never pay. Days from it until phase 2 ships pay when
-   it does, re-priced like the Food Log's.
-8. **Other rewards:** Gems for step streaks, Freedom, Life XP.
-9. **A background sync:** XP lands only when something syncs. If that turns out to matter,
-   add a daily scheduled sync (a GitHub Actions cron, or Oura's webhooks waking the machine).
-10. **Days with the ring off:** is a day with a lot of non-wear time excused rather than
-    counted as a low-step day?
+Each part works like this:
+
+- **Exercise counts per Oura day, not per workout.**
+  - It adds up the day's counted workouts to the second, merging any times where they
+    overlap. 10 minutes means 600 seconds.
+  - So splitting a workout in two pays no more, and two overlapping records count once.
+  - Only the duration counts: not calories, intensity, heart rate or the kind of exercise.
+  - What counts is §3.4's rule, unchanged: recorded by Chris, never a walk, never detected.
+- **Missing isn't zero.**
+  - A day with no step count, or no sleep score, pays nothing for that part. It shows as
+    missing, never as 0.
+  - A day where Oura measured 0 steps also pays 0.
+- **No penalties.** A low day pays less, never less than 0.
+- **XP from 2026-10-22** (`ActivityRules.XpFrom`, question 7). Earlier days are shown but
+  never pay. It's a rules value like the others, so a retune or a test can move it.
+- **Oura's Activity Score never pays.** It overlaps steps and workouts.
+- **A drift test** keeps the numbers honest:
+  - the parts add up to 80
+  - the curves and tiers rise
+  - the currency is a life domain
+  - the worked examples still hold
+- **A TypeScript port** (`lib/activity-score.ts`) is tested on the same table, so the mock
+  and the page's projections pay what the kernel would.
+
+**On the ledger (A8).** Each day has three award keys. None belongs to an item, like the
+Food Log's `diet:` and `fast:` (food-log plan §3.3):
+
+| Key | Due | Dated at | Cites |
+|---|---|---|---|
+| `steps:<day>` | Once Oura's day is over, at 4 a.m. the next morning. Oura's day starts at 4 a.m. local, and the start comes with each day. | The day's end | The day's activity event |
+| `exercise:<day>` | The same | The day's end | The counted workouts' events |
+| `sleep:<day>` | Once the day has a sleep score | The night's wake time, or else when LifeOS stored the score | The day's sleep-score event |
+
+- **Payment and credit.** Each award pays Health XP and is credited to its Oura day
+  (`credited_on`).
+- **The multiplier** is that day's, as it stands when the award is written. `base` and
+  `multipliers` are stamped on it (xp-domains plan).
+- **Re-priced like the Food Log's:**
+  - A paid key that still reads the event versions it was priced from is left alone, so a
+    retune never rewrites a past day.
+  - When Oura revises a day, the key's net is reversed and the new base earned, in one
+    batch. Revisions include more steps synced after 4 a.m., a workout added, edited,
+    deleted or restored, and a revised sleep score.
+  - A key whose day no longer pays, such as a deleted day's only workout, is reversed.
+- **Settling:** after a sync that wrote something, from `POST /api/domains/settle` (the
+  Character page), and in `bsk rewards reconcile`. Award keys are unique, so a repeated sync
+  or settle never pays twice.
+- **Toasts** are grouped as the Food Log's are, for example "👟 Steps Thu Oct 22: +20
+  Health XP".
+
+**On the page (A9).** The Steps, Exercise and Sleep cards each show the day's XP:
+
+- **Paid:** read from the ledger, multiplier included.
+- **Projected:** worked out by `lib/activity-score.ts` from the day so far, and labelled as
+  projected, never as earned.
+
+The Today card adds the three up. Nothing else on the page changes.
+
+**The questions, answered (2026-10-22):**
+
+1. **Activity's share of the 70-XP successful day:** activity adds to the day rather than
+   raising the bar. **Still open: whether the bar stays at 70.** See the calibration below.
+2. **The steps curve:**
+   - The straight line above, with partial pay under 5,000 and no penalty.
+   - It tops out at 10,000 with 25.
+3. **When steps pay:** once Oura's day is over. Until then they're projected.
+4. **Workouts:**
+   - They pay on the day's counted duration, in tiers, up to 35.
+   - A manual workout is still on Chris's honor (GEN-5).
+5. **Sleep and readiness:** sleep pays on the score. Readiness never pays.
+6. **Double counting:**
+   - No item pays Health XP today, on staging or dev, so nothing pays twice.
+   - **One to watch:** the staging habit "Gym three times a week" has no bounty. Giving it
+     a Health XP bounty would pay twice with exercise.
+   - LifeOS never changes a habit's bounty itself.
+   - Letting Oura tick off a habit stays in §6.
+7. **History:** settled, XP from 2026-10-22.
+8. **Other rewards:**
+   - Health XP only. Activity pays no Gems, Freedom or Life XP of its own.
+   - Health's rank-up Gems still come as Health ranks up.
+9. **A background sync:**
+   - Not yet. XP lands when a sync brings the data in.
+   - The Activity page syncs when it opens (throttled), and A9 has the Food Log and
+     Character pages ask for the same throttled sync when Oura is connected.
+   - Add a scheduled sync (§6) if days still wait to pay.
+10. **Days with the ring off:**
+    - They're not excused. A part with no data pays nothing, and the consistency rules
+      don't change.
+    - **This is a known limit:** a day with the ring off can fall short of 70 and count as
+      missed.
+
+**Calibration (2026-10-22).** The planning notes aim for about 100 paid Health XP a day and
+Level 100 in about 7 years for a healthy routine. Chris's notes ask to report a gap rather
+than change the level curve or the rewards.
+
+The simulation used the Health rules as built: the curve, the ranks, a 70-XP successful day
+and the multiplier. Its routine was close to the planning notes' example:
+
+- food at 35 a day, logged 95% of days
+- steps around 7,500, with a spread of 2,000
+- a sleep score around 80, with a spread of 6
+- the ring worn 97% of days
+- four workouts a week of about 36 minutes, nine in ten done
+
+Each case below is the median of 20 runs over 10 years:
+
+| Routine | Base a day | Successful days | Paid a day | Level at 10 years | Grandmaster |
+|---|---:|---:|---:|---:|---|
+| The routine above | 78.5 | 70% | 91 | 59 | never |
+| Food at the Food Log's good day (31) | 74.8 | 60% | 83 | 49 | never |
+| No regular exercise | 66.5 | 47% | 69 | 39 | never |
+| Lower adherence: food 80% at 28, 6,000 steps, sleep 75, 2 workouts | 54.6 | 19% | 55 | 19 | never |
+| High activity: food 37, 11,000 steps, sleep 84, 6 workouts of 45+ | 101.2 | 95% | 132 | 100 | 5.3 years |
+| The routine plus 20 a day of Health habits | 98.5 | 94% | 128 | 100 | 5.5 years |
+
+`bsk domains simulate --avg 78.5 --sd 14 --off 3%` agrees: 68% successful days, level 59,
+and never past Elite.
+
+**What the simulation found.** The economy runs short of the target, not over it.
+
+- The reason is the bar, not the curve.
+- A good day without exercise adds up to about 70: food 35, steps around 19, and sleep
+  around 15. So roughly half of those days miss the bar.
+- At 70% successful days, the consistency bars stop the ranks at Veteran, and the level cap
+  holds the levels with them.
+- The planning notes' food average of 35 is also optimistic. The Food Log's own good day
+  pays 31, and an ordinary day pays 15.
+
+The same routine at other bars:
+
+| Successful day | Successful days | Paid a day | Level at 10 years | Grandmaster |
+|---|---:|---:|---:|---|
+| 70 base XP (now) | 70% | 91 | 59 | never |
+| 65 | 82% | 97 | 89 | never |
+| 60 | 89% | 101 | 100 | 7.5 years |
+
+**The recommendation is 60.** It's a one-line change to `LifeDomains.Health`, plus the
+simulator's regression bands.
+
+- It's easy to undo: ranks and successful days are re-read from history, and only an
+  issued multiplier stays as it was.
+- After a month of real days, `bsk domains simulate --replay` can confirm the choice or
+  move it.
+- **The bar is Chris's call.** A7 doesn't change it.
 
 ## 4. Phases
 
@@ -544,13 +663,13 @@ Each phase is one commit:
 | A5 | Activity page: sleep and readiness | §3.7's Sleep and readiness card, the Today card's last night, the day detail sheet. Vitest, e2e, a11y. | A4 |
 | A6 | Live on staging | `fly-setup.ps1` imports the Oura settings; Chris connects on staging; a real refresh on day one; the history backfills; a week of comparing the page with the Oura app, imported workouts included if there are any. | A5 |
 
-**Phase 2 (activity XP), after the formulas:**
+**Phase 2 (activity XP), settled 2026-10-22 (§3.8):**
 
 | # | Phase | Delivers | Depends on |
 |---|---|---|---|
-| A7 | Q&A + rules | The §3.8 questions answered; `ActivityRules` with its drift test; the plan updated. | A6 |
-| A8 | XP on the ledger | The award keys, the settling hooks, rank-ups and `progress`, as F2 did for food. | A7 |
-| A9 | XP on the page | Paid and projected per day, toasts, `lib/activity-score.ts`. | A8 |
+| A7 | Rules | §3.8's answers and calibration in this plan. `ActivityRules` (steps, exercise, sleep, `XpFrom`) with its drift test and the worked examples; `lib/activity-score.ts` tested on the same table. No migration and no ledger change. | A5 (A6's week of comparing runs alongside) |
+| A8 | XP on the ledger | `ActivityAwards` (`steps:`, `exercise:`, `sleep:`) and `ActivityRewards`, settling after a sync, in `POST /api/domains/settle` and in `bsk rewards reconcile`, re-pricing on the cited versions as `FoodRewards` does; rank-ups and `progress` on the sync's answer. Tests: each key's due time and date; credited to the Oura day at its multiplier, the base kept; nothing before `XpFrom`; a repeated sync pays once; more steps after 4 a.m., a workout added, edited, deleted and restored, and a revised sleep score each re-price; a retune leaves paid days alone; readiness alone pays nothing; missing steps or a missing score pay nothing. | A7 |
+| A9 | XP on the page | Paid and projected XP on the Steps, Exercise and Sleep cards, and the Today card's total; the sync's earn toasts; the Food Log and Character pages ask for the throttled sync when Oura is connected; the mock store pays as the kernel does. Vitest, e2e, a11y. | A8 |
 
 - **A1 and A2 are kernel only.** From A2, `bsk oura sync` works end to end, so the numbers
   can be checked from the CLI before the page exists.
@@ -620,6 +739,28 @@ That was first read as a cut-off on reading Oura, and built that way. He then sa
 - **The night is the longest `long_sleep`.** Naps add up separately.
 - **Oura's own score bands** (70 and 85) on the sleep and readiness charts, since Chris
   hasn't set his own.
+
+**Phase 2's rules (2026-10-22).** Chris's planning agent wrote up the decisions for
+activity XP, and Chris said: "Let's work on the A6+ (Health XP scoring) in the meantime. I
+am pasting a generated prompt from my planning agent that summarizes the decisions for
+Activity rewards. … Use these decisions as input to the remaining phase 2 content."
+
+- **Taken as decided:**
+  - the three formulas and their caps
+  - readiness and Oura's Activity Score paying nothing
+  - Health XP only, with no new balance
+  - steps and exercise paying once Oura's day is over, and sleep once it has a score
+  - missing data not counting as zero
+  - ring-off days not excused, and written down as a limit
+  - overlaps with habits reported, not fixed
+  - the rules in one place, with a TypeScript port
+  - a calibration that reports a gap rather than changing the curve
+- **Filled in here, from how LifeOS already works:**
+  - the award keys' dating and re-pricing (the Food Log's, D13)
+  - exercise counted to the second, with overlaps merged
+  - Health pages asking for a sync, rather than a background job
+- **Came back as a question:** the calibration found the 70-XP bar holds a healthy routine
+  well short of Level 100 (§3.8). Chris decides the bar.
 
 ## 6. Later
 
@@ -737,7 +878,7 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
 - [x] A4 — Activity page: steps and exercise
 - [x] A5 — Activity page: sleep and readiness
 - [ ] A6 — Live on staging
-- [ ] A7 — Phase 2 Q&A + rules
+- [x] A7 — Phase 2 rules (`ActivityRules` and its TypeScript port)
 - [ ] A8 — Activity XP on the ledger
 - [ ] A9 — Activity XP on the page
 
@@ -1126,3 +1267,21 @@ plus:
   included if there are any. Then A6 is ticked.
 - **Not built yet:** the `bsk oura forget` purge (§7). Real data is on staging now, so a
   deletion request would have to wait for it to be built.
+
+**A7 (2026-10-22).** As planned in §3.8, plus:
+
+- **The rules are data.** `ActivityRules` holds the steps and sleep curves as points and
+  exercise as tiers, so a retune is a change to a list.
+  - `StepsPart` and `SleepPart` give the unrounded parts for showing the working.
+  - `ExerciseSeconds` adds up a day's counted workouts with overlaps merged, through
+    `MergedSeconds`.
+- **The facts carry no readiness.** `ActivityDayFacts` has steps, exercise seconds and the
+  sleep score only, and a test fails if anything is added.
+- **The TypeScript port** (`lib/activity-score.ts`) takes each workout's `counted` from the
+  API, rather than judging it again, and reuses the diet score's halves-up rounding.
+- **Tests:** `ActivityXpRulesTests` and `activity-score.test.ts` run the same table: the
+  drift checks, the worked examples, each curve's points and midpoints, the exercise tier
+  edges to the second, overlaps, splits, walks and detections, missing data, and
+  `XpFrom`.
+- **Not changed:** the ledger, the sync, the Activity page, the Food Log's rules, the level
+  curve and the 70-XP bar.
