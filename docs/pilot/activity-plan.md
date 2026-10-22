@@ -114,9 +114,9 @@ Checked against Oura's API v2 docs and OpenAPI spec 1.42 on 2026-10-22 (§7).
   - The rate limit, 5,000 requests per 5 minutes, is far beyond one person's use.
 - **Webhooks exist** (ids only, signed, with subscriptions to renew). Polling is simpler and
   enough for phase 1 (§6).
-- **Oura's API agreement** (in effect since 2026-06-08) has clauses on how long data is kept
-  and on deleting it within 72 hours of a user's request. For Chris's own data in his own
-  app the risk is low, but the store is append-only, so read the agreement once before A2.
+- **Oura's API agreement** (in effect since 2026-06-08) has clauses on how long data is kept,
+  on deleting it within 72 hours of a user's request, and on AI. It was read for A2; §7 has
+  what it says and what LifeOS does about each clause.
 
 ## 2. Phase 1 rules (agreed 2026-10-22)
 
@@ -691,16 +691,35 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
   - Subscriptions expire and are renewed (**[third-party]** 90 days).
   - It isn't documented whether an unapproved app can use them.
 - **API agreement** ([agreement](https://cloud.ouraring.com/legal/api-agreement)), in effect
-  since 2026-06-08:
-  - It limits how long data is kept.
-  - It requires deletion within 72 hours of a user's request.
-  - It has clauses about AI use.
+  since 2026-06-08. Read for A2 (2026-10-22); in summary, with what LifeOS does:
+  - **Keeping data:** data from the API may not be stored or kept longer than strictly
+    necessary, and only what each request needs should be asked for. LifeOS keeps the
+    history, because the page's trends and phase 2's XP read it. It trims each record to
+    what it reads and leaves Oura's series in Oura. For one person's own data in his own
+    app, the risk was accepted (D14).
+  - **Deleting on request:** a user can ask for their data to be deleted at any time, and it
+    must be gone within 72 hours, with nothing kept afterwards. The same applies when the
+    agreement ends. LifeOS's event store is append-only (UPDATE and DELETE are refused by
+    trigger), so honouring a request takes a deliberate purge, run as the database's owner,
+    of the `oura` events and the workout notes. **Not built yet:** a `bsk oura forget`
+    command is the follow-up, best done before A6 puts real data on staging.
+  - **Consent:** revoking consent stops collection at once. Disconnect does that: it revokes
+    the token and nothing calls Oura afterwards.
+  - **AI:** data from the API may not be given to any AI model or AI platform, including as
+    a prompt; LLM use goes through Oura's own MCP server instead. LifeOS has no AI features.
+    Two consequences:
+    - Phase 2 and anything later must keep Oura data out of any LLM feature.
+    - Agents building LifeOS work against Oura's sandbox and recorded fixtures, not Chris's
+      real data. In A6, Chris compares the page with the Oura app himself.
+  - **Privacy policy:** an app must explain how it collects, keeps and deletes data. For a
+    single-user app this is the plan and this section.
+  - **Revocation:** Oura can suspend an app's access at its discretion.
 
 ## Status
 
 - [x] A0 — Requirements (ACTIVITY-1 to ACTIVITY-5, D14) + this plan
 - [x] A1 — Oura connection (migration 0036)
-- [ ] A2 — Sync and storage (migration 0037)
+- [x] A2 — Sync and storage (migration 0037)
 - [ ] A3 — API
 - [ ] A4 — Activity page: steps and exercise
 - [ ] A5 — Activity page: sleep and readiness
@@ -750,3 +769,65 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
     down
   - the endpoints, including startup failing without a token key
   - `bsk_reader` refused on `bsk_ops.integration`
+
+**A2 (2026-10-22).** As planned, plus:
+
+- **Migration 0037** also adds `history_done` to the connection row, and two helpers,
+  `bsk.json_int` and `bsk.json_num`, that read a jsonb number (anything else reads as null).
+  Each view has a partial index on its payload key.
+- **Versions are stamped with `clock_timestamp()`**, under the sync lock, not with the
+  transaction's start. A sync that waited for the lock can't stamp its versions older than
+  the ones it waited on.
+- **The hash leaves out Oura's id for a daily record.** Those ids aren't documented as
+  stable, and a new id alone isn't worth a version. The id is still kept in the payload.
+- **`occurred_at`:** a daily record's Oura timestamp (4 a.m. for activity), or midnight UTC
+  of its day when there's none; a workout's or sleep period's start. A voided version keeps
+  the date of the version it replaces.
+- **The window** is the last 14 days through tomorrow, so a night that already counts for
+  tomorrow (a `late_nap` after 6 p.m.) isn't missed. Each request reads two days more on
+  each side.
+- **What's withdrawn:** a workout or sleep period whose newest version is on a day in the
+  window and that Oura's answer, padding included, no longer has. A record held on a day
+  outside the window isn't touched, so a recent sync never withdraws history.
+- **History:** after the window, each sync reads back 180 days at a time, four windows per
+  sync by default; `bsk oura sync` reads until it's done. It stops at a window with nothing
+  in any collection, or at 2015-01-01. A gap of more than 180 days without the ring would
+  stop it early; `bsk oura sync --from <date>` reads further back. Where it got to is on the
+  connection (`history_from`, `history_done`) and in `GET /api/oura/status`.
+- **One window, one transaction:** each window is read and written under the advisory lock,
+  so a second sync waits, then reads Oura itself and finds nothing new. What earlier windows
+  wrote stays if a later one fails.
+- **A token Oura refuses (401)** is refreshed once per sync and the read tried again. A
+  second refusal marks the connection for reconnecting. A 403 (membership or scope) or an
+  outage is kept as the last sync error and leaves the connection as it was.
+- **`POST /api/oura/connect` runs the first sync** (`OuraSyncService.ConnectAsync`). A first
+  sync that fails doesn't undo the connection; the status carries its error.
+- **Workout notes** can't hold a line break or any other control character, and are trimmed.
+  A note the same as the current one writes nothing. A workout is named by its Oura id, or
+  by 8 or more characters from its start.
+- **`ActivityReads`** answers the CLI now and the API from A3: days, workouts (all, or only
+  those that count) and sleep with readiness, up to 731 days at a time.
+- **CLI:** `bsk oura sync [--from]`, `steps [--days]`, `workouts [--days] [--all]`,
+  `sleep [--days]` and `note <workout> "text" | --clear`, each with `--json`.
+  `bsk oura status` adds the history line.
+- **The API agreement was read** (§7). What it means for LifeOS: a purge for deletion
+  requests is still to build, and Oura data never goes to an AI model.
+- **Tests:**
+  - the HTTP client against fixtures recorded from Oura's sandbox
+    (`tests/LifeOs.Tests/OuraFixtures`): the request, the bearer token, every field read,
+    paging through `next_token` and stopping on a repeated token, records without an id or
+    day skipped, unknown values kept, 401, 403, 429 and outages
+  - table tests for `ExerciseRules` and `ActivityTargets`; the payloads' JSON and hash, the
+    `external_id`, and which collections can be withdrawn
+  - against Postgres, each on a database of its own: the first sync's events and views, the
+    widened window, an unchanged re-sync and a new Oura id writing nothing, growing steps,
+    A → B → A, a deleted workout voided and restored while daily records stay, nothing
+    withdrawn outside the window, two racing syncs writing once, the night and naps with
+    `rest`, `deleted` and an unknown type, walks and detections not counted, the history
+    backfill and its floor, `--from`, a refused token refreshed once, reconnecting after a
+    second refusal, Oura down or refusing access, a sync with no connection, connect running
+    the first sync, and the events and notes staying out of the inbox, the timeline, the
+    ledger, the timers, the food views and the diagnostics while `bsk_reader` reads every
+    new view
+  - notes: set, changed and cleared with the newest winning, re-syncs leaving them alone, a
+    deleted workout refusing one and bringing its note back with it, and the refusals

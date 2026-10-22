@@ -1,0 +1,41 @@
+{
+  "data": [
+    {
+      "id": "workout-1-2026-10-1",
+      "activity": "walking",
+      "calories": 10.0,
+      "day": "2026-10-01",
+      "distance": 1.0,
+      "end_datetime": "2026-10-01T00:00:00.000+00:00",
+      "intensity": "easy",
+      "label": "My Workout",
+      "source": "confirmed",
+      "start_datetime": "2026-10-01T00:00:00.000+00:00"
+    },
+    {
+      "id": "workout-2-2026-10-2",
+      "activity": "swimming",
+      "calories": 1000.0,
+      "day": "2026-10-02",
+      "distance": 200.0,
+      "end_datetime": "2026-10-02T00:00:00.000+00:00",
+      "intensity": "moderate",
+      "label": null,
+      "source": "manual",
+      "start_datetime": "2026-10-02T00:00:00.000+00:00"
+    },
+    {
+      "id": "workout-0-2026-10-3",
+      "activity": "running",
+      "calories": 100.0,
+      "day": "2026-10-03",
+      "distance": 10.0,
+      "end_datetime": "2026-10-03T00:00:00.000+00:00",
+      "intensity": "hard",
+      "label": "None",
+      "source": "workout_heart_rate",
+      "start_datetime": "2026-10-03T00:00:00.000+00:00"
+    }
+  ],
+  "next_token": null
+}

@@ -87,6 +87,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFoodLogRepository>(_ => new NpgsqlFoodLogRepository(connectionString));
         services.AddSingleton<IIntegrationRepository>(_ =>
             new NpgsqlIntegrationRepository(connectionString, integrations?.TokenCipher));
+        services.AddSingleton<IActivityRepository>(_ => new NpgsqlActivityRepository(connectionString));
         if (integrations?.Oura is { } oura)
         {
             services.AddSingleton<IOuraClient>(sp =>
@@ -252,6 +253,22 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new OuraConnectionService(
             sp.GetRequiredService<IIntegrationRepository>(),
             sp.GetService<IOuraClient>(),
+            sp.GetRequiredService<IClock>()));
+        services.AddSingleton(sp => new OuraSyncService(
+            sp.GetRequiredService<OuraConnectionService>(),
+            sp.GetService<IOuraClient>(),
+            sp.GetRequiredService<IActivityRepository>(),
+            sp.GetRequiredService<IIntegrationRepository>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>()));
+        services.AddSingleton(sp => new WorkoutNoteService(
+            sp.GetRequiredService<IActivityRepository>(),
+            sp.GetRequiredService<IEventStore>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
+        services.AddSingleton(sp => new ActivityReads(
+            sp.GetRequiredService<IActivityRepository>(),
+            sp.GetRequiredService<IHomeCalendar>(),
             sp.GetRequiredService<IClock>()));
 
         // Operational services that work directly against the store.

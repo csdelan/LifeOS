@@ -24,6 +24,16 @@ public sealed class OuraGrantException(string error, string message, bool spentG
 }
 
 /// <summary>
+/// Oura refused a data request: the access token (401) or access itself (403: the Oura
+/// Membership has lapsed, or a scope is missing). The message carries Oura's own words.
+/// </summary>
+public sealed class OuraAccessDeniedException(int status, string message) : OuraConnectionException(message)
+{
+    /// <summary>401 or 403.</summary>
+    public int Status { get; } = status;
+}
+
+/// <summary>
 /// Oura couldn't be reached, timed out, failed (5xx), limited requests (429) or answered
 /// something LifeOS can't read. Nothing about it is the caller's fault and nothing stored has
 /// changed, so the API answers 502.

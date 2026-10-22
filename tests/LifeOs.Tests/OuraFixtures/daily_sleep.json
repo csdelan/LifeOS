@@ -1,0 +1,35 @@
+{
+  "data": [
+    {
+      "id": "daily_sleep-0-2026-10-1",
+      "contributors": {
+        "deep_sleep": 70,
+        "efficiency": 80,
+        "latency": 90,
+        "rem_sleep": 60,
+        "restfulness": 70,
+        "timing": 80,
+        "total_sleep": 90
+      },
+      "day": "2026-10-01",
+      "score": 80,
+      "timestamp": "2026-10-01T00:00:00.000+00:00"
+    },
+    {
+      "id": "daily_sleep-1-2026-10-2",
+      "contributors": {
+        "deep_sleep": 90,
+        "efficiency": 70,
+        "latency": 80,
+        "rem_sleep": 70,
+        "restfulness": 80,
+        "timing": 90,
+        "total_sleep": 80
+      },
+      "day": "2026-10-02",
+      "score": 73,
+      "timestamp": "2026-10-02T00:00:00.000+00:00"
+    }
+  ],
+  "next_token": null
+}

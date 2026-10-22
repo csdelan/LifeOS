@@ -1,19 +1,23 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Activity;
+using LifeOs.Domain;
 
 namespace LifeOs.Infrastructure.Integrations;
 
 /// <summary>
-/// Oura's API v2 over HTTP (activity plan §3.1, §3.3): a small hand-written client. For now the
-/// OAuth calls; the data collections arrive with the sync (A2).
+/// Oura's API v2 over HTTP (activity plan §3.1, §3.3): a small hand-written client for the OAuth
+/// calls and the five collections LifeOS keeps, read into trimmed records.
 /// <list type="bullet">
 /// <item>Token calls post a form with the client id and secret, as Oura documents.</item>
 /// <item>A 400, 401 or 403 from the token endpoint is <see cref="OuraGrantException"/>;
 /// <c>invalid_grant</c> (or a 401 that isn't about the client) means the grant is spent.</item>
+/// <item>A collection read that Oura refuses is <see cref="OuraAccessDeniedException"/>: 401
+/// for the access token, 403 for access itself, with Oura's <c>detail</c>.</item>
 /// <item>A 429, a 5xx, anything else unexpected, a timeout or no connection is
 /// <see cref="OuraUnavailableException"/>.</item>
 /// <item>No message ever carries a token or the client secret.</item>
@@ -25,6 +29,9 @@ public sealed class OuraHttpClient(HttpClient http, OuraOptions options, IClock 
     public static readonly TimeSpan DefaultLifetime = TimeSpan.FromHours(24);
 
     private const int MaxDetail = 200;
+
+    // A runaway next_token can't loop forever: a year of daily records is a few pages.
+    private const int MaxPages = 500;
 
     /// <summary>An <see cref="HttpClient"/> for Oura: pooled connections that notice DNS changes, a 30-second timeout.</summary>
     public static HttpClient CreateHttpClient()
@@ -87,6 +94,213 @@ public sealed class OuraHttpClient(HttpClient http, OuraOptions options, IClock 
         }
 
         throw Unavailable(response, "revoke the token");
+    }
+
+    public Task<IReadOnlyList<OuraActivityDay>> GetDailyActivityAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => GetCollectionAsync(accessToken, OuraCollections.DailyActivity.Name, start, end, ReadActivity, cancellationToken);
+
+    public Task<IReadOnlyList<OuraWorkout>> GetWorkoutsAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => GetCollectionAsync(accessToken, OuraCollections.Workout.Name, start, end, ReadWorkout, cancellationToken);
+
+    public Task<IReadOnlyList<OuraSleepScore>> GetDailySleepAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => GetCollectionAsync(accessToken, OuraCollections.DailySleep.Name, start, end, ReadSleepScore, cancellationToken);
+
+    public Task<IReadOnlyList<OuraReadiness>> GetDailyReadinessAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => GetCollectionAsync(accessToken, OuraCollections.DailyReadiness.Name, start, end, ReadReadiness, cancellationToken);
+
+    public Task<IReadOnlyList<OuraSleepPeriod>> GetSleepPeriodsAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => GetCollectionAsync(accessToken, OuraCollections.Sleep.Name, start, end, ReadSleepPeriod, cancellationToken);
+
+    private async Task<IReadOnlyList<T>> GetCollectionAsync<T>(
+        string accessToken, string collection, DateOnly start, DateOnly end, Func<JsonElement, T?> read,
+        CancellationToken cancellationToken)
+        where T : class
+    {
+        var records = new List<T>();
+        var tokens = new HashSet<string>(StringComparer.Ordinal);
+        string? next = null;
+        for (var page = 0; page < MaxPages; page++)
+        {
+            var pairs = new List<(string Name, string Value)>
+            {
+                ("start_date", start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+                ("end_date", end.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+            };
+            if (next is not null)
+            {
+                pairs.Add(("next_token", next));
+            }
+
+            var url = new Uri(options.CollectionsUrl, collection + "?" + Query([.. pairs]));
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var response = await SendAsync(request, $"read {collection}", cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                throw new OuraAccessDeniedException(401, "Oura refused the access token.");
+            }
+
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                var (_, detail) = ParseError(body);
+                throw new OuraAccessDeniedException(403,
+                    $"Oura refused access to {collection}{(detail is null ? "" : $" ({detail})")}. "
+                    + "The Oura Membership may have lapsed, or a scope is missing: reconnecting asks for the scopes again.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw Unavailable(response, $"read {collection}");
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                var root = document.RootElement;
+                if (root.ValueKind != JsonValueKind.Object
+                    || !root.TryGetProperty("data", out var data)
+                    || data.ValueKind != JsonValueKind.Array)
+                {
+                    throw new OuraUnavailableException($"Oura's answer for {collection} had no data list.");
+                }
+
+                foreach (var item in data.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.Object && read(item) is { } record)
+                    {
+                        records.Add(record);
+                    }
+                }
+
+                next = Text(root, "next_token");
+            }
+            catch (JsonException ex)
+            {
+                throw new OuraUnavailableException($"Oura's answer for {collection} wasn't JSON.", null, ex);
+            }
+
+            if (string.IsNullOrEmpty(next) || !tokens.Add(next))
+            {
+                return records;
+            }
+        }
+
+        throw new OuraUnavailableException($"Oura's answer for {collection} kept paging past {MaxPages} pages.");
+    }
+
+    private static OuraActivityDay? ReadActivity(JsonElement item)
+        => Day(item) is not { } day ? null : new OuraActivityDay(
+            day,
+            Text(item, "id"),
+            Time(item, "timestamp"),
+            Int(item, "steps"),
+            Int(item, "active_calories"),
+            Int(item, "total_calories"),
+            Int(item, "equivalent_walking_distance"),
+            Int(item, "high_activity_time"),
+            Int(item, "medium_activity_time"),
+            Int(item, "low_activity_time"),
+            Int(item, "sedentary_time"),
+            Int(item, "resting_time"),
+            Int(item, "non_wear_time"),
+            Int(item, "score"));
+
+    private static OuraWorkout? ReadWorkout(JsonElement item)
+        => Text(item, "id") is not { Length: > 0 } id
+           || Day(item) is not { } day
+           || Time(item, "start_datetime") is not { } start
+           || Time(item, "end_datetime") is not { } end
+            ? null
+            : new OuraWorkout(
+                id,
+                day,
+                Text(item, "activity") ?? "unknown",
+                Text(item, "label"),
+                start,
+                end,
+                Int(item, "calories"),
+                Int(item, "distance"),
+                Text(item, "intensity"),
+                Text(item, "source") ?? "unknown");
+
+    private static OuraSleepScore? ReadSleepScore(JsonElement item)
+        => Day(item) is not { } day ? null : new OuraSleepScore(
+            day, Text(item, "id"), Time(item, "timestamp"), Int(item, "score"), Contributors(item));
+
+    private static OuraReadiness? ReadReadiness(JsonElement item)
+        => Day(item) is not { } day ? null : new OuraReadiness(
+            day,
+            Text(item, "id"),
+            Time(item, "timestamp"),
+            Int(item, "score"),
+            Number(item, "temperature_deviation"),
+            Number(item, "temperature_trend_deviation"),
+            Contributors(item));
+
+    private static OuraSleepPeriod? ReadSleepPeriod(JsonElement item)
+        => Text(item, "id") is not { Length: > 0 } id
+           || Day(item) is not { } day
+           || Time(item, "bedtime_start") is not { } start
+           || Time(item, "bedtime_end") is not { } end
+            ? null
+            : new OuraSleepPeriod(
+                id,
+                day,
+                Text(item, "type") ?? "unknown",
+                start,
+                end,
+                Int(item, "time_in_bed"),
+                Int(item, "total_sleep_duration"),
+                Int(item, "deep_sleep_duration"),
+                Int(item, "light_sleep_duration"),
+                Int(item, "rem_sleep_duration"),
+                Int(item, "awake_time"),
+                Int(item, "latency"),
+                Int(item, "efficiency"),
+                Int(item, "average_hrv"),
+                Number(item, "average_heart_rate") is { } hr ? Math.Round(hr, 1) : null,
+                Int(item, "lowest_heart_rate"));
+
+    private static DateOnly? Day(JsonElement item)
+        => Text(item, "day") is { } text
+           && DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day)
+            ? day
+            : null;
+
+    private static DateTimeOffset? Time(JsonElement item, string name)
+        => Text(item, name) is { } text
+           && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var time)
+            ? time
+            : null;
+
+    private static double? Number(JsonElement item, string name)
+        => item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetDouble() : null;
+
+    private static int? Int(JsonElement item, string name)
+        => Number(item, name) is { } number ? (int)Math.Round(number, MidpointRounding.AwayFromZero) : null;
+
+    // Sorted by name, so the same contributors always read (and hash) the same.
+    private static IReadOnlyDictionary<string, int?> Contributors(JsonElement item)
+    {
+        var contributors = new SortedDictionary<string, int?>(StringComparer.Ordinal);
+        if (item.TryGetProperty("contributors", out var value) && value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in value.EnumerateObject())
+            {
+                contributors[property.Name] = property.Value.ValueKind == JsonValueKind.Number
+                    ? (int)Math.Round(property.Value.GetDouble(), MidpointRounding.AwayFromZero)
+                    : null;
+            }
+        }
+
+        return contributors;
     }
 
     private async Task<OAuthTokens> PostTokenAsync(

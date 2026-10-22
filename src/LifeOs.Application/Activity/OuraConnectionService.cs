@@ -41,6 +41,10 @@ public sealed class OuraConnectionService(
     /// <summary>An access token this close to expiring is refreshed before it's used.</summary>
     public static readonly TimeSpan RefreshMargin = TimeSpan.FromMinutes(5);
 
+    /// <summary>What everything but the status says when this host has no Oura app.</summary>
+    public const string NotSetUp =
+        "Oura isn't set up on this server: it needs Oura__ClientId, Oura__ClientSecret and Integrations__TokenKey.";
+
     private const int MaxCodeLength = 2048;
 
     public bool Configured => client is not null;
@@ -112,6 +116,29 @@ public sealed class OuraConnectionService(
     /// </summary>
     public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default)
         => UseTokensAsync(force: false, cancellationToken);
+
+    /// <summary>
+    /// Refreshes the tokens now, however fresh the stored ones look, and answers the new access
+    /// token: for a sync whose token Oura refused (401) before it expired.
+    /// </summary>
+    public Task<string> RefreshAccessTokenAsync(CancellationToken cancellationToken = default)
+        => UseTokensAsync(force: true, cancellationToken);
+
+    /// <summary>
+    /// Marks the connection as needing to reconnect, saying why: Oura refused a token it had
+    /// just refreshed, so only connecting again helps. Nothing calls Oura until then.
+    /// </summary>
+    public async Task MarkReconnectAsync(string reason, CancellationToken cancellationToken = default)
+    {
+        await using var locked = await integrations.LockAsync(service, cancellationToken);
+        if (locked is null)
+        {
+            return;
+        }
+
+        await locked.MarkReconnectAsync(reason, cancellationToken);
+        await locked.CommitAsync(cancellationToken);
+    }
 
     /// <summary>Refreshes the tokens now, however fresh they are (<c>bsk oura refresh</c>), and answers the new status.</summary>
     public async Task<OuraStatus> RefreshAsync(CancellationToken cancellationToken = default)
@@ -198,9 +225,7 @@ public sealed class OuraConnectionService(
         return fresh.AccessToken;
     }
 
-    private IOuraClient RequireClient()
-        => client ?? throw new OuraConnectionException(
-            "Oura isn't set up on this server: it needs Oura__ClientId, Oura__ClientSecret and Integrations__TokenKey.");
+    private IOuraClient RequireClient() => client ?? throw new OuraConnectionException(NotSetUp);
 
     private static OuraConnectionException NotConnected()
         => new("Oura isn't connected: press Connect Oura on the Activity page.");
@@ -233,6 +258,8 @@ public sealed class OuraConnectionService(
 /// (Oura refused the stored sign-in) or <c>connected</c>.
 /// </param>
 /// <param name="MissingScopes">Scopes LifeOS asked for that Oura didn't grant.</param>
+/// <param name="HistoryFrom">The earliest day the history backfill has read back to.</param>
+/// <param name="HistoryDone">The backfill found where Oura's history starts.</param>
 public sealed record OuraStatus(
     string State,
     bool Configured,
@@ -244,7 +271,9 @@ public sealed record OuraStatus(
     IReadOnlyList<string> Scopes,
     IReadOnlyList<string> MissingScopes,
     DateTimeOffset? LastSyncedAt,
-    string? LastSyncError)
+    string? LastSyncError,
+    DateOnly? HistoryFrom,
+    bool HistoryDone)
 {
     public const string NotConfigured = "not_configured";
     public const string NotConnected = "not_connected";
@@ -265,6 +294,7 @@ public sealed record OuraStatus(
             : [];
         return new OuraStatus(
             state, configured, connected, reconnect, stored?.ReconnectReason, stored?.ConnectedAt,
-            stored?.ExpiresAt, scopes, missing, stored?.LastSyncedAt, stored?.LastSyncError);
+            stored?.ExpiresAt, scopes, missing, stored?.LastSyncedAt, stored?.LastSyncError,
+            stored?.HistoryFrom, stored?.HistoryDone ?? false);
     }
 }

@@ -190,4 +190,10 @@ public static class KernelSources
 
     /// <summary>Events written by the ASP.NET Core API (the web door into Application).</summary>
     public const string Api = "api";
+
+    /// <summary>
+    /// Records read off the Oura Ring (D14, activity plan §3.2), whichever door ran the sync, so
+    /// the CLI and the API dedupe against each other.
+    /// </summary>
+    public const string Oura = "oura";
 }

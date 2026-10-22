@@ -1,3 +1,4 @@
+using System.Globalization;
 using LifeOs.Application.Activity;
 
 namespace LifeOs.Api.Read;
@@ -35,6 +36,12 @@ public sealed class OuraStatusRead
     public DateTimeOffset? LastSyncedAt { get; set; }
     public string? LastSyncError { get; set; }
 
+    /// <summary>The earliest day (yyyy-MM-dd) the history has been read back to; each sync reads further until it's done.</summary>
+    public string? HistoryFrom { get; set; }
+
+    /// <summary>The history is all in: the sync found where Oura's history starts.</summary>
+    public bool HistoryDone { get; set; }
+
     public static OuraStatusRead From(OuraStatus status) => new()
     {
         State = status.State,
@@ -48,6 +55,8 @@ public sealed class OuraStatusRead
         MissingScopes = status.MissingScopes,
         LastSyncedAt = status.LastSyncedAt,
         LastSyncError = status.LastSyncError,
+        HistoryFrom = status.HistoryFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        HistoryDone = status.HistoryDone,
     };
 }
 

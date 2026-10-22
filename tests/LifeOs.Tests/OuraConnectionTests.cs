@@ -5,6 +5,7 @@ using System.Text;
 using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Activity;
+using LifeOs.Domain;
 using LifeOs.Infrastructure.Integrations;
 using LifeOs.Infrastructure.Persistence;
 using Npgsql;
@@ -14,7 +15,8 @@ namespace LifeOs.Tests;
 /// <summary>
 /// An Oura client that plays Oura's part: it hands out numbered token pairs, accepts each refresh
 /// token once (as Oura does), and can be told to refuse or fail. Refreshes can be held open so a
-/// test can race two of them.
+/// test can race two of them. It also holds Oura's records (A2) and answers a read with those on
+/// the days asked for, as Oura filters them.
 /// </summary>
 internal sealed class FakeOuraClient(IClock clock) : IOuraClient
 {
@@ -77,6 +79,72 @@ internal sealed class FakeOuraClient(IClock clock) : IOuraClient
     {
         Revoked.Add(accessToken);
         return FailRevoke is { } failure ? Task.FromException(failure) : Task.CompletedTask;
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Data (A2)
+    // ---------------------------------------------------------------------------------
+
+    public List<OuraActivityDay> ActivityDays { get; } = [];
+    public List<OuraWorkout> Workouts { get; } = [];
+    public List<OuraSleepScore> SleepScores { get; } = [];
+    public List<OuraReadiness> Readiness { get; } = [];
+    public List<OuraSleepPeriod> SleepPeriods { get; } = [];
+
+    /// <summary>Every read: the collection, the token it carried and the days it asked for.</summary>
+    public ConcurrentQueue<(string Collection, string Token, DateOnly Start, DateOnly End)> Reads { get; } = new();
+
+    /// <summary>Access tokens Oura refuses (401).</summary>
+    public HashSet<string> RefusedTokens { get; } = [];
+
+    public bool RefuseEveryToken { get; set; }
+    public Exception? FailReads { get; set; }
+    public TimeSpan ReadDelay { get; set; }
+
+    public Task<IReadOnlyList<OuraActivityDay>> GetDailyActivityAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => ReadAsync(OuraCollections.DailyActivity, accessToken, start, end, ActivityDays, d => d.Day, cancellationToken);
+
+    public Task<IReadOnlyList<OuraWorkout>> GetWorkoutsAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => ReadAsync(OuraCollections.Workout, accessToken, start, end, Workouts, w => w.Day, cancellationToken);
+
+    public Task<IReadOnlyList<OuraSleepScore>> GetDailySleepAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => ReadAsync(OuraCollections.DailySleep, accessToken, start, end, SleepScores, s => s.Day, cancellationToken);
+
+    public Task<IReadOnlyList<OuraReadiness>> GetDailyReadinessAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => ReadAsync(OuraCollections.DailyReadiness, accessToken, start, end, Readiness, r => r.Day, cancellationToken);
+
+    public Task<IReadOnlyList<OuraSleepPeriod>> GetSleepPeriodsAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
+        => ReadAsync(OuraCollections.Sleep, accessToken, start, end, SleepPeriods, p => p.Day, cancellationToken);
+
+    private async Task<IReadOnlyList<T>> ReadAsync<T>(
+        OuraCollection collection, string accessToken, DateOnly start, DateOnly end, List<T> records,
+        Func<T, DateOnly> day, CancellationToken cancellationToken)
+    {
+        Reads.Enqueue((collection.Name, accessToken, start, end));
+        if (ReadDelay > TimeSpan.Zero)
+        {
+            await Task.Delay(ReadDelay, cancellationToken);
+        }
+
+        if (FailReads is { } failure)
+        {
+            throw failure;
+        }
+
+        if (RefuseEveryToken || RefusedTokens.Contains(accessToken))
+        {
+            throw new OuraAccessDeniedException(401, "Oura refused the access token.");
+        }
+
+        lock (records)
+        {
+            return records.Where(r => day(r) >= start && day(r) <= end).ToList();
+        }
     }
 
     private OAuthTokens Issue(IReadOnlyList<string> scopes)

@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "id": "daily_readiness-0-2026-10-1",
+      "contributors": {
+        "activity_balance": 70,
+        "body_temperature": 70,
+        "hrv_balance": 80,
+        "previous_day_activity": 90,
+        "previous_night": 60,
+        "recovery_index": 90,
+        "resting_heart_rate": 60,
+        "sleep_balance": 70,
+        "sleep_regularity": null
+      },
+      "day": "2026-10-01",
+      "score": 80,
+      "temperature_deviation": 0.5,
+      "temperature_trend_deviation": 0.2,
+      "timestamp": "2026-10-01T00:00:00.000+00:00"
+    },
+    {
+      "id": "daily_readiness-0-2026-10-2",
+      "contributors": {
+        "activity_balance": 70,
+        "body_temperature": 70,
+        "hrv_balance": 80,
+        "previous_day_activity": 90,
+        "previous_night": 60,
+        "recovery_index": 90,
+        "resting_heart_rate": 60,
+        "sleep_balance": 70,
+        "sleep_regularity": null
+      },
+      "day": "2026-10-02",
+      "score": 80,
+      "temperature_deviation": 0.5,
+      "temperature_trend_deviation": 0.2,
+      "timestamp": "2026-10-02T00:00:00.000+00:00"
+    }
+  ],
+  "next_token": null
+}

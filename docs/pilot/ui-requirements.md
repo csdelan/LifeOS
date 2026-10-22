@@ -2949,6 +2949,15 @@ which `bsk_reader` can't read, with Oura's tokens sealed under `Integrations:Tok
 stored connection. A refresh runs under a row lock, so the single-use refresh token is spent
 once. Build moves `needs-kernel → building`: syncing (A2) is not built yet.
 
+**Update (2026-10-22 — sync landed, A2):** `OuraSyncService` reads the five collections into
+`observed` events from source `oura`, writing a version only when a record changed, and
+migration 0037 folds them into `v_activity_day`, `v_workout`, `v_sleep_period`, `v_sleep_day`
+and `v_readiness_day`. Each sync reads the last 14 days, then the history 180 days at a time
+until it's all in. Connecting runs the first sync. `bsk oura sync` works end to end. Build
+stays `building`: the API's sync endpoint and the page (A3–A5) aren't built, and nothing has
+synced from a real ring yet (A6). Oura's API agreement asks for deletion within 72 hours of a
+request, which the append-only store can't do yet; a purge command is the follow-up.
+
 **Workflow (Chris):**
 - "I would like to pull Oura ring data into my app, and add a page for showing health related
   stuff from Oura ring, including workouts and steps." (2026-10-22)
@@ -2987,7 +2996,12 @@ once. Build moves `needs-kernel → building`: syncing (A2) is not built yet.
 ### ACTIVITY-2 — Steps show as a trend against my 5,000 minimum and 7,500 goal
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-10-22 — kernel landed, A2):** `v_activity_day` holds each day's steps,
+calories, activity time and non-wear time, and `ActivityTargets` the two thresholds.
+`bsk oura steps` prints the days with their band. Build moves `needs-kernel → building`: the
+API and the Steps card (A3, A4) are next.
 
 **Workflow (Chris):**
 - "Steps is a key indicator that I want to actually show a trend chart for." (2026-10-22)
@@ -3008,7 +3022,13 @@ Build:      needs-kernel
 ### ACTIVITY-3 — Exercise I record in Oura is tracked by week, with an optional note
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-10-22 — kernel landed, A2):** `v_workout` holds each live workout with its
+note, `ExerciseRules` says whether it counts and why not, and `WorkoutNoteService` writes the
+note. `bsk oura workouts [--all]` and `bsk oura note` use them. A workout deleted in the Oura
+app is withdrawn, and its note comes back if the workout does. Build moves
+`needs-kernel → building`: the API and the Exercise card (A3, A4) are next.
 
 **Workflow (Chris):**
 - "Logged exercise is another key thing to record and track also. … Assumption: All of my
@@ -3041,7 +3061,12 @@ Build:      needs-kernel
 ### ACTIVITY-4 — My sleep score and readiness are tracked every day
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-10-22 — kernel landed, A2):** `v_sleep_day` holds each day's sleep score, the
+night (the longest `long_sleep`) and naps, leaving out periods Oura rejected or deleted;
+`v_readiness_day` holds readiness. `bsk oura sleep` prints both. Build moves
+`needs-kernel → building`: the API and the Sleep and readiness card (A3, A5) are next.
 
 **Workflow (Chris):**
 - "I forgot about sleep altogether!!! It's important. I want to track sleep score also, and

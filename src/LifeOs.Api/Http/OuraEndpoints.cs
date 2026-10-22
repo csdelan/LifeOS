@@ -11,7 +11,9 @@ namespace LifeOs.Api.Http;
 /// <item><c>POST /api/oura/authorize</c> with the SPA's <c>/activity/connected</c> URL answers
 /// Oura's authorize URL; the page sends the browser there.</item>
 /// <item>Oura sends the browser back to <c>/activity/connected?code=…&amp;state=…</c>, an SPA
-/// route, and the page posts both to <c>POST /api/oura/connect</c>.</item>
+/// route, and the page posts both to <c>POST /api/oura/connect</c>, which connects and runs
+/// the first sync (<see cref="OuraSyncService.ConnectAsync"/>). A first sync that fails
+/// doesn't undo the connection: the status carries its error.</item>
 /// </list>
 /// The connect finishes on an API call rather than a redirect to the API, because the API
 /// authenticates by the bearer token the SPA sends. Nothing here ever answers a token. Oura not
@@ -58,7 +60,7 @@ public static class OuraEndpoints
     }
 
     private static async Task<IResult> Connect(
-        OuraConnectBody? body, OuraConnectionService oura, CancellationToken cancellationToken)
+        OuraConnectBody? body, OuraSyncService oura, CancellationToken cancellationToken)
         => Results.Ok(OuraStatusRead.From(
             await oura.ConnectAsync(body?.Code ?? "", body?.State ?? "", cancellationToken)));
 

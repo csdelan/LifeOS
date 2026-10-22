@@ -503,9 +503,16 @@ public sealed record OAuthTokens(
 }
 
 /// <summary>
-/// Oura's API v2 (activity plan §3.1, §3.3): for now the OAuth calls. The data collections
-/// arrive with the sync (A2). Errors: <see cref="OuraGrantException"/> when Oura refuses a
-/// grant, <see cref="OuraUnavailableException"/> when it can't be reached or fails.
+/// Oura's API v2 (activity plan §3.1, §3.3): the OAuth calls and the five collections LifeOS
+/// keeps. Errors: <see cref="OuraGrantException"/> when Oura refuses a grant,
+/// <see cref="OuraAccessDeniedException"/> when it refuses an access token (401) or access
+/// (403), <see cref="OuraUnavailableException"/> when it can't be reached or fails.
+/// <para>
+/// A collection read asks for the days [<c>start</c>, <c>end</c>] as Oura filters them —
+/// which differs by collection — and pages through <c>next_token</c>; the caller widens the
+/// window and filters on each record's day. A record without what identifies it (its day, or
+/// a workout's or sleep period's id) is skipped.
+/// </para>
 /// </summary>
 public interface IOuraClient
 {
@@ -524,6 +531,21 @@ public interface IOuraClient
 
     /// <summary>Asks Oura to revoke the grant behind <paramref name="accessToken"/>.</summary>
     Task RevokeAsync(string accessToken, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<OuraActivityDay>> GetDailyActivityAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<OuraWorkout>> GetWorkoutsAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<OuraSleepScore>> GetDailySleepAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<OuraReadiness>> GetDailyReadinessAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<OuraSleepPeriod>> GetSleepPeriodsAsync(
+        string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -540,6 +562,8 @@ public sealed record PendingConnect(string State, string CodeVerifier, Uri Redir
 /// tokens.
 /// </summary>
 /// <param name="Connected">Tokens are stored (they may still need reconnecting).</param>
+/// <param name="HistoryFrom">The earliest day the history backfill has reached.</param>
+/// <param name="HistoryDone">The backfill found where the history starts.</param>
 public sealed record IntegrationState(
     string Service,
     bool Connected,
@@ -550,7 +574,8 @@ public sealed record IntegrationState(
     string? ReconnectReason,
     DateTimeOffset? LastSyncedAt,
     string? LastSyncError,
-    DateOnly? HistoryFrom);
+    DateOnly? HistoryFrom,
+    bool HistoryDone);
 
 /// <summary>
 /// Connections to outside services (<c>bsk_ops.integration</c>, migration 0036). Tokens are
@@ -584,6 +609,18 @@ public interface IIntegrationRepository
     /// single-use refresh token is spent once: null when the service has no row.
     /// </summary>
     Task<IIntegrationLock?> LockAsync(string service, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records a sync that finished at <paramref name="syncedAt"/>, clearing the last error. The
+    /// history only grows: <paramref name="historyFrom"/> moves it earlier, never later, and
+    /// once done it stays done. Nothing happens when the service has no row.
+    /// </summary>
+    Task RecordSyncAsync(
+        string service, DateTimeOffset syncedAt, DateOnly? historyFrom, bool historyDone,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Records why the last sync failed, in words; the last good sync stays as it was.</summary>
+    Task RecordSyncErrorAsync(string service, string error, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -608,6 +645,76 @@ public interface IIntegrationLock : IAsyncDisposable
 
     /// <summary>Forgets the tokens and any connect in progress (a disconnect). What was synced stays.</summary>
     Task ClearTokensAsync(CancellationToken cancellationToken = default);
+
+    Task CommitAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// The newest version LifeOS holds of one Oura record (D14): what identifies it, its day, when
+/// it happened, its content hash (from its <c>external_id</c>), and whether it's voided.
+/// </summary>
+public sealed record OuraHead(string Key, DateOnly? Day, DateTimeOffset OccurredAt, string Hash, Guid EventId, bool Voided);
+
+/// <summary>
+/// A version of an Oura record to append: an <c>observed</c> event from source <c>oura</c>,
+/// stamped with the database's clock as it's written, under the sync lock, so versions written
+/// from different hosts order correctly.
+/// </summary>
+public sealed record OuraVersion(string Kind, DateTimeOffset OccurredAt, string ExternalId, string PayloadJson);
+
+/// <summary>
+/// Oura's records and Chris's workout notes as LifeOS holds them (ACTIVITY-1..4, D14, migration
+/// 0037): versioned observed events, folded by <c>bsk.v_activity_day</c>, <c>bsk.v_workout</c>,
+/// <c>bsk.v_sleep_period</c>, <c>bsk.v_sleep_day</c> and <c>bsk.v_readiness_day</c>. Days are
+/// Oura's own.
+/// </summary>
+public interface IActivityRepository
+{
+    /// <summary>
+    /// Starts writing a sync's versions under a lock every sync shares, so two syncs (the API
+    /// and the CLI, say) take turns: the second sees what the first wrote.
+    /// </summary>
+    Task<IOuraSyncLock> BeginSyncAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Days of activity in [<paramref name="from"/>, <paramref name="to"/>], oldest first.</summary>
+    Task<IReadOnlyList<ActivityDay>> GetActivityDaysAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
+
+    /// <summary>Live workouts on the days [<paramref name="from"/>, <paramref name="to"/>], newest first.</summary>
+    Task<IReadOnlyList<Workout>> GetWorkoutsAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
+
+    /// <summary>The live workout with that Oura id, or null.</summary>
+    Task<Workout?> GetWorkoutAsync(string id, CancellationToken cancellationToken = default);
+
+    /// <summary>Live workouts whose Oura id starts with <paramref name="prefix"/>, newest first.</summary>
+    Task<IReadOnlyList<Workout>> FindWorkoutsAsync(string prefix, CancellationToken cancellationToken = default);
+
+    /// <summary>Days with a sleep score or a sleep period in [<paramref name="from"/>, <paramref name="to"/>], oldest first.</summary>
+    Task<IReadOnlyList<SleepDay>> GetSleepDaysAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
+
+    /// <summary>Days with a readiness score in [<paramref name="from"/>, <paramref name="to"/>], oldest first.</summary>
+    Task<IReadOnlyList<ReadinessDay>> GetReadinessDaysAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// A sync's writes, under the lock every sync shares (<see cref="IActivityRepository.BeginSyncAsync"/>).
+/// They take effect at <see cref="CommitAsync"/>; disposing without it rolls them back.
+/// </summary>
+public interface IOuraSyncLock : IAsyncDisposable
+{
+    /// <summary>
+    /// The newest version of each record in <paramref name="collection"/> that is one of
+    /// <paramref name="keys"/>, or whose newest version's day is in [<paramref name="from"/>,
+    /// <paramref name="to"/>].
+    /// </summary>
+    Task<IReadOnlyList<OuraHead>> GetHeadsAsync(
+        OuraCollection collection, IReadOnlyCollection<string> keys, DateOnly from, DateOnly to,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Appends the versions; one whose <c>external_id</c> is already held is skipped. Answers
+    /// how many were written.
+    /// </summary>
+    Task<int> AppendAsync(IReadOnlyList<OuraVersion> versions, CancellationToken cancellationToken = default);
 
     Task CommitAsync(CancellationToken cancellationToken = default);
 }

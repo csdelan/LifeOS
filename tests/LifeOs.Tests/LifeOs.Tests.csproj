@@ -38,6 +38,13 @@
     </EmbeddedResource>
   </ItemGroup>
 
+  <!-- Oura's answers, recorded from its sandbox (activity plan A2). -->
+  <ItemGroup>
+    <EmbeddedResource Include="OuraFixtures\*.json">
+      <LogicalName>OuraFixtures.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>

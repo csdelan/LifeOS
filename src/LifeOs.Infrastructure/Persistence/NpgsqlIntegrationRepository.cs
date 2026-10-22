@@ -22,8 +22,12 @@ public sealed class NpgsqlIntegrationRepository(string connectionString, TokenCi
         service, access_token_enc IS NOT NULL AS connected, connected_at AS connectedat,
         expires_at AS expiresat, scopes, needs_reconnect AS needsreconnect,
         reconnect_reason AS reconnectreason, last_synced_at AS lastsyncedat,
-        last_sync_error AS lastsyncerror, history_from::text AS historyfrom
+        last_sync_error AS lastsyncerror, history_from::text AS historyfrom,
+        history_done AS historydone
         """;
+
+    // Longer than any message LifeOS writes; Oura's own words are trimmed before they get here.
+    private const int MaxErrorLength = 1000;
 
     public async Task<IntegrationState?> GetAsync(string service, CancellationToken cancellationToken = default)
     {
@@ -160,6 +164,46 @@ public sealed class NpgsqlIntegrationRepository(string connectionString, TokenCi
             await connection.DisposeAsync();
             throw;
         }
+    }
+
+    public async Task RecordSyncAsync(
+        string service, DateTimeOffset syncedAt, DateOnly? historyFrom, bool historyDone,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE bsk_ops.integration SET
+                last_synced_at = @syncedAt,
+                last_sync_error = NULL,
+                history_from = CASE
+                    WHEN @historyFrom::date IS NULL THEN history_from
+                    WHEN history_from IS NULL THEN @historyFrom::date
+                    ELSE least(history_from, @historyFrom::date) END,
+                history_done = history_done OR @historyDone,
+                updated_at = now()
+            WHERE service = @service;
+            """,
+            new
+            {
+                service,
+                syncedAt = syncedAt.UtcDateTime,
+                historyFrom = historyFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                historyDone
+            },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task RecordSyncErrorAsync(string service, string error, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE bsk_ops.integration SET last_sync_error = @error, updated_at = now()
+            WHERE service = @service;
+            """,
+            new { service, error = error.Length <= MaxErrorLength ? error : error[..MaxErrorLength] },
+            cancellationToken: cancellationToken));
     }
 
     private async Task<NpgsqlConnection> OpenAsync(CancellationToken cancellationToken)
@@ -334,11 +378,13 @@ public sealed class NpgsqlIntegrationRepository(string connectionString, TokenCi
         public DateTime? LastSyncedAt { get; set; }
         public string? LastSyncError { get; set; }
         public string? HistoryFrom { get; set; }
+        public bool HistoryDone { get; set; }
 
         public IntegrationState ToState() => new(
             Service, Connected, Utc(ConnectedAt), Utc(ExpiresAt), Scopes ?? [], NeedsReconnect, ReconnectReason,
             Utc(LastSyncedAt), LastSyncError,
-            HistoryFrom is null ? null : DateOnly.ParseExact(HistoryFrom, "yyyy-MM-dd", CultureInfo.InvariantCulture));
+            HistoryFrom is null ? null : DateOnly.ParseExact(HistoryFrom, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+            HistoryDone);
     }
 
     private sealed class PendingRow

@@ -1,15 +1,18 @@
 using System.Net;
+using System.Reflection;
 using System.Text;
 using LifeOs.Application.Abstractions;
+using LifeOs.Domain;
 using LifeOs.Infrastructure.Integrations;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace LifeOs.Tests;
 
 /// <summary>
-/// Oura's OAuth calls over HTTP (activity plan A1, §3.1), against a stub handler: what LifeOS
-/// sends, how it reads Oura's answers, and how each refusal or outage surfaces — never with a
-/// token or the client secret in the message.
+/// Oura's OAuth calls and data collections over HTTP (activity plan A1, A2, §3.1, §3.3), against
+/// a stub handler: what LifeOS sends, how it reads Oura's answers (recorded from Oura's sandbox
+/// in <c>OuraFixtures</c>), and how each refusal or outage surfaces — never with a token or the
+/// client secret in the message.
 /// </summary>
 public sealed class OuraHttpClientTests
 {
@@ -19,7 +22,8 @@ public sealed class OuraHttpClientTests
 
     private static readonly OuraOptions Options = new(
         "client-123", Secret, OuraOptions.DefaultAuthorizeUrl, OuraOptions.DefaultTokenUrl,
-        new Uri("https://moi.ouraring.com/oauth/v2/ext/oauth-token"), OuraOptions.DefaultRevokeUrl);
+        new Uri("https://moi.ouraring.com/oauth/v2/ext/oauth-token"), OuraOptions.DefaultRevokeUrl,
+        OuraOptions.DefaultCollectionsUrl);
 
     private static (OuraHttpClient Client, StubHandler Handler) Create(params Func<HttpRequestMessage, HttpResponseMessage>[] answers)
     {
@@ -174,6 +178,205 @@ public sealed class OuraHttpClientTests
     public void Scopes_lose_their_prefix(string scope, string[] expected)
         => Assert.Equal(expected, OuraHttpClient.NormalizeScopes(scope));
 
+    // ---------------------------------------------------------------------------------
+    // Collections (A2)
+    // ---------------------------------------------------------------------------------
+
+    private static readonly DateOnly Start = new(2026, 9, 29);
+    private static readonly DateOnly End = new(2026, 10, 4);
+
+    /// <summary>A recorded answer from Oura's sandbox (<c>OuraFixtures/&lt;collection&gt;.json</c>).</summary>
+    internal static string Fixture(string collection)
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"OuraFixtures.{collection}.json")
+                           ?? throw new InvalidOperationException($"No Oura fixture for {collection}.");
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
+    [Fact]
+    public async Task A_collection_is_read_with_the_bearer_token_and_the_days_asked_for()
+    {
+        var (client, handler) = Create(Json(HttpStatusCode.OK, Fixture("daily_activity")));
+
+        var days = await client.GetDailyActivityAsync("access-1", Start, End, TestContext.Current.CancellationToken);
+
+        var sent = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Get, sent.Method);
+        Assert.Equal(
+            "https://api.ouraring.com/v2/usercollection/daily_activity?start_date=2026-09-29&end_date=2026-10-04", sent.Uri);
+        Assert.Equal("Bearer access-1", sent.Authorization);
+
+        Assert.Equal(2, days.Count);
+        var day = days[1];
+        Assert.Equal(new DateOnly(2026, 10, 2), day.Day);
+        Assert.Equal("daily_activity-1-2026-10-2", day.OuraId);
+        Assert.Equal(new DateTimeOffset(2026, 10, 2, 0, 0, 0, TimeSpan.Zero), day.Timestamp);
+        Assert.Equal(20000, day.Steps);
+        Assert.Equal(200, day.ActiveCalories);
+        Assert.Equal(3000, day.TotalCalories);
+        Assert.Equal(2000, day.WalkingM);
+        Assert.Equal((200, 40, 20), (day.HighS, day.MediumS, day.LowS));
+        Assert.Equal((20, 20, 20), (day.SedentaryS, day.RestingS, day.NonWearS));
+        Assert.Equal(74, day.Score);
+    }
+
+    [Fact]
+    public async Task Workouts_sleep_and_readiness_read_from_the_sandbox_shapes()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (workoutClient, _) = Create(Json(HttpStatusCode.OK, Fixture("workout")));
+        var (sleepClient, _) = Create(Json(HttpStatusCode.OK, Fixture("daily_sleep")));
+        var (readinessClient, _) = Create(Json(HttpStatusCode.OK, Fixture("daily_readiness")));
+        var (periodClient, periodHandler) = Create(Json(HttpStatusCode.OK, Fixture("sleep")));
+
+        var workouts = await workoutClient.GetWorkoutsAsync("a", Start, End, ct);
+        Assert.Equal(["walking", "swimming", "running"], workouts.Select(w => w.Activity));
+        Assert.Equal(["confirmed", "manual", "workout_heart_rate"], workouts.Select(w => w.Source));
+        var swim = workouts[1];
+        Assert.Equal("workout-2-2026-10-2", swim.Id);
+        Assert.Equal((1000, 200), (swim.Calories, swim.DistanceM));
+        Assert.Equal("moderate", swim.Intensity);
+        Assert.Null(swim.Label);
+        Assert.Equal("My Workout", workouts[0].Label);
+
+        var sleep = await sleepClient.GetDailySleepAsync("a", Start, End, ct);
+        Assert.Equal(73, sleep[1].Score);
+        Assert.Equal(
+            ["deep_sleep", "efficiency", "latency", "rem_sleep", "restfulness", "timing", "total_sleep"],
+            sleep[1].Contributors.Keys);
+
+        var readiness = await readinessClient.GetDailyReadinessAsync("a", Start, End, ct);
+        Assert.Equal(80, readiness[0].Score);
+        Assert.Equal((0.5, 0.2), (readiness[0].TemperatureDeviation, readiness[0].TemperatureTrendDeviation));
+        Assert.Null(readiness[0].Contributors["sleep_regularity"]);
+
+        var periods = await periodClient.GetSleepPeriodsAsync("a", Start, End, ct);
+        Assert.EndsWith("/v2/usercollection/sleep?start_date=2026-09-29&end_date=2026-10-04", Assert.Single(periodHandler.Requests).Uri);
+        Assert.Equal(["long_sleep", "late_nap"], periods.Select(p => p.Type));
+        var nap = periods[1];
+        Assert.Equal((3000, 2370, 30, 200, 58, 24), (nap.InBedS, nap.AsleepS, nap.DeepS, nap.LightS, nap.RemS, nap.AwakeS));
+        Assert.Equal((50, 70, 56, 64.0, 54), (nap.LatencyS, nap.Efficiency, nap.AverageHrv, nap.AverageHr, nap.LowestHr));
+    }
+
+    [Fact]
+    public async Task Paging_follows_next_token_until_it_runs_out_or_repeats()
+    {
+        var (client, handler) = Create(
+            Json(HttpStatusCode.OK, """{"data":[{"day":"2026-10-01","steps":1}],"next_token":"page-2"}"""),
+            Json(HttpStatusCode.OK, """{"data":[{"day":"2026-10-02","steps":2}],"next_token":"page-3"}"""),
+            Json(HttpStatusCode.OK, """{"data":[{"day":"2026-10-03","steps":3}],"next_token":"page-3"}"""));
+
+        var days = await client.GetDailyActivityAsync("access-1", Start, End, TestContext.Current.CancellationToken);
+
+        // The third page names itself as the next page: a token already followed, so it stops.
+        Assert.Equal([1, 2, 3], days.Select(d => d.Steps));
+        Assert.Equal(3, handler.Requests.Count);
+        Assert.DoesNotContain("next_token", handler.Requests[0].Uri);
+        Assert.EndsWith("&next_token=page-2", handler.Requests[1].Uri);
+        Assert.EndsWith("&next_token=page-3", handler.Requests[2].Uri);
+        Assert.All(handler.Requests, r => Assert.Equal("Bearer access-1", r.Authorization));
+    }
+
+    [Fact]
+    public async Task Records_without_what_identifies_them_are_skipped_and_unknown_values_kept()
+    {
+        var (client, _) = Create(Json(HttpStatusCode.OK, """
+            {"data":[
+              {"id":"w1","day":"2026-10-01","activity":"padel_v2","source":"garmin_import",
+               "start_datetime":"2026-10-01T07:00:00-07:00","end_datetime":"2026-10-01T07:45:00-07:00",
+               "calories":301.6,"distance":null,"intensity":"brutal"},
+              {"id":"w2","day":"2026-10-01","start_datetime":"2026-10-01T09:00:00-07:00","end_datetime":"2026-10-01T09:30:00-07:00"},
+              {"day":"2026-10-01","start_datetime":"2026-10-01T09:00:00-07:00","end_datetime":"2026-10-01T09:30:00-07:00"},
+              {"id":"w4","day":"not a day","start_datetime":"2026-10-01T09:00:00-07:00","end_datetime":"2026-10-01T09:30:00-07:00"},
+              {"id":"w5","day":"2026-10-01","start_datetime":"2026-10-01T09:00:00-07:00"},
+              "not an object"
+            ],"next_token":null}
+            """));
+
+        var workouts = await client.GetWorkoutsAsync("a", Start, End, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["w1", "w2"], workouts.Select(w => w.Id));
+        var padel = workouts[0];
+        Assert.Equal(("padel_v2", "garmin_import", "brutal"), (padel.Activity, padel.Source, padel.Intensity));
+        Assert.Equal(302, padel.Calories);
+        Assert.Null(padel.DistanceM);
+        Assert.Equal(TimeSpan.FromHours(-7), padel.Start.Offset);
+        Assert.Equal(("unknown", "unknown"), (workouts[1].Activity, workouts[1].Source));
+    }
+
+    [Fact]
+    public async Task A_refused_token_or_access_says_which()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (unauthorized, _) = Create(Json(HttpStatusCode.Unauthorized, """{"detail":"Invalid token"}"""));
+        var (forbidden, _) = Create(Json(HttpStatusCode.Forbidden, """{"detail":"Membership required"}"""));
+
+        var refused = await Assert.ThrowsAsync<OuraAccessDeniedException>(() =>
+            unauthorized.GetWorkoutsAsync("secret-access-token", Start, End, ct));
+        Assert.Equal(401, refused.Status);
+        Assert.DoesNotContain("secret-access-token", refused.Message);
+
+        var denied = await Assert.ThrowsAsync<OuraAccessDeniedException>(() =>
+            forbidden.GetDailySleepAsync("secret-access-token", Start, End, ct));
+        Assert.Equal(403, denied.Status);
+        Assert.Contains("Membership required", denied.Message);
+        Assert.Contains("daily_sleep", denied.Message);
+        Assert.DoesNotContain("secret-access-token", denied.Message);
+    }
+
+    [Fact]
+    public async Task A_collection_that_fails_or_answers_strangely_is_unavailable()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (limited, _) = Create(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(30));
+            return response;
+        });
+        var (failing, _) = Create(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var (listless, _) = Create(Json(HttpStatusCode.OK, """{"items":[]}"""));
+        var (garbled, _) = Create(Json(HttpStatusCode.OK, "<html>maintenance</html>"));
+        var (endless, _) = Create(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent($$"""{"data":[],"next_token":"{{Guid.NewGuid():N}}"}""", Encoding.UTF8, "application/json")
+        });
+
+        Assert.Equal(TimeSpan.FromSeconds(30),
+            (await Assert.ThrowsAsync<OuraUnavailableException>(() => limited.GetWorkoutsAsync("a", Start, End, ct))).RetryAfter);
+        await Assert.ThrowsAsync<OuraUnavailableException>(() => failing.GetDailyActivityAsync("a", Start, End, ct));
+        await Assert.ThrowsAsync<OuraUnavailableException>(() => listless.GetDailyActivityAsync("a", Start, End, ct));
+        await Assert.ThrowsAsync<OuraUnavailableException>(() => garbled.GetDailyActivityAsync("a", Start, End, ct));
+        Assert.Contains("kept paging",
+            (await Assert.ThrowsAsync<OuraUnavailableException>(() => endless.GetSleepPeriodsAsync("a", Start, End, ct))).Message);
+    }
+
+    [Fact]
+    public void The_collections_url_can_point_at_the_sandbox()
+    {
+        var sandbox = OuraOptions.Resolve(key => key switch
+        {
+            OuraOptions.ClientIdKey => "client-123",
+            OuraOptions.ClientSecretKey => Secret,
+            OuraOptions.CollectionsUrlKey => "https://api.ouraring.com/v2/sandbox/usercollection",
+            _ => null
+        })!;
+        var standard = OuraOptions.Resolve(key => key switch
+        {
+            OuraOptions.ClientIdKey => "client-123",
+            OuraOptions.ClientSecretKey => Secret,
+            _ => null
+        })!;
+
+        // Without the trailing slash, the collection's name would replace the last segment.
+        Assert.Equal("https://api.ouraring.com/v2/sandbox/usercollection/", sandbox.CollectionsUrl.AbsoluteUri);
+        Assert.Equal(
+            "https://api.ouraring.com/v2/sandbox/usercollection/workout",
+            new Uri(sandbox.CollectionsUrl, OuraCollections.Workout.Name).AbsoluteUri);
+        Assert.Equal(OuraOptions.DefaultCollectionsUrl, standard.CollectionsUrl);
+    }
+
     private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage>[] answers) : HttpMessageHandler
     {
         public List<SentRequest> Requests { get; } = [];
@@ -182,10 +385,11 @@ public sealed class OuraHttpClientTests
         {
             var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
             Requests.Add(new SentRequest(
-                request.Method, request.RequestUri!.AbsoluteUri, request.Content?.Headers.ContentType?.MediaType, body));
+                request.Method, request.RequestUri!.AbsoluteUri, request.Content?.Headers.ContentType?.MediaType, body,
+                request.Headers.Authorization?.ToString()));
             return answers[Math.Min(Requests.Count - 1, answers.Length - 1)](request);
         }
     }
 
-    private sealed record SentRequest(HttpMethod Method, string Uri, string? ContentType, string Body);
+    private sealed record SentRequest(HttpMethod Method, string Uri, string? ContentType, string Body, string? Authorization);
 }

@@ -12,10 +12,13 @@ namespace LifeOs.Infrastructure.Integrations;
 /// documented endpoints by default.</item>
 /// <item><c>Oura:RefreshUrl</c> — where refreshes go; the token URL by default. A report says
 /// apps from Oura's new portal must refresh elsewhere, so it can be moved without a release.</item>
+/// <item><c>Oura:CollectionsUrl</c> — where the data collections are read; Oura's
+/// <c>/v2/usercollection/</c> by default (its sandbox is <c>/v2/sandbox/usercollection/</c>).</item>
 /// </list>
 /// </summary>
 public sealed record OuraOptions(
-    string ClientId, string ClientSecret, Uri AuthorizeUrl, Uri TokenUrl, Uri RefreshUrl, Uri RevokeUrl)
+    string ClientId, string ClientSecret, Uri AuthorizeUrl, Uri TokenUrl, Uri RefreshUrl, Uri RevokeUrl,
+    Uri CollectionsUrl)
 {
     public const string ClientIdKey = "Oura:ClientId";
     public const string ClientSecretKey = "Oura:ClientSecret";
@@ -23,10 +26,12 @@ public sealed record OuraOptions(
     public const string TokenUrlKey = "Oura:TokenUrl";
     public const string RefreshUrlKey = "Oura:RefreshUrl";
     public const string RevokeUrlKey = "Oura:RevokeUrl";
+    public const string CollectionsUrlKey = "Oura:CollectionsUrl";
 
     public static readonly Uri DefaultAuthorizeUrl = new("https://cloud.ouraring.com/oauth/authorize");
     public static readonly Uri DefaultTokenUrl = new("https://api.ouraring.com/oauth/token");
     public static readonly Uri DefaultRevokeUrl = new("https://api.ouraring.com/oauth/revoke");
+    public static readonly Uri DefaultCollectionsUrl = new("https://api.ouraring.com/v2/usercollection/");
 
     /// <summary>
     /// Reads the settings through <paramref name="get"/>, or null when there's no client id or
@@ -60,12 +65,17 @@ public sealed record OuraOptions(
             Endpoint(get, AuthorizeUrlKey, DefaultAuthorizeUrl),
             tokenUrl,
             Endpoint(get, RefreshUrlKey, tokenUrl),
-            Endpoint(get, RevokeUrlKey, DefaultRevokeUrl));
+            Endpoint(get, RevokeUrlKey, DefaultRevokeUrl),
+            Folder(Endpoint(get, CollectionsUrlKey, DefaultCollectionsUrl)));
     }
 
     // Never print the secret.
     public override string ToString()
-        => $"OuraOptions {{ ClientId = {ClientId}, AuthorizeUrl = {AuthorizeUrl}, TokenUrl = {TokenUrl}, RefreshUrl = {RefreshUrl}, RevokeUrl = {RevokeUrl} }}";
+        => $"OuraOptions {{ ClientId = {ClientId}, AuthorizeUrl = {AuthorizeUrl}, TokenUrl = {TokenUrl}, RefreshUrl = {RefreshUrl}, RevokeUrl = {RevokeUrl}, CollectionsUrl = {CollectionsUrl} }}";
+
+    // A base a collection's name is resolved against: it must end in a slash.
+    private static Uri Folder(Uri uri)
+        => uri.AbsolutePath.EndsWith('/') ? uri : new UriBuilder(uri) { Path = uri.AbsolutePath + "/" }.Uri;
 
     private static Uri Endpoint(Func<string, string?> get, string key, Uri fallback)
     {
