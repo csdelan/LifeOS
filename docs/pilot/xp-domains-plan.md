@@ -43,7 +43,7 @@ gamification changes Chris's days. Everything in §6 has to earn its place throu
 | Lifetime XP | Accumulates permanently. |
 | Levels | 1–100 per domain, computed from the domain's total XP, with each domain's own formula. Everyone starts at level 1 with 0 XP. |
 | Health's formula | `XPnext(L) = 300 + 25(L−1) + 70·max(0, L−45)` is the XP to go from level L to L+1. 254,925 XP reaches 100 (§2.1). |
-| A successful day (Health) | **At least 70 base XP** (before the multiplier). Flat, with no rise by rank. It's a provisional number, recalibrated after a few weeks of real Health XP (§2.4). |
+| A successful day (Health) | **At least 60 base XP** (before the multiplier). Flat, with no rise by rank. It was 70 until activity XP's calibration (2026-10-22, §2.4), and is still recalibrated after a few weeks of real Health XP. |
 | Consistency | The share of successful days in a window. The "successful day" test is a **replaceable rule per domain**; 70 XP is only Health's first rule (§3.2). |
 | Recovery days | In the pilot, pricing handles them. The 70 counts *all* Health XP, so sleep, nutrition, mobility or a recovery routine can carry a rest day. An explicit recovery-day rule is designed for later. |
 | Ranks | One every 10 levels, 11 in all, Novice to Grandmaster (§2.2). Entering a rank needs the level, consistency at or above its bar over its window, **and** a domain at least as old as the window, so Grandmaster takes a year of effort no matter what. Rank difficulty rises through the bars and windows only. |
@@ -120,7 +120,7 @@ Human sits right on the top two bars, so it's the first line to check at calibra
 | 9 | 90–99 | Legend | 88% over 365 days | 1 |
 | 10 | 100 | Grandmaster | 90% over 365 days | 5 |
 
-A successful day is 70+ base XP at every rank.
+A successful day is 60+ base XP at every rank (70 until 2026-10-22, §2.4).
 
 ### 2.3 Multiplier
 
@@ -145,6 +145,17 @@ The plan:
 4. Once X4 lands, `bsk domains simulate --replay` runs his real days so far through the
    rules, and projects them forward.
 5. He sets the minimum, the tiers and the bars from that.
+
+**Lowered to 60 (2026-10-22).** Activity XP's calibration (activity plan §3.8) simulated a
+healthy routine of food, steps, sleep and four workouts a week. At 70 it reached 70%
+successful days and level 59 after 10 years, with the ranks stopped at Veteran. At 60 it
+reached 89%, level 100, and Grandmaster in 7.5 years. Chris chose 60: "Lower the Health
+successful-day bar to 60 base XP."
+
+- The curve, tiers and rank bars are unchanged.
+- Steps 3–5 still apply once there are a few weeks of real days.
+- Ranks and successful days are re-read from history, so past days are judged at 60 too.
+  Multipliers already issued stay as they were paid.
 
 ## 3. Design
 
@@ -183,7 +194,7 @@ Health has one in the pilot. A domain currency without rules collects XP and not
 - `Success`: an **`ISuccessRule`** with `bool Succeeded(PeriodFacts facts)`.
   - `PeriodFacts` holds the period (start, end) and its base and paid XP. It can grow later
     (habits followed, commitments kept, a recovery-day flag) without touching the fold.
-  - Health uses `MinimumBaseXp(70)`.
+  - Health uses `MinimumBaseXp(60)` (70 until 2026-10-22, §2.4).
   - **Designed, not built:** `AllOf` / `AnyOf` combinators; "these habits were followed";
     "these commitments were kept"; "an approved recovery-day routine". For example, Health
     later becoming "70 XP and my core nutrition and activity habits, or my recovery routine".
@@ -553,16 +564,20 @@ synthetic daily series. It's both a regression suite and Chris's calibration too
   - Output per rank: runs reaching it and p10 / p50 / p90 years and dates. Plus the final
     level spread, final ranks, average consistency and each run's fold.
   - The regression bands, as built:
-    - **Steady** (95 / 15, essentials 70, 5% off): Grandmaster in every run, median 5–8
-      years; the multiplier is worth more than a year.
-    - **Human** (90 / 15, essentials 70, 10% off, 4% half): Champion always, Legend in at
-      least 18 of 20, Grandmaster in 1–9 of 20 and never before 6.5 years, consistency 85–89%.
+    - **Steady** (the bar + 25 / 15, essentials at the bar, 5% off): Grandmaster in every
+      run, median 5–8 years; the multiplier is worth more than a year.
+    - **Human** (the bar + 20 / 15, essentials at the bar, 10% off, 4% half): Champion
+      always, Legend in at least 18 of 20, Grandmaster in 1–9 of 20 and never before 6.5
+      years, consistency 85–89%.
       Loosened from "never before about 7.5 years": the C# runs land 6.9 at the earliest.
     - **Improving** (+5 a year): Grandmaster in every run within 10 years.
     - **Lapse** (6 months in year 3): the standing doesn't move through it; at its end 0%
       and ×1.0; a month back, at least 70% and ×1.2.
-    - **Below the minimum** (60): level 9, Novice, the rest banked, never multiplied.
-    - **Perfect** (70): each rank the day its level arrives; Grandmaster in 7–8.5 years.
+    - **Below the minimum** (the bar − 10): level 9, Novice, the rest banked, never multiplied.
+    - **Perfect** (exactly the bar): each rank the day its level arrives; Grandmaster in
+      8.5–9.5 years at 60 (7–8.5 at 70).
+    - Since the bar moved to 60 (§2.4) the scenarios are set against it, so they keep their
+      meaning when it moves. Steady and Human were 95 and 90 with essentials of 70.
   - `bsk domains simulate`: `--avg --sd --essentials --off --half --growth --lapse --years
     --runs --seed --no-multiplier --replay`. `--off` and `--half` are percentages; `--lapse`
     is `<start>:<length>` in d, w, m or y. Without `--replay` it needs no database.

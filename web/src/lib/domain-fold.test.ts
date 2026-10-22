@@ -71,10 +71,10 @@ describe("Health's level curve (§2.1)", () => {
 
 describe("the daily fold (§3.5)", () => {
   it("judges a day on its base XP, not what was paid", () => {
-    const progress = fold([day(3, 60, 78), day(2, 70), day(1, 40), day(1, 30), day(0, 69, 89)]);
+    const progress = fold([day(3, 50, 65), day(2, 60), day(1, 35), day(1, 25), day(0, 59, 77)]);
     expect(progress.periods.map((p) => p.succeeded)).toEqual([false, true, true, false]);
-    expect(progress.periods[2]).toMatchObject({ base: 70, paid: 70 });
-    expect(progress.totalXp).toBe(78 + 70 + 70 + 89);
+    expect(progress.periods[2]).toMatchObject({ base: 60, paid: 60 });
+    expect(progress.totalXp).toBe(65 + 60 + 60 + 77);
   });
 
   it("counts days before the start as unsuccessful and uncovered", () => {
@@ -336,7 +336,7 @@ describe("reading it as the API does", () => {
     expect(row).toMatchObject({ name: "Health", configured: true, totalXp: 5_000 });
     expect(row.lifetime).toMatchObject({ level: 9, rawLevel: 12, capped: true, rankTitle: "Novice", bankedXp: 1_400, levelXp: costToNext(curve, 9) });
     expect(row.nextRank).toMatchObject({ title: "Apprentice", level: 10, bar: 0.5, windowDays: 14, requiredDays: 7, successfulDays: 1 });
-    expect(row.current).toMatchObject({ todayBase: 5_000, todaySucceeded: true, target: 70, rule: "at least 70 base XP", multiplier: 1 });
+    expect(row.current).toMatchObject({ todayBase: 5_000, todaySucceeded: true, target: 60, rule: "at least 60 base XP", multiplier: 1 });
     expect(row.ranks).toHaveLength(11);
     expect(row.ranks![10]).toMatchObject({ title: "Grandmaster", topLevel: 100, gems: 5 });
     expect(toDomainRow({ key: "social_xp", label: "Social XP" }, 40, null)).toMatchObject({
@@ -348,15 +348,15 @@ describe("reading it as the API does", () => {
   });
 
   it("answers GET /api/domains/{key}/days, oldest first", () => {
-    const read = toDomainDays({ key: "health_xp", label: "Health XP" }, [day(5, 70), day(0, 60, 78)], TODAY, 6);
-    expect(read.target).toBe(70);
+    const read = toDomainDays({ key: "health_xp", label: "Health XP" }, [day(5, 70), day(0, 50, 65)], TODAY, 6);
+    expect(read.target).toBe(60);
     expect(read.days.map((d) => [d.base, d.paid, d.succeeded])).toEqual([
       [70, 70, true],
       [0, 0, false],
       [0, 0, false],
       [0, 0, false],
       [0, 0, false],
-      [60, 78, false],
+      [50, 65, false],
     ]);
     const social = toDomainDays({ key: "social_xp", label: "Social XP" }, [day(1, 25)], TODAY, 2);
     expect(social.days).toEqual([

@@ -189,14 +189,15 @@ public static class LifeDomains
     private static readonly IReadOnlyList<string> NoMilestones = [];
 
     /// <summary>
-    /// Health, the pilot domain (xp-domains plan §2): a successful day is 70+ base XP at every
-    /// rank — provisional, to recalibrate after a few weeks of real XP (§2.4).
+    /// Health, the pilot domain (xp-domains plan §2): a successful day is 60+ base XP at every
+    /// rank. It was 70 until activity XP's calibration (activity plan §3.8, 2026-10-22), and is
+    /// still to recalibrate after a few weeks of real XP (§2.4).
     /// </summary>
     public static readonly DomainRules Health = new(
         Currencies.HealthXp,
         Cadence.Daily,
         new RampCurve(Base: 300, PerLevel: 25, RampFrom: 45, RampPerLevel: 70),
-        new MinimumBaseXp(70),
+        new MinimumBaseXp(60),
         [
             new(1, "Novice", 0m, 0, NoMilestones),
             new(10, "Apprentice", 0.50m, 14, NoMilestones),

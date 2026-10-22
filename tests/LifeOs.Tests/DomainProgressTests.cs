@@ -29,16 +29,16 @@ public sealed class DomainProgressTests
     public void A_day_succeeds_on_its_base_xp_not_what_was_paid()
     {
         var progress = Fold(
-            Day(3, 60, paid: 78),   // 60 base at ×1.3: still short
-            Day(2, 70, paid: 70),
-            Day(1, 40), Day(1, 30), // two awards on one day add up
-            Day(0, 69, paid: 89));
+            Day(3, 50, paid: 65),   // 50 base at ×1.3: still short
+            Day(2, 60, paid: 60),
+            Day(1, 35), Day(1, 25), // two awards on one day add up
+            Day(0, 59, paid: 77));
 
         Assert.Equal([false, true, true, false], progress.Periods.Select(p => p.Succeeded));
-        Assert.Equal((70L, 70L), (progress.Periods[2].Base, progress.Periods[2].Paid));
-        Assert.Equal(78 + 70 + 70 + 89, progress.TotalXp);
-        Assert.False(new MinimumBaseXp(70).Succeeded(new PeriodFacts(Today, Today, BaseXp: 69, PaidXp: 1000)));
-        Assert.True(new MinimumBaseXp(70).Succeeded(new PeriodFacts(Today, Today, BaseXp: 70, PaidXp: 0)));
+        Assert.Equal((60L, 60L), (progress.Periods[2].Base, progress.Periods[2].Paid));
+        Assert.Equal(65 + 60 + 60 + 77, progress.TotalXp);
+        Assert.False(new MinimumBaseXp(60).Succeeded(new PeriodFacts(Today, Today, BaseXp: 59, PaidXp: 1000)));
+        Assert.True(new MinimumBaseXp(60).Succeeded(new PeriodFacts(Today, Today, BaseXp: 60, PaidXp: 0)));
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class DomainProgressTests
     [InlineData(26, "1.3")] // 86.7%
     public void Successful_days_in_the_last_30_pick_the_multiplier(int successfulDays, string multiplier)
     {
-        // Started 30 days ago: the oldest days succeed, the rest earn a little short of 70.
+        // Started 30 days ago: the oldest days succeed, the rest earn well short of the bar.
         var days = Enumerable.Range(1, 30).Select(ago => ago > 30 - successfulDays ? Good(ago) : Day(ago, 10));
 
         var progress = Fold(days);

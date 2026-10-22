@@ -116,8 +116,8 @@ public sealed class LifeDomainsTests
         Assert.Equal(Currencies.HealthXp, health.Currency);
         Assert.Equal(Cadence.Daily, health.Cadence);
         Assert.Equal(new RampCurve(Base: 300, PerLevel: 25, RampFrom: 45, RampPerLevel: 70), health.Curve);
-        Assert.Equal(new MinimumBaseXp(70), health.Success);
-        Assert.Equal("at least 70 base XP", health.Success.Describe());
+        Assert.Equal(new MinimumBaseXp(60), health.Success);
+        Assert.Equal("at least 60 base XP", health.Success.Describe());
         Assert.Equal(30, health.Multiplier.WindowDays);
         Assert.Equal(new RankUpGems(1, 5), health.RankUpGems);
         Assert.Equal(

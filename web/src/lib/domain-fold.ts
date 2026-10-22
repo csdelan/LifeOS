@@ -53,7 +53,7 @@ export interface DomainRules {
 export const HEALTH: DomainRules = {
   currency: "health_xp",
   curve: { base: 300, perLevel: 25, rampFrom: 45, rampPerLevel: 70, maxLevel: 100 },
-  minimumBaseXp: 70,
+  minimumBaseXp: 60,
   ranks: [
     { startLevel: 1, title: "Novice", minConsistency: 0, windowDays: 0 },
     { startLevel: 10, title: "Apprentice", minConsistency: 0.5, windowDays: 14 },

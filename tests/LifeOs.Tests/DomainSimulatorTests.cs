@@ -15,9 +15,14 @@ public sealed class DomainSimulatorTests
     private static readonly DomainRules Health = LifeDomains.Health;
     private static readonly SimulationOptions TenYears = new(Years: 10, Runs: 20, Seed: 1);
 
-    // Full days do the 70 XP of essentials plus extras that vary.
-    private static readonly SimulationPattern Steady = new(AverageXp: 95, SpreadXp: 15, Essentials: 70, OffShare: 0.05m, HalfShare: 0);
-    private static readonly SimulationPattern Human = new(AverageXp: 90, SpreadXp: 15, Essentials: 70, OffShare: 0.10m, HalfShare: 0.04m);
+    /// <summary>Health's successful day, in base XP: the scenarios are set against it.</summary>
+    private static readonly long Minimum = ((MinimumBaseXp)Health.Success).Minimum;
+
+    // Full days do the minimum's worth of essentials plus extras that vary. The scenarios sit
+    // the same distance above the bar as when it was 70 (activity plan §3.8), so their bands
+    // still hold.
+    private static readonly SimulationPattern Steady = new(AverageXp: Minimum + 25, SpreadXp: 15, Essentials: Minimum, OffShare: 0.05m, HalfShare: 0);
+    private static readonly SimulationPattern Human = new(AverageXp: Minimum + 20, SpreadXp: 15, Essentials: Minimum, OffShare: 0.10m, HalfShare: 0.04m);
 
     private static SimulationResult Simulate(SimulationPattern pattern, SimulationOptions? options = null)
         => DomainSimulator.Run(Health, pattern, options ?? TenYears, Start);
@@ -107,23 +112,24 @@ public sealed class DomainSimulatorTests
     [Fact]
     public void Always_below_the_minimum_stays_a_level_9_novice_with_the_rest_banked()
     {
-        var result = Simulate(new SimulationPattern(AverageXp: 60, SpreadXp: 0, OffShare: 0, HalfShare: 0));
+        var below = Minimum - 10;
+        var result = Simulate(new SimulationPattern(AverageXp: below, SpreadXp: 0, OffShare: 0, HalfShare: 0));
 
         Assert.All(result.Runs, run =>
         {
             Assert.Equal((9, 0), (run.Level, run.Rank));
             Assert.True(run.RawLevel > 50);
             Assert.Equal(run.TotalXp - Health.Curve.TotalFor(10), run.BankedXp);
-            Assert.Equal(60 * run.Periods.Count, run.TotalXp); // never multiplied
+            Assert.Equal(below * run.Periods.Count, run.TotalXp); // never multiplied
         });
         Assert.All(result.Ranks, r => Assert.Equal(0, r.RunsReached));
         Assert.Equal(0m, result.AverageConsistency);
     }
 
     [Fact]
-    public void Exactly_70_a_day_reaches_each_rank_the_day_its_level_arrives()
+    public void Exactly_the_minimum_a_day_reaches_each_rank_the_day_its_level_arrives()
     {
-        var result = Simulate(new SimulationPattern(AverageXp: 70, SpreadXp: 0, OffShare: 0, HalfShare: 0), TenYears with { Runs = 1 });
+        var result = Simulate(new SimulationPattern(AverageXp: Minimum, SpreadXp: 0, OffShare: 0, HalfShare: 0), TenYears with { Runs = 1 });
 
         var run = Assert.Single(result.Runs);
         Assert.Equal(10, run.RanksReached.Count);
@@ -133,7 +139,8 @@ public sealed class DomainSimulatorTests
             Assert.Equal(levelArrives, reached.QualifiedOn);
         }
 
-        Assert.InRange(Rank(result, "Grandmaster").Years!.P50, 7.0, 8.5);
+        // 60 a day at ×1.3: 78 paid.
+        Assert.InRange(Rank(result, "Grandmaster").Years!.P50, 8.5, 9.5);
     }
 
     [Fact]
@@ -198,11 +205,14 @@ public sealed class DomainSimulatorTests
     [Fact]
     public void A_pattern_reads_in_words()
     {
+        var human = new SimulationPattern(AverageXp: 90, SpreadXp: 15, Essentials: 70, OffShare: 0.10m, HalfShare: 0.04m);
+        var steady = new SimulationPattern(AverageXp: 95, SpreadXp: 15, Essentials: 70, OffShare: 0.05m, HalfShare: 0);
+
         Assert.Equal(
             "full days about 90 base XP (spread 15, essentials 70), 10% of days off, 4% half days",
-            Human.Describe());
+            human.Describe());
         Assert.Equal(
             "full days about 95 base XP (spread 15, essentials 70), 5% of days off, +5 a day per year, 182 days off after 1095 days",
-            (Steady with { GrowthPerYear = 5, Lapse = new SimulationLapse(1095, 182) }).Describe());
+            (steady with { GrowthPerYear = 5, Lapse = new SimulationLapse(1095, 182) }).Describe());
     }
 }

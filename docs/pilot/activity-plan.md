@@ -22,8 +22,8 @@ re-import.
   - §3.1: versioned events, where the newest by `recorded_at` wins.
   - §3.3 and F2 as built: item-less award keys, re-priced when their day changes.
   - §3.4: settling when a page opens.
-- [xp-domains-plan.md](xp-domains-plan.md): the credited day, the multiplier and the 70-XP
-  successful day. Phase 2 only.
+- [xp-domains-plan.md](xp-domains-plan.md): the credited day, the multiplier and the
+  successful day (60 base XP since 2026-10-22). Phase 2 only.
 - [ontology.md](../ontology.md):
   - §4.4 provenance: `observed` means read off an external source.
   - §5 idempotency: `(source_id, external_id)` is unique, built for "configurable data
@@ -556,8 +556,9 @@ The Today card adds the three up. Nothing else on the page changes.
 
 **The questions, answered (2026-10-22):**
 
-1. **Activity's share of the 70-XP successful day:** activity adds to the day rather than
-   raising the bar. **Still open: whether the bar stays at 70.** See the calibration below.
+1. **Activity's share of the successful day:** activity adds to the day rather than
+   raising the bar, and **the bar comes down from 70 to 60** (settled 2026-10-22, see the
+   calibration below).
 2. **The steps curve:**
    - The straight line above, with partial pay under 5,000 and no penalty.
    - It tops out at 10,000 with 25.
@@ -639,7 +640,11 @@ simulator's regression bands.
   issued multiplier stays as it was.
 - After a month of real days, `bsk domains simulate --replay` can confirm the choice or
   move it.
-- **The bar is Chris's call.** A7 doesn't change it.
+- **The bar is Chris's call.** A7 didn't change it.
+
+**Settled (2026-10-22):** Chris said "Lower the Health successful-day bar to 60 base XP".
+It was lowered after A7, ahead of A8 (xp-domains plan §2.4). The simulator's regression
+scenarios are now set against the bar, so they keep their meaning when it moves.
 
 ## 4. Phases
 
@@ -760,7 +765,8 @@ Activity rewards. … Use these decisions as input to the remaining phase 2 cont
   - exercise counted to the second, with overlaps merged
   - Health pages asking for a sync, rather than a background job
 - **Came back as a question:** the calibration found the 70-XP bar holds a healthy routine
-  well short of Level 100 (§3.8). Chris decides the bar.
+  well short of Level 100 (§3.8). Chris chose 60: "Lower the Health successful-day bar to
+  60 base XP, then start A8."
 
 ## 6. Later
 

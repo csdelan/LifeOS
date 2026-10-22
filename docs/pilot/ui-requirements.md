@@ -2685,8 +2685,10 @@ successful day gets retuned after a few weeks of real XP.
   30-day consistency and the multiplier do. Coming back after a long break shouldn't feel
   like losing years of progress, but LifeOS shouldn't pretend current habits are still
   excellent either.
-- **A successful Health day** is at least 70 base XP, flat at every rank, provisional until a
-  few weeks of real XP calibrate it. (Chris first set 100 + 5 per rank; simulation showed
+- **A successful Health day** is at least 60 base XP, flat at every rank, provisional until a
+  few weeks of real XP calibrate it. It was 70 until 2026-10-22, when activity XP's
+  calibration showed a healthy routine stalling at level 59 and Chris lowered it to 60
+  (activity plan §3.8). (Chris first set 100 + 5 per rank; simulation showed
   realistic patterns stalling at level 19, so rank difficulty rises through the bars and
   windows instead.) The success test is a replaceable rule per domain, so it can later
   require core habits or allow an approved recovery-day routine. In the pilot, recovery days
@@ -3192,9 +3194,8 @@ Build:      building
 
 - Build moves `unmapped → building`. Paying on the ledger (A8) and showing it on the page
   (A9) are next.
-- **One open question for Chris:** the 70-XP successful day. The calibration found it holds
-  a healthy routine to about 70% successful days and level 59 after 10 years. The plan
-  recommends 60.
+- **The successful day is now 60 base XP (2026-10-22).** The calibration found 70 held a
+  healthy routine to about 70% successful days and level 59 after 10 years. Chris chose 60.
 
 
 

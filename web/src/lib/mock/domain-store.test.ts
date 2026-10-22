@@ -98,7 +98,7 @@ describe("mock life domains (DomainService, RewardService's domain half)", () =>
   it("reads one domain's days for the chart, by key, label or name", () => {
     earnDay("habit-mobility", "followed", today());
     const read = mockDomainDays("health");
-    expect(read).toMatchObject({ key: "health_xp", name: "Health", configured: true, today: today(), target: 70 });
+    expect(read).toMatchObject({ key: "health_xp", name: "Health", configured: true, today: today(), target: 60 });
     expect(read.days).toHaveLength(30);
     expect(read.days[0].day).toBe(addDays(today(), -29));
     expect(read.days.at(-1)).toEqual({ day: today(), base: 90, paid: 108, succeeded: true });

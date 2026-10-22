@@ -255,7 +255,7 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
 
         Assert.Equal(5, series.Days.Count);
         Assert.Equal(TodayUtc, series.Days[^1].Day);
-        Assert.All(series.Days, d => Assert.Equal(d.Base >= 70, d.Succeeded));
+        Assert.All(series.Days, d => Assert.Equal(d.Base >= ((MinimumBaseXp)LifeDomains.Health.Success).Minimum, d.Succeeded));
         await Assert.ThrowsAsync<ArgumentException>(() => kernel.Domains.GetDaysAsync("health", 0, Ct));
         await Assert.ThrowsAsync<ArgumentException>(() => kernel.Domains.GetDaysAsync("coins", 3, Ct));
     }

@@ -132,7 +132,7 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
         Assert.Equal(3_640, health.GetProperty("totalXp").GetInt64());
         Assert.Equal(3_640 - 3_600, lifetime.GetProperty("xpIntoLevel").GetInt64());
         Assert.Equal("Journeyman", health.GetProperty("nextRank").GetProperty("title").GetString());
-        Assert.Equal(70, health.GetProperty("current").GetProperty("target").GetInt64());
+        Assert.Equal(60, health.GetProperty("current").GetProperty("target").GetInt64());
         Assert.Equal(11, health.GetProperty("ranks").GetArrayLength());
         Assert.False(domains.GetProperty("domains").EnumerateArray().Single(d => d.GetProperty("key").GetString() == "social_xp").GetProperty("configured").GetBoolean());
 

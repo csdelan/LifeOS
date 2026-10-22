@@ -39,7 +39,7 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
         await database.OpenWalletAsync(daysAgo: 40);
         // 26 of the 30 days before today succeeded: ×1.3.
         await database.CreditDaysAsync(today, fromAgo: 30, toAgo: 5, xp: 70);
-        var habit = await database.HabitAsync(today, startOffset: 3, healthXp: 60);
+        var habit = await database.HabitAsync(today, startOffset: 3, healthXp: 50);
 
         await using var host = await ApiTestHost.StartAsync(database.ConnectionString, Ct, DomainTestDatabase.ApiZone);
         var response = await host.Client.PostAsJsonAsync(
@@ -47,34 +47,34 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(Ct));
         var award = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("awards").EnumerateArray());
 
-        // 60 × 1.3 = 78, and the earn says how. The day's default Freedom and Life XP aren't
+        // 50 × 1.3 = 65, and the earn says how. The day's default Freedom and Life XP aren't
         // domain XP, so they pay as priced.
         var earned = award.GetProperty("amounts").Deserialize<Dictionary<string, long>>()!;
-        Assert.Equal(78, earned[Currencies.HealthXp]);
+        Assert.Equal(65, earned[Currencies.HealthXp]);
         Assert.Equal(5, earned[Currencies.Freedom]);
-        Assert.Equal(60, award.GetProperty("base").GetProperty(Currencies.HealthXp).GetInt64());
+        Assert.Equal(50, award.GetProperty("base").GetProperty(Currencies.HealthXp).GetInt64());
         Assert.Equal(1.3m, award.GetProperty("multipliers").GetProperty(Currencies.HealthXp).GetDecimal());
         var payload = await database.PayloadAsync(award.GetProperty("id").GetGuid());
-        Assert.Equal(78, payload.GetProperty("amounts").GetProperty(Currencies.HealthXp).GetInt64());
-        Assert.Equal(60, payload.GetProperty("base").GetProperty(Currencies.HealthXp).GetInt64());
+        Assert.Equal(65, payload.GetProperty("amounts").GetProperty(Currencies.HealthXp).GetInt64());
+        Assert.Equal(50, payload.GetProperty("base").GetProperty(Currencies.HealthXp).GetInt64());
         Assert.Equal(1.3m, payload.GetProperty("multipliers").GetProperty(Currencies.HealthXp).GetDecimal());
 
-        // Paid 78, but the day's base is 60: under the 70, so today hasn't succeeded.
+        // Paid 65, but the day's base is 50: under the 60, so today hasn't succeeded.
         var health = (await database.Get<DomainService>().GetAsync(Ct)).Domains
             .Single(d => d.Currency.Key == Currencies.HealthXp).Progress!;
-        Assert.Equal((60L, false), (health.TodayBase, health.TodaySucceeded));
-        Assert.Equal(78, health.Periods[^1].Paid);
+        Assert.Equal((50L, false), (health.TodayBase, health.TodaySucceeded));
+        Assert.Equal(65, health.Periods[^1].Paid);
 
-        // The Character page's chart reads the same days: base against the 70, paid beside it.
+        // The Character page's chart reads the same days: base against the 60, paid beside it.
         var days = await host.Client.GetFromJsonAsync<JsonElement>("/api/domains/health/days?days=6", Ct);
-        Assert.Equal(("health_xp", 70L), (days.GetProperty("key").GetString(), days.GetProperty("target").GetInt64()));
+        Assert.Equal(("health_xp", 60L), (days.GetProperty("key").GetString(), days.GetProperty("target").GetInt64()));
         Assert.Equal(today.ToString("yyyy-MM-dd"), days.GetProperty("today").GetString());
         var rows = days.GetProperty("days").EnumerateArray().ToList();
         Assert.Equal(6, rows.Count);
         Assert.Equal((today.AddDays(-5).ToString("yyyy-MM-dd"), 70L, true),
             (rows[0].GetProperty("day").GetString(), rows[0].GetProperty("base").GetInt64(), rows[0].GetProperty("succeeded").GetBoolean()));
         Assert.Equal((0L, false), (rows[1].GetProperty("base").GetInt64(), rows[1].GetProperty("succeeded").GetBoolean()));
-        Assert.Equal((60L, 78L, false),
+        Assert.Equal((50L, 65L, false),
             (rows[5].GetProperty("base").GetInt64(), rows[5].GetProperty("paid").GetInt64(), rows[5].GetProperty("succeeded").GetBoolean()));
         Assert.Equal(30, (await host.Client.GetFromJsonAsync<JsonElement>("/api/domains/health/days", Ct)).GetProperty("days").GetArrayLength());
         foreach (var bad in new[] { "/api/domains/health/days?days=0", "/api/domains/health/days?days=732", "/api/domains/coins/days" })

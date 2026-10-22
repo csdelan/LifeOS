@@ -184,7 +184,7 @@ test.describe("golden paths", () => {
     await page.getByRole("link", { name: "Character" }).first().click();
     await expect(health.getByText("Level 10", { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(health.getByText("Apprentice", { exact: true })).toBeVisible();
-    await expect(health.getByRole("img", { name: "Today: 90 of 70 base XP, a successful day" })).toBeVisible();
+    await expect(health.getByRole("img", { name: "Today: 90 of 60 base XP, a successful day" })).toBeVisible();
     const ranks = page.getByRole("region", { name: "Health ranks" }).getByRole("listitem");
     await expect(ranks.nth(1)).toHaveAttribute("aria-current", "step");
   });

@@ -71,7 +71,7 @@ describe("Character page (xp-domains plan §3.12)", () => {
     ).toBeInTheDocument();
     expect(card.getByText(/3,560 Health XP in all/)).toBeInTheDocument();
 
-    expect(card.getByRole("img", { name: "Today: 0 of 70 base XP" })).toBeInTheDocument();
+    expect(card.getByRole("img", { name: "Today: 0 of 60 base XP" })).toBeInTheDocument();
     expect(card.getByText("24 of the last 30 days successful")).toBeInTheDocument();
     expect(card.getByText("×1.2 · 80% of the last 30 days")).toBeInTheDocument();
     expect(card.getByText("2 more successful days in the window for ×1.3")).toBeInTheDocument();
@@ -122,7 +122,7 @@ describe("Character page (xp-domains plan §3.12)", () => {
     const plot = chart.getByRole("group", { name: /Health base XP by day, last 30 days/ });
     // Focus reads today; the left arrow steps back to yesterday, a followed day at ×1.2.
     plot.focus();
-    await waitFor(() => expect(plot).toHaveAccessibleDescription(/: 0 base XP · short of 70$/));
+    await waitFor(() => expect(plot).toHaveAccessibleDescription(/: 0 base XP · short of 60$/));
     await user.keyboard("{ArrowLeft}");
     await waitFor(() => expect(plot).toHaveAccessibleDescription(/: 90 base XP \(108 paid\) · a successful day$/));
 
