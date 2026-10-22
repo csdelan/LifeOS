@@ -1071,3 +1071,54 @@ plus:
 - **Found in passing:** `GET /api/activity/day?date=nope` answers ASP.NET's own binding
   message ("Failed to bind parameter…") as its 400, not a 400 in words. The page never sends
   a bad date. Left for later.
+
+**A6 (started 2026-10-22; the week of comparing is still to come).** No migration.
+
+- **The start date** (§3.3, asked for at the start of A6):
+  - `Oura:StartDate` is a `YYYY-MM-DD` setting, 2026-10-22 when it isn't set
+    (`OuraOptions.DefaultStartDate`). A malformed one, or one before 2015-01-01, fails
+    startup in words.
+  - The sync's floor is the later of the start date and 2015-01-01:
+    - The recent window starts there while the start date is under 14 days old.
+    - The history loop stops there, and reaching it marks the history done.
+    - A start date still to come reads nothing yet.
+    - `--from` before it is refused, naming `Oura:StartDate`.
+    - History read before a start date was set stays, and the backfill ends.
+  - `GET /api/oura/status` and `GET /api/activity/summary`'s `oura` carry `startDate`
+    (null when Oura isn't set up), and `bsk oura status` prints "Reads from".
+  - The page says "LifeOS reads Oura from Thu, Oct 22, so the days before it are empty"
+    while the year reaches before it. In the readouts, Tables and year weeks, those days read
+    "before LifeOS read Oura".
+- **`fly-setup.ps1`** imports `Oura__ClientId`, `Oura__ClientSecret` and
+  `Integrations__TokenKey` from the env file, and `Oura__StartDate` when it's set.
+  - It takes all three or none, and checks that the key is 32 bytes of base64.
+  - Names match without regard to case, so `.env`'s `Oura__ClientID` is found.
+  - Its summary says Oura is on or off, and from when, without printing a value.
+  - When Oura is on, the steps left by hand add the redirect URI to register with Oura.
+- **On staging:**
+  - The three secrets were staged on `lifeos-mz55-staging` from `.env` with
+    `fly secrets import --stage`, values on stdin. The whole script wasn't re-run, so the
+    other secrets and the deploy token were left as they were.
+  - Staging seals tokens with `.env`'s `Integrations__TokenKey`, so `bsk` run with `.env`
+    loaded opens the same tokens.
+  - Main was pushed (A0–A6), and CI ran the tests, applied 0036–0037 to staging and
+    deployed.
+  - Checked from outside without signing in:
+    - `/health/ready` answers ready, which it can't do without a well-formed token key.
+    - The three secrets show as deployed.
+    - The served bundle has the start date's words.
+    - `/api/oura/status` asks for sign-in.
+    - Fly's logs show no errors.
+  - Whether the page offers Connect Oura, rather than saying Oura isn't set up, is for
+    Chris's first look.
+- **Left for Chris:**
+  1. Register `https://lifeos-mz55-staging.fly.dev/activity/connected` under the app's
+     Redirect URIs at developer.ouraring.com.
+  2. Connect Oura on staging's Activity page.
+  3. On day one, force a real refresh with `bsk oura refresh`, with `.env` loaded. If Oura
+     refuses it, the refresh URL moves to `moi.ouraring.com` with the `Oura__RefreshUrl`
+     secret (A1).
+  4. For a week, compare the page with the Oura app, imported workouts included if there
+     are any.
+- **Not built yet:** the `bsk oura forget` purge (§7), which this plan says is best done
+  before real data reaches staging.
