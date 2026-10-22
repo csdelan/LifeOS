@@ -256,6 +256,30 @@ public sealed record SleepDay(
     int NapS,
     DateTimeOffset SyncedAt);
 
+/// <summary>
+/// A live sleep period as LifeOS holds it (<c>bsk.v_sleep_period</c>): a night or a nap, never
+/// one Oura rejected (<c>rest</c>) or deleted. Durations are in seconds; <see cref="Day"/> is
+/// the morning it counts on.
+/// </summary>
+public sealed record SleepPeriod(
+    string Id,
+    DateOnly Day,
+    string Type,
+    DateTimeOffset StartedAt,
+    DateTimeOffset EndedAt,
+    int? InBedS,
+    int? AsleepS,
+    int? DeepS,
+    int? LightS,
+    int? RemS,
+    int? AwakeS,
+    int? LatencyS,
+    int? Efficiency,
+    int? AverageHrv,
+    double? AverageHr,
+    int? LowestHr,
+    DateTimeOffset SyncedAt);
+
 /// <summary>A day's readiness as LifeOS holds it (<c>bsk.v_readiness_day</c>).</summary>
 public sealed record ReadinessDay(
     DateOnly Day,

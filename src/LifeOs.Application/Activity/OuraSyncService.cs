@@ -32,6 +32,17 @@ public sealed record OuraSyncResult(
     DateTimeOffset SyncedAt);
 
 /// <summary>
+/// What the Activity page's sync did (<see cref="OuraSyncService.SyncForPageAsync"/>): the sync's
+/// result, or null when it was skipped because LifeOS synced moments ago; and when LifeOS last
+/// synced either way.
+/// </summary>
+public sealed record OuraPageSync(OuraSyncResult? Result, DateTimeOffset? LastSyncedAt)
+{
+    /// <summary>The sync ran (it wasn't skipped).</summary>
+    public bool Ran => Result is not null;
+}
+
+/// <summary>
 /// Reads Oura's five collections into LifeOS (ACTIVITY-1..4, D14, activity plan §3.2, §3.3).
 /// <list type="bullet">
 /// <item><b>The window:</b> the last 14 days through tomorrow, for every collection, which
@@ -76,6 +87,31 @@ public sealed class OuraSyncService(
 
     /// <summary>The earliest day a sync reads: before the first Oura Ring with an API.</summary>
     public static readonly DateOnly HistoryFloor = new(2015, 1, 1);
+
+    /// <summary>How recent a sync lets the page's sync on opening be skipped (activity plan §3.3).</summary>
+    public static readonly TimeSpan PageSyncInterval = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// The Activity page's sync. On opening the page it's skipped when Oura is connected and
+    /// last synced under <see cref="PageSyncInterval"/> ago; with <paramref name="force"/>
+    /// (Sync now) it always runs. A sync that runs is <see cref="SyncAsync"/> with its
+    /// defaults, and throws as it does.
+    /// </summary>
+    public async Task<OuraPageSync> SyncForPageAsync(bool force, CancellationToken cancellationToken = default)
+    {
+        if (!force
+            && await integrations.GetAsync(service, cancellationToken) is { Connected: true, NeedsReconnect: false, LastSyncedAt: { } last })
+        {
+            var age = clock.UtcNow - last;
+            if (age >= TimeSpan.Zero && age < PageSyncInterval)
+            {
+                return new OuraPageSync(null, last);
+            }
+        }
+
+        var result = await SyncAsync(cancellationToken: cancellationToken);
+        return new OuraPageSync(result, result.SyncedAt);
+    }
 
     /// <summary>
     /// Finishes connecting (<see cref="OuraConnectionService.ConnectAsync"/>) and runs the first

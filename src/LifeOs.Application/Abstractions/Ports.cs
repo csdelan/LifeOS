@@ -693,6 +693,9 @@ public interface IActivityRepository
 
     /// <summary>Days with a readiness score in [<paramref name="from"/>, <paramref name="to"/>], oldest first.</summary>
     Task<IReadOnlyList<ReadinessDay>> GetReadinessDaysAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
+
+    /// <summary>Live sleep periods counting on the days [<paramref name="from"/>, <paramref name="to"/>], earliest first.</summary>
+    Task<IReadOnlyList<SleepPeriod>> GetSleepPeriodsAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

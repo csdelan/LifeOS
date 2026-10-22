@@ -980,10 +980,299 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/oura/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetOuraStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oura/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthorizeOura"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oura/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ConnectOura"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oura/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DisconnectOura"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity/days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetActivityDays"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity/workouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetActivityWorkouts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity/workouts/{id}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SetWorkoutNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity/day": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetActivityDay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetActivitySummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SyncActivity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ActivityDayDetailRead: {
+            day?: string;
+            today?: string;
+            /** Format: int32 */
+            minimumSteps?: number | string;
+            /** Format: int32 */
+            goalSteps?: number | string;
+            summary?: components["schemas"]["ActivityDayRow"];
+            sleepContributors?: {
+                [key: string]: null | number | string;
+            };
+            readinessContributors?: {
+                [key: string]: null | number | string;
+            };
+            /** Format: double */
+            temperatureDeviation?: null | number | string;
+            /** Format: double */
+            temperatureTrendDeviation?: null | number | string;
+            night?: null | components["schemas"]["SleepPeriodRow"];
+            naps?: components["schemas"]["SleepPeriodRow"][];
+            workouts?: components["schemas"]["WorkoutRow"][];
+        };
+        ActivityDayRow: {
+            day?: string;
+            /** Format: int32 */
+            steps?: null | number | string;
+            band?: null | string;
+            /** Format: int32 */
+            activeCalories?: null | number | string;
+            /** Format: int32 */
+            totalCalories?: null | number | string;
+            /** Format: int32 */
+            walkingM?: null | number | string;
+            /** Format: int32 */
+            highS?: null | number | string;
+            /** Format: int32 */
+            mediumS?: null | number | string;
+            /** Format: int32 */
+            lowS?: null | number | string;
+            /** Format: int32 */
+            nonWearS?: null | number | string;
+            /** Format: int32 */
+            activityScore?: null | number | string;
+            /** Format: int32 */
+            sleepScore?: null | number | string;
+            /** Format: int32 */
+            readinessScore?: null | number | string;
+            /** Format: int32 */
+            asleepS?: null | number | string;
+            /** Format: int32 */
+            inBedS?: null | number | string;
+            /** Format: date-time */
+            bedAt?: null | string;
+            /** Format: date-time */
+            wokeAt?: null | string;
+            /** Format: int32 */
+            napCount?: number | string;
+            /** Format: int32 */
+            napAsleepS?: number | string;
+        };
+        ActivityDaysRead: {
+            from?: string;
+            to?: string;
+            today?: string;
+            /** Format: int32 */
+            minimumSteps?: number | string;
+            /** Format: int32 */
+            goalSteps?: number | string;
+            days?: components["schemas"]["ActivityDayRow"][];
+        };
+        ActivitySummaryRead: {
+            today?: string;
+            /** Format: int32 */
+            minimumSteps?: number | string;
+            /** Format: int32 */
+            goalSteps?: number | string;
+            todaySoFar?: components["schemas"]["ActivityDayRow"];
+            todayWorkouts?: components["schemas"]["WorkoutRow"][];
+            thisWeek?: components["schemas"]["ActivityWeekRow"];
+            lastWeek?: components["schemas"]["ActivityWeekRow"];
+            oura?: components["schemas"]["OuraStatusRead"];
+        };
+        ActivitySyncBody: {
+            force?: null | boolean;
+        };
+        ActivitySyncRead: {
+            ran?: boolean;
+            changed?: boolean;
+            from?: null | string;
+            to?: null | string;
+            /** Format: int32 */
+            records?: number | string;
+            /** Format: int32 */
+            written?: number | string;
+            /** Format: int32 */
+            voided?: number | string;
+            historyFrom?: null | string;
+            historyDone?: boolean;
+            /** Format: date-time */
+            lastSyncedAt?: null | string;
+        };
+        ActivityWeekRow: {
+            from?: string;
+            to?: string;
+            /** Format: int32 */
+            averageSteps?: null | number | string;
+            /** Format: int32 */
+            stepDays?: number | string;
+            /** Format: int32 */
+            goalDays?: number | string;
+            /** Format: int32 */
+            underDays?: number | string;
+            /** Format: int32 */
+            sessions?: number | string;
+            /** Format: int32 */
+            exerciseSeconds?: number | string;
+            /** Format: int32 */
+            exerciseCalories?: number | string;
+            /** Format: int32 */
+            averageSleep?: null | number | string;
+            /** Format: int32 */
+            averageReadiness?: null | number | string;
+        };
+        ActivityWorkoutsRead: {
+            from?: string;
+            to?: string;
+            today?: string;
+            workouts?: components["schemas"]["WorkoutRow"][];
+        };
         AddRewardBody: {
             title?: string;
             kind?: null | string;
@@ -1562,6 +1851,34 @@ export interface components {
                 [key: string]: string;
             };
         };
+        OuraAuthorizeBody: {
+            redirectUri?: null | string;
+        };
+        OuraAuthorizeRead: {
+            authorizeUrl?: string;
+        };
+        OuraConnectBody: {
+            code?: null | string;
+            state?: null | string;
+        };
+        OuraStatusRead: {
+            state?: string;
+            configured?: boolean;
+            connected?: boolean;
+            needsReconnect?: boolean;
+            reconnectReason?: null | string;
+            /** Format: date-time */
+            connectedAt?: null | string;
+            /** Format: date-time */
+            expiresAt?: null | string;
+            scopes?: string[];
+            missingScopes?: string[];
+            /** Format: date-time */
+            lastSyncedAt?: null | string;
+            lastSyncError?: null | string;
+            historyFrom?: null | string;
+            historyDone?: boolean;
+        };
         PersonRow: {
             /** Format: uuid */
             id?: string;
@@ -1697,6 +2014,36 @@ export interface components {
                 [key: string]: string;
             };
         };
+        SleepPeriodRow: {
+            id?: string;
+            type?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            endedAt?: string;
+            /** Format: int32 */
+            inBedS?: null | number | string;
+            /** Format: int32 */
+            asleepS?: null | number | string;
+            /** Format: int32 */
+            deepS?: null | number | string;
+            /** Format: int32 */
+            lightS?: null | number | string;
+            /** Format: int32 */
+            remS?: null | number | string;
+            /** Format: int32 */
+            awakeS?: null | number | string;
+            /** Format: int32 */
+            latencyS?: null | number | string;
+            /** Format: int32 */
+            efficiency?: null | number | string;
+            /** Format: int32 */
+            averageHrv?: null | number | string;
+            /** Format: double */
+            averageHr?: null | number | string;
+            /** Format: int32 */
+            lowestHr?: null | number | string;
+        };
         StatusBody: {
             subject?: string;
             status?: string;
@@ -1824,6 +2171,34 @@ export interface components {
             /** Format: double */
             coinValueUsd?: number | string;
             balances?: components["schemas"]["WalletCurrencyLine"][];
+        };
+        WorkoutNoteBody: {
+            text?: null | string;
+        };
+        WorkoutRow: {
+            id?: string;
+            day?: string;
+            activity?: string;
+            label?: null | string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            endedAt?: string;
+            /** Format: int32 */
+            seconds?: number | string;
+            /** Format: int32 */
+            calories?: null | number | string;
+            /** Format: int32 */
+            distanceM?: null | number | string;
+            intensity?: null | string;
+            source?: string;
+            counted?: boolean;
+            reason?: null | string;
+            note?: null | string;
+            /** Format: date-time */
+            noteAt?: null | string;
+            /** Format: date-time */
+            syncedAt?: string;
         };
     };
     responses: never;
@@ -3636,6 +4011,349 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetOuraStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OuraStatusRead"];
+                };
+            };
+        };
+    };
+    AuthorizeOura: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["OuraAuthorizeBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OuraAuthorizeRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    ConnectOura: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["OuraConnectBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OuraStatusRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    DisconnectOura: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OuraStatusRead"];
+                };
+            };
+        };
+    };
+    GetActivityDays: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityDaysRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetActivityWorkouts: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityWorkoutsRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SetWorkoutNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["WorkoutNoteBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetActivityDay: {
+        parameters: {
+            query?: {
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityDayDetailRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetActivitySummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivitySummaryRead"];
+                };
+            };
+        };
+    };
+    SyncActivity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["ActivitySyncBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivitySyncRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

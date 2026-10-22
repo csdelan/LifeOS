@@ -2958,6 +2958,12 @@ stays `building`: the API's sync endpoint and the page (A3–A5) aren't built, a
 synced from a real ring yet (A6). Oura's API agreement asks for deletion within 72 hours of a
 request, which the append-only store can't do yet; a purge command is the follow-up.
 
+**Update (2026-10-22 — the page's sync landed, A3):** `POST /api/activity/sync` is the sync
+the Activity page runs when it opens, skipped when LifeOS synced under 5 minutes ago, and Sync
+now forces it. Its answer says whether anything changed. Oura not connected or refusing access
+is a 409 in words, and Oura down is a 502; the page's reads never call Oura, so they still
+work. Build stays `building`: the page (A4, A5) and a real ring (A6) are next.
+
 **Workflow (Chris):**
 - "I would like to pull Oura ring data into my app, and add a page for showing health related
   stuff from Oura ring, including workouts and steps." (2026-10-22)
@@ -3003,6 +3009,12 @@ calories, activity time and non-wear time, and `ActivityTargets` the two thresho
 `bsk oura steps` prints the days with their band. Build moves `needs-kernel → building`: the
 API and the Steps card (A3, A4) are next.
 
+**Update (2026-10-22 — API landed, A3):** `GET /api/activity/days` answers every day of a
+range of up to 731 days, each with its steps and band, with the two thresholds alongside, and
+`GET /api/activity/summary` this week against last: the average steps, days at the goal and
+days under the minimum. Today counts toward the goal once it gets there, but isn't averaged or
+called under the minimum until it's over. Build stays `building`: the Steps card (A4) is next.
+
 **Workflow (Chris):**
 - "Steps is a key indicator that I want to actually show a trend chart for." (2026-10-22)
 - "Daily ideal step goal should be 7500. More is better. But minimum should be 5000. Less is
@@ -3029,6 +3041,12 @@ note, `ExerciseRules` says whether it counts and why not, and `WorkoutNoteServic
 note. `bsk oura workouts [--all]` and `bsk oura note` use them. A workout deleted in the Oura
 app is withdrawn, and its note comes back if the workout does. Build moves
 `needs-kernel → building`: the API and the Exercise card (A3, A4) are next.
+
+**Update (2026-10-22 — API landed, A3):** `GET /api/activity/workouts` answers every live
+workout, newest first, with whether it counts and why not, and its note; with no range, the
+last 12 weeks. `POST /api/activity/workouts/{id}/note` sets or clears the note, refusing a line
+break or more than 140 characters in words. The summary counts this week's and last week's
+sessions, time and calories. Build stays `building`: the Exercise card (A4) is next.
 
 **Workflow (Chris):**
 - "Logged exercise is another key thing to record and track also. … Assumption: All of my
@@ -3067,6 +3085,12 @@ Build:      building
 night (the longest `long_sleep`) and naps, leaving out periods Oura rejected or deleted;
 `v_readiness_day` holds readiness. `bsk oura sleep` prints both. Build moves
 `needs-kernel → building`: the API and the Sleep and readiness card (A3, A5) are next.
+
+**Update (2026-10-22 — API landed, A3):** the days carry the sleep and readiness scores, time
+asleep and bed and wake times; `GET /api/activity/day` answers one day in full, with both
+scores' contributors, the night's stages and heart rate, and the naps. The summary has last
+night and each week's average sleep and readiness. Build stays `building`: the Sleep and
+readiness card (A5) is next.
 
 **Workflow (Chris):**
 - "I forgot about sleep altogether!!! It's important. I want to track sleep score also, and

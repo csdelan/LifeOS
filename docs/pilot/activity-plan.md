@@ -720,7 +720,7 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
 - [x] A0 — Requirements (ACTIVITY-1 to ACTIVITY-5, D14) + this plan
 - [x] A1 — Oura connection (migration 0036)
 - [x] A2 — Sync and storage (migration 0037)
-- [ ] A3 — API
+- [x] A3 — API
 - [ ] A4 — Activity page: steps and exercise
 - [ ] A5 — Activity page: sleep and readiness
 - [ ] A6 — Live on staging
@@ -831,3 +831,57 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
     new view
   - notes: set, changed and cleared with the newest winning, re-syncs leaving them alone, a
     deleted workout refusing one and bringing its note back with it, and the refusals
+
+**A3 (2026-10-22).** The §3.6 endpoints under `/api/activity`, on `ActivityReader` (the
+reader connection), with no migration. As planned, plus:
+
+- **`GET /days?from&to`** answers every day of the range, oldest first, with nulls where
+  LifeOS holds nothing, so a chart shows the gap. Each row has the steps and their band, the
+  calories, high, medium and low activity time, non-wear time, Oura's activity score, the
+  sleep and readiness scores, time asleep and in bed, bed and wake times, and the naps
+  (`napCount`, `napAsleepS`). The thresholds come with the days. With no range it's the 30
+  days through today; more than 731 days, or a range running backwards, is a 400 in words.
+- **`GET /workouts?from&to`** answers every live workout, counted or not, newest first, each
+  with `counted` and its `reason`. With no range it's the last 12 whole weeks, Monday to
+  Sunday, so the Exercise card's weekly minutes need one call.
+- **`POST /workouts/{id}/note`** takes the workout's whole Oura id (the CLI's short ids aren't
+  taken here) and `{ text }`, which is required: `""` clears the note, and a body without
+  `text` is a 400, so a page bug can't clear a note by accident. A note LifeOS refuses (a line
+  break, over 140 characters) is a 400 in words; a workout it doesn't hold is a 404.
+- **`GET /day?date=`** (default today): the day's row, both scores' contributors by Oura's
+  names, the temperature deviation and trend, the night with its stages and heart rate, every
+  other period as a nap, and the day's workouts, earliest first. The night is the period
+  `v_sleep_day` took its bed and wake times from. A new read, `GetSleepPeriodsAsync` over
+  `v_sleep_period`, serves it.
+- **`GET /summary`:** today so far — its steps, and last night's sleep and readiness, which
+  Oura puts on the morning they end — today's workouts, and this week against last, Monday to
+  Sunday. Each week has the average steps, days at the goal, days under the minimum, counted
+  sessions with their time and calories, and the average sleep and readiness scores (rounded,
+  over the days with one). **Today is still going:** it counts toward days at the goal as
+  soon as it gets there, but isn't averaged or counted under the minimum until it's over, so
+  this week isn't dragged down by a half-finished day; on a Monday, this week has no average
+  yet. A day with no record isn't under the minimum. The summary also carries the Oura
+  connection (`/api/oura/status`'s shape), so the page needs one call to start.
+- **`POST /sync { force? }`** is `OuraSyncService.SyncForPageAsync`. Opening the page skips
+  it when Oura is connected and last synced under 5 minutes ago; a connection that needs
+  reconnecting is never skipped, so the page always hears it. `force` (Sync now) always runs.
+  It answers `ran`, `changed` (something was written, so the cards should be read again), the
+  counts, the window, and `lastSyncedAt`. A failed sync doesn't move `lastSyncedAt`, so the
+  next page open tries again. Oura not connected, refusing the sign-in, or refusing access
+  (403, with Oura's words) is a 409; Oura down or limiting requests, a 502. The reads never
+  call Oura, so the page still shows what LifeOS holds.
+- **`gen:api`** regenerated `web/src/api/schema.d.ts` with the new routes and shapes.
+- **Tests:**
+  - over HTTP, each on a database of its own with Oura connected the way the page connects
+    it: the days with their bands, sleep and readiness, the empty days and the default range;
+    the 731-day limit and a backwards range; only the allowlisted user; workouts counted or
+    not with their reasons, the fields, and the default 12 weeks; the note set, refused (a
+    line break, 141 characters, no `text`, an unknown or shortened id) and cleared, with only
+    two note events written; a day in full with its contributors, night, nap and workouts in
+    order, and an empty day; the summary's two weeks against hand-worked numbers; the
+    throttle skipping under 5 minutes and running after, Sync now always running, and a
+    later sync picking up changed steps and a new workout; and Oura not connected, down,
+    refusing access, and refusing the token twice, each in words, with the reads still
+    working and the throttle not hiding a reconnect
+  - on `ActivityReads`: today not under the minimum until it's over, and a Monday with
+    nothing averaged yet

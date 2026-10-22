@@ -55,6 +55,15 @@ public sealed class NpgsqlActivityRepository(string connectionString) : IActivit
         FROM bsk.v_readiness_day
         """;
 
+    private const string SleepPeriodSql = """
+        SELECT period_id AS id, to_char(day, 'YYYY-MM-DD') AS day, type, started_at AS startedat,
+               ended_at AS endedat, in_bed_s AS inbeds, asleep_s AS asleeps, deep_s AS deeps,
+               light_s AS lights, rem_s AS rems, awake_s AS awakes, latency_s AS latencys, efficiency,
+               average_hrv AS averagehrv, average_hr::float8 AS averagehr, lowest_hr AS lowesthr,
+               synced_at AS syncedat
+        FROM bsk.v_sleep_period
+        """;
+
     public async Task<IOuraSyncLock> BeginSyncAsync(CancellationToken cancellationToken = default)
     {
         var connection = new NpgsqlConnection(connectionString);
@@ -119,6 +128,13 @@ public sealed class NpgsqlActivityRepository(string connectionString) : IActivit
                 ReadinessDaySql + " WHERE day BETWEEN @from::date AND @to::date ORDER BY day",
                 Range(from, to), cancellationToken))
             .Select(r => r.ToDay()).ToList();
+
+    public async Task<IReadOnlyList<SleepPeriod>> GetSleepPeriodsAsync(
+        DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+        => (await QueryAsync<SleepPeriodRow>(
+                SleepPeriodSql + " WHERE day BETWEEN @from::date AND @to::date ORDER BY started_at, period_id",
+                Range(from, to), cancellationToken))
+            .Select(r => r.ToPeriod()).ToList();
 
     private async Task<IEnumerable<T>> QueryAsync<T>(string sql, object args, CancellationToken cancellationToken)
     {
@@ -349,6 +365,31 @@ public sealed class NpgsqlActivityRepository(string connectionString) : IActivit
             ParseDay(Day), Score, NpgsqlActivityRepository.Contributors(Contributors), Utc(BedAt), Utc(WokeAt),
             InBedS, AsleepS, DeepS, LightS, RemS, AwakeS, Efficiency, AverageHrv, LowestHr, Naps, Naps_Seconds,
             Utc(SyncedAt));
+    }
+
+    private sealed class SleepPeriodRow
+    {
+        public string Id { get; set; } = "";
+        public string Day { get; set; } = "";
+        public string Type { get; set; } = "";
+        public DateTime StartedAt { get; set; }
+        public DateTime EndedAt { get; set; }
+        public int? InBedS { get; set; }
+        public int? AsleepS { get; set; }
+        public int? DeepS { get; set; }
+        public int? LightS { get; set; }
+        public int? RemS { get; set; }
+        public int? AwakeS { get; set; }
+        public int? LatencyS { get; set; }
+        public int? Efficiency { get; set; }
+        public int? AverageHrv { get; set; }
+        public double? AverageHr { get; set; }
+        public int? LowestHr { get; set; }
+        public DateTime SyncedAt { get; set; }
+
+        public SleepPeriod ToPeriod() => new(
+            Id, ParseDay(Day), Type, Utc(StartedAt), Utc(EndedAt), InBedS, AsleepS, DeepS, LightS, RemS, AwakeS,
+            LatencyS, Efficiency, AverageHrv, AverageHr, LowestHr, Utc(SyncedAt));
     }
 
     private sealed class ReadinessDayRow
