@@ -7,9 +7,10 @@ namespace LifeOs.Api.Read;
 
 /// <summary>
 /// <c>GET /api/food/day</c> (FOOD-1..4, food-log plan §3.6): one home-zone day of the Food Log.
-/// Its entries come newest first; its fasts are those that ended on it. <see cref="Running"/>
-/// is the fast running now, whatever the day. <see cref="LastMeal"/> is the newest entry with
-/// calories, whose time Begin fast offers.
+/// Its entries come oldest first (FOOD-7); its fasts are those that ended on it.
+/// <see cref="Running"/> is the fast running now, whatever the day. <see cref="LastMeal"/> is
+/// the newest entry with calories, whose time Begin fast offers. <see cref="Sobriety"/> is the
+/// sobriety streak as of the day (FOOD-6), null before the Food Log's first day.
 /// </summary>
 public sealed class FoodDayRead
 {
@@ -20,11 +21,14 @@ public sealed class FoodDayRead
     public FastRow? Running { get; set; }
     public MealRow? LastMeal { get; set; }
     public FoodDaySummaryRow Summary { get; set; } = new();
+    public SobrietyRow? Sobriety { get; set; }
 }
 
 /// <summary>
 /// <c>GET /api/food/days?from&amp;to</c>: every day of the range, oldest first, at most 62 —
-/// what the Week and Month views total.
+/// what the Week and Month views total. <see cref="Sobriety"/> is the streak as of the range's
+/// last day so far (today, when the range holds it), null when that's before the Food Log's
+/// first day.
 /// </summary>
 public sealed class FoodDaysRead
 {
@@ -32,13 +36,46 @@ public sealed class FoodDaysRead
     public string To { get; set; } = "";
     public string Today { get; set; } = "";
     public IReadOnlyList<FoodDaySummaryRow> Days { get; set; } = [];
+    public SobrietyRow? Sobriety { get; set; }
+}
+
+/// <summary>
+/// A sobriety streak (FOOD-6, food-log plan §7.3) as of <see cref="AsOf"/>: <see cref="Days"/>
+/// drink-free days in a row ending on it (0 when it has a drink), counted from
+/// <see cref="Since"/>; the best run since the Food Log's <see cref="FirstDay"/>; and the last
+/// day with a drink, if any. A day with nothing logged counts as drink-free.
+/// </summary>
+public sealed class SobrietyRow
+{
+    public string AsOf { get; set; } = "";
+    public int Days { get; set; }
+    public int BestDays { get; set; }
+    public string Since { get; set; } = "";
+    public string? LastDrinkOn { get; set; }
+    public string FirstDay { get; set; } = "";
+}
+
+/// <summary>
+/// <c>GET /api/food/drinks?from&amp;to</c> (FOOD-6): the drinks drunk from <see cref="From"/> up to
+/// (not including) <see cref="To"/>, on how many home-zone days, and the most in one day
+/// (<see cref="MostOn"/>, the first such day).
+/// </summary>
+public sealed class FoodDrinksRead
+{
+    public DateTimeOffset From { get; set; }
+    public DateTimeOffset To { get; set; }
+    public int Drinks { get; set; }
+    public int DrinkDays { get; set; }
+    public int MostInADay { get; set; }
+    public string? MostOn { get; set; }
 }
 
 /// <summary>
 /// A food entry (FOOD-1): its 1–5 score, calories and the optional nutrients in whole grams.
 /// <see cref="EatenAt"/> is an instant; <see cref="EatenOn"/> the home-zone day it counts on.
 /// <see cref="DuringFast"/> names the recorded fast it was eaten inside, if any (a day read
-/// only), so the page can offer to end that fast there.
+/// only), so the page can offer to end that fast there. <see cref="Alcoholic"/> marks one
+/// alcoholic drink (FOOD-6), whose score is always 1.
 /// </summary>
 public sealed class MealRow
 {
@@ -46,6 +83,7 @@ public sealed class MealRow
     public string Name { get; set; } = "";
     public int Score { get; set; }
     public int Calories { get; set; }
+    public bool Alcoholic { get; set; }
     public int? ProteinG { get; set; }
     public int? CarbsG { get; set; }
     public int? FatG { get; set; }
@@ -87,6 +125,12 @@ public sealed class FastRow
 /// <see cref="Closed"/> is true once the day is closed by hand (<see cref="ClosedByHand"/>,
 /// <see cref="ClosedAt"/>) or is over.
 /// </para>
+/// <para>
+/// <see cref="Drinks"/> counts the day's alcoholic drinks (FOOD-6); <see cref="DrinkFactor"/>
+/// is what they leave of its diet XP (1 up to two drinks, 0.9 for three, … 0 from twelve). Both
+/// awards are shown cut, as they pay once the day is closed; before the close a fast is paid
+/// in full.
+/// </para>
 /// </summary>
 public sealed class FoodDaySummaryRow
 {
@@ -109,6 +153,8 @@ public sealed class FoodDaySummaryRow
     /// <summary>The food and fast awards together, at most <see cref="Cap"/>.</summary>
     public long Total { get; set; }
     public int Cap { get; set; }
+    public int Drinks { get; set; }
+    public decimal DrinkFactor { get; set; } = 1m;
     public FoodPaidRow Paid { get; set; } = new();
 }
 
@@ -161,7 +207,8 @@ public static class FoodRows
         Fasts = view.Fasts.Select(From).ToList(),
         Running = view.Running is { } running ? From(running) : null,
         LastMeal = view.LastMeal is { } last ? From(last, null) : null,
-        Summary = From(new FoodDaySummary(view.Facts, view.Score, view.Paid), rules)
+        Summary = From(new FoodDaySummary(view.Facts, view.Score, view.Paid), rules),
+        Sobriety = From(view.Sobriety)
     };
 
     public static FoodDaysRead From(FoodRange range, DietRules rules) => new()
@@ -169,7 +216,30 @@ public static class FoodRows
         From = Day(range.From),
         To = Day(range.To),
         Today = Day(range.Today),
-        Days = range.Days.Select(d => From(d, rules)).ToList()
+        Days = range.Days.Select(d => From(d, rules)).ToList(),
+        Sobriety = From(range.Sobriety)
+    };
+
+    public static SobrietyRow? From(SobrietyStreak? streak) => streak is null
+        ? null
+        : new SobrietyRow
+        {
+            AsOf = Day(streak.AsOf),
+            Days = streak.Days,
+            BestDays = streak.BestDays,
+            Since = Day(streak.Since),
+            LastDrinkOn = streak.LastDrinkOn is { } last ? Day(last) : null,
+            FirstDay = Day(streak.FirstDay)
+        };
+
+    public static FoodDrinksRead From(DrinkTally tally) => new()
+    {
+        From = tally.From,
+        To = tally.To,
+        Drinks = tally.Drinks,
+        DrinkDays = tally.DrinkDays,
+        MostInADay = tally.MostInADay,
+        MostOn = tally.MostOn is { } most ? Day(most) : null
     };
 
     public static MealRow From(Meal meal, Guid? duringFast = null) => new()
@@ -178,6 +248,7 @@ public static class FoodRows
         Name = meal.Name,
         Score = meal.Score,
         Calories = meal.Calories,
+        Alcoholic = meal.Alcoholic,
         ProteinG = meal.ProteinG,
         CarbsG = meal.CarbsG,
         FatG = meal.FatG,
@@ -223,6 +294,8 @@ public static class FoodRows
             FastAward = score.FastAward,
             Total = score.Total,
             Cap = rules.Cap,
+            Drinks = score.Drinks,
+            DrinkFactor = score.DrinkFactor,
             Paid = new FoodPaidRow
             {
                 Fast = Paid(paid.Fast),

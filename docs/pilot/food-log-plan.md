@@ -1,6 +1,6 @@
 # Food Log Plan — meals, fasts and diet XP
 
-The design and build order for the Food Log (FOOD-1 to FOOD-5 in
+The design and build order for the Food Log (FOOD-1 to FOOD-7 in
 [ui-requirements.md](ui-requirements.md)) and the decision behind it (**D13**, in the same
 doc). It builds on the rewards ledger in [rewards-plan.md](rewards-plan.md) and on Health XP
 in [xp-domains-plan.md](xp-domains-plan.md). The requirements say *what*; this doc says *how*
@@ -13,6 +13,10 @@ base Health XP**. Photos come last.
 
 **Keep it small.** The thing under test is whether logging food and fasts, and seeing a daily
 diet score, changes what Chris eats. Everything in §6 has to earn its place through use.
+
+**Added on 2026-10-22 (§7):** drinks flagged as alcoholic, a cut to the day's diet XP above
+two drinks, a sobriety streak, a count of drinks over any range, identical entries combined
+on the day's page, and the day's entries listed oldest first.
 
 ## 0. Read these first
 
@@ -326,7 +330,7 @@ bsk food [<date>] [--week | --month] [--json]
 
 | Endpoint | Answers |
 |---|---|
-| `GET /api/food/day?date=` | The day's entries (newest first), fasts ending that day, the running fast if any, the last entry's time (for Begin fast), and the summary: calories, `S`, the three parts, the two awards projected and paid (base, paid, multiplier), closed and how. |
+| `GET /api/food/day?date=` | The day's entries (oldest first since F7, §7), fasts ending that day, the running fast if any, the last entry's time (for Begin fast), and the summary: calories, `S`, the three parts, the two awards projected and paid (base, paid, multiplier), closed and how. |
 | `GET /api/food/days?from&to` | One summary per day in the range (up to 62 days): the parts, awards projected and paid, calories, `S`, entries, the longest fast. The Week and Month views total these. |
 | `GET /api/food/recent?limit=` | Recent distinct entries by name (the newest version of each), for "Log again". |
 | `POST /api/food/meals`, `/api/food/meals/{id}`, `/api/food/meals/{id}/delete` | Log, edit, delete. |
@@ -360,7 +364,7 @@ bsk food [<date>] [--week | --month] [--json]
   - **Close day** shows once the day has an entry.
   - After the close: "Closed · 31 base → 37 Health XP (×1.2)".
   - A day closed by time reads "Closed at midnight".
-- **Gallery:** a card per entry, newest first:
+- **Gallery:** a card per entry, oldest first (newest first until F8, §7):
   - the photo (F6), or a tile coloured by score with the meal type's icon
   - the name, time, calories and a score chip ("5 · very healthy"; the number is always
     shown, so colour is never the only cue)
@@ -440,6 +444,9 @@ Each phase is one commit:
 | F4 | Day view | `/food` (nav, palette), the fasting card with its prefills, the summary with Close day, the gallery, the Log food sheet with Log again; `lib/diet-score.ts`; the mock store's food half; toasts and the grouped re-score. Vitest; e2e golden path (log a salmon salad, record a 23 h fast, close the day: "+39 Health XP"); a11y in both themes, on a phone viewport too. | F3 (mock-first can start after F1) |
 | F5 | Week and month | The Week and Month views over `GET /api/food/days`, stacked bars, the calendar with its Table view, totals. Vitest, e2e (switch to Week, open a day), a11y. | F4 |
 | F6 | Photos | §3.8: the multipart upload, resize in the browser, artifact content serving, the camera input, thumbnails. Tests: an upload round-trips byte for byte; editing keeps the photo; Remove photo; oversized and non-image files refused. | F4 |
+| F7 | Drinks in the kernel | §7: migration 0038 (`alcoholic` on `v_meal`; `drinks` and `drink_event_ids` on `v_food_day`); the score locked at 1 and the drink meal type; the drinks cut in `DietRules`; the fast award cut once the day closes; `Sobriety`; the drinks count over a range; the day's entries oldest first; `bsk food log/edit --alcohol` and `bsk food drinks`; the API fields and `GET /api/food/drinks`; `gen:api`. Tests: the drinks table; the score lock; the cut on both awards and when each applies; removing a drink re-scores back; the streak and its edges; the range count by days and by times. | F6 |
+| F8 | Drinks on the page | §7: the Alcoholic drink switch and the greyed-out score; the drink tile and label; the summary's drinks line and streak; drinks and the streak in Week and Month; the gallery oldest first; `lib/diet-score.ts` and `lib/sobriety.ts` on the same tables as the C#; the mock store. Vitest, e2e, a11y in both themes. | F7 |
+| F9 | Combined entries | §7.4: identical entries on a day as one "×N" card with summed calories and nutrients and a time range; tapping it lists its copies, with Have another. Vitest, e2e, a11y. | F8 |
 
 - **F1 and F2 are kernel only.** From F2, `bsk food` works end to end, so Chris could start
   logging from the CLI before the page exists.
@@ -504,7 +511,7 @@ Each of these has to earn its place through use.
   so a rule can read them later.
 - **A calorie target that follows activity**, instead of a fixed 2,000.
 - **Weight and body measurements** as more `measurement` events.
-- **Water intake and alcohol** as their own lines.
+- **Water intake** as its own line. (Alcohol landed in F7–F9, §7.)
 - **Saved meals** that can be edited, beyond "Log again" from history.
 - **Estimating calories and a score from a photo** (Production, with AI).
 - **Long fasts crediting every day they span**, instead of only the end day.
@@ -513,6 +520,128 @@ Each of these has to earn its place through use.
 - **Fasting streaks, or Life XP and other currencies for food.**
 - **A diet-aware success rule** for Health, such as "70 XP and a diet score of at least 20"
   (xp-domains plan §6, richer success rules).
+
+## 7. Drinks, the sobriety streak and combined entries (2026-10-22)
+
+Chris asked for four changes on 2026-10-22, in his words:
+
+1. "I would like to optionally flag any logged "food" as "alcoholic". This can be a beer,
+   glass of wine, or any other roughly equivalent alcoholic drink. An alcoholic entry
+   contributes zero Health XP, and it will automatically lock in lowest rating health rank...
+   in fact you can grey out the star rating."
+2. "All alcoholic drinks in excess of 2 for that day will decrease the diet's health XP
+   contribution by 10% per drink above 2. So theoretically, 12 drinks in a single day will
+   ensure zero Health XP from diet is contributed that day."
+3. "If I copy a food log and apply it to the same day, it will record the new log with the
+   new timestamp, but since it is on the same day, it will combine the display into 1 entry
+   with (x2) and combine the calories/nutrients. You can also convert the time of day display
+   to a range (eg 12:14 PM-2:45 PM). This feature only affects the display to combine
+   identical food logs for a single day."
+4. "I would like some way to count up all the alcoholic drinks I've had between 2 dates ...
+   Just have the capability to sum up the number of alcoholic drinks in a datetime range. Add
+   this information to the week or month view."
+
+He took the three recommendations below and added two things: "Add sobriety streak on the
+Food page, and on weekly, monthly views when applicable. Then sort the food entries from
+oldest to newest instead of newest to oldest."
+
+### 7.1 The three questions
+
+| Question | Options | Chosen |
+|---|---|---|
+| Do the first two drinks cost anything? | **A.** A drink is a score of 1 in the calorie-weighted average, like any other 1. **B.** Drinks are left out of the average. | **A.** Under B, 300 calories of beer would score better than 300 calories of fries. |
+| Does the cut above two drinks reach fasting XP? | **A.** The whole day: the fast pays in full when it ends and is re-scored at the close. **B.** The food part only. | **A.** It matches "12 drinks ... zero Health XP from diet", and logging a third drink never takes XP back on the spot. |
+| What does tapping a combined card do? | **A.** It lists the copies with their times, each opening to change or delete, plus Have another. **B.** It opens the newest copy. | **A.** |
+
+### 7.2 The rules
+
+| Question | Decision |
+|---|---|
+| What's a drink? | A food entry flagged **alcoholic**: a beer, a glass of wine, a shot, or roughly the same. **One entry is one drink**; a double is logged twice (Log again and the combined card make that quick). Wine with dinner is its own entry, since the flag makes the whole entry score 1. |
+| Its score | Always **1**. The service stores 1 whatever is sent; the page greys the picker out at 1. Turning the flag off frees the score again. |
+| Its meal type | **Drink** when none is given, instead of the guess from the time. The page switches to Drink when the flag goes on; it can still be changed. |
+| Its calories | Count like any entry's: toward the day's calories, and a drink with calories ends a running fast. |
+| In the quality score | A 1 in the calorie-weighted average (§7.1), so even one drink costs a little. |
+| The cut | With `n` drinks on a day, its diet XP is multiplied by `max(0, 1 − 10% × max(0, n − 2))`: 3 drinks −10%, 4 −20%, 12 or more leave nothing. |
+| Which awards | Both. The food award is `round((Quality + Calories part) × cut)` and the fasting award `round(Fasting × cut)`, each rounded halves up as before. |
+| When | The food award already pays at the close, so it carries the cut then. **The fasting award pays in full when the fast ends**; once the day is closed (by hand, or because it's over) with more than two drinks, it's re-scored with the cut. Before the close, no drink takes back fasting XP. "On track for" shows the cut on both. |
+| Days | A drink counts on the home-zone day it was drunk, midnight to midnight, like every entry. A night out across midnight splits across two days. |
+| Past days | Nothing logged before 2026-10-22 has the flag, so no paid day changes. Flagging an old entry re-scores its day, as any edit does. |
+
+**Examples**, in base Health XP: the salmon day of §1 (1,200 calories at 5 and a 23-hour
+fast, 39 of 40) plus beers of 150 calories each.
+
+| Beers | Quality | Calories | Fasting | Cut | Food + fast |
+|---|---|---|---|---|---|
+| 0 | 28 | 4 | 7.3 | none | 32 + 7 = **39** |
+| 2 | 22.4 | 4 | 7.3 | none | 26 + 7 = **33** |
+| 3 | 20.4 | 4 | 7.3 | −10% | 22 + 7 = **29** |
+| 4 | 18.7 | 4 | 7.3 | −20% | 18 + 6 = **24** |
+| 12 | 11.2 | 0 | 7.3 | −100% | 0 + 0 = **0** |
+
+### 7.3 The sobriety streak and the drinks count
+
+- **A drink-free day** is a day with no alcoholic entry. A day with nothing logged counts as
+  drink-free: only a logged drink breaks the streak (scout's honor, GEN-5).
+- **The streak on a day** is the drink-free days in a row ending on it, counted back to the
+  day after the last drink, or to the Food Log's first day (its earliest entry, fast or
+  close) when there's been no drink. A day with a drink has a streak of 0. Today counts from
+  its start, so a drink today makes it 0.
+- **The best streak** is the longest run of drink-free days from the Food Log's first day to
+  that day. Before the first day there's no streak.
+- **Where it shows:**
+  - The Day view's summary: the streak as of that day and the best.
+  - Week and Month: the drinks in the period, the drink-free days among its days so far (from
+    the Food Log's first day), and the streak as of its last day so far (today, when the
+    period holds today). A period wholly before the first day shows none of this: that's the
+    "when applicable".
+- **Drinks over any range:** `FoodReads.GetDrinksAsync(from, to)` counts the drinks drunk in
+  `[from, to)`, the days with a drink and the most in one day.
+  - `GET /api/food/drinks?from=&to=`: each end is a home-zone day (`yyyy-MM-dd`, both days
+    included) or an ISO instant (`to` excluded). The last 30 days, today included, by
+    default. There's no range limit, since it's one count, so a 30-, 90- or 365-day look-back
+    is ready for a later report.
+  - `bsk food drinks [--days N | --from … --to …]`, the last 30 days by default.
+- Each day's summary carries its drinks and its cut; the day and range reads carry the streak.
+
+### 7.4 Combined entries (display only)
+
+- On one day, entries with the same **name** (ignoring case and surrounding spaces),
+  **score**, **calories**, **protein**, **carbs**, **fat** and **alcohol flag** show as one
+  card. The meal type and the photo don't count, since Log again re-guesses the meal type
+  from the time.
+- The card reads "Beer ×3", with the calories and nutrients summed and the time as a range
+  ("7:10 PM–9:30 PM"). It shows the first copy's photo that has one, and the inside-a-fast
+  flag when any copy has it.
+- The record keeps each entry with its own time, and the XP is the same either way. Editing
+  one copy so it differs splits it back out. It applies to any identical entries, not only
+  those made with Log again.
+- **Tapping it** opens a short list of the copies with their times; tapping one opens it to
+  change or delete. **Have another** opens the Log food sheet filled in with that entry, as
+  Log again does: the time is now on today, or the last copy's time on a past day.
+- The gallery lists cards oldest first; a combined card sits at its first copy's time.
+
+### 7.5 Storage and code
+
+- **Payload:** `meal.alcoholic: true`, left out when false, carried on every version like the
+  photo. An edit keeps it unless told otherwise (`alcoholic` left out of `POST
+  /api/food/meals/{id}`; `bsk food edit` without `--alcohol` or `--no-alcohol`).
+- **Migration 0038:** `bsk.v_meal` gains `alcoholic`; `bsk.v_food_day` gains `drinks` and
+  `drink_event_ids` (the drinks' event versions).
+- **`DietRules`** gains `DrinksFree` (2) and `DrinkCutPercent` (10); `DietDayFacts` gains
+  `Drinks`. `DietScore` carries `Drinks`, `DrinkFactor` and `FastAwardUncut` (what the fast
+  pays before the close). The drift test checks the cut reaches 0 at
+  `DrinksFree + 100 / DrinkCutPercent` drinks (12).
+- **`FoodRewards`:** the fast award's base is `FastAwardUncut` while the day is open and
+  `FastAward` once it's closed. A closed day with any drinks also cites the drinks' versions
+  (and the close), so adding, removing or flagging a drink re-scores the fast. Any drinks,
+  not more than `DrinksFree`, keeps what's cited free of the rules' numbers, so a retune
+  still leaves a paid fast alone. A day without drinks cites the fast's own version alone, as
+  before, so no paid fast changes.
+- **`Sobriety`** (Domain) computes the streak from the Food Log's first day and the days with
+  a drink; `lib/sobriety.ts` ports it, tested on the same table.
+- **Oldest first:** `FoodReads.GetDayAsync` returns the day's entries by the time they were
+  eaten, so the page and `bsk food` agree.
 
 ## Status
 
@@ -523,6 +652,9 @@ Each of these has to earn its place through use.
 - [x] F4 — Day view
 - [x] F5 — Week and month views
 - [x] F6 — Photos (migration 0035, Supabase Storage)
+- [x] F7 — Drinks in the kernel (migration 0038)
+- [ ] F8 — Drinks on the page
+- [ ] F9 — Combined entries
 
 ### As built
 
@@ -673,3 +805,32 @@ Each of these has to earn its place through use.
   CLI reads the same `Storage__*` environment variables.
 - **Not reused yet:** the live client's multipart write is built to serve document capture,
   but `captureDocument` is still a stub.
+
+**F7 (2026-10-22).** As planned in §7, plus:
+
+- **The cut is applied before rounding.** Each award is `round(part × cut)`, so a 23-hour
+  fast (7.3) with three drinks still pays 7 (6.6 rounds up), and with four pays 6. The
+  salmon-day table in §7.2 is a test (`The_drinks_table_holds`).
+- **The fast cites the drinks once the day is closed with any drinks**, not only more than
+  two (§7.5), so the citations don't depend on the rules' numbers. Taking a drink back
+  re-prices only when the base changes: from four drinks to three, the fast goes 6 → 7 and
+  the food 18 → 22; from three to two, only the food moves (22 → 26).
+- **A drink needs no score anywhere.** `POST /api/food/meals` with `"alcoholic": true` and no
+  `score` stores 1; with a score, 1 is stored whatever it is. `bsk food log --alcohol` refuses
+  any score but 1 in words ("A drink's score is always 1: leave --score out."). Turning the
+  flag off (`"alcoholic": false`, `bsk food edit --no-alcohol`) needs a score again.
+- **Reads:** each day summary carries `drinks` and `drinkFactor` (1 with no cut); each meal
+  `alcoholic`; `GET /api/food/day` and `GET /api/food/days` carry `sobriety` (`asOf`, `days`,
+  `bestDays`, `since`, `lastDrinkOn`, `firstDay`), null before the Food Log's first day.
+  The range's streak is as of its last day, or today when the range runs past it.
+- **`GET /api/food/drinks`** answers `{from, to, drinks, drinkDays, mostInADay, mostOn}` with
+  `from` and `to` as the instants counted between. An end that's neither a day nor an
+  instant with an offset (`2026-10-22T19:00` alone) is a 400 in words, as is `to` before
+  `from`.
+- **`bsk food`** marks drinks in the day with "(drink)", prints
+  the drinks line with its cut ("4 drinks, 2 over 2: 20% off the day's diet XP") and the
+  streak ("Sober 12 days (best 30)"); `--week` / `--month` add a drinks column and a totals
+  line ("3 drinks; drink-free 5 of 7 days; Sober 2 days (best 9) as of Sun Oct 25");
+  `bsk food drinks` prints the count and today's streak, `--json` everywhere.
+- **Oldest first** reached `bsk food` and the API at once, since both read
+  `FoodReads.GetDayAsync`; the page's gallery follows in F8.

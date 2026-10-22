@@ -26,7 +26,7 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
                eaten_local AS eatenlocal, name, score, calories, protein_g AS proteing,
                carbs_g AS carbsg, fat_g AS fatg, meal_type AS mealtype,
                photo_artifact_id AS photoartifactid, first_logged_at AS firstloggedat,
-               logged_at AS loggedat, versions, event_id AS eventid
+               logged_at AS loggedat, versions, event_id AS eventid, alcoholic
         FROM bsk.v_meal
         """;
 
@@ -43,7 +43,7 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
                longest_fast_seconds AS longestfastseconds, longest_fast_id AS longestfastid,
                fast_event_id AS fasteventid, closed_by_hand AS closedbyhand, closed_at AS closedat,
                close_event_id AS closeeventid, closed, last_recorded_at AS lastrecordedat,
-               food_event_ids AS foodeventids
+               food_event_ids AS foodeventids, drinks, drink_event_ids AS drinkeventids
         FROM bsk.v_food_day
         """;
 
@@ -122,6 +122,32 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
                 DaySql + " WHERE day BETWEEN @from::date AND @to::date ORDER BY day",
                 new { from = Text(from), to = Text(to) }, cancellationToken))
             .Select(r => r.ToDay()).ToList();
+
+    public async Task<DrinkHistory> GetDrinkHistoryAsync(DateOnly to, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var first = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT to_char(min(day), 'YYYY-MM-DD') FROM bsk.v_food_day;", cancellationToken: cancellationToken));
+        var drinkDays = await connection.QueryAsync<string>(new CommandDefinition(
+            "SELECT to_char(day, 'YYYY-MM-DD') FROM bsk.v_food_day WHERE drinks > 0 AND day <= @to::date ORDER BY day;",
+            new { to = Text(to) },
+            cancellationToken: cancellationToken));
+        return new DrinkHistory(first is null ? null : ParseDay(first), drinkDays.Select(ParseDay).ToList());
+    }
+
+    public async Task<IReadOnlyList<(DateOnly Day, int Drinks)>> CountDrinksAsync(
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+        => (await QueryAsync<DrinkDayRow>(
+                """
+                SELECT to_char(eaten_on, 'YYYY-MM-DD') AS day, count(*)::int AS drinks
+                FROM bsk.v_meal
+                WHERE alcoholic AND eaten_at >= @from::timestamptz AND eaten_at < @to::timestamptz
+                GROUP BY eaten_on
+                ORDER BY eaten_on
+                """,
+                new { from = from.ToUniversalTime(), to = to.ToUniversalTime() }, cancellationToken))
+            .Select(r => (ParseDay(r.Day), r.Drinks)).ToList();
 
     public async Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default)
     {
@@ -281,11 +307,12 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
         public DateTime LoggedAt { get; set; }
         public int Versions { get; set; }
         public Guid EventId { get; set; }
+        public bool Alcoholic { get; set; }
 
         public Meal ToMeal() => new(
             Id, Utc(EatenAt), ParseDay(EatenOn), Local(EatenLocal), Name ?? "", Score ?? 0, Calories ?? 0,
             ProteinG, CarbsG, FatG, MealType ?? FoodEntries.Snack, PhotoArtifactId, Utc(FirstLoggedAt), Utc(LoggedAt),
-            Versions, EventId);
+            Versions, EventId, Alcoholic);
     }
 
     private sealed class FastRow
@@ -308,6 +335,12 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
             Seconds, MealsDuring, Utc(RecordedAt), EventId);
     }
 
+    private sealed class DrinkDayRow
+    {
+        public string Day { get; set; } = "";
+        public int Drinks { get; set; }
+    }
+
     private sealed class DayRow
     {
         public string Day { get; set; } = "";
@@ -323,10 +356,12 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
         public bool Closed { get; set; }
         public DateTime? LastRecordedAt { get; set; }
         public Guid[] FoodEventIds { get; set; } = [];
+        public int Drinks { get; set; }
+        public Guid[] DrinkEventIds { get; set; } = [];
 
         public FoodDay ToDay() => new(
             ParseDay(Day), Meals, Calories, ScoreCalories, LongestFastSeconds, LongestFastId, FastEventId,
             ClosedByHand, ClosedAt is { } c ? Utc(c) : null, CloseEventId, Closed,
-            LastRecordedAt is { } l ? Utc(l) : null, FoodEventIds);
+            LastRecordedAt is { } l ? Utc(l) : null, FoodEventIds, Drinks, DrinkEventIds);
     }
 }

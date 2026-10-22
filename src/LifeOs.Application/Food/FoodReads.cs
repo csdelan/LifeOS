@@ -24,9 +24,9 @@ public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger)
     public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default) => food.TodayAsync(cancellationToken);
 
     /// <summary>
-    /// One day of the Food Log (default today): its entries, the fasts that ended on it, the
-    /// running fast, when food with calories was last eaten (for Begin fast), its score, and
-    /// what the ledger pays it.
+    /// One day of the Food Log (default today): its entries (oldest first), the fasts that ended
+    /// on it, the running fast, when food with calories was last eaten (for Begin fast), its
+    /// score, what the ledger pays it, and the sobriety streak as of it.
     /// </summary>
     public async Task<FoodDayView> GetDayAsync(DateOnly? day = null, CancellationToken cancellationToken = default)
     {
@@ -39,16 +39,18 @@ public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger)
         var running = await food.GetRunningFastAsync(cancellationToken);
         var last = (await food.GetLatestMealsAsync(1, withCalories: true, cancellationToken)).FirstOrDefault();
         var paid = await GetPaidAsync(target, target, cancellationToken);
+        var history = await food.GetDrinkHistoryAsync(target, cancellationToken);
         return new FoodDayView(
-            target, today, meals.OrderByDescending(m => m.EatenAt).ToList(), fasts, running, last, facts,
+            target, today, meals.OrderBy(m => m.EatenAt).ThenBy(m => m.Id).ToList(), fasts, running, last, facts,
             Rules.Score(facts.Facts), await EatenDuringFastsAsync(meals, cancellationToken),
-            paid.GetValueOrDefault(target) ?? FoodDayPaid.None);
+            paid.GetValueOrDefault(target) ?? FoodDayPaid.None, history.StreakOn(target));
     }
 
     /// <summary>
     /// Every day from <paramref name="from"/> to <paramref name="to"/> (inclusive, at most
     /// <see cref="MaxRangeDays"/>), each with its facts, score and what's paid; a day with
-    /// nothing on it is empty.
+    /// nothing on it is empty. The sobriety streak is as of the range's last day so far: today,
+    /// when the range holds it.
     /// </summary>
     public async Task<FoodRange> GetDaysAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
     {
@@ -72,7 +74,45 @@ public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger)
             days.Add(new FoodDaySummary(facts, Rules.Score(facts.Facts), paid.GetValueOrDefault(d) ?? FoodDayPaid.None));
         }
 
-        return new FoodRange(from, to, today, days);
+        var asOf = to < today ? to : today;
+        var streak = asOf < from ? null : (await food.GetDrinkHistoryAsync(asOf, cancellationToken)).StreakOn(asOf);
+        return new FoodRange(from, to, today, days, streak);
+    }
+
+    /// <summary>
+    /// The drinks drunk from <paramref name="from"/> up to (not including)
+    /// <paramref name="to"/> (FOOD-6): how many, on how many home-zone days, and the most in one
+    /// day. Any range, since it's one count.
+    /// </summary>
+    public async Task<DrinkTally> GetDrinksAsync(
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        if (to < from)
+        {
+            throw new ArgumentException("The range must end on or after the time it starts.");
+        }
+
+        return DrinkTally.Of(from, to, await food.CountDrinksAsync(from, to, cancellationToken));
+    }
+
+    /// <summary>The instant a home-zone day starts (midnight in the home zone).</summary>
+    public Task<DateTimeOffset> StartOfDayAsync(DateOnly day, CancellationToken cancellationToken = default)
+        => food.InstantAtAsync(day.ToDateTime(TimeOnly.MinValue), cancellationToken);
+
+    /// <summary>
+    /// The drinks drunk over the home-zone days <paramref name="from"/> to <paramref name="to"/>,
+    /// both included: from the start of the first to the start of the day after the last.
+    /// </summary>
+    public async Task<DrinkTally> GetDrinksAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+    {
+        if (to < from)
+        {
+            throw new ArgumentException("The range must end on or after the day it starts.");
+        }
+
+        var start = await StartOfDayAsync(from, cancellationToken);
+        var end = await StartOfDayAsync(to.AddDays(1), cancellationToken);
+        return await GetDrinksAsync(start, end, cancellationToken);
     }
 
     /// <summary>

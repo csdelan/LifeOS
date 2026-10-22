@@ -141,6 +141,106 @@ public sealed class DietRulesTests
         Assert.Null(FoodEntries.FindMealType(null));
     }
 
+    /// <summary>The salmon day of the plan's §1 plus <paramref name="beers"/> beers of 150 calories (a 1 each).</summary>
+    private static DietDayFacts SalmonDayWithBeers(int beers)
+    {
+        var plain = Day(23, (1200, 5));
+        return plain with
+        {
+            Calories = plain.Calories + 150L * beers,
+            ScoreCalories = plain.ScoreCalories + 150L * beers * FoodEntries.DrinkScore,
+            Drinks = beers
+        };
+    }
+
+    [Fact]
+    public void The_drinks_cut_starts_after_two_and_leaves_nothing_at_twelve()
+    {
+        Assert.Equal((2, 10), (Rules.DrinksFree, Rules.DrinkCutPercent));
+        Assert.True(Rules.DrinksFree >= 0 && Rules.DrinkCutPercent is > 0 and <= 100);
+        Assert.Equal(FoodEntries.ScoreMin, FoodEntries.DrinkScore);
+        Assert.Equal(12, Rules.DrinksToNothing);
+        Assert.Equal(1m, Rules.DrinkFactorFor(0));
+        Assert.Equal(1m, Rules.DrinkFactorFor(Rules.DrinksFree));
+        Assert.Equal(0.9m, Rules.DrinkFactorFor(Rules.DrinksFree + 1));
+        Assert.Equal(0.1m, Rules.DrinkFactorFor(Rules.DrinksToNothing - 1));
+        Assert.Equal(0m, Rules.DrinkFactorFor(Rules.DrinksToNothing));
+        Assert.Equal(0m, Rules.DrinkFactorFor(40));
+    }
+
+    /// <summary>The plan's drinks table (§7.2): the salmon day with 0, 2, 3, 4 and 12 beers.</summary>
+    [Theory]
+    [InlineData(0, 28.0, 4.0, 32, 7, 39)]
+    [InlineData(2, 22.4, 4.0, 26, 7, 33)]
+    [InlineData(3, 20.4, 4.0, 22, 7, 29)]
+    [InlineData(4, 18.7, 4.0, 18, 6, 24)]
+    [InlineData(12, 11.2, 0.0, 0, 0, 0)]
+    public void The_drinks_table_holds(int beers, double quality, double calories, long food, long fast, long total)
+    {
+        var score = Rules.Score(SalmonDayWithBeers(beers));
+        Assert.Equal((decimal)quality, Math.Round(score.Quality, 1));
+        Assert.Equal((decimal)calories, score.CaloriesPart);
+        Assert.Equal(7.3m, Math.Round(score.Fasting, 1));
+        Assert.Equal((food, fast, total), (score.FoodAward, score.FastAward, score.Total));
+        Assert.Equal(beers, score.Drinks);
+        Assert.Equal(beers > Rules.DrinksFree, score.Cut);
+
+        // Before the close the fast pays in full, whatever was drunk.
+        Assert.Equal(7L, score.FastAwardUncut);
+    }
+
+    [Fact]
+    public void Each_award_is_cut_before_it_is_rounded()
+    {
+        // A 23-hour fast is 7.33; three drinks leave 90% of it, 6.6, which rounds to 7. Cutting
+        // the rounded 7 instead would give 6.3, so 6.
+        var three = Rules.Score(Day(23) with { Drinks = 3 });
+        Assert.Equal((7L, 7L), (three.FastAward, three.FastAwardUncut));
+
+        // Four leave 80%: 5.87 → 6.
+        Assert.Equal(6L, Rules.Score(Day(23) with { Drinks = 4 }).FastAward);
+    }
+
+    [Fact]
+    public void A_streak_counts_drink_free_days_from_the_last_drink_or_the_first_day()
+    {
+        var first = new DateOnly(2026, 10, 20);
+
+        // Nothing before the Food Log's first day.
+        Assert.Null(Sobriety.On(first.AddDays(-1), first, []));
+
+        // No drink yet: every day from the first counts, the first day included.
+        var none = Sobriety.On(first.AddDays(9), first, [])!;
+        Assert.Equal((10, 10, first, (DateOnly?)null), (none.Days, none.BestDays, none.Since, none.LastDrinkOn));
+
+        // Drinks on the 3rd and the 10th day, seen from the 15th: 5 since the last, best 6 between them.
+        var drinks = new[] { first.AddDays(2), first.AddDays(9) };
+        var later = Sobriety.On(first.AddDays(14), first, drinks)!;
+        Assert.Equal((5, 6, first.AddDays(10), (DateOnly?)first.AddDays(9)), (later.Days, later.BestDays, later.Since, later.LastDrinkOn));
+
+        // A day with a drink has a streak of 0; a drink after it doesn't count.
+        var drinkDay = Sobriety.On(first.AddDays(9), first, drinks)!;
+        Assert.Equal((0, 6), (drinkDay.Days, drinkDay.BestDays));
+        var before = Sobriety.On(first.AddDays(5), first, drinks)!;
+        Assert.Equal((3, 3, (DateOnly?)first.AddDays(2)), (before.Days, before.BestDays, before.LastDrinkOn));
+
+        // A drink on the first day.
+        var onFirst = Sobriety.On(first, first, [first])!;
+        Assert.Equal((0, 0), (onFirst.Days, onFirst.BestDays));
+    }
+
+    [Fact]
+    public void A_drinks_tally_counts_drinks_days_and_the_most_in_one_day()
+    {
+        var (from, to) = (DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddDays(30));
+        var day = new DateOnly(2026, 10, 1);
+        var tally = DrinkTally.Of(from, to, [(day, 2), (day.AddDays(3), 4), (day.AddDays(5), 4), (day.AddDays(6), 1)]);
+        Assert.Equal((11, 4, 4, (DateOnly?)day.AddDays(3)), (tally.Drinks, tally.DrinkDays, tally.MostInADay, tally.MostOn));
+
+        var empty = DrinkTally.Of(from, to, []);
+        Assert.Equal((0, 0, 0, (DateOnly?)null), (empty.Drinks, empty.DrinkDays, empty.MostInADay, empty.MostOn));
+    }
+
     [Fact]
     public void Times_and_lengths_read_in_words()
     {

@@ -1,3 +1,4 @@
+using System.Globalization;
 using LifeOs.Application.Food;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.Persistence;
@@ -31,6 +32,54 @@ public sealed class FoodReader(string readerConnectionString, string homeTimeZon
         var end = to ?? await reads.TodayAsync(cancellationToken);
         var start = from ?? end.AddDays(-(((int)end.DayOfWeek + 6) % 7));
         return FoodRows.From(await reads.GetDaysAsync(start, end, cancellationToken), reads.Rules);
+    }
+
+    /// <summary>
+    /// The drinks drunk between <paramref name="from"/> and <paramref name="to"/> (FOOD-6). Each
+    /// end is a home-zone day (<c>yyyy-MM-dd</c>, both days included) or an ISO instant
+    /// (<paramref name="to"/> excluded). By default, the last 30 days with today.
+    /// </summary>
+    public async Task<FoodDrinksRead> GetDrinksAsync(string? from, string? to, CancellationToken cancellationToken = default)
+    {
+        var today = await reads.TodayAsync(cancellationToken);
+        var start = ParseEnd(from, "from") switch
+        {
+            DateOnly day => await reads.StartOfDayAsync(day, cancellationToken),
+            DateTimeOffset instant => instant,
+            _ => await reads.StartOfDayAsync(today.AddDays(-(DefaultDrinkDays - 1)), cancellationToken)
+        };
+        var end = ParseEnd(to, "to") switch
+        {
+            DateOnly day => await reads.StartOfDayAsync(day.AddDays(1), cancellationToken),
+            DateTimeOffset instant => instant,
+            _ => await reads.StartOfDayAsync(today.AddDays(1), cancellationToken)
+        };
+        return FoodRows.From(await reads.GetDrinksAsync(start, end, cancellationToken));
+    }
+
+    /// <summary>The days <see cref="GetDrinksAsync"/> reads by default: the last 30, today among them.</summary>
+    public const int DefaultDrinkDays = 30;
+
+    /// <summary>A range end: a day, an instant, or null when left out.</summary>
+    private static object? ParseEnd(string? text, string name)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var value = text.Trim();
+        if (DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+        {
+            return day;
+        }
+
+        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var instant)
+               && value.Contains('T')
+               && (value.EndsWith('Z') || value.LastIndexOfAny(['+', '-']) > value.IndexOf('T'))
+            ? instant
+            : throw new ArgumentException(
+                $"'{text}' isn't a {name}: give a day (YYYY-MM-DD) or a time with an offset (2026-10-22T18:00:00-07:00).");
     }
 
     /// <summary>The latest entry of each name, newest first — "Log again".</summary>

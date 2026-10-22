@@ -90,14 +90,15 @@ public sealed class FoodLogService(
 
     /// <summary>
     /// Replaces a food entry with <paramref name="input"/> as a whole (named by its id or the
-    /// start of it). The photo, when it has one, is kept.
+    /// start of it). The photo, when it has one, is kept, and so is the alcohol flag when the
+    /// input leaves it out.
     /// </summary>
     public async Task<FoodWriteResult> EditAsync(
         string reference, FoodEntryInput input, CancellationToken cancellationToken = default)
     {
         var now = clock.UtcNow;
         var meal = await ResolveMealAsync(reference, cancellationToken);
-        var entry = await NormalizeAsync(input, now, cancellationToken);
+        var entry = await NormalizeAsync(input with { Alcoholic = input.Alcoholic ?? meal.Alcoholic }, now, cancellationToken);
         var ids = await food.AppendAsync(
             [MealEvent(meal.Id, entry, meal.PhotoArtifactId, now)], FoodGuard.None, cancellationToken);
         return await ResultAsync(
@@ -139,7 +140,7 @@ public sealed class FoodLogService(
 
         var entry = new NormalizedEntry(
             meal.Name, meal.Score, meal.Calories, meal.EatenAt, meal.EatenOn, meal.MealType,
-            meal.ProteinG, meal.CarbsG, meal.FatG);
+            meal.ProteinG, meal.CarbsG, meal.FatG, meal.Alcoholic);
         var ids = await food.AppendAsync(
             [MealEvent(meal.Id, entry, photoArtifactId, now)], FoodGuard.None, cancellationToken);
         return await ResultAsync(
@@ -296,6 +297,14 @@ public sealed class FoodLogService(
     public Task<FoodRange> GetDaysAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
         => reads.GetDaysAsync(from, to, cancellationToken);
 
+    /// <summary>The drinks drunk in a range: see <see cref="FoodReads.GetDrinksAsync(DateTimeOffset, DateTimeOffset, CancellationToken)"/>.</summary>
+    public Task<DrinkTally> GetDrinksAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+        => reads.GetDrinksAsync(from, to, cancellationToken);
+
+    /// <summary>The drinks drunk over home-zone days: see <see cref="FoodReads.GetDrinksAsync(DateOnly, DateOnly, CancellationToken)"/>.</summary>
+    public Task<DrinkTally> GetDrinksAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+        => reads.GetDrinksAsync(from, to, cancellationToken);
+
     /// <summary>What "Log again" offers: see <see cref="FoodReads.GetRecentAsync"/>.</summary>
     public Task<IReadOnlyList<Meal>> GetRecentAsync(int limit = 20, CancellationToken cancellationToken = default)
         => reads.GetRecentAsync(limit, cancellationToken);
@@ -310,6 +319,10 @@ public sealed class FoodLogService(
     /// <summary>A home-zone wall-clock time as an instant (for hosts reading "12:30").</summary>
     public Task<DateTimeOffset> InstantAtAsync(DateTime local, CancellationToken cancellationToken = default)
         => food.InstantAtAsync(local, cancellationToken);
+
+    /// <summary>An instant as home-zone wall-clock time (for hosts printing "Mon Oct 19, 8:00 pm").</summary>
+    public Task<DateTime> LocalAtAsync(DateTimeOffset instant, CancellationToken cancellationToken = default)
+        => food.LocalAtAsync(instant, cancellationToken);
 
     /// <summary>Today in the home zone.</summary>
     public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default) => food.TodayAsync(cancellationToken);
@@ -377,7 +390,10 @@ public sealed class FoodLogService(
             throw new ArgumentException($"Keep the name to {FoodEntries.NameMaxLength} characters.");
         }
 
-        if (input.Score is < FoodEntries.ScoreMin or > FoodEntries.ScoreMax)
+        // A drink's score is always the lowest (FOOD-6), whatever was sent.
+        var alcoholic = input.Alcoholic ?? false;
+        var score = alcoholic ? FoodEntries.DrinkScore : input.Score;
+        if (score is < FoodEntries.ScoreMin or > FoodEntries.ScoreMax)
         {
             throw new ArgumentException(
                 $"The health score is {FoodEntries.ScoreMin} to {FoodEntries.ScoreMax} (1 = junk, 5 = very healthy); got {input.Score}.");
@@ -403,9 +419,9 @@ public sealed class FoodLogService(
         var eatenAt = CheckTime(input.EatenAt ?? now, now, "A food entry");
         var local = await food.LocalAtAsync(eatenAt, cancellationToken);
         return new NormalizedEntry(
-            name, input.Score, input.Calories, eatenAt, DateOnly.FromDateTime(local),
-            mealType ?? FoodEntries.GuessMealType(TimeOnly.FromDateTime(local)),
-            input.ProteinG, input.CarbsG, input.FatG);
+            name, score, input.Calories, eatenAt, DateOnly.FromDateTime(local),
+            mealType ?? (alcoholic ? FoodEntries.Drink : FoodEntries.GuessMealType(TimeOnly.FromDateTime(local))),
+            input.ProteinG, input.CarbsG, input.FatG, alcoholic);
     }
 
     private static void CheckGrams(int? grams, string what)
@@ -485,7 +501,8 @@ public sealed class FoodLogService(
                     carbs_g = entry.CarbsG,
                     fat_g = entry.FatG,
                     meal_type = entry.MealType,
-                    photo
+                    photo,
+                    alcoholic = entry.Alcoholic ? true : (bool?)null
                 }
             },
             OmitNulls);
@@ -526,16 +543,18 @@ public sealed class FoodLogService(
         return new FoodWriteResult(action, meal, fast, day, touched, earned);
     }
 
-    /// <summary>An entry after its checks: trimmed, its time and day settled, its type known.</summary>
+    /// <summary>An entry after its checks: trimmed, its time and day settled, its type known, a drink's score 1.</summary>
     private sealed record NormalizedEntry(
         string Name, int Score, int Calories, DateTimeOffset EatenAt, DateOnly EatenOn, string MealType,
-        int? ProteinG, int? CarbsG, int? FatG);
+        int? ProteinG, int? CarbsG, int? FatG, bool Alcoholic);
 }
 
 /// <summary>
 /// A food entry as a host sends it (FOOD-1). <paramref name="EatenAt"/> defaults to now and
 /// <paramref name="MealType"/> to a guess from the home-zone time; the nutrients are optional
-/// whole grams.
+/// whole grams. <paramref name="Alcoholic"/> marks one alcoholic drink (FOOD-6): its score is
+/// then always 1 and its meal type defaults to a drink. Left out, a new entry isn't a drink and
+/// an edit keeps what the entry was.
 /// </summary>
 public sealed record FoodEntryInput(
     string Name,
@@ -545,7 +564,8 @@ public sealed record FoodEntryInput(
     string? MealType = null,
     int? ProteinG = null,
     int? CarbsG = null,
-    int? FatG = null);
+    int? FatG = null,
+    bool? Alcoholic = null);
 
 /// <summary>What a food write did (<see cref="FoodActions"/>).</summary>
 public static class FoodActions
@@ -573,9 +593,10 @@ public sealed record FoodWriteResult(
     string Action, Meal? Meal, Fast? Fast, DateOnly? Day, IReadOnlyList<DateOnly> Days, Earned Earned);
 
 /// <summary>
-/// One day of the Food Log: its entries (newest first), the fasts that ended on it, the fast
+/// One day of the Food Log: its entries (oldest first), the fasts that ended on it, the fast
 /// running now, the newest entry with calories (Begin fast offers its time), the day's facts,
-/// its score, and the entries eaten inside a recorded fast (entry id → fast id).
+/// its score, the entries eaten inside a recorded fast (entry id → fast id), what the ledger
+/// pays it, and the sobriety streak as of it (null before the Food Log's first day).
 /// </summary>
 public sealed record FoodDayView(
     DateOnly Day,
@@ -587,10 +608,15 @@ public sealed record FoodDayView(
     FoodDay Facts,
     DietScore Score,
     IReadOnlyDictionary<Guid, Guid> EatenDuringFast,
-    FoodDayPaid Paid);
+    FoodDayPaid Paid,
+    SobrietyStreak? Sobriety = null);
 
 /// <summary>One day's facts, its score, and what the ledger pays it, for the week and month views.</summary>
 public sealed record FoodDaySummary(FoodDay Facts, DietScore Score, FoodDayPaid Paid);
 
-/// <summary>Every day of a range, oldest first, with today in the home zone.</summary>
-public sealed record FoodRange(DateOnly From, DateOnly To, DateOnly Today, IReadOnlyList<FoodDaySummary> Days);
+/// <summary>
+/// Every day of a range, oldest first, with today in the home zone, and the sobriety streak as
+/// of the range's last day so far (null when that's before the Food Log's first day).
+/// </summary>
+public sealed record FoodRange(
+    DateOnly From, DateOnly To, DateOnly Today, IReadOnlyList<FoodDaySummary> Days, SobrietyStreak? Sobriety = null);

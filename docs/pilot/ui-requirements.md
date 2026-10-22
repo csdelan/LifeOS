@@ -2939,6 +2939,75 @@ photos. Build moves `mapped → built`.
 - Open decisions: none blocking.
 
 
+### FOOD-6 — Alcoholic drinks are flagged, cut the day's diet XP above two, and keep a sobriety streak
+Horizon:    Pilot
+Definition: active
+Build:      building
+
+**Update (2026-10-22 — the kernel landed, F7):** migration 0038 adds `alcoholic` to
+`v_meal` and `drinks` / `drink_event_ids` to `v_food_day`. A drink is stored at score 1 with
+the Drink meal type, and more than two cut both diet awards (the fast's once the day closes).
+The day and range reads carry the sobriety streak; `GET /api/food/drinks` and
+`bsk food drinks` count drinks over any days or times; `bsk food log/edit --alcohol`. The
+day's entries read oldest first. Build moves `needs-kernel → building`: the page is F8.
+
+**Workflow (Chris):**
+- "I would like to optionally flag any logged "food" as "alcoholic". This can be a beer,
+  glass of wine, or any other roughly equivalent alcoholic drink. An alcoholic entry
+  contributes zero Health XP, and it will automatically lock in lowest rating health rank...
+  in fact you can grey out the star rating." (2026-10-22)
+- "All alcoholic drinks in excess of 2 for that day will decrease the diet's health XP
+  contribution by 10% per drink above 2. So theoretically, 12 drinks in a single day will
+  ensure zero Health XP from diet is contributed that day."
+- "I would like some way to count up all the alcoholic drinks I've had between 2 dates ...
+  Just have the capability to sum up the number of alcoholic drinks in a datetime range. Add
+  this information to the week or month view."
+- "Add sobriety streak on the Food page, and on weekly, monthly views when applicable."
+- Agreed in Q&A (2026-10-22), every recommendation taken:
+  - One entry is one drink, scored 1 and counted as a 1 in the day's average score, so even
+    one drink costs a little. Its calories count.
+  - Above two drinks the cut reaches the whole day's diet XP, food and fasting. The fast still
+    pays in full when it ends and is re-scored when the day closes.
+  - A day with nothing logged counts as drink-free.
+
+**Ontology fit (Claude):**
+- Maps to: a flag on the food entry's `measurement` payload (`meal.alcoholic`), carried on
+  every version like the photo. The cut is a rule in `DietRules`, beside the diet's other
+  numbers. The streak and the drinks count are read-only folds; nothing new is stored.
+- Kernel delta: migration 0038 (`alcoholic` on `v_meal`; `drinks` and `drink_event_ids` on
+  `v_food_day`); the cut in `DietRules` and `FoodRewards`; `Sobriety`; `GET /api/food/drinks`
+  and `bsk food drinks`. Phases F7 (kernel) and F8 (page) of
+  [food-log-plan.md](food-log-plan.md) §7.
+- Implications: a retune by another name, so nothing already paid changes; an old entry
+  flagged later re-scores its day. Drinks count on the home-zone day they were drunk, so a
+  night out across midnight splits across two days.
+- Open decisions: none blocking.
+
+
+### FOOD-7 — Identical entries on a day show as one card, and the day reads oldest first
+Horizon:    Pilot
+Definition: active
+Build:      mapped
+
+**Workflow (Chris):**
+- "If I copy a food log and apply it to the same day, it will record the new log with the new
+  timestamp, but since it is on the same day, it will combine the display into 1 entry with
+  (x2) and combine the calories/nutrients. You can also convert the time of day display to a
+  range (eg 12:14 PM-2:45 PM). This feature only affects the display to combine identical
+  food logs for a single day." (2026-10-22)
+- "Then sort the food entries from oldest to newest instead of newest to oldest."
+- Agreed in Q&A (2026-10-22): tapping a combined card lists its copies with their times, each
+  opening to change or delete, and Have another fills in the Log food sheet with it.
+
+**Ontology fit (Claude):**
+- Maps to: display only. Every copy stays its own entry with its own time and id.
+- Kernel delta: none beyond listing a day's entries oldest first (F7). The combined card is
+  phase F9 of [food-log-plan.md](food-log-plan.md) §7.4.
+- Implications: identical means the same name (any case), score, calories, nutrients and
+  alcohol flag; the meal type and photo don't count.
+- Open decisions: none blocking.
+
+
 ### ACTIVITY-1 — LifeOS reads my Oura Ring data and keeps it in step
 Horizon:    Pilot
 Definition: active
@@ -3522,6 +3591,11 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;
   `bsk food`; the `/food` Day, Week and Month views. — **Shipped** (F1–F6 in
   [food-log-plan.md](food-log-plan.md), migrations 0034–0035, photos in Supabase Storage).
+- **Drinks, the sobriety streak and combined entries** (FOOD-6 / FOOD-7): the alcohol flag on
+  a food entry, the cut above two drinks a day, the streak, a drinks count over any range,
+  identical entries combined on the day's page, entries oldest first. — **Building** (F7, the
+  kernel, landed with migration 0038; F8–F9, the page, in
+  [food-log-plan.md](food-log-plan.md) §7).
 - **Oura integration** (ACTIVITY-1..4 / D14):
   - an OAuth connection with encrypted tokens in `bsk_ops`
   - Oura records as `observed` events from source `oura`, versioned by content

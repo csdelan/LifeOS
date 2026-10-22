@@ -13,7 +13,10 @@ namespace LifeOs.Cli.Commands;
 /// <code>
 /// bsk food log "Salmon salad" --score 5 --cal 650 [--at 12:30] [--type lunch]
 ///              [--protein 40 --carbs 20 --fat 30] [--end-fast]
+/// bsk food log "IPA" --alcohol --cal 200            (a drink: its score is always 1)
 /// bsk food edit &lt;entry&gt; [--name …] [--score …] [--cal …] [--at …] [--type …] [nutrients]
+///              [--alcohol | --no-alcohol]
+/// bsk food drinks [--days 30 | --from … --to …]
 /// bsk food delete &lt;entry&gt;
 /// bsk food photo &lt;entry&gt; --file &lt;path&gt; | --remove
 /// bsk food fast begin [--at …] | end [--at …] | record --from … --to …
@@ -48,6 +51,7 @@ internal static class FoodCommand
         command.Subcommands.Add(CreatePhoto(connectionOption, jsonOption));
         command.Subcommands.Add(CreateFast(connectionOption, jsonOption));
         command.Subcommands.Add(CreateClose(connectionOption, jsonOption));
+        command.Subcommands.Add(CreateDrinks(connectionOption, jsonOption));
 
         command.SetAction((parseResult, cancellationToken) =>
         {
@@ -139,11 +143,16 @@ internal static class FoodCommand
         var nameArgument = new Argument<string>("name") { Description = "What it was, e.g. \"Salmon salad\"." };
         var options = EntryOptions.Create();
         var endFastOption = new Option<bool>("--end-fast") { Description = "End the running fast at this entry's time." };
+        var alcoholOption = new Option<bool>("--alcohol")
+        {
+            Description = "One alcoholic drink (a beer, a glass of wine, a shot): its score is always 1 and it counts toward the day's drinks."
+        };
 
         var command = new Command("log", "Log a food entry: a name, a 1–5 health score and rough calories.");
         command.Arguments.Add(nameArgument);
         options.AddTo(command);
         command.Options.Add(endFastOption);
+        command.Options.Add(alcoholOption);
 
         command.SetAction((parseResult, cancellationToken) =>
         {
@@ -151,8 +160,15 @@ internal static class FoodCommand
             var asJson = parseResult.GetValue(jsonOption);
             return Cli.RunAsync(asJson, async () =>
             {
+                var alcoholic = parseResult.GetValue(alcoholOption);
                 var score = parseResult.GetValue(options.Score)
-                            ?? throw new ArgumentException("Give it a health score: --score 1 (junk) to 5 (very healthy).");
+                            ?? (alcoholic
+                                ? FoodEntries.DrinkScore
+                                : throw new ArgumentException("Give it a health score: --score 1 (junk) to 5 (very healthy)."));
+                if (alcoholic && score != FoodEntries.DrinkScore)
+                {
+                    throw new ArgumentException("A drink's score is always 1: leave --score out.");
+                }
                 var calories = parseResult.GetValue(options.Calories)
                                ?? throw new ArgumentException("Give it rough calories: --cal 650 (0 for a black coffee).");
 
@@ -162,7 +178,8 @@ internal static class FoodCommand
                     parseResult.GetValue(nameArgument)!, score, calories,
                     await ParseAtAsync(parseResult.GetValue(options.At), food, cancellationToken),
                     parseResult.GetValue(options.Type),
-                    parseResult.GetValue(options.Protein), parseResult.GetValue(options.Carbs), parseResult.GetValue(options.Fat));
+                    parseResult.GetValue(options.Protein), parseResult.GetValue(options.Carbs), parseResult.GetValue(options.Fat),
+                    alcoholic);
                 var result = await food.LogAsync(input, parseResult.GetValue(endFastOption), cancellationToken);
                 FoodOutput.WriteResult(result, asJson);
                 return 0;
@@ -177,11 +194,15 @@ internal static class FoodCommand
         var entryArgument = new Argument<string>("entry") { Description = "The entry (its id or first 8 characters)." };
         var nameOption = new Option<string?>("--name") { Description = "A new name." };
         var options = EntryOptions.Create();
+        var alcoholOption = new Option<bool>("--alcohol") { Description = "Make it an alcoholic drink (its score becomes 1)." };
+        var noAlcoholOption = new Option<bool>("--no-alcohol") { Description = "It isn't an alcoholic drink after all." };
 
         var command = new Command("edit", "Change a food entry. What you leave out stays as it was.");
         command.Arguments.Add(entryArgument);
         command.Options.Add(nameOption);
         options.AddTo(command);
+        command.Options.Add(alcoholOption);
+        command.Options.Add(noAlcoholOption);
 
         command.SetAction((parseResult, cancellationToken) =>
         {
@@ -193,6 +214,12 @@ internal static class FoodCommand
                 var food = provider.GetRequiredService<FoodLogService>();
                 var reference = parseResult.GetValue(entryArgument)!;
                 var meal = await food.ResolveMealAsync(reference, cancellationToken);
+                var (on, off) = (parseResult.GetValue(alcoholOption), parseResult.GetValue(noAlcoholOption));
+                if (on && off)
+                {
+                    throw new ArgumentException("Use --alcohol or --no-alcohol, not both.");
+                }
+
                 var input = new FoodEntryInput(
                     parseResult.GetValue(nameOption) ?? meal.Name,
                     parseResult.GetValue(options.Score) ?? meal.Score,
@@ -201,7 +228,8 @@ internal static class FoodCommand
                     parseResult.GetValue(options.Type) ?? meal.MealType,
                     parseResult.GetValue(options.Protein) ?? meal.ProteinG,
                     parseResult.GetValue(options.Carbs) ?? meal.CarbsG,
-                    parseResult.GetValue(options.Fat) ?? meal.FatG);
+                    parseResult.GetValue(options.Fat) ?? meal.FatG,
+                    on ? true : off ? false : null);
                 var result = await food.EditAsync(meal.Id.ToString(), input, cancellationToken);
                 FoodOutput.WriteResult(result, asJson);
                 return 0;
@@ -402,6 +430,89 @@ internal static class FoodCommand
     }
 
     // ---------------------------------------------------------------------------------
+    // drinks
+    // ---------------------------------------------------------------------------------
+
+    private const int DefaultDrinkDays = 30;
+
+    private static Command CreateDrinks(Option<string?> connectionOption, Option<bool> jsonOption)
+    {
+        var daysOption = new Option<int?>("--days") { Description = $"The last N days, today among them ({DefaultDrinkDays} by default)." };
+        var fromOption = new Option<string?>("--from") { Description = "From this day (YYYY-MM-DD) or time (as --at reads it)." };
+        var toOption = new Option<string?>("--to") { Description = "To this day (included) or time (excluded). Defaults to the end of today." };
+        var command = new Command("drinks", "Count the alcoholic drinks over a range of days or times, with the sobriety streak.");
+        command.Options.Add(daysOption);
+        command.Options.Add(fromOption);
+        command.Options.Add(toOption);
+
+        command.SetAction((parseResult, cancellationToken) =>
+        {
+            var connectionString = KernelConnectionString.Resolve(parseResult.GetValue(connectionOption));
+            var asJson = parseResult.GetValue(jsonOption);
+            var days = parseResult.GetValue(daysOption);
+            var fromText = parseResult.GetValue(fromOption);
+            var toText = parseResult.GetValue(toOption);
+            return Cli.RunAsync(asJson, async () =>
+            {
+                if (days is not null && (fromText is not null || toText is not null))
+                {
+                    throw new ArgumentException("Use --days or --from/--to, not both.");
+                }
+
+                if (days is < 1)
+                {
+                    throw new ArgumentException("--days is 1 or more.");
+                }
+
+                await using var provider = Cli.BuildServices(connectionString);
+                var food = provider.GetRequiredService<FoodLogService>();
+                var today = await food.TodayAsync(cancellationToken);
+                var from = await RangeEndAsync(fromText, food, end: false, cancellationToken)
+                           ?? await food.InstantAtAsync(today.AddDays(-((days ?? DefaultDrinkDays) - 1)).ToDateTime(TimeOnly.MinValue), cancellationToken);
+                var to = await RangeEndAsync(toText, food, end: true, cancellationToken)
+                         ?? await food.InstantAtAsync(today.AddDays(1).ToDateTime(TimeOnly.MinValue), cancellationToken);
+                var tally = await food.GetDrinksAsync(from, to, cancellationToken);
+                var streak = (await food.GetDayAsync(today, cancellationToken)).Sobriety;
+                if (asJson)
+                {
+                    Cli.WriteJson(FoodOutput.DrinksJson(tally, streak));
+                }
+                else
+                {
+                    FoodOutput.WriteDrinks(tally, streak, await food.LocalAtAsync(from, cancellationToken), await food.LocalAtAsync(to, cancellationToken));
+                }
+
+                return 0;
+            });
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// A range end: a day (its start, or for <paramref name="end"/> the start of the day after),
+    /// a time as <c>--at</c> reads it, or null when none is given.
+    /// </summary>
+    private static async Task<DateTimeOffset?> RangeEndAsync(
+        string? text, FoodLogService food, bool end, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var value = text.Trim().ToLowerInvariant();
+        if (value is "today" or "yesterday"
+            || DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            var day = await ParseDayAsync(value, food, cancellationToken) ?? await food.TodayAsync(cancellationToken);
+            return await food.InstantAtAsync((end ? day.AddDays(1) : day).ToDateTime(TimeOnly.MinValue), cancellationToken);
+        }
+
+        return await ParseAtAsync(text, food, cancellationToken);
+    }
+
+    // ---------------------------------------------------------------------------------
     // Parsing
     // ---------------------------------------------------------------------------------
 
@@ -580,7 +691,7 @@ internal static class FoodOutput
 
         foreach (var meal in view.Meals)
         {
-            var flag = view.EatenDuringFast.ContainsKey(meal.Id) ? "  (inside a fast)" : "";
+            var flag = (meal.Alcoholic ? "  (drink)" : "") + (view.EatenDuringFast.ContainsKey(meal.Id) ? "  (inside a fast)" : "");
             Console.WriteLine(
                 $"  {FoodLogService.Short(meal.Id)}  {FoodText.Clock(meal.EatenLocal),8}  {meal.MealType,-9} {meal.Name}  " +
                 $"{meal.Calories:N0} cal, score {meal.Score}{Nutrients(meal)}{flag}");
@@ -604,6 +715,11 @@ internal static class FoodOutput
         Console.WriteLine(
             $"  Quality {Part(score.Quality)} / {rules.QualityMax}; calories {Part(score.CaloriesPart)} / {rules.CaloriesMax}; " +
             $"fasting {Part(score.Fasting)} / {rules.FastingMax}.");
+        if (score.Drinks > 0)
+        {
+            Console.WriteLine($"  {Drinks(score.Drinks)}{(score.Cut ? $", {score.Drinks - rules.DrinksFree} over {rules.DrinksFree}: {CutText(score.DrinkFactor)} off the day's diet XP" : "")}.");
+        }
+
         Console.WriteLine(
             $"  Diet: {score.Total} of {rules.Cap} base Health XP (food {score.FoodAward}, fast {score.FastAward})" +
             (view.Facts.Closed ? "." : ", if the day closed now."));
@@ -611,7 +727,58 @@ internal static class FoodOutput
         {
             Console.WriteLine($"  Paid: {Paid(view.Paid)}.");
         }
+
+        if (view.Sobriety is { } streak)
+        {
+            Console.WriteLine($"  {Streak(streak)}.");
+        }
     }
+
+    /// <summary>"Sober 12 days (best 30)", or "A drink today: sober 0 days (best 30)".</summary>
+    private static string Streak(SobrietyStreak streak)
+        => (streak.Days == 0 ? "A drink that day: sober 0 days" : $"Sober {streak.Days} day{(streak.Days == 1 ? "" : "s")}")
+           + $" (best {streak.BestDays})";
+
+    private static string Drinks(int drinks) => $"{drinks} drink{(drinks == 1 ? "" : "s")}";
+
+    private static string CutText(decimal factor) => $"{(1m - factor) * 100m:0}%";
+
+    public static void WriteDrinks(DrinkTally tally, SobrietyStreak? streak, DateTime fromLocal, DateTime toLocal)
+    {
+        var most = tally.MostOn is { } on
+            ? $"; the most in a day was {tally.MostInADay}, on {on.ToString("ddd MMM d", CultureInfo.InvariantCulture)}"
+            : "";
+        Console.WriteLine(
+            $"{Drinks(tally.Drinks)} from {FoodText.When(fromLocal)} to {FoodText.When(toLocal)}, " +
+            $"on {tally.DrinkDays} day{(tally.DrinkDays == 1 ? "" : "s")}{most}.");
+        if (streak is not null)
+        {
+            Console.WriteLine($"Today: {Streak(streak)}.");
+        }
+    }
+
+    public static object DrinksJson(DrinkTally tally, SobrietyStreak? streak) => new
+    {
+        from = tally.From,
+        to = tally.To,
+        drinks = tally.Drinks,
+        drinkDays = tally.DrinkDays,
+        mostInADay = tally.MostInADay,
+        mostOn = tally.MostOn?.ToString("yyyy-MM-dd"),
+        sobriety = SobrietyJson(streak)
+    };
+
+    private static object? SobrietyJson(SobrietyStreak? streak) => streak is null
+        ? null
+        : new
+        {
+            asOf = streak.AsOf.ToString("yyyy-MM-dd"),
+            days = streak.Days,
+            bestDays = streak.BestDays,
+            since = streak.Since.ToString("yyyy-MM-dd"),
+            lastDrinkOn = streak.LastDrinkOn?.ToString("yyyy-MM-dd"),
+            firstDay = streak.FirstDay.ToString("yyyy-MM-dd")
+        };
 
     /// <summary>What the ledger pays a day: "39 Health XP (food 32 x 1.2 = 38, fast 7)".</summary>
     private static string Paid(FoodDayPaid paid)
@@ -635,9 +802,10 @@ internal static class FoodOutput
             var fast = facts.LongestFastSeconds is { } seconds ? FoodText.Duration(seconds) : "-";
             var state = facts.ClosedByHand ? "closed" : facts.Day < range.Today ? "" : facts.Day == range.Today ? "today" : "ahead";
             var paid = day.Paid.Total > 0 ? $"paid {day.Paid.Total,2}" : "       ";
+            var drinks = facts.Drinks > 0 ? $"drinks {facts.Drinks,2}" : "         ";
             Console.WriteLine(
                 $"{facts.Day.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture)}  {facts.Calories,6:N0} cal  avg {average,3}  " +
-                $"fast {fast,-9}  {day.Score.Total,2}/{rules.Cap}  {paid}  {state}".TrimEnd());
+                $"fast {fast,-9}  {drinks}  {day.Score.Total,2}/{rules.Cap}  {paid}  {state}".TrimEnd());
         }
 
         var past = range.Days.Where(d => d.Facts.Day <= range.Today).ToList();
@@ -648,6 +816,13 @@ internal static class FoodOutput
             (past.Count > 0 ? $" ({((decimal)total / past.Count).ToString("0.0", CultureInfo.InvariantCulture)} a day)" : "") +
             $"; {range.Days.Sum(d => d.Paid.Total)} Health XP paid" +
             (logged.Count > 0 ? $"; {logged.Average(d => d.Facts.Calories):N0} cal a logged day" : "") + ".");
+        if (range.Sobriety is { } streak)
+        {
+            var counted = past.Where(d => d.Facts.Day >= streak.FirstDay).ToList();
+            Console.WriteLine(
+                $"{Drinks(counted.Sum(d => d.Facts.Drinks))}; drink-free {counted.Count(d => d.Facts.Drinks == 0)} of {counted.Count} days; " +
+                $"{Streak(streak)} as of {streak.AsOf.ToString("ddd MMM d", CultureInfo.InvariantCulture)}.");
+        }
     }
 
     public static object DayJson(FoodDayView view) => new
@@ -658,7 +833,8 @@ internal static class FoodOutput
         fasts = view.Fasts.Select(FastJson),
         running = view.Running is { } r ? FastJson(r) : null,
         lastMeal = view.LastMeal is { } l ? MealJson(l) : null,
-        summary = SummaryJson(view.Facts, view.Score, view.Paid)
+        summary = SummaryJson(view.Facts, view.Score, view.Paid),
+        sobriety = SobrietyJson(view.Sobriety)
     };
 
     public static object RangeJson(FoodRange range) => new
@@ -666,7 +842,8 @@ internal static class FoodOutput
         from = range.From.ToString("yyyy-MM-dd"),
         to = range.To.ToString("yyyy-MM-dd"),
         today = range.Today.ToString("yyyy-MM-dd"),
-        days = range.Days.Select(d => SummaryJson(d.Facts, d.Score, d.Paid))
+        days = range.Days.Select(d => SummaryJson(d.Facts, d.Score, d.Paid)),
+        sobriety = SobrietyJson(range.Sobriety)
     };
 
     public static object MealJson(Meal meal) => MealJson(meal, Guid.Empty);
@@ -677,6 +854,7 @@ internal static class FoodOutput
         name = meal.Name,
         score = meal.Score,
         calories = meal.Calories,
+        alcoholic = meal.Alcoholic,
         proteinG = meal.ProteinG,
         carbsG = meal.CarbsG,
         fatG = meal.FatG,
@@ -717,6 +895,8 @@ internal static class FoodOutput
         foodAward = score.FoodAward,
         fastAward = score.FastAward,
         total = score.Total,
+        drinks = score.Drinks,
+        drinkFactor = score.DrinkFactor,
         paid = new
         {
             fast = paid.Fast is { } f ? new { @base = f.Base, paid = f.Paid, multiplier = f.Multiplier } : null,
@@ -726,7 +906,7 @@ internal static class FoodOutput
     };
 
     private static string Describe(Meal meal)
-        => $"{meal.Name} ({meal.MealType}, {meal.Calories:N0} cal, score {meal.Score}{Nutrients(meal)}) at {FoodText.When(meal.EatenLocal)}";
+        => $"{meal.Name} ({(meal.Alcoholic ? "alcoholic " : "")}{meal.MealType}, {meal.Calories:N0} cal, score {meal.Score}{Nutrients(meal)}) at {FoodText.When(meal.EatenLocal)}";
 
     private static string Nutrients(Meal meal)
     {

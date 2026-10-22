@@ -836,6 +836,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/food/drinks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetFoodDrinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/food/meals": {
         parameters: {
             query?: never;
@@ -1603,6 +1619,7 @@ export interface components {
             running?: null | components["schemas"]["FastRow"];
             lastMeal?: null | components["schemas"]["MealRow"];
             summary?: components["schemas"]["FoodDaySummaryRow"];
+            sobriety?: null | components["schemas"]["SobrietyRow"];
         };
         FoodDaySummaryRow: {
             day?: string;
@@ -1632,6 +1649,10 @@ export interface components {
             total?: number | string;
             /** Format: int32 */
             cap?: number | string;
+            /** Format: int32 */
+            drinks?: number | string;
+            /** Format: double */
+            drinkFactor?: number | string;
             paid?: components["schemas"]["FoodPaidRow"];
         };
         FoodDaysRead: {
@@ -1639,6 +1660,20 @@ export interface components {
             to?: string;
             today?: string;
             days?: components["schemas"]["FoodDaySummaryRow"][];
+            sobriety?: null | components["schemas"]["SobrietyRow"];
+        };
+        FoodDrinksRead: {
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            /** Format: int32 */
+            drinks?: number | string;
+            /** Format: int32 */
+            drinkDays?: number | string;
+            /** Format: int32 */
+            mostInADay?: number | string;
+            mostOn?: null | string;
         };
         FoodEntryBody: {
             name?: null | string;
@@ -1655,6 +1690,7 @@ export interface components {
             carbsG?: null | number | string;
             /** Format: int32 */
             fatG?: null | number | string;
+            alcoholic?: null | boolean;
             endFast?: boolean;
         };
         FoodFastBody: {
@@ -1840,6 +1876,7 @@ export interface components {
             score?: number | string;
             /** Format: int32 */
             calories?: number | string;
+            alcoholic?: boolean;
             /** Format: int32 */
             proteinG?: null | number | string;
             /** Format: int32 */
@@ -2063,6 +2100,16 @@ export interface components {
             averageHr?: null | number | string;
             /** Format: int32 */
             lowestHr?: null | number | string;
+        };
+        SobrietyRow: {
+            asOf?: string;
+            /** Format: int32 */
+            days?: number | string;
+            /** Format: int32 */
+            bestDays?: number | string;
+            since?: string;
+            lastDrinkOn?: null | string;
+            firstDay?: string;
         };
         StatusBody: {
             subject?: string;
@@ -3724,6 +3771,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MealRow"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetFoodDrinks: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodDrinksRead"];
                 };
             };
             /** @description Bad Request */

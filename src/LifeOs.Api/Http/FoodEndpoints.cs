@@ -1,6 +1,7 @@
 using LifeOs.Api.Auth;
 using LifeOs.Api.Read;
 using LifeOs.Application.Food;
+using LifeOs.Domain;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LifeOs.Api.Http;
@@ -38,6 +39,8 @@ public static class FoodEndpoints
             .Produces<FoodDaysRead>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapGet("/recent", GetRecent).WithName("GetRecentFood")
             .Produces<IReadOnlyList<MealRow>>().Produces<ApiError>(StatusCodes.Status400BadRequest);
+        api.MapGet("/drinks", GetDrinks).WithName("GetFoodDrinks")
+            .Produces<FoodDrinksRead>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/meals", LogMeal).WithName("LogFood")
             .Produces<FoodWriteResultRow>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/meals/{id}", EditMeal).WithName("EditFood")
@@ -71,6 +74,14 @@ public static class FoodEndpoints
     private static async Task<IResult> GetDays(DateOnly? from, DateOnly? to, FoodReader food, CancellationToken cancellationToken)
         => Results.Ok(await food.GetDaysAsync(from, to, cancellationToken));
 
+    /// <summary>
+    /// The alcoholic drinks drunk between <paramref name="from"/> and <paramref name="to"/>
+    /// (FOOD-6): each a home-zone day (<c>yyyy-MM-dd</c>, both included) or an ISO instant
+    /// (<paramref name="to"/> excluded). The last 30 days with today by default; any range.
+    /// </summary>
+    private static async Task<IResult> GetDrinks(string? from, string? to, FoodReader food, CancellationToken cancellationToken)
+        => Results.Ok(await food.GetDrinksAsync(from, to, cancellationToken));
+
     /// <summary>The latest entry of each name, newest first (20 by default, 1 to 100): "Log again".</summary>
     private static async Task<IResult> GetRecent(int? limit, FoodReader food, CancellationToken cancellationToken)
         => Results.Ok(await food.GetRecentAsync(limit ?? DefaultRecent, cancellationToken));
@@ -92,8 +103,8 @@ public static class FoodEndpoints
 
     /// <summary>
     /// Replaces a food entry (its id, or the start of it) with the one sent: the whole entry, as
-    /// the Log food sheet sends it, so a nutrient left out is cleared. Its time and meal type
-    /// stay as they were when left out.
+    /// the Log food sheet sends it, so a nutrient left out is cleared. Its time, meal type and
+    /// alcohol flag stay as they were when left out.
     /// </summary>
     private static async Task<IResult> EditMeal(
         string id, FoodEntryBody body, FoodLogService food, CancellationToken cancellationToken)
@@ -208,12 +219,14 @@ public static class FoodEndpoints
     }
 
     private static IResult? Missing(FoodEntryBody body)
-        => string.IsNullOrWhiteSpace(body.Name) || body.Score is null || body.Calories is null
-            ? Results.BadRequest(new ApiError("A food entry takes name, score and calories."))
+        => string.IsNullOrWhiteSpace(body.Name) || (body.Score is null && body.Alcoholic != true) || body.Calories is null
+            ? Results.BadRequest(new ApiError("A food entry takes name, score and calories (a drink needs no score)."))
             : null;
 
     private static FoodEntryInput Input(FoodEntryBody body, DateTimeOffset? eatenAt, string? mealType)
-        => new(body.Name!, body.Score!.Value, body.Calories!.Value, eatenAt, mealType, body.ProteinG, body.CarbsG, body.FatG);
+        => new(
+            body.Name!, body.Score ?? FoodEntries.DrinkScore, body.Calories!.Value, eatenAt, mealType,
+            body.ProteinG, body.CarbsG, body.FatG, body.Alcoholic);
 }
 
 /// <summary>
@@ -225,7 +238,7 @@ public sealed class FoodEntryBody
     /// <summary>1–80 characters.</summary>
     public string? Name { get; set; }
 
-    /// <summary>1 (junk food) to 5 (very healthy).</summary>
+    /// <summary>1 (junk food) to 5 (very healthy); always 1 for an alcoholic drink, which needs none.</summary>
     public int? Score { get; set; }
 
     /// <summary>A rough estimate, 0 to 5,000.</summary>
@@ -243,6 +256,12 @@ public sealed class FoodEntryBody
     public int? ProteinG { get; set; }
     public int? CarbsG { get; set; }
     public int? FatG { get; set; }
+
+    /// <summary>
+    /// One alcoholic drink (FOOD-6): its score is always 1 and its meal type defaults to a drink.
+    /// Left out, a new entry isn't a drink and an edit keeps what the entry was.
+    /// </summary>
+    public bool? Alcoholic { get; set; }
 
     /// <summary>Logging only: end the running fast at the entry's time ("End your fast?").</summary>
     public bool EndFast { get; set; }

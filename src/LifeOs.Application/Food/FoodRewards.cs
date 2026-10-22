@@ -16,6 +16,9 @@ namespace LifeOs.Application.Food;
 /// <item><c>diet:&lt;day&gt;</c> — the food award (quality and calories), due once the day is
 /// closed, by hand or because it's over</item>
 /// </list>
+/// More than <see cref="DietRules.DrinksFree"/> drinks on a day cut both (FOOD-6, plan §7.2):
+/// the food award when it pays at the close, and the fast award, paid in full when the fast
+/// ended, re-scored once the day is closed.
 /// Settling compares every food day with the ledger. Unlike every other award, a food award is
 /// re-priced when the day it's for changes: the key's net is reversed and the new base earned,
 /// in one batch. A paid award cites the event versions its day was scored from, and is left
@@ -161,9 +164,17 @@ public sealed class FoodRewards(
                 && fasts.TryGetValue(fastId, out var fast)
                 && fast.EndedAt is { } endedAt)
             {
+                // The fast pays in full when it ends; the day's drinks cut it only once the day
+                // is closed (plan §7.2). A closed day with drinks cites them (and its close), so
+                // a drink added, removed or flagged re-scores the fast — whatever the rules'
+                // numbers, so a retune still leaves a paid fast alone.
+                IReadOnlyList<Guid> sources = day is { Closed: true, Drinks: > 0 }
+                    ? [fastEvent, .. day.DrinkVersions, .. day.CloseEventId is { } closeEvent ? [closeEvent] : Array.Empty<Guid>()]
+                    : [fastEvent];
                 due.Add(new DueFood(
-                    FoodAwards.FastKey(day.Day), FoodAwards.FastTrigger, day.Day, score.FastAward, endedAt,
-                    [fastEvent], $"{Note(FoodAwards.FastTrigger, day.Day)} ({FoodText.Duration(fast.Seconds ?? 0)})"));
+                    FoodAwards.FastKey(day.Day), FoodAwards.FastTrigger, day.Day,
+                    day.Closed ? score.FastAward : score.FastAwardUncut, endedAt,
+                    sources, $"{Note(FoodAwards.FastTrigger, day.Day)} ({FoodText.Duration(fast.Seconds ?? 0)})"));
             }
 
             if (day is { Closed: true, Meals: > 0 }

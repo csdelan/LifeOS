@@ -303,7 +303,7 @@ public sealed class FoodLogServiceTests(PostgresFixture postgres)
         Assert.False(view.Facts.ClosedByHand);
         Assert.Equal((32L, 7L, 39L), (view.Score.FoodAward, view.Score.FastAward, view.Score.Total));
         Assert.Equal([longFast.Id, shortFast.Id], view.Fasts.Select(f => f.Id));
-        Assert.Equal(["Water", "Almonds", "Salmon salad"], view.Meals.Select(m => m.Name));
+        Assert.Equal(["Salmon salad", "Almonds", "Water"], view.Meals.Select(m => m.Name)); // oldest first
 
         // The snack was eaten inside the short fast; the 0-calorie water doesn't count.
         Assert.Equal(shortFast.Id, Assert.Single(view.EatenDuringFast, kv => kv.Key == snack.Id).Value);

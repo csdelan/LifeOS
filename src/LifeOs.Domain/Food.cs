@@ -21,6 +21,9 @@ public static class FoodEntries
     public const int CaloriesMax = 5000;
     public const int GramsMax = 1000;
 
+    /// <summary>An alcoholic drink's score, always (FOOD-6): the lowest.</summary>
+    public const int DrinkScore = ScoreMin;
+
     /// <summary>
     /// The meal type a home-zone time suggests: 04:00–10:59 breakfast, 11:00–15:59 lunch,
     /// 16:00–21:59 dinner, otherwise a snack.
@@ -39,23 +42,37 @@ public static class FoodEntries
 }
 
 /// <summary>
-/// One home-zone day as the diet score reads it (food-log plan §2.1): its total calories, the
-/// sum of score × calories over its live entries, and the longest fast that ended on it.
+/// One home-zone day as the diet score reads it (food-log plan §2.1, §7.2): its total calories,
+/// the sum of score × calories over its live entries, the longest fast that ended on it, and
+/// how many of its entries are alcoholic drinks.
 /// </summary>
-public sealed record DietDayFacts(long Calories, long ScoreCalories, long? LongestFastSeconds);
+public sealed record DietDayFacts(long Calories, long ScoreCalories, long? LongestFastSeconds, int Drinks = 0);
 
 /// <summary>
-/// A day's diet score (food-log plan §2.1). The three parts are unrounded, for showing the
-/// working; <see cref="FoodAward"/> (quality + calories) and <see cref="FastAward"/> are each
-/// rounded to whole base Health XP, halves up, and are what the ledger pays before the
-/// multiplier. <see cref="AverageScore"/> is the calorie-weighted average, or null when the
-/// day has no calories.
+/// A day's diet score (food-log plan §2.1, §7.2). The three parts are unrounded, for showing
+/// the working; <see cref="FoodAward"/> (quality + calories) and <see cref="FastAward"/> are
+/// each cut by <see cref="DrinkFactor"/> and rounded to whole base Health XP, halves up: what
+/// the ledger pays before the multiplier once the day is closed. <see cref="FastAwardUncut"/>
+/// is what the fast pays before the close, when no drink cuts it yet.
+/// <see cref="AverageScore"/> is the calorie-weighted average, or null when the day has no
+/// calories.
 /// </summary>
 public sealed record DietScore(
-    decimal Quality, decimal CaloriesPart, decimal Fasting, long FoodAward, long FastAward, decimal? AverageScore)
+    decimal Quality,
+    decimal CaloriesPart,
+    decimal Fasting,
+    long FoodAward,
+    long FastAward,
+    decimal? AverageScore,
+    int Drinks,
+    decimal DrinkFactor,
+    long FastAwardUncut)
 {
-    /// <summary>The day's diet XP before the multiplier: both awards.</summary>
+    /// <summary>The day's diet XP before the multiplier, once it's closed: both awards.</summary>
     public long Total => FoodAward + FastAward;
+
+    /// <summary>Whether the day's drinks cut its diet XP.</summary>
+    public bool Cut => DrinkFactor < 1m;
 }
 
 /// <summary>
@@ -73,9 +90,14 @@ public sealed record DietRules(
     int CalorieFullTo,
     int CalorieZeroAt,
     int FastFromHours,
-    int FastFullAtHours)
+    int FastFullAtHours,
+    int DrinksFree,
+    int DrinkCutPercent)
 {
-    /// <summary>Chris's first pass (2026-10-20): 28 quality + 4 calories + 8 fasting = 40.</summary>
+    /// <summary>
+    /// Chris's first pass (2026-10-20): 28 quality + 4 calories + 8 fasting = 40; and
+    /// (2026-10-22) 10% off the day for each drink above two.
+    /// </summary>
     public static readonly DietRules Default = new(
         Currency: Currencies.HealthXp,
         QualityMax: 28,
@@ -85,7 +107,9 @@ public sealed record DietRules(
         CalorieFullTo: 2000,
         CalorieZeroAt: 2500,
         FastFromHours: 12,
-        FastFullAtHours: 24);
+        FastFullAtHours: 24,
+        DrinksFree: 2,
+        DrinkCutPercent: 10);
 
     /// <summary>The most base Health XP a day's diet can pay.</summary>
     public int Cap => QualityMax + CaloriesMax + FastingMax;
@@ -93,7 +117,10 @@ public sealed record DietRules(
     /// <summary>The most the food award (quality + calories) can pay.</summary>
     public int FoodMax => QualityMax + CaloriesMax;
 
-    /// <summary>Scores one day (food-log plan §2.1).</summary>
+    /// <summary>The fewest drinks that leave a day's diet XP at nothing: 12.</summary>
+    public int DrinksToNothing => DrinksFree + (100 + DrinkCutPercent - 1) / DrinkCutPercent;
+
+    /// <summary>Scores one day (food-log plan §2.1, §7.2).</summary>
     public DietScore Score(DietDayFacts facts)
     {
         decimal? average = facts.Calories > 0 ? (decimal)facts.ScoreCalories / facts.Calories : null;
@@ -103,8 +130,19 @@ public sealed record DietRules(
             : 0m;
         var calories = CaloriesPartFor(facts.Calories);
         var fasting = FastingFor(facts.LongestFastSeconds ?? 0);
-        return new DietScore(quality, calories, fasting, Round(quality + calories), Round(fasting), average);
+        var factor = DrinkFactorFor(facts.Drinks);
+        return new DietScore(
+            quality, calories, fasting, Round((quality + calories) * factor), Round(fasting * factor), average,
+            Math.Max(0, facts.Drinks), factor, Round(fasting));
     }
+
+    /// <summary>
+    /// What a day's drinks leave of its diet XP (food-log plan §7.2): all of it up to
+    /// <see cref="DrinksFree"/>, then <see cref="DrinkCutPercent"/>% less for each drink above,
+    /// down to nothing.
+    /// </summary>
+    public decimal DrinkFactorFor(int drinks)
+        => Math.Max(0m, 1m - DrinkCutPercent * Math.Max(0, drinks - DrinksFree) / 100m);
 
     /// <summary>
     /// The calorie part: 0 below <see cref="CalorieFloor"/>, full from there to
@@ -176,7 +214,8 @@ public static class FoodAwards
 /// <summary>
 /// A live food entry as <c>bsk.v_meal</c> reads it (FOOD-1): the newest version of its id.
 /// <see cref="EatenLocal"/> is the wall-clock time it was eaten in the home zone, and
-/// <see cref="EatenOn"/> the day it counts on.
+/// <see cref="EatenOn"/> the day it counts on. <see cref="Alcoholic"/> marks one alcoholic
+/// drink (FOOD-6).
 /// </summary>
 public sealed record Meal(
     Guid Id,
@@ -194,7 +233,8 @@ public sealed record Meal(
     DateTimeOffset FirstLoggedAt,
     DateTimeOffset LoggedAt,
     int Versions,
-    Guid EventId);
+    Guid EventId,
+    bool Alcoholic = false);
 
 /// <summary>
 /// A live fast as <c>bsk.v_fast</c> reads it (FOOD-2): running while <see cref="EndedAt"/> is
@@ -218,10 +258,11 @@ public sealed record Fast(
 }
 
 /// <summary>
-/// One home-zone day as <c>bsk.v_food_day</c> reads it (FOOD-3 / FOOD-4): its live entries'
-/// totals, the longest fast that ended on it, and whether it's closed — by hand
-/// (<see cref="ClosedByHand"/>) or because it's over. <see cref="FoodEventIds"/> and
-/// <see cref="FastEventId"/> are the event versions a score of it reads.
+/// One home-zone day as <c>bsk.v_food_day</c> reads it (FOOD-3 / FOOD-4 / FOOD-6): its live
+/// entries' totals, its drinks, the longest fast that ended on it, and whether it's closed — by
+/// hand (<see cref="ClosedByHand"/>) or because it's over. <see cref="FoodEventIds"/>,
+/// <see cref="DrinkEventIds"/> and <see cref="FastEventId"/> are the event versions a score of
+/// it reads.
 /// </summary>
 public sealed record FoodDay(
     DateOnly Day,
@@ -236,14 +277,92 @@ public sealed record FoodDay(
     Guid? CloseEventId,
     bool Closed,
     DateTimeOffset? LastRecordedAt,
-    IReadOnlyList<Guid> FoodEventIds)
+    IReadOnlyList<Guid> FoodEventIds,
+    int Drinks = 0,
+    IReadOnlyList<Guid>? DrinkEventIds = null)
 {
     /// <summary>What the diet score reads of this day.</summary>
-    public DietDayFacts Facts => new(Calories, ScoreCalories, LongestFastSeconds);
+    public DietDayFacts Facts => new(Calories, ScoreCalories, LongestFastSeconds, Drinks);
+
+    /// <summary>The drinks' event versions (none when the day has no drink).</summary>
+    public IReadOnlyList<Guid> DrinkVersions => DrinkEventIds ?? [];
 
     /// <summary>A day with nothing on it.</summary>
     public static FoodDay Empty(DateOnly day, bool closed)
         => new(day, 0, 0, 0, null, null, null, false, null, null, closed, null, []);
+}
+
+/// <summary>
+/// A sobriety streak as of one day (FOOD-6, food-log plan §7.3): <see cref="Days"/> drink-free
+/// days in a row ending on it (0 when it has a drink), counted from <see cref="Since"/> — the
+/// day after the last drink, or the Food Log's first day when there's been none.
+/// <see cref="BestDays"/> is the longest run from <see cref="FirstDay"/> to that day.
+/// </summary>
+public sealed record SobrietyStreak(
+    DateOnly AsOf, int Days, int BestDays, DateOnly Since, DateOnly? LastDrinkOn, DateOnly FirstDay);
+
+/// <summary>
+/// What the streak reads (FOOD-6): the Food Log's first day (null while it's empty) and the
+/// days with a drink, oldest first.
+/// </summary>
+public sealed record DrinkHistory(DateOnly? FirstDay, IReadOnlyList<DateOnly> DrinkDays)
+{
+    /// <summary>The streak as of <paramref name="asOf"/>, or null before the first day.</summary>
+    public SobrietyStreak? StreakOn(DateOnly asOf)
+        => FirstDay is { } first ? Sobriety.On(asOf, first, DrinkDays) : null;
+}
+
+/// <summary>
+/// The drinks drunk in <c>[From, To)</c> (FOOD-6, food-log plan §7.3): how many, on how many
+/// home-zone days, and the most in one day (the first such day, when there's a tie).
+/// </summary>
+public sealed record DrinkTally(
+    DateTimeOffset From, DateTimeOffset To, int Drinks, int DrinkDays, int MostInADay, DateOnly? MostOn)
+{
+    /// <summary>A tally from the drinks counted on each day.</summary>
+    public static DrinkTally Of(
+        DateTimeOffset from, DateTimeOffset to, IReadOnlyList<(DateOnly Day, int Drinks)> days)
+    {
+        var withDrinks = days.Where(d => d.Drinks > 0).OrderBy(d => d.Day).ToList();
+        var most = withDrinks.OrderByDescending(d => d.Drinks).ThenBy(d => d.Day).FirstOrDefault();
+        return new DrinkTally(
+            from, to, withDrinks.Sum(d => d.Drinks), withDrinks.Count, most.Drinks,
+            withDrinks.Count > 0 ? most.Day : null);
+    }
+}
+
+/// <summary>
+/// The sobriety streak (FOOD-6, food-log plan §7.3). A drink-free day is one with no
+/// alcoholic entry; a day with nothing logged counts as drink-free, since only a logged drink
+/// breaks the streak (scout's honor, GEN-5). Nothing counts before the Food Log's first day.
+/// </summary>
+public static class Sobriety
+{
+    /// <summary>
+    /// The streak as of <paramref name="asOf"/>, from the Food Log's <paramref name="firstDay"/>
+    /// and the days with a drink; null before the first day.
+    /// </summary>
+    public static SobrietyStreak? On(DateOnly asOf, DateOnly firstDay, IEnumerable<DateOnly> drinkDays)
+    {
+        if (asOf < firstDay)
+        {
+            return null;
+        }
+
+        var drinks = drinkDays.Where(d => d >= firstDay && d <= asOf).Distinct().Order().ToList();
+        var best = 0;
+        var runStart = firstDay;
+        foreach (var day in drinks)
+        {
+            best = Math.Max(best, day.DayNumber - runStart.DayNumber);
+            runStart = day.AddDays(1);
+        }
+
+        var current = asOf.DayNumber - runStart.DayNumber + 1;
+        best = Math.Max(best, current);
+        DateOnly? last = drinks.Count > 0 ? drinks[^1] : null;
+        return new SobrietyStreak(asOf, current, best, runStart, last, firstDay);
+    }
 }
 
 /// <summary>

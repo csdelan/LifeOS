@@ -421,6 +421,19 @@ public interface IFoodLogRepository
     /// <summary>The days with food, fasts or closes in [<paramref name="from"/>, <paramref name="to"/>], oldest first.</summary>
     Task<IReadOnlyList<FoodDay>> GetDaysAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// What the sobriety streak reads (FOOD-6): the Food Log's first day and the days up to
+    /// <paramref name="to"/> with a drink.
+    /// </summary>
+    Task<DrinkHistory> GetDrinkHistoryAsync(DateOnly to, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The drinks drunk in [<paramref name="from"/>, <paramref name="to"/>), counted by the
+    /// home-zone day they were drunk on, oldest first (FOOD-6).
+    /// </summary>
+    Task<IReadOnlyList<(DateOnly Day, int Drinks)>> CountDrinksAsync(
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
+
     /// <summary>Today in the home zone.</summary>
     Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default);
 
