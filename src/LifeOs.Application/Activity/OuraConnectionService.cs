@@ -26,13 +26,8 @@ namespace LifeOs.Application.Activity;
 /// Without an <see cref="IOuraClient"/> (no <c>Oura:ClientId</c> on this host) the status says
 /// Oura isn't set up, and everything else refuses in words.
 /// </summary>
-/// <param name="startDate">
-/// The first day LifeOS reads Oura for (<c>Oura:StartDate</c>): nothing from before it is synced.
-/// Null reads Oura's whole history.
-/// </param>
 public sealed class OuraConnectionService(
-    IIntegrationRepository integrations, IOuraClient? client, IClock clock, string service = Integrations.Oura,
-    DateOnly? startDate = null)
+    IIntegrationRepository integrations, IOuraClient? client, IClock clock, string service = Integrations.Oura)
 {
     /// <summary>The scopes LifeOS asks for: daily summaries (activity, sleep, readiness) and workouts.</summary>
     public static readonly IReadOnlyList<string> Scopes = ["daily", "workout"];
@@ -54,12 +49,9 @@ public sealed class OuraConnectionService(
 
     public bool Configured => client is not null;
 
-    /// <summary>The first day LifeOS reads Oura for, or null for Oura's whole history.</summary>
-    public DateOnly? StartDate => startDate;
-
     /// <summary>The connection as the Activity page shows it. Never carries a token.</summary>
     public async Task<OuraStatus> GetStatusAsync(CancellationToken cancellationToken = default)
-        => OuraStatus.From(Configured, await integrations.GetAsync(service, cancellationToken), startDate);
+        => OuraStatus.From(Configured, await integrations.GetAsync(service, cancellationToken));
 
     /// <summary>
     /// Starts connecting: keeps a new state and PKCE verifier for <see cref="PendingFor"/> and
@@ -267,8 +259,7 @@ public sealed class OuraConnectionService(
 /// </param>
 /// <param name="MissingScopes">Scopes LifeOS asked for that Oura didn't grant.</param>
 /// <param name="HistoryFrom">The earliest day the history backfill has read back to.</param>
-/// <param name="HistoryDone">The backfill found where Oura's history starts (or reached <paramref name="StartDate"/>).</param>
-/// <param name="StartDate">The first day LifeOS reads Oura for (<c>Oura:StartDate</c>), or null for all of it.</param>
+/// <param name="HistoryDone">The backfill found where Oura's history starts.</param>
 public sealed record OuraStatus(
     string State,
     bool Configured,
@@ -282,15 +273,14 @@ public sealed record OuraStatus(
     DateTimeOffset? LastSyncedAt,
     string? LastSyncError,
     DateOnly? HistoryFrom,
-    bool HistoryDone,
-    DateOnly? StartDate = null)
+    bool HistoryDone)
 {
     public const string NotConfigured = "not_configured";
     public const string NotConnected = "not_connected";
     public const string Reconnect = "reconnect";
     public const string ConnectedState = "connected";
 
-    public static OuraStatus From(bool configured, IntegrationState? stored, DateOnly? startDate = null)
+    public static OuraStatus From(bool configured, IntegrationState? stored)
     {
         var connected = stored?.Connected ?? false;
         var reconnect = stored?.NeedsReconnect ?? false;
@@ -305,6 +295,6 @@ public sealed record OuraStatus(
         return new OuraStatus(
             state, configured, connected, reconnect, stored?.ReconnectReason, stored?.ConnectedAt,
             stored?.ExpiresAt, scopes, missing, stored?.LastSyncedAt, stored?.LastSyncError,
-            stored?.HistoryFrom, stored?.HistoryDone ?? false, startDate);
+            stored?.HistoryFrom, stored?.HistoryDone ?? false);
     }
 }

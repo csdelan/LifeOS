@@ -20,7 +20,7 @@
                                 VITE_SUPABASE_ANON_KEY, ALLOWED_EMAILS,
                                 Storage__SupabaseSecretKey (or SUPABASE_SECRET_KEY),
                                 and the Oura app: Oura__ClientId, Oura__ClientSecret,
-                                Integrations__TokenKey (and Oura__StartDate if set)
+                                Integrations__TokenKey
       web/.env.local            VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY when
                                 the env file does not set them
       LifeOs.Api user-secrets   ALLOWED_EMAILS when the env file does not set it
@@ -229,8 +229,6 @@ if ($oura) {
     if ($fromEnvFile['Oura__ClientId'] -match '\s' -or $fromEnvFile['Oura__ClientSecret'] -match '\s') {
         throw "Oura__ClientId and Oura__ClientSecret can't contain spaces."
     }
-    $ouraStart = $fromEnvFile['Oura__StartDate']
-    if ($ouraStart -and $ouraStart -notmatch '^\d{4}-\d{2}-\d{2}$') { throw "Oura__StartDate must be a date written YYYY-MM-DD." }
 }
 
 $flySecrets = [ordered]@{
@@ -246,7 +244,6 @@ if ($storageKey) { $flySecrets['Storage__SupabaseSecretKey'] = $storageKey }
 $storageKey = $null
 if ($oura) {
     foreach ($name in $ouraNames) { $flySecrets[$name] = $fromEnvFile[$name] }
-    if ($ouraStart) { $flySecrets['Oura__StartDate'] = $ouraStart }
 }
 
 # ---------- confirm ----------
@@ -267,8 +264,7 @@ if ($flySecrets.Contains('Storage__SupabaseSecretKey')) {
     Write-Host "Food photos        OFF: no Storage__SupabaseSecretKey in $EnvFile, so the API refuses photos" -ForegroundColor Yellow
 }
 if ($oura) {
-    $start = if ($ouraStart) { "from $ouraStart (Oura__StartDate)" } else { 'from the default start date (2026-10-22)' }
-    Write-Host "Oura               ON: client id and secret from $EnvFile, tokens sealed with Integrations__TokenKey, read $start" -ForegroundColor Cyan
+    Write-Host "Oura               ON: client id and secret from $EnvFile, tokens sealed with Integrations__TokenKey" -ForegroundColor Cyan
 } else {
     Write-Host "Oura               OFF: no Oura__ClientId in $EnvFile, so the Activity page says Oura isn't set up" -ForegroundColor Yellow
 }

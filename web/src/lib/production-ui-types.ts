@@ -1140,8 +1140,6 @@ export interface OuraStatus {
   /** The earliest day the history has been read back to. */
   historyFrom: string | null;
   historyDone: boolean;
-  /** The first day LifeOS reads Oura for (`Oura:StartDate`): it holds nothing from before it. Null reads it all. */
-  startDate: string | null;
 }
 
 /** Under the 5,000 minimum, at the minimum, or at the 7,500 goal. */

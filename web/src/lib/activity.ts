@@ -64,16 +64,7 @@ export function normalizeOuraStatus(raw: OuraStatus): OuraStatus {
     lastSyncError: raw.lastSyncError ?? null,
     historyFrom: raw.historyFrom ?? null,
     historyDone: Boolean(raw.historyDone),
-    startDate: raw.startDate ?? null,
   };
-}
-
-/** What a day before the start date says: LifeOS never read Oura for it (`Oura:StartDate`). */
-export const BEFORE_START = "before LifeOS read Oura";
-
-/** The day comes before the first day LifeOS reads Oura for. */
-export function beforeStart(day: string, start: string | null | undefined): boolean {
-  return start != null && day < start;
 }
 
 export function normalizeActivityDay(raw: ActivityDayRow): ActivityDayRow {
@@ -285,12 +276,9 @@ export function dayName(day: string, today: string): string {
   return day === today ? "Today" : formatWeekday(day);
 }
 
-/**
- * A day's steps against the thresholds, and a long time without the ring, without its name. A
- * day before `start` (the Oura start date) says LifeOS never read it.
- */
-export function stepDayText(day: ActivityDayRow, targets: StepTargets, today: string, start?: string | null): string {
-  if (day.steps == null) return beforeStart(day.day, start) ? BEFORE_START : "no steps recorded";
+/** A day's steps against the thresholds, and a long time without the ring, without its name. */
+export function stepDayText(day: ActivityDayRow, targets: StepTargets, today: string): string {
+  if (day.steps == null) return "no steps recorded";
   const nonWear =
     day.nonWearS != null && day.nonWearS >= HIGH_NON_WEAR_S ? `, ${formatDuration(day.nonWearS)} without the ring` : "";
   return `${describeSteps(day.steps, targets, day.day === today)}${nonWear}`;
@@ -553,16 +541,10 @@ export function sleepValueWords(value: number, metric: SleepMetric): string {
   return metric === "asleep" ? formatHours(value) : String(Math.round(value));
 }
 
-/**
- * A day on a sleep metric, without its name: "sleep score 73, good"; "6 h 41 min asleep of 7 h
- * 21 min in bed". A day before `start` (the Oura start date) says LifeOS never read it.
- */
-export function sleepDayText(day: ActivityDayRow, metric: SleepMetric, today: string, start?: string | null): string {
+/** A day on a sleep metric, without its name: "sleep score 73, good"; "6 h 41 min asleep of 7 h 21 min in bed". */
+export function sleepDayText(day: ActivityDayRow, metric: SleepMetric, today: string): string {
   if (metric === "asleep") {
-    if (day.asleepS == null) {
-      if (beforeStart(day.day, start)) return BEFORE_START;
-      return day.day === today ? "last night hasn't synced yet" : "no sleep recorded";
-    }
+    if (day.asleepS == null) return day.day === today ? "last night hasn't synced yet" : "no sleep recorded";
     const inBed = day.inBedS != null ? ` of ${formatDuration(day.inBedS)} in bed` : "";
     const naps =
       day.napCount > 0
@@ -572,10 +554,7 @@ export function sleepDayText(day: ActivityDayRow, metric: SleepMetric, today: st
   }
   const score = metric === "sleep" ? day.sleepScore : day.readinessScore;
   const name = metric === "sleep" ? "sleep score" : "readiness";
-  if (score == null) {
-    if (beforeStart(day.day, start)) return BEFORE_START;
-    return day.day === today ? "last night hasn't synced yet" : `no ${name}`;
-  }
+  if (score == null) return day.day === today ? "last night hasn't synced yet" : `no ${name}`;
   return `${name} ${score}, ${ouraScoreWords(score).toLowerCase()}`;
 }
 
@@ -701,6 +680,12 @@ export function formatTemperature(deviation: number): string {
 // ---------------------------------------------------------------------------
 // Syncing
 // ---------------------------------------------------------------------------
+
+/** The API's words ended once: "it." and "“…reasons.”" stay as they are, "it" gets its period. */
+export function asSentence(text: string): string {
+  const trimmed = text.trim();
+  return /[.!?]["”’)]?$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
 
 /** "just now", "3 min ago", "2 h ago", "yesterday", or the date. */
 export function syncedAgo(iso: string, now: Date = new Date()): string {

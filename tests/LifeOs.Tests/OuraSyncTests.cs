@@ -21,13 +21,13 @@ internal sealed class OuraHarness : IAsyncDisposable
     public static readonly Uri Redirect = new("https://lifeos.example/activity/connected");
     public static readonly DateOnly Today = new(2026, 10, 22);
 
-    private OuraHarness(DomainTestDatabase db, TimerTestClock clock, FakeOuraClient oura, IOuraClient? client, DateOnly? startDate)
+    private OuraHarness(DomainTestDatabase db, TimerTestClock clock, FakeOuraClient oura, IOuraClient? client)
     {
         Db = db;
         Clock = clock;
         Oura = oura;
         Integrations = new NpgsqlIntegrationRepository(db.ConnectionString, new TokenCipher(RandomNumberGenerator.GetBytes(32)));
-        Connection = new OuraConnectionService(Integrations, client, clock, startDate: startDate);
+        Connection = new OuraConnectionService(Integrations, client, clock);
         Activity = new NpgsqlActivityRepository(db.ConnectionString);
         Sync = new OuraSyncService(Connection, client, Activity, Integrations, db.Get<IHomeCalendar>(), clock);
         Notes = new WorkoutNoteService(Activity, db.Get<IEventStore>(), clock, KernelSources.Cli);
@@ -44,17 +44,14 @@ internal sealed class OuraHarness : IAsyncDisposable
     public WorkoutNoteService Notes { get; }
     public ActivityReads Reads { get; }
 
-    /// <summary>
-    /// A new database with Oura connected (unless <paramref name="connect"/> is false), reading
-    /// Oura from <paramref name="startDate"/> (its whole history without one).
-    /// </summary>
+    /// <summary>A new database with Oura connected (unless <paramref name="connect"/> is false).</summary>
     public static async Task<OuraHarness> CreateAsync(
-        PostgresFixture postgres, CancellationToken ct, bool connect = true, bool configured = true, DateOnly? startDate = null)
+        PostgresFixture postgres, CancellationToken ct, bool connect = true, bool configured = true)
     {
         var db = await DomainTestDatabase.CreateAsync(postgres, ct);
         var clock = new TimerTestClock(new DateTimeOffset(2026, 10, 22, 12, 0, 0, TimeSpan.Zero));
         var oura = new FakeOuraClient(clock);
-        var harness = new OuraHarness(db, clock, oura, configured ? oura : null, startDate);
+        var harness = new OuraHarness(db, clock, oura, configured ? oura : null);
         if (connect)
         {
             await harness.Connection.BeginConnectAsync(Redirect, ct);
@@ -126,8 +123,8 @@ public sealed class OuraSyncTests(PostgresFixture postgres)
 
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private Task<OuraHarness> CreateAsync(bool connect = true, bool configured = true, DateOnly? startDate = null)
-        => OuraHarness.CreateAsync(postgres, Ct, connect, configured, startDate);
+    private Task<OuraHarness> CreateAsync(bool connect = true, bool configured = true)
+        => OuraHarness.CreateAsync(postgres, Ct, connect, configured);
 
     private static void Replace<T>(List<T> records, Func<T, bool> match, T with)
         => records[records.FindIndex(r => match(r))] = with;
@@ -490,115 +487,6 @@ public sealed class OuraSyncTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Nothing_from_before_the_start_date_is_read_or_kept_and_the_history_is_all_in()
-    {
-        var start = Today.AddDays(-3);
-        await using var h = await CreateAsync(startDate: start);
-        h.Oura.ActivityDays.AddRange([
-            OuraHarness.Steps(Today.AddDays(-4), 9000),
-            OuraHarness.Steps(start, 6000),
-            OuraHarness.Steps(Today, 2000)
-        ]);
-        h.Oura.Workouts.AddRange([OuraHarness.Workout("w-before", Today.AddDays(-4)), OuraHarness.Workout("w-on", start)]);
-        h.Oura.SleepScores.AddRange([OuraHarness.SleepScore(Today.AddDays(-4), 70), OuraHarness.SleepScore(start, 80)]);
-        h.Oura.SleepPeriods.AddRange([OuraHarness.Night("s-before", Today.AddDays(-4), 400), OuraHarness.Night("s-on", start, 420)]);
-
-        var result = await h.Sync.SyncAsync(cancellationToken: Ct);
-
-        // One window from the start date (padded as always, then filtered on day); no history.
-        Assert.Equal((start, Today.AddDays(1)), (result.From, result.To));
-        Assert.Equal((1, 5, 5), (result.Windows, result.Records, result.Written));
-        Assert.Equal((start, true), (result.HistoryFrom, result.HistoryDone));
-        Assert.All(h.Oura.Reads, r => Assert.Equal(start.AddDays(-OuraSyncService.PadDays), r.Start));
-        Assert.Equal(start, h.Sync.Floor);
-
-        Assert.Equal(0, await h.CountAsync(
-            "SELECT count(*) FROM bsk.event WHERE source_id = 'oura' AND (external_id LIKE '%:2026-10-18:%' OR external_id LIKE '%-before:%');"));
-        Assert.Null(await h.Activity.GetWorkoutAsync("w-before", Ct));
-        Assert.NotNull(await h.Activity.GetWorkoutAsync("w-on", Ct));
-        Assert.Equal(
-            [6000, 2000],
-            (await h.Activity.GetActivityDaysAsync(Today.AddDays(-4), Today, Ct)).Select(d => d.Steps));
-
-        var status = await h.Connection.GetStatusAsync(Ct);
-        Assert.Equal((start, start, true), (status.StartDate, status.HistoryFrom, status.HistoryDone));
-
-        // Later syncs still read from the start date, and nothing more.
-        var again = await h.Sync.SyncAsync(cancellationToken: Ct);
-        Assert.Equal((start, 1, 0), (again.From, again.Windows, again.Written));
-    }
-
-    [Fact]
-    public async Task Once_the_start_date_is_past_the_window_the_history_reads_back_to_it_and_stops()
-    {
-        var start = Today.AddDays(-40);
-        await using var h = await CreateAsync(startDate: start);
-        h.Oura.ActivityDays.AddRange([
-            OuraHarness.Steps(Today.AddDays(-50), 1),
-            OuraHarness.Steps(Today.AddDays(-30), 2),
-            OuraHarness.Steps(Today.AddDays(-1), 3)
-        ]);
-
-        var result = await h.Sync.SyncAsync(cancellationToken: Ct);
-
-        Assert.Equal((Today.AddDays(-14), 2, 2), (result.From, result.Windows, result.Written));
-        Assert.Equal((start, true), (result.HistoryFrom, result.HistoryDone));
-        Assert.Contains(h.Oura.Reads, r => (r.Start, r.End) == (start.AddDays(-2), Today.AddDays(-13)));
-        Assert.DoesNotContain(h.Oura.Reads, r => r.Start < start.AddDays(-OuraSyncService.PadDays));
-        Assert.Equal(
-            [2, 3],
-            (await h.Activity.GetActivityDaysAsync(Today.AddDays(-60), Today, Ct)).Where(d => d.Steps is not null).Select(d => d.Steps));
-    }
-
-    [Fact]
-    public async Task Syncing_from_a_day_can_not_go_before_the_start_date()
-    {
-        var start = Today.AddDays(-10);
-        await using var h = await CreateAsync(startDate: start);
-        h.Oura.ActivityDays.AddRange([OuraHarness.Steps(start.AddDays(-1), 1), OuraHarness.Steps(start, 2)]);
-
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
-            h.Sync.SyncAsync(new OuraSyncOptions(From: start.AddDays(-1)), Ct));
-        Assert.Equal(
-            "LifeOS reads Oura from 2026-10-12 (Oura:StartDate): sync from a day between then and today (2026-10-22).",
-            ex.Message);
-
-        var result = await h.Sync.SyncAsync(new OuraSyncOptions(From: start), Ct);
-        Assert.Equal((start, 1), (result.From, result.Written));
-    }
-
-    [Fact]
-    public async Task A_start_date_still_to_come_reads_nothing_yet()
-    {
-        await using var h = await CreateAsync(startDate: Today.AddDays(5));
-        h.Oura.ActivityDays.Add(OuraHarness.Steps(Today, 5000));
-
-        var result = await h.Sync.SyncAsync(cancellationToken: Ct);
-
-        Assert.Equal((0, 0, true), (result.Windows, result.Written, result.HistoryDone));
-        Assert.Empty(h.Oura.Reads);
-    }
-
-    [Fact]
-    public async Task History_read_before_a_start_date_was_set_is_kept_and_the_backfill_ends()
-    {
-        await using var h = await CreateAsync();
-        h.Oura.ActivityDays.AddRange([OuraHarness.Steps(Today.AddDays(-100), 1), OuraHarness.Steps(Today, 2)]);
-        var before = await h.Sync.SyncAsync(new OuraSyncOptions(HistoryWindows: 1), Ct);
-        Assert.Equal((Today.AddDays(-194), false), (before.HistoryFrom, before.HistoryDone));
-
-        var start = Today.AddDays(-3);
-        var connection = new OuraConnectionService(h.Integrations, h.Oura, h.Clock, startDate: start);
-        var sync = new OuraSyncService(connection, h.Oura, h.Activity, h.Integrations, h.Db.Get<IHomeCalendar>(), h.Clock);
-        var after = await sync.SyncAsync(cancellationToken: Ct);
-
-        // The backfill is over; "back to" still says how far LifeOS read before, since it holds
-        // those days: the record is append-only.
-        Assert.Equal((start, 1, Today.AddDays(-194), true), (after.From, after.Windows, after.HistoryFrom, after.HistoryDone));
-        Assert.Equal(1, (await h.Activity.GetActivityDaysAsync(Today.AddDays(-100), Today.AddDays(-100), Ct)).Single().Steps);
-    }
-
-    [Fact]
     public async Task A_refused_token_is_refreshed_once_and_the_read_tried_again()
     {
         await using var h = await CreateAsync();
@@ -625,7 +513,9 @@ public sealed class OuraSyncTests(PostgresFixture postgres)
         Assert.Equal(1, h.Oura.Refreshes);
         var status = await h.Connection.GetStatusAsync(Ct);
         Assert.Equal(OuraStatus.Reconnect, status.State);
-        Assert.Contains("even after refreshing", status.ReconnectReason);
+        Assert.Equal(
+            $"Oura refused LifeOS's access token for daily_activity even after refreshing it: “{FakeOuraClient.InvalidTokenDetail}”",
+            status.ReconnectReason);
         Assert.Equal(ex.Message, status.LastSyncError);
         Assert.Null(status.LastSyncedAt);
 

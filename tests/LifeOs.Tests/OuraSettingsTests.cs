@@ -101,32 +101,6 @@ public sealed class OuraSettingsTests
     }
 
     [Fact]
-    public void Oura_is_read_from_the_food_logs_first_day_unless_told_otherwise()
-    {
-        var oura = OuraOptions.Resolve(Settings((OuraOptions.ClientIdKey, ClientId), (OuraOptions.ClientSecretKey, Secret)))!;
-        Assert.Equal(new DateOnly(2026, 10, 22), oura.StartDate);
-        Assert.Equal(OuraOptions.DefaultStartDate, oura.StartDate);
-
-        var moved = OuraOptions.Resolve(Settings(
-            (OuraOptions.ClientIdKey, ClientId), (OuraOptions.ClientSecretKey, Secret), ("oura:startdate", " 2015-01-01 ")))!;
-        Assert.Equal(new DateOnly(2015, 1, 1), moved.StartDate);
-        Assert.Contains("StartDate = 2015-01-01", moved.ToString());
-    }
-
-    [Theory]
-    [InlineData("22/10/2026", "YYYY-MM-DD")]
-    [InlineData("2026-02-30", "YYYY-MM-DD")]
-    [InlineData("2014-12-31", "2015-01-01")]
-    public void A_malformed_or_too_early_start_date_fails(string text, string says)
-    {
-        var ex = Assert.Throws<InvalidOperationException>(() => OuraOptions.Resolve(Settings(
-            (OuraOptions.ClientIdKey, ClientId), (OuraOptions.ClientSecretKey, Secret), (OuraOptions.StartDateKey, text))));
-
-        Assert.Contains(OuraOptions.StartDateKey, ex.Message);
-        Assert.Contains(says, ex.Message);
-    }
-
-    [Fact]
     public void Secrets_never_print()
     {
         var settings = IntegrationSettings.Resolve(Settings(

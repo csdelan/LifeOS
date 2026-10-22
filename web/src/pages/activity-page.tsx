@@ -13,8 +13,7 @@ import { WorkoutSheet } from "@/components/activity/workout-sheet";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton } from "@/components/primitives/skeletons";
 import { Button } from "@/components/ui/button";
-import { formatWeekday, syncedAgo } from "@/lib/activity";
-import { addDays } from "@/lib/dates";
+import { asSentence, syncedAgo } from "@/lib/activity";
 import type { OuraStatus, WorkoutRow } from "@/lib/production-ui-types";
 import { useActivitySummary, useWrites } from "@/lib/queries";
 import { useNow } from "@/lib/timer";
@@ -141,8 +140,8 @@ export function ActivityPage() {
                   </Button>
                 }
               >
-                Oura needs reconnecting{oura.reconnectReason ? `: ${oura.reconnectReason}` : ""}. What's here is from
-                the last sync.
+                Oura needs reconnecting{oura.reconnectReason ? `: ${asSentence(oura.reconnectReason)}` : "."} What's
+                here is from the last sync.
               </Banner>
             ) : null}
             {connected && oura.missingScopes.length > 0 ? (
@@ -165,12 +164,6 @@ export function ActivityPage() {
             {connectError ? <Banner>Couldn't start connecting Oura: {connectError}</Banner> : null}
 
             {!connected ? <ConnectCard status={oura} busy={connecting} onConnect={() => void connect()} /> : null}
-
-            {(connected || hasHistory) && oura.startDate && oura.startDate > addDays(data.today, -365) ? (
-              <p className="text-xs text-muted-foreground" data-testid="oura-start">
-                LifeOS reads Oura from {formatWeekday(oura.startDate)}, so the days before it are empty.
-              </p>
-            ) : null}
 
             {connected || hasHistory ? (
               <div className="grid items-start gap-4 lg:grid-cols-2">

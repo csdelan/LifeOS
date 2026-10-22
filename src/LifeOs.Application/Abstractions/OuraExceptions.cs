@@ -27,10 +27,17 @@ public sealed class OuraGrantException(string error, string message, bool spentG
 /// Oura refused a data request: the access token (401) or access itself (403: the Oura
 /// Membership has lapsed, or a scope is missing). The message carries Oura's own words.
 /// </summary>
-public sealed class OuraAccessDeniedException(int status, string message) : OuraConnectionException(message)
+public sealed class OuraAccessDeniedException(int status, string message, string? collection = null, string? detail = null)
+    : OuraConnectionException(message)
 {
     /// <summary>401 or 403.</summary>
     public int Status { get; } = status;
+
+    /// <summary>The collection Oura refused (<c>daily_activity</c>, …), when it was a data request.</summary>
+    public string? Collection { get; } = collection;
+
+    /// <summary>Oura's own words for the refusal, trimmed, when it gave any.</summary>
+    public string? Detail { get; } = detail;
 }
 
 /// <summary>

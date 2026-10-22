@@ -249,28 +249,19 @@ describe("Activity page (activity plan §3.7)", () => {
     expect(await card("Steps")).toBeTruthy();
     expect(sync).not.toHaveBeenCalled();
   });
-});
 
-describe("The Oura start date (activity plan §3.3)", () => {
-  it("says the day LifeOS reads Oura from while it's within the year the charts show", async () => {
-    setMockOura({ startDate: addDays(todayIso(), -5) });
+  it("ends a reason that has its own period, or Oura's quoted words, once", async () => {
+    setMockOura({
+      state: "reconnect",
+      needsReconnect: true,
+      reconnectReason:
+        "Oura refused LifeOS's access token for daily_activity even after refreshing it: “The access token provided is expired, revoked, malformed, or invalid for other reasons.”",
+    });
     renderPage();
-    const note = await screen.findByTestId("oura-start");
-    expect(note).toHaveTextContent(
-      `LifeOS reads Oura from ${dayName(addDays(todayIso(), -5), "")}, so the days before it are empty.`,
-    );
-  });
-
-  it("says nothing when LifeOS reads all of Oura, or started over a year ago", async () => {
-    const view = renderPage();
-    await card("Steps");
-    expect(screen.queryByTestId("oura-start")).not.toBeInTheDocument();
-    view.unmount();
-
-    setMockOura({ startDate: addDays(todayIso(), -400) });
-    renderPage();
-    await card("Steps");
-    expect(screen.queryByTestId("oura-start")).not.toBeInTheDocument();
+    const banner = await screen.findByRole("alert");
+    expect(banner).toHaveTextContent("for daily_activity even after refreshing it");
+    expect(banner).toHaveTextContent("for other reasons.” What's here is from the last sync.");
+    expect(banner.textContent).not.toMatch(/\.\s*\./);
   });
 });
 

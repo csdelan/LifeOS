@@ -35,10 +35,17 @@ public sealed class OuraHttpClient(HttpClient http, OuraOptions options, IClock 
 
     /// <summary>An <see cref="HttpClient"/> for Oura: pooled connections that notice DNS changes, a 30-second timeout.</summary>
     public static HttpClient CreateHttpClient()
-        => new(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
+    {
+        var http = new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
         {
             Timeout = TimeSpan.FromSeconds(30)
         };
+
+        // As Oura's documented clients do: say who's asking, and ask for JSON.
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LifeOS/1.0");
+        http.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        return http;
+    }
 
     public Uri AuthorizeUrl(string state, string codeChallenge, Uri redirectUri)
     {
@@ -144,7 +151,14 @@ public sealed class OuraHttpClient(HttpClient http, OuraOptions options, IClock 
 
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
-                throw new OuraAccessDeniedException(401, "Oura refused the access token.");
+                // Oura says why: an expired or revoked token, or (third-party reports) a scope
+                // the collection needs. Kept, so the reconnect reason can say it.
+                var (_, said) = ParseError(body);
+                var detail = said ?? Challenge(response);
+                throw new OuraAccessDeniedException(401,
+                    $"Oura refused the access token for {collection}{(detail is null ? "." : $": “{detail}”")}",
+                    collection,
+                    detail);
             }
 
             if (response.StatusCode == HttpStatusCode.Forbidden)
@@ -152,7 +166,9 @@ public sealed class OuraHttpClient(HttpClient http, OuraOptions options, IClock 
                 var (_, detail) = ParseError(body);
                 throw new OuraAccessDeniedException(403,
                     $"Oura refused access to {collection}{(detail is null ? "" : $" ({detail})")}. "
-                    + "The Oura Membership may have lapsed, or a scope is missing: reconnecting asks for the scopes again.");
+                    + "The Oura Membership may have lapsed, or a scope is missing: reconnecting asks for the scopes again.",
+                    collection,
+                    detail);
             }
 
             if (!response.IsSuccessStatusCode)
@@ -399,6 +415,13 @@ public sealed class OuraHttpClient(HttpClient http, OuraOptions options, IClock 
         }
 
         return new OuraUnavailableException($"Oura answered {status} when asked to {doing}; try again later.");
+    }
+
+    // A bearer challenge's words (error="insufficient_scope", …) when the body gave none.
+    private static string? Challenge(HttpResponseMessage response)
+    {
+        var challenge = string.Join(", ", response.Headers.WwwAuthenticate.Select(h => h.ToString()));
+        return challenge.Length == 0 ? null : Trim(challenge);
     }
 
     private static TimeSpan? RetryAfter(HttpResponseMessage response)

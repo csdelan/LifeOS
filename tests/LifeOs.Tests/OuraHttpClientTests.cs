@@ -23,7 +23,7 @@ public sealed class OuraHttpClientTests
     private static readonly OuraOptions Options = new(
         "client-123", Secret, OuraOptions.DefaultAuthorizeUrl, OuraOptions.DefaultTokenUrl,
         new Uri("https://moi.ouraring.com/oauth/v2/ext/oauth-token"), OuraOptions.DefaultRevokeUrl,
-        OuraOptions.DefaultCollectionsUrl, OuraOptions.DefaultStartDate);
+        OuraOptions.DefaultCollectionsUrl);
 
     private static (OuraHttpClient Client, StubHandler Handler) Create(params Func<HttpRequestMessage, HttpResponseMessage>[] answers)
     {
@@ -46,7 +46,8 @@ public sealed class OuraHttpClientTests
 
         var url = client.AuthorizeUrl("state-1", "challenge-1", Redirect);
 
-        Assert.StartsWith("https://cloud.ouraring.com/oauth/authorize?", url.AbsoluteUri);
+        // The new portal's sign-in, which adds the external-API sign-in on its way to Oura's.
+        Assert.StartsWith("https://developer.ouraring.com/authorize?", url.AbsoluteUri);
         var query = QueryHelpers.ParseQuery(url.Query);
         Assert.Equal("code", query["response_type"]);
         Assert.Equal("client-123", query["client_id"]);
@@ -315,6 +316,8 @@ public sealed class OuraHttpClientTests
         var refused = await Assert.ThrowsAsync<OuraAccessDeniedException>(() =>
             unauthorized.GetWorkoutsAsync("secret-access-token", Start, End, ct));
         Assert.Equal(401, refused.Status);
+        Assert.Equal("Oura refused the access token for workout: “Invalid token”", refused.Message);
+        Assert.Equal(("workout", "Invalid token"), (refused.Collection, refused.Detail));
         Assert.DoesNotContain("secret-access-token", refused.Message);
 
         var denied = await Assert.ThrowsAsync<OuraAccessDeniedException>(() =>
@@ -322,7 +325,42 @@ public sealed class OuraHttpClientTests
         Assert.Equal(403, denied.Status);
         Assert.Contains("Membership required", denied.Message);
         Assert.Contains("daily_sleep", denied.Message);
+        Assert.Equal(("daily_sleep", "Membership required"), (denied.Collection, denied.Detail));
         Assert.DoesNotContain("secret-access-token", denied.Message);
+    }
+
+    [Fact]
+    public async Task A_refused_token_without_words_says_the_challenge_or_nothing()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (challenged, _) = Create(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            response.Headers.WwwAuthenticate.ParseAdd("Bearer error=\"insufficient_scope\", scope=\"extapi:daily\"");
+            return response;
+        });
+        var (silent, _) = Create(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+        var scoped = await Assert.ThrowsAsync<OuraAccessDeniedException>(() =>
+            challenged.GetDailyActivityAsync("secret-access-token", Start, End, ct));
+        Assert.Equal("daily_activity", scoped.Collection);
+        Assert.Contains("insufficient_scope", scoped.Detail);
+        Assert.Contains("insufficient_scope", scoped.Message);
+
+        var bare = await Assert.ThrowsAsync<OuraAccessDeniedException>(() =>
+            silent.GetSleepPeriodsAsync("secret-access-token", Start, End, ct));
+        Assert.Equal("Oura refused the access token for sleep.", bare.Message);
+        Assert.Null(bare.Detail);
+    }
+
+    [Fact]
+    public void The_client_says_who_is_asking_and_asks_for_json()
+    {
+        using var http = OuraHttpClient.CreateHttpClient();
+
+        Assert.Equal("LifeOS/1.0", http.DefaultRequestHeaders.UserAgent.ToString());
+        Assert.Equal("application/json", http.DefaultRequestHeaders.Accept.ToString());
+        Assert.Equal(TimeSpan.FromSeconds(30), http.Timeout);
     }
 
     [Fact]

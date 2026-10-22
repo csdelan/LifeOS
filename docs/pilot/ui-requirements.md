@@ -2964,11 +2964,6 @@ now forces it. Its answer says whether anything changed. Oura not connected or r
 is a 409 in words, and Oura down is a 502; the page's reads never call Oura, so they still
 work. Build stays `building`: the page (A4, A5) and a real ring (A6) are next.
 
-**Update (2026-10-22 — a start date, A6):** LifeOS reads Oura from 2026-10-22, the day the
-Food Log began, so activity and food feed Health XP from the same day. Nothing from before it
-is synced: the history backfill ends there (`Oura:StartDate`, activity plan §3.3). The page
-says "LifeOS reads Oura from Thu, Oct 22", and days before it read "before LifeOS read Oura".
-
 **Update (2026-10-22 — the page landed, A4):** the Activity page (`/activity`, in the nav
 after Food Log) connects Oura from its Connect card and finishes on `/activity/connected`. It
 syncs when it opens (skipped under 5 minutes), and Sync now forces one. The header says when
@@ -3163,10 +3158,11 @@ Build:      unmapped
 - "Assigning health XP (or other rewards) automatically based on the data. I don't know
   formulas yet, but this will come next." (2026-10-22)
 - Thresholds so far: 5,000 steps minimum, 7,500 goal (ACTIVITY-2).
-- "I would like to put in a cut-off begin date that only starts today, because today is when
-  I started logging food, and I want to start using both at the same time to avoid half life
-  XP contributions missing." (2026-10-22) So Oura is read from 2026-10-22 (ACTIVITY-1), and
-  activity XP can't reach back before the Food Log's first day.
+- **XP starts on 2026-10-22 (2026-10-22):** "I should clarify my earlier comment about starting Oura data today. I meant I don't want Life XP to be awarded before today. You can still collect data from before today and display it."
+  - 2026-10-22 is the day he began the Food Log, so activity and food pay Health XP from the
+    same day.
+  - Oura's history before then is still read and shown on the Activity page (ACTIVITY-1);
+    it just never pays (activity plan §3.8, question 7).
 
 **Ontology fit (Claude):**
 - _pending_ until the formulas are set. The likely shape is item-less award keys per day,

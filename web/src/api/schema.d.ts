@@ -1878,7 +1878,6 @@ export interface components {
             lastSyncError?: null | string;
             historyFrom?: null | string;
             historyDone?: boolean;
-            startDate?: null | string;
         };
         PersonRow: {
             /** Format: uuid */

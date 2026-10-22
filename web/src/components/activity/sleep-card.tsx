@@ -28,8 +28,6 @@ import {
   scoreBand,
   SLEEP_METRICS,
   sleepDayText,
-  beforeStart,
-  BEFORE_START,
   sleepValue,
   sleepValueWords,
   weekTitle,
@@ -157,7 +155,6 @@ export function SleepCard({
   const [mode, setMode] = useState<"chart" | "table">("chart");
   const titleId = useId();
   const today = summary.today;
-  const start = summary.oura.startDate;
   const { range, metric } = view;
   const days = useActivityDays(rangeFrom(range, today), today);
 
@@ -222,9 +219,7 @@ export function SleepCard({
       title: weekTitle(w.from, today),
       text:
         w.average == null
-          ? beforeStart(w.to, start)
-            ? BEFORE_START
-            : "nothing recorded"
+          ? "nothing recorded"
           : scores
             ? `${metricLabel.toLowerCase()} ${Math.round(w.average)} on average${w.partial ? " so far" : ""}, ${ouraScoreWords(w.average).toLowerCase()}`
             : `${formatHours(w.average)} asleep a night${w.partial ? " so far" : ""}`,
@@ -240,7 +235,7 @@ export function SleepCard({
         value,
         tone: value != null ? tone(value, metric) : "",
         title: dayName(day.day, today),
-        text: sleepDayText(day, metric, today, start),
+        text: sleepDayText(day, metric, today),
         detail: average != null ? `7-day average ${unit(average)}` : undefined,
         axis: day.day === today ? "Today" : formatDay(day.day),
       };

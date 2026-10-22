@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ACTIVITY_TARGETS,
-  BEFORE_START,
   bandWords,
-  beforeStart,
   contributorName,
   describeStepDay,
   describeSteps,
@@ -29,10 +27,10 @@ import {
   sleepValue,
   sleepValueWords,
   stepBand,
-  stepDayText,
   stepWeeks,
   summarizeWeek,
   syncedAgo,
+  asSentence,
   weekTitle,
   weeklyExercise,
   workoutName,
@@ -302,6 +300,19 @@ describe("syncedAgo", () => {
   });
 });
 
+describe("asSentence", () => {
+  it("ends the API's words with one period", () => {
+    expect(asSentence("Oura refused LifeOS's access token even after refreshing it.")).toBe(
+      "Oura refused LifeOS's access token even after refreshing it.",
+    );
+    expect(asSentence("Oura refused the stored sign-in")).toBe("Oura refused the stored sign-in.");
+    expect(asSentence("for daily_activity: “The token is invalid for other reasons.”")).toBe(
+      "for daily_activity: “The token is invalid for other reasons.”",
+    );
+    expect(asSentence("Oura answered “Unauthorized”")).toBe("Oura answered “Unauthorized”.");
+  });
+});
+
 describe("normalizers", () => {
   it("turns the API's string numbers into numbers and fills the defaults", () => {
     const days = normalizeActivityDays({
@@ -328,29 +339,7 @@ describe("normalizers", () => {
     expect(summary.todayWorkouts[0].seconds).toBe(600);
     expect(summary.thisWeek).toMatchObject({ averageSteps: 6_000, stepDays: 3, sessions: 0, averageSleep: null });
     expect(summary.lastWeek.averageSteps).toBeNull();
-    expect(summary.oura).toMatchObject({ state: "not_connected", connected: false, scopes: [], startDate: null });
-  });
-});
-
-describe("days before the Oura start date", () => {
-  const today = "2026-10-22";
-  const start = "2026-10-20";
-
-  it("says a day before the start date was never read, and only when it holds nothing", () => {
-    expect(beforeStart("2026-10-19", start)).toBe(true);
-    expect([beforeStart(start, start), beforeStart("2026-10-19", null)]).toEqual([false, false]);
-
-    expect(stepDayText(day("2026-10-19", null), ACTIVITY_TARGETS, today, start)).toBe(BEFORE_START);
-    expect(stepDayText(day("2026-10-19", null), ACTIVITY_TARGETS, today)).toBe("no steps recorded");
-    expect(stepDayText(day(start, null), ACTIVITY_TARGETS, today, start)).toBe("no steps recorded");
-    expect(stepDayText(day("2026-10-19", 6_000), ACTIVITY_TARGETS, today, start)).toMatch(/^6,000 steps, /);
-
-    for (const metric of ["sleep", "readiness", "asleep"] as const) {
-      expect(sleepDayText(day("2026-10-19", null), metric, today, start)).toBe(BEFORE_START);
-    }
-    expect(sleepDayText(day(start, null), "sleep", today, start)).toBe("no sleep score");
-    // A start date still to come: today hasn't been read either.
-    expect(sleepDayText(day(today, null), "sleep", today, "2026-10-25")).toBe(BEFORE_START);
+    expect(summary.oura).toMatchObject({ state: "not_connected", connected: false, scopes: [] });
   });
 });
 

@@ -98,6 +98,10 @@ internal sealed class FakeOuraClient(IClock clock) : IOuraClient
     public HashSet<string> RefusedTokens { get; } = [];
 
     public bool RefuseEveryToken { get; set; }
+
+    /// <summary>What Oura says for a token it won't take (checked live, 2026-10-22).</summary>
+    public const string InvalidTokenDetail =
+        "The access token provided is expired, revoked, malformed, or invalid for other reasons.";
     public Exception? FailReads { get; set; }
     public TimeSpan ReadDelay { get; set; }
 
@@ -138,7 +142,11 @@ internal sealed class FakeOuraClient(IClock clock) : IOuraClient
 
         if (RefuseEveryToken || RefusedTokens.Contains(accessToken))
         {
-            throw new OuraAccessDeniedException(401, "Oura refused the access token.");
+            // As OuraHttpClient words it, with Oura's own text for a bad token.
+            throw new OuraAccessDeniedException(401,
+                $"Oura refused the access token for {collection.Name}: “{InvalidTokenDetail}”",
+                collection.Name,
+                InvalidTokenDetail);
         }
 
         lock (records)

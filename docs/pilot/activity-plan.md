@@ -128,7 +128,7 @@ Checked against Oura's API v2 docs and OpenAPI spec 1.42 on 2026-10-22 (§7).
 | Which day | **Oura's own day.** Activity days start at 4 a.m.; a night counts on the morning it ends. Steps can't be re-cut to LifeOS's midnight, because Oura gives a day's total, not steps by the hour. |
 | Today | Today's steps and workouts are "so far", and last night's sleep and readiness appear once the Oura app has synced. LifeOS is never fresher than the Oura app. |
 | When it syncs | When the Activity page opens (at most once every 5 minutes), on **Sync now**, and from `bsk oura sync`. No background job in phase 1 (§3.3). |
-| **Start date** | **Oura is read from 2026-10-22**, the day Chris started the Food Log, so activity and food feed Health XP from the same day. Nothing from before it is synced (`Oura:StartDate`, §3.3). *(Changed 2026-10-22, at the start of A6: it was everything Oura has.)* |
+| History | On first connect, everything Oura has. A few MB at most. |
 | **Step thresholds** | **A minimum of 5,000 and a goal of 7,500.** More is better; less is worse. A day reads as under the minimum, at the minimum, or at the goal. |
 | Steps chart | 30 days by default, or 90: a bar per day, the 7-day average as a line, and dashed lines at 5,000 and 7,500. Bars are toned by band (under the minimum, the minimum met, the goal met). 1 year: a bar per week (Monday to Sunday) of the average a day, since 365 bars don't fit on a phone. Today is a lighter "so far" bar. |
 | **What counts as exercise** | **Only workouts Chris records himself**: entered in the Oura app (`manual`) or recorded live (`workout_heart_rate`, `live_oura_heart_rate`, `live_third_party_heart_rate`). Not counted: workouts Oura detected, confirmed or not, and **any walk** (`walking`), since its steps already count. A source Oura adds later isn't counted until it's classified. |
@@ -307,17 +307,6 @@ activity ones change on every sync. A later view that needs one can fetch it.
 - **One sync at a time:** a sync runs under a transaction-scoped advisory lock. A second
   sync waits, then finds nothing new. That covers the page opening while Sync now is
   pressed, and the API racing the CLI.
-- **The start date** (`Oura:StartDate`, 2026-10-22 by default): no sync reads or keeps
-  anything from before it.
-  - The window starts there while it's under 14 days old, and the history counts as all in
-    once it reaches it, so there's no backfill.
-  - `bsk oura sync --from` can't go before it, and says so.
-  - The API's status and `bsk oura status` say it, and the page says "LifeOS reads Oura from
-    Thu, Oct 22" while the charts' year reaches before it. Days before it read "before
-    LifeOS read Oura", not "no steps recorded".
-  - Anything LifeOS read before a start date was set stays (the record is append-only).
-  - It's a setting, not a constant, so a host can move it. `2015-01-01` reads Oura's whole
-    history.
 - **Throttle:** the page-open sync is skipped when the last sync is under 5 minutes old.
   Sync now and the CLI always run.
 - **The outcome** is kept on the connection row (`last_synced_at`, `last_sync_error`, §3.5).
@@ -522,10 +511,10 @@ The machinery is D13's. Only the rules are new.
 6. **Double counting:** a Health habit that is itself exercise or sleep would pay twice.
 7. **History:** XP only from the day phase 2 ships (recommended), or for past days too. A
    year of backfilled data paying at once would jump several levels and fill the
-   consistency window in one go. *Partly settled (2026-10-22):* LifeOS holds nothing from
-   before the start date (2026-10-22, when the Food Log began), so there's no year to pay.
-   What's left is whether the days between then and phase 2 shipping pay, as the Food
-   Log's do.
+   consistency window in one go. **Settled (2026-10-22): XP from 2026-10-22**, the day Chris
+   began the Food Log, so activity and food pay Health XP from the same day (§5). Days
+   before it are read and shown but never pay. Days from it until phase 2 ships pay when
+   it does, re-priced like the Food Log's.
 8. **Other rewards:** Gems for step streaks, Freedom, Life XP.
 9. **A background sync:** XP lands only when something syncs. If that turns out to matter,
    add a daily scheduled sync (a GitHub Actions cron, or Oura's webhooks waking the machine).
@@ -552,7 +541,7 @@ Each phase is one commit:
 | A3 | API | `ActivityReads` / `ActivityReader`, the §3.6 endpoints including the note, the page-open throttle, `gen:api`. Tests: shapes, the range limit, the throttle, `counted` and its reasons, the note's refusals as 400s, Oura's errors as clear messages. | A2 |
 | A4 | Activity page: steps and exercise | §3.7's header, connect card and return route, the Today card's steps and workouts, the shared daily-metric chart, the Steps card, the Exercise card with its workout sheet and note; `lib/exercise-rules.ts`; the mock store's activity half, notes included. Vitest, e2e, a11y in both themes and on a phone. | A3 (mock-first can start after A2) |
 | A5 | Activity page: sleep and readiness | §3.7's Sleep and readiness card, the Today card's last night, the day detail sheet. Vitest, e2e, a11y. | A4 |
-| A6 | Live on staging | The start date (2026-10-22: nothing earlier is read); `fly-setup.ps1` imports the Oura settings; Chris connects on staging; a real refresh on day one; a week of comparing the page with the Oura app, imported workouts included if there are any. | A5 |
+| A6 | Live on staging | `fly-setup.ps1` imports the Oura settings; Chris connects on staging; a real refresh on day one; the history backfills; a week of comparing the page with the Oura app, imported workouts included if there are any. | A5 |
 
 **Phase 2 (activity XP), after the formulas:**
 
@@ -619,20 +608,17 @@ note in the LifeOS activity page."
 - **Sync when the page opens, plus Sync now.** No background job until phase 2 shows it
   needs one.
 - **All history on first connect.** It's a few MB. Whether past days pay XP is phase 2's
-  question 7. *Replaced at the start of A6, below.*
+  question 7.
+
+**XP starts on 2026-10-22 (settled at the start of A6).** Chris asked: "Do A6 next. But I would like to put in a cut-off begin date that only starts today, because today is when I started logging food, and I want to start using both at the same time to avoid half life XP contributions missing."
+That was first read as a cut-off on reading Oura, and built that way. He then said: "I should clarify my earlier comment about starting Oura data today. I meant I don't want Life XP to be awarded before today. You can still collect data from before today and display it."
+
+- So all history is still read and shown, as above.
+- XP from activity, when phase 2 builds it, starts on 2026-10-22, so activity and food feed
+  Health XP from the same day (§3.8, question 7).
 - **The night is the longest `long_sleep`.** Naps add up separately.
 - **Oura's own score bands** (70 and 85) on the sleep and readiness charts, since Chris
   hasn't set his own.
-
-**Changed at the start of A6 (2026-10-22):** "Do A6 next. But I would like to put in a
-cut-off begin date that only starts today, because today is when I started logging food, and
-I want to start using both at the same time to avoid half life XP contributions missing."
-
-- So Oura is read from 2026-10-22 and nothing earlier is synced (§2, §3.3). Health XP from
-  activity and from food then cover the same days, with no stretch where only one of them
-  could pay.
-- It's the setting `Oura:StartDate`, defaulting to 2026-10-22 in code, so every host (the
-  API, `bsk`, staging and production) honours it without anything to remember.
 
 ## 6. Later
 
@@ -661,7 +647,9 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
   and old ones are removed. There's no official SDK.
 - **OAuth** ([authentication](https://cloud.ouraring.com/docs/authentication)):
   - Authorize at `https://cloud.ouraring.com/oauth/authorize`. The new portal's
-    `https://developer.ouraring.com/authorize` redirects there.
+    `https://developer.ouraring.com/authorize` redirects there, adding `prompt=consent` and
+    `acr_values=urn:se:curity:authentication:username:default_ext` (seen 2026-10-22).
+    LifeOS signs in through the portal's URL (A6).
   - Get and refresh tokens at `https://api.ouraring.com/oauth/token`.
   - Revoke at `https://api.ouraring.com/oauth/revoke?access_token=…`.
   - PKCE (S256) is supported. Codes last 10 minutes. Client credentials go in the body or in
@@ -1074,26 +1062,16 @@ plus:
 
 **A6 (started 2026-10-22; the week of comparing is still to come).** No migration.
 
-- **The start date** (§3.3, asked for at the start of A6):
-  - `Oura:StartDate` is a `YYYY-MM-DD` setting, 2026-10-22 when it isn't set
-    (`OuraOptions.DefaultStartDate`). A malformed one, or one before 2015-01-01, fails
-    startup in words.
-  - The sync's floor is the later of the start date and 2015-01-01:
-    - The recent window starts there while the start date is under 14 days old.
-    - The history loop stops there, and reaching it marks the history done.
-    - A start date still to come reads nothing yet.
-    - `--from` before it is refused, naming `Oura:StartDate`.
-    - History read before a start date was set stays, and the backfill ends.
-  - `GET /api/oura/status` and `GET /api/activity/summary`'s `oura` carry `startDate`
-    (null when Oura isn't set up), and `bsk oura status` prints "Reads from".
-  - The page says "LifeOS reads Oura from Thu, Oct 22, so the days before it are empty"
-    while the year reaches before it. In the readouts, Tables and year weeks, those days read
-    "before LifeOS read Oura".
+- **A sync cut-off, built and withdrawn the same day** (§5): at the start of A6, Chris's ask
+  read as "read nothing from Oura before 2026-10-22". It went out as `Oura:StartDate`
+  (`30cb9f1`, deployed). He then said he meant XP, not data, so it was reverted: the history
+  is read and shown as planned, and phase 2's XP starts on 2026-10-22 (§3.8, question 7).
+  Nothing had synced in between.
 - **`fly-setup.ps1`** imports `Oura__ClientId`, `Oura__ClientSecret` and
-  `Integrations__TokenKey` from the env file, and `Oura__StartDate` when it's set.
+  `Integrations__TokenKey` from the env file.
   - It takes all three or none, and checks that the key is 32 bytes of base64.
   - Names match without regard to case, so `.env`'s `Oura__ClientID` is found.
-  - Its summary says Oura is on or off, and from when, without printing a value.
+  - Its summary says Oura is on or off without printing a value.
   - When Oura is on, the steps left by hand add the redirect URI to register with Oura.
 - **On staging:**
   - The three secrets were staged on `lifeos-mz55-staging` from `.env` with
@@ -1103,22 +1081,47 @@ plus:
     loaded opens the same tokens.
   - Main was pushed (A0–A6), and CI ran the tests, applied 0036–0037 to staging and
     deployed.
-  - Checked from outside without signing in:
-    - `/health/ready` answers ready, which it can't do without a well-formed token key.
-    - The three secrets show as deployed.
-    - The served bundle has the start date's words.
-    - `/api/oura/status` asks for sign-in.
-    - Fly's logs show no errors.
-  - Whether the page offers Connect Oura, rather than saying Oura isn't set up, is for
-    Chris's first look.
+  - Checked from outside without signing in: `/health/ready` answers ready (it can't
+    without a well-formed token key), the three secrets show as deployed, `/api/oura/status`
+    asks for sign-in, and Fly's logs show no errors.
+- **The first connect (2026-10-22):** Chris registered the redirect URI and connected. Oura
+  granted `daily` and `workout` with 30-day tokens. The first sync's read was refused (401),
+  the refresh worked, and the read was refused again, so the connection asked to reconnect.
+  - LifeOS had dropped Oura's reason, so the cause isn't known yet.
+  - A made-up token gets Oura's `{"detail": "The access token provided is expired, revoked,
+    malformed, or invalid for other reasons."}`, with or without a `User-Agent`, so the
+    missing headers weren't it.
+  - Third-party reports say Oura also answers 401 when a collection needs a scope the token
+    lacks, and names the scope. But the five collections LifeOS reads all need `daily` or
+    `workout`, which were granted.
+  - Agents don't read Chris's real Oura data (§7), so his token wasn't used to probe Oura.
+    LifeOS now keeps what Oura says instead.
+  - **The likely cause:** LifeOS sent the browser straight to
+    `cloud.ouraring.com/oauth/authorize`. The new portal's documented
+    `developer.ouraring.com/authorize` redirects there, but adds `prompt=consent` and
+    `acr_values=…default_ext`: by its name, the sign-in for the external API. A token signed
+    in without it may be one the data API won't take. Checked with a made-up client id, the
+    redirect keeps every parameter LifeOS sends, PKCE included. Oura's token URL stays
+    `api.ouraring.com/oauth/token`; the portal has none of its own.
+- **What changed after it:**
+  - `Oura:AuthorizeUrl` defaults to `https://developer.ouraring.com/authorize`. Without a
+    release, a host can go back with the `Oura__AuthorizeUrl` secret.
+  - A 401 on a collection carries the collection and Oura's `detail`, or the
+    `WWW-Authenticate` challenge when there's no body
+    (`OuraAccessDeniedException.Collection`, `.Detail`).
+  - The reconnect reason names both. For example: "Oura refused LifeOS's access token for
+    daily_activity even after refreshing it: “…”".
+  - Requests send `User-Agent: LifeOS/1.0` and `Accept: application/json`, as Oura's
+    documented clients do.
+  - The page's banner no longer ends a reason that has its own period with a second one
+    (`asSentence`).
 - **Left for Chris:**
-  1. Register `https://lifeos-mz55-staging.fly.dev/activity/connected` under the app's
-     Redirect URIs at developer.ouraring.com.
-  2. Connect Oura on staging's Activity page.
-  3. On day one, force a real refresh with `bsk oura refresh`, with `.env` loaded. If Oura
+  1. Reconnect Oura on staging's Activity page. Oura asks for consent again. If the read is
+     refused again, the banner and `bsk oura status` now say which collection and why.
+  2. On day one, force a real refresh with `bsk oura refresh`, with `.env` loaded. If Oura
      refuses it, the refresh URL moves to `moi.ouraring.com` with the `Oura__RefreshUrl`
      secret (A1).
-  4. For a week, compare the page with the Oura app, imported workouts included if there
+  3. For a week, compare the page with the Oura app, imported workouts included if there
      are any.
 - **Not built yet:** the `bsk oura forget` purge (§7), which this plan says is best done
   before real data reaches staging.
