@@ -211,6 +211,80 @@ test.describe("accessibility", () => {
     expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
   });
 
+  // The Activity page (ACTIVITY-1..4): the steps and exercise charts, then the Tables and the
+  // year of weeks with the workouts not counted, then a workout's sheet, in both themes.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /activity with charts, tables and a workout, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/activity");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      const steps = page.getByRole("region", { name: "Steps" });
+      const exercise = page.getByRole("region", { name: "Exercise" });
+      await expect(steps.getByRole("group", { name: /^Steps by day/ })).toBeVisible({ timeout: 10_000 });
+      await expect(exercise.getByRole("group", { name: /^Minutes of counted exercise/ })).toBeVisible();
+      await expect(page.getByText(/^Synced from Oura /)).toBeVisible();
+      // A bar read out, so the readout's tooltip is scanned too.
+      await steps.getByRole("group", { name: /^Steps by day/ }).focus();
+      const charts = await scan();
+      expect(charts, JSON.stringify(charts, null, 2)).toEqual([]);
+
+      await steps.getByRole("button", { name: "Table" }).click();
+      await expect(steps.getByRole("table")).toBeVisible();
+      await exercise.getByRole("button", { name: "Table" }).click();
+      await exercise.getByRole("button", { name: /^Show \d+ not counted$/ }).click();
+      await expect(exercise.getByText(/^Not counted: /).first()).toBeVisible();
+      const tables = await scan();
+      expect(tables, JSON.stringify(tables, null, 2)).toEqual([]);
+
+      await steps.getByRole("button", { name: "1 year" }).click();
+      await steps.getByRole("button", { name: "Chart" }).click();
+      await expect(steps.getByRole("group", { name: /^Average steps a day by week/ })).toBeVisible();
+      // The last range stays up, dimmed, while the year loads: scan it settled.
+      await expect(steps.locator("[aria-busy=true]")).toHaveCount(0);
+      const year = await scan();
+      expect(year, JSON.stringify(year, null, 2)).toEqual([]);
+
+      await exercise.getByTestId("workout-row").first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("textbox", { name: "Note" }).fill("Steady");
+      await sheet.getByRole("textbox", { name: "Note" }).press("Enter");
+      await expect(sheet.getByText("Saved")).toBeVisible();
+      const workout = await scan();
+      expect(workout, JSON.stringify(workout, null, 2)).toEqual([]);
+    });
+  }
+
+  // The Activity page on a phone: one column, and a workout's sheet rising from the bottom.
+  test("axe serious/critical: /activity on a phone with a workout open", async ({ page }) => {
+    const scan = async () => {
+      const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    };
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/activity");
+    await expect(page.getByRole("region", { name: "Steps" }).getByRole("group", { name: /^Steps by day/ })).toBeVisible({
+      timeout: 10_000,
+    });
+    const width = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(width).toBeLessThanOrEqual(375);
+    const phone = await scan();
+    expect(phone, JSON.stringify(phone, null, 2)).toEqual([]);
+
+    await page.getByRole("region", { name: "Exercise" }).getByTestId("workout-row").first().click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("textbox", { name: "Note" })).toBeVisible();
+    const box = await sheet.boundingBox();
+    expect(box && box.y + box.height).toBeGreaterThan(800);
+    const open = await scan();
+    expect(open, JSON.stringify(open, null, 2)).toEqual([]);
+  });
+
   // States the routes above don't reach: an Established habit checked off on the Habits
   // page, and Today's Maintaining group open (REWARD-2 maintenance).
   test("axe serious/critical: maintained habits", async ({ page }) => {

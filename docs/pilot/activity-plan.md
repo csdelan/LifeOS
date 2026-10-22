@@ -721,7 +721,7 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
 - [x] A1 — Oura connection (migration 0036)
 - [x] A2 — Sync and storage (migration 0037)
 - [x] A3 — API
-- [ ] A4 — Activity page: steps and exercise
+- [x] A4 — Activity page: steps and exercise
 - [ ] A5 — Activity page: sleep and readiness
 - [ ] A6 — Live on staging
 - [ ] A7 — Phase 2 Q&A + rules
@@ -885,3 +885,83 @@ reader connection), with no migration. As planned, plus:
     working and the throttle not hiding a reconnect
   - on `ActivityReads`: today not under the minimum until it's over, and a Monday with
     nothing averaged yet
+
+**A4 (2026-10-22).** The Activity page's header, Connect card, return route, Today card,
+Steps card and Exercise card, with the workout sheet and its note. Mock first, then live
+against the API. As planned, plus:
+
+- **Opening the page syncs once** when Oura is connected (the API skips it under 5 minutes),
+  and Sync now forces one. The header says "Synced from Oura 3 min ago", refreshed every
+  minute.
+- **Banners, in words:** Oura needs reconnecting (with Reconnect Oura), a scope Oura didn't
+  allow, a sync that failed now, and the last sync's error. The data still shows under them.
+- **The Connect card** says what LifeOS reads and that it's read-only. On a host without
+  Oura set up, it names `Oura__ClientId` and `Oura__ClientSecret` instead of offering the
+  button. Data synced before a disconnect stays on the page under the card.
+- **`/activity/connected`** posts the code once, so a second render can't spend it. Then it
+  says "Oura connected" and replaces itself with `/activity`. A refusal, Oura's own error or
+  a missing code shows "Oura isn't connected" with Try again and Back to Activity.
+- **The Today card:** steps so far as the big number, on a meter toward the goal with the
+  minimum marked, and the verdict as a sentence ("1,188 under the minimum."). Last night's
+  sleep and readiness each have Oura's band in words (85 and up Optimal, 70 Good, below that
+  Pay attention). Time asleep is shown against time in bed. Today's counted workouts open
+  their sheet.
+- **The Steps card:**
+  - The range (30 days, 90 days, 1 year) is remembered in the browser.
+  - The year is a bar per week, Monday to Sunday (the average a day), with no average line.
+  - The tiles say "of N days with steps" and "of N full days", so a gap or today isn't
+    counted against him.
+  - A day with 2 hours or more off the ring says so in its readout and in the Table.
+- **One chart component**, `components/charts/daily-metric-chart.tsx`, on
+  `DomainDailyChart`'s pattern. The Character page's chart is left as it is. It has:
+  - bars toned by band, and today's (or this week's) bar hatched as "so far"
+  - the 7-day average line, broken where there's no average
+  - the dotted minimum and dashed goal, each labelled on the axis
+  - a legend
+  - readouts on hover and with the arrow keys, Home and End
+  - Enter or a click opens a bar when the card gives it somewhere to go (A5's day sheet)
+  - `MetricTable`, the Table view for both cards
+- **Colour:** the three step bands are one green ramp, light to dark. It was checked with the
+  dataviz validator against the card in both themes, with its own dark steps. The average
+  line is the ember chart colour. Its colour-blind separation from the bars is 6–8, which is
+  only allowed with a second cue, so the line also has a 2px halo in the card colour and is a
+  line, not a bar. Every bar's band is also said in words. In forced-colours mode, bars draw
+  in `CanvasText`.
+- **The Exercise card:**
+  - Sessions, minutes and calories against last week.
+  - Minutes per week over 12 weeks, as a chart or a Table, with this week hatched.
+  - The counted workouts grouped by week. "Show N not counted" opens the rest, muted, each
+    with "Not counted:" and its reason.
+- **The workout sheet** opens on the right on a desktop and from the bottom on a phone. It
+  opens on the sheet rather than the note box, so a phone's keyboard doesn't jump up. It
+  says "Counts as exercise." or "Not counted as exercise:" and the reason, then every field
+  with the source and when it synced. The note:
+  - saves on Enter, when the box loses focus, and when the sheet closes, one save after
+    another
+  - shows "Saving…", then "Saved", with a counter out of 140
+  - has Clear
+  - shows a refusal in words under the box
+- **`lib/exercise-rules.ts`** mirrors `ExerciseRules` and is tested on the kernel's 14-row
+  table. **`lib/activity.ts`** holds the bands, the words and the weeks, tested on the
+  kernel's hand-worked weeks.
+- **The mock store's activity half** (`lib/mock/activity-store.ts`):
+  - 120 days, with two gaps, days off the ring, naps, and today at 60%
+  - 40 workouts of every source, and a note on a run
+  - Oura connected and synced two hours ago
+  - It refuses what the API refuses, in the same words, and skips a page sync under 5
+    minutes the same way.
+- **Checked live** against the API on a throwaway database, with a fake Oura on localhost
+  serving synthetic records in Oura's shape (no real Oura data), and every call answered
+  200:
+  - the connect round trip: Oura's sign-in, the code exchange, the first sync with its
+    history
+  - the page-open sync skipped under 5 minutes
+  - Sync now
+  - a note saved and shown under its row
+  - the 1-year view
+- **Tests:** Vitest for the rules, the words and weeks, the mock store, the chart and the
+  page (StrictMode included, so the connect posts once). The e2e golden path covers steps
+  1–4; step 5, the sleep chart, comes with A5. The a11y scan covers the page in both themes
+  and on a phone, with the year view, the tables and the sheet open.
+- **Left for later:** a Disconnect button (the API has `POST /api/oura/disconnect`), and the
+  Sleep and readiness card with the day sheet (A5).

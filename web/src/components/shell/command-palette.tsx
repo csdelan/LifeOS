@@ -12,6 +12,7 @@ import {
 import { useSubjects } from "@/lib/queries";
 import { typeLabel } from "@/lib/production-ui-types";
 import {
+  ActivityIcon,
   CompassIcon,
   GiftIcon,
   MedalIcon,
@@ -77,6 +78,9 @@ export function CommandPalette({
           </CommandItem>
           <CommandItem onSelect={() => go("/food")}>
             <UtensilsIcon /> Food Log
+          </CommandItem>
+          <CommandItem onSelect={() => go("/activity")}>
+            <ActivityIcon /> Activity
           </CommandItem>
           <CommandItem onSelect={() => go("/rewards")}>
             <GiftIcon /> Rewards

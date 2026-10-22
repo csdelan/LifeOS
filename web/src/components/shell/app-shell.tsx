@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import {
+  ActivityIcon,
   ClipboardCheckIcon,
   CompassIcon,
   GiftIcon,
@@ -87,6 +88,7 @@ const NAV = [
   { to: "/tasks", label: "Tasks", icon: ListTodoIcon },
   { to: "/habits", label: "Habits", icon: RepeatIcon },
   { to: "/food", label: "Food Log", icon: UtensilsIcon },
+  { to: "/activity", label: "Activity", icon: ActivityIcon },
   { to: "/rewards", label: "Rewards", icon: GiftIcon },
   { to: "/character", label: "Character", icon: MedalIcon },
   { to: "/vision", label: "Vision", icon: EyeIcon },

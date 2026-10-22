@@ -61,6 +61,11 @@ export const qk = {
   foodDay: (date: string) => ["food", "day", date] as const,
   foodDays: (from: string, to: string) => ["food", "days", from, to] as const,
   foodRecent: ["food", "recent"] as const,
+  // Every Activity read sits under ["activity"], so a sync, a connect or a note refreshes them all.
+  activity: ["activity"] as const,
+  activitySummary: ["activity", "summary"] as const,
+  activityDays: (from: string, to: string) => ["activity", "days", from, to] as const,
+  activityWorkouts: (from: string, to: string) => ["activity", "workouts", from, to] as const,
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
@@ -298,6 +303,36 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       announceEarned(earned);
       if (earned.awards.length > 0) await invalidate(qc, [qk.food, qk.wallet, qk.ledger, qk.domains]);
       return earned;
+    },
+
+    async authorizeOura(redirectUri) {
+      return client.authorizeOura(redirectUri);
+    },
+
+    async connectOura(code, state) {
+      try {
+        return await client.connectOura(code, state);
+      } finally {
+        await invalidate(qc, [qk.activity]);
+      }
+    },
+
+    async syncActivity(force) {
+      let ran = true;
+      try {
+        const result = await client.syncActivity(force);
+        ran = result.ran;
+        return result;
+      } finally {
+        // A skipped sync changed nothing; a refused one may have marked the connection.
+        if (ran) await invalidate(qc, [qk.activity]);
+      }
+    },
+
+    async setWorkoutNote(workout, text) {
+      const row = await client.setWorkoutNote(workout, text);
+      await invalidate(qc, [qk.activity]);
+      return row;
     },
 
     async recur(habit, spec) {
@@ -736,6 +771,34 @@ export function useFoodRecent(enabled = true) {
     queryKey: qk.foodRecent,
     queryFn: () => reads().foodRecent(30),
     enabled,
+  });
+}
+
+/** The Activity page's top: today so far, this week against last, and the Oura connection. */
+export function useActivitySummary() {
+  return useQuery({
+    queryKey: qk.activitySummary,
+    queryFn: () => reads().activitySummary(),
+  });
+}
+
+/** Every day from `from` to `to`: the step chart; the last range stays up while the next loads. */
+export function useActivityDays(from: string, to: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.activityDays(from, to),
+    queryFn: () => reads().activityDays(from, to),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Workouts from `from` to `to`, counted or not: the Exercise card. */
+export function useActivityWorkouts(from: string, to: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.activityWorkouts(from, to),
+    queryFn: () => reads().activityWorkouts(from, to),
+    enabled,
+    placeholderData: keepPreviousData,
   });
 }
 

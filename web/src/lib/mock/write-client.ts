@@ -49,6 +49,12 @@ import {
   setTags,
 } from "@/lib/mock/store";
 import { getState } from "@/lib/mock/store";
+import {
+  mockAuthorizeOura,
+  mockConnectOura,
+  mockSetWorkoutNote,
+  mockSyncActivity,
+} from "@/lib/mock/activity-store";
 
 const wait = (ms = 90) => new Promise((r) => setTimeout(r, ms));
 
@@ -256,6 +262,32 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       const earned = mockSettleFood();
       if (earned.awards.length > 0) bump();
       return earned;
+    },
+
+    async authorizeOura(redirectUri) {
+      await wait();
+      return mockAuthorizeOura(redirectUri);
+    },
+
+    async connectOura(code, state) {
+      await wait();
+      const status = mockConnectOura(code, state);
+      bump();
+      return status;
+    },
+
+    async syncActivity(force) {
+      await wait();
+      const result = mockSyncActivity(force);
+      if (result.ran) bump();
+      return result;
+    },
+
+    async setWorkoutNote(workout, text) {
+      await wait();
+      const row = mockSetWorkoutNote(workout, text);
+      bump();
+      return row;
     },
 
     async recur(habit, spec) {

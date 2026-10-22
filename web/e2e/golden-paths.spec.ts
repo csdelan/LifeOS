@@ -265,6 +265,44 @@ test.describe("golden paths", () => {
     await expect(page.getByRole("list", { name: /^Entries for / }).getByRole("listitem")).toHaveCount(2);
   });
 
+  test("Activity: steps over 90 days as a table, the workouts not counted, and a note on a run", async ({ page }) => {
+    await page.goto("/activity");
+    const steps = page.getByRole("region", { name: "Steps" });
+    await expect(steps.getByRole("group", { name: /^Steps by day, last 30 days/ })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/^Synced from Oura /)).toBeVisible();
+
+    // Steps: 90 days, then the Table, a row a day.
+    await steps.getByRole("button", { name: "90 days" }).click();
+    await expect(steps.getByRole("group", { name: /^Steps by day, last 90 days/ })).toBeVisible();
+    await steps.getByRole("button", { name: "Table" }).click();
+    await expect(steps.getByTestId("metric-row")).toHaveCount(90);
+    await expect(steps.getByTestId("metric-row").first()).toContainText("Today");
+
+    // Exercise: the workouts that don't count, each with its reason.
+    const exercise = page.getByRole("region", { name: "Exercise" });
+    await expect(exercise.getByTestId("workout-row").first()).toBeVisible();
+    await expect(exercise.getByText(/^Not counted: /)).toHaveCount(0);
+    await exercise.getByRole("button", { name: /^Show \d+ not counted$/ }).click();
+    await expect(exercise.getByText("Not counted: A walk: it's in your steps").first()).toBeVisible();
+    await expect(exercise.getByText("Not counted: Detected by Oura").first()).toBeVisible();
+
+    // A note on a run, saved on Enter, under its row once the sheet closes.
+    const run = exercise
+      .getByTestId("workout-row")
+      .filter({ hasText: "Running" })
+      .filter({ hasNot: page.getByTestId("workout-note") })
+      .first();
+    await run.click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("Counts as exercise.")).toBeVisible();
+    await sheet.getByRole("textbox", { name: "Note" }).fill("Negative splits, felt easy");
+    await sheet.getByRole("textbox", { name: "Note" }).press("Enter");
+    await expect(sheet.getByText("Saved")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await expect(exercise.getByTestId("workout-note").filter({ hasText: "Negative splits, felt easy" })).toBeVisible();
+  });
+
   test("Food Log: log an entry with a photo, see it full size, and remove it", async ({ page }) => {
     await page.goto("/food");
     await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });

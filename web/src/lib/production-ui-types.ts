@@ -1112,6 +1112,147 @@ export interface FoodWriteResult extends Earned {
   days: string[];
 }
 
+// ---------------------------------------------------------------------------
+// Activity (ACTIVITY-1..4, activity plan §3.6–§3.7): `/api/oura` and `/api/activity`. Days
+// are Oura's (`yyyy-MM-dd`): an activity day starts at 4 a.m., and a night counts on the
+// morning it ends. Times are ISO instants; durations are in seconds.
+// ---------------------------------------------------------------------------
+
+/**
+ * `not_configured` (no Oura app on this server), `not_connected`, `reconnect` (Oura refused
+ * the stored sign-in) or `connected`.
+ */
+export type OuraState = "not_configured" | "not_connected" | "reconnect" | "connected";
+
+/** The Oura connection as the page shows it. It never carries a token. */
+export interface OuraStatus {
+  state: OuraState;
+  configured: boolean;
+  connected: boolean;
+  needsReconnect: boolean;
+  reconnectReason: string | null;
+  connectedAt: string | null;
+  expiresAt: string | null;
+  scopes: string[];
+  missingScopes: string[];
+  lastSyncedAt: string | null;
+  lastSyncError: string | null;
+  /** The earliest day the history has been read back to. */
+  historyFrom: string | null;
+  historyDone: boolean;
+}
+
+/** Under the 5,000 minimum, at the minimum, or at the 7,500 goal. */
+export type StepBand = "under" | "minimum" | "goal";
+
+/** One Oura day: its steps and band, its activity, and the sleep and readiness on it. */
+export interface ActivityDayRow {
+  day: string;
+  steps: number | null;
+  band: StepBand | null;
+  activeCalories: number | null;
+  totalCalories: number | null;
+  walkingM: number | null;
+  highS: number | null;
+  mediumS: number | null;
+  lowS: number | null;
+  nonWearS: number | null;
+  activityScore: number | null;
+  sleepScore: number | null;
+  readinessScore: number | null;
+  asleepS: number | null;
+  inBedS: number | null;
+  bedAt: string | null;
+  wokeAt: string | null;
+  napCount: number;
+  napAsleepS: number;
+}
+
+export interface ActivityDaysRead {
+  from: string;
+  to: string;
+  today: string;
+  minimumSteps: number;
+  goalSteps: number;
+  /** Every day of the range, oldest first; a day with nothing is all null. */
+  days: ActivityDayRow[];
+}
+
+/** A live Oura workout: whether it counts as exercise and, if not, why; and Chris's note. */
+export interface WorkoutRow {
+  id: string;
+  day: string;
+  /** Oura's own value (`running`, `tableTennis`, …), which it keeps adding to. */
+  activity: string;
+  label: string | null;
+  startedAt: string;
+  endedAt: string;
+  seconds: number;
+  calories: number | null;
+  distanceM: number | null;
+  intensity: string | null;
+  source: string;
+  counted: boolean;
+  reason: string | null;
+  note: string | null;
+  noteAt: string | null;
+  syncedAt: string;
+}
+
+export interface ActivityWorkoutsRead {
+  from: string;
+  to: string;
+  today: string;
+  /** Newest first, counted or not. */
+  workouts: WorkoutRow[];
+}
+
+/**
+ * A week, Monday to Sunday. Today is still going: it counts toward `goalDays` once it gets
+ * there, but isn't averaged or counted under the minimum until it's over.
+ */
+export interface ActivityWeekRow {
+  from: string;
+  to: string;
+  averageSteps: number | null;
+  /** The days averaged: those before today with a step count. */
+  stepDays: number;
+  goalDays: number;
+  underDays: number;
+  sessions: number;
+  exerciseSeconds: number;
+  exerciseCalories: number;
+  averageSleep: number | null;
+  averageReadiness: number | null;
+}
+
+/** Today so far (with last night), today's workouts, this week against last, and the connection. */
+export interface ActivitySummaryRead {
+  today: string;
+  minimumSteps: number;
+  goalSteps: number;
+  todaySoFar: ActivityDayRow;
+  todayWorkouts: WorkoutRow[];
+  thisWeek: ActivityWeekRow;
+  lastWeek: ActivityWeekRow;
+  oura: OuraStatus;
+}
+
+/** What the page's sync did: skipped when LifeOS synced under 5 minutes ago, unless forced. */
+export interface ActivitySyncResult {
+  ran: boolean;
+  /** Something was written: the cards should be read again. */
+  changed: boolean;
+  from: string | null;
+  to: string | null;
+  records: number;
+  written: number;
+  voided: number;
+  historyFrom: string | null;
+  historyDone: boolean;
+  lastSyncedAt: string | null;
+}
+
 /**
  * The write client the UI calls. Every method maps to a bsk verb / API endpoint.
  * Mock all of these for the first pass; return shapes match the real API.
@@ -1161,6 +1302,20 @@ export interface LifeOsWriteClient {
   closeFoodDay(day?: string): Promise<FoodWriteResult>;
   /** Settle every food day with the ledger, which the Food Log does when it opens. */
   settleFood(): Promise<Earned>;
+  /**
+   * Begin connecting Oura (`POST /api/oura/authorize`): answers the URL to send the browser
+   * to. Oura sends it back to `redirectUri`, the page's `/activity/connected`.
+   */
+  authorizeOura(redirectUri: string): Promise<string>;
+  /** Finish connecting with what Oura sent back (`POST /api/oura/connect`); runs the first sync. */
+  connectOura(code: string, state: string): Promise<OuraStatus>;
+  /**
+   * The Activity page's sync (`POST /api/activity/sync`): skipped when LifeOS synced under 5
+   * minutes ago, unless `force` (Sync now).
+   */
+  syncActivity(force?: boolean): Promise<ActivitySyncResult>;
+  /** Set a workout's one-line note (at most 140 characters); `""` clears it. */
+  setWorkoutNote(workout: string, text: string): Promise<WorkoutRow>;
   /** Set structured recurrence on a Habit (GEN-3). */
   recur(habit: string, spec: RecurrenceSpec): Promise<void>;
   involve(subject: string, person: string, role: PersonRole, remove?: boolean): Promise<void>;

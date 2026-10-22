@@ -3,6 +3,7 @@ import {
   revokeIfBlobUrl,
 } from "@/lib/artifacts";
 import { deriveTitle } from "@/lib/capture";
+import { resetActivityStore } from "@/lib/mock/activity-store";
 import { addDays, nowIso, slugify, todayIso, startOfWeekMonday, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
 import {
   CALORIES_MAX,
@@ -137,6 +138,7 @@ function emit() {
 export function resetStore() {
   revokeArtifacts(state);
   state = createSeed();
+  resetActivityStore();
   emit();
 }
 

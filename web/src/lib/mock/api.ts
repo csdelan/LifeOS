@@ -15,6 +15,9 @@ import {
   type MapLens,
 } from "@/lib/derive";
 import type {
+  ActivityDaysRead,
+  ActivitySummaryRead,
+  ActivityWorkoutsRead,
   AreaRow,
   ArtifactRecord,
   DomainDaysRead,
@@ -68,6 +71,7 @@ import {
   mockDomainReport,
   withBounty,
 } from "@/lib/mock/store";
+import { mockActivityDays, mockActivitySummary, mockActivityWorkouts } from "@/lib/mock/activity-store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 
@@ -149,6 +153,15 @@ export interface LifeOsReads {
   foodDays(from?: string, to?: string): Promise<FoodDaysRead>;
   /** The newest version of each recent entry by name, for "Log again". */
   foodRecent(limit?: number): Promise<MealRow[]>;
+  /**
+   * The Activity page's top (ACTIVITY-1..4): today so far with last night, today's workouts,
+   * this week against last, and the Oura connection.
+   */
+  activitySummary(): Promise<ActivitySummaryRead>;
+  /** Every day of a range (the 30 days through today by default), oldest first: the charts. */
+  activityDays(from?: string, to?: string): Promise<ActivityDaysRead>;
+  /** Workouts on those days (the last 12 whole weeks by default), newest first, counted or not. */
+  activityWorkouts(from?: string, to?: string): Promise<ActivityWorkoutsRead>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /**
@@ -338,6 +351,21 @@ export const mockReads: LifeOsReads = {
   async foodRecent(limit?: number): Promise<MealRow[]> {
     await wait();
     return mockFoodRecent(limit);
+  },
+
+  async activitySummary(): Promise<ActivitySummaryRead> {
+    await wait();
+    return mockActivitySummary();
+  },
+
+  async activityDays(from?: string, to?: string): Promise<ActivityDaysRead> {
+    await wait();
+    return mockActivityDays(from, to);
+  },
+
+  async activityWorkouts(from?: string, to?: string): Promise<ActivityWorkoutsRead> {
+    await wait();
+    return mockActivityWorkouts(from, to);
   },
 
   async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {

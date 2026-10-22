@@ -2964,6 +2964,13 @@ now forces it. Its answer says whether anything changed. Oura not connected or r
 is a 409 in words, and Oura down is a 502; the page's reads never call Oura, so they still
 work. Build stays `building`: the page (A4, A5) and a real ring (A6) are next.
 
+**Update (2026-10-22 — the page landed, A4):** the Activity page (`/activity`, in the nav
+after Food Log) connects Oura from its Connect card and finishes on `/activity/connected`. It
+syncs when it opens (skipped under 5 minutes), and Sync now forces one. The header says when
+it last synced. Reconnecting, a missing scope and a failed sync each show as a banner in
+words, with the data still under it. Checked live against a fake Oura on localhost with
+synthetic data. Build stays `building`: a real ring (A6) is next.
+
 **Workflow (Chris):**
 - "I would like to pull Oura ring data into my app, and add a page for showing health related
   stuff from Oura ring, including workouts and steps." (2026-10-22)
@@ -3015,6 +3022,14 @@ range of up to 731 days, each with its steps and band, with the two thresholds a
 days under the minimum. Today counts toward the goal once it gets there, but isn't averaged or
 called under the minimum until it's over. Build stays `building`: the Steps card (A4) is next.
 
+**Update (2026-10-22 — Steps card landed, A4):** the Activity page's Steps card charts 30
+days, 90 days or a year (a bar per week). Each bar is toned by band, with today hatched as
+"so far", the 7-day average as a line, and the dotted minimum and dashed goal. Hover or the
+arrow keys read a day in words, and a Table lists them. The tiles are the 7-day average, this
+week against last, days at the goal, days under the minimum and the best day. The Today card
+shows steps so far on a meter, with the verdict as a sentence. Build stays `building`: the
+numbers from a real ring (A6) are next.
+
 **Workflow (Chris):**
 - "Steps is a key indicator that I want to actually show a trend chart for." (2026-10-22)
 - "Daily ideal step goal should be 7500. More is better. But minimum should be 5000. Less is
@@ -3047,6 +3062,13 @@ workout, newest first, with whether it counts and why not, and its note; with no
 last 12 weeks. `POST /api/activity/workouts/{id}/note` sets or clears the note, refusing a line
 break or more than 140 characters in words. The summary counts this week's and last week's
 sessions, time and calories. Build stays `building`: the Exercise card (A4) is next.
+
+**Update (2026-10-22 — Exercise card landed, A4):** the Exercise card shows this week's
+sessions, minutes and calories against last week, minutes per week over 12 weeks (chart or
+Table), and the counted workouts grouped by week. "Show N not counted" lists the rest with
+their reasons. A row opens a sheet with every field and the one-line note, which saves on
+Enter, on leaving the box, or on closing the sheet. Build stays `building`: real workouts
+(A6) are next.
 
 **Workflow (Chris):**
 - "Logged exercise is another key thing to record and track also. … Assumption: All of my
@@ -3091,6 +3113,11 @@ asleep and bed and wake times; `GET /api/activity/day` answers one day in full, 
 scores' contributors, the night's stages and heart rate, and the naps. The summary has last
 night and each week's average sleep and readiness. Build stays `building`: the Sleep and
 readiness card (A5) is next.
+
+**Update (2026-10-22 — last night on the Today card, A4):** the Today card shows last
+night's sleep and readiness scores with Oura's band in words, and time asleep against time
+in bed. Or, when the night hasn't arrived, "Open the Oura app to sync last night." Build
+stays `building`: the Sleep and readiness card (A5) is next.
 
 **Workflow (Chris):**
 - "I forgot about sleep altogether!!! It's important. I want to track sleep score also, and

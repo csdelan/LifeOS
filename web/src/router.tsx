@@ -13,6 +13,7 @@ import { HabitsPage } from "@/pages/habits-page";
 import { RewardsPage } from "@/pages/rewards-page";
 import { CharacterPage } from "@/pages/character-page";
 import { FoodPage } from "@/pages/food-page";
+import { ActivityConnectedPage, ActivityPage } from "@/pages/activity-page";
 import { VisionPage } from "@/pages/vision-page";
 import { ReviewsPage } from "@/pages/reviews-page";
 import { PeoplePage } from "@/pages/people-page";
@@ -58,6 +59,14 @@ export type RewardsSearch = {
 export type FoodSearch = {
   view?: "week" | "month";
   date?: string;
+};
+
+/** What Oura sends back to `/activity/connected`: a code and the state, or an error. */
+export type ActivityConnectedSearch = {
+  code?: string;
+  state?: string;
+  error?: string;
+  error_description?: string;
 };
 
 export type CharacterSearch = {
@@ -176,6 +185,26 @@ const foodRoute = createRoute({
   component: FoodPage,
 });
 
+const activityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/activity",
+  component: ActivityPage,
+});
+
+const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : undefined);
+
+const activityConnectedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/activity/connected",
+  validateSearch: (search: Record<string, unknown>): ActivityConnectedSearch => ({
+    code: text(search.code),
+    state: text(search.state),
+    error: text(search.error),
+    error_description: text(search.error_description),
+  }),
+  component: ActivityConnectedPage,
+});
+
 const characterRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/character",
@@ -220,6 +249,8 @@ const routeTree = rootRoute.addChildren([
   tasksRoute,
   habitsRoute,
   foodRoute,
+  activityRoute,
+  activityConnectedRoute,
   rewardsRoute,
   characterRoute,
   visionRoute,

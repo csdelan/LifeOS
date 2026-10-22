@@ -1,16 +1,20 @@
 import { toast } from "sonner";
 import { api, unwrap } from "@/lib/live/http";
 import type {
+  ActivitySyncResult,
   BountyResult,
   CreatedSubject,
   HabitTargetResult,
   LifeOsWriteClient,
+  OuraStatus,
   Redemption,
   RenamedSubject,
   RenamedTag,
   RewardRow,
   TimerActionResult,
+  WorkoutRow,
 } from "@/lib/production-ui-types";
+import { normalizeOuraStatus, normalizeSync, normalizeWorkout } from "@/lib/activity";
 import { renamedMessage } from "@/lib/production-ui-types";
 import { normalizeTimer } from "@/lib/live/reads";
 import { normalizeEarned, normalizeProgress } from "@/lib/domains";
@@ -201,6 +205,33 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async settleFood() {
       return normalizeEarned(await unwrap(api().POST("/api/food/settle")));
+    },
+
+    async authorizeOura(redirectUri) {
+      const result = (await unwrap(
+        api().POST("/api/oura/authorize", { body: { redirectUri } }),
+      )) as unknown as { authorizeUrl: string };
+      return result.authorizeUrl;
+    },
+
+    async connectOura(code, state) {
+      return normalizeOuraStatus(
+        (await unwrap(api().POST("/api/oura/connect", { body: { code, state } }))) as unknown as OuraStatus,
+      );
+    },
+
+    async syncActivity(force) {
+      return normalizeSync(
+        (await unwrap(api().POST("/api/activity/sync", { body: { force: force ?? false } }))) as unknown as ActivitySyncResult,
+      );
+    },
+
+    async setWorkoutNote(workout, text) {
+      return normalizeWorkout(
+        (await unwrap(
+          api().POST("/api/activity/workouts/{id}/note", { params: { path: { id: workout } }, body: { text } }),
+        )) as unknown as WorkoutRow,
+      );
     },
 
     async timer(task, action) {

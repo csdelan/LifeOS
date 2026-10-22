@@ -1,0 +1,417 @@
+/**
+ * The mock store's activity half (ACTIVITY-1..4, activity plan §3.7): about 120 days of steps,
+ * sleep and readiness, and 40 workouts of every source, walks and detections included, all
+ * relative to today and the same on every load. It answers as `/api/oura` and `/api/activity`
+ * do — the thresholds, `counted` and its reasons, this week against last, the note's
+ * refusals, the page's sync skipped under 5 minutes — so the page behaves the same on either.
+ * Its sync changes nothing.
+ */
+import {
+  ACTIVITY_TARGETS,
+  NOTE_MAX,
+  stepBand,
+  summarizeWeek,
+} from "@/lib/activity";
+import { addDays, nowIso, startOfWeekMonday, todayIso } from "@/lib/dates";
+import { exerciseVerdict } from "@/lib/exercise-rules";
+import type {
+  ActivityDayRow,
+  ActivityDaysRead,
+  ActivitySummaryRead,
+  ActivitySyncResult,
+  ActivityWorkoutsRead,
+  OuraStatus,
+  WorkoutRow,
+} from "@/lib/production-ui-types";
+
+/** How many days the seed holds, through today. */
+export const SEEDED_DAYS = 120;
+
+/** The widest range a read answers, in days (the API's `ActivityReads.MaxRangeDays`). */
+export const MAX_RANGE_DAYS = 731;
+
+/** A sync on opening the page is skipped when the last was this recent. */
+export const PAGE_SYNC_MS = 5 * 60_000;
+
+interface ActivityState {
+  oura: OuraStatus;
+  /** Keyed by day. */
+  days: Map<string, ActivityDayRow>;
+  /** Newest first. */
+  workouts: WorkoutRow[];
+  pendingState: string | null;
+}
+
+let seeded: ActivityState | null = null;
+
+/** Seeded on first use, so "today" is the day it's first read. */
+function store(): ActivityState {
+  return (seeded ??= seedActivity());
+}
+
+export function resetActivityStore() {
+  seeded = null;
+}
+
+/** Test seam: put the connection in any state (not connected, reconnect, a sync error…). */
+export function setMockOura(patch: Partial<OuraStatus>) {
+  const state = store();
+  state.oura = { ...state.oura, ...patch };
+}
+
+// ---------------------------------------------------------------------------
+// The seed
+// ---------------------------------------------------------------------------
+
+/** A small deterministic generator, so a day's numbers are the same on every load. */
+function random(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+/** An instant on `day` at local `hh:mm`. */
+function at(day: string, hour: number, minute = 0): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y, m - 1, d, hour, minute).toISOString();
+}
+
+function emptyDay(day: string): ActivityDayRow {
+  return {
+    day,
+    steps: null,
+    band: null,
+    activeCalories: null,
+    totalCalories: null,
+    walkingM: null,
+    highS: null,
+    mediumS: null,
+    lowS: null,
+    nonWearS: null,
+    activityScore: null,
+    sleepScore: null,
+    readinessScore: null,
+    asleepS: null,
+    inBedS: null,
+    bedAt: null,
+    wokeAt: null,
+    napCount: 0,
+    napAsleepS: 0,
+  };
+}
+
+function seedDay(day: string, ago: number, today: string): ActivityDayRow {
+  const r = random(ago * 7_919 + 17);
+  const row = emptyDay(day);
+  // Two days without the ring at all: nothing recorded.
+  if (ago === 23 || ago === 61) return row;
+
+  const weekday = new Date(`${day}T12:00:00`).getDay();
+  const weekend = weekday === 0 || weekday === 6;
+  let steps = Math.round(3_200 + r() * 7_800 + (weekend ? 1_500 : 0));
+  // Every so often a day the ring sat on the charger for hours.
+  const offRing = ago % 17 === 5;
+  if (offRing) steps = Math.round(steps * 0.55);
+  // Today is still going.
+  if (day === today) steps = Math.round(steps * 0.6);
+
+  row.steps = steps;
+  row.band = stepBand(steps);
+  row.activeCalories = Math.round(steps * 0.045 + r() * 60);
+  row.totalCalories = 2_050 + row.activeCalories;
+  row.walkingM = Math.round(steps * 0.76);
+  row.highS = Math.round(r() * 1_200);
+  row.mediumS = Math.round(600 + r() * 2_400);
+  row.lowS = Math.round(5_400 + r() * 7_200);
+  row.nonWearS = offRing ? Math.round(3 * 3_600 + r() * 3_600) : Math.round(r() * 1_800);
+  row.activityScore = Math.round(62 + r() * 34);
+
+  // Last night counts on the morning it ended.
+  row.sleepScore = Math.round(58 + r() * 36);
+  row.readinessScore = Math.round(55 + r() * 40);
+  const inBedMinutes = Math.round(390 + r() * 150);
+  const asleepMinutes = Math.round(inBedMinutes * (0.82 + r() * 0.12));
+  const bed = at(addDays(day, -1), 22, Math.round(r() * 90));
+  row.bedAt = bed;
+  row.wokeAt = new Date(Date.parse(bed) + inBedMinutes * 60_000).toISOString();
+  row.inBedS = inBedMinutes * 60;
+  row.asleepS = asleepMinutes * 60;
+  if (ago % 9 === 4) {
+    row.napCount = 1;
+    row.napAsleepS = Math.round(20 + r() * 25) * 60;
+  }
+  return row;
+}
+
+interface SeedWorkout {
+  ago: number;
+  hour: number;
+  activity: string;
+  source: string;
+  minutes: number;
+  label?: string;
+  distanceKm?: number;
+  intensity?: "easy" | "moderate" | "hard";
+  note?: string;
+}
+
+/** The last fortnight by hand, so the page always has a run, a walk and a detection to show. */
+const RECENT: SeedWorkout[] = [
+  { ago: 0, hour: 7, activity: "running", source: "manual", minutes: 32, distanceKm: 5.2, intensity: "moderate" },
+  { ago: 1, hour: 12, activity: "walking", source: "manual", minutes: 35, distanceKm: 2.6, intensity: "easy", label: "Lunch loop" },
+  { ago: 2, hour: 18, activity: "strengthTraining", source: "workout_heart_rate", minutes: 45, intensity: "hard" },
+  { ago: 3, hour: 7, activity: "running", source: "manual", minutes: 41, distanceKm: 6.4, intensity: "hard", note: "Hill repeats, left knee fine" },
+  { ago: 3, hour: 17, activity: "walking", source: "autodetected", minutes: 28, distanceKm: 2.1, intensity: "easy" },
+  { ago: 4, hour: 9, activity: "cycling", source: "autodetected", minutes: 25, distanceKm: 8.3, intensity: "moderate" },
+  { ago: 5, hour: 6, activity: "yoga", source: "live_oura_heart_rate", minutes: 30, intensity: "easy" },
+  { ago: 7, hour: 8, activity: "cycling", source: "manual", minutes: 62, distanceKm: 24.5, intensity: "moderate" },
+  { ago: 8, hour: 19, activity: "tableTennis", source: "confirmed", minutes: 50, intensity: "moderate" },
+  { ago: 9, hour: 7, activity: "running", source: "live_third_party_heart_rate", minutes: 38, distanceKm: 6, intensity: "moderate" },
+  { ago: 10, hour: 13, activity: "padel_v2", source: "garmin_import", minutes: 60, intensity: "hard" },
+  { ago: 11, hour: 18, activity: "swimming", source: "manual", minutes: 40, distanceKm: 1.6, intensity: "moderate" },
+  { ago: 12, hour: 10, activity: "hiking", source: "manual", minutes: 95, distanceKm: 7.8, intensity: "moderate", label: "Ridge trail" },
+];
+
+const OLDER = ["running", "cycling", "strengthTraining", "walking", "yoga", "rowing", "running", "swimming"] as const;
+const OLDER_SOURCES = ["manual", "manual", "workout_heart_rate", "manual", "autodetected", "manual", "confirmed", "live_oura_heart_rate"] as const;
+
+function seedWorkouts(today: string): WorkoutRow[] {
+  const seeds = [...RECENT];
+  // 27 more, every four days back from a fortnight ago.
+  for (let i = 0; i < 27; i++) {
+    const r = random(i * 104_729 + 3);
+    const activity = OLDER[i % OLDER.length];
+    seeds.push({
+      ago: 14 + i * 4,
+      hour: 6 + Math.round(r() * 12),
+      activity,
+      source: OLDER_SOURCES[i % OLDER_SOURCES.length],
+      minutes: Math.round(25 + r() * 50),
+      distanceKm: activity === "running" || activity === "cycling" || activity === "walking" ? Math.round((2 + r() * 10) * 10) / 10 : undefined,
+      intensity: (["easy", "moderate", "hard"] as const)[Math.floor(r() * 3)],
+    });
+  }
+
+  return seeds
+    .map((s, i): WorkoutRow => {
+      const day = addDays(today, -s.ago);
+      const startedAt = at(day, s.hour, (i * 7) % 60);
+      const verdict = exerciseVerdict(s.source, s.activity);
+      return {
+        id: `mock-workout-${String(i + 1).padStart(2, "0")}-${s.activity.toLowerCase()}`,
+        day,
+        activity: s.activity,
+        label: s.label ?? null,
+        startedAt,
+        endedAt: new Date(Date.parse(startedAt) + s.minutes * 60_000).toISOString(),
+        seconds: s.minutes * 60,
+        calories: s.activity === "yoga" ? null : Math.round(s.minutes * (s.intensity === "hard" ? 11 : 8)),
+        distanceM: s.distanceKm != null ? Math.round(s.distanceKm * 1_000) : null,
+        intensity: s.intensity ?? null,
+        source: s.source,
+        counted: verdict.counted,
+        reason: verdict.reason,
+        note: s.note ?? null,
+        noteAt: s.note ? at(day, 21) : null,
+        syncedAt: at(day, 22),
+      };
+    })
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+}
+
+function seedActivity(): ActivityState {
+  const today = todayIso();
+  const days = new Map<string, ActivityDayRow>();
+  for (let ago = SEEDED_DAYS - 1; ago >= 0; ago--) {
+    const day = addDays(today, -ago);
+    days.set(day, seedDay(day, ago, today));
+  }
+
+  return {
+    oura: {
+      state: "connected",
+      configured: true,
+      connected: true,
+      needsReconnect: false,
+      reconnectReason: null,
+      connectedAt: at(addDays(today, -SEEDED_DAYS), 20),
+      expiresAt: new Date(Date.now() + 20 * 3_600_000).toISOString(),
+      scopes: ["daily", "workout"],
+      missingScopes: [],
+      // Two hours ago, so opening the page syncs.
+      lastSyncedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+      lastSyncError: null,
+      historyFrom: addDays(today, -SEEDED_DAYS + 1),
+      historyDone: true,
+    },
+    days,
+    workouts: seedWorkouts(today),
+    pendingState: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Reads
+// ---------------------------------------------------------------------------
+
+function checkRange(from: string, to: string) {
+  if (to < from) throw new Error(`The range ends (${to}) before it starts (${from}).`);
+  const days = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+  if (days > MAX_RANGE_DAYS) throw new Error(`Ask for up to ${MAX_RANGE_DAYS} days at a time.`);
+}
+
+function daysBetween(from: string, to: string): ActivityDayRow[] {
+  const rows: ActivityDayRow[] = [];
+  for (let day = from; day <= to; day = addDays(day, 1)) {
+    rows.push({ ...(store().days.get(day) ?? emptyDay(day)) });
+  }
+  return rows;
+}
+
+export function mockOuraStatus(): OuraStatus {
+  return { ...store().oura };
+}
+
+/** Every day from `from` to `to` (default the 30 days through today), oldest first. */
+export function mockActivityDays(from?: string, to?: string): ActivityDaysRead {
+  const today = todayIso();
+  const end = to ?? today;
+  const start = from ?? addDays(end, -29);
+  checkRange(start, end);
+  return { from: start, to: end, today, ...ACTIVITY_TARGETS, days: daysBetween(start, end) };
+}
+
+/** Live workouts on those days (default the last 12 whole weeks), newest first, counted or not. */
+export function mockActivityWorkouts(from?: string, to?: string): ActivityWorkoutsRead {
+  const today = todayIso();
+  const end = to ?? today;
+  const start = from ?? addDays(startOfWeekMonday(end), -7 * 11);
+  checkRange(start, end);
+  return {
+    from: start,
+    to: end,
+    today,
+    workouts: store().workouts.filter((w) => w.day >= start && w.day <= end).map((w) => ({ ...w })),
+  };
+}
+
+/** Today so far, today's workouts, this week against last (Monday to Sunday), and the connection. */
+export function mockActivitySummary(): ActivitySummaryRead {
+  const today = todayIso();
+  const monday = startOfWeekMonday(today);
+  const lastMonday = addDays(monday, -7);
+  const days = daysBetween(lastMonday, today);
+  const workouts = store().workouts.filter((w) => w.day >= lastMonday && w.day <= today);
+  return {
+    today,
+    ...ACTIVITY_TARGETS,
+    todaySoFar: days[days.length - 1],
+    todayWorkouts: workouts.filter((w) => w.day === today).map((w) => ({ ...w })),
+    thisWeek: summarizeWeek(monday, addDays(monday, 6), days, workouts, today),
+    lastWeek: summarizeWeek(lastMonday, addDays(monday, -1), days, workouts, today),
+    oura: mockOuraStatus(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Writes
+// ---------------------------------------------------------------------------
+
+const NOT_SET_UP = "Oura isn't set up on this server: Oura__ClientId and Oura__ClientSecret are missing.";
+
+/** Begin connecting: the mock "Oura" sends the browser straight back with a code. */
+export function mockAuthorizeOura(redirectUri: string): string {
+  if (!store().oura.configured) throw new Error(NOT_SET_UP);
+  const pending = `mock-state-${Math.random().toString(36).slice(2, 10)}`;
+  store().pendingState = pending;
+  const url = new URL(redirectUri);
+  url.searchParams.set("code", "mock-code");
+  url.searchParams.set("state", pending);
+  return url.toString();
+}
+
+/** Finish connecting; like the API, a state that wasn't asked for is refused. */
+export function mockConnectOura(code: string, connectState: string): OuraStatus {
+  if (!code.trim()) throw new Error("Connecting Oura takes the code Oura sent back.");
+  if (!store().pendingState || connectState !== store().pendingState) {
+    throw new Error("That sign-in wasn't started here, or it expired. Connect Oura again.");
+  }
+  store().pendingState = null;
+  const now = nowIso();
+  store().oura = {
+    ...store().oura,
+    state: "connected",
+    connected: true,
+    needsReconnect: false,
+    reconnectReason: null,
+    connectedAt: now,
+    lastSyncedAt: now,
+    lastSyncError: null,
+  };
+  return mockOuraStatus();
+}
+
+/** The page's sync: skipped under 5 minutes unless forced; it changes nothing here. */
+export function mockSyncActivity(force = false): ActivitySyncResult {
+  const oura = store().oura;
+  if (!oura.configured) throw new Error(NOT_SET_UP);
+  if (!oura.connected) throw new Error("Oura isn't connected: press Connect Oura on the Activity page.");
+  if (oura.needsReconnect) throw new Error("Oura needs reconnecting: press Reconnect Oura on the Activity page.");
+
+  const last = oura.lastSyncedAt ? Date.parse(oura.lastSyncedAt) : null;
+  if (!force && last != null && Date.now() - last >= 0 && Date.now() - last < PAGE_SYNC_MS) {
+    return {
+      ran: false,
+      changed: false,
+      from: null,
+      to: null,
+      records: 0,
+      written: 0,
+      voided: 0,
+      historyFrom: null,
+      historyDone: false,
+      lastSyncedAt: oura.lastSyncedAt,
+    };
+  }
+
+  const today = todayIso();
+  const now = nowIso();
+  store().oura = { ...oura, lastSyncedAt: now, lastSyncError: null };
+  return {
+    ran: true,
+    changed: false,
+    from: addDays(today, -14),
+    to: addDays(today, 1),
+    records: [...store().days.values()].filter((d) => d.day >= addDays(today, -14)).length,
+    written: 0,
+    voided: 0,
+    historyFrom: oura.historyFrom,
+    historyDone: oura.historyDone,
+    lastSyncedAt: now,
+  };
+}
+
+/** Set or clear a workout's note, refusing what the API refuses, in its words. */
+export function mockSetWorkoutNote(id: string, text: string): WorkoutRow {
+  const note = text.trim();
+  if (/[\p{Cc}\u2028\u2029]/u.test(note)) {
+    throw new Error("A workout note is one line: take out the line break.");
+  }
+  if (note.length > NOTE_MAX) {
+    throw new Error(`A workout note is up to ${NOTE_MAX} characters; that one is ${note.length}.`);
+  }
+  const i = store().workouts.findIndex((w) => w.id === id);
+  if (i < 0) {
+    throw new Error(`LifeOS holds no workout '${id}': it may have been deleted in the Oura app, or not synced yet.`);
+  }
+  const workout = store().workouts[i];
+  if ((workout.note ?? "") !== note) {
+    store().workouts[i] = { ...workout, note: note || null, noteAt: note ? nowIso() : null };
+  }
+  return { ...store().workouts[i] };
+}
