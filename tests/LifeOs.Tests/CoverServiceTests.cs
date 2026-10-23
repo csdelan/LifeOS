@@ -22,7 +22,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
 
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private ServiceProvider Provider(FakeUnsplash? unsplash)
+    private ServiceProvider Provider(FakeUnsplashClient? unsplash)
     {
         var services = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString);
         services.AddSingleton<IClock>(new TimerTestClock(Now));
@@ -65,7 +65,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [InlineData(SubjectTypes.Project)]
     public async Task A_photo_becomes_the_cover_from_what_unsplash_says(string type)
     {
-        var unsplash = new FakeUnsplash();
+        var unsplash = new FakeUnsplashClient();
         await using var provider = Provider(unsplash);
         var subject = await Create(provider, type);
 
@@ -78,7 +78,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
         Assert.Equal(change.Cover, cover);
         Assert.Equal(Cover.Unsplash, cover.Source);
         Assert.Equal("Dwu85P9SOIk", cover.PhotoId);
-        Assert.Equal(FakeUnsplash.Photo.RawUrl, cover.Url);
+        Assert.Equal(FakeUnsplashClient.Photo.RawUrl, cover.Url);
         Assert.Equal("#6e633a", cover.Color);
         Assert.Equal((2448, 3264), (cover.Width, cover.Height));
         Assert.Equal("man drinking coffee", cover.Alt);
@@ -89,13 +89,13 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
         Assert.Equal(Now, cover.SetAt);
 
         Assert.Equal(["Dwu85P9SOIk"], unsplash.Looked);
-        Assert.Equal([FakeUnsplash.Photo.DownloadLocation!], unsplash.Downloads);
+        Assert.Equal([FakeUnsplashClient.Photo.DownloadLocation!], unsplash.Downloads);
     }
 
     [Fact]
     public async Task A_position_can_be_given_with_the_photo()
     {
-        await using var provider = Provider(new FakeUnsplash());
+        await using var provider = Provider(new FakeUnsplashClient());
         var goal = await Create(provider, SubjectTypes.Goal);
 
         var change = await provider.GetRequiredService<CoverService>()
@@ -108,13 +108,13 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task Picking_another_photo_replaces_the_cover_and_counts_again()
     {
-        var unsplash = new FakeUnsplash();
+        var unsplash = new FakeUnsplashClient();
         await using var provider = Provider(unsplash);
         var covers = provider.GetRequiredService<CoverService>();
         var goal = await Create(provider, SubjectTypes.Goal);
 
         await covers.SetFromUnsplashAsync(goal.Urn, "Dwu85P9SOIk", cancellationToken: Ct);
-        unsplash.Next = FakeUnsplash.Photo with { Id = "xBRQfR2bqNI", Photographer = "Annie Spratt" };
+        unsplash.Next = FakeUnsplashClient.Photo with { Id = "xBRQfR2bqNI", Photographer = "Annie Spratt" };
         await covers.SetFromUnsplashAsync(goal.Urn, "xBRQfR2bqNI", cancellationToken: Ct);
 
         Assert.Equal("xBRQfR2bqNI", Cover.Parse(await StoredCover(goal.Id))!.PhotoId);
@@ -126,7 +126,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [InlineData(SubjectTypes.Area)]
     public async Task Other_types_are_refused_before_asking_unsplash(string type)
     {
-        var unsplash = new FakeUnsplash();
+        var unsplash = new FakeUnsplashClient();
         await using var provider = Provider(unsplash);
         var subject = await Create(provider, type);
 
@@ -145,7 +145,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [InlineData("Dwu85P9SOIk", -5)]
     public async Task A_malformed_photo_id_or_position_is_refused_before_anything(string photoId, int? position)
     {
-        var unsplash = new FakeUnsplash();
+        var unsplash = new FakeUnsplashClient();
         await using var provider = Provider(unsplash);
         var goal = await Create(provider, SubjectTypes.Goal);
 
@@ -159,7 +159,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task A_photo_unsplash_doesnt_have_writes_nothing()
     {
-        var unsplash = new FakeUnsplash
+        var unsplash = new FakeUnsplashClient
         {
             Failure = new UnsplashException(UnsplashFailure.NotFound, "That photo is no longer on Unsplash.")
         };
@@ -177,7 +177,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task An_answer_pointing_off_unsplash_is_refused_and_writes_nothing()
     {
-        var unsplash = new FakeUnsplash { Next = FakeUnsplash.Photo with { RawUrl = "https://example.com/photo.jpg" } };
+        var unsplash = new FakeUnsplashClient { Next = FakeUnsplashClient.Photo with { RawUrl = "https://example.com/photo.jpg" } };
         await using var provider = Provider(unsplash);
         var goal = await Create(provider, SubjectTypes.Goal);
 
@@ -192,7 +192,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task A_download_counter_that_fails_leaves_the_cover_set_and_says_so()
     {
-        var unsplash = new FakeUnsplash
+        var unsplash = new FakeUnsplashClient
         {
             DownloadFailure = new UnsplashException(UnsplashFailure.RateLimited, "Unsplash's hourly limit is used up. Try again in a few minutes.")
         };
@@ -210,9 +210,9 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task Tidies_what_unsplash_says_into_what_a_cover_keeps()
     {
-        var unsplash = new FakeUnsplash
+        var unsplash = new FakeUnsplashClient
         {
-            Next = FakeUnsplash.Photo with
+            Next = FakeUnsplashClient.Photo with
             {
                 Color = null,
                 AltDescription = "  ",
@@ -234,7 +234,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task Moving_changes_only_the_position_and_tells_unsplash_nothing()
     {
-        var unsplash = new FakeUnsplash();
+        var unsplash = new FakeUnsplashClient();
         await using var provider = Provider(unsplash);
         var covers = provider.GetRequiredService<CoverService>();
         var value = await Create(provider, SubjectTypes.Value);
@@ -252,7 +252,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task Moving_without_a_cover_or_out_of_range_is_refused()
     {
-        await using var provider = Provider(new FakeUnsplash());
+        await using var provider = Provider(new FakeUnsplashClient());
         var covers = provider.GetRequiredService<CoverService>();
         var goal = await Create(provider, SubjectTypes.Goal);
 
@@ -267,7 +267,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task Clearing_removes_the_cover_and_says_whether_there_was_one()
     {
-        await using var provider = Provider(new FakeUnsplash());
+        await using var provider = Provider(new FakeUnsplashClient());
         var covers = provider.GetRequiredService<CoverService>();
         var project = await Create(provider, SubjectTypes.Project);
         await covers.SetFromUnsplashAsync(project.Urn, "Dwu85P9SOIk", cancellationToken: Ct);
@@ -280,7 +280,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task Without_a_key_searching_and_setting_say_unsplash_isnt_set_up_but_the_rest_works()
     {
-        await using var withKey = Provider(new FakeUnsplash());
+        await using var withKey = Provider(new FakeUnsplashClient());
         var goal = await Create(withKey, SubjectTypes.Goal);
         await withKey.GetRequiredService<CoverService>().SetFromUnsplashAsync(goal.Urn, "Dwu85P9SOIk", cancellationToken: Ct);
 
@@ -302,7 +302,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task Search_squeezes_the_words_and_checks_the_page()
     {
-        var unsplash = new FakeUnsplash();
+        var unsplash = new FakeUnsplashClient();
         await using var provider = Provider(unsplash);
         var covers = provider.GetRequiredService<CoverService>();
 
@@ -322,7 +322,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task Bsk_set_refuses_the_cover_key_either_way()
     {
-        await using var provider = Provider(new FakeUnsplash());
+        await using var provider = Provider(new FakeUnsplashClient());
         var attributes = provider.GetRequiredService<AttributeService>();
         var goal = await Create(provider, SubjectTypes.Goal);
         await provider.GetRequiredService<CoverService>().SetFromUnsplashAsync(goal.Urn, "Dwu85P9SOIk", cancellationToken: Ct);
@@ -339,7 +339,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task Other_attribute_edits_and_renames_leave_the_cover_alone()
     {
-        await using var provider = Provider(new FakeUnsplash());
+        await using var provider = Provider(new FakeUnsplashClient());
         var goal = await Create(provider, SubjectTypes.Goal);
         var cover = (await provider.GetRequiredService<CoverService>()
             .SetFromUnsplashAsync(goal.Urn, "Dwu85P9SOIk", cancellationToken: Ct)).Cover;
@@ -355,7 +355,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [Fact]
     public async Task A_hand_edited_cover_reads_as_none_and_can_still_be_cleared()
     {
-        await using var provider = Provider(new FakeUnsplash());
+        await using var provider = Provider(new FakeUnsplashClient());
         var covers = provider.GetRequiredService<CoverService>();
         var goal = await Create(provider, SubjectTypes.Goal);
         await provider.GetRequiredService<ISubjectRepository>().UpdateAttributesAsync(
@@ -365,59 +365,5 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
         await Assert.ThrowsAsync<InvalidOperationException>(() => covers.MoveAsync(goal.Urn, 10, Ct));
         Assert.True((await covers.ClearAsync(goal.Urn, Ct)).HadCover);
         Assert.Null(await StoredCover(goal.Id));
-    }
-
-    /// <summary>Unsplash, as the service sees it: one photo by default, every call recorded.</summary>
-    private sealed class FakeUnsplash : IUnsplashClient
-    {
-        public static readonly UnsplashPhoto Photo = new(
-            "Dwu85P9SOIk",
-            "https://images.unsplash.com/photo-1417325384643-aac51acc9e5d?ixid=M3w2NTQ3",
-            "#6E633A",
-            2448,
-            3264,
-            "A man drinking a coffee.",
-            "man drinking coffee",
-            "Joe Example",
-            "https://unsplash.com/@exampleuser",
-            "https://unsplash.com/photos/Dwu85P9SOIk",
-            new Uri("https://api.unsplash.com/photos/Dwu85P9SOIk/download?ixid=M3w2NTQ3"));
-
-        public UnsplashPhoto Next { get; set; } = Photo;
-
-        public UnsplashException? Failure { get; init; }
-
-        public UnsplashException? DownloadFailure { get; init; }
-
-        public List<string> Looked { get; } = [];
-
-        public List<Uri> Downloads { get; } = [];
-
-        public List<(string Query, int Page, int PerPage)> Searched { get; } = [];
-
-        public string AppName => "lifeos";
-
-        public Task<UnsplashSearchPage> SearchAsync(string query, int page, int perPage, CancellationToken cancellationToken = default)
-        {
-            Searched.Add((query, page, perPage));
-            return Task.FromResult(new UnsplashSearchPage(1, 1, [Next]));
-        }
-
-        public Task<UnsplashPhoto> GetPhotoAsync(string photoId, CancellationToken cancellationToken = default)
-        {
-            Looked.Add(photoId);
-            return Failure is null ? Task.FromResult(Next) : Task.FromException<UnsplashPhoto>(Failure);
-        }
-
-        public Task TrackDownloadAsync(Uri downloadLocation, CancellationToken cancellationToken = default)
-        {
-            if (DownloadFailure is not null)
-            {
-                return Task.FromException(DownloadFailure);
-            }
-
-            Downloads.Add(downloadLocation);
-            return Task.CompletedTask;
-        }
     }
 }

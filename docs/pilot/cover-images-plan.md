@@ -354,7 +354,7 @@ Read 2026-10-23.
 
 - [x] C0 — Requirements (COVER-1 to COVER-3, D15) + this plan
 - [x] C1 — Kernel: the cover attribute, the Unsplash client, `bsk cover`
-- [ ] C2 — API, the security policy and the key on Fly
+- [x] C2 — API, the security policy and the key on Fly
 - [ ] C3 — Picker and banner
 - [ ] C4 — Card images
 - [ ] C5 — Live on staging
@@ -399,3 +399,46 @@ Read 2026-10-23.
   - `bsk set cover=…` was refused, and a missing photo answered in words.
   - The fake saw `Client-ID` and `Accept-Version: v1` on every request, one download count
     on set, and no call on move.
+
+**C2 (2026-10-23).** As planned, except where noted:
+
+- **Endpoints** are in `src/LifeOs.Api/Http/CoverEndpoints.cs` (tag "Covers"), and their
+  shapes are in `Read/CoverModels.cs`. A subject can be named by id, urn or title, as in
+  every other write.
+- **Two answers differ from §3.4:**
+  - `POST /api/cover` and `/api/cover/position` answer `{ subject, cover, downloadCounted,
+    downloadProblem }`, not the bare cover. The page can then say when the download count
+    failed, though the cover is set.
+  - `POST /api/cover/clear` answers 200 with `{ subject, removed }`, not 204. That matches
+    the API's other writes (none answers 204), and `removed` says whether there was a cover.
+- **Search** answers `query` (the words as searched, spaces squeezed) and `page` too. It
+  checks the words even without a key, so a blank search is a 400 either way. `thumbUrl`
+  adds `&fit=max`, so a small photo is never stretched.
+- **Errors:** `NotSetUp` is 409, `NotFound` is 404, and Unsplash's other failures are 502,
+  each with C1's words. Asking to move a cover that isn't there, or for a type that can't
+  have one, is a 400.
+- **The cover on the reads.** `cover` (`CoverRead`) is on `SubjectListItem` (the list and
+  `/list-item`) and `SubjectDetail`. It's always null for a type other than Value, Goal or
+  Project, and for a cover in the wrong shape.
+  - The list reads give the cover its own Dapper split column, `cover_json`, after
+    `bounty_json`. Dapper hands back a null object for a split whose first column is null,
+    so a cover sharing the bounty's split would vanish on every subject without a bounty
+    of its own.
+  - The credit links use `Unsplash__AppName`, the same as the CLI.
+- **Security policy:** `img-src 'self' data: blob: https://images.unsplash.com`.
+  `connect-src` is unchanged. A test checks both, and that Development sends no policy.
+- **`fly-setup.ps1`** imports `Unsplash__AccessKey`, and `Unsplash__AppName` when it's set.
+  It refuses a key with spaces, an app name without a key, or a malformed app name. It
+  prints "Covers ON" or "Covers OFF". `.env.example` lists both settings.
+- **`gen:api`** regenerated `web/src/api/schema.d.ts`; it only adds the cover shapes and
+  routes.
+- **Tests:**
+  - `CoverEndpointTests` (Postgres, with `FakeUnsplashClient`, now shared with
+    `CoverServiceTests`). It covers:
+    - search without a key, and its refusals
+    - search paging and thumbnails
+    - set by id and by title, then the list item and detail, with and without a bounty
+    - move and clear
+    - refusals in words, including a photo that's gone (404) and the hourly limit (502)
+    - a malformed stored cover reading as none
+  - `ApiHostTests.Csp_lets_cover_images_load_from_unsplash_and_nothing_more`.

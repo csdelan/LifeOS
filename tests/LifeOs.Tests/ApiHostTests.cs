@@ -111,6 +111,24 @@ public sealed class ApiHostTests
     }
 
     [Fact]
+    public void Csp_lets_cover_images_load_from_unsplash_and_nothing_more()
+    {
+        var options = new SupabaseAuthOptions { Issuer = Issuer };
+        options.Normalize();
+        var directives = SecurityHeaders.BuildContentSecurityPolicy(options, includeStrictCsp: true)
+            .Split("; ")
+            .ToDictionary(d => d.Split(' ')[0], d => d);
+
+        Assert.Equal("img-src 'self' data: blob: https://images.unsplash.com", directives["img-src"]);
+        // The browser never calls Unsplash's API: the picker searches through ours.
+        Assert.DoesNotContain("unsplash", directives["connect-src"], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("default-src 'self'", directives["default-src"]);
+
+        // Development sends no policy at all.
+        Assert.Equal("", SecurityHeaders.BuildContentSecurityPolicy(options, includeStrictCsp: false));
+    }
+
+    [Fact]
     public void Spa_fallback_does_not_capture_api_or_health()
     {
         Assert.True(SpaFallback.IsReserved("/api/subjects"));

@@ -18,7 +18,9 @@ namespace LifeOs.Api.Read;
 /// <c>bsk.is_archived</c> on <c>v_subject</c>. Together that means a status or
 /// archive write is visible on the next read without a <c>bsk rebuild</c>.
 /// </remarks>
-public sealed class SubjectReader(string connectionString)
+/// <param name="connectionString">The reader connection.</param>
+/// <param name="coverAppName">The <c>utm_source</c> on a cover's links back to Unsplash (COVER-1).</param>
+public sealed class SubjectReader(string connectionString, string coverAppName = Cover.DefaultAppName)
 {
     private NpgsqlConnection Open()
     {
@@ -44,7 +46,7 @@ public sealed class SubjectReader(string connectionString)
     public IReadOnlyList<SubjectListItem> QuerySubjects(string? type, bool includeArchived = false)
     {
         using var db = Open();
-        return db.Query<SubjectListItem, BountyText, SubjectListItem>(
+        return db.Query<SubjectListItem, BountyText, CoverText, SubjectListItem>(
             """
             SELECT s.id, s.urn, s.type, s.title,
                    c.status,
@@ -62,7 +64,8 @@ public sealed class SubjectReader(string connectionString)
                    s.next_review_at,
                    s.attributes->>'person_kind' AS person_kind,
                    (s.attributes->>'vision_order')::int AS vision_order,
-                   s.attributes->>'bounty' AS bounty_json
+                   s.attributes->>'bounty' AS bounty_json,
+                   s.attributes->>'cover' AS cover_json
             FROM bsk.v_subject s
             LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = s.id
             LEFT JOIN bsk.v_area a ON a.urn = s.area
@@ -72,13 +75,13 @@ public sealed class SubjectReader(string connectionString)
             """,
             WithHeadline,
             new { type, includeArchived },
-            splitOn: "bounty_json").AsList();
+            splitOn: "bounty_json,cover_json").AsList();
     }
 
     public SubjectListItem? GetListItem(Guid id)
     {
         using var db = Open();
-        return db.Query<SubjectListItem, BountyText, SubjectListItem>(
+        return db.Query<SubjectListItem, BountyText, CoverText, SubjectListItem>(
             """
             SELECT s.id, s.urn, s.type, s.title,
                    c.status,
@@ -96,7 +99,8 @@ public sealed class SubjectReader(string connectionString)
                    s.next_review_at,
                    s.attributes->>'person_kind' AS person_kind,
                    (s.attributes->>'vision_order')::int AS vision_order,
-                   s.attributes->>'bounty' AS bounty_json
+                   s.attributes->>'bounty' AS bounty_json,
+                   s.attributes->>'cover' AS cover_json
             FROM bsk.v_subject s
             LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = s.id
             LEFT JOIN bsk.v_area a ON a.urn = s.area
@@ -104,7 +108,7 @@ public sealed class SubjectReader(string connectionString)
             """,
             WithHeadline,
             new { id },
-            splitOn: "bounty_json").FirstOrDefault();
+            splitOn: "bounty_json,cover_json").FirstOrDefault();
     }
 
     public SubjectDetail? GetSubject(Guid id)
@@ -127,14 +131,18 @@ public sealed class SubjectReader(string connectionString)
             new { id });
         if (detail is not null)
         {
-            detail.Bounty = BountyRows.Lines(detail.Type, BountyJsonOf(detail.Attributes));
+            detail.Bounty = BountyRows.Lines(detail.Type, MemberJsonOf(detail.Attributes, "bounty"));
+            detail.Cover = CoverOf(detail.Type, MemberJsonOf(detail.Attributes, Cover.AttributeKey));
         }
 
         return detail;
     }
 
-    /// <summary>The raw <c>bounty</c> member of an attributes document, as <c>attributes-&gt;&gt;'bounty'</c> reads it.</summary>
-    private static string? BountyJsonOf(string? attributes)
+    /// <summary>
+    /// The raw <paramref name="key"/> member of an attributes document, as
+    /// <c>attributes-&gt;&gt;'key'</c> reads it.
+    /// </summary>
+    private static string? MemberJsonOf(string? attributes, string key)
     {
         if (string.IsNullOrWhiteSpace(attributes))
         {
@@ -144,8 +152,8 @@ public sealed class SubjectReader(string connectionString)
         try
         {
             return JsonNode.Parse(attributes) is JsonObject bag
-                   && bag["bounty"] is { } bounty
-                ? bounty.ToJsonString()
+                   && bag[key] is { } member
+                ? member.ToJsonString()
                 : null;
         }
         catch (JsonException)
@@ -154,11 +162,16 @@ public sealed class SubjectReader(string connectionString)
         }
     }
 
-    private static SubjectListItem WithHeadline(SubjectListItem item, BountyText? bounty)
+    private SubjectListItem WithHeadline(SubjectListItem item, BountyText? bounty, CoverText? cover)
     {
         item.Bounty = BountyRows.Headline(item.Type, bounty?.BountyJson);
+        item.Cover = CoverOf(item.Type, cover?.CoverJson);
         return item;
     }
+
+    /// <summary>A cover as pages read it; null when there's none, it's malformed, or the type can't have one.</summary>
+    private CoverRead? CoverOf(string type, string? coverJson)
+        => Cover.Allowed(type) ? CoverRead.FromJson(coverJson, coverAppName) : null;
 
     /// <summary>The split-off <c>bounty_json</c> column of a list read; Dapper hands null when it is.</summary>
     private sealed class BountyText
@@ -166,10 +179,21 @@ public sealed class SubjectReader(string connectionString)
         public string? BountyJson { get; set; }
     }
 
+    /// <summary>
+    /// The split-off <c>cover_json</c> column of a list read. It's its own split, not a second
+    /// column on <see cref="BountyText"/>: Dapper hands a null object whenever a split's first
+    /// column is null, so a cover sharing the bounty's split would vanish on every subject
+    /// without a bounty.
+    /// </summary>
+    private sealed class CoverText
+    {
+        public string? CoverJson { get; set; }
+    }
+
     public SubjectDetail? GetSubjectByUrn(string urn)
     {
         using var db = Open();
-        return db.QueryFirstOrDefault<SubjectDetail>(
+        var detail = db.QueryFirstOrDefault<SubjectDetail>(
             """
             SELECT s.id, s.urn, s.type, s.title,
                    c.status,
@@ -184,6 +208,12 @@ public sealed class SubjectReader(string connectionString)
             WHERE s.urn = @urn
             """,
             new { urn });
+        if (detail is not null)
+        {
+            detail.Cover = CoverOf(detail.Type, MemberJsonOf(detail.Attributes, Cover.AttributeKey));
+        }
+
+        return detail;
     }
 
     /// <summary>What this subject serves / results in (outgoing edges) — parents in the Map.</summary>

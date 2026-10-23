@@ -1,4 +1,5 @@
 using LifeOs.Api.Auth;
+using LifeOs.Domain;
 
 namespace LifeOs.Api.Http;
 
@@ -52,7 +53,9 @@ public static class SecurityHeaders
             "default-src 'self'",
             "script-src 'self'",
             "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data: blob:",
+            // Cover images (COVER-1, D15) load straight from Unsplash's image host, as its API
+            // terms ask. The browser never calls api.unsplash.com, so connect-src doesn't gain it.
+            "img-src 'self' data: blob: https://" + Cover.ImageHost,
             "font-src 'self' data:",
             "connect-src " + string.Join(' ', connect),
             "frame-ancestors 'none'",

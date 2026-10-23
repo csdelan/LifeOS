@@ -61,6 +61,8 @@ public static class ApiHost
         var storage = SupabaseStorageOptions.Resolve(key => builder.Configuration[key]);
         // Oura (activity plan §3.1) is optional: without Oura:ClientId the Activity page says it
         // isn't set up. A client id without Integrations:TokenKey, or a malformed one, fails startup.
+        // Unsplash (cover-images plan §3.2) is optional too: without Unsplash:AccessKey the cover
+        // picker says covers aren't set up; covers already set still show.
         var integrations = IntegrationSettings.Resolve(key => builder.Configuration[key]);
         builder.Services.AddLifeOsKernel(
             owner, KernelSources.Api,
@@ -69,7 +71,8 @@ public static class ApiHost
             storage,
             allowPhotosInDatabase: builder.Environment.IsDevelopment(),
             integrations: integrations);
-        builder.Services.AddSingleton(new SubjectReader(reader));
+        builder.Services.AddSingleton(new SubjectReader(
+            reader, integrations.Unsplash?.AppName ?? Cover.DefaultAppName));
         builder.Services.AddSingleton(sp => new RewardReader(
             reader, sp.GetRequiredService<RewardService>().CoinValueUsd, homeZone));
         builder.Services.AddSingleton(new FoodReader(reader, homeZone));
@@ -157,6 +160,7 @@ public static class ApiHost
         app.MapArtifactEndpoints();
         app.MapOuraEndpoints();
         app.MapActivityEndpoints();
+        app.MapCoverEndpoints();
         app.MapSpaFallback();
     }
 }

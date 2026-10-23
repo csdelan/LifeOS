@@ -20,7 +20,9 @@
                                 VITE_SUPABASE_ANON_KEY, ALLOWED_EMAILS,
                                 Storage__SupabaseSecretKey (or SUPABASE_SECRET_KEY),
                                 and the Oura app: Oura__ClientId, Oura__ClientSecret,
-                                Integrations__TokenKey
+                                Integrations__TokenKey,
+                                and the Unsplash app: Unsplash__AccessKey
+                                (Unsplash__AppName optional)
       web/.env.local            VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY when
                                 the env file does not set them
       LifeOs.Api user-secrets   ALLOWED_EMAILS when the env file does not set it
@@ -38,12 +40,18 @@
     Oura's tokens in the database. All three or none: without them the Activity
     page says Oura isn't set up. Names match without regard to case.
 
+    Unsplash__AccessKey is the Access Key of the app registered at
+    unsplash.com/developers (cover images, docs/pilot/cover-images-plan.md §3.5).
+    Without it the cover picker says covers aren't set up; covers already set still
+    show. Unsplash__AppName is the utm_source on credit links (default lifeos).
+
     Sets:
       Fly app secrets           BSK_CONNECTION_STRING, BSK_READER_CONNECTION_STRING,
                                 Auth__Issuer, Auth__JwksUrl, ALLOWED_EMAILS,
                                 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY,
                                 Storage__SupabaseSecretKey (when given),
-                                the Oura settings (when given)
+                                the Oura settings (when given),
+                                the Unsplash settings (when given)
       GitHub environment        BSK_CONNECTION_STRING (for bsk migrate) and
       secrets                   FLY_API_TOKEN (a deploy token scoped to this app)
 
@@ -231,6 +239,21 @@ if ($oura) {
     }
 }
 
+# Optional: the Unsplash app for cover images (cover-images plan §3.5). Server-only, never
+# a VITE_ value: the picker searches through the API, so the key never reaches a browser.
+$unsplashKey = $fromEnvFile['Unsplash__AccessKey']
+$unsplashAppName = $fromEnvFile['Unsplash__AppName']
+$covers = -not [string]::IsNullOrWhiteSpace($unsplashKey)
+if ($covers -and $unsplashKey -match '\s') { throw "Unsplash__AccessKey can't contain spaces." }
+if (-not [string]::IsNullOrWhiteSpace($unsplashAppName)) {
+    if (-not $covers) {
+        throw "$EnvFile sets Unsplash__AppName but not Unsplash__AccessKey. Set the key to switch covers on, or remove the name."
+    }
+    if ($unsplashAppName.Trim() -cnotmatch '^[a-z0-9][a-z0-9_-]{0,39}$') {
+        throw "Unsplash__AppName must be lowercase letters, digits, dashes or underscores (it's a utm_source), e.g. lifeos."
+    }
+}
+
 $flySecrets = [ordered]@{
     BSK_CONNECTION_STRING        = $values['BSK_CONNECTION_STRING']
     BSK_READER_CONNECTION_STRING = $values['BSK_READER_CONNECTION_STRING']
@@ -245,6 +268,11 @@ $storageKey = $null
 if ($oura) {
     foreach ($name in $ouraNames) { $flySecrets[$name] = $fromEnvFile[$name] }
 }
+if ($covers) {
+    $flySecrets['Unsplash__AccessKey'] = $unsplashKey
+    if (-not [string]::IsNullOrWhiteSpace($unsplashAppName)) { $flySecrets['Unsplash__AppName'] = $unsplashAppName.Trim() }
+}
+$unsplashKey = $null
 
 # ---------- confirm ----------
 $repo = gh repo view --json nameWithOwner --jq .nameWithOwner
@@ -267,6 +295,12 @@ if ($oura) {
     Write-Host "Oura               ON: client id and secret from $EnvFile, tokens sealed with Integrations__TokenKey" -ForegroundColor Cyan
 } else {
     Write-Host "Oura               OFF: no Oura__ClientId in $EnvFile, so the Activity page says Oura isn't set up" -ForegroundColor Yellow
+}
+if ($covers) {
+    $coverName = if ($flySecrets.Contains('Unsplash__AppName')) { $flySecrets['Unsplash__AppName'] } else { 'lifeos' }
+    Write-Host "Covers             ON: Unsplash Access Key from $EnvFile, credits linked as utm_source=$coverName" -ForegroundColor Cyan
+} else {
+    Write-Host "Covers             OFF: no Unsplash__AccessKey in $EnvFile, so the cover picker says covers aren't set up" -ForegroundColor Yellow
 }
 Write-Host ''
 if (-not $Yes) {

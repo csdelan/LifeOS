@@ -30,6 +30,12 @@ public static class KernelExceptionHandler
         ObjectStorageException storage => (StatusCodes.Status502BadGateway, new ApiError(storage.Message)),
         OuraUnavailableException oura => (StatusCodes.Status502BadGateway, new ApiError(oura.Message)),
         OuraConnectionException oura => (StatusCodes.Status409Conflict, new ApiError(oura.Message)),
+        UnsplashException unsplash => (unsplash.Failure switch
+        {
+            UnsplashFailure.NotSetUp => StatusCodes.Status409Conflict,
+            UnsplashFailure.NotFound => StatusCodes.Status404NotFound,
+            _ => StatusCodes.Status502BadGateway,
+        }, new ApiError(unsplash.Message)),
         BadHttpRequestException bad => (bad.StatusCode, new ApiError(bad.Message)),
         ArgumentException or InvalidOperationException => (
             StatusCodes.Status400BadRequest, new ApiError(ex.Message)),

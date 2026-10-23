@@ -1172,6 +1172,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/covers/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SearchCovers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SetCover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cover/position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MoveCover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cover/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ClearCover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1437,6 +1501,73 @@ export interface components {
         };
         CaptureBody: {
             text?: string;
+        };
+        CoverBody: {
+            subject?: string;
+            photoId?: string;
+            /** Format: int32 */
+            positionY?: null | number | string;
+        };
+        CoverClearBody: {
+            subject?: string;
+        };
+        CoverClearedRead: {
+            subject?: components["schemas"]["CreatedSubject"];
+            removed?: boolean;
+        };
+        CoverPhotoRead: {
+            id?: string;
+            thumbUrl?: string;
+            color?: string;
+            alt?: null | string;
+            /** Format: int32 */
+            width?: number | string;
+            /** Format: int32 */
+            height?: number | string;
+            photographer?: string;
+            photographerLink?: string;
+        };
+        CoverPositionBody: {
+            subject?: string;
+            /** Format: int32 */
+            positionY?: null | number | string;
+        };
+        CoverRead: {
+            source?: string;
+            photoId?: string;
+            url?: string;
+            color?: string;
+            /** Format: int32 */
+            width?: number | string;
+            /** Format: int32 */
+            height?: number | string;
+            alt?: null | string;
+            photographer?: string;
+            photographerLink?: string;
+            photoLink?: string;
+            unsplashLink?: string;
+            /** Format: int32 */
+            positionY?: number | string;
+            /** Format: date-time */
+            setAt?: string;
+        };
+        CoverResult: {
+            subject?: components["schemas"]["CreatedSubject"];
+            cover?: components["schemas"]["CoverRead"];
+            downloadCounted?: boolean;
+            downloadProblem?: null | string;
+        };
+        CoverSearchRead: {
+            configured?: boolean;
+            query?: string;
+            /** Format: int32 */
+            page?: number | string;
+            /** Format: int32 */
+            total?: number | string;
+            /** Format: int32 */
+            totalPages?: number | string;
+            unsplashLink?: string;
+            photos?: components["schemas"]["CoverPhotoRead"][];
         };
         CreatedSubject: {
             /** Format: uuid */
@@ -2190,6 +2321,7 @@ export interface components {
             areaName?: null | string;
             attributes?: null | string;
             bounty?: null | components["schemas"]["BountyLineRow"][];
+            cover?: null | components["schemas"]["CoverRead"];
         };
         SubjectListItem: {
             /** Format: uuid */
@@ -2216,6 +2348,7 @@ export interface components {
             bounty?: null | {
                 [key: string]: number | string;
             };
+            cover?: null | components["schemas"]["CoverRead"];
         };
         SubjectRelationsResponse: {
             parents?: components["schemas"]["RelationEdge"][];
@@ -4536,6 +4669,191 @@ export interface operations {
             };
             /** @description Bad Gateway */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SearchCovers: {
+        parameters: {
+            query?: {
+                q?: string;
+                page?: number | string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverSearchRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SetCover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    MoveCover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverPositionBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    ClearCover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverClearBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverClearedRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

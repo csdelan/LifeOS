@@ -33,6 +33,9 @@ public sealed class SubjectListItem
     /// own bounty or the type default. Null for a type that doesn't earn (REWARD-2).
     /// </summary>
     public IReadOnlyDictionary<string, long>? Bounty { get; set; }
+
+    /// <summary>Its cover image (COVER-1), or null — always null for a type that can't have one.</summary>
+    public CoverRead? Cover { get; set; }
 }
 
 /// <summary>The detail-pane header fields for one subject, plus the raw attributes jsonb.</summary>
@@ -57,6 +60,9 @@ public sealed class SubjectDetail
 
     /// <summary>What each trigger pays (REWARD-2); null for a type that doesn't earn.</summary>
     public IReadOnlyList<BountyLineRow>? Bounty { get; set; }
+
+    /// <summary>Its cover image (COVER-1), or null — always null for a type that can't have one.</summary>
+    public CoverRead? Cover { get; set; }
 }
 
 /// <summary>One alignment-graph edge, in whichever direction it was queried.</summary>

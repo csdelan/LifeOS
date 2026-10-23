@@ -3409,6 +3409,12 @@ and `show` work end to end with `Unsplash__AccessKey` in the environment. The co
 `attributes.cover`, written only by `CoverService`, and `bsk set` refuses the key. The API,
 the picker and the pages follow in C2–C4. Build moves `mapped → building`.
 
+**Update (2026-10-23 — API landed, C2):** `/api/covers/search`, `/api/cover`,
+`/api/cover/position` and `/api/cover/clear` work, and every subject read carries `cover`
+with its credit links ready. The production security policy lets images load from
+`images.unsplash.com` only, and `fly-setup.ps1` stages `Unsplash__AccessKey` from `.env`.
+Nothing shows on a page yet: the picker and banner are C3.
+
 **Workflow (Chris):**
 - "I would like to add images to long standing subjects such as identity statements, goals,
   and even projects, for the visual enhancement it provides. My first question is whether
