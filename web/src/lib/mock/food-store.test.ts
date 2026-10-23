@@ -139,8 +139,11 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
   it("flags food eaten inside a recorded fast without refusing it", () => {
     const fast = mockFastAction({ action: "record", from: ago(10 * HOUR), to: ago(HOUR) });
     const snack = mockLogFood({ name: "Granola bar", score: 2, calories: 200, eatenAt: ago(5 * HOUR) });
-    expect(mockFoodDay().meals.find((m) => m.id === snack.meal!.id)?.duringFast).toBe(fast.fast!.id);
-    expect(mockFoodDay().fasts[0].mealsDuring).toBe(1);
+    // Read the days they landed on: 5 hours ago is yesterday for the first 5 hours of a day.
+    const snackDay = mockFoodDay(snack.meal!.eatenOn);
+    expect(snackDay.meals.find((m) => m.id === snack.meal!.id)?.duringFast).toBe(fast.fast!.id);
+    const endDay = mockFoodDay(fast.fast!.endedOn!);
+    expect(endDay.fasts.find((f) => f.id === fast.fast!.id)?.mealsDuring).toBe(1);
   });
 
   it("refuses in words, writing nothing", () => {
@@ -168,7 +171,7 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
   });
 
   it("keeps a half score through the day's read, its sum and Log again (food-log plan §8)", () => {
-    const wrap = mockLogFood({ name: "Turkey wrap", score: 3.5, calories: 1200, eatenAt: ago(HOUR) });
+    const wrap = mockLogFood({ name: "Turkey wrap", score: 3.5, calories: 1200 });
     expect(wrap.meal!.score).toBe(3.5);
     const meal = mockFoodDay().meals.find((m) => m.id === wrap.meal!.id)!;
     expect(meal.score).toBe(3.5);
