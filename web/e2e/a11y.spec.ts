@@ -382,8 +382,13 @@ test.describe("accessibility", () => {
     await page.goto("/vision");
     const card = page.locator("article", { has: page.getByRole("heading", { name: "Steward of my health" }) });
     await expect(card.getByText("Photo by Ines Vale on Unsplash")).toBeVisible({ timeout: 10_000 });
-    // 112 px tall on a phone.
-    expect((await card.getByTestId("cover-image").boundingBox())?.height).toBe(112);
+    // A 128 px square on the card's left edge on a phone, filling the card's height.
+    const photo = (await card.getByTestId("cover-image").boundingBox())!;
+    const box = (await card.boundingBox())!;
+    expect(photo.width).toBe(128);
+    expect(photo.x).toBe(box.x);
+    expect(photo.height).toBeGreaterThanOrEqual(photo.width);
+    expect(photo.height).toBe(box.height);
     const vision = await scan();
     expect(vision, JSON.stringify(vision, null, 2)).toEqual([]);
 

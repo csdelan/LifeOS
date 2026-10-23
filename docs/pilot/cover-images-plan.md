@@ -244,7 +244,7 @@ as it does today, so the two can sit side by side.
 
 | Where | What changes |
 |---|---|
-| **Vision** (`/vision`), identity statement cards | The image across the top of each card (112 px on a phone, 144 px from `md`), the card's text below. These cards are large, so the credit pill shows in the image's corner. |
+| **Vision** (`/vision`), identity statement cards | A square photo along each card's left edge (128 px wide on a phone, 144 px from `md`), filling the card's height, with the card's text to its right. The credit is a small line under the area name. (C4 first put the photo across the top; Chris changed it, see As built.) |
 | **Vision**, long-term goals | A 40 px rounded thumbnail before each title. |
 | **Today** (`/`), the primary focus card | A strip across the top of the card (96 px). |
 | **Today**, Active goals and Active projects | `ListRow` gains an optional leading thumbnail (36 px). |
@@ -254,7 +254,7 @@ as it does today, so the two can sit side by side.
   rows, the Pilot desktop app.
 - **Credit on thumbnails.** A 36–40 px thumbnail has no room for a line. Its credit is in
   the image's tooltip, and in full on the banner one tap away and on the Vision card. The
-  large images (banner, Vision cards) always show it.
+  banner, Today's focus strip and the Vision cards always show it.
 - **The Vision page's line** "Not a mood board — alignment." comes out in C4: photos on the
   cards make it read oddly. The page is still ordered by alignment.
 
@@ -568,3 +568,28 @@ Read 2026-10-23.
     graph scanned whole), and of `/vision` and `/` on a 375 px phone.
 - **No live check.** C4 is web only, and it reads the same `cover` on the list read that the
   C3 live check confirmed. The live dashboard and graph are built from that read.
+
+**C4 revision (2026-10-23).** Chris, after C4: "I don't care for the banner on the card
+view. it takes up too much screen space relative to the body. I'd rather have more square,
+smaller images along the left edge of the card. Sort of like Gallery View in Notion and
+other tools."
+
+- **Vision cards** (`pages/vision-page.tsx`): the photo is now a square on the card's left
+  edge, 128 px wide on a phone and 144 px from `md`, with the badge, title, area and credit
+  to its right. It fills the card's height, so a title that wraps makes it a little taller
+  than square. A card with a cover is at least as tall as the photo is wide.
+  - At 375 px the photo is 128 × 147 and the card 147 tall; a card without a cover is 131.
+    From `md` it's 144 × 155. The top banner added its full 112 px above the same text on a
+    phone.
+  - 112 px on a phone was tried first. It came out 112 × 147, too tall for a square.
+  - The photo is asked for at 300 px wide, enough for a landscape photo cropped by its
+    height into a 144 px square.
+- **The credit** moves out of the photo, which is too narrow for the pill, to a small muted
+  line under the area name: `CoverCredit` gains `variant="line"`. Its links still sit above
+  the card's stretched button.
+- **Not changed:** Today's focus strip, the goal and row thumbnails, the graph nodes and the
+  panel banner.
+- **Tests:** `vision-page.test.tsx` checks that the photo leads the card with no credit in
+  it, and that the credit line's links sit outside the button. The golden path finds the
+  credit on the card. The phone a11y test checks a 128 px photo on the card's left edge,
+  as tall as the card and at least square.

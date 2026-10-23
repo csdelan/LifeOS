@@ -7,9 +7,13 @@ import { EmptyState } from "@/components/primitives/empty-state";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { useSubjects } from "@/lib/queries";
 import { ListSkeleton } from "@/components/primitives/skeletons";
+import { cn } from "@/lib/utils";
 
-/** The width a Vision card's photo is asked for: the page is at most 768 px wide. */
-const VISION_CARD_WIDTH = 768;
+/**
+ * The width a Vision card's square asks for. A landscape photo fills the square by its
+ * height, so it shows wider than the square: about 220 px across in a 144 px square.
+ */
+const VISION_SQUARE_WIDTH = 300;
 
 export function VisionPage() {
   const { data, isLoading, isError } = useSubjects("Value");
@@ -36,24 +40,28 @@ export function VisionPage() {
         ) : null}
         <div className="mt-8 space-y-8">
           {(data ?? []).map((v) => (
-            // The title's button stretches over the whole card, so the card opens the
-            // statement while the photo's credit links, laid above it, still work.
+            // The photo is a square along the card's left edge (Chris: "more square, smaller
+            // images along the left edge of the card"), 128 px on a phone and 144 px from md,
+            // filling the card's height when the text runs taller. The title's button
+            // stretches over the whole card, so the card opens the statement while the
+            // credit's links, laid above it, still work.
             <article
               key={v.id}
-              className="relative overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow hover:shadow-(--shadow-lift) has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ring/50"
+              className={cn(
+                "relative flex overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow hover:shadow-(--shadow-lift) has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ring/50",
+                v.cover && "min-h-32 md:min-h-36",
+              )}
             >
               {v.cover ? (
                 <CoverImage
                   url={v.cover.url}
                   color={v.cover.color}
                   positionY={v.cover.positionY}
-                  width={VISION_CARD_WIDTH}
-                  className="h-28 md:h-36"
-                >
-                  <CoverCredit cover={v.cover} className="z-10" />
-                </CoverImage>
+                  width={VISION_SQUARE_WIDTH}
+                  className="w-32 shrink-0 self-stretch md:w-36"
+                />
               ) : null}
-              <div className="p-5">
+              <div className={cn("min-w-0 flex-1 p-5", v.cover && "p-4 md:p-5")}>
                 <TypeBadge type="Value" />
                 <h2 className="mt-2 font-heading text-2xl">
                   <button
@@ -67,6 +75,7 @@ export function VisionPage() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   {v.areaName ?? "Whole life"}
                 </p>
+                {v.cover ? <CoverCredit cover={v.cover} variant="line" className="mt-2" /> : null}
               </div>
             </article>
           ))}

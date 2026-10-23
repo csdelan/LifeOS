@@ -720,7 +720,8 @@ test.describe("golden paths", () => {
     // Vision: the statement's card keeps its photo and credit; the goals follow the panel.
     await page.getByRole("link", { name: "Vision" }).click();
     const steward = page.locator("article", { has: page.getByRole("heading", { name: "Steward of my health" }) });
-    await expect(steward.getByTestId("cover-image")).toContainText("Photo by Ines Vale on Unsplash");
+    await expect(steward.getByTestId("cover-image")).toBeVisible();
+    await expect(steward).toContainText("Photo by Ines Vale on Unsplash");
     await expect(steward.getByRole("link", { name: "Ines Vale" })).toHaveAttribute("target", "_blank");
     await expect(
       page.getByRole("button", { name: /Run a half-marathon/ }).getByTestId("cover-image"),

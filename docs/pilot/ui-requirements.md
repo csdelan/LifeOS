@@ -3484,13 +3484,20 @@ Build:      building
 - Map graph: a node shows its cover under a dark scrim, with white words.
 - Anything without a cover looks as before, and "Not a mood board" is gone from Vision.
 
+**Update (2026-10-23 — Vision cards revised):** the identity statement card's photo moved
+from across the top to a square on the card's left edge (128 px on a phone, 144 px from
+`md`), with the credit as a small line under the area name. Chris: "it takes up too much
+screen space relative to the body. I'd rather have more square, smaller images along the
+left edge of the card."
+
 Build moves `mapped → building`. It becomes `built` once it's on staging (C5).
 
 **Workflow (Chris):**
 - "both banners and card images" (2026-10-23).
-- Vision: an image across the top of each identity statement card, a thumbnail before each
-  long-term goal. Today: a strip on the primary focus card, thumbnails on the Active goals
-  and Active projects rows. Map graph: the cover in the node's picture slot.
+- Vision: a square image on the left edge of each identity statement card ("Sort of like
+  Gallery View in Notion and other tools"), a thumbnail before each long-term goal.
+- Today: a strip on the primary focus card, thumbnails on the Active goals and Active
+  projects rows. Map graph: the cover in the node's picture slot.
 - A subject without a cover looks as it does today.
 
 **Ontology fit (Claude):**

@@ -61,14 +61,18 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 describe("VisionPage covers (COVER-3)", () => {
-  it("shows a statement's cover across its card, credited, and the card still opens it", async () => {
+  it("shows a statement's cover as a square on its card's left edge, credited, and the card still opens it", async () => {
     render(<VisionPage />);
     const card = screen.getByRole("heading", { name: "Steward of my health" }).closest("article")!;
     const photo = within(card).getByTestId("cover-image");
-    expect(photo).toHaveTextContent("Photo by Ines on Unsplash");
+    // The photo leads the card, ahead of its words, and carries no credit of its own.
+    expect(card.firstElementChild).toBe(photo);
+    expect(photo).toHaveTextContent("");
     expect(photo.querySelector("img")).toHaveAttribute("alt", "");
     expect(photo.querySelector("img")!.style.objectPosition).toBe("50% 60%");
-    const links = within(photo).getAllByRole("link");
+    // The credit is a line under the area name.
+    const credit = within(card).getByText((_, el) => el?.tagName === "P" && el.textContent === "Photo by Ines on Unsplash");
+    const links = within(credit).getAllByRole("link");
     expect(links.map((a) => a.textContent)).toEqual(["Ines", "Unsplash"]);
     // The credit's links sit beside the card's button, never inside it.
     for (const link of links) expect(link.closest("button")).toBeNull();
