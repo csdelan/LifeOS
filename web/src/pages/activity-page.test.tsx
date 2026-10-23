@@ -455,8 +455,11 @@ describe("Sleep and readiness (activity plan §3.7, ACTIVITY-4)", () => {
     expect(sleep.getByText("This week, so far")).toBeInTheDocument();
 
     await userEvent.click(sleep.getByRole("button", { name: "Table" }));
-    const rows = await within(await sleep.findByRole("table")).findAllByTestId("metric-row");
-    expect(rows.length).toBeGreaterThanOrEqual(52);
+    // The 30 days stay on screen until the year's nights arrive (keepPreviousData), so wait for them.
+    await waitFor(() =>
+      expect(within(sleep.getByRole("table")).getAllByTestId("metric-row").length).toBeGreaterThanOrEqual(52),
+    );
+    const rows = within(sleep.getByRole("table")).getAllByTestId("metric-row");
     expect(rows[0]).toHaveTextContent(/^This week, so far/);
     expect(within(rows[0]).queryByRole("button")).not.toBeInTheDocument();
   });
