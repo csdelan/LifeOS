@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ActivityIcon, Loader2Icon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
+import { ActivityBanner } from "@/components/activity/activity-banner";
 import { ConnectCard } from "@/components/activity/connect-card";
 import { DaySheet } from "@/components/activity/day-sheet";
 import { ExerciseCard } from "@/components/activity/exercise-card";
@@ -18,18 +19,6 @@ import { asSentence, scopeWords, syncedAgo } from "@/lib/activity";
 import type { OuraStatus, WorkoutRow } from "@/lib/production-ui-types";
 import { useActivitySummary, useWrites } from "@/lib/queries";
 import { useNow } from "@/lib/timer";
-
-function PageHeader({ children }: { children?: React.ReactNode }) {
-  return (
-    <header className="shrink-0 border-b px-4 py-4 md:px-6">
-      <p className="type-scale-section text-primary">Oura</p>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="font-heading text-2xl">Activity</h1>
-        {children}
-      </div>
-    </header>
-  );
-}
 
 function Banner({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
@@ -54,9 +43,11 @@ function syncWords(oura: OuraStatus, syncing: boolean, now: number): string {
 
 /**
  * The Activity page (ACTIVITY-1..4, activity plan §3.7): Oura's steps, the exercise Chris
- * records, and his sleep and readiness, read-only. Before connecting it shows the Connect Oura card. Opening
- * it syncs (skipped when LifeOS synced under 5 minutes ago); Sync now always runs. A row opens
- * the workout's sheet, where its note is; a day on the sleep chart or table opens the day's.
+ * records, and his sleep and readiness, read-only, under a drawn banner with the sync's status.
+ * Each card has its own title, icon and colour; the Today card steps back a day at a time.
+ * Before connecting it shows the Connect Oura card. Opening it syncs (skipped when LifeOS
+ * synced under 5 minutes ago); Sync now always runs. A row opens the workout's sheet, where its
+ * note is; a day on the sleep chart or table opens the day's.
  */
 export function ActivityPage() {
   const summary = useActivitySummary();
@@ -101,21 +92,21 @@ export function ActivityPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader>
-        {oura && connected ? (
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-muted-foreground" aria-live="polite">
-              {syncWords(oura, syncing, now)}
-            </p>
-            <Button variant="outline" size="sm" disabled={syncing} onClick={() => void runSync(true)}>
-              <RefreshCwIcon className={syncing ? "animate-spin" : undefined} aria-hidden />
-              Sync now
-            </Button>
-          </div>
-        ) : null}
-      </PageHeader>
-
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 md:px-6">
+        <ActivityBanner>
+          {oura && connected ? (
+            <>
+              <p className="text-xs text-muted-foreground" aria-live="polite">
+                {syncWords(oura, syncing, now)}
+              </p>
+              <Button variant="outline" size="sm" disabled={syncing} onClick={() => void runSync(true)}>
+                <RefreshCwIcon className={syncing ? "animate-spin" : undefined} aria-hidden />
+                Sync now
+              </Button>
+            </>
+          ) : null}
+        </ActivityBanner>
+
         {summary.isLoading ? (
           <div className="grid gap-4 lg:grid-cols-2">
             <CardSkeleton />
@@ -230,8 +221,8 @@ export function ActivityConnectedPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader />
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 md:px-6">
+        <ActivityBanner />
         {error || retryError ? (
           <EmptyState
             tone="error"

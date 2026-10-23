@@ -431,6 +431,20 @@ test.describe("accessibility", () => {
     expect(nightBox && nightBox.y + nightBox.height).toBeGreaterThan(800);
     const lastNight = await scan();
     expect(lastNight, JSON.stringify(lastNight, null, 2)).toEqual([]);
+
+    // The Today card a day back: its arrows on their own row, the page still one phone wide.
+    await page.keyboard.press("Escape");
+    await expect(night).toBeHidden();
+    await page.getByRole("region", { name: "Today", exact: true }).getByRole("button", { name: "Previous day" }).click();
+    const yesterday = page.getByRole("region", { name: "Yesterday", exact: true });
+    await expect(yesterday.getByRole("region", { name: "Health XP yesterday" })).toBeVisible();
+    for (const name of ["Previous day", "Today", "Next day"]) {
+      const box = await yesterday.getByRole("button", { name, exact: true }).boundingBox();
+      expect(box && box.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+    const dayBack = await scan();
+    expect(dayBack, JSON.stringify(dayBack, null, 2)).toEqual([]);
   });
 
   // States the routes above don't reach: an Established habit checked off on the Habits

@@ -1,4 +1,6 @@
 import { useId, useState } from "react";
+import { FootprintsIcon } from "lucide-react";
+import { ActivityCard, ActivityCardTitle } from "@/components/activity/activity-card";
 import { StatTile } from "@/components/activity/sleep-parts";
 import { XpCell } from "@/components/activity/xp-parts";
 import {
@@ -150,11 +152,8 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
   const lastWeek = summary.lastWeek.averageSteps;
 
   return (
-    <section aria-labelledby={titleId} className="space-y-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id={titleId} className="type-scale-section text-muted-foreground">
-          Steps
-        </h2>
+    <ActivityCard tone="steps" titleId={titleId}>
+      <ActivityCardTitle id={titleId} tone="steps" icon={FootprintsIcon} title="Steps">
         <div className="flex flex-wrap items-center gap-3">
           <ToggleGroup label="Range" value={range} onChange={setRange} options={[...METRIC_RANGES]} />
           <ToggleGroup
@@ -167,7 +166,7 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
             ]}
           />
         </div>
-      </div>
+      </ActivityCardTitle>
 
       {days.isLoading ? <ListSkeleton rows={3} /> : null}
       {days.isError ? (
@@ -261,6 +260,6 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
           )}
         </div>
       ) : null}
-    </section>
+    </ActivityCard>
   );
 }

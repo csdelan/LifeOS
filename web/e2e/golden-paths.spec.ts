@@ -510,6 +510,15 @@ test.describe("golden paths", () => {
     await expect(xp.getByTestId("activity-xp-steps")).toContainText("Pays when the day ends, at 4 a.m.");
     await expect(xp.getByTestId("activity-xp-total")).toHaveText(/^\d+ Health XP: \d+ earned, \d+ projected$/);
 
+    // A day back on the Today card: yesterday's Health XP, all of it earned; then Today again.
+    await page.getByRole("region", { name: "Today", exact: true }).getByRole("button", { name: "Previous day" }).click();
+    const yesterday = page.getByRole("region", { name: "Yesterday", exact: true });
+    await expect(yesterday.getByRole("region", { name: "Health XP yesterday" }).getByTestId("activity-xp-total")).toHaveText(
+      /^\d+ Health XP earned$/,
+    );
+    await yesterday.getByRole("button", { name: "Today", exact: true }).click();
+    await expect(xp.getByTestId("activity-xp-total")).toHaveText(/^\d+ Health XP: \d+ earned, \d+ projected$/);
+
     // Each day's steps XP in the Table: projected today, earned the days before.
     const steps = page.getByRole("region", { name: "Steps" });
     await steps.getByRole("button", { name: "Table" }).click();

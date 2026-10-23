@@ -409,16 +409,28 @@ Run `npm run gen:api` after the endpoints land.
 
 - **`/activity`**, called "Activity", sits in the nav after Food Log and in the command
   palette. Phone first: one column, widening to two on a desktop.
-- **Header:** "Synced from Oura 3 min ago" and **Sync now**.
+- **Banner (A11):** "Activity" over a drawn scene, teal hills under a dawn sun with a trail of
+  dotted steps, or a crescent moon and stars in the dark theme. "Synced from Oura 3 min ago"
+  and **Sync now** sit on a frosted strip in it. It scrolls with the page.
   - Before connecting, a Connect Oura card says what LifeOS will read, and that it's
     read-only.
   - `/activity/connected` finishes the connect (§3.1), then shows the page.
+- **Card titles (A11):** each card's name is large (the page's serif, 24 px) beside its icon
+  on a tile of the card's colour, and that colour runs along the card's top: Today (amber,
+  a sun), Steps (teal, footprints), Tags (magenta, a tag), Sleep and readiness (indigo, a
+  moon), Exercise (ember, a dumbbell).
 - **Today card:**
-  - **Last night:** the sleep score, readiness score and time asleep. Or "Open the Oura app
-    to sync last night" when it hasn't arrived.
   - **Steps so far** as the big number, with progress past the 5,000 minimum toward the
     7,500 goal.
-  - Today's counted workouts.
+  - **Last night:** the sleep score, readiness score and time asleep. Or "Open the Oura app
+    to sync last night" when it hasn't arrived.
+  - Today's counted workouts, and today's Health XP (§3.8).
+  - **A day at a time (A11):** arrows step back a day, as far as the history read from Oura
+    (`historyFrom`); **Today** comes back. The title says the day ("Yesterday", "Wed, Oct
+    21") over the date or how long ago. An earlier day shows its steps (not "so far"), the
+    night before it, its workouts, and its Health XP ("Health XP yesterday"), read from
+    `GET /api/activity/day`, the same read its sheet uses. On a phone the arrows take their
+    own row, one at each end.
 - **Steps card:**
   - The chart (§2): 30 days, 90 days or 1 year, the 7-day average line, the two threshold
     lines, bars toned by band, and today's "so far" bar.
@@ -789,6 +801,12 @@ Each phase is one commit:
 |---|---|---|---|
 | A10 | Tags | §3.9. The `tag` scope, the history read again after a connect that adds a scope, `enhanced_tag` in the client and the sync, `OuraTags`, migration 0039 (`v_oura_tag`), `GET /api/activity/tags` and the day's tags, `bsk oura tags`, the Tags card and the day sheet's tags, the mock's tags. Tests: the client's fields and paging; tags read only with the scope; versions, voiding and restoring; the history read again after a new scope; names; the API's shapes and range; the events kept out of every view about items; Vitest, e2e, a11y. | A9 |
 
+**Page polish (added 2026-10-23):**
+
+| # | Phase | Delivers | Depends on |
+|---|---|---|---|
+| A11 | Banner, titles, a day at a time | §3.7's banner, the cards' titles and colours, and the Today card's arrows. Web only: no API change and no migration. Vitest, e2e, a11y in both themes and on a phone. | A10 |
+
 - **A4 and A5 touch the same page,** so they run one after the other.
 - **Migrations** continue from 0036. Merging to `main` promotes them to staging through CI.
 
@@ -1001,6 +1019,7 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
 - [x] A8 — Activity XP on the ledger
 - [x] A9 — Activity XP on the page
 - [x] A10 — Tags from the Oura app (migration 0039)
+- [x] A11 — Banner, card titles, and the Today card a day at a time
 
 ### As built
 
@@ -1602,3 +1621,28 @@ no migration. As planned in §3.8, plus:
   - Reconnected with it: the banner went, and the history brought in 255 synthetic tags and
     nothing else new. A second reconnect wrote nothing.
   - The card, a day's sheet and `bsk oura tags` read them back, also at 375 px wide.
+
+**A11 (2026-10-23).** Chris asked for "a much more prominent title to identify the different
+cards", "a title bar or banner too, and bonus points if it has an image in it", and arrows on
+the Today card "for going back and forth by 1 day at a time. I want to see my Health XP from
+yesterday." Web only:
+
+- **The banner** (`activity-banner.tsx`) replaces the page header and scrolls with the page.
+  Its picture is inline SVG drawn from theme tokens (`--banner-*` in `index.css`), so there's
+  no image file and it follows the theme. It's in three layers so each part keeps its place at
+  any width: the stars (dark only), the sun or moon at the top right, and the hills along the
+  bottom 62%, drawn 2,400 × 160 and cropped only from the left. The words keep to the sky; the
+  tagline is the page's foreground colour, so it reads at 7.3:1 even where it reaches the
+  middle hill. The picture is `aria-hidden` and dropped in high-contrast mode.
+- **The titles** (`activity-card.tsx`): `ActivityCard` and `ActivityCardTitle`, with five
+  `--activity-*` colours. Each icon reaches 3.4:1 or more on its 12% tile in both themes. The
+  colours are identity, not data: the title always names the card.
+- **The Today card** keeps the day it shows as null for today, so it moves to a new day by
+  itself at 4 a.m. An earlier day reads `useActivityDay`, so stepping back and then opening the
+  day in full reads once. The previous arrow stops at `historyFrom`.
+- **Tests:** Vitest for `dayTitle` and `dayWhen`, the five titles in order with their
+  colours, stepping back two days and forward again, the day in full from an earlier day, the
+  stop at `historyFrom`, and yesterday's XP all earned on Oct 25 (and Oct 21 saying when
+  activity XP started). The golden path steps back to yesterday's earned XP and returns; the
+  phone a11y scan steps back too and checks the arrows are 44 px and the page stays 375 px
+  wide.

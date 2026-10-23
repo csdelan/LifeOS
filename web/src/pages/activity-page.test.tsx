@@ -109,6 +109,69 @@ describe("Activity page (activity plan §3.7)", () => {
     expect(await card("Steps")).toBeTruthy();
   });
 
+  it("titles every card, under a banner with the page's name and a picture screen readers skip", async () => {
+    renderPage();
+    await card("Tags");
+    expect(screen.getByRole("heading", { level: 1, name: "Activity" })).toBeInTheDocument();
+    expect(document.querySelector("[data-banner-scene]")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "Today",
+      "Steps",
+      "Tags",
+      "Sleep and readiness",
+      "Exercise",
+    ]);
+    // Each card carries its own colour.
+    expect(screen.getAllByRole("region").flatMap((r) => r.dataset.tone ?? [])).toEqual([
+      "today",
+      "steps",
+      "tags",
+      "sleep",
+      "exercise",
+    ]);
+  });
+
+  it("steps the Today card back a day at a time, opens that day in full, and comes back to today", async () => {
+    renderPage();
+    const now = todayIso();
+    const today = await card("Today");
+    expect(today.getByRole("button", { name: "Next day" })).toBeDisabled();
+    expect(today.getByRole("button", { name: "Today" })).toBeDisabled();
+
+    await userEvent.click(today.getByRole("button", { name: "Previous day" }));
+    const yesterday = await card("Yesterday");
+    expect(await yesterday.findByRole("meter", { name: "Steps toward the goal" })).toHaveAttribute(
+      "aria-valuetext",
+      expect.stringMatching(/^[\d,]+ steps, /),
+    );
+    expect(yesterday.getByRole("heading", { name: "The night before" })).toBeInTheDocument();
+    expect(yesterday.getByRole("region", { name: "Health XP yesterday" })).toBeInTheDocument();
+    expect(yesterday.getByRole("button", { name: "Next day" })).toBeEnabled();
+
+    const twoBack = addDays(now, -2);
+    await userEvent.click(yesterday.getByRole("button", { name: "Previous day" }));
+    const earlier = await card(dayName(twoBack, now));
+    expect(earlier.getByText("2 days ago")).toBeInTheDocument();
+    expect(await earlier.findByRole("region", { name: `Health XP on ${dayName(twoBack, now)}` })).toBeInTheDocument();
+    await userEvent.click(earlier.getByRole("button", { name: `${dayName(twoBack, now)} in full` }));
+    const sheet = await screen.findByRole("dialog", { name: dayName(twoBack, now) });
+    expect(await within(sheet).findByRole("heading", { name: "The night" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await userEvent.click(earlier.getByRole("button", { name: "Next day" }));
+    expect(await card("Yesterday")).toBeTruthy();
+    await userEvent.click((await card("Yesterday")).getByRole("button", { name: "Today" }));
+    expect((await card("Today")).getByText("Steps so far")).toBeInTheDocument();
+  });
+
+  it("doesn't step back before the history Oura has given", async () => {
+    setMockOura({ historyFrom: addDays(todayIso(), -1) });
+    renderPage();
+    await userEvent.click((await card("Today")).getByRole("button", { name: "Previous day" }));
+    expect((await card("Yesterday")).getByRole("button", { name: "Previous day" })).toBeDisabled();
+  });
+
   it("switches steps to 90 days, remembers it, and lists every day in the Table", async () => {
     const view = renderPage();
     const steps = await card("Steps");
@@ -627,6 +690,24 @@ describe("Activity XP on the page (activity plan A9)", () => {
     const rows = await within(await exercise.findByRole("table")).findAllByTestId("metric-row");
     expect(rows[0]).toHaveTextContent(/\d+ \+ 25 projected$/);
     expect(rows[1]).toHaveTextContent(/—$/);
+  });
+
+  it("steps the Today card back to yesterday's Health XP, all earned, and before Oct 22 says when it started", async () => {
+    renderPage();
+    await todayXp();
+    await userEvent.click((await card("Today")).getByRole("button", { name: "Previous day" }));
+    const yesterday = await card("Yesterday");
+    const xp = within(await yesterday.findByRole("region", { name: "Health XP yesterday" }));
+    expect(xp.getByTestId("activity-xp-steps")).toHaveTextContent(/earned/);
+    expect(xp.getByTestId("activity-xp-sleep")).toHaveTextContent(/earned/);
+    expect(xp.getByTestId("activity-xp-total")).toHaveTextContent(/^\d+ Health XP earned$/);
+
+    // Oct 24, 23, 22, then Oct 21: the day before activity XP started.
+    for (let i = 0; i < 3; i++) {
+      await userEvent.click(screen.getByRole("button", { name: "Previous day" }));
+    }
+    const before = await card(dayName("2026-10-21", "2026-10-25"));
+    expect(await before.findByTestId("activity-xp-total")).toHaveTextContent(/^Activity XP starts on /);
   });
 
   it("shows a day's XP in its sheet", async () => {

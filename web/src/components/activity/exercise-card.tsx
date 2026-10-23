@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, DumbbellIcon } from "lucide-react";
+import { ActivityCard, ActivityCardTitle } from "@/components/activity/activity-card";
 import { WorkoutRowButton } from "@/components/activity/workout-parts";
 import { DailyMetricChart, MetricTable, type MetricBar } from "@/components/charts/daily-metric-chart";
 import { ListSkeleton } from "@/components/primitives/skeletons";
@@ -120,10 +121,8 @@ export function ExerciseCard({
   }));
 
   return (
-    <section aria-labelledby={titleId} className="space-y-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
-      <h2 id={titleId} className="type-scale-section text-muted-foreground">
-        Exercise
-      </h2>
+    <ActivityCard tone="exercise" titleId={titleId}>
+      <ActivityCardTitle id={titleId} tone="exercise" icon={DumbbellIcon} title="Exercise" />
 
       <WeekCompare thisWeek={summary.thisWeek} lastWeek={summary.lastWeek} xp={compareXp} />
 
@@ -227,6 +226,6 @@ export function ExerciseCard({
           ) : null}
         </div>
       ) : null}
-    </section>
+    </ActivityCard>
   );
 }

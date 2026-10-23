@@ -39,6 +39,11 @@
   --color-sleep-light: var(--sleep-light);
   --color-sleep-rem: var(--sleep-rem);
   --color-sleep-awake: var(--sleep-awake);
+  --color-activity-today: var(--activity-today);
+  --color-activity-steps: var(--activity-steps);
+  --color-activity-sleep: var(--activity-sleep);
+  --color-activity-exercise: var(--activity-exercise);
+  --color-activity-tags: var(--activity-tags);
   --color-score-1: var(--score-1);
   --color-score-1-5: var(--score-1-5);
   --color-score-2: var(--score-2);
@@ -156,6 +161,26 @@
   --sleep-rem: oklch(0.62 0.11 265);
   --sleep-light: oklch(0.48 0.13 265);
   --sleep-deep: oklch(0.35 0.1 265);
+  /* The Activity page's cards: each card's own colour, on its icon tile and the cap along its
+     top, so the cards tell apart at a glance. Identity, not data: the title always says which
+     card it is. Each reaches 3:1 or more on its 12% tile. */
+  --activity-today: oklch(0.6 0.14 70);
+  --activity-steps: oklch(0.52 0.1 168);
+  --activity-sleep: oklch(0.5 0.13 265);
+  --activity-exercise: oklch(0.56 0.15 40);
+  --activity-tags: oklch(0.5 0.13 330);
+  /* The Activity banner's scene (a dawn over teal hills; a moonlit night in the dark). The
+     title sits on the sky, which stays within a step of the page's own paper, so the page's
+     text colours read on it at 4.5:1 or more. */
+  --banner-sky-top: oklch(0.965 0.02 85);
+  --banner-sky-bottom: oklch(0.925 0.045 70);
+  --banner-sun: oklch(0.83 0.13 75);
+  --banner-glow: oklch(0.9 0.08 75);
+  --banner-hill-far: oklch(0.86 0.04 168);
+  --banner-hill-mid: oklch(0.73 0.065 168);
+  --banner-hill-near: oklch(0.56 0.08 168);
+  --banner-tree: oklch(0.47 0.075 168);
+  --banner-trail: oklch(0.93 0.03 85);
   --radius: 0.7rem;
   --sidebar: oklch(0.96 0.014 85);
   --sidebar-foreground: oklch(0.23 0.02 50);
@@ -247,6 +272,20 @@
   --sleep-rem: oklch(0.58 0.13 265);
   --sleep-light: oklch(0.71 0.11 265);
   --sleep-deep: oklch(0.84 0.07 265);
+  --activity-today: oklch(0.83 0.12 80);
+  --activity-steps: oklch(0.78 0.09 168);
+  --activity-sleep: oklch(0.77 0.1 265);
+  --activity-exercise: oklch(0.76 0.13 50);
+  --activity-tags: oklch(0.77 0.11 330);
+  --banner-sky-top: oklch(0.19 0.035 265);
+  --banner-sky-bottom: oklch(0.255 0.04 235);
+  --banner-sun: oklch(0.93 0.03 85);
+  --banner-glow: oklch(0.93 0.03 85 / 0.12);
+  --banner-hill-far: oklch(0.3 0.035 205);
+  --banner-hill-mid: oklch(0.25 0.03 185);
+  --banner-hill-near: oklch(0.205 0.022 170);
+  --banner-tree: oklch(0.175 0.018 170);
+  --banner-trail: oklch(0.42 0.04 170);
   --sidebar: oklch(0.16 0.016 170);
   --sidebar-foreground: oklch(0.945 0.012 85);
   --sidebar-primary: oklch(0.78 0.08 168);
@@ -367,6 +406,10 @@
   [data-metric-bar] {
     background-color: CanvasText;
     forced-color-adjust: none;
+  }
+  /* The banner's scene keeps its own fills, which the system's text colour may not read on. */
+  [data-banner-scene] {
+    display: none;
   }
 }
 

@@ -323,6 +323,23 @@ export function dayName(day: string, today: string): string {
   return day === today ? "Today" : formatWeekday(day);
 }
 
+/** "Today", "Yesterday", or "Tue, Oct 21": the Today card's title for the day it shows. */
+export function dayTitle(day: string, today: string): string {
+  return day === addDays(today, -1) ? "Yesterday" : dayName(day, today);
+}
+
+/** Under the Today card's title: the date in full today and yesterday, "3 days ago" before that. */
+export function dayWhen(day: string, today: string): string {
+  if (day >= addDays(today, -1)) {
+    const [y, m, d] = day.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  }
+  const [ty, tm, td] = today.split("-").map(Number);
+  const [y, m, d] = day.split("-").map(Number);
+  const days = Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(y, m - 1, d)) / 86_400_000);
+  return `${days} days ago`;
+}
+
 /** A day's steps against the thresholds, and a long time without the ring, without its name. */
 export function stepDayText(day: ActivityDayRow, targets: StepTargets, today: string): string {
   if (day.steps == null) return "no steps recorded";

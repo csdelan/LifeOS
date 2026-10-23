@@ -3325,6 +3325,16 @@ Build:      building
 - Build stays `building` until A6's week of comparing the page with the Oura app, as
   ACTIVITY-1 to ACTIVITY-4 do.
 
+**Update (2026-10-23 — a day at a time, A11):** "the 'today' card (or single day view) I think
+should have arrows for going back and forth by 1 day at a time. I want to see my Health XP
+from yesterday, as an example."
+
+- The Today card's arrows step back a day at a time, as far as Oura's history goes, and
+  **Today** comes back. An earlier day shows its steps, the night before it, its workouts and
+  its Health XP, each part earned or projected as today's are.
+- In the same change each Activity card got a large title with its own icon and colour, and
+  the page a drawn banner (activity plan §3.7, A11).
+
 ### ACTIVITY-6 — Tags I add in the Oura app are kept beside my health data
 Horizon:    Pilot
 Definition: active

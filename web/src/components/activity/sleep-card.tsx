@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { MoonIcon } from "lucide-react";
+import { ActivityCard, ActivityCardTitle } from "@/components/activity/activity-card";
 import { ScoreCell, ScoreFigure, StageBar, StatTile } from "@/components/activity/sleep-parts";
 import { XpCell } from "@/components/activity/xp-parts";
 import {
@@ -276,10 +277,8 @@ export function SleepCard({
     : [];
 
   return (
-    <section aria-labelledby={titleId} className="space-y-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
-      <h2 id={titleId} className="type-scale-section text-muted-foreground">
-        Sleep and readiness
-      </h2>
+    <ActivityCard tone="sleep" titleId={titleId}>
+      <ActivityCardTitle id={titleId} tone="sleep" icon={MoonIcon} title="Sleep and readiness" />
 
       <div className="space-y-2">
         <h3 className="text-sm font-medium">Last night</h3>
@@ -375,6 +374,6 @@ export function SleepCard({
           </p>
         </div>
       ) : null}
-    </section>
+    </ActivityCard>
   );
 }

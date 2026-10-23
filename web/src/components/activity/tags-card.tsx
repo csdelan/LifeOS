@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { ChevronDownIcon, TagIcon } from "lucide-react";
+import { ActivityCard, ActivityCardTitle } from "@/components/activity/activity-card";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
 import { Button } from "@/components/ui/button";
@@ -81,17 +82,10 @@ export function TagsCard({
   const hidden = days.length - visible.length;
 
   return (
-    <section
-      aria-labelledby={titleId}
-      data-testid="tags-card"
-      className="space-y-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id={titleId} className="type-scale-section text-muted-foreground">
-          Tags
-        </h2>
+    <ActivityCard tone="tags" titleId={titleId} data-testid="tags-card">
+      <ActivityCardTitle id={titleId} tone="tags" icon={TagIcon} title="Tags">
         <ToggleGroup label="Range" value={range} onChange={setRange} options={[...METRIC_RANGES]} />
-      </div>
+      </ActivityCardTitle>
 
       {tags.isLoading ? <ListSkeleton rows={3} /> : null}
       {tags.isError ? (
@@ -171,6 +165,6 @@ export function TagsCard({
           )}
         </div>
       ) : null}
-    </section>
+    </ActivityCard>
   );
 }

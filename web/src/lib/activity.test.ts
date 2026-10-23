@@ -3,6 +3,8 @@ import {
   ACTIVITY_TARGETS,
   bandWords,
   contributorName,
+  dayTitle,
+  dayWhen,
   describeStepDay,
   describeSteps,
   formatDistance,
@@ -309,6 +311,24 @@ describe("syncedAgo", () => {
     expect(syncedAgo("2026-10-22T09:00:00Z", now)).toBe("3 h ago");
     expect(syncedAgo("2026-10-21T09:00:00Z", now)).toBe("yesterday");
     expect(syncedAgo("2026-10-23T09:00:00Z", now)).toBe("just now");
+  });
+});
+
+describe("the Today card's day", () => {
+  it("names today, yesterday, then the day itself", () => {
+    expect(dayTitle("2026-10-23", "2026-10-23")).toBe("Today");
+    expect(dayTitle("2026-10-22", "2026-10-23")).toBe("Yesterday");
+    expect(dayTitle("2026-10-21", "2026-10-23")).toBe(formatWeekday("2026-10-21"));
+  });
+
+  it("says the date in full today and yesterday, how long ago before that", () => {
+    const full = (iso: string) =>
+      new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+    expect(dayWhen("2026-10-23", "2026-10-23")).toBe(full("2026-10-23"));
+    expect(dayWhen("2026-10-22", "2026-10-23")).toBe(full("2026-10-22"));
+    expect(dayWhen("2026-10-21", "2026-10-23")).toBe("2 days ago");
+    // Across the change from summer time, still whole days.
+    expect(dayWhen("2026-10-27", "2026-11-03")).toBe("7 days ago");
   });
 });
 
