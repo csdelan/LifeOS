@@ -2182,6 +2182,13 @@ Build:      mapped
 - The weekly review should use one editable document rather than a collection of separate
   documents. Guided reflection and planning can appear as sections within that document.
 - It should combine reflection on the prior week with planning for the upcoming week.
+- Weeks run Monday to Sunday. The review I do on Sunday looks back at the week ending that
+  day and plans the week starting the next day: "a weekly review on 10/25/26 would review my
+  accomplishments from 10/19/26 to 10/25/26, but then plan priorities for 10/26/26 through
+  11/1/2026." (2026-10-23)
+- Name each weekly review by the Sunday it's done, e.g. "Weekly review, Sun Oct 25", with
+  both ranges shown: looking back Mon Oct 19 – Sun Oct 25, planning Mon Oct 26 – Sun Nov 1.
+  (Decision 2026-10-23.)
 - Begin with a comprehensive weekly summary. Initially include links to every daily review
   from the week, completed and overdue Tasks, Project progress, Habit adherence,
   Appointments, missed Commitments, Inbox history, and any other recorded weekly activity.
@@ -2225,6 +2232,13 @@ Build:      mapped
 - Implications: no second running document mid-week (only daily Reviews accumulate); the weekly
   Review is created and normally completed Sunday. Missed with no grace period, but backfillable
   (D8 / GEN-5).
+- Week boundaries (2026-10-23): the weekly Review is identified by its Sunday. Its summary
+  covers the Monday–Sunday week ending on that Sunday; its planning covers the Monday–Sunday
+  week after. The week's daily Reviews are the seven that end on that Sunday, so a late
+  (backfilled) review still belongs to the week it looks back on. The placeholder web Reviews
+  page (`web/src/pages/reviews-page.tsx`, the mock store and seed) still groups Sunday–Saturday
+  with `startOfWeekSunday` and keys a weekly doc by that start; change it when this is built
+  (`startOfWeekMonday`, keyed by the Sunday).
 - Open decisions: the weekly-specific reflection questions (content, app-side).
 
 
