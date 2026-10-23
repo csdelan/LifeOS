@@ -246,6 +246,8 @@ export interface SubjectListItem {
   visionOrder?: number | null;
   /** What completing it pays (a Habit: a followed day); null for a type that doesn't earn. */
   bounty?: Amounts | null;
+  /** Its cover photo (COVER-1); null when it has none, always for a type that can't have one. */
+  cover?: CoverRead | null;
 }
 
 /** Detail-pane header for one subject, plus the raw attributes JSON. */
@@ -268,6 +270,81 @@ export interface SubjectDetail {
   attributes?: string | null;  // raw attributes jsonb as text
   /** What each trigger pays (REWARD-2); null for a type that doesn't earn. */
   bounty?: BountyLine[] | null;
+  /** Its cover photo (COVER-1); null when it has none, always for a type that can't have one. */
+  cover?: CoverRead | null;
+}
+
+// ---------------------------------------------------------------------------
+// Cover images (COVER-1..3, D15; cover-images plan §3.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * A subject's cover as the API reads it: an Unsplash photo, hotlinked, with the credit links
+ * already carrying Unsplash's referral parameters. `url` is the raw image (`lib/cover.ts`
+ * sizes it); `positionY` is where a banner is centred, 0 (top) to 100 (bottom).
+ */
+export interface CoverRead {
+  source: string;
+  photoId: string;
+  url: string;
+  /** The photo's average colour, `#rrggbb`: shown while it loads, and if it can't. */
+  color: string;
+  width: number;
+  height: number;
+  alt?: string | null;
+  photographer: string;
+  photographerLink: string;
+  photoLink: string;
+  unsplashLink: string;
+  positionY: number;
+  setAt: string;
+}
+
+/** One photo in the cover picker: a small image to show, and its credit. */
+export interface CoverPhoto {
+  /** What `setCover` takes. */
+  id: string;
+  /** The photo at 400 px wide. */
+  thumbUrl: string;
+  color: string;
+  alt?: string | null;
+  width: number;
+  height: number;
+  photographer: string;
+  photographerLink: string;
+}
+
+/** A page of the cover picker's search. Without an Access Key on the server, `configured` is false. */
+export interface CoverSearchRead {
+  configured: boolean;
+  /** The words as searched, spaces squeezed. */
+  query: string;
+  page: number;
+  total: number;
+  totalPages: number;
+  unsplashLink: string;
+  photos: CoverPhoto[];
+}
+
+/** `POST /api/cover` (`bsk cover set`): an Unsplash photo by id, centred at `positionY` (50 by default). */
+export interface CoverRequest {
+  subject: string;
+  photoId: string;
+  positionY?: number;
+}
+
+/** A cover set or moved; `downloadProblem` says why Unsplash's download count failed (the cover is set regardless). */
+export interface CoverResult {
+  subject: CreatedSubject;
+  cover: CoverRead;
+  downloadCounted: boolean;
+  downloadProblem?: string | null;
+}
+
+/** A cover removed; `removed` is false when there was none. */
+export interface CoverCleared {
+  subject: CreatedSubject;
+  removed: boolean;
 }
 
 /** One alignment-graph edge (the tree/graph is built from these). */
@@ -1493,4 +1570,10 @@ export interface LifeOsWriteClient {
   setBounty(req: BountyRequest): Promise<BountyResult>;
   /** Set or clear a Habit's establish target (REWARD-2). Refused for any other type. */
   setHabitTarget(req: HabitTargetRequest): Promise<HabitTargetResult>;
+  /** Make an Unsplash photo an identity statement's, goal's or project's cover (COVER-1). */
+  setCover(req: CoverRequest): Promise<CoverResult>;
+  /** Move a cover's banner to `positionY` (0 top, 100 bottom). Refused when there's no cover. */
+  moveCover(subject: string, positionY: number): Promise<CoverResult>;
+  /** Remove a subject's cover. */
+  clearCover(subject: string): Promise<CoverCleared>;
 }

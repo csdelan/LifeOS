@@ -628,6 +628,50 @@ test.describe("golden paths", () => {
     await expect(entries.getByRole("button", { name: /^Sausage burrito ×3, / })).toBeVisible({ timeout: 10_000 });
   });
 
+  test("Covers: add one to a goal from search, see its credit, reposition it with the keyboard, and remove it", async ({
+    page,
+  }) => {
+    await page.goto("/map?selected=goal-half");
+    await expect(page.getByRole("heading", { name: "Run a half-marathon" })).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Add cover" }).click();
+
+    const picker = page.getByRole("dialog", { name: "Choose a cover" });
+    const search = picker.getByRole("searchbox", { name: "Search Unsplash" });
+    await expect(search).toHaveValue("Run a half-marathon");
+    await expect(picker.getByRole("button", { name: /^Use the photo by / })).toHaveCount(1);
+    await search.fill("anything at all");
+    await search.press("Enter");
+    await expect(picker.getByRole("button", { name: /^Use the photo by / })).toHaveCount(6);
+    await picker.getByRole("button", { name: "More photos" }).click();
+    await expect(picker.getByRole("button", { name: /^Use the photo by / })).toHaveCount(8);
+    await picker.getByRole("button", { name: /^Use the photo by Teo Marin/ }).click();
+    await expect(picker).toBeHidden();
+
+    const banner = page.getByTestId("cover-banner");
+    await expect(banner).toContainText("Photo by Teo Marin on Unsplash");
+    await expect(banner.getByRole("link", { name: "Unsplash" })).toHaveAttribute(
+      "href",
+      /utm_source=lifeos&utm_medium=referral/,
+    );
+    await expect(page.getByRole("button", { name: "Add cover" })).toBeHidden();
+
+    await banner.getByRole("button", { name: "Cover options" }).click();
+    await page.getByRole("menuitem", { name: "Reposition" }).click();
+    const slider = page.getByRole("slider", { name: /Cover position/ });
+    await expect(slider).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    await expect(slider).toHaveAttribute("aria-valuenow", "40");
+    await page.getByRole("button", { name: "Save position" }).click();
+    await expect(slider).toBeHidden();
+    await expect(banner.locator("img")).toHaveCSS("object-position", "50% 40%");
+
+    await banner.getByRole("button", { name: "Cover options" }).click();
+    await page.getByRole("menuitem", { name: "Remove cover" }).click();
+    await expect(banner).toBeHidden();
+    await expect(page.getByRole("button", { name: "Add cover" })).toBeVisible();
+  });
+
   test("theme toggle switches the document class", async ({ page }) => {
     await page.goto("/");
     const html = page.locator("html");

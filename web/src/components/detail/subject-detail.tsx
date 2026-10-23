@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   BookOpenIcon,
   HistoryIcon,
+  ImagePlusIcon,
   LayoutListIcon,
   Link2Icon,
   PaperclipIcon,
@@ -41,6 +42,9 @@ import { BountyChip } from "@/components/rewards/bounty-chip";
 import { BountySection } from "@/components/rewards/bounty-editor";
 import { TaskTimerPanel } from "@/components/timer/task-timer";
 import { JournalEditor, looksLikeHtml } from "@/components/journal/journal-editor";
+import { CoverBanner } from "@/components/cover/cover-banner";
+import { CoverPicker } from "@/components/cover/cover-picker";
+import { canHaveCover } from "@/lib/cover";
 import {
   useHabits,
   useHistory,
@@ -108,6 +112,8 @@ export function SubjectDetail({
   const { data: habits } = useHabits();
   const { data: occurrences } = useOccurrences(subjectId);
   const [editing, setEditing] = useState(false);
+  const [choosingCover, setChoosingCover] = useState(false);
+  const [coverPicks, setCoverPicks] = useState(0);
   const [bountyDraft, setBountyDraft] = useState<BountyDraft>({});
   const [targetDraft, setTargetDraft] = useState<TargetDraft>({});
   const writes = useWrites();
@@ -144,6 +150,7 @@ export function SubjectDetail({
   useEffect(() => {
     setBountyDraft({});
     setTargetDraft({});
+    setChoosingCover(false);
   }, [subjectId]);
 
   const bountyLines = data?.bounty ?? [];
@@ -272,13 +279,44 @@ export function SubjectDetail({
   }
 
   const headline = bountyLines[0];
+  const coverable = canHaveCover(subject.type);
+  // Each opening of the picker starts afresh from the title.
+  function chooseCover() {
+    setCoverPicks((n) => n + 1);
+    setChoosingCover(true);
+  }
+  const cover = coverable ? subject.cover : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {cover ? (
+        <CoverBanner key={subject.id} subjectId={subject.id} cover={cover} onChangeCover={chooseCover} />
+      ) : null}
+      {coverable ? (
+        <CoverPicker
+          key={`${subject.id}-${coverPicks}`}
+          open={choosingCover}
+          onOpenChange={setChoosingCover}
+          subject={{ id: subject.id, title: subject.title }}
+        />
+      ) : null}
       <header className="shrink-0 border-b px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <TypeBadge type={subject.type} />
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <TypeBadge type={subject.type} />
+              {/* Beside the type, not with the buttons, so the title keeps its width. */}
+              {coverable && !cover && !editing ? (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="-my-1 text-muted-foreground"
+                  onClick={chooseCover}
+                >
+                  <ImagePlusIcon aria-hidden /> Add cover
+                </Button>
+              ) : null}
+            </div>
             {editing ? (
               <div className="mt-1 space-y-1">
                 <Input

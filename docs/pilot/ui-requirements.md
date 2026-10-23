@@ -3415,6 +3415,12 @@ with its credit links ready. The production security policy lets images load fro
 `images.unsplash.com` only, and `fly-setup.ps1` stages `Unsplash__AccessKey` from `.env`.
 Nothing shows on a page yet: the picker and banner are C3.
 
+**Update (2026-10-23 — picker landed, C3):** Add cover, beside the type badge on an
+identity statement, goal or project, opens "Choose a cover". It searches Unsplash through
+the server, filled in with the title, and tapping a photo sets it. It works in the mock
+(eight drawn scenes) and was checked live against the API with a fake Unsplash. Build stays
+`building` until it's on staging (C5).
+
 **Workflow (Chris):**
 - "I would like to add images to long standing subjects such as identity statements, goals,
   and even projects, for the visual enhancement it provides. My first question is whether
@@ -3443,7 +3449,13 @@ Nothing shows on a page yet: the picker and banner are C3.
 ### COVER-2 — A subject's cover shows as a banner at the top of its detail
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      building
+
+**Update (2026-10-23 — banner landed, C3):** The banner shows across the top of the detail
+panel and the phone sheet, with "Photo by … on Unsplash" (both linked) in its corner. Its
+Cover menu offers Change cover, Reposition and Remove cover. Reposition is a drag, or the
+arrow keys, Page Up and Page Down, Home and End, then Save. Build moves `mapped →
+building`. It becomes `built` once it's on staging (C5).
 
 **Workflow (Chris):**
 - "both banners and card images" (2026-10-23).

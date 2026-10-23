@@ -4,6 +4,7 @@
  */
 import {
   keepPreviousData,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -14,6 +15,7 @@ import { isLiveApi } from "@/lib/api-base";
 import { createWriteClient, getReads } from "@/lib/client";
 import { mapForestStatus, type DashboardRead, type MapLens } from "@/lib/derive";
 import { announceEarned } from "@/lib/earn-feedback";
+import { nextCoverPage } from "@/lib/cover";
 import { fetchMe, meQueryKey } from "@/lib/me";
 import type { LifeOsReads } from "@/lib/mock/api";
 import type {
@@ -72,6 +74,7 @@ export const qk = {
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
+  coverSearch: (query: string) => ["cover-search", query] as const,
   reviews: ["reviews"] as const,
   recap: ["recap"] as const,
   dashboard: ["dashboard"] as const,
@@ -462,7 +465,30 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       await invalidate(qc, [qk.habits, qk.subject(result.habit.id)]);
       return result;
     },
+
+    async setCover(req) {
+      const result = await client.setCover(req);
+      await invalidate(qc, coverKeys(result.subject.id));
+      return result;
+    },
+
+    async moveCover(subject, positionY) {
+      const result = await client.moveCover(subject, positionY);
+      await invalidate(qc, coverKeys(result.subject.id));
+      return result;
+    },
+
+    async clearCover(subject) {
+      const result = await client.clearCover(subject);
+      await invalidate(qc, coverKeys(result.subject.id));
+      return result;
+    },
   };
+}
+
+/** What a cover change moves: the subject, the lists and cards it shows on, and the Map. */
+function coverKeys(id: string): readonly (readonly unknown[])[] {
+  return [qk.subject(id), qk.listItem(id), qk.subjects, qk.dashboard, ["forest"]];
 }
 
 function matchesRef(id: string, urn: string, ref: string) {
@@ -539,6 +565,23 @@ export function useBountyDefaults() {
     queryKey: qk.bountyDefaults,
     queryFn: () => reads().bountyDefaults(),
     staleTime: Infinity,
+  });
+}
+
+/**
+ * The cover picker's search (COVER-1), a page at a time for "More photos". Unsplash allows
+ * 50 searches an hour, so a search is kept for half an hour and a failure isn't retried.
+ */
+export function useCoverSearch(query: string, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: qk.coverSearch(query),
+    queryFn: ({ pageParam }) => reads().coverSearch(query, pageParam),
+    initialPageParam: 1,
+    getNextPageParam: nextCoverPage,
+    enabled: enabled && query.trim() !== "",
+    staleTime: 30 * 60_000,
+    gcTime: 30 * 60_000,
+    retry: false,
   });
 }
 

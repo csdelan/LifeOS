@@ -5,6 +5,7 @@ import {
   type AlignmentEdge,
 } from "@/lib/derive";
 import { api, ApiRequestError, unwrap } from "@/lib/live/http";
+import { normalizeCoverSearch, withNormalCover } from "@/lib/cover";
 import type { RecapSection } from "@/lib/review-recap";
 import {
   normalizeBountyDefaults,
@@ -108,7 +109,7 @@ export const liveReads: LifeOsReads = {
         },
       }),
     );
-    return asType<SubjectListItem[]>(data).map(normalizeListBounty);
+    return asType<SubjectListItem[]>(data).map((s) => withNormalCover(normalizeListBounty(s)));
   },
 
   async getSubject(id) {
@@ -119,7 +120,7 @@ export const liveReads: LifeOsReads = {
     if (!response.ok || data === undefined) {
       throw new Error(`API ${response.status}`);
     }
-    return normalizeDetailBounty(asType<SubjectDetail>(data));
+    return withNormalCover(normalizeDetailBounty(asType<SubjectDetail>(data)));
   },
 
   async getListItem(id) {
@@ -130,7 +131,7 @@ export const liveReads: LifeOsReads = {
     if (!response.ok || data === undefined) {
       throw new Error(`API ${response.status}`);
     }
-    return normalizeListBounty(asType<SubjectListItem>(data));
+    return withNormalCover(normalizeListBounty(asType<SubjectListItem>(data)));
   },
 
   async relations(id) {
@@ -317,6 +318,11 @@ export const liveReads: LifeOsReads = {
       }),
     );
     return asType<RewardRow[]>(data).map(normalizeReward);
+  },
+
+  async coverSearch(query, page = 1) {
+    const data = await unwrap(api().GET("/api/covers/search", { params: { query: { q: query, page } } }));
+    return normalizeCoverSearch(data);
   },
 
   async bountyDefaults() {

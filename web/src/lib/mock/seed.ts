@@ -27,6 +27,7 @@ import type {
 import { defaultStatus } from "@/lib/production-ui-types";
 import type { TimerEvent } from "@/lib/timer";
 import type { MockFoodEvent } from "@/lib/mock/food-fold";
+import { sceneById, storedCoverOf } from "@/lib/mock/covers";
 import { applyMultiplier, DomainProgress, gemsFor, HEALTH, rankAwardKey, type DomainDay } from "@/lib/domain-fold";
 
 export interface MockEvent {
@@ -928,6 +929,20 @@ export function createSeed(): MockState {
     attendees: "person-maya,person-jonah",
     all_day: "false",
   });
+
+  // Covers (cover-images plan §3.9): an identity statement, a goal and a project start with
+  // one of the bundled scenes, so the banner and the cards show without picking first.
+  function cover(id: string, sceneId: string, positionY: number) {
+    const d = details[id];
+    const scene = sceneById(sceneId);
+    if (!d || !scene) return;
+    const attrs = d.attributes ? (JSON.parse(d.attributes) as Record<string, unknown>) : {};
+    attrs.cover = storedCoverOf(scene, positionY, `${t(-3)}T09:00:00Z`);
+    details[id] = { ...d, attributes: JSON.stringify(attrs) };
+  }
+  cover("value-steward", "mock-forest-path", 60);
+  cover("goal-lifeos", "mock-city-night", 40);
+  cover("proj-web", "mock-workbench", 50);
 
   const edges: CanonicalEdge[] = [
     // Health

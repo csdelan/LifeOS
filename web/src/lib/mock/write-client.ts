@@ -38,7 +38,10 @@ import {
   mockAddReward,
   mockPriceReward,
   mockRedeem,
+  mockClearCover,
+  mockMoveCover,
   mockSetBounty,
+  mockSetCover,
   mockSetHabitTarget,
   mockTargetReward,
   relateEvent,
@@ -398,6 +401,30 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       notify(targetUsd === null ? "Target removed" : "Target saved");
       bump();
       return row;
+    },
+
+    async setCover(req) {
+      await wait();
+      const result = mockSetCover(req);
+      notify("Cover set");
+      bump();
+      return result;
+    },
+
+    async moveCover(subject, positionY) {
+      await wait();
+      const result = mockMoveCover(subject, positionY);
+      notify("Cover moved");
+      bump();
+      return result;
+    },
+
+    async clearCover(subject) {
+      await wait();
+      const result = mockClearCover(subject);
+      notify(result.removed ? "Cover removed" : "No cover to remove");
+      bump();
+      return result;
     },
 
     async setBounty(req) {

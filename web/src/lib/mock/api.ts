@@ -23,6 +23,7 @@ import type {
   ActivityWorkoutsRead,
   AreaRow,
   ArtifactRecord,
+  CoverSearchRead,
   DomainDaysRead,
   DomainReportRead,
   DomainsRead,
@@ -75,7 +76,9 @@ import {
   mockDomainReport,
   mockActivityPaid,
   withBounty,
+  withCover,
 } from "@/lib/mock/store";
+import { mockSearchScenes } from "@/lib/mock/covers";
 import {
   mockActivityDay,
   mockActivityDays,
@@ -112,7 +115,7 @@ function listOf(type?: SubjectListItem["type"], includeArchived = false): Subjec
       if (type && s.type !== type) return false;
       return true;
     })
-    .map(withBounty);
+    .map((s) => withCover(withBounty(s)));
 }
 
 export interface LifeOsReads {
@@ -191,6 +194,11 @@ export interface LifeOsReads {
   rewards(opts?: { includeArchived?: boolean }): Promise<RewardRow[]>;
   /** What each trigger of each earning type pays by default (REWARD-2). */
   bountyDefaults(): Promise<BountyTypeDefaults[]>;
+  /**
+   * A page of Unsplash photos for the cover picker (COVER-1), searched through the server.
+   * Without an Access Key there, `configured` is false and there are no photos.
+   */
+  coverSearch(query: string, page?: number): Promise<CoverSearchRead>;
   reviews(opts?: { kind?: "daily" | "weekly"; date?: string }): Promise<ReviewDoc[]>;
   recap(opts: { start: string; end: string; asOf: string }): Promise<RecapSection[]>;
   /**
@@ -226,13 +234,13 @@ export const mockReads: LifeOsReads = {
   async getSubject(id: string): Promise<SubjectDetail | null> {
     await wait();
     const detail = storeState().details[id];
-    return detail ? detailWithBounty(detail) : null;
+    return detail ? withCover(detailWithBounty(detail)) : null;
   },
 
   async getListItem(id: string): Promise<SubjectListItem | null> {
     await wait();
     const item = storeState().subjects.find((s) => s.id === id);
-    return item ? withBounty(item) : null;
+    return item ? withCover(withBounty(item)) : null;
   },
 
   async relations(id: string): Promise<SubjectRelations> {
@@ -425,6 +433,11 @@ export const mockReads: LifeOsReads = {
   async rewards(opts?: { includeArchived?: boolean }): Promise<RewardRow[]> {
     await wait();
     return mockRewards(opts?.includeArchived);
+  },
+
+  async coverSearch(query: string, page = 1): Promise<CoverSearchRead> {
+    await wait();
+    return mockSearchScenes(query, page);
   },
 
   async bountyDefaults(): Promise<BountyTypeDefaults[]> {

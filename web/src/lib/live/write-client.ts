@@ -3,6 +3,8 @@ import { api, unwrap } from "@/lib/live/http";
 import type {
   ActivitySyncResult,
   BountyResult,
+  CoverCleared,
+  CoverResult,
   CreatedSubject,
   HabitTargetResult,
   LifeOsWriteClient,
@@ -15,6 +17,7 @@ import type {
   WorkoutRow,
 } from "@/lib/production-ui-types";
 import { normalizeOuraStatus, normalizeSync, normalizeWorkout } from "@/lib/activity";
+import { normalizeCover } from "@/lib/cover";
 import { renamedMessage } from "@/lib/production-ui-types";
 import { normalizeTimer } from "@/lib/live/reads";
 import { normalizeEarned, normalizeProgress } from "@/lib/domains";
@@ -30,6 +33,14 @@ import {
 
 function notify(message: string) {
   toast.success(message);
+}
+
+/** A cover set or moved, its cover normalized; a download count that failed is said, not hidden. */
+function coverResult(raw: unknown): CoverResult {
+  const result = raw as CoverResult;
+  const cover = normalizeCover(result.cover);
+  if (!cover) throw new Error("The server's answer had no cover in it.");
+  return { ...result, cover };
 }
 
 export function createLiveWriteClient(): LifeOsWriteClient {
@@ -331,6 +342,25 @@ export function createLiveWriteClient(): LifeOsWriteClient {
         (await unwrap(api().POST("/api/bounty", { body: req }))) as unknown as BountyResult,
       );
       notify("Bounty saved");
+      return result;
+    },
+
+    async setCover(req) {
+      const result = coverResult(await unwrap(api().POST("/api/cover", { body: req })));
+      notify("Cover set");
+      if (result.downloadProblem) toast.warning(result.downloadProblem);
+      return result;
+    },
+
+    async moveCover(subject, positionY) {
+      const result = coverResult(await unwrap(api().POST("/api/cover/position", { body: { subject, positionY } })));
+      notify("Cover moved");
+      return result;
+    },
+
+    async clearCover(subject) {
+      const result = (await unwrap(api().POST("/api/cover/clear", { body: { subject } }))) as unknown as CoverCleared;
+      notify(result.removed ? "Cover removed" : "No cover to remove");
       return result;
     },
 

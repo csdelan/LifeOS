@@ -355,7 +355,7 @@ Read 2026-10-23.
 - [x] C0 — Requirements (COVER-1 to COVER-3, D15) + this plan
 - [x] C1 — Kernel: the cover attribute, the Unsplash client, `bsk cover`
 - [x] C2 — API, the security policy and the key on Fly
-- [ ] C3 — Picker and banner
+- [x] C3 — Picker and banner
 - [ ] C4 — Card images
 - [ ] C5 — Live on staging
 
@@ -442,3 +442,74 @@ Read 2026-10-23.
     - refusals in words, including a photo that's gone (404) and the hourly limit (502)
     - a malformed stored cover reading as none
   - `ApiHostTests.Csp_lets_cover_images_load_from_unsplash_and_nothing_more`.
+
+**C3 (2026-10-23).** As planned, except where noted:
+
+- **Where things live.** The helpers are in `web/src/lib/cover.ts`. The components are in
+  `web/src/components/cover/`: `cover-image.tsx`, `cover-banner.tsx` and
+  `cover-picker.tsx`. The mock's scenes are in `web/src/lib/mock/covers.ts` and
+  `covers/*.svg`. The client types (`CoverRead`, `CoverPhoto`, `CoverSearchRead`,
+  `CoverResult`, `CoverCleared`) are in `production-ui-types.ts`, and both data seams read
+  covers through `normalizeCover`, so a cover with no image or credit reads as none.
+- **Add cover sits beside the type badge,** as a small ghost button, not in the header's
+  button row. In the 448 px panel, a fourth button there wrapped the title onto two lines.
+- **Reposition:**
+  - Choosing it from the menu puts the focus on the banner. The banner is then a vertical
+    slider (0–100), and its value is in words, e.g. "Showing the photo 40% of the way
+    down".
+  - Keys: Up and Down move 5, Page Up and Page Down move 20, and Home and End go to the
+    top and bottom.
+  - The photo moves the way the arrow points: Up raises `position_y`, which shows more of
+    the photo's lower part. A drag follows the pointer, scaled by how much of the photo is
+    hidden above and below.
+  - Escape isn't bound. On a phone it would close the sheet; Cancel is there instead.
+  - Save writes only if the position changed.
+- **The picker:**
+  - The Search button stays enabled while a search loads, because a disabled submit
+    button swallows Enter.
+  - Results are kept for 30 minutes and never retried, since Unsplash's demo limit is 50
+    requests an hour. Reopening the picker on the same words costs nothing.
+  - An error shows in words in place of the grid. An error loading more photos shows
+    under the grid and keeps the photos already there.
+  - If the download count failed, a warning toast says so. The cover is still set.
+- **Keyed state.** The banner is keyed by subject and the picker by each opening. Moving to
+  another subject never inherits a reposition in progress, and every opening starts again
+  from the title.
+- **The write hooks** refresh the subject, its list item, the subject lists, the dashboard
+  and the map after a set, move or clear.
+- **The mock:**
+  - It has eight scenes, served six to a page, so More photos shows.
+  - A search word of two or more letters matches a scene's keyword by prefix either way.
+    With no match, the search gives every scene.
+  - It refuses in the server's words.
+  - The made-up photographers' links go to unsplash.com with the referral parameters.
+  - `applyAttrs` refuses `cover`, as `bsk set` does.
+- **Tests:**
+  - Vitest:
+    - `cover.test.ts`: sizing, positions, keys, drag, words, paging and reading the API.
+    - `mock/covers.test.ts`: search, the seeds, set, move and clear, the refusals, and the
+      cover kept through other edits.
+    - A "SubjectDetail covers" block in `subject-detail.test.tsx`: the credit links; adding
+      a cover from a search; repositioning with the keyboard, saving and removing; and no
+      Add cover on a Task.
+  - An e2e golden path: add a cover to a goal from search, see its credit, reposition it
+    with the keyboard, and remove it.
+  - a11y scans of the banner and the picker in both themes, and of the banner,
+    Reposition and the picker on a 375 px phone.
+- **a11y scans now wait for transitions to finish.** `index.html` starts dark, and
+  next-themes switches to light only after the page mounts; its own early script never
+  runs in a client-only app. Under reduced motion every element still takes a 0.01 ms
+  transition, and the colour reaches each level of the page a frame after its parent.
+  For a moment, deep text sits between the two themes, and axe reported that moment as
+  1.14:1 contrast.
+  - The cover light-theme scan failed this way every time.
+  - The Character Reports light-theme scan failed this way once.
+  - `settled()` in `a11y.spec.ts` now waits until no transition is running, before every
+    scan.
+- **Live-checked** with a throwaway database, the API with a fake Unsplash, and a test
+  sign-in:
+  - The picker searched the goal's title through the server.
+  - Picking a photo set the cover with one download count, and showed the credit with both
+    links.
+  - Moving it with the keyboard saved 40. It kept 40 across a reload and on the list read.
+  - Removing it brought Add cover back. A Task had no Add cover.

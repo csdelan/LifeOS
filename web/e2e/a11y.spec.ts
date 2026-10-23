@@ -1,5 +1,19 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+// The page starts dark and next-themes switches it to light after it mounts. Under reduced
+// motion every element still takes a 0.01ms transition, and the colour reaches each level of
+// the page a frame after its parent, so for a moment deep text sits halfway between the
+// themes. Wait until no transition is running before a scan, or axe reads that moment.
+async function settled(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.getAnimations().filter((a) => a.effect?.getComputedTiming().endTime !== Infinity).length,
+      ),
+    )
+    .toBe(0);
+}
 
 const routes = [
   "/",
@@ -38,6 +52,7 @@ test.describe("accessibility", () => {
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /character with the daily chart, ${theme} theme`, async ({ page }) => {
       const scan = async () => {
+        await settled(page);
         const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
       };
@@ -71,6 +86,7 @@ test.describe("accessibility", () => {
       await expect(page.getByRole("list", { name: "Consistency, last 3 months" })).toContainText("30 days: 80%", {
         timeout: 10_000,
       });
+      await settled(page);
       const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       const blocking = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
       expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
@@ -83,6 +99,7 @@ test.describe("accessibility", () => {
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /food with entries and the log sheet, ${theme} theme`, async ({ page }) => {
       const scan = async () => {
+        await settled(page);
         const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
       };
@@ -133,6 +150,7 @@ test.describe("accessibility", () => {
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /food with drinks, ${theme} theme`, async ({ page }) => {
       const scan = async () => {
+        await settled(page);
         const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
       };
@@ -191,6 +209,7 @@ test.describe("accessibility", () => {
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /food week and month, ${theme} theme`, async ({ page }) => {
       const scan = async () => {
+        await settled(page);
         const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
       };
@@ -226,6 +245,7 @@ test.describe("accessibility", () => {
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /food with a photo, ${theme} theme`, async ({ page }) => {
       const scan = async () => {
+        await settled(page);
         const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
       };
@@ -288,6 +308,65 @@ test.describe("accessibility", () => {
     });
   }
 
+  // A cover across the top of the detail panel, with its credit and menu, then the cover
+  // picker with its photos, in both themes (COVER-1, COVER-2).
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: a cover banner and the cover picker, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        await settled(page);
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/map?selected=goal-lifeos");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      const banner = page.getByTestId("cover-banner");
+      await expect(banner).toContainText("Photo by Mina Cho on Unsplash", { timeout: 10_000 });
+      const shown = await scan();
+      expect(shown, JSON.stringify(shown, null, 2)).toEqual([]);
+
+      await banner.getByRole("button", { name: "Cover options" }).click();
+      await page.getByRole("menuitem", { name: "Change cover" }).click();
+      const picker = page.getByRole("dialog", { name: "Choose a cover" });
+      await picker.getByRole("searchbox", { name: "Search Unsplash" }).fill("anything at all");
+      await picker.getByRole("button", { name: "Search", exact: true }).click();
+      await expect(picker.getByRole("button", { name: /^Use the photo by / })).toHaveCount(6);
+      const picking = await scan();
+      expect(picking, JSON.stringify(picking, null, 2)).toEqual([]);
+    });
+  }
+
+  // On a phone the detail is a sheet: the banner, repositioning it, and the picker.
+  test("axe serious/critical: a cover banner, repositioning and the picker on a phone", async ({ page }) => {
+    const scan = async () => {
+      await settled(page);
+      const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    };
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/map?selected=proj-web");
+    const banner = page.getByTestId("cover-banner");
+    await expect(banner).toContainText("Photo by Sam Okafor on Unsplash", { timeout: 10_000 });
+    const shown = await scan();
+    expect(shown, JSON.stringify(shown, null, 2)).toEqual([]);
+
+    await banner.getByRole("button", { name: "Cover options" }).click();
+    await page.getByRole("menuitem", { name: "Reposition" }).click();
+    await expect(page.getByRole("slider", { name: /Cover position/ })).toBeFocused();
+    const moving = await scan();
+    expect(moving, JSON.stringify(moving, null, 2)).toEqual([]);
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+
+    await banner.getByRole("button", { name: "Cover options" }).click();
+    await page.getByRole("menuitem", { name: "Change cover" }).click();
+    const picker = page.getByRole("dialog", { name: "Choose a cover" });
+    await expect(picker.getByRole("button", { name: /^Use the photo by / }).first()).toBeVisible({ timeout: 10_000 });
+    const picking = await scan();
+    expect(picking, JSON.stringify(picking, null, 2)).toEqual([]);
+  });
+
   // The Food Log on a phone: Log food sits at the bottom, and the sheet rises from there.
   test("axe serious/critical: /food on a phone with the log sheet open", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
@@ -310,6 +389,7 @@ test.describe("accessibility", () => {
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /activity with charts, tables and a workout, ${theme} theme`, async ({ page }) => {
       const scan = async () => {
+        await settled(page);
         const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
       };
@@ -372,6 +452,7 @@ test.describe("accessibility", () => {
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /activity tags and a day's tags, ${theme} theme`, async ({ page }) => {
       const scan = async () => {
+        await settled(page);
         const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
       };
@@ -400,6 +481,7 @@ test.describe("accessibility", () => {
   // the bottom.
   test("axe serious/critical: /activity on a phone with a workout and last night open", async ({ page }) => {
     const scan = async () => {
+      await settled(page);
       const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
     };
@@ -451,6 +533,7 @@ test.describe("accessibility", () => {
   // page, and Today's Maintaining group open (REWARD-2 maintenance).
   test("axe serious/critical: maintained habits", async ({ page }) => {
     const scan = async () => {
+      await settled(page);
       const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
     };

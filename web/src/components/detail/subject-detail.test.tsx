@@ -169,3 +169,84 @@ describe("SubjectDetail tag autocomplete", () => {
     expect(input).toHaveValue("");
   });
 });
+
+describe("SubjectDetail covers", () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  function storedPosition(id: string): unknown {
+    const attrs = JSON.parse(getState().details[id]?.attributes ?? "{}") as { cover?: { position_y?: unknown } };
+    return attrs.cover?.position_y;
+  }
+
+  it("shows a cover across the top with its credit, linked with Unsplash's referral", async () => {
+    renderDetail("goal-lifeos");
+    await screen.findByRole("heading", { name: /Ship LifeOS production UI/i }, { timeout: 4000 });
+    const banner = screen.getByTestId("cover-banner");
+    expect(banner).toHaveTextContent("Photo by Mina Cho on Unsplash");
+    const links = within(banner).getAllByRole("link");
+    expect(links.map((a) => a.textContent)).toEqual(["Mina Cho", "Unsplash"]);
+    for (const link of links) {
+      expect(link).toHaveAttribute("href", expect.stringContaining("utm_source=lifeos&utm_medium=referral"));
+      expect(link).toHaveAttribute("target", "_blank");
+    }
+    // Decorative: the title beside it says what it's about.
+    expect(banner.querySelector("img")).toHaveAttribute("alt", "");
+    expect(screen.queryByRole("button", { name: "Add cover" })).not.toBeInTheDocument();
+  });
+
+  it("adds a cover from the picker, searched with the title", async () => {
+    const user = userEvent.setup();
+    renderDetail("goal-half");
+    await screen.findByRole("heading", { name: /Run a half-marathon/i }, { timeout: 4000 });
+    expect(screen.queryByTestId("cover-banner")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Add cover" }));
+    const picker = await screen.findByRole("dialog", { name: "Choose a cover" });
+    expect(within(picker).getByRole("searchbox", { name: "Search Unsplash" })).toHaveValue("Run a half-marathon");
+    await within(picker).findByRole("button", { name: /Use the photo by Ada Hollis/ }, { timeout: 4000 });
+
+    const search = within(picker).getByRole("searchbox", { name: "Search Unsplash" });
+    await user.clear(search);
+    await user.type(search, "lake{Enter}");
+    await user.click(await within(picker).findByRole("button", { name: /Use the photo by Noor Haddad/ }, { timeout: 4000 }));
+
+    await waitFor(() => expect(screen.getByTestId("cover-banner")).toHaveTextContent("Photo by Noor Haddad on Unsplash"), {
+      timeout: 4000,
+    });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Choose a cover" })).not.toBeInTheDocument());
+  });
+
+  it("repositions with the arrow keys and saves, then removes the cover", async () => {
+    const user = userEvent.setup();
+    renderDetail("proj-web");
+    await screen.findByRole("heading", { name: /Production web UI/i }, { timeout: 4000 });
+    expect(storedPosition("proj-web")).toBe(50);
+
+    screen.getByRole("button", { name: "Cover options" }).focus();
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("menuitem", { name: "Reposition" }));
+    const slider = await screen.findByRole("slider", { name: /Cover position/ });
+    await waitFor(() => expect(slider).toHaveFocus());
+    await user.keyboard("{ArrowUp}{ArrowUp}");
+    expect(slider).toHaveAttribute("aria-valuenow", "60");
+    expect(slider).toHaveAttribute("aria-valuetext", "Showing the photo 60% of the way down");
+    await user.click(screen.getByRole("button", { name: "Save position" }));
+    await waitFor(() => expect(storedPosition("proj-web")).toBe(60));
+    await waitFor(() => expect(screen.queryByRole("slider")).not.toBeInTheDocument());
+
+    screen.getByRole("button", { name: "Cover options" }).focus();
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("menuitem", { name: "Remove cover" }));
+    expect(await screen.findByRole("button", { name: "Add cover" }, { timeout: 4000 })).toBeInTheDocument();
+    expect(screen.queryByTestId("cover-banner")).not.toBeInTheDocument();
+  });
+
+  it("offers no cover on a Task", async () => {
+    renderDetail("task-longrun");
+    await screen.findByRole("heading", { level: 2 }, { timeout: 4000 });
+    expect(screen.queryByRole("button", { name: "Add cover" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("cover-banner")).not.toBeInTheDocument();
+  });
+});

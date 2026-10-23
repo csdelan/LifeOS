@@ -41,6 +41,10 @@ import type {
   Award,
   BountyRequest,
   BountyResult,
+  CoverCleared,
+  CoverRead,
+  CoverRequest,
+  CoverResult,
   HabitEstablishment,
   HabitTargetRequest,
   HabitTargetResult,
@@ -89,6 +93,8 @@ import type {
   Wallet,
 } from "@/lib/production-ui-types";
 import { defaultStatus, isTerminal } from "@/lib/production-ui-types";
+import { canHaveCover, DEFAULT_POSITION_Y } from "@/lib/cover";
+import { readStoredCover, sceneById, storedCoverOf } from "@/lib/mock/covers";
 import {
   BOUNTY_TRIGGERS,
   STREAK_MILESTONES,
@@ -319,6 +325,9 @@ export function addEdge(fromId: string, relation: Relation, toId: string) {
 }
 
 export function applyAttrs(subjectId: string, attrs: Record<string, string>) {
+  if (Object.keys(attrs).some((key) => key.trim().toLowerCase() === "cover")) {
+    throw new Error("Cover is set with `bsk cover` (a photo from Unsplash), not `bsk set`.");
+  }
   const list = byId(subjectId);
   const detail = state.details[subjectId];
   if (!list || !detail) return;
@@ -2150,6 +2159,75 @@ export function mockSetBounty(req: BountyRequest): BountyResult {
     subject: { id: item.id, urn: item.urn, type: item.type, title: item.title },
     lines: linesFor(item.type, stored, every),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Covers (COVER-1, cover-images plan §3.3 and §3.9): CoverService against the bundled scenes.
+// The cover lives in `attributes.cover` as the kernel stores it, and reads decorate it.
+// ---------------------------------------------------------------------------
+
+function storedCover(subjectId: string): CoverRead | null {
+  return readStoredCover(rawAttrs(state.details[subjectId]?.attributes).cover);
+}
+
+export function withCover<T extends { id: string; type: SubjectListItem["type"] }>(item: T): T & { cover: CoverRead | null } {
+  return { ...item, cover: canHaveCover(item.type) ? storedCover(item.id) : null };
+}
+
+function coverable(subject: string): SubjectListItem {
+  const item = byRef(subject);
+  if (!item) throw new Error(`No subject matches '${subject}'.`);
+  if (!canHaveCover(item.type)) {
+    throw new Error(`'${item.title}' is a ${item.type}; only identity statements (Value), goals and projects have covers.`);
+  }
+  return item;
+}
+
+function checkPosition(positionY: number): number {
+  if (!Number.isInteger(positionY) || positionY < 0 || positionY > 100) {
+    throw new Error(`A cover's position runs from 0 (top) to 100 (bottom); got ${positionY}.`);
+  }
+  return positionY;
+}
+
+function coverSubject(item: SubjectListItem) {
+  return { id: item.id, urn: item.urn, type: item.type, title: item.title };
+}
+
+/** `bsk cover set` / `POST /api/cover`: a scene by id, centred at `positionY`. */
+export function mockSetCover(req: CoverRequest): CoverResult {
+  const scene = sceneById(req.photoId?.trim() ?? "");
+  const position = checkPosition(req.positionY ?? DEFAULT_POSITION_Y);
+  const item = coverable(req.subject);
+  if (!scene) throw new Error("That photo is no longer on Unsplash.");
+  writeRewardAttrs(item.id, { cover: storedCoverOf(scene, position, nowIso()) });
+  emit();
+  return { subject: coverSubject(item), cover: storedCover(item.id)!, downloadCounted: true, downloadProblem: null };
+}
+
+/** `bsk cover move` / `POST /api/cover/position`. Refused when there's no cover. */
+export function mockMoveCover(subject: string, positionY: number): CoverResult {
+  const position = checkPosition(positionY);
+  const item = coverable(subject);
+  const stored = rawAttrs(state.details[item.id]?.attributes).cover;
+  if (!storedCover(item.id) || !stored || typeof stored !== "object") {
+    throw new Error(`'${item.title}' has no cover to move.`);
+  }
+  writeRewardAttrs(item.id, { cover: { ...(stored as Record<string, unknown>), position_y: position } });
+  emit();
+  return { subject: coverSubject(item), cover: storedCover(item.id)!, downloadCounted: false, downloadProblem: null };
+}
+
+/** `bsk cover clear` / `POST /api/cover/clear`: works on any subject; says whether there was a cover. */
+export function mockClearCover(subject: string): CoverCleared {
+  const item = byRef(subject);
+  if (!item) throw new Error(`No subject matches '${subject}'.`);
+  const removed = rawAttrs(state.details[item.id]?.attributes).cover !== undefined;
+  if (removed) {
+    writeRewardAttrs(item.id, { cover: undefined });
+    emit();
+  }
+  return { subject: coverSubject(item), removed };
 }
 
 // ---------------------------------------------------------------------------
