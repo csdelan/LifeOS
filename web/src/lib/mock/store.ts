@@ -2675,12 +2675,15 @@ function planFood(fold: FoodFold, openedAt: number): Award[] {
 /**
  * The plan `FoodRewards` and `ActivityRewards` share (D13): for each key that could pay or is
  * paid, the entries that bring the ledger in line. `reversalOf` names a key's trigger and note.
+ * A base is due from the wallet's opening: food by its trigger's instant, activity (given
+ * `openedOn`, the Oura day the wallet opened on) by its day.
  */
 function planKeyed(
   due: DueFood[],
   held: Map<string, HeldFood>,
   openedAt: number,
   reversalOf: (key: string) => { trigger: string; note: string },
+  openedOn?: string,
 ): Award[] {
   const candidates = new Map(due.map((c) => [c.key, c]));
   const paidKeys = [...held.values()].filter((h) => h.paid).map((h) => h.key);
@@ -2690,8 +2693,8 @@ function planKeyed(
   for (const key of keys) {
     const candidate = candidates.get(key);
     const paid = held.get(key);
-    const due =
-      candidate && candidate.base > 0 && Date.parse(candidate.triggeredAt) >= openedAt ? candidate : undefined;
+    const fromOpening = (c: DueFood) => (openedOn ? c.day >= openedOn : Date.parse(c.triggeredAt) >= openedAt);
+    const due = candidate && candidate.base > 0 && fromOpening(candidate) ? candidate : undefined;
     let earnAt = now;
     if (paid?.paid) {
       if (candidate && sameSources(candidate.sources, paid.latestEarn?.sources ?? [])) continue;
@@ -2700,15 +2703,18 @@ function planKeyed(
       awards.push(keyedReversal(paid, now, reversalOf(paid.key)));
       earnAt = now + 1;
     }
-    if (due) awards.push(keyedEarn(due, paid, earnAt));
+    if (due) awards.push(keyedEarn(due, paid, earnAt, openedAt));
   }
   return awards;
 }
 
-/** An earn at the credited day's multiplier, dated at its trigger the first time, else at the change. */
-function keyedEarn(due: DueFood, previous: HeldFood | undefined, now: number): Award {
+/**
+ * An earn at the credited day's multiplier, dated at its trigger the first time (never before
+ * the wallet opened), else at the change.
+ */
+function keyedEarn(due: DueFood, previous: HeldFood | undefined, now: number, openedAt: number): Award {
   const { amounts, base, multipliers } = priceDomains({ [DIET_RULES.currency]: due.base }, due.day);
-  let at = previous?.latestEarn ? now : Date.parse(due.triggeredAt);
+  let at = previous?.latestEarn ? now : Math.max(Date.parse(due.triggeredAt), openedAt);
   const last = previous?.latestEarn ? Date.parse(previous.latestEarn.occurredAt) : null;
   if (last !== null && at <= last) at = last + 1;
   const id = newId();
@@ -2840,15 +2846,25 @@ function activityCandidates(): DueFood[] {
   return due;
 }
 
-/** `ActivityRewards.SettleAsync`: activity never opens the wallet. */
+/**
+ * `ActivityRewards.SettleAsync`: activity never opens the wallet, and pays the Oura days from
+ * the one it opened on.
+ */
 function settleActivityDays(): Earned {
   const open = state.ledger.find((e) => e.entry === "open");
   if (!open) return { awards: [], progress: [] };
+  const openedAt = Date.parse(open.occurredAt);
   return earning(() =>
-    planKeyed(activityCandidates(), heldKeyed(ACTIVITY_KEY), Date.parse(open.occurredAt), (key) => {
-      const [, trigger, day] = ACTIVITY_KEY.exec(key)!;
-      return { trigger, note: activityNote(trigger, day) };
-    }),
+    planKeyed(
+      activityCandidates(),
+      heldKeyed(ACTIVITY_KEY),
+      openedAt,
+      (key) => {
+        const [, trigger, day] = ACTIVITY_KEY.exec(key)!;
+        return { trigger, note: activityNote(trigger, day) };
+      },
+      ouraDayAt(new Date(openedAt)),
+    ),
   );
 }
 

@@ -544,6 +544,11 @@ Food Log's `diet:` and `fast:` (food-log plan §3.3):
 The "Dated at" column is what A8 built. The first plan dated steps and exercise at the day's
 end; see A8 under As built.
 
+- **The wallet's opening.** Activity never opens the wallet. It pays the Oura days from the
+  one the wallet opened on, whole: a night that ended, or a run that finished, earlier that
+  morning pays like the rest of the day, dated at the opening instead of its trigger, so no
+  earn predates the wallet. A day before the opening never pays, whenever it syncs. (A8
+  judged by the trigger's instant; see the fix after A11.)
 - **Payment and credit.** Each award pays Health XP and is credited to its Oura day
   (`credited_on`).
 - **The multiplier** is that day's, as it stands when the award is written. `base` and
@@ -1438,7 +1443,8 @@ migration. As planned in §3.8, plus:
     moment the award became due.
   - A re-price is dated when it's written, always after the key's last earn, as the Food
     Log's are.
-  - An earn whose date falls before the wallet opened doesn't pay.
+  - An earn whose date falls before the wallet opened doesn't pay. (Changed on 2026-10-23
+    to go by the Oura day; see the fix after A11.)
 - **The sleep score's event:** `v_sleep_day` lists the score's event first, so
   `SleepDay.ScoreEventId` reads `event_ids[1]` when the day has a score. No view changed.
 - **The notes carry no Oura numbers:** "Steps Thu Oct 22", "Exercise Thu Oct 22", "Sleep Thu
@@ -1646,3 +1652,27 @@ yesterday." Web only:
   activity XP started). The golden path steps back to yesterday's earned XP and returns; the
   phone a11y scan steps back too and checks the arrows are 44 px and the page stays 375 px
   wide.
+
+**Fix (2026-10-23): activity pays from the day the wallet opened.** Stepping back to Oct 22,
+Chris saw "Sleep 19 of 20 projected · Pays at the next sync" a day after the night, beside
+steps that were earned. He asked: "Shouldn't it have locked in that XP 24 hours ago after my
+first sync after sleeping?"
+
+- **Why:** the staging wallet opened at 11:00 on Oct 22, with his first Food Log entry. A8
+  paid only triggers on or after that instant. Sleep's trigger is the wake time, which was
+  earlier that morning, so the night could never pay. The steps triggered at the day's last
+  sync, after the opening, so they did. The page's projection doesn't know the wallet rule,
+  so it kept saying "Pays at the next sync". Only Oct 22's sleep was affected; the wallet
+  opens once.
+- **Decided:** count activity from the Oura day the wallet opened on (§3.8). `ActivityRewards`
+  compares each award's day with `OuraDayAtAsync(openedAt)`, and a first earn whose trigger
+  is before the opening is dated at the opening. A day before the opening still never pays,
+  even if it syncs later. Before, Oct 21's steps and sleep would have paid had they synced
+  after 11:00 on Oct 22.
+- **The mock** does the same for activity only. Food keeps the instant, since the first food
+  award opens the wallet at its own trigger.
+- **Tests:** `ActivityRewardsTests` (a night and a run before the opening on its day pay,
+  dated at the opening; the steps at the sync; the day before pays nothing, though synced
+  after) and the mock store (the opening day's night pays, dated at the opening; the day
+  before doesn't). No migration and no API change. On the next sync after the deploy, Oct
+  22's sleep pays.

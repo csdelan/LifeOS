@@ -3335,6 +3335,17 @@ from yesterday, as an example."
 - In the same change each Activity card got a large title with its own icon and colour, and
   the page a drawn banner (activity plan §3.7, A11).
 
+**Update (2026-10-23 — from the day the wallet opened):** stepping back to Oct 22, Chris
+found "Sleep 19 of 20 projected · Pays at the next sync" beside earned steps: "Shouldn't it
+have locked in that XP 24 hours ago after my first sync after sleeping?"
+
+- **Why it didn't pay:** the wallet opened at 11:00 that day with his first Food Log entry,
+  and activity paid only what triggered after that instant. He'd woken earlier, so the night
+  never could.
+- **Chris decided** to count activity from the day the wallet opened. The whole opening day
+  pays, with anything from before the opening dated at it; a day before it never pays. Oct
+  22's sleep pays on the next sync (activity plan §3.8 and the fix after A11).
+
 ### ACTIVITY-6 — Tags I add in the Oura app are kept beside my health data
 Horizon:    Pilot
 Definition: active

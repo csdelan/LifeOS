@@ -349,6 +349,20 @@ describe("the mock's activity XP (activity plan A8–A9)", () => {
     expect(mockSettleActivity().awards).toEqual([]);
   });
 
+  it("pays from the day the wallet opened, dating a night before the opening at it, never a day before", () => {
+    // Chris's first day: awake in the morning, then the wallet opened at 11 with his first Food Log entry.
+    const opened = new Date(2026, 9, 23, 11).toISOString();
+    getState().ledger = getState().ledger.map((e) => (e.entry === "open" ? { ...e, occurredAt: opened } : e));
+    const woke = mockActivityDays(day(23), day(23)).days[0].wokeAt ?? new Date(2026, 9, 23, 8).toISOString();
+    expect(Date.parse(woke)).toBeLessThan(Date.parse(opened));
+
+    mockSettleActivity();
+    expect(activityKeys().filter((k) => k!.endsWith(day(22)))).toEqual([]);
+    expect(activityKeys()).toEqual(expect.arrayContaining([`sleep:${day(23)}`, `steps:${day(23)}`]));
+    const sleep = getState().ledger.find((e) => e.entry === "earn" && e.awardKey === `sleep:${day(23)}`)!;
+    expect(sleep.occurredAt).toBe(opened);
+  });
+
   it("settles on the page's sync, even a skipped one, and in the domain settle", async () => {
     const writes = createMockWriteClient();
     const first = await writes.syncActivity(false);

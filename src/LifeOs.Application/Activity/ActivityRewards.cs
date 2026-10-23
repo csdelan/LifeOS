@@ -29,7 +29,14 @@ namespace LifeOs.Application.Activity;
 /// steps, the last counted workout's end for exercise, the wake time (else the score's sync) for
 /// sleep — or, for a re-price, at the change; always after the key's previous earn. Missing data
 /// pays nothing: a day without a step count or a sleep score has no award for it. Readiness
-/// never pays. Activity never opens the wallet, and a trigger from before it opened never pays.
+/// never pays.
+/// </para>
+/// <para>
+/// Activity never opens the wallet, and pays the Oura days from the one the wallet opened on: a
+/// day is whole, so the night that ended the morning the wallet opened, or a run before it, pays
+/// like the rest of that day, dated at the opening rather than before it. A day before the
+/// opening never pays, whenever it syncs. (Until 2026-10-23 it went by the trigger's instant,
+/// and Chris's first day lost its sleep: he woke before 7 and the wallet opened at 11.)
 /// </para>
 /// </summary>
 public sealed class ActivityRewards(
@@ -80,12 +87,13 @@ public sealed class ActivityRewards(
     /// <item>paid otherwise: a reversal of what it pays, then an earn at the base due (if any)</item>
     /// <item>unpaid with a base due: an earn</item>
     /// </list>
-    /// A base is due when it's above 0 and its trigger came on or after the wallet opened.
+    /// A base is due when it's above 0 and its Oura day is on or after the one the wallet opened on.
     /// </summary>
     private async Task<IReadOnlyList<PlannedAward>> PlanAsync(
         DateTimeOffset openedAt, Func<Task<IReadOnlyList<DomainProgress>>> domains, CancellationToken cancellationToken)
     {
         var now = clock.UtcNow;
+        var openedOn = await OuraDayAtAsync(openedAt, cancellationToken);
         var candidates = (await CandidatesAsync(now, cancellationToken)).ToDictionary(c => c.Key, StringComparer.Ordinal);
         var held = (await ledger.GetKeyedAwardsAsync(ActivityAwards.Triggers, cancellationToken))
             .ToDictionary(k => k.AwardKey, StringComparer.Ordinal);
@@ -96,7 +104,7 @@ public sealed class ActivityRewards(
         {
             candidates.TryGetValue(key, out var candidate);
             held.TryGetValue(key, out var paid);
-            var due = candidate is { Base: > 0 } && candidate.TriggeredAt >= openedAt ? candidate : null;
+            var due = candidate is { Base: > 0 } && candidate.Day >= openedOn ? candidate : null;
             var earnAt = now;
             if (paid is { Paid: true })
             {
@@ -117,7 +125,7 @@ public sealed class ActivityRewards(
 
             if (due is not null)
             {
-                planned.Add(Earn(due, paid, earnAt, await domains()));
+                planned.Add(Earn(due, paid, earnAt, openedAt, await domains()));
             }
         }
 
@@ -178,14 +186,18 @@ public sealed class ActivityRewards(
 
     /// <summary>
     /// An earn of <paramref name="award"/> at its day's multiplier: dated at its trigger the
-    /// first time the key pays, at the change that re-priced it after that, and always after
-    /// the key's previous earn.
+    /// first time the key pays (at the opening, for a trigger earlier on the day the wallet
+    /// opened), at the change that re-priced it after that, and always after the key's previous
+    /// earn.
     /// </summary>
     private PlannedAward Earn(
-        DueActivity award, KeyedAward? previous, DateTimeOffset now, IReadOnlyList<DomainProgress> domains)
+        DueActivity award, KeyedAward? previous, DateTimeOffset now, DateTimeOffset openedAt,
+        IReadOnlyList<DomainProgress> domains)
     {
         var earn = DomainPricing.Price(new Dictionary<string, long> { [Rules.Currency] = award.Base }, award.Day, domains);
-        var at = previous?.LatestEarnAt is null ? award.TriggeredAt : now;
+        var at = previous?.LatestEarnAt is null
+            ? (award.TriggeredAt < openedAt ? openedAt : award.TriggeredAt)
+            : now;
         if (previous?.LatestEarnAt is { } last && at <= last)
         {
             at = last.AddMilliseconds(1);

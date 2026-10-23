@@ -273,6 +273,41 @@ public sealed class ActivityRewardsTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Activity_pays_from_the_day_the_wallet_opened_dated_no_earlier_than_the_opening()
+    {
+        // Chris's Oct 22: awake at 6:20 and a run at 7:00, then the wallet opened at 11:00 with
+        // his first Food Log entry. The night and the run came before the opening, the same day.
+        await using var w = await CreateAsync(openWallet: false);
+        var (day, before) = (w.Over, w.Over.AddDays(-1));
+        var opened = OuraHarness.At(day, 11);
+        await w.Db.Get<RewardService>().OpenAsync(opened, Ct);
+        var oura = w.H.Oura;
+        oura.SleepPeriods.Add(OuraHarness.Night("s-night", day, 7 * 60));
+        oura.SleepScores.Add(Sleep(day, 80));
+        oura.Workouts.Add(Workout("w-run", day, 0, 30));
+        oura.ActivityDays.Add(OuraHarness.Steps(day, 7_500));
+
+        // The day before the wallet opened never pays, though it's synced after the opening.
+        oura.ActivityDays.Add(OuraHarness.Steps(before, 9_000));
+        oura.SleepScores.Add(Sleep(before, 85));
+
+        Assert.Equal(
+            [(ActivityAwards.ExerciseKey(day), 25L), (ActivityAwards.SleepKey(day), 15L), (ActivityAwards.StepsKey(day), 20L)],
+            Paid(await SyncAndSettleAsync(w)));
+
+        // The night and the run are dated at the opening, never before it; the steps at the day's sync.
+        var at = (await w.Db.Get<RewardService>().GetLedgerAsync(cancellationToken: Ct))
+            .Where(e => e.AwardKey is not null)
+            .ToDictionary(e => e.AwardKey!, e => e.OccurredAt);
+        Assert.Equal(opened, at[ActivityAwards.SleepKey(day)]);
+        Assert.Equal(opened, at[ActivityAwards.ExerciseKey(day)]);
+        Assert.True(at[ActivityAwards.StepsKey(day)] > opened);
+        Assert.Equal((60L, 60L), await CreditAsync(w, day));
+        Assert.Equal((0L, 0L), await CreditAsync(w, before));
+        Assert.Empty((await w.Rewards.SettleAsync(Ct)).Awards);
+    }
+
+    [Fact]
     public async Task The_kernel_s_activity_rewards_pay_from_2026_10_22()
     {
         await using var w = await CreateAsync();
