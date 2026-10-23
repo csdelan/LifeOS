@@ -980,6 +980,7 @@ export type FoodMealType = "breakfast" | "lunch" | "dinner" | "snack" | "drink";
 export interface MealRow {
   id: string;
   name: string;
+  /** 1 to 5 in whole or half points (3.5). */
   score: number;
   calories: number;
   proteinG: number | null;
@@ -1094,6 +1095,7 @@ export interface FoodDaysRead {
 /** A food entry as the page sends it; `eatenAt` defaults to now, `mealType` to a guess. */
 export interface FoodEntryRequest {
   name: string;
+  /** 1 to 5 in whole or half points (3.5); a drink is stored at 1 whatever is sent. */
   score: number;
   calories: number;
   eatenAt?: string;

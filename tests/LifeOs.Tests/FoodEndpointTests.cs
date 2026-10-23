@@ -139,6 +139,39 @@ public sealed class FoodEndpointTests(PostgresFixture postgres)
         Assert.Equal(0L, read.GetProperty("summary").GetProperty("paid").GetProperty("total").GetInt64());
     }
 
+    /// <summary>Food-log plan §8: a half score goes in and comes back as a half, and pays halfway.</summary>
+    [Fact]
+    public async Task A_half_score_round_trips_and_pays_halfway_between_its_neighbours()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await db.OpenWalletAsync(daysAgo: 10);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
+        var day = (await db.TodayAsync()).AddDays(-3);
+
+        // 1,200 calories at 3.5: quality 17.5 + calories 4 = 21.5, paid as 22.
+        var logged = await PostAsync(host, "/api/food/meals",
+            new { name = "Turkey wrap", score = 3.5m, calories = 1200, eatenAt = Iso(day, 12) });
+        Assert.Equal(3.5m, logged.GetProperty("meal").GetProperty("score").GetDecimal());
+        Assert.Equal([("earn", 22L)], Awards(logged));
+
+        var read = await host.Client.GetFromJsonAsync<JsonElement>($"/api/food/day?date={Day(day)}", Ct);
+        Assert.Equal(3.5m, Assert.Single(read.GetProperty("meals").EnumerateArray()).GetProperty("score").GetDecimal());
+        var summary = read.GetProperty("summary");
+        Assert.Equal((3.5m, 17.5m, 22L), (summary.GetProperty("averageScore").GetDecimal(),
+            summary.GetProperty("quality").GetDecimal(), summary.GetProperty("foodAward").GetInt64()));
+
+        // A whole score reads as a whole number, never "4.0"; up to 4, the day re-scores to 25.
+        var id = logged.GetProperty("meal").GetProperty("id").GetGuid();
+        var edited = await PostAsync(host, $"/api/food/meals/{id}", new { name = "Turkey wrap", score = 4.0m, calories = 1200 });
+        Assert.Equal("4", edited.GetProperty("meal").GetProperty("score").GetRawText());
+        Assert.Equal([("reversal", -22L), ("earn", 25L)], Awards(edited));
+
+        // Anything between the half steps is refused in words.
+        var refused = await RefusedAsync(host, "/api/food/meals", new { name = "Toast", score = 3.7m, calories = 200, eatenAt = Iso(day, 15) });
+        Assert.Contains("half points", refused);
+        Assert.Contains("3.7", refused);
+    }
+
     [Fact]
     public async Task Fasts_begin_end_edit_and_delete_and_food_inside_a_fast_is_flagged()
     {

@@ -88,4 +88,11 @@ describe("MealGallery (FOOD-7)", () => {
     // Have another starts from the last copy.
     expect(onAnother).toHaveBeenCalledWith(MEALS[3]);
   });
+
+  it("names a half score and tints its tile between its neighbours (food-log plan §8)", () => {
+    renderGallery([meal("w1", "Turkey wrap", "12:30", { score: 3.5, calories: 550, mealType: "lunch", alcoholic: false })]);
+    const card = within(screen.getByRole("list", { name: "Entries for today" })).getByRole("button");
+    expect(card).toHaveTextContent("3.5 · average to good");
+    expect(card.querySelector(".bg-score-3-5")).not.toBeNull();
+  });
 });

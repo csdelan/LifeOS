@@ -148,6 +148,7 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
     expect(() => mockLogFood({ name: " ", score: 5, calories: 100 })).toThrow("Say what it was: a name is required.");
     expect(() => mockLogFood({ name: "x".repeat(81), score: 5, calories: 100 })).toThrow("Keep the name to 80 characters.");
     expect(() => mockLogFood({ name: "Toast", score: 6, calories: 100 })).toThrow(/health score is 1 to 5/);
+    expect(() => mockLogFood({ name: "Toast", score: 3.7, calories: 100 })).toThrow(/in whole or half points, like 3 or 3\.5 .*got 3\.7\./);
     expect(() => mockLogFood({ name: "Toast", score: 3, calories: 5001 })).toThrow("Calories are a whole number from 0 to 5,000; got 5001.");
     expect(() => mockLogFood({ name: "Toast", score: 3, calories: 100, proteinG: -1 })).toThrow(/Protein is whole grams/);
     expect(() => mockLogFood({ name: "Toast", score: 3, calories: 100, eatenAt: new Date(Date.now() + 2 * HOUR).toISOString() })).toThrow(
@@ -164,6 +165,17 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
     );
     expect(() => mockCloseFoodDay(addDays(todayIso(), 1))).toThrow(/hasn't happened yet, so it can't be closed\./);
     expect(getState().foodEvents.length).toBe(before);
+  });
+
+  it("keeps a half score through the day's read, its sum and Log again (food-log plan §8)", () => {
+    const wrap = mockLogFood({ name: "Turkey wrap", score: 3.5, calories: 1200, eatenAt: ago(HOUR) });
+    expect(wrap.meal!.score).toBe(3.5);
+    const meal = mockFoodDay().meals.find((m) => m.id === wrap.meal!.id)!;
+    expect(meal.score).toBe(3.5);
+    expect(mockFoodDay().summary).toMatchObject({ averageScore: 3.5, quality: 17.5, foodAward: 22 });
+    expect(mockFoodRecent().find((m) => m.name === "Turkey wrap")?.score).toBe(3.5);
+    mockEditFood(wrap.meal!.id, { name: "Turkey wrap", score: 4, calories: 1200 });
+    expect(mockFoodDay().summary).toMatchObject({ averageScore: 4, quality: 21, foodAward: 25 });
   });
 
   it("guesses the meal type from the time, and offers each recent name once for Log again", () => {

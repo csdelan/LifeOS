@@ -13,6 +13,7 @@ namespace LifeOs.Cli.Commands;
 /// <code>
 /// bsk food log "Salmon salad" --score 5 --cal 650 [--at 12:30] [--type lunch]
 ///              [--protein 40 --carbs 20 --fat 30] [--end-fast]
+/// bsk food log "Turkey wrap" --score 3.5 --cal 550  (a score is 1 to 5 in whole or half points)
 /// bsk food log "IPA" --alcohol --cal 200            (a drink: its score is always 1)
 /// bsk food edit &lt;entry&gt; [--name …] [--score …] [--cal …] [--at …] [--type …] [nutrients]
 ///              [--alcohol | --no-alcohol]
@@ -114,11 +115,11 @@ internal static class FoodCommand
     // ---------------------------------------------------------------------------------
 
     private sealed record EntryOptions(
-        Option<int?> Score, Option<int?> Calories, Option<string?> At, Option<string?> Type,
+        Option<decimal?> Score, Option<int?> Calories, Option<string?> At, Option<string?> Type,
         Option<int?> Protein, Option<int?> Carbs, Option<int?> Fat)
     {
         public static EntryOptions Create() => new(
-            new Option<int?>("--score") { Description = "How healthy it was, 1 (junk) to 5 (very healthy)." },
+            new Option<decimal?>("--score") { Description = "How healthy it was, 1 (junk) to 5 (very healthy), in whole or half points (3.5)." },
             new Option<int?>("--cal", "--calories") { Description = "Rough calories, 0 to 5,000." },
             new Option<string?>("--at") { Description = "When it was eaten (home-zone time, e.g. 12:30 or \"2026-10-19 19:00\"). Defaults to now." },
             new Option<string?>("--type") { Description = "breakfast | lunch | dinner | snack | drink. Guessed from the time when left out." },
@@ -148,7 +149,7 @@ internal static class FoodCommand
             Description = "One alcoholic drink (a beer, a glass of wine, a shot): its score is always 1 and it counts toward the day's drinks."
         };
 
-        var command = new Command("log", "Log a food entry: a name, a 1–5 health score and rough calories.");
+        var command = new Command("log", "Log a food entry: a name, a 1–5 health score (halves allowed) and rough calories.");
         command.Arguments.Add(nameArgument);
         options.AddTo(command);
         command.Options.Add(endFastOption);
@@ -164,7 +165,7 @@ internal static class FoodCommand
                 var score = parseResult.GetValue(options.Score)
                             ?? (alcoholic
                                 ? FoodEntries.DrinkScore
-                                : throw new ArgumentException("Give it a health score: --score 1 (junk) to 5 (very healthy)."));
+                                : throw new ArgumentException("Give it a health score: --score 1 (junk) to 5 (very healthy), halves allowed (3.5)."));
                 if (alcoholic && score != FoodEntries.DrinkScore)
                 {
                     throw new ArgumentException("A drink's score is always 1: leave --score out.");
@@ -694,7 +695,7 @@ internal static class FoodOutput
             var flag = (meal.Alcoholic ? "  (drink)" : "") + (view.EatenDuringFast.ContainsKey(meal.Id) ? "  (inside a fast)" : "");
             Console.WriteLine(
                 $"  {FoodLogService.Short(meal.Id)}  {FoodText.Clock(meal.EatenLocal),8}  {meal.MealType,-9} {meal.Name}  " +
-                $"{meal.Calories:N0} cal, score {meal.Score}{Nutrients(meal)}{flag}");
+                $"{meal.Calories:N0} cal, score {FoodEntries.ScoreText(meal.Score)}{Nutrients(meal)}{flag}");
         }
 
         foreach (var fast in view.Fasts)
@@ -906,7 +907,7 @@ internal static class FoodOutput
     };
 
     private static string Describe(Meal meal)
-        => $"{meal.Name} ({(meal.Alcoholic ? "alcoholic " : "")}{meal.MealType}, {meal.Calories:N0} cal, score {meal.Score}{Nutrients(meal)}) at {FoodText.When(meal.EatenLocal)}";
+        => $"{meal.Name} ({(meal.Alcoholic ? "alcoholic " : "")}{meal.MealType}, {meal.Calories:N0} cal, score {FoodEntries.ScoreText(meal.Score)}{Nutrients(meal)}) at {FoodText.When(meal.EatenLocal)}";
 
     private static string Nutrients(Meal meal)
     {

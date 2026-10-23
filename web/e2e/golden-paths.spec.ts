@@ -250,6 +250,41 @@ test.describe("golden paths", () => {
     await expect(page.getByText("39 base → 46 Health XP (×1.2)")).toBeVisible();
   });
 
+  test("Food Log: rate an entry 3.5 on a phone, see it pay halfway, and log it again", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await beforeActivityXp(page);
+    await page.goto("/food");
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+
+    // The halves sit in a row of smaller buttons, each under the gap between its neighbours.
+    await page.getByRole("button", { name: "Log food", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Log food" });
+    const box = async (name: string) => (await sheet.locator("label").filter({ has: page.getByRole("radio", { name }) }).boundingBox())!;
+    const [three, half, four] = [await box("3 · average"), await box("3.5 · average to good"), await box("4 · good")];
+    expect(half.y).toBeGreaterThan(three.y + three.height - 1);
+    expect(half.width).toBeGreaterThanOrEqual(44);
+    expect(half.width).toBeLessThan(three.width);
+    expect(Math.abs(half.x + half.width / 2 - (three.x + three.width + four.x) / 2)).toBeLessThan(2);
+
+    // 1,200 calories at 3.5: 17.5 for quality and 4 for calories, on track for 22.
+    await sheet.getByLabel("Name").fill("Turkey wrap");
+    await sheet.getByRole("radio", { name: "3.5 · average to good" }).check();
+    await expect(sheet.getByText("Average to good: halfway between 3 and 4.")).toBeVisible();
+    await sheet.getByLabel("Calories").fill("1200");
+    await sheet.getByRole("button", { name: "Log", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText("On track for 22 of 40")).toBeVisible({ timeout: 10_000 });
+    const entries = page.getByRole("list", { name: "Entries for today" });
+    await expect(entries.getByRole("button", { name: /^Turkey wrap, / })).toContainText("3.5 · average to good");
+
+    // Log again keeps the half. On a phone the "Logged" toast sits over the Log food button
+    // until it goes.
+    await expect(page.getByText("Logged Turkey wrap")).toBeHidden({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Log food", exact: true }).click();
+    await sheet.getByRole("button", { name: "Log again: Turkey wrap · 3.5 · 1,200 cal" }).click();
+    await expect(sheet.getByRole("radio", { name: "3.5 · average to good" })).toBeChecked();
+  });
+
   test("Food Log: log drinks with the score locked, see the cut and the streak, and count them in the week", async ({
     page,
   }) => {

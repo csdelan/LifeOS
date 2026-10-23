@@ -16,13 +16,35 @@ public static class FoodEntries
     public static readonly IReadOnlyList<string> MealTypes = [Breakfast, Lunch, Dinner, Snack, Drink];
 
     public const int NameMaxLength = 80;
-    public const int ScoreMin = 1;
-    public const int ScoreMax = 5;
+    public const decimal ScoreMin = 1m;
+    public const decimal ScoreMax = 5m;
+
+    /// <summary>The step a health score moves in (food-log plan §8): whole and half points, so 3.5 sits between 3 and 4.</summary>
+    public const decimal ScoreStep = 0.5m;
+
     public const int CaloriesMax = 5000;
     public const int GramsMax = 1000;
 
     /// <summary>An alcoholic drink's score, always (FOOD-6): the lowest.</summary>
-    public const int DrinkScore = ScoreMin;
+    public const decimal DrinkScore = ScoreMin;
+
+    /// <summary>Whether <paramref name="score"/> is a health score: 1 to 5 in half steps.</summary>
+    public static bool IsScore(decimal score)
+        => score is >= ScoreMin and <= ScoreMax && score % ScoreStep == 0m;
+
+    /// <summary>
+    /// A health score without trailing zeros (4, not 4.0; 3.5, not 3.50), so an entry's payload,
+    /// its reads and the CLI all show it the same way. <paramref name="score"/> must be a score.
+    /// </summary>
+    public static decimal TidyScore(decimal score)
+    {
+        var halves = (int)(score * 2);
+        return halves % 2 == 0 ? halves / 2 : halves / 2m;
+    }
+
+    /// <summary>A health score in words a person reads: "4", "3.5".</summary>
+    public static string ScoreText(decimal score)
+        => score.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The meal type a home-zone time suggests: 04:00–10:59 breakfast, 11:00–15:59 lunch,
@@ -44,9 +66,10 @@ public static class FoodEntries
 /// <summary>
 /// One home-zone day as the diet score reads it (food-log plan §2.1, §7.2): its total calories,
 /// the sum of score × calories over its live entries, the longest fast that ended on it, and
-/// how many of its entries are alcoholic drinks.
+/// how many of its entries are alcoholic drinks. <see cref="ScoreCalories"/> is a decimal since
+/// a score can be a half (3.5 × 600 = 2,100; 3.5 × 333 = 1,165.5).
 /// </summary>
-public sealed record DietDayFacts(long Calories, long ScoreCalories, long? LongestFastSeconds, int Drinks = 0);
+public sealed record DietDayFacts(long Calories, decimal ScoreCalories, long? LongestFastSeconds, int Drinks = 0);
 
 /// <summary>
 /// A day's diet score (food-log plan §2.1, §7.2). The three parts are unrounded, for showing
@@ -123,7 +146,7 @@ public sealed record DietRules(
     /// <summary>Scores one day (food-log plan §2.1, §7.2).</summary>
     public DietScore Score(DietDayFacts facts)
     {
-        decimal? average = facts.Calories > 0 ? (decimal)facts.ScoreCalories / facts.Calories : null;
+        decimal? average = facts.Calories > 0 ? facts.ScoreCalories / facts.Calories : null;
         var quality = average is { } s
             ? QualityMax * Math.Clamp(s - FoodEntries.ScoreMin, 0m, FoodEntries.ScoreMax - FoodEntries.ScoreMin)
               / (FoodEntries.ScoreMax - FoodEntries.ScoreMin)
@@ -214,8 +237,8 @@ public static class FoodAwards
 /// <summary>
 /// A live food entry as <c>bsk.v_meal</c> reads it (FOOD-1): the newest version of its id.
 /// <see cref="EatenLocal"/> is the wall-clock time it was eaten in the home zone, and
-/// <see cref="EatenOn"/> the day it counts on. <see cref="Alcoholic"/> marks one alcoholic
-/// drink (FOOD-6).
+/// <see cref="EatenOn"/> the day it counts on. <see cref="Score"/> is 1 to 5 in half steps.
+/// <see cref="Alcoholic"/> marks one alcoholic drink (FOOD-6).
 /// </summary>
 public sealed record Meal(
     Guid Id,
@@ -223,7 +246,7 @@ public sealed record Meal(
     DateOnly EatenOn,
     DateTime EatenLocal,
     string Name,
-    int Score,
+    decimal Score,
     int Calories,
     int? ProteinG,
     int? CarbsG,
@@ -268,7 +291,7 @@ public sealed record FoodDay(
     DateOnly Day,
     int Meals,
     long Calories,
-    long ScoreCalories,
+    decimal ScoreCalories,
     long? LongestFastSeconds,
     Guid? LongestFastId,
     Guid? FastEventId,

@@ -296,7 +296,7 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
         public string EatenOn { get; set; } = "";
         public DateTime EatenLocal { get; set; }
         public string? Name { get; set; }
-        public int? Score { get; set; }
+        public decimal? Score { get; set; }
         public int? Calories { get; set; }
         public int? ProteinG { get; set; }
         public int? CarbsG { get; set; }
@@ -346,7 +346,7 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
         public string Day { get; set; } = "";
         public int Meals { get; set; }
         public long Calories { get; set; }
-        public long ScoreCalories { get; set; }
+        public decimal ScoreCalories { get; set; }
         public long? LongestFastSeconds { get; set; }
         public Guid? LongestFastId { get; set; }
         public Guid? FastEventId { get; set; }

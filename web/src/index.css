@@ -40,9 +40,13 @@
   --color-sleep-rem: var(--sleep-rem);
   --color-sleep-awake: var(--sleep-awake);
   --color-score-1: var(--score-1);
+  --color-score-1-5: var(--score-1-5);
   --color-score-2: var(--score-2);
+  --color-score-2-5: var(--score-2-5);
   --color-score-3: var(--score-3);
+  --color-score-3-5: var(--score-3-5);
   --color-score-4: var(--score-4);
+  --color-score-4-5: var(--score-4-5);
   --color-score-5: var(--score-5);
   --color-score-ink-low: var(--score-ink-low);
   --color-score-ink-high: var(--score-ink-high);
@@ -111,11 +115,19 @@
   --chart-spent: oklch(0.66 0.15 48);
   /* Food Log (FOOD-4): a food entry's 1-5 health score, an ordinal one-hue ramp, light to dark
      (validated --ordinal on the card: monotone, steps >= 0.06 L apart, the light end 2.0:1). The
-     number is always shown beside it. Icons sit in score-ink-low on scores 1-2, score-ink-high on 3-5. */
+     number is always shown beside it. Icons sit in score-ink-low on scores 1-2.5, score-ink-high on 3-5.
+     The half points (food-log plan §8) are the midpoints between their neighbours, a tint between
+     two validated steps rather than a step of their own: nine steps 0.06 L apart would need the
+     light end too pale to clear the card. Their number always shows ("3.5"), and each half's icon
+     ink still reaches 3.4:1 or more in both themes. */
   --score-1: oklch(0.75 0.09 168);
+  --score-1-5: oklch(0.705 0.1 168);
   --score-2: oklch(0.66 0.11 168);
+  --score-2-5: oklch(0.615 0.115 168);
   --score-3: oklch(0.57 0.12 168);
+  --score-3-5: oklch(0.525 0.115 168);
   --score-4: oklch(0.48 0.11 168);
+  --score-4-5: oklch(0.435 0.1 168);
   --score-5: oklch(0.39 0.09 168);
   --score-ink-low: oklch(0.23 0.03 168);
   --score-ink-high: oklch(0.99 0.01 85);
@@ -205,9 +217,13 @@
   /* The score ramp's anchor flips in the dark: a healthier entry glows brighter (validated
      --ordinal on the dark card, the dark end 2.6:1). */
   --score-1: oklch(0.46 0.09 168);
+  --score-1-5: oklch(0.505 0.1 168);
   --score-2: oklch(0.55 0.11 168);
+  --score-2-5: oklch(0.595 0.115 168);
   --score-3: oklch(0.64 0.12 168);
+  --score-3-5: oklch(0.685 0.115 168);
   --score-4: oklch(0.73 0.11 168);
+  --score-4-5: oklch(0.775 0.1 168);
   --score-5: oklch(0.82 0.09 168);
   --score-ink-low: oklch(0.97 0.01 85);
   --score-ink-high: oklch(0.18 0.02 170);

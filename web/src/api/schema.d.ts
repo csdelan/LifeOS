@@ -1717,7 +1717,7 @@ export interface components {
         };
         FoodEntryBody: {
             name?: null | string;
-            /** Format: int32 */
+            /** Format: double */
             score?: null | number | string;
             /** Format: int32 */
             calories?: null | number | string;
@@ -1912,7 +1912,7 @@ export interface components {
             /** Format: uuid */
             id?: string;
             name?: string;
-            /** Format: int32 */
+            /** Format: double */
             score?: number | string;
             /** Format: int32 */
             calories?: number | string;

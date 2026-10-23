@@ -71,7 +71,8 @@ public sealed class FoodDrinksRead
 }
 
 /// <summary>
-/// A food entry (FOOD-1): its 1–5 score, calories and the optional nutrients in whole grams.
+/// A food entry (FOOD-1): its score (1–5 in half steps), calories and the optional nutrients
+/// in whole grams.
 /// <see cref="EatenAt"/> is an instant; <see cref="EatenOn"/> the home-zone day it counts on.
 /// <see cref="DuringFast"/> names the recorded fast it was eaten inside, if any (a day read
 /// only), so the page can offer to end that fast there. <see cref="Alcoholic"/> marks one
@@ -81,7 +82,8 @@ public sealed class MealRow
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = "";
-    public int Score { get; set; }
+    /// <summary>1 to 5 in whole or half points (3.5).</summary>
+    public decimal Score { get; set; }
     public int Calories { get; set; }
     public bool Alcoholic { get; set; }
     public int? ProteinG { get; set; }

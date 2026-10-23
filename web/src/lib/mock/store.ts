@@ -15,6 +15,7 @@ import {
   formatDuration,
   GRAMS_MAX,
   guessMealType,
+  isScore,
   MEAL_TYPES,
   NAME_MAX,
   SCORE_MAX,
@@ -2230,8 +2231,10 @@ function normalizeFood(req: FoodEntryRequest, now: number): NormalizedFood {
   // A drink always scores 1, whatever was sent (FOOD-6).
   const alcoholic = req.alcoholic === true;
   const score = alcoholic ? DRINK_SCORE : req.score;
-  if (!Number.isInteger(score) || score < SCORE_MIN || score > SCORE_MAX) {
-    throw new Error(`The health score is ${SCORE_MIN} to ${SCORE_MAX} (1 = junk, 5 = very healthy); got ${score}.`);
+  if (!isScore(score)) {
+    throw new Error(
+      `The health score is ${SCORE_MIN} to ${SCORE_MAX} in whole or half points, like 3 or 3.5 (1 = junk, 5 = very healthy); got ${score}.`,
+    );
   }
   if (!Number.isInteger(req.calories) || req.calories < 0 || req.calories > CALORIES_MAX) {
     throw new Error(`Calories are a whole number from 0 to ${CALORIES_MAX.toLocaleString("en-US")}; got ${req.calories}.`);

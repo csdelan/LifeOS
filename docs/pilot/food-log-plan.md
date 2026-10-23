@@ -18,6 +18,8 @@ diet score, changes what Chris eats. Everything in §6 has to earn its place thr
 two drinks, a sobriety streak, a count of drinks over any range, identical entries combined
 on the day's page, and the day's entries listed oldest first.
 
+**Added on 2026-10-22 (§8):** health scores in half points, so an entry can be a 3.5.
+
 ## 0. Read these first
 
 - [xp-domains-plan.md](xp-domains-plan.md): the credited day (§3.3), daily credit and
@@ -47,12 +49,12 @@ on the day's page, and the day's entries listed oldest first.
 | Question | Decision |
 |---|---|
 | What's logged? | **Food entries** (meals, snacks, and drinks with calories) and **fasts**. Photos last (F6). |
-| A food entry | **Required:** the time eaten (defaults to now), a short name, a health score from 1 to 5, and calories (a rough estimate). **Optional:** protein, carbs and fat in grams, which don't count toward XP for now. A meal type (breakfast, lunch, dinner, snack, drink) is guessed from the time and can be changed. |
-| Health score | 1 to 5, whole numbers. The picker shows examples: **1** junk (ice cream, fries, candy), **2** indulgent (pizza, burger, pastry), **3** average (a sandwich, pasta), **4** good (grilled chicken and vegetables, oatmeal and fruit), **5** very healthy (a salmon salad). |
+| A food entry | **Required:** the time eaten (defaults to now), a short name, a health score from 1 to 5 (halves allowed, §8), and calories (a rough estimate). **Optional:** protein, carbs and fat in grams, which don't count toward XP for now. A meal type (breakfast, lunch, dinner, snack, drink) is guessed from the time and can be changed. |
+| Health score | 1 to 5 in whole or half points (whole numbers only until §8, 2026-10-22). The picker shows examples: **1** junk (ice cream, fries, candy), **2** indulgent (pizza, burger, pastry), **3** average (a sandwich, pasta), **4** good (grilled chicken and vegetables, oatmeal and fruit), **5** very healthy (a salmon salad). |
 | Calories | Quick sizes to start from: snack 200, light 400, meal 700, big 1,000. Editable to any whole number from 0 to 5,000. |
 | "Log again" | Recent entries are one tap away: the name, score, calories and nutrients are filled in, and the time is now. |
 | Diet XP per day | Up to **40 base Health XP**: **food quality 28** (70%), **calories 4** (10%), **fasting 8** (20%). §2 has the formula. |
-| Food quality | The calorie-weighted average of the day's scores, on a straight line: an average of 1 pays 0, 2 pays 7, 3 pays 14, 4 pays 21, 5 pays 28. |
+| Food quality | The calorie-weighted average of the day's scores, on a straight line: an average of 1 pays 0, 2 pays 7, 3 pays 14, 4 pays 21, 5 pays 28. A half pays halfway: 3.5 pays 17.5. |
 | Calories | 0 XP under 500 calories. 4 XP from 500 to 2,000. Then it fades evenly to 0 at 2,500. It doesn't depend on quality: 1,500 calories of ice cream still earns the 4. |
 | Fasting | Nothing up to 12 hours. Then ⅔ XP per hour, counted by the second, up to 8 XP at 24 hours. Longer fasts pay the 8. |
 | Which day does a fast count on? | **The day it ends.** Only the longest fast ending on a day counts, so a day's fasting never pays more than 8. |
@@ -109,7 +111,7 @@ For the longest fast ending on the day, `h` = its length in hours (to the second
 
 - `Currency`: `health_xp`.
 - `Cap`: 40, split as `QualityMax` 28, `CaloriesMax` 4, `FastingMax` 8.
-- `ScoreMin` 1, `ScoreMax` 5.
+- `ScoreMin` 1, `ScoreMax` 5, in steps of `ScoreStep` 0.5 (§8; `FoodEntries`).
 - `CalorieFloor` 500, `CalorieFullTo` 2000, `CalorieZeroAt` 2500.
 - `FastFromHours` 12, `FastFullAtHours` 24.
 - `Score(DietDay facts)` returns the three parts (unrounded), the two awards (rounded) and
@@ -283,7 +285,7 @@ code) reconciles food days:
 with nothing written:
 
 - name: 1–80 characters
-- score: a whole number from 1 to 5
+- score: 1 to 5 in whole or half points (§8); 3.7 is refused in words
 - calories: a whole number from 0 to 5,000
 - protein, carbs, fat: optional, whole grams from 0 to 1,000
 - meal type: breakfast, lunch, dinner, snack or drink. When it's left out, it's guessed from
@@ -375,7 +377,8 @@ bsk food [<date>] [--week | --month] [--json]
   Delete, plus Have another.
 - **Log food sheet:**
   - Name, with matching recent entries under it ("Log again").
-  - Score picker 1–5, with the examples from §1.
+  - Score picker 1–5, with the examples from §1, and the half points as smaller buttons between
+    them (§8).
   - Calories: quick sizes, then a number box.
   - Time (now; quick picks for −30 min, −1 h, −2 h and "earlier…").
   - Meal type (guessed). Nutrients (collapsed).
@@ -407,7 +410,8 @@ rank-ups. A re-price is grouped into one "re-scored" toast (§3.3).
 - The seed has a few days of entries and fasts, so the views are populated.
 
 **Charts:** the stacked bars and the calendar's shading go through the dataviz validator in
-both themes. Score colours are a five-step scale checked the same way.
+both themes. Score colours are a five-step scale checked the same way, with the half points
+tinted between their neighbours (§8).
 
 ### 3.8 Photos (F6, last)
 
@@ -448,6 +452,7 @@ Each phase is one commit:
 | F7 | Drinks in the kernel | §7: migration 0038 (`alcoholic` on `v_meal`; `drinks` and `drink_event_ids` on `v_food_day`); the score locked at 1 and the drink meal type; the drinks cut in `DietRules`; the fast award cut once the day closes; `Sobriety`; the drinks count over a range; the day's entries oldest first; `bsk food log/edit --alcohol` and `bsk food drinks`; the API fields and `GET /api/food/drinks`; `gen:api`. Tests: the drinks table; the score lock; the cut on both awards and when each applies; removing a drink re-scores back; the streak and its edges; the range count by days and by times. | F6 |
 | F8 | Drinks on the page | §7: the Alcoholic drink switch and the greyed-out score; the drink tile and label; the summary's drinks line and streak; drinks and the streak in Week and Month; the gallery oldest first; `lib/diet-score.ts` and `lib/sobriety.ts` on the same tables as the C#; the mock store. Vitest, e2e, a11y in both themes. | F7 |
 | F9 | Combined entries | §7.4: identical entries on a day as one "×N" card with summed calories and nutrients and a time range; tapping it lists its copies, with Have another. Vitest, e2e, a11y. | F8 |
+| F10 | Half-point scores | §8: migration 0040 (`v_meal.score` and `v_food_day.score_calories` numeric); `FoodEntries.ScoreStep`, the check and the tidy form; decimal scores through the service, API, CLI and `gen:api`; the picker's half buttons, words and colours; the mock. Tests in the kernel, Vitest, e2e on a phone, a11y in both themes. | F9 |
 
 - **F1 and F2 are kernel only.** From F2, `bsk food` works end to end, so Chris could start
   logging from the CLI before the page exists.
@@ -646,6 +651,30 @@ fast, 39 of 40) plus beers of 150 calories each.
 - **Oldest first:** `FoodReads.GetDayAsync` returns the day's entries by the time they were
   eaten, so the page and `bsk food` agree.
 
+## 8. Half-point scores (2026-10-22)
+
+Chris asked: "Is it possible to make the food log rating on a precision of 0.5 steps instead of
+1? So I can rate 3.5, not just 3 or 4". He took the three recommendations: one tap for any score
+(the halves as smaller buttons between the whole ones, rather than a "+½" toggle), the words
+"3.5 · average to good", and in-between colours.
+
+| Question | Decision |
+|---|---|
+| Which scores | 1, 1.5, 2 … 5. Anything between the steps (3.7, 3.25) is refused in words. |
+| What a half pays | Halfway between its neighbours, through the same straight quality line (§2.1): no number of `DietRules` changes. 1,200 calories at 3.5 is 17.5 + 4 = 21.5, paid as 22. |
+| Words | A half is named by its neighbours: 1.5 "junk to indulgent", 2.5 "indulgent to average", 3.5 "average to good", 4.5 "good to very healthy". The chip reads "3.5 · average to good"; the picker's line reads "Average to good: halfway between 3 and 4." |
+| The picker | The five whole scores stay as they were. Under them, four smaller buttons (1.5, 2.5, 3.5, 4.5), each centred on the gap between its two neighbours, so any score is one tap. All nine are one radio group in score order, so the arrow keys step 1, 1.5, 2 … 5. A drink still greys the lot out at 1. |
+| Colours | Each half is the midpoint (in OKLCH) of its two neighbours' colours, in both themes. Its icon takes the light ink below 3 and the dark from 3, at least 3.4:1 either way. |
+| Drinks | Still always 1. |
+| Past entries | Unchanged: a whole score is stored and read as before (4, never 4.0), so no paid day re-scores. |
+
+**Storage:** `meal.score` in the payload may be a half (`3.5`). `FoodLogService` checks the step
+(`FoodEntries.IsScore`) and writes the score without trailing zeros (`FoodEntries.TidyScore`).
+Migration 0040 makes `v_meal.score` numeric (0034 read it as an int, which rounded 3.5 to 4) and
+`v_food_day.score_calories` numeric (3.5 × 333 = 1,165.5). A view's column can't change type in
+place, so 0040 drops `v_food_day`, `v_fast` and `v_meal` and makes them again as they were,
+apart from those two columns.
+
 ## Status
 
 - [x] F0 — Requirements (FOOD-1 to FOOD-5, D13) + this plan
@@ -658,6 +687,7 @@ fast, 39 of 40) plus beers of 150 calories each.
 - [x] F7 — Drinks in the kernel (migration 0038)
 - [x] F8 — Drinks on the page
 - [x] F9 — Combined entries
+- [x] F10 — Half-point scores (migration 0040)
 
 ### As built
 
@@ -911,3 +941,26 @@ fast, 39 of 40) plus beers of 150 calories each.
 - **Later (2026-10-22):** a single entry's card opens the dialog too ("Pick the entry to change
   or delete it, or have another."), its button reading "Grain bowl, 7:30 PM: change, delete or
   have another". `meal-gallery.test.tsx` and the photo e2e path go through it.
+
+**F10 (2026-10-22).** As planned in §8, plus:
+
+- **Types:** `Meal.Score`, `FoodEntryInput.Score`, `DietDayFacts.ScoreCalories` and
+  `FoodDay.ScoreCalories` are decimals; the API's `score` is a number (`gen:api` changes only
+  its format, int32 → double).
+- **CLI:** `bsk food log "Turkey wrap" --score 3.5 --cal 550`; `bsk food` prints "score 3.5"
+  and "score 4", never "4.0".
+- **The colours aren't nine validated steps.** Nine steps at least 0.06 L apart (the dataviz
+  validator's ordinal gap) would need the light end too pale to clear the card, so the five
+  whole steps keep their validation and each half is the midpoint between two of them (0.045 L
+  from each). The number always shows beside the colour, so the colour is never the only cue.
+- **Tests:**
+  - Kernel: the half table and the step check (`DietRulesTests`); a half stored as given, read
+    back through the views and the day's sum, and a whole score kept whole
+    (`FoodLogServiceTests`); a half over HTTP, paying 22 and re-scoring to 25 at 4, and 3.7
+    refused (`FoodEndpointTests`).
+  - Vitest: `diet-score.test.ts` on the kernel's half table and words; the mock keeps a half
+    and refuses 3.7; `log-food-sheet.test.tsx` (the nine buttons in order, logging a 3.5, a
+    drink greying the halves out); the gallery's half tile.
+  - e2e on a 375 px phone: the half sits under the gap between 3 and 4, at least 44 px wide;
+    logging a 3.5 reads "On track for 22 of 40"; Log again keeps the half.
+  - a11y in both themes: the sheet with 3.5 picked, and the gallery with a half's tile.

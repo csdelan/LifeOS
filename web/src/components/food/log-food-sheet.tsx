@@ -25,6 +25,7 @@ import {
   formatDuration,
   GRAMS_MAX,
   guessMealType,
+  HALF_SCORES,
   MEAL_TYPES,
   NAME_MAX,
   scoreLabel,
@@ -41,8 +42,9 @@ import { cn } from "@/lib/utils";
  * The Log food sheet (FOOD-1): a bottom sheet on a phone, a side panel on a desktop.
  *
  * - Name, with recent entries under it ("Log again" fills the rest; the time stays now).
- * - The health score 1-5 with its examples, calories from quick sizes or typed, the time with
- *   quick picks, the meal type (guessed from the time until it's chosen), nutrients folded away.
+ * - The health score 1-5 with its examples, and the half points (3.5) as smaller buttons between
+ *   them; calories from quick sizes or typed, the time with quick picks, the meal type (guessed
+ *   from the time until it's chosen), nutrients folded away.
  * - Alcoholic drink (FOOD-6): the score greys out at 1 and the meal type becomes Drink; turned
  *   off, the score picked before comes back. Log again carries the flag.
  * - With a fast running and calories above 0, "Ends your 17 h fast at 12:30 pm", on by default.
@@ -96,6 +98,27 @@ export function LogFoodSheet({
       </SheetContent>
     </Sheet>
   );
+}
+
+/**
+ * The score picker's buttons in score order, each with its place on the ten-column grid: the
+ * whole scores in the top row, each half in the row under it, centred on the gap between its
+ * neighbours (food-log plan §8). Written out so Tailwind sees every class.
+ */
+const PICKER: readonly { score: number; half: boolean; place: string }[] = [
+  { score: 1, half: false, place: "col-start-1 row-start-1" },
+  { score: 1.5, half: true, place: "col-start-2 row-start-2" },
+  { score: 2, half: false, place: "col-start-3 row-start-1" },
+  { score: 2.5, half: true, place: "col-start-4 row-start-2" },
+  { score: 3, half: false, place: "col-start-5 row-start-1" },
+  { score: 3.5, half: true, place: "col-start-6 row-start-2" },
+  { score: 4, half: false, place: "col-start-7 row-start-1" },
+  { score: 4.5, half: true, place: "col-start-8 row-start-2" },
+  { score: 5, half: false, place: "col-start-9 row-start-1" },
+];
+
+function capitalize(text: string): string {
+  return `${text[0].toUpperCase()}${text.slice(1)}`;
 }
 
 /** A `datetime-local` value `minutes` before now. */
@@ -314,6 +337,7 @@ function FoodForm({
   const photoName = name.trim() || meal?.name || "this entry";
 
   const chosen = SCORES.find((s) => s.score === shownScore);
+  const chosenHalf = HALF_SCORES.find((s) => s.score === shownScore);
 
   return (
     <form
@@ -485,38 +509,51 @@ function FoodForm({
 
         <fieldset className="space-y-1.5" disabled={alcoholic || pending}>
           <legend className="text-sm font-medium">Health score</legend>
-          <div className={cn("grid grid-cols-5 gap-1.5", alcoholic && "opacity-50")}>
-            {SCORES.map((s) => (
-              <label
-                key={s.score}
-                className={cn(
-                  "relative flex min-h-14 cursor-pointer flex-col items-center justify-center rounded-lg px-1 py-1.5 text-center has-[:disabled]:cursor-not-allowed has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50",
-                  shownScore === s.score
-                    ? "bg-muted ring-2 ring-primary"
-                    : "bg-card ring-1 ring-foreground/10 hover:bg-muted has-[:disabled]:hover:bg-card",
-                )}
-              >
-                <input
-                  type="radio"
-                  name={`${ids}-score`}
-                  value={s.score}
-                  aria-label={scoreLabel(s.score)}
-                  checked={shownScore === s.score}
-                  onChange={() => setScore(s.score)}
-                  className="absolute inset-0 z-10 cursor-pointer appearance-none rounded-lg opacity-0 disabled:cursor-not-allowed"
-                />
-                <span aria-hidden className={cn("mb-1 h-1.5 w-6 rounded-full", SCORE_FILL[s.score])} />
-                <span className="text-lg leading-none font-semibold">{s.score}</span>
-                <span className="mt-0.5 text-[0.65rem] leading-tight">{s.word}</span>
-              </label>
-            ))}
+          {/* Ten columns: each whole score spans two in the top row, and each half spans the two
+              under the gap between its neighbours, so 3.5 sits between 3 and 4. In score order, so
+              the arrow keys step 1, 1.5, 2 ... 5. */}
+          <div className={cn("grid grid-cols-10 gap-x-1.5 gap-y-1", alcoholic && "opacity-50")}>
+            {PICKER.map(({ score: value, half, place }) => {
+              const whole = SCORES.find((s) => s.score === value);
+              return (
+                <label
+                  key={value}
+                  className={cn(
+                    "relative col-span-2 flex cursor-pointer flex-col items-center justify-center rounded-lg text-center has-[:disabled]:cursor-not-allowed has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50",
+                    place,
+                    half ? "min-h-10 w-3/4 justify-self-center px-0.5 py-1" : "min-h-14 px-1 py-1.5",
+                    shownScore === value
+                      ? "bg-muted ring-2 ring-primary"
+                      : "bg-card ring-1 ring-foreground/10 hover:bg-muted has-[:disabled]:hover:bg-card",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name={`${ids}-score`}
+                    value={value}
+                    aria-label={scoreLabel(value)}
+                    checked={shownScore === value}
+                    onChange={() => setScore(value)}
+                    className="absolute inset-0 z-10 cursor-pointer appearance-none rounded-lg opacity-0 disabled:cursor-not-allowed"
+                  />
+                  <span
+                    aria-hidden
+                    className={cn("rounded-full", half ? "mb-0.5 h-1 w-4" : "mb-1 h-1.5 w-6", SCORE_FILL[value])}
+                  />
+                  <span className={cn("leading-none font-semibold", half ? "text-sm" : "text-lg")}>{value}</span>
+                  {whole && <span className="mt-0.5 text-[0.65rem] leading-tight">{whole.word}</span>}
+                </label>
+              );
+            })}
           </div>
           <p className="text-xs text-muted-foreground" aria-live="polite">
             {alcoholic
               ? "A drink always scores 1."
               : chosen
-                ? `${chosen.word[0].toUpperCase()}${chosen.word.slice(1)}: ${chosen.examples}.`
-                : "1 junk · 3 average · 5 very healthy"}
+                ? `${capitalize(chosen.word)}: ${chosen.examples}.`
+                : chosenHalf
+                  ? `${capitalize(chosenHalf.word)}: halfway between ${chosenHalf.between[0]} and ${chosenHalf.between[1]}.`
+                  : "1 junk · 3 average · 5 very healthy · halves in between"}
           </p>
         </fieldset>
 

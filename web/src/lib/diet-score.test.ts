@@ -11,8 +11,11 @@ import {
   formatDuration,
   formatPart,
   guessMealType,
+  HALF_SCORES,
+  isScore,
   scoreDay,
   scoreLabel,
+  scoreWord,
 } from "@/lib/diet-score";
 
 const HOUR = 3600;
@@ -68,6 +71,18 @@ describe("scoreDay", () => {
     expect(formatPart(s.caloriesPart)).toBe("2.4");
     expect(formatPart(s.fasting)).toBe("1.3");
     expect([s.foodAward, s.fastAward, s.total]).toEqual([14, 1, 15]);
+  });
+
+  // The kernel's A_half_score_pays_halfway_and_mixes_into_the_average (food-log plan §8).
+  it("pays a half score halfway between its neighbours, through the same line", () => {
+    for (let score = 1; score <= 5; score += 0.5) expect(day([[1000, score]]).quality).toBeCloseTo(7 * (score - 1), 10);
+    expect(day([[1200, 3.5]])).toMatchObject({ quality: 17.5, caloriesPart: 4, foodAward: 22, averageScore: 3.5 });
+    const mixed = day([
+      [600, 3.5],
+      [600, 4],
+    ]);
+    expect(mixed).toMatchObject({ averageScore: 3.75, quality: 19.25, foodAward: 23 });
+    expect(day([[333, 3.5]]).averageScore).toBe(3.5);
   });
 
   it("has no average and no quality on a day of 0-calorie entries", () => {
@@ -164,7 +179,25 @@ describe("words", () => {
   it("names scores and durations as the kernel does", () => {
     expect(scoreLabel(5)).toBe("5 · very healthy");
     expect(scoreLabel(1)).toBe("1 · junk");
+    expect(scoreLabel(3.5)).toBe("3.5 · average to good");
+    expect(HALF_SCORES.map((s) => scoreLabel(s.score))).toEqual([
+      "1.5 · junk to indulgent",
+      "2.5 · indulgent to average",
+      "3.5 · average to good",
+      "4.5 · good to very healthy",
+    ]);
+    expect(HALF_SCORES.find((s) => s.score === 2.5)?.between).toEqual([2, 3]);
+    expect(scoreWord(3.25)).toBeUndefined();
+    expect(scoreLabel(3.25)).toBe("3.25");
     expect(formatDuration(23 * HOUR + 5 * 60)).toBe("23 h 05 m");
     expect(formatDuration(45 * 60 + 59)).toBe("45 m");
+  });
+});
+
+// The kernel's A_score_is_1_to_5_in_half_steps.
+describe("isScore", () => {
+  it("takes 1 to 5 in whole or half points and nothing else", () => {
+    expect([1, 1.5, 3.5, 4.5, 5].every(isScore)).toBe(true);
+    expect([0.5, 0, 3.25, 3.7, 5.5, 6, Number.NaN].some(isScore)).toBe(false);
   });
 });

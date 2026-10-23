@@ -3,7 +3,8 @@
  * mock pays exactly what the kernel would and the page can show the working. Up to 40 base
  * Health XP a day: food quality 28, calories 4, fasting 8.
  *
- * - Quality is a straight line on the calorie-weighted average score: 1 pays 0, 5 pays 28.
+ * - Quality is a straight line on the calorie-weighted average score: 1 pays 0, 5 pays 28, and a
+ *   half point (3.5, plan §8) pays halfway between its neighbours.
  * - Calories pay 4 from 500 to 2,000, fading evenly to 0 at 2,500.
  * - Fasting pays nothing up to 12 hours, then evenly up to 8 at 24 hours, by the second.
  * - Drinks (FOOD-6, plan §7.2): an alcoholic entry scores 1, and each drink above two cuts the
@@ -33,6 +34,13 @@ export const SCORE_MIN = 1;
 /** A drink's score: always the lowest. */
 export const DRINK_SCORE = SCORE_MIN;
 export const SCORE_MAX = 5;
+/** The step a score moves in (food-log plan §8): whole and half points, so 3.5 sits between 3 and 4. */
+export const SCORE_STEP = 0.5;
+
+/** Whether `score` is a health score: 1 to 5 in half steps, as `FoodEntries.IsScore`. */
+export function isScore(score: number): boolean {
+  return Number.isFinite(score) && score >= SCORE_MIN && score <= SCORE_MAX && Number.isInteger(score / SCORE_STEP);
+}
 export const CALORIES_MAX = 5000;
 export const GRAMS_MAX = 1000;
 export const NAME_MAX = 80;
@@ -178,9 +186,24 @@ export const SCORES: readonly { score: number; word: string; examples: string }[
   { score: 5, word: "very healthy", examples: "a salmon salad" },
 ];
 
-/** "5 · very healthy". */
+/**
+ * The half points between the whole ones (food-log plan §8), each named by its neighbours:
+ * 3.5 is "average to good".
+ */
+export const HALF_SCORES: readonly { score: number; word: string; between: readonly [number, number] }[] =
+  SCORES.slice(0, -1).map((low, i) => {
+    const high = SCORES[i + 1];
+    return { score: low.score + SCORE_STEP, word: `${low.word} to ${high.word}`, between: [low.score, high.score] as const };
+  });
+
+/** The word for a score, whole or half: "very healthy", "average to good"; undefined for anything else. */
+export function scoreWord(score: number): string | undefined {
+  return (SCORES.find((s) => s.score === score) ?? HALF_SCORES.find((s) => s.score === score))?.word;
+}
+
+/** "5 · very healthy", "3.5 · average to good". */
 export function scoreLabel(score: number): string {
-  const word = SCORES.find((s) => s.score === score)?.word;
+  const word = scoreWord(score);
   return word ? `${score} · ${word}` : String(score);
 }
 

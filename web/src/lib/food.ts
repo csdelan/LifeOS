@@ -186,23 +186,35 @@ export function formatClockOn(iso: string, day: string): string {
 }
 
 /**
- * The score's fill alone, for a swatch. The ramp's middle steps (3 light, 2 dark) reach only
- * about 4:1 against either ink: enough for an icon, not for small text, so text never sits on it.
+ * The score's fill alone, for a swatch, whole and half points (food-log plan §8). The ramp's
+ * middle steps (3 light, 2 dark) reach only about 4:1 against either ink: enough for an icon,
+ * not for small text, so text never sits on it.
  */
 export const SCORE_FILL: Record<number, string> = {
   1: "bg-score-1",
+  1.5: "bg-score-1-5",
   2: "bg-score-2",
+  2.5: "bg-score-2-5",
   3: "bg-score-3",
+  3.5: "bg-score-3-5",
   4: "bg-score-4",
+  4.5: "bg-score-4-5",
   5: "bg-score-5",
 };
 
-/** The score tile's fill and the ink an icon on it wears (the ramp in `index.css`). */
+/**
+ * The score tile's fill and the ink an icon on it wears (the ramp in `index.css`): the light
+ * ink below 3, the dark one from 3, so a half's icon reaches 3.4:1 or more in both themes.
+ */
 export const SCORE_TILE: Record<number, string> = {
   1: "bg-score-1 text-score-ink-low",
+  1.5: "bg-score-1-5 text-score-ink-low",
   2: "bg-score-2 text-score-ink-low",
+  2.5: "bg-score-2-5 text-score-ink-low",
   3: "bg-score-3 text-score-ink-high",
+  3.5: "bg-score-3-5 text-score-ink-high",
   4: "bg-score-4 text-score-ink-high",
+  4.5: "bg-score-4-5 text-score-ink-high",
   5: "bg-score-5 text-score-ink-high",
 };
 

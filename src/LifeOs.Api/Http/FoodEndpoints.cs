@@ -231,15 +231,18 @@ public static class FoodEndpoints
 
 /// <summary>
 /// A food entry (FOOD-1) for <c>POST /api/food/meals</c> and <c>/meals/{id}</c>. Name, score
-/// (1–5) and calories (0–5,000) are required; the rest is optional.
+/// (1–5 in half steps) and calories (0–5,000) are required; the rest is optional.
 /// </summary>
 public sealed class FoodEntryBody
 {
     /// <summary>1–80 characters.</summary>
     public string? Name { get; set; }
 
-    /// <summary>1 (junk food) to 5 (very healthy); always 1 for an alcoholic drink, which needs none.</summary>
-    public int? Score { get; set; }
+    /// <summary>
+    /// 1 (junk food) to 5 (very healthy) in whole or half points (3.5); always 1 for an
+    /// alcoholic drink, which needs none.
+    /// </summary>
+    public decimal? Score { get; set; }
 
     /// <summary>A rough estimate, 0 to 5,000.</summary>
     public int? Calories { get; set; }

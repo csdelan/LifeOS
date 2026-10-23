@@ -28,7 +28,7 @@ public sealed class FoodLogServiceTests(PostgresFixture postgres)
     }
 
     private static FoodEntryInput Entry(
-        string name, int score, int calories, DateTimeOffset? at = null, string? type = null)
+        string name, decimal score, int calories, DateTimeOffset? at = null, string? type = null)
         => new(name, score, calories, at, type);
 
     private async Task<long> CountAsync(DomainTestDatabase db, string sql)
@@ -140,6 +140,10 @@ public sealed class FoodLogServiceTests(PostgresFixture postgres)
                      Entry(new string('x', 81), 3, 100),
                      Entry("Toast", 0, 100),
                      Entry("Toast", 6, 100),
+                     Entry("Toast", 0.5m, 100),
+                     Entry("Toast", 3.7m, 100),
+                     Entry("Toast", 3.25m, 100),
+                     Entry("Toast", 5.5m, 100),
                      Entry("Toast", 3, -1),
                      Entry("Toast", 3, 5001),
                      Entry("Toast", 3, 100, type: "brunch"),
@@ -171,6 +175,45 @@ public sealed class FoodLogServiceTests(PostgresFixture postgres)
         Assert.Equal(350, recent[1].Calories);
         Assert.Single(await food.GetRecentAsync(1, Ct));
         await Assert.ThrowsAsync<ArgumentException>(() => food.GetRecentAsync(0, Ct));
+    }
+
+    /// <summary>Food-log plan §8: a score can be a half, and every read keeps it (migration 0040).</summary>
+    [Fact]
+    public async Task A_half_score_is_stored_as_given_and_every_read_keeps_it()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var food = db.Get<FoodLogService>();
+        var day = (await db.TodayAsync()).AddDays(-2);
+        DateTimeOffset At(int hour) => new(day.ToDateTime(new TimeOnly(hour, 0)), TimeSpan.Zero);
+
+        var wrap = (await food.LogAsync(Entry("Turkey wrap", 3.5m, 600, At(12)), cancellationToken: Ct)).Meal!;
+        Assert.Equal(3.5m, wrap.Score);
+
+        // A whole score sent with a trailing zero is stored as the whole number, as before.
+        var pasta = (await food.LogAsync(Entry("Pasta", 3.0m, 333, At(18)), cancellationToken: Ct)).Meal!;
+        Assert.Equal((3m, 0), (pasta.Score, pasta.Score.Scale));
+        await using (var connection = new NpgsqlConnection(db.ConnectionString))
+        {
+            await connection.OpenAsync(Ct);
+            var stored = (await connection.QueryAsync<string>(new CommandDefinition(
+                "SELECT payload->'meal'->>'score' FROM bsk.event WHERE payload ? 'meal' ORDER BY occurred_at;",
+                cancellationToken: Ct))).ToList();
+            Assert.Equal(["3.5", "3"], stored);
+        }
+
+        // The view reads the half (it used to round it to 4), and the day's sum keeps it.
+        var view = await food.GetDayAsync(day, Ct);
+        Assert.Equal([3.5m, 3m], view.Meals.Select(m => m.Score));
+        Assert.Equal((933L, 3099m), (view.Facts.Calories, view.Facts.ScoreCalories));
+        Assert.Equal(3.32m, Math.Round(view.Score.AverageScore!.Value, 2));
+
+        // 3.5 x 333 leaves a half in the sum: an edit to a 3.5 pasta reads 600 x 3.5 + 333 x 3.5.
+        await food.EditAsync(pasta.Id.ToString(), Entry("Pasta", 3.5m, 333, At(18)), Ct);
+        view = await food.GetDayAsync(day, Ct);
+        Assert.Equal((3265.5m, 3.5m), (view.Facts.ScoreCalories, view.Score.AverageScore));
+        Assert.Equal(17.5m, view.Score.Quality);
+        Assert.Equal(3.5m, (await food.GetRecentAsync(cancellationToken: Ct)).Single(m => m.Name == "Pasta").Score);
+        Assert.Equal(3.5m, (await food.GetDaysAsync(day, day, Ct)).Days.Single().Score.AverageScore);
     }
 
     [Fact]

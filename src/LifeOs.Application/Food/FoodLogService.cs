@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LifeOs.Application.Abstractions;
@@ -393,11 +394,14 @@ public sealed class FoodLogService(
         // A drink's score is always the lowest (FOOD-6), whatever was sent.
         var alcoholic = input.Alcoholic ?? false;
         var score = alcoholic ? FoodEntries.DrinkScore : input.Score;
-        if (score is < FoodEntries.ScoreMin or > FoodEntries.ScoreMax)
+        if (!FoodEntries.IsScore(score))
         {
             throw new ArgumentException(
-                $"The health score is {FoodEntries.ScoreMin} to {FoodEntries.ScoreMax} (1 = junk, 5 = very healthy); got {input.Score}.");
+                $"The health score is {FoodEntries.ScoreText(FoodEntries.ScoreMin)} to {FoodEntries.ScoreText(FoodEntries.ScoreMax)} " +
+                $"in whole or half points, like 3 or 3.5 (1 = junk, 5 = very healthy); got {input.Score.ToString(CultureInfo.InvariantCulture)}.");
         }
+
+        score = FoodEntries.TidyScore(score);
 
         if (input.Calories is < 0 or > FoodEntries.CaloriesMax)
         {
@@ -545,20 +549,21 @@ public sealed class FoodLogService(
 
     /// <summary>An entry after its checks: trimmed, its time and day settled, its type known, a drink's score 1.</summary>
     private sealed record NormalizedEntry(
-        string Name, int Score, int Calories, DateTimeOffset EatenAt, DateOnly EatenOn, string MealType,
+        string Name, decimal Score, int Calories, DateTimeOffset EatenAt, DateOnly EatenOn, string MealType,
         int? ProteinG, int? CarbsG, int? FatG, bool Alcoholic);
 }
 
 /// <summary>
 /// A food entry as a host sends it (FOOD-1). <paramref name="EatenAt"/> defaults to now and
 /// <paramref name="MealType"/> to a guess from the home-zone time; the nutrients are optional
-/// whole grams. <paramref name="Alcoholic"/> marks one alcoholic drink (FOOD-6): its score is
-/// then always 1 and its meal type defaults to a drink. Left out, a new entry isn't a drink and
-/// an edit keeps what the entry was.
+/// whole grams. <paramref name="Score"/> is 1 to 5 in whole or half points (3.5).
+/// <paramref name="Alcoholic"/> marks one alcoholic drink (FOOD-6): its score is then always 1
+/// and its meal type defaults to a drink. Left out, a new entry isn't a drink and an edit keeps
+/// what the entry was.
 /// </summary>
 public sealed record FoodEntryInput(
     string Name,
-    int Score,
+    decimal Score,
     int Calories,
     DateTimeOffset? EatenAt = null,
     string? MealType = null,

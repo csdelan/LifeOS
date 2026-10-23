@@ -109,6 +109,21 @@ test.describe("accessibility", () => {
       await expect(sheet.getByText(/^Average: /)).toBeVisible();
       const log = await scan();
       expect(log, JSON.stringify(log, null, 2)).toEqual([]);
+
+      // A half point (food-log plan §8): picked, then logged, so the gallery shows its tile.
+      await sheet.getByRole("radio", { name: "3.5 · average to good" }).check();
+      await expect(sheet.getByText("Average to good: halfway between 3 and 4.")).toBeVisible();
+      const half = await scan();
+      expect(half, JSON.stringify(half, null, 2)).toEqual([]);
+      await sheet.getByLabel("Name").fill("Turkey wrap");
+      await sheet.getByLabel("Calories").fill("550");
+      await sheet.getByRole("button", { name: "Log", exact: true }).click();
+      await expect(sheet).toBeHidden();
+      await expect(page.getByRole("list", { name: "Entries for today" })).toContainText("3.5 · average to good", {
+        timeout: 10_000,
+      });
+      const gallery = await scan();
+      expect(gallery, JSON.stringify(gallery, null, 2)).toEqual([]);
     });
   }
 

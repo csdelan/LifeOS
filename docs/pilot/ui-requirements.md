@@ -2731,6 +2731,12 @@ Horizon:    Pilot
 Definition: active
 Build:      built
 
+**Update (2026-10-22 — half-point scores, F10):** "Is it possible to make the food log rating
+on a precision of 0.5 steps instead of 1? So I can rate 3.5, not just 3 or 4" (Chris). A score
+is now 1 to 5 in whole or half points: the picker adds 1.5, 2.5, 3.5 and 4.5 as smaller
+buttons between the whole ones, a half reads "3.5 · average to good", and it pays halfway
+between its neighbours. Migration 0040 reads the score as a decimal (food-log plan §8).
+
 **Update (2026-10-20 — the page landed, F4):** `/food` logs, edits and deletes entries from
 the Log food sheet: a bottom sheet on a phone, a side panel on a desktop. It has Log again
 from recent names, the 1–5 picker with its examples, quick calorie sizes, quick times and a
@@ -3648,8 +3654,9 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;
-  `bsk food`; the `/food` Day, Week and Month views. — **Shipped** (F1–F6 in
-  [food-log-plan.md](food-log-plan.md), migrations 0034–0035, photos in Supabase Storage).
+  `bsk food`; the `/food` Day, Week and Month views; health scores in half points. —
+  **Shipped** (F1–F6 and F10 in [food-log-plan.md](food-log-plan.md), migrations 0034–0035
+  and 0040, photos in Supabase Storage).
 - **Drinks, the sobriety streak and combined entries** (FOOD-6 / FOOD-7): the alcohol flag on
   a food entry, the cut above two drinks a day, the streak, a drinks count over any range,
   identical entries combined on the day's page, entries oldest first. — **Shipped** (F7–F9 in

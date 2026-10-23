@@ -12,10 +12,10 @@ public sealed class DietRulesTests
     private static readonly DietRules Rules = DietRules.Default;
 
     /// <summary>A day's facts from (calories, score) entries and a fast of <paramref name="fastHours"/>.</summary>
-    private static DietDayFacts Day(double? fastHours, params (int Calories, int Score)[] entries)
+    private static DietDayFacts Day(double? fastHours, params (int Calories, decimal Score)[] entries)
         => new(
             entries.Sum(e => (long)e.Calories),
-            entries.Sum(e => (long)e.Calories * e.Score),
+            entries.Sum(e => e.Calories * e.Score),
             fastHours is { } h ? (long)Math.Round(h * 3600) : null);
 
     [Fact]
@@ -113,12 +113,52 @@ public sealed class DietRulesTests
     }
 
     [Fact]
-    public void Quality_is_a_straight_line_from_1_to_5()
+    public void Quality_is_a_straight_line_from_1_to_5_halves_included()
     {
-        for (var score = 1; score <= 5; score++)
+        for (var score = FoodEntries.ScoreMin; score <= FoodEntries.ScoreMax; score += FoodEntries.ScoreStep)
         {
             Assert.Equal(7m * (score - 1), Rules.Score(Day(null, (1000, score))).Quality);
         }
+    }
+
+    /// <summary>Food-log plan §8: a half pays halfway between its neighbours, through the same line.</summary>
+    [Fact]
+    public void A_half_score_pays_halfway_and_mixes_into_the_average()
+    {
+        // 1,200 calories of turkey wraps at 3.5: 17.5 + 4 = 21.5, which rounds up to 22.
+        var wraps = Rules.Score(Day(null, (1200, 3.5m)));
+        Assert.Equal((17.5m, 4m, 22L, 3.5m), (wraps.Quality, wraps.CaloriesPart, wraps.FoodAward, wraps.AverageScore));
+
+        // 600 at 3.5 and 600 at 4 average 3.75: 19.25 + 4 → 23.
+        var mixed = Rules.Score(Day(null, (600, 3.5m), (600, 4)));
+        Assert.Equal((3.75m, 19.25m, 23L), (mixed.AverageScore, mixed.Quality, mixed.FoodAward));
+
+        // An odd number of calories leaves a half in score x calories: 3.5 x 333 = 1,165.5.
+        Assert.Equal(1165.5m, Day(null, (333, 3.5m)).ScoreCalories);
+        Assert.Equal(3.5m, Rules.Score(Day(null, (333, 3.5m))).AverageScore);
+    }
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(1.5, true)]
+    [InlineData(3.5, true)]
+    [InlineData(4.5, true)]
+    [InlineData(5, true)]
+    [InlineData(0.5, false)]
+    [InlineData(0, false)]
+    [InlineData(3.25, false)]
+    [InlineData(3.7, false)]
+    [InlineData(5.5, false)]
+    [InlineData(6, false)]
+    public void A_score_is_1_to_5_in_half_steps(double score, bool valid)
+        => Assert.Equal(valid, FoodEntries.IsScore((decimal)score));
+
+    [Fact]
+    public void A_score_is_kept_and_shown_without_trailing_zeros()
+    {
+        Assert.Equal(("4", "3.5"), (FoodEntries.ScoreText(FoodEntries.TidyScore(4.0m)), FoodEntries.ScoreText(FoodEntries.TidyScore(3.50m))));
+        Assert.Equal((0, 1), (FoodEntries.TidyScore(4.00m).Scale, FoodEntries.TidyScore(3.500m).Scale));
+        Assert.Equal(1m, FoodEntries.DrinkScore);
     }
 
     [Theory]
@@ -148,7 +188,7 @@ public sealed class DietRulesTests
         return plain with
         {
             Calories = plain.Calories + 150L * beers,
-            ScoreCalories = plain.ScoreCalories + 150L * beers * FoodEntries.DrinkScore,
+            ScoreCalories = plain.ScoreCalories + 150m * beers * FoodEntries.DrinkScore,
             Drinks = beers
         };
     }
