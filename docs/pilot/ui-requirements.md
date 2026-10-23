@@ -68,6 +68,7 @@ requirements cluster and the ID says where it lives:
 | `REWARD-` | Rewards: currencies, redeeming, reward history, life-domain progression |
 | `FOOD-` | Food Log: food entries, fasts, diet XP |
 | `ACTIVITY-` | Activity: Oura steps, exercise, sleep and readiness, activity XP, tags |
+| `COVER-` | Cover images: Unsplash photos on identity statements, goals and projects |
 | `NAV-` | Navigation shell |
 | `GEN-` | Cross-cutting conventions **and** per-subject-type object specs (Goals, Projects, Tasks, Identity Statements, Commitments, Decisions, Problems, People, Vision, …) |
 
@@ -3398,6 +3399,75 @@ tags beside its sleep, readiness, steps and workouts. Build is `building` until 
 reconnects and compares the page with his tags in the Oura app.
 
 
+### COVER-1 — I can pick a cover photo from Unsplash for an identity statement, goal or project
+Horizon:    Pilot
+Definition: active
+Build:      mapped
+
+**Workflow (Chris):**
+- "I would like to add images to long standing subjects such as identity statements, goals,
+  and even projects, for the visual enhancement it provides. My first question is whether
+  there are standard libraries of free images that I can choose from similar to how Notion
+  provides image libraries. Or do I need to find the image myself?" (2026-10-23)
+- "Let's do unsplash, and both banners and card images" (2026-10-23)
+- Search Unsplash from inside LifeOS, filled in with the subject's title, and tap a photo to
+  make it the cover. Change, reposition or remove it later.
+
+**Ontology fit (Claude):**
+- Maps to: `attributes.cover` on the subject, a reference to an Unsplash photo (D15). Not
+  bytes, not an artifact, not an event.
+- Kernel delta: `Cover` (Domain), the `IUnsplashClient` port and its HTTP adapter,
+  `CoverService`, `bsk cover`; `GET /api/covers/search`, `POST /api/cover`,
+  `/api/cover/position`, `/api/cover/clear`; `cover` on the subject reads. No migration.
+- Implications:
+  - Unsplash's rules: the picture is shown from `images.unsplash.com` (so the security
+    policy allows it), the photographer and Unsplash are credited with links, and picking a
+    photo counts a download for the photographer.
+  - The Access Key stays on the server. Without it the picker says Unsplash isn't set up.
+  - A photo later deleted from Unsplash shows as its colour until another is picked.
+  - Covers keep no history, as renames don't.
+- Open decisions: none blocking. Uploading his own photo and covers on Areas are later
+  (cover-images plan §6).
+
+### COVER-2 — A subject's cover shows as a banner at the top of its detail
+Horizon:    Pilot
+Definition: active
+Build:      mapped
+
+**Workflow (Chris):**
+- "both banners and card images" (2026-10-23).
+- The banner sits across the top of the detail panel (the side panel on desktop, the sheet
+  on a phone), above the title, with "Photo by … on Unsplash" in its corner and a Cover menu
+  for Change, Reposition and Remove. Reposition is a drag, or the arrow keys.
+
+**Ontology fit (Claude):**
+- Maps to: a read of `cover` on `SubjectDetail`; Reposition writes `position_y` only.
+- Kernel delta: none beyond COVER-1.
+- Implications: there are no Goal, Project or Identity Statement pages (BROWSE-2 / the
+  production UI's peek panel), so the detail panel is the subject's own view. A full page
+  per subject is later.
+- Open decisions: none.
+
+### COVER-3 — Covers show on the cards where identity statements, goals and projects appear
+Horizon:    Pilot
+Definition: active
+Build:      mapped
+
+**Workflow (Chris):**
+- "both banners and card images" (2026-10-23).
+- Vision: an image across the top of each identity statement card, a thumbnail before each
+  long-term goal. Today: a strip on the primary focus card, thumbnails on the Active goals
+  and Active projects rows. Map graph: the cover in the node's picture slot.
+- A subject without a cover looks as it does today.
+
+**Ontology fit (Claude):**
+- Maps to: a read of `cover` on `SubjectListItem`, so a card needs no extra fetch.
+- Kernel delta: none beyond COVER-1.
+- Implications: thumbnails are too small for a credit line, so theirs is a tooltip; the
+  banner and the Vision cards show it in full.
+- Open decisions: none.
+
+
 
 
 ---
@@ -3603,6 +3673,24 @@ day. Design and build order: [food-log-plan.md](food-log-plan.md).
 
 Design and build order: [activity-plan.md](activity-plan.md).
 
+**D15 — A cover image is a reference to an Unsplash photo, kept in the subject's attributes
+(COVER-1..3, 2026-10-23).**
+
+- **What's stored:** `attributes.cover`, one object: `source` (`unsplash`), the photo's id,
+  its image URL (`urls.raw`), its colour, size and description, the photographer's name and
+  links, where the banner is centred (`position_y`), and when it was set.
+- **Not bytes:** Unsplash requires its images be shown from its own servers, so LifeOS
+  keeps a reference, not an artifact. It's the first media LifeOS shows from another site.
+- **Not an event:** a cover is presentation. It's changed in place, like a title, and
+  keeps no history.
+- **One writer:** `CoverService`. The generic `set` refuses `cover`, as it refuses `title`.
+- **Trusted from Unsplash, not the browser:** the browser sends only a photo id; the server
+  looks the photo up and stores what Unsplash says. A stored URL must be on
+  `images.unsplash.com`.
+- **Room for more:** `source` leaves space for an uploaded photo (an `artifact_id`) later.
+
+Design and build order: [cover-images-plan.md](cover-images-plan.md).
+
 ### Method for the Habit ↔ Commitment discrepancy
 
 "Habit" (UI concept) and "Commitment" (storage type) are deliberately decoupled — Chris
@@ -3717,10 +3805,14 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 
   — **Open** (planned in [activity-plan.md](activity-plan.md), A1–A6; activity XP,
   ACTIVITY-5, follows).
+- **Cover images** (COVER-1..3 / D15): `attributes.cover` (an Unsplash photo reference),
+  the Unsplash client behind a port, `CoverService`, `bsk cover`, the cover endpoints and
+  `cover` on the subject reads; no migration. — **Open** (planned in
+  [cover-images-plan.md](cover-images-plan.md), C1–C5).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **Oura
-integration** (ACTIVITY-1..4 / D14). Everything else
+integration** (ACTIVITY-1..4 / D14); **cover images** (COVER-1..3 / D15). Everything else
 above has shipped, the rewards work included (R1–R7 in [rewards-plan.md](rewards-plan.md))
 and life-domain XP (X1–X7 in [xp-domains-plan.md](xp-domains-plan.md)), and the Food Log
 (F1–F6 in [food-log-plan.md](food-log-plan.md)). The user-facing UIs for the shipped kernel bits still vary by surface — see each
