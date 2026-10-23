@@ -9,6 +9,7 @@
 import { habitStage } from "@/lib/establish";
 import { isTerminal } from "@/lib/production-ui-types";
 import type {
+  CoverRead,
   HabitOccurrenceRow,
   HabitRow,
   Relation,
@@ -36,7 +37,8 @@ export interface AlignmentNode {
 }
 
 export interface DashboardRead {
-  primaryFocus: { title: string; subjectId: string; kind: "goal" };
+  /** The focus, with its subject's cover for the card's strip (COVER-3), when it has one. */
+  primaryFocus: { title: string; subjectId: string; kind: "goal"; cover?: CoverRead | null };
   objectives: { id: string; title: string; subjectId?: string }[];
   dueAndOverdue: SubjectListItem[];
   nextActions: SubjectListItem[];
@@ -193,10 +195,15 @@ export function deriveDashboard(input: {
     .slice(0, 3)
     .map((p) => ({ id: p.id, title: p.title, subjectId: p.id }));
 
+  const focus: DashboardRead["primaryFocus"] = input.primaryFocus ?? (primary
+    ? { title: primary.title, subjectId: primary.id, kind: "goal" }
+    : { title: "No active goal yet", subjectId: "", kind: "goal" });
+  const focusCover = focus.subjectId
+    ? (subjects.find((x) => x.id === focus.subjectId)?.cover ?? null)
+    : null;
+
   return {
-    primaryFocus: input.primaryFocus ?? (primary
-      ? { title: primary.title, subjectId: primary.id, kind: "goal" }
-      : { title: "No active goal yet", subjectId: "", kind: "goal" }),
+    primaryFocus: { ...focus, cover: focusCover },
     objectives:
       input.objectives && input.objectives.length > 0 ? input.objectives : objectives,
     dueAndOverdue,

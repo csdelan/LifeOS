@@ -356,7 +356,7 @@ Read 2026-10-23.
 - [x] C1 — Kernel: the cover attribute, the Unsplash client, `bsk cover`
 - [x] C2 — API, the security policy and the key on Fly
 - [x] C3 — Picker and banner
-- [ ] C4 — Card images
+- [x] C4 — Card images
 - [ ] C5 — Live on staging
 
 ### As built
@@ -513,3 +513,58 @@ Read 2026-10-23.
     links.
   - Moving it with the keyboard saved 40. It kept 40 across a reload and on the list read.
   - Removing it brought Add cover back. A Task had no Add cover.
+
+**C4 (2026-10-23).** As planned, except where noted:
+
+- **Shared pieces.** `CoverCredit` (`components/cover/cover-credit.tsx`) is the corner pill
+  with both links, now used by the banner too. `CoverThumb` (`cover-thumb.tsx`) is a square
+  with the credit as its tooltip. `CoverImage` takes a `style` for a thumbnail's size.
+- **Vision** (`pages/vision-page.tsx`):
+  - Each identity statement card is now an `<article>`. Its title is the button, stretched
+    over the whole card, so the card still opens the statement. The credit's links sit
+    above that stretch, because links can't go inside a button.
+  - The button's name is now the title alone. It used to be the badge, the title and the
+    area.
+  - The photo is 112 px tall on a phone and 144 px from `md`, asked for at 768 px.
+  - Long-term goals lead with a 40 px `CoverThumb`.
+  - "Not a mood board — alignment." is gone.
+- **Today** (`pages/focus-page.tsx`):
+  - `DashboardRead.primaryFocus` gains `cover`, taken from the subject list in
+    `deriveDashboard`, so it needs no extra read.
+  - The focus card's 96 px strip carries the credit pill too. §3.8 named only the banner
+    and the Vision cards for a full credit, but the strip is wide enough for one.
+  - `ListRow` gains `withCover`, used only by Active goals and Active projects. Rows
+    elsewhere stay as they were.
+- **Map graph** (`components/graph/subject-node.tsx`, `graph.css`):
+  - A node with a cover shows it in the art slot under a **black scrim at 60%**, and the
+    node's words, type icon and status turn white.
+  - §3.8 left the scrim's colour open. A scrim in the card's colour would have to hide
+    about 92% of the photo to keep the coloured type text at 4.5:1. The type colours
+    already sit near that line, in both themes.
+  - The dark scrim leaves even a white photo at most 40% bright. That keeps white text
+    above 5:1 over any photo, so the picture stays visible.
+  - The photo is clipped to the shell's shape. Goal and Idea shells leave overflow visible
+    for their halo, so the art slot takes `border-radius: inherit`.
+  - The art slot ignores the pointer, so the credit is the node's tooltip.
+- **The graph now refreshes each node's subject on every read** (`alignment-graph.tsx`),
+  not only when it lays out again. A cover picked in the panel didn't show on its node
+  until the graph's membership changed, and a rename wouldn't have either. Positions are
+  kept.
+- **The mock's dashboard and map forest** now give subjects with their bounty and cover,
+  as the live reads do. Before, they used the store's bare subjects.
+- **Tests:**
+  - Vitest:
+    - `list-row.test.tsx` and `subject-node.test.tsx`, both new.
+    - `vision-page.test.tsx`, new.
+    - Cover cases in `focus-page.test.tsx`.
+    - `deriveDashboard`'s focus cover in `derive.test.ts`.
+  - An e2e golden path:
+    - A cover picked for a goal in the graph's panel shows on its node at once, and one
+      removed leaves it.
+    - Today: the focus loses its strip, and the rows follow.
+    - Vision: the statement card keeps its credit, the goal thumbnails follow, and the
+      card still opens the statement.
+  - a11y scans of `/vision`, `/` and `/map?view=graph` with covers in both themes (the
+    graph scanned whole), and of `/vision` and `/` on a 375 px phone.
+- **No live check.** C4 is web only, and it reads the same `cover` on the list read that the
+  C3 live check confirmed. The live dashboard and graph are built from that read.

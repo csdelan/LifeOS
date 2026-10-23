@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { coverColor, coverSrc, coverSrcSet, objectPosition } from "@/lib/cover";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,7 @@ export function CoverImage({
   eager = false,
   title,
   className,
+  style,
   children,
 }: {
   url: string;
@@ -27,6 +28,8 @@ export function CoverImage({
   /** A tooltip, for a thumbnail too small to carry its credit. */
   title?: string;
   className?: string;
+  /** A fixed size, for a thumbnail. */
+  style?: CSSProperties;
   /** Laid over the photo: a credit, a menu. */
   children?: ReactNode;
 }) {
@@ -36,7 +39,7 @@ export function CoverImage({
     <div
       data-testid="cover-image"
       className={cn("relative overflow-hidden", className)}
-      style={{ backgroundColor: coverColor(color) }}
+      style={{ ...style, backgroundColor: coverColor(color) }}
       title={title}
     >
       {failed !== url ? (

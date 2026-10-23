@@ -165,13 +165,17 @@ function GraphCanvas({
       });
   }, [layoutKey]); // layout + membership; color/selection applied below
 
+  // The latest read of each subject too, so a new title or cover shows without a new layout.
   useEffect(() => {
+    const latest = new Map(model.nodes.map((m) => [m.subject.id, m.subject]));
     setNodes((nds) => {
       let changed = false;
       const next = nds.map((n) => {
-        const areaColor = areaAccent(n.data.subject.area, areas);
+        const subject = latest.get(n.id) ?? n.data.subject;
+        const areaColor = areaAccent(subject.area, areas);
         const selectedNow = n.id === selected;
         if (
+          n.data.subject === subject &&
           n.data.colorByArea === colorByArea &&
           n.data.areaColor === areaColor &&
           n.selected === selectedNow
@@ -182,12 +186,12 @@ function GraphCanvas({
         return {
           ...n,
           selected: selectedNow,
-          data: { ...n.data, colorByArea, areaColor },
+          data: { ...n.data, subject, colorByArea, areaColor },
         };
       });
       return changed ? next : nds;
     });
-  }, [colorByArea, areas, selected, setNodes]);
+  }, [model, colorByArea, areas, selected, setNodes]);
 
   useEffect(() => {
     const highlight = hovered ?? selected ?? null;

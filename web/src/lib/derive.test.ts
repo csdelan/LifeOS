@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAlignmentForest,
+  deriveDashboard,
   maintainingHabitRows,
   todayHabitRows,
   type AlignmentEdge,
 } from "@/lib/derive";
 import type {
+  CoverRead,
   HabitOccurrenceRow,
   HabitRow,
   SubjectListItem,
@@ -123,5 +125,26 @@ describe("today's habit rows (REWARD-2 maintenance)", () => {
     expect(maintainingHabitRows(habits, [], today)).toEqual([
       expect.objectContaining({ habitId: "established", state: "unrecorded", allowsPartial: true }),
     ]);
+  });
+});
+
+describe("deriveDashboard's primary focus cover (COVER-3)", () => {
+  const cover = { photographer: "Mina Cho", url: "https://images.unsplash.com/photo-1" } as CoverRead;
+  const base = { edges: [], inboxCount: 0, habits: [], occurrences: [], today: "2026-10-23" };
+
+  it("carries the focus subject's cover from the list it was given", () => {
+    const subjects = [item("g", "Goal", "Ship", { status: "Active", cover })];
+    expect(deriveDashboard({ ...base, subjects }).primaryFocus).toMatchObject({ subjectId: "g", cover });
+    const chosen = deriveDashboard({
+      ...base,
+      subjects,
+      primaryFocus: { title: "Ship", subjectId: "g", kind: "goal" },
+    });
+    expect(chosen.primaryFocus.cover).toBe(cover);
+  });
+
+  it("has none for a focus without a cover, or with no goal at all", () => {
+    expect(deriveDashboard({ ...base, subjects: [item("g", "Goal", "Ship", { status: "Active" })] }).primaryFocus.cover).toBeNull();
+    expect(deriveDashboard({ ...base, subjects: [] }).primaryFocus).toMatchObject({ subjectId: "", cover: null });
   });
 });

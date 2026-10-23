@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { CoverCredit } from "@/components/cover/cover-credit";
 import { CoverImage } from "@/components/cover/cover-image";
 import { BANNER_WIDTH, clampPosition, dragPosition, keyPosition, positionText } from "@/lib/cover";
 import { useWrites } from "@/lib/queries";
@@ -165,26 +166,7 @@ export function CoverBanner({
         </span>
       ) : null}
 
-      <p className="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-md bg-black/60 px-2 py-0.5 text-[0.7rem] text-white">
-        Photo by{" "}
-        <a
-          href={cover.photographerLink || cover.unsplashLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium underline underline-offset-2"
-        >
-          {cover.photographer}
-        </a>{" "}
-        on{" "}
-        <a
-          href={cover.unsplashLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium underline underline-offset-2"
-        >
-          Unsplash
-        </a>
-      </p>
+      <CoverCredit cover={cover} />
 
       <div className="absolute top-2 right-2 flex gap-1.5">
         {repositioning ? (

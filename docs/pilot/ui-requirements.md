@@ -3474,7 +3474,17 @@ building`. It becomes `built` once it's on staging (C5).
 ### COVER-3 — Covers show on the cards where identity statements, goals and projects appear
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      building
+
+**Update (2026-10-23 — cards landed, C4):**
+- Vision: each identity statement's card has its photo across the top, with its credit,
+  and each long-term goal has a thumbnail.
+- Today: the primary focus card has a strip, and Active goals and Active projects have
+  thumbnails.
+- Map graph: a node shows its cover under a dark scrim, with white words.
+- Anything without a cover looks as before, and "Not a mood board" is gone from Vision.
+
+Build moves `mapped → building`. It becomes `built` once it's on staging (C5).
 
 **Workflow (Chris):**
 - "both banners and card images" (2026-10-23).

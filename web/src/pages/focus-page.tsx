@@ -1,6 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CoverCredit } from "@/components/cover/cover-credit";
+import { CoverImage } from "@/components/cover/cover-image";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { ListRow } from "@/components/primitives/list-row";
 import { CardSkeleton, ListSkeleton } from "@/components/primitives/skeletons";
@@ -10,6 +12,9 @@ import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
 import { cn } from "@/lib/utils";
 import { useDashboard, useWrites } from "@/lib/queries";
 import { todayIso } from "@/lib/dates";
+
+/** The width the focus card's strip is asked for: the card is at most about 600 px wide. */
+const FOCUS_STRIP_WIDTH = 720;
 
 export function FocusPage() {
   const { data, isLoading, isError } = useDashboard();
@@ -40,6 +45,7 @@ export function FocusPage() {
   }
 
   const today = todayIso();
+  const focusCover = data.primaryFocus.cover ?? null;
   const overdue = data.dueAndOverdue.filter((t) => t.due && t.due < today);
   const dueToday = data.dueAndOverdue.filter((t) => !overdue.includes(t));
 
@@ -53,7 +59,19 @@ export function FocusPage() {
         </p>
 
         <div className="mt-8 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-          <Card className="shadow-(--shadow-lift)">
+          <Card className={cn("shadow-(--shadow-lift)", focusCover && "pt-0")}>
+            {focusCover ? (
+              <CoverImage
+                url={focusCover.url}
+                color={focusCover.color}
+                positionY={focusCover.positionY}
+                width={FOCUS_STRIP_WIDTH}
+                eager
+                className="h-24"
+              >
+                <CoverCredit cover={focusCover} />
+              </CoverImage>
+            ) : null}
             <CardHeader>
               <p className="type-scale-section text-attention">Primary focus</p>
               <CardTitle className="font-heading text-3xl">
@@ -199,6 +217,7 @@ export function FocusPage() {
                 <ListRow
                   key={g.id}
                   item={g}
+                  withCover
                   onSelect={() =>
                     void navigate({ to: "/map", search: { selected: g.id } })
                   }
@@ -215,6 +234,7 @@ export function FocusPage() {
                 <ListRow
                   key={p.id}
                   item={p}
+                  withCover
                   onSelect={() =>
                     void navigate({ to: "/map", search: { selected: p.id } })
                   }

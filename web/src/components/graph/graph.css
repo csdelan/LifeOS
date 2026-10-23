@@ -119,6 +119,27 @@
   color: var(--node-accent);
 }
 
+/*
+ * A node with a cover (COVER-3): the photo fills the art slot, clipped to the shell's shape
+ * (Goal and Idea shells leave overflow visible for their halo), under a black scrim at 60%.
+ * White words over that keep 4.5:1 even over a white photo (the scrim leaves it at most 40%
+ * bright), so the node's words turn white.
+ */
+.lifeos-node.has-cover .lifeos-node__art {
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.lifeos-node__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.6);
+}
+
+.lifeos-node.has-cover .lifeos-node__body {
+  color: #fff;
+}
+
 .lifeos-node__body {
   position: relative;
   z-index: 1;

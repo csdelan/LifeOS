@@ -337,6 +337,62 @@ test.describe("accessibility", () => {
     });
   }
 
+  // Covers on cards (COVER-3): Vision's statement cards and goal thumbnails, Today's focus
+  // strip and row thumbnails, and the Map graph's covered nodes, in both themes.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: covers on Vision, Today and the Map graph, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        await settled(page);
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+
+      await page.goto("/vision");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      await expect(page.getByText("Photo by Ines Vale on Unsplash")).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('[title="Photo by Mina Cho on Unsplash"]')).toBeVisible();
+      const vision = await scan();
+      expect(vision, JSON.stringify(vision, null, 2)).toEqual([]);
+
+      await page.goto("/");
+      await expect(page.getByText("Photo by Mina Cho on Unsplash")).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('[title="Photo by Sam Okafor on Unsplash"]')).toBeVisible();
+      const today = await scan();
+      expect(today, JSON.stringify(today, null, 2)).toEqual([]);
+
+      await page.goto("/map?view=graph");
+      await expect(page.locator(".lifeos-node.has-cover")).toHaveCount(3, { timeout: 20_000 });
+      const graph = await scan();
+      expect(graph, JSON.stringify(graph, null, 2)).toEqual([]);
+    });
+  }
+
+  // The same cards on a phone.
+  test("axe serious/critical: covers on Vision and Today on a phone", async ({ page }) => {
+    const scan = async () => {
+      await settled(page);
+      const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    };
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+
+    await page.goto("/vision");
+    const card = page.locator("article", { has: page.getByRole("heading", { name: "Steward of my health" }) });
+    await expect(card.getByText("Photo by Ines Vale on Unsplash")).toBeVisible({ timeout: 10_000 });
+    // 112 px tall on a phone.
+    expect((await card.getByTestId("cover-image").boundingBox())?.height).toBe(112);
+    const vision = await scan();
+    expect(vision, JSON.stringify(vision, null, 2)).toEqual([]);
+
+    await page.goto("/");
+    await expect(page.getByText("Photo by Mina Cho on Unsplash")).toBeVisible({ timeout: 10_000 });
+    const today = await scan();
+    expect(today, JSON.stringify(today, null, 2)).toEqual([]);
+  });
+
   // On a phone the detail is a sheet: the banner, repositioning it, and the picker.
   test("axe serious/critical: a cover banner, repositioning and the picker on a phone", async ({ page }) => {
     const scan = async () => {

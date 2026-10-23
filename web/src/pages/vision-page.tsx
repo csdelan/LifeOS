@@ -1,9 +1,15 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EyeIcon } from "lucide-react";
+import { CoverCredit } from "@/components/cover/cover-credit";
+import { CoverImage } from "@/components/cover/cover-image";
+import { CoverThumb } from "@/components/cover/cover-thumb";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { useSubjects } from "@/lib/queries";
 import { ListSkeleton } from "@/components/primitives/skeletons";
+
+/** The width a Vision card's photo is asked for: the page is at most 768 px wide. */
+const VISION_CARD_WIDTH = 768;
 
 export function VisionPage() {
   const { data, isLoading, isError } = useSubjects("Value");
@@ -18,7 +24,6 @@ export function VisionPage() {
         <h1 className="type-scale-display mt-1">Who I'm becoming</h1>
         <p className="mt-2 text-muted-foreground">
           Identity Statements first, then the long-horizon Goals that serve them.
-          Not a mood board — alignment.
         </p>
         {isLoading ? <ListSkeleton /> : null}
         {isError ? (
@@ -31,18 +36,39 @@ export function VisionPage() {
         ) : null}
         <div className="mt-8 space-y-8">
           {(data ?? []).map((v) => (
-            <button
+            // The title's button stretches over the whole card, so the card opens the
+            // statement while the photo's credit links, laid above it, still work.
+            <article
               key={v.id}
-              type="button"
-              className="w-full cursor-pointer rounded-xl bg-card p-5 text-left ring-1 ring-foreground/10 transition-shadow hover:shadow-(--shadow-lift) focus-visible:ring-2 focus-visible:ring-ring/50"
-              onClick={() => void navigate({ to: "/map", search: { selected: v.id } })}
+              className="relative overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow hover:shadow-(--shadow-lift) has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ring/50"
             >
-              <TypeBadge type="Value" />
-              <h2 className="mt-2 font-heading text-2xl">{v.title}</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {v.areaName ?? "Whole life"}
-              </p>
-            </button>
+              {v.cover ? (
+                <CoverImage
+                  url={v.cover.url}
+                  color={v.cover.color}
+                  positionY={v.cover.positionY}
+                  width={VISION_CARD_WIDTH}
+                  className="h-28 md:h-36"
+                >
+                  <CoverCredit cover={v.cover} className="z-10" />
+                </CoverImage>
+              ) : null}
+              <div className="p-5">
+                <TypeBadge type="Value" />
+                <h2 className="mt-2 font-heading text-2xl">
+                  <button
+                    type="button"
+                    className="cursor-pointer text-left outline-none after:absolute after:inset-0 after:content-['']"
+                    onClick={() => void navigate({ to: "/map", search: { selected: v.id } })}
+                  >
+                    {v.title}
+                  </button>
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {v.areaName ?? "Whole life"}
+                </p>
+              </div>
+            </article>
           ))}
         </div>
         <section className="mt-12">
@@ -52,13 +78,16 @@ export function VisionPage() {
               <li key={g.id}>
                 <button
                   type="button"
-                  className="min-h-11 text-left text-sm hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className="flex min-h-11 items-center gap-3 text-left text-sm hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50"
                   onClick={() => void navigate({ to: "/map", search: { selected: g.id } })}
                 >
-                  {g.title}
-                  {g.targetDate ? (
-                    <span className="ml-2 text-xs text-muted-foreground">{g.targetDate}</span>
-                  ) : null}
+                  {g.cover ? <CoverThumb cover={g.cover} size={40} /> : null}
+                  <span>
+                    {g.title}
+                    {g.targetDate ? (
+                      <span className="ml-2 text-xs text-muted-foreground">{g.targetDate}</span>
+                    ) : null}
+                  </span>
                 </button>
               </li>
             ))}

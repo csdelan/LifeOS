@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { CoverThumb } from "@/components/cover/cover-thumb";
 import { DateChip } from "@/components/primitives/date-chip";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { TypeBadge } from "@/components/primitives/type-badge";
@@ -11,12 +12,15 @@ export function ListRow({
   selected,
   onSelect,
   trailing,
+  withCover = false,
   className,
 }: {
   item: SubjectListItem;
   selected?: boolean;
   onSelect?: () => void;
   trailing?: React.ReactNode;
+  /** Lead with the subject's cover, when it has one (COVER-3: Today's goals and projects). */
+  withCover?: boolean;
   className?: string;
 }) {
   const status = item.status || defaultStatus(item.type) || null;
@@ -31,6 +35,7 @@ export function ListRow({
         className,
       )}
     >
+      {withCover && item.cover ? <CoverThumb cover={item.cover} size={36} /> : null}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-medium">{item.title}</span>

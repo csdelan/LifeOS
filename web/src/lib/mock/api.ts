@@ -115,7 +115,12 @@ function listOf(type?: SubjectListItem["type"], includeArchived = false): Subjec
       if (type && s.type !== type) return false;
       return true;
     })
-    .map((s) => withCover(withBounty(s)));
+    .map(listed);
+}
+
+/** A subject as the list reads give it: with its bounty and cover, as the live API does. */
+function listed(s: SubjectListItem): SubjectListItem {
+  return withCover(withBounty(s));
 }
 
 export interface LifeOsReads {
@@ -479,7 +484,7 @@ export const mockReads: LifeOsReads = {
     await wait();
     const s = storeState();
     return deriveDashboard({
-      subjects: s.subjects,
+      subjects: s.subjects.map(listed),
       edges: s.edges,
       inboxCount: s.inbox.length,
       habits: mockHabits(),
@@ -496,7 +501,7 @@ export const mockReads: LifeOsReads = {
   }) {
     await wait();
     const s = storeState();
-    return buildAlignmentForest(s.subjects, s.edges, opts);
+    return buildAlignmentForest(s.subjects.map(listed), s.edges, opts);
   },
 };
 
