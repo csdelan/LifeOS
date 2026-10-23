@@ -2,6 +2,7 @@ using System.Globalization;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Activity;
 using LifeOs.Application.Capture;
+using LifeOs.Application.Covers;
 using LifeOs.Application.Food;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
@@ -42,7 +43,9 @@ namespace LifeOs.Infrastructure.DependencyInjection;
 /// <c>integrations</c> connects outside services (activity plan §3.1): with an Oura app it
 /// registers <see cref="IOuraClient"/>, and with a token key the repository can store tokens.
 /// A host passes it explicitly (<see cref="IntegrationSettings.Resolve"/>), so a test never
-/// calls Oura. Without it, <see cref="OuraConnectionService"/> says Oura isn't set up.
+/// calls Oura. Without it, <see cref="OuraConnectionService"/> says Oura isn't set up. With an
+/// Unsplash key it registers <see cref="IUnsplashClient"/>; without one,
+/// <see cref="CoverService"/> says Unsplash isn't set up.
 /// </para>
 /// </summary>
 public static class ServiceCollectionExtensions
@@ -88,6 +91,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIntegrationRepository>(_ =>
             new NpgsqlIntegrationRepository(connectionString, integrations?.TokenCipher));
         services.AddSingleton<IActivityRepository>(_ => new NpgsqlActivityRepository(connectionString));
+        if (integrations?.Unsplash is { } unsplash)
+        {
+            services.AddSingleton<IUnsplashClient>(_ =>
+                new UnsplashHttpClient(UnsplashHttpClient.CreateHttpClient(), unsplash));
+        }
+
         if (integrations?.Oura is { } oura)
         {
             services.AddSingleton<IOuraClient>(sp =>
@@ -220,6 +229,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new BountyService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>()));
+
+        services.AddSingleton(sp => new CoverService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetService<IUnsplashClient>(),
+            sp.GetRequiredService<IClock>()));
 
         services.AddSingleton(sp => new HabitTargetService(
             sp.GetRequiredService<SubjectService>(),

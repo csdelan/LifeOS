@@ -353,8 +353,49 @@ Read 2026-10-23.
 ## Status
 
 - [x] C0 — Requirements (COVER-1 to COVER-3, D15) + this plan
-- [ ] C1 — Kernel: the cover attribute, the Unsplash client, `bsk cover`
+- [x] C1 — Kernel: the cover attribute, the Unsplash client, `bsk cover`
 - [ ] C2 — API, the security policy and the key on Fly
 - [ ] C3 — Picker and banner
 - [ ] C4 — Card images
 - [ ] C5 — Live on staging
+
+### As built
+
+**C1 (2026-10-23).** As planned, plus:
+
+- **Where things live.** `Cover` is in `src/LifeOs.Domain/Covers.cs`. `IUnsplashClient`,
+  `UnsplashPhoto` and `UnsplashSearchPage` are in `Application/Abstractions/Ports.cs`, and
+  `CoverService` is in `Application/Covers`. `UnsplashOptions` and `UnsplashHttpClient` are
+  in `Infrastructure/Integrations`.
+- **The settings ride on `IntegrationSettings`** (a third, optional member), so the API host
+  and the CLI read `Unsplash__AccessKey` the same way they read Oura's settings.
+- **One error type, five kinds.** `UnsplashException.Failure` is `NotSetUp`, `BadKey`,
+  `RateLimited`, `NotFound` or `Unavailable`. C2 maps them: `NotSetUp` to 409, `NotFound`
+  to 404, and the rest to 502.
+- **The hourly limit** is a 429, or a 403 with `X-Ratelimit-Remaining: 0` or "Rate Limit"
+  in the body, so any of the ways Unsplash might signal it reads the same.
+- **The key only goes to the API's host.** A `download_location` with a different scheme,
+  host or port from `Unsplash:ApiUrl` is never followed.
+- **The client drops what can't be shown or credited.** A photo is left out if it lacks an
+  id, an image on `images.unsplash.com`, a size, a photographer, or credit links on
+  `unsplash.com`. Names and descriptions are read with single spaces.
+- **Setting a cover** checks the id and position, then the subject's type, then looks the
+  photo up, writes the cover, and counts the download. If the download count fails, the
+  cover stays set: `CoverChange.DownloadProblem` says why the count failed, and `bsk` prints
+  it to stderr.
+- **Clearing works on any subject,** so a cover hand-edited into the wrong shape can always
+  be removed. It reads as none and can't be moved.
+- **`bsk set` refuses `cover`**, both setting it and blanking it, and points at `bsk cover`.
+  The Pilot desktop app only sends its own form fields, so it's unaffected.
+- **Tests:**
+  - `CoverTests`: round trips, off-host and hand-edited covers, positions, referral links,
+    allowed types.
+  - `UnsplashSettingsTests`.
+  - `UnsplashHttpClientTests`, on fixtures in `tests/LifeOs.Tests/UnsplashFixtures`
+    (`search.json` includes an Unsplash+ photo and one with no photographer).
+  - `CoverServiceTests`: Postgres, with a fake Unsplash.
+- **Live-checked** with a throwaway database and a fake Unsplash in node:
+  - `bsk cover search`, `set --position`, `show`, `move` and `--json show` all worked.
+  - `bsk set cover=…` was refused, and a missing photo answered in words.
+  - The fake saw `Client-ID` and `Accept-Version: v1` on every request, one download count
+    on set, and no call on move.

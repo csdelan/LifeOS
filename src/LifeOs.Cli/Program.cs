@@ -48,6 +48,7 @@ rootCommand.Subcommands.Add(WalletCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(LedgerCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(RedeemCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(BountyCommand.Create(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(CoverCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(RewardsCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(DomainsCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(InvolveCommand.Create(connectionOption, jsonOption));

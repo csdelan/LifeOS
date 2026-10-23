@@ -38,6 +38,13 @@
     </EmbeddedResource>
   </ItemGroup>
 
+  <!-- Unsplash's answers, shaped like its documentation's examples (cover-images plan C1). -->
+  <ItemGroup>
+    <EmbeddedResource Include="UnsplashFixtures\*.json">
+      <LogicalName>UnsplashFixtures.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <!-- Oura's answers, recorded from its sandbox (activity plan A2). -->
   <ItemGroup>
     <EmbeddedResource Include="OuraFixtures\*.json">

@@ -3402,7 +3402,12 @@ reconnects and compares the page with his tags in the Oura app.
 ### COVER-1 — I can pick a cover photo from Unsplash for an identity statement, goal or project
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      building
+
+**Update (2026-10-23 — kernel landed, C1):** `bsk cover search`, `set`, `move`, `clear`
+and `show` work end to end with `Unsplash__AccessKey` in the environment. The cover is
+`attributes.cover`, written only by `CoverService`, and `bsk set` refuses the key. The API,
+the picker and the pages follow in C2–C4. Build moves `mapped → building`.
 
 **Workflow (Chris):**
 - "I would like to add images to long standing subjects such as identity statements, goals,

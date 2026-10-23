@@ -566,6 +566,54 @@ public interface IOuraClient
 }
 
 /// <summary>
+/// Unsplash's API (cover-images plan §3.2): search, one photo, and the download counter. Only
+/// photos whose image is on <c>images.unsplash.com</c> come back, so nothing can be chosen
+/// that LifeOS won't show. Errors are <see cref="UnsplashException"/>, in words, never with
+/// the key.
+/// </summary>
+public interface IUnsplashClient
+{
+    /// <summary>The <c>utm_source</c> on every link back to Unsplash (<c>Unsplash:AppName</c>).</summary>
+    string AppName { get; }
+
+    /// <summary>
+    /// Landscape photos matching <paramref name="query"/>, a page at a time (1-based), with
+    /// Unsplash's strict content filter.
+    /// </summary>
+    Task<UnsplashSearchPage> SearchAsync(
+        string query, int page, int perPage, CancellationToken cancellationToken = default);
+
+    /// <summary>One photo by its id; <see cref="UnsplashFailure.NotFound"/> when Unsplash no longer has it.</summary>
+    Task<UnsplashPhoto> GetPhotoAsync(string photoId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Tells Unsplash a photo was used (its <c>download_location</c>), as its guidelines ask
+    /// when a photo becomes a header. A counter for the photographer, nothing more.
+    /// </summary>
+    Task TrackDownloadAsync(Uri downloadLocation, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// A photo as Unsplash describes it, trimmed to what a cover needs. <see cref="RawUrl"/> is
+/// <c>urls.raw</c>; <see cref="DownloadLocation"/> is <c>links.download_location</c>.
+/// </summary>
+public sealed record UnsplashPhoto(
+    string Id,
+    string RawUrl,
+    string? Color,
+    int Width,
+    int Height,
+    string? Description,
+    string? AltDescription,
+    string Photographer,
+    string PhotographerUrl,
+    string PhotoUrl,
+    Uri? DownloadLocation);
+
+/// <summary>One page of a search: how many photos and pages Unsplash has, and this page's photos.</summary>
+public sealed record UnsplashSearchPage(int Total, int TotalPages, IReadOnlyList<UnsplashPhoto> Photos);
+
+/// <summary>
 /// A connect in progress (activity plan §3.1): the OAuth <c>state</c> sent to Oura, the PKCE
 /// verifier and redirect URI the code exchange needs, and when it lapses.
 /// </summary>

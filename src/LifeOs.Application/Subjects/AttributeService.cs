@@ -49,6 +49,15 @@ public sealed class AttributeService(SubjectService subjects, ISubjectRepository
                     nameof(assignments));
             }
 
+            // A cover is a checked Unsplash reference with one writer (D15). Written here it
+            // would be a string no page can show, so point at the verb that sets it.
+            if (string.Equals(key, Cover.AttributeKey, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException(
+                    "Cover is set with `bsk cover` (a photo from Unsplash), not `bsk set`.",
+                    nameof(assignments));
+            }
+
             if (string.IsNullOrWhiteSpace(assignment.Value))
             {
                 removed.Add(key);

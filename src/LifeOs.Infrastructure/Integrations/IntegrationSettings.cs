@@ -103,8 +103,12 @@ public sealed record OuraOptions(
 /// the key its tokens are encrypted under. Oura is optional — without <c>Oura:ClientId</c> the
 /// host runs and the Activity page says Oura isn't set up — but a client id without
 /// <c>Integrations:TokenKey</c> fails startup, since tokens would have nowhere safe to go.
+/// <para>
+/// Unsplash (cover-images plan §3.2) is optional too: without <c>Unsplash:AccessKey</c> covers
+/// can't be searched or set.
+/// </para>
 /// </summary>
-public sealed record IntegrationSettings(OuraOptions? Oura, TokenCipher? TokenCipher)
+public sealed record IntegrationSettings(OuraOptions? Oura, TokenCipher? TokenCipher, UnsplashOptions? Unsplash = null)
 {
     public static readonly IntegrationSettings None = new(null, null);
 
@@ -120,12 +124,13 @@ public sealed record IntegrationSettings(OuraOptions? Oura, TokenCipher? TokenCi
                 + $"Make a key with {TokenCipher.MakeKeyCommand}");
         }
 
-        return new IntegrationSettings(oura, cipher);
+        return new IntegrationSettings(oura, cipher, UnsplashOptions.Resolve(get));
     }
 
     /// <summary>
     /// Reads the settings from environment variables (<c>Oura__ClientId</c>,
-    /// <c>Integrations__TokenKey</c>, …), as the CLI does. Names match without regard to case.
+    /// <c>Integrations__TokenKey</c>, <c>Unsplash__AccessKey</c>, …), as the CLI does. Names
+    /// match without regard to case.
     /// </summary>
     public static IntegrationSettings FromEnvironment()
     {
