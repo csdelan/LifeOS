@@ -46,7 +46,7 @@ export function FoodPage() {
   const writes = useWrites();
   const settled = useRef(false);
   useOuraSyncOnOpen();
-  // `template` fills a new entry from one already logged (Have another on a combined card).
+  // `template` fills a new entry from one already logged (Have another on an entry).
   const [sheet, setSheet] = useState<{ open: boolean; meal: MealRow | null; template?: MealRow }>({
     open: false,
     meal: null,

@@ -502,8 +502,11 @@ test.describe("golden paths", () => {
     await page.keyboard.press("Escape");
     await expect(viewer).toBeHidden();
 
-    // Remove photo saves at once; the entry stays.
-    await entries.getByRole("button", { name: /^Grain bowl/ }).click();
+    // Remove photo saves at once; the entry stays. The card lists the entry with Have another.
+    await entries.getByRole("button", { name: /^Grain bowl, .+: change, delete or have another$/ }).click();
+    const picker = page.getByRole("dialog", { name: "Grain bowl" });
+    await expect(picker.getByRole("button", { name: "Have another" })).toBeVisible();
+    await picker.getByRole("list", { name: "The Grain bowl entry" }).getByRole("button").click();
     const edit = page.getByRole("dialog", { name: "Change Grain bowl" });
     await edit.getByRole("button", { name: "Remove photo" }).click();
     await expect(page.getByText("Photo removed from Grain bowl")).toBeVisible({ timeout: 10_000 });

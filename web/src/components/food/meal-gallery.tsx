@@ -51,11 +51,11 @@ function nutrients(group: MealGroup): string | null {
  * (FOOD-5), or a tile coloured by score with the meal type's icon (a glass of beer for an
  * alcoholic drink, FOOD-6); the name, time and calories, and the score as a number and a word,
  * so colour is never the only cue. An entry eaten inside a recorded fast is flagged. Tapping a
- * thumbnail shows the photo full size; tapping the rest opens the entry for editing.
+ * thumbnail shows the photo full size.
  *
  * Identical entries on the day show as one card (FOOD-7, plan §7.4), "Beer ×3", with the
- * calories and nutrients summed and the time as a range. Tapping it lists the copies, each
- * opening to change or delete, with Have another.
+ * calories and nutrients summed and the time as a range. Tapping any card lists its entries
+ * (one for a single entry), each opening to change or delete, with Have another.
  */
 export function MealGallery({
   meals,
@@ -105,11 +105,11 @@ export function MealGallery({
             <li key={group.key} className="relative">
               <button
                 type="button"
-                onClick={() => (group.count > 1 ? setCopies({ group, open: true }) : onOpen(meal))}
+                onClick={() => setCopies({ group, open: true })}
                 aria-label={
                   group.count > 1
                     ? `${name}${drink}, ${range}: show the ${group.count} entries`
-                    : `${name}${drink}, ${range}: change or delete`
+                    : `${name}${drink}, ${range}: change, delete or have another`
                 }
                 className="flex h-full w-full items-stretch gap-3 rounded-xl bg-card p-3 text-left ring-1 ring-foreground/10 transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50"
               >
@@ -167,10 +167,15 @@ export function MealGallery({
             <DialogHeader>
               <DialogTitle className="pr-8">{groupName(listed)}</DialogTitle>
               <DialogDescription>
-                Each is its own entry, shown as one card because they're the same. Pick one to change or delete it.
+                {listed.count > 1
+                  ? "Each is its own entry, shown as one card because they're the same. Pick one to change or delete it."
+                  : "Pick the entry to change or delete it, or have another."}
               </DialogDescription>
             </DialogHeader>
-            <ul aria-label={`Each ${listed.first.name}`} className="-mx-2 divide-y">
+            <ul
+              aria-label={listed.count > 1 ? `Each ${listed.first.name}` : `The ${listed.first.name} entry`}
+              className="-mx-2 divide-y"
+            >
               {listed.meals.map((m) => (
                 <li key={m.id}>
                   <button

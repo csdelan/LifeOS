@@ -52,17 +52,26 @@ describe("MealGallery (FOOD-7)", () => {
     const cards = within(screen.getByRole("list", { name: "Entries for today" })).getAllByRole("button");
     expect(cards.map((c) => c.getAttribute("aria-label"))).toEqual([
       expect.stringMatching(/^Lager ×3 \(alcoholic drink\), 7:10\sPM–9:30\sPM: show the 3 entries$/),
-      expect.stringMatching(/^Grain bowl, 7:30\sPM: change or delete$/),
+      expect.stringMatching(/^Grain bowl, 7:30\sPM: change, delete or have another$/),
     ]);
     expect(cards[0]).toHaveTextContent("Lager ×3");
     expect(cards[0]).toHaveTextContent("450 cal");
     expect(cards[0]).toHaveTextContent("1 · alcoholic");
   });
 
-  it("opens a single entry straight away", async () => {
-    const { onOpen } = renderGallery();
+  it("lists a single entry, opening to change or delete, and offers Have another", async () => {
+    const { onOpen, onAnother } = renderGallery();
     await userEvent.click(screen.getByRole("button", { name: /^Grain bowl, / }));
+    const dialog = await screen.findByRole("dialog", { name: "Grain bowl" });
+    expect(dialog).toHaveTextContent("Pick the entry to change or delete it, or have another.");
+    const entry = within(within(dialog).getByRole("list", { name: "The Grain bowl entry" })).getAllByRole("button");
+    expect(entry).toHaveLength(1);
+    await userEvent.click(entry[0]);
     expect(onOpen).toHaveBeenCalledWith(MEALS[1]);
+
+    await userEvent.click(screen.getByRole("button", { name: /^Grain bowl, / }));
+    await userEvent.click(await screen.findByRole("button", { name: "Have another" }));
+    expect(onAnother).toHaveBeenCalledWith(MEALS[1]);
   });
 
   it("lists a combined card's copies, each opening to change or delete, and offers Have another", async () => {

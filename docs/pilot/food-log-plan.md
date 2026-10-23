@@ -371,7 +371,8 @@ bsk food [<date>] [--week | --month] [--json]
   - nutrients when present
   - a flag when it was eaten inside a recorded fast
   
-  Tapping a card opens it for editing, with Delete.
+  Tapping a card lists its entry (or its copies, §7.4), each opening for editing with
+  Delete, plus Have another.
 - **Log food sheet:**
   - Name, with matching recent entries under it ("Log again").
   - Score picker 1–5, with the examples from §1.
@@ -619,6 +620,8 @@ fast, 39 of 40) plus beers of 150 calories each.
 - **Tapping it** opens a short list of the copies with their times; tapping one opens it to
   change or delete. **Have another** opens the Log food sheet filled in with that entry, as
   Log again does: the time is now on today, or the last copy's time on a past day.
+- A single entry's card opens the same dialog, listing its one entry, so Have another is
+  there too (Chris, 2026-10-22).
 - The gallery lists cards oldest first; a combined card sits at its first copy's time.
 
 ### 7.5 Storage and code
@@ -905,3 +908,6 @@ fast, 39 of 40) plus beers of 150 calories each.
   - `meal-gallery.test.tsx`: the combined card, a single entry, the copies and Have another.
   - The drinks e2e path: Have another adds a fifth IPA, and deleting a copy takes it back.
   - An a11y scan of the copies dialog in both themes.
+- **Later (2026-10-22):** a single entry's card opens the dialog too ("Pick the entry to change
+  or delete it, or have another."), its button reading "Grain bowl, 7:30 PM: change, delete or
+  have another". `meal-gallery.test.tsx` and the photo e2e path go through it.

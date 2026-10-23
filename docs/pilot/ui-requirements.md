@@ -2995,6 +2995,9 @@ Horizon:    Pilot
 Definition: active
 Build:      built
 
+**Update (2026-10-22 — Have another on every card):** tapping a single entry opens the same
+dialog as a combined card, listing its one entry to change or delete, with Have another.
+
 **Update (2026-10-22 — combined cards, F9):** identical entries on a day show as one card,
 "IPA ×4", with the calories and nutrients summed and the time as a range. Tapping it lists the
 copies, each opening to change or delete, and Have another fills in Log food from the last
