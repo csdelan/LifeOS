@@ -83,6 +83,67 @@ public sealed class FoodPhotoTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Log_again_carries_the_photo_without_storing_it_again()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var food = db.Get<FoodLogService>();
+        var photos = db.Get<FoodPhotoService>();
+        var first = (await food.LogAsync(new FoodEntryInput("Sausage burrito", 2, 650), cancellationToken: Ct)).Meal!;
+        var photo = (await photos.AttachAsync(first.Id.ToString(), Jpeg(), cancellationToken: Ct)).Meal!.PhotoArtifactId!.Value;
+        Assert.Equal(photo, await food.PhotoOfAsync(FoodLogService.Short(first.Id), Ct));
+
+        var again = await food.LogAsync(new FoodEntryInput("Sausage burrito", 2, 650), photo: photo, cancellationToken: Ct);
+
+        Assert.Equal(FoodActions.Logged, again.Action);
+        Assert.NotEqual(first.Id, again.Meal!.Id);
+        Assert.Equal((photo, 1), (again.Meal.PhotoArtifactId, again.Meal.Versions));
+        // One stored photo and one photo event, shown by both entries.
+        await using (var connection = await OpenAsync(db))
+        {
+            Assert.Equal((1L, 1L), await connection.QuerySingleAsync<(long, long)>(new CommandDefinition(
+                """
+                SELECT (SELECT count(*) FROM bsk.artifact_blob),
+                       (SELECT count(*) FROM bsk.event WHERE artifact_id = @photo);
+                """,
+                new { photo }, cancellationToken: Ct)));
+        }
+
+        // Each entry's photo is its own: removing the copy's leaves the first's.
+        Assert.Null((await photos.RemoveAsync(again.Meal.Id.ToString(), Ct)).Meal!.PhotoArtifactId);
+        Assert.Equal(photo, (await food.ResolveMealAsync(first.Id.ToString(), Ct)).PhotoArtifactId);
+
+        // Anything but a stored photo is refused in words, with nothing written.
+        var plain = (await food.LogAsync(new FoodEntryInput("Toast", 2, 300), cancellationToken: Ct)).Meal!;
+        Assert.Equal("Toast has no photo to carry over.",
+            (await Assert.ThrowsAsync<InvalidOperationException>(() => food.PhotoOfAsync(plain.Id.ToString(), Ct))).Message);
+        Assert.Equal(
+            "That photo isn't stored here: pick the photo again, or log the entry without one.",
+            (await Assert.ThrowsAsync<ArgumentException>(() => food.LogAsync(
+                new FoodEntryInput("Toast", 2, 300), photo: Guid.NewGuid(), cancellationToken: Ct))).Message);
+        Assert.Equal(3, (await food.GetDayAsync(first.EatenOn, Ct)).Meals.Count);
+    }
+
+    [Fact]
+    public async Task Log_again_offers_the_newest_photo_a_name_has_had()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var food = db.Get<FoodLogService>();
+        var photos = db.Get<FoodPhotoService>();
+        var now = DateTimeOffset.UtcNow;
+        var monday = (await food.LogAsync(new FoodEntryInput("Sausage burrito", 2, 650, now.AddDays(-2)), cancellationToken: Ct)).Meal!;
+        var photo = (await photos.AttachAsync(monday.Id.ToString(), Jpeg(), cancellationToken: Ct)).Meal!.PhotoArtifactId;
+        // Logged again without it: the newest entry has no photo, but its name still offers it.
+        var tuesday = (await food.LogAsync(new FoodEntryInput("sausage burrito", 2, 700, now.AddDays(-1)), cancellationToken: Ct)).Meal!;
+        await food.LogAsync(new FoodEntryInput("Toast", 2, 300, now.AddHours(-1)), cancellationToken: Ct);
+
+        var recent = await food.GetRecentAsync(cancellationToken: Ct);
+
+        Assert.Equal(["Toast", "sausage burrito"], recent.Select(m => m.Name));
+        Assert.Null(recent[0].PhotoArtifactId);
+        Assert.Equal((tuesday.Id, 700, photo), (recent[1].Id, recent[1].Calories, recent[1].PhotoArtifactId));
+    }
+
+    [Fact]
     public async Task Remove_photo_writes_a_version_without_it()
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);

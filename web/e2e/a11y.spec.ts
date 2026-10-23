@@ -269,6 +269,22 @@ test.describe("accessibility", () => {
       await expect(page.getByRole("dialog", { name: "Green salad" }).getByRole("img")).toBeVisible();
       const viewer = await scan();
       expect(viewer, JSON.stringify(viewer, null, 2)).toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog", { name: "Green salad" })).toBeHidden();
+
+      // The entry's dialog: Change or delete, and Have another, which carries the photo.
+      await page.getByRole("button", { name: /^Green salad, .+: change, delete or have another$/ }).click();
+      const entry = page.getByRole("dialog", { name: "Green salad" });
+      await expect(entry.getByRole("button", { name: "Change or delete" })).toBeVisible();
+      const entryScan = await scan();
+      expect(entryScan, JSON.stringify(entryScan, null, 2)).toEqual([]);
+      await entry.getByRole("button", { name: "Have another" }).click();
+      await expect(sheet.getByText(/^The last one's photo comes with it\./)).toBeVisible();
+      await expect(sheet.getByRole("button", { name: "Show the photo of Green salad full size" }).locator("img")).toBeVisible({
+        timeout: 10_000,
+      });
+      const carried = await scan();
+      expect(carried, JSON.stringify(carried, null, 2)).toEqual([]);
     });
   }
 

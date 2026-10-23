@@ -4,19 +4,28 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { LogFoodSheet } from "@/components/food/log-food-sheet";
 import { todayIso } from "@/lib/dates";
-import { mockFoodDay } from "@/lib/mock/store";
+import { mockFoodDay, mockLogFood, mockSetFoodPhoto, resetStore } from "@/lib/mock/store";
+import type { MealRow } from "@/lib/production-ui-types";
 
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
 }));
 
-function renderSheet() {
+function renderSheet(template: MealRow | null = null) {
   const today = todayIso();
   const onOpenChange = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <LogFoodSheet open onOpenChange={onOpenChange} meal={null} day={today} today={today} running={null} />
+      <LogFoodSheet
+        open
+        onOpenChange={onOpenChange}
+        meal={null}
+        template={template}
+        day={today}
+        today={today}
+        running={null}
+      />
     </QueryClientProvider>,
   );
   return { onOpenChange, picker: within(screen.getByRole("group", { name: "Health score" })) };
@@ -74,5 +83,55 @@ describe("LogFoodSheet's score picker (food-log plan §8)", () => {
     // Off again, the half picked before comes back.
     await user.click(screen.getByRole("switch", { name: "Alcoholic drink" }));
     expect(picker.getByRole("radio", { name: "2.5 · indulgent to average" })).toBeChecked();
+  });
+});
+
+describe("LogFoodSheet's photo on Log again and Have another (FOOD-5)", () => {
+  /** A burrito logged yesterday with a photo; the photo's artifact id. */
+  function burritoWithPhoto(): { meal: MealRow; photo: string } {
+    resetStore();
+    const meal = mockLogFood({
+      name: "Sausage burrito",
+      score: 2,
+      calories: 650,
+      eatenAt: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    }).meal!;
+    const blob = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 1])], { type: "image/jpeg" });
+    const set = mockSetFoodPhoto(meal.id, blob, "burrito.jpg").meal!;
+    return { meal: set, photo: set.photoArtifactId! };
+  }
+
+  it("carries the photo with Log again, and logs it without an upload", async () => {
+    const user = userEvent.setup();
+    const { photo } = burritoWithPhoto();
+    const { onOpenChange } = renderSheet();
+
+    // jsdom drops the space after the hidden "Log again:"; a browser keeps it.
+    await user.click(await screen.findByRole("button", { name: /^Log again: ?Sausage burrito · 2 · 650 cal$/ }));
+    expect(screen.getByRole("button", { name: "Show the photo of Sausage burrito full size" })).toBeInTheDocument();
+    expect(screen.getByText(/^The last one's photo comes with it\./)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Log" }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    const logged = mockFoodDay().meals.filter((m) => m.name === "Sausage burrito");
+    expect(logged).toHaveLength(1);
+    expect(logged[0].photoArtifactId).toBe(photo);
+  });
+
+  it("leaves the photo off when it's removed, and Have another carries it too", async () => {
+    const user = userEvent.setup();
+    const { meal, photo } = burritoWithPhoto();
+    const { onOpenChange } = renderSheet(meal);
+
+    expect(screen.getByRole("button", { name: "Show the photo of Sausage burrito full size" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove photo" }));
+    expect(screen.queryByRole("button", { name: /^Show the photo/ })).toBeNull();
+    expect(screen.getByText("Optional. It's shrunk to 1,200 px before it's sent.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Log" }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    const today = mockFoodDay().meals.filter((m) => m.name === "Sausage burrito");
+    expect(today.map((m) => m.photoArtifactId)).toEqual([null]);
+    expect(photo).toBeTruthy();
   });
 });

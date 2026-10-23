@@ -96,6 +96,31 @@ public sealed class FoodPhotoEndpointTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Logging_with_a_stored_photo_shows_it_without_an_upload()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
+        var meal = await LogAsync(host, "Sausage burrito");
+        var photo = (await (await UploadAsync(host, meal, FoodPhotoTests.Jpeg())).Content.ReadFromJsonAsync<JsonElement>(Ct))
+            .GetProperty("meal").GetProperty("photoArtifactId").GetGuid();
+
+        var again = await host.Client.PostAsJsonAsync(
+            "/api/food/meals", new { name = "Sausage burrito", score = 5, calories = 650, photoArtifactId = photo }, Ct);
+
+        Assert.True(again.IsSuccessStatusCode, await again.Content.ReadAsStringAsync(Ct));
+        var copy = (await again.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("meal");
+        Assert.NotEqual(meal, copy.GetProperty("id").GetGuid());
+        Assert.Equal(photo, copy.GetProperty("photoArtifactId").GetGuid());
+        // Log again lists the newest of the name, with the photo.
+        var recent = await host.Client.GetFromJsonAsync<JsonElement>("/api/food/recent", Ct);
+        Assert.Equal(photo, Assert.Single(recent.EnumerateArray()).GetProperty("photoArtifactId").GetGuid());
+
+        // An id that isn't a stored photo is refused in words.
+        Assert.StartsWith("That photo isn't stored here", await RefusedAsync(await host.Client.PostAsJsonAsync(
+            "/api/food/meals", new { name = "Toast", score = 5, calories = 650, photoArtifactId = Guid.NewGuid() }, Ct)));
+    }
+
+    [Fact]
     public async Task Oversized_and_non_image_uploads_are_refused_in_words()
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);

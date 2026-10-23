@@ -148,12 +148,17 @@ internal static class FoodCommand
         {
             Description = "One alcoholic drink (a beer, a glass of wine, a shot): its score is always 1 and it counts toward the day's drinks."
         };
+        var photoFromOption = new Option<string?>("--photo-from")
+        {
+            Description = "Show this entry's photo too (its id or first 8 characters), as Log again does. Nothing is uploaded again."
+        };
 
         var command = new Command("log", "Log a food entry: a name, a 1–5 health score (halves allowed) and rough calories.");
         command.Arguments.Add(nameArgument);
         options.AddTo(command);
         command.Options.Add(endFastOption);
         command.Options.Add(alcoholOption);
+        command.Options.Add(photoFromOption);
 
         command.SetAction((parseResult, cancellationToken) =>
         {
@@ -181,7 +186,10 @@ internal static class FoodCommand
                     parseResult.GetValue(options.Type),
                     parseResult.GetValue(options.Protein), parseResult.GetValue(options.Carbs), parseResult.GetValue(options.Fat),
                     alcoholic);
-                var result = await food.LogAsync(input, parseResult.GetValue(endFastOption), cancellationToken);
+                var photo = parseResult.GetValue(photoFromOption) is { } source
+                    ? await food.PhotoOfAsync(source, cancellationToken)
+                    : (Guid?)null;
+                var result = await food.LogAsync(input, parseResult.GetValue(endFastOption), photo, cancellationToken);
                 FoodOutput.WriteResult(result, asJson);
                 return 0;
             });

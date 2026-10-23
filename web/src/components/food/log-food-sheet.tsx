@@ -41,7 +41,8 @@ import { cn } from "@/lib/utils";
 /**
  * The Log food sheet (FOOD-1): a bottom sheet on a phone, a side panel on a desktop.
  *
- * - Name, with recent entries under it ("Log again" fills the rest; the time stays now).
+ * - Name, with recent entries under it ("Log again" fills the rest, the photo too; the time
+ *   stays now).
  * - The health score 1-5 with its examples, and the half points (3.5) as smaller buttons between
  *   them; calories from quick sizes or typed, the time with quick picks, the meal type (guessed
  *   from the time until it's chosen), nutrients folded away.
@@ -51,6 +52,8 @@ import { cn } from "@/lib/utils";
  * - A photo (FOOD-5): Take photo opens the phone's camera, Choose photo its library. It's shrunk
  *   to 1,200 px in the browser first. On a new entry it's sent once the entry is logged; on an
  *   entry already logged it saves as soon as it's picked, and Remove photo takes it off.
+ *   Log again and Have another carry the last one's photo, the one already stored, so it isn't
+ *   sent again; picking a photo or Remove photo replaces it.
  *
  * Opened on an entry, it edits it as a whole and offers Delete. Opened with a `template` (Have
  * another, on a combined card), it's a new entry filled in from it as Log again fills one; its
@@ -186,6 +189,9 @@ function FoodForm({
   const [photoId, setPhotoId] = useState<string | null>(meal?.photoArtifactId ?? null);
   // A new entry's photo, resized and held until the entry is logged.
   const [held, setHeld] = useState<{ blob: Blob; url: string; name: string } | null>(null);
+  // A new entry's photo carried over from the entry it copies (Log again, Have another): the
+  // photo already stored, so nothing is uploaded. A photo picked here replaces it.
+  const [carried, setCarried] = useState<string | null>(meal ? null : (template?.photoArtifactId ?? null));
   // What the photo is busy doing, said under the buttons; null when idle.
   const [photoBusy, setPhotoBusy] = useState<string | null>(null);
   const [viewing, setViewing] = useState(false);
@@ -238,6 +244,8 @@ function FoodForm({
     setFat(m.fatG?.toString() ?? "");
     setShowNutrients(m.proteinG !== null || m.carbsG !== null || m.fatG !== null);
     setMealType("");
+    // Its photo comes too, unless one was already picked for this entry.
+    if (!held) setCarried(m.photoArtifactId);
   }
 
   /** Turned on, the meal type becomes Drink; turned off, it goes back to what it was. */
@@ -264,6 +272,7 @@ function FoodForm({
         setPhotoId(result.meal?.photoArtifactId ?? null);
       } else {
         hold({ blob, name: jpegName(file.name) });
+        setCarried(null);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "That photo didn't save.");
@@ -275,6 +284,7 @@ function FoodForm({
   async function removePhoto() {
     if (!meal) {
       hold(null);
+      setCarried(null);
       return;
     }
     setError(null);
@@ -315,6 +325,7 @@ function FoodForm({
       carbsG: grams[1] as number | null,
       fatG: grams[2] as number | null,
       endFast: !!endsFast && endFast,
+      photoArtifactId: !meal && !held && carried ? carried : undefined,
     };
     if (meal) {
       void run(() => writes.editFood(meal.id, req));
@@ -333,7 +344,10 @@ function FoodForm({
     });
   }
 
-  const shownPhoto = meal ? photoId : (held?.url ?? null);
+  // The photo shown: a stored one by its artifact (the entry's, or the one carried over), or
+  // one picked for a new entry by its object URL.
+  const storedPhoto = meal ? photoId : held ? null : carried;
+  const shownPhoto = storedPhoto ?? held?.url ?? null;
   const photoName = name.trim() || meal?.name || "this entry";
 
   const chosen = SCORES.find((s) => s.score === shownScore);
@@ -402,8 +416,8 @@ function FoodForm({
                 aria-label={`Show the photo of ${photoName} full size`}
                 className="size-20 shrink-0 overflow-hidden rounded-lg ring-1 ring-foreground/10 focus-visible:ring-2 focus-visible:ring-ring/50"
               >
-                {meal && photoId ? (
-                  <MealPhoto artifactId={photoId} alt="" className="size-full" />
+                {storedPhoto ? (
+                  <MealPhoto artifactId={storedPhoto} alt="" className="size-full" />
                 ) : (
                   <img src={shownPhoto} alt="" className="size-full object-cover" />
                 )}
@@ -454,7 +468,9 @@ function FoodForm({
                 ? "A photo saves as soon as you pick it."
                 : held
                   ? "It's saved with the entry when you log it."
-                  : "Optional. It's shrunk to 1,200 px before it's sent.")}
+                  : carried
+                    ? "The last one's photo comes with it. Choose another or remove it if this one looks different."
+                    : "Optional. It's shrunk to 1,200 px before it's sent.")}
           </p>
           {/* Hidden: the buttons above open them. capture asks a phone for its rear camera. */}
           <input
@@ -479,8 +495,8 @@ function FoodForm({
             }}
           />
           <PhotoViewer
-            artifactId={meal ? photoId : null}
-            src={meal ? null : held?.url}
+            artifactId={storedPhoto}
+            src={storedPhoto ? null : held?.url}
             name={photoName}
             open={viewing && !!shownPhoto}
             onOpenChange={setViewing}

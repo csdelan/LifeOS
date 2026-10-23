@@ -88,7 +88,7 @@ public static class FoodEndpoints
 
     /// <summary>
     /// Logs a food entry; with <c>endFast</c>, the running fast ends at the entry's time in the
-    /// same write.
+    /// same write, and with <c>photoArtifactId</c> it shows that stored photo (Log again).
     /// </summary>
     private static async Task<IResult> LogMeal(FoodEntryBody body, FoodLogService food, CancellationToken cancellationToken)
     {
@@ -97,7 +97,8 @@ public static class FoodEndpoints
             return missing;
         }
 
-        var result = await food.LogAsync(Input(body, body.EatenAt, body.MealType), body.EndFast, cancellationToken);
+        var result = await food.LogAsync(
+            Input(body, body.EatenAt, body.MealType), body.EndFast, body.PhotoArtifactId, cancellationToken);
         return Results.Ok(FoodRows.From(result));
     }
 
@@ -268,6 +269,13 @@ public sealed class FoodEntryBody
 
     /// <summary>Logging only: end the running fast at the entry's time ("End your fast?").</summary>
     public bool EndFast { get; set; }
+
+    /// <summary>
+    /// Logging only: a photo already stored (another entry's <c>photoArtifactId</c>) for the new
+    /// entry to show. Log again and Have another carry the last one's photo this way, so it
+    /// isn't uploaded or stored again. Refused in words when it isn't a stored photo.
+    /// </summary>
+    public Guid? PhotoArtifactId { get; set; }
 }
 
 /// <summary><c>POST /api/food/fasts</c>: one fast action and what it takes.</summary>

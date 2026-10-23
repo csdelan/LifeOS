@@ -226,6 +226,28 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
     expect(() => mockRemoveFoodPhoto(meal.id)).toThrow("Ramen has no photo to remove.");
   });
 
+  it("logs again with the photo already stored, and offers a name's newest photo (FOOD-5)", () => {
+    const first = mockLogFood({ name: "Sausage burrito", score: 2, calories: 650, eatenAt: ago(26 * HOUR) }).meal!;
+    const photo = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3])], { type: "image/jpeg" });
+    const id = mockSetFoodPhoto(first.id, photo, "burrito.jpg").meal!.photoArtifactId!;
+    const stored = Object.keys(getState().artifacts).length;
+
+    const again = mockLogFood({ name: "Sausage burrito", score: 2, calories: 650, photoArtifactId: id }).meal!;
+    expect(again).toMatchObject({ photoArtifactId: id, versions: 1 });
+    expect(again.id).not.toBe(first.id);
+    expect(Object.keys(getState().artifacts)).toHaveLength(stored);
+
+    // Each entry's photo is its own.
+    mockRemoveFoodPhoto(again.id);
+    expect(mockFoodDay(first.eatenOn).meals.find((m) => m.id === first.id)?.photoArtifactId).toBe(id);
+    // The newest entry has no photo now, but Log again still offers the name's newest.
+    expect(mockFoodRecent().find((m) => m.name === "Sausage burrito")).toMatchObject({ id: again.id, photoArtifactId: id });
+
+    expect(() => mockLogFood({ name: "Toast", score: 2, calories: 300, photoArtifactId: "nope" })).toThrow(
+      "That photo isn't stored here: pick the photo again, or log the entry without one.",
+    );
+  });
+
   // Drinks (FOOD-6, plan §7): as the kernel's FoodDrinksTests.
   it("stores a drink at score 1, typed as a drink, and keeps the flag until told otherwise", () => {
     const beer = mockLogFood({ name: "IPA", score: 5, calories: 200, alcoholic: true }).meal!;

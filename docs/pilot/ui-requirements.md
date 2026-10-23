@@ -2918,6 +2918,12 @@ Horizon:    Pilot
 Definition: active
 Build:      built
 
+**Update (2026-10-23 — Log again carries the photo):** Chris logged an entry again from the
+recent list and its photo didn't come with it. Log again and Have another now carry the photo
+already stored, without sending it again, and the recent list offers each name's newest
+photo. The sheet shows the photo, which Chris can remove or replace before logging. Each
+entry's photo stays its own.
+
 **Update (2026-10-21 — photos landed, F6, in Supabase Storage):** the Log food sheet has Take
 photo (phones) and Choose photo; the browser shrinks the photo to 1,200 px and re-encodes it
 as JPEG, which drops its location. The gallery shows a thumbnail that opens the photo full
@@ -3000,6 +3006,11 @@ day's entries read oldest first. Build moves `needs-kernel → building`: the pa
 Horizon:    Pilot
 Definition: active
 Build:      built
+
+**Update (2026-10-23 — Change or delete as a button):** Chris couldn't see how to edit a
+single entry: its dialog's one row didn't read as something to tap. The dialog now shows the
+entry's time, meal type and calories with two buttons, Change or delete and Have another, and
+a combined card's rows each end in "Change".
 
 **Update (2026-10-22 — Have another on every card):** tapping a single entry opens the same
 dialog as a combined card, listing its one entry to change or delete, with Have another.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatClock } from "@/lib/food";
-import { groupMeals, groupName, groupTimeRange, mealGroupKey } from "@/lib/meal-groups";
+import { anotherFrom, groupMeals, groupName, groupTimeRange, mealGroupKey } from "@/lib/meal-groups";
 import type { MealRow } from "@/lib/production-ui-types";
 
 let n = 0;
@@ -72,6 +72,18 @@ describe("groupMeals (FOOD-7)", () => {
       meal("Protein shake", "15:00", { proteinG: 30, carbsG: 5, duringFast: "fast-1" }),
     ]);
     expect([shakes.proteinG, shakes.carbsG, shakes.fatG, shakes.duringFast]).toEqual([60, 10, null, true]);
+  });
+
+  it("starts Have another from the last copy, with the card's photo when it has none", () => {
+    const [plain] = groupMeals([meal("Toast", "07:00"), meal("Toast", "08:00")]);
+    expect(anotherFrom(plain)).toBe(plain.last);
+    const [burritos] = groupMeals([
+      meal("Burrito", "07:00", { photoArtifactId: "photo-1" }),
+      meal("Burrito", "08:00"),
+    ]);
+    expect(anotherFrom(burritos)).toEqual({ ...burritos.last, photoArtifactId: "photo-1" });
+    const [own] = groupMeals([meal("Bowl", "07:00", { photoArtifactId: "photo-1" }), meal("Bowl", "08:00", { photoArtifactId: "photo-2" })]);
+    expect(anotherFrom(own).photoArtifactId).toBe("photo-2");
   });
 
   it("shows one time when the copies share the minute, and the name alone for one entry", () => {

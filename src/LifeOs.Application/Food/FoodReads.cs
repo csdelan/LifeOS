@@ -117,7 +117,8 @@ public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger)
 
     /// <summary>
     /// The latest entry of each distinct name (any case), newest first, at most
-    /// <paramref name="limit"/> — what "Log again" offers.
+    /// <paramref name="limit"/> — what "Log again" offers. Each shows the newest photo its name
+    /// has had: its own, or an older entry's when it was logged without one.
     /// </summary>
     public async Task<IReadOnlyList<Meal>> GetRecentAsync(int limit = 20, CancellationToken cancellationToken = default)
     {
@@ -129,7 +130,12 @@ public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger)
         var latest = await food.GetLatestMealsAsync(limit * 10, withCalories: false, cancellationToken);
         return latest
             .GroupBy(m => m.Name.Trim(), StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.First())
+            .Select(g => g.First() with
+            {
+                // Log again brings the newest photo the name has had: an entry logged without
+                // one doesn't lose it for the next.
+                PhotoArtifactId = g.Select(m => m.PhotoArtifactId).FirstOrDefault(p => p is not null)
+            })
             .Take(limit)
             .ToList();
     }

@@ -1107,6 +1107,12 @@ export interface FoodEntryRequest {
   alcoholic?: boolean;
   /** Ends the running fast at the entry's time ("Ends your 17 h fast at 12:30"). */
   endFast?: boolean;
+  /**
+   * Logging only: a photo already stored (another entry's `photoArtifactId`) for the new entry
+   * to show. Log again and Have another carry the last one's photo this way, without uploading
+   * it again; refused in words when it isn't a stored photo.
+   */
+  photoArtifactId?: string;
 }
 
 export type FastActionRequest =

@@ -52,7 +52,7 @@ on the day's page, and the day's entries listed oldest first.
 | A food entry | **Required:** the time eaten (defaults to now), a short name, a health score from 1 to 5 (halves allowed, §8), and calories (a rough estimate). **Optional:** protein, carbs and fat in grams, which don't count toward XP for now. A meal type (breakfast, lunch, dinner, snack, drink) is guessed from the time and can be changed. |
 | Health score | 1 to 5 in whole or half points (whole numbers only until §8, 2026-10-22). The picker shows examples: **1** junk (ice cream, fries, candy), **2** indulgent (pizza, burger, pastry), **3** average (a sandwich, pasta), **4** good (grilled chicken and vegetables, oatmeal and fruit), **5** very healthy (a salmon salad). |
 | Calories | Quick sizes to start from: snack 200, light 400, meal 700, big 1,000. Editable to any whole number from 0 to 5,000. |
-| "Log again" | Recent entries are one tap away: the name, score, calories and nutrients are filled in, and the time is now. |
+| "Log again" | Recent entries are one tap away: the name, score, calories, nutrients and photo are filled in, and the time is now. |
 | Diet XP per day | Up to **40 base Health XP**: **food quality 28** (70%), **calories 4** (10%), **fasting 8** (20%). §2 has the formula. |
 | Food quality | The calorie-weighted average of the day's scores, on a straight line: an average of 1 pays 0, 2 pays 7, 3 pays 14, 4 pays 21, 5 pays 28. A half pays halfway: 3.5 pays 17.5. |
 | Calories | 0 XP under 500 calories. 4 XP from 500 to 2,000. Then it fades evenly to 0 at 2,500. It doesn't depend on quality: 1,500 calories of ice cream still earns the 4. |
@@ -334,8 +334,8 @@ bsk food [<date>] [--week | --month] [--json]
 |---|---|
 | `GET /api/food/day?date=` | The day's entries (oldest first since F7, §7), fasts ending that day, the running fast if any, the last entry's time (for Begin fast), and the summary: calories, `S`, the three parts, the two awards projected and paid (base, paid, multiplier), closed and how. |
 | `GET /api/food/days?from&to` | One summary per day in the range (up to 62 days): the parts, awards projected and paid, calories, `S`, entries, the longest fast. The Week and Month views total these. |
-| `GET /api/food/recent?limit=` | Recent distinct entries by name (the newest version of each), for "Log again". |
-| `POST /api/food/meals`, `/api/food/meals/{id}`, `/api/food/meals/{id}/delete` | Log, edit, delete. |
+| `GET /api/food/recent?limit=` | Recent distinct entries by name (the newest version of each, with the newest photo the name has had), for "Log again". |
+| `POST /api/food/meals`, `/api/food/meals/{id}`, `/api/food/meals/{id}/delete` | Log, edit, delete. Logging takes `photoArtifactId`, a photo already stored, so Log again carries a photo without sending it again. |
 | `POST /api/food/fasts` | `{ action: begin \| end \| record \| edit \| delete, … }`. |
 | `POST /api/food/close` | `{ date? }`. |
 | `POST /api/food/settle` | Settles every food day; answers `{ awards, progress }`. |
@@ -373,10 +373,10 @@ bsk food [<date>] [--week | --month] [--json]
   - nutrients when present
   - a flag when it was eaten inside a recorded fast
   
-  Tapping a card lists its entry (or its copies, §7.4), each opening for editing with
-  Delete, plus Have another.
+  Tapping a card opens a dialog: a single entry's has **Change or delete** and Have another;
+  a combined card's lists its copies (§7.4), each with **Change**, plus Have another.
 - **Log food sheet:**
-  - Name, with matching recent entries under it ("Log again").
+  - Name, with matching recent entries under it ("Log again", which brings the photo too).
   - Score picker 1–5, with the examples from §1, and the half points as smaller buttons between
     them (§8).
   - Calories: quick sizes, then a number box.
@@ -625,8 +625,9 @@ fast, 39 of 40) plus beers of 150 calories each.
 - **Tapping it** opens a short list of the copies with their times; tapping one opens it to
   change or delete. **Have another** opens the Log food sheet filled in with that entry, as
   Log again does: the time is now on today, or the last copy's time on a past day.
-- A single entry's card opens the same dialog, listing its one entry, so Have another is
-  there too (Chris, 2026-10-22).
+- A single entry's card opens the same dialog, so Have another is there too (Chris,
+  2026-10-22), with **Change or delete** as a button beside it (2026-10-23: a one-row list
+  didn't read as something to tap).
 - The gallery lists cards oldest first; a combined card sits at its first copy's time.
 
 ### 7.5 Storage and code
@@ -707,7 +708,7 @@ apart from those two columns.
 - **`--at` reads** `12:30`, `7:30pm` (today, or yesterday when today's is still ahead),
   `yesterday 20:00`, `2026-10-19 19:00` (home zone), or an ISO instant with an offset.
 - **`GetRecentAsync`** ("Log again") returns the newest entry of each name, ignoring case and
-  surrounding spaces.
+  surrounding spaces, with the newest photo the name has had (2026-10-23).
 - **Food events never reach other views:** they carry no `subject_id` and no edge, so the
   inbox, the diagnostics, the habit and timer views and the ledger never see them (tested).
 
@@ -777,7 +778,7 @@ apart from those two columns.
 - **Day navigation steps from the date asked for**, not the day on screen: the last day stays
   up while the next loads, so pressing ‹ twice moves two days.
 - **The Log food sheet** takes the whole entry, as the API does. Log again fills everything
-  but the time. Past days start a new entry at noon on that day. End fast shows only for a new
+  but the time, the photo included since 2026-10-23. Past days start a new entry at noon on that day. End fast shows only for a new
   entry with calories, eaten after the running fast began.
 - **Accessibility:** the food scans emulate reduced motion, which `index.css` already honours
   by switching transitions off, so axe reads settled colours. Opening the page stacks the
@@ -964,3 +965,44 @@ apart from those two columns.
   - e2e on a 375 px phone: the half sits under the gap between 3 and 4, at least 44 px wide;
     logging a 3.5 reads "On track for 22 of 40"; Log again keeps the half.
   - a11y in both themes: the sheet with 3.5 picked, and the gallery with a half's tile.
+
+**Fix (2026-10-23): Log again carries the photo, and a single entry's dialog says Change.**
+Chris logged "Sausage Burrito flat" from the recent list: the photo didn't come with it, and he
+couldn't see a way to edit the entry.
+
+- **The photo.** Log again and Have another never copied it. Now they carry it:
+  - The new entry points at the photo already stored. Nothing is uploaded or stored again.
+  - `POST /api/food/meals` takes `photoArtifactId`. `FoodLogService.LogAsync` takes `photo`
+    and refuses anything that isn't a stored JPEG, PNG or WebP, in words, with nothing
+    written.
+  - `bsk food log --photo-from <entry>` does the same from the CLI.
+  - Each entry's photo is still its own: Remove photo on the copy leaves the first's.
+  - `GetRecentAsync` offers each name's newest photo, so an entry logged without one (like
+    that burrito) doesn't lose it for the next Log again.
+  - Have another on a combined card takes the card's photo when the last copy has none
+    (`anotherFrom`).
+  - The sheet shows the carried photo, with "The last one's photo comes with it. Choose
+    another or remove it if this one looks different." Picking a photo or Remove photo
+    replaces it.
+- **Editing.** A single entry's dialog listed its one entry as a row with the time
+  ("7:30 PM · Dinner · 700 cal ›"). That row opened the editor, but it didn't read as
+  something to tap.
+  - The dialog now reads "7:30 PM · Dinner · 700 cal" and has two buttons, **Change or
+    delete** and **Have another**.
+  - A combined card's rows end in "✎ Change".
+- **Tests:**
+  - Kernel: Log again shares the stored photo (one blob, one photo event), removing the
+    copy's leaves the first's, and a bad id is refused (`FoodPhotoTests`). The recent read
+    offers a name's newest photo. The API logs with `photoArtifactId` and refuses an unknown
+    one (`FoodPhotoEndpointTests`).
+  - Vitest: the mock does the same; the sheet carries the photo on Log again and leaves it
+    off after Remove photo; `anotherFrom`; the gallery's Change or delete button and Change
+    rows.
+  - e2e: Log again and Have another carry the photo, and each copy's photo is its own. The
+    photo path uses Change or delete.
+  - a11y in both themes: the entry dialog and the sheet with a carried photo.
+- Two e2e races in the half-score path were fixed on the way:
+  - It read the score buttons' boxes one at a time while the sheet slid up; it now reads
+    them at the same instant.
+  - It waited for a toast that sat under the pointer, and a toast under the pointer doesn't
+    leave; the pointer now moves off first.

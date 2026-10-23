@@ -9,6 +9,26 @@ async function beforeActivityXp(page: Page) {
   await page.clock.install({ time: new Date("2026-10-21T12:00:00") });
 }
 
+/** A 2400 x 1600 PNG, as a phone might take: the browser shrinks it to 1,200 px. */
+async function bigPng(page: Page): Promise<Buffer> {
+  return Buffer.from(
+    await page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 2400;
+      canvas.height = 1600;
+      const g = canvas.getContext("2d")!;
+      g.fillStyle = "#c2410c";
+      g.fillRect(0, 0, 2400, 1600);
+      g.fillStyle = "#fde68a";
+      g.beginPath();
+      g.arc(1200, 800, 500, 0, Math.PI * 2);
+      g.fill();
+      return canvas.toDataURL("image/png").split(",")[1];
+    }),
+    "base64",
+  );
+}
+
 test.describe("golden paths", () => {
   test("create via New dialog", async ({ page }) => {
     await page.goto("/");
@@ -259,8 +279,14 @@ test.describe("golden paths", () => {
     // The halves sit in a row of smaller buttons, each under the gap between its neighbours.
     await page.getByRole("button", { name: "Log food", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Log food" });
-    const box = async (name: string) => (await sheet.locator("label").filter({ has: page.getByRole("radio", { name }) }).boundingBox())!;
-    const [three, half, four] = [await box("3 · average"), await box("3.5 · average to good"), await box("4 · good")];
+    // All three read at the same instant: the sheet is still sliding up, so boxes read one after
+    // another can each be at a different point of the slide.
+    const [three, half, four] = await sheet.evaluate((el) =>
+      ["3 · average", "3.5 · average to good", "4 · good"].map((name) => {
+        const r = el.querySelector(`input[aria-label="${name}"]`)!.closest("label")!.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      }),
+    );
     expect(half.y).toBeGreaterThan(three.y + three.height - 1);
     expect(half.width).toBeGreaterThanOrEqual(44);
     expect(half.width).toBeLessThan(three.width);
@@ -278,7 +304,8 @@ test.describe("golden paths", () => {
     await expect(entries.getByRole("button", { name: /^Turkey wrap, / })).toContainText("3.5 · average to good");
 
     // Log again keeps the half. On a phone the "Logged" toast sits over the Log food button
-    // until it goes.
+    // until it goes; a toast under the pointer waits, so the pointer moves off first.
+    await page.mouse.move(0, 0);
     await expect(page.getByText("Logged Turkey wrap")).toBeHidden({ timeout: 10_000 });
     await page.getByRole("button", { name: "Log food", exact: true }).click();
     await sheet.getByRole("button", { name: "Log again: Turkey wrap · 3.5 · 1,200 cal" }).click();
@@ -495,23 +522,7 @@ test.describe("golden paths", () => {
     await beforeActivityXp(page);
     await page.goto("/food");
     await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
-    // A 2400 x 1600 PNG, as a phone might take: the browser shrinks it to 1,200 px.
-    const png = Buffer.from(
-      await page.evaluate(() => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 2400;
-        canvas.height = 1600;
-        const g = canvas.getContext("2d")!;
-        g.fillStyle = "#c2410c";
-        g.fillRect(0, 0, 2400, 1600);
-        g.fillStyle = "#fde68a";
-        g.beginPath();
-        g.arc(1200, 800, 500, 0, Math.PI * 2);
-        g.fill();
-        return canvas.toDataURL("image/png").split(",")[1];
-      }),
-      "base64",
-    );
+    const png = await bigPng(page);
 
     await page.getByRole("button", { name: "Log food", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Log food" });
@@ -537,11 +548,11 @@ test.describe("golden paths", () => {
     await page.keyboard.press("Escape");
     await expect(viewer).toBeHidden();
 
-    // Remove photo saves at once; the entry stays. The card lists the entry with Have another.
+    // Remove photo saves at once; the entry stays. The card offers Change or delete and Have another.
     await entries.getByRole("button", { name: /^Grain bowl, .+: change, delete or have another$/ }).click();
     const picker = page.getByRole("dialog", { name: "Grain bowl" });
     await expect(picker.getByRole("button", { name: "Have another" })).toBeVisible();
-    await picker.getByRole("list", { name: "The Grain bowl entry" }).getByRole("button").click();
+    await picker.getByRole("button", { name: "Change or delete" }).click();
     const edit = page.getByRole("dialog", { name: "Change Grain bowl" });
     await edit.getByRole("button", { name: "Remove photo" }).click();
     await expect(page.getByText("Photo removed from Grain bowl")).toBeVisible({ timeout: 10_000 });
@@ -549,6 +560,63 @@ test.describe("golden paths", () => {
     await page.keyboard.press("Escape");
     await expect(entries.getByRole("button", { name: /^Grain bowl/ })).toBeVisible();
     await expect(entries.getByRole("button", { name: /^Show the photo/ })).toHaveCount(0);
+  });
+
+  test("Food Log: Log again and Have another carry the photo, and each entry's photo is its own", async ({ page }) => {
+    await beforeActivityXp(page);
+    await page.goto("/food");
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    const png = await bigPng(page);
+
+    await page.getByRole("button", { name: "Log food", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Log food" });
+    await sheet.getByLabel("Name").fill("Sausage burrito");
+    await sheet.getByRole("radio", { name: "2 · indulgent" }).check();
+    await sheet.getByLabel("Calories").fill("650");
+    const chooser = page.waitForEvent("filechooser");
+    await sheet.getByRole("button", { name: "Choose photo" }).click();
+    await (await chooser).setFiles({ name: "IMG_5120.png", mimeType: "image/png", buffer: png });
+    await expect(sheet.getByRole("button", { name: "Show the photo of Sausage burrito full size" })).toBeVisible();
+    await sheet.getByRole("button", { name: "Log", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText("Photo added to Sausage burrito")).toBeVisible({ timeout: 10_000 });
+    // A toast under the pointer waits, and this one sits over Log food on a phone.
+    await page.mouse.move(0, 0);
+    await expect(page.getByText("Photo added to Sausage burrito")).toBeHidden({ timeout: 10_000 });
+
+    // Log again fills in the photo too: the one already stored.
+    await page.getByRole("button", { name: "Log food", exact: true }).click();
+    await sheet.getByRole("button", { name: "Log again: Sausage burrito · 2 · 650 cal" }).click();
+    await expect(sheet.getByRole("button", { name: "Show the photo of Sausage burrito full size" })).toBeVisible();
+    await expect(sheet.getByText(/^The last one's photo comes with it\./)).toBeVisible();
+    await sheet.getByRole("button", { name: "Log", exact: true }).click();
+    await expect(sheet).toBeHidden();
+
+    // The two show as one card. The copy has the photo; removing it leaves the first's.
+    const entries = page.getByRole("list", { name: "Entries for today" });
+    const card = entries.getByRole("button", { name: /^Sausage burrito ×2, / });
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const copies = page.getByRole("dialog", { name: "Sausage burrito ×2" });
+    const each = copies.getByRole("list", { name: "Each Sausage burrito" }).getByRole("button");
+    await expect(each.last()).toContainText("Change");
+    await each.last().click();
+    const change = page.getByRole("dialog", { name: "Change Sausage burrito" });
+    await expect(change.getByRole("button", { name: "Show the photo of Sausage burrito full size" })).toBeVisible();
+    await change.getByRole("button", { name: "Remove photo" }).click();
+    await expect(page.getByText("Photo removed from Sausage burrito")).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press("Escape");
+    await expect(change).toBeHidden();
+    await expect(entries.getByRole("button", { name: "Show the photo of Sausage burrito full size" })).toBeVisible();
+
+    // Have another starts from the last copy, with the card's photo since it has none.
+    await card.click();
+    await copies.getByRole("button", { name: "Have another" }).click();
+    await expect(sheet.getByLabel("Name")).toHaveValue("Sausage burrito");
+    await expect(sheet.getByRole("button", { name: "Show the photo of Sausage burrito full size" })).toBeVisible();
+    await sheet.getByRole("button", { name: "Log", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(entries.getByRole("button", { name: /^Sausage burrito ×3, / })).toBeVisible({ timeout: 10_000 });
   });
 
   test("theme toggle switches the document class", async ({ page }) => {

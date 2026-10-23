@@ -21,7 +21,7 @@ namespace LifeOs.Application.Food;
 /// written. Days and wall-clock times are the home zone's.
 /// </summary>
 public sealed class FoodLogService(
-    IFoodLogRepository food, FoodRewards rewards, FoodReads reads, IClock clock, string sourceId)
+    IFoodLogRepository food, FoodRewards rewards, FoodReads reads, IArtifactBlobStore blobs, IClock clock, string sourceId)
 {
     /// <summary>The widest range <see cref="GetDaysAsync"/> answers.</summary>
     public const int MaxRangeDays = FoodReads.MaxRangeDays;
@@ -46,15 +46,23 @@ public sealed class FoodLogService(
 
     /// <summary>
     /// Logs a food entry. With <paramref name="endFast"/>, the running fast ends at the
-    /// entry's time in the same write ("Ends your 17 h fast at 12:30").
+    /// entry's time in the same write ("Ends your 17 h fast at 12:30"). With
+    /// <paramref name="photo"/> (a photo already stored, as another entry shows it), the new
+    /// entry shows it too: Log again and Have another carry the last one's photo. Nothing is
+    /// stored again, and each entry can later change or remove its own.
     /// </summary>
     public async Task<FoodWriteResult> LogAsync(
-        FoodEntryInput input, bool endFast = false, CancellationToken cancellationToken = default)
+        FoodEntryInput input, bool endFast = false, Guid? photo = null, CancellationToken cancellationToken = default)
     {
         var now = clock.UtcNow;
         var entry = await NormalizeAsync(input, now, cancellationToken);
+        if (photo is { } stored)
+        {
+            await CheckPhotoAsync(stored, cancellationToken);
+        }
+
         var mealId = Guid.NewGuid();
-        var events = new List<NewEvent> { MealEvent(mealId, entry, photo: null, now) };
+        var events = new List<NewEvent> { MealEvent(mealId, entry, photo, now) };
         var guard = FoodGuard.None;
         Fast? ending = null;
 
@@ -147,6 +155,26 @@ public sealed class FoodLogService(
         return await ResultAsync(
             action, await food.GetMealAsync(meal.Id, cancellationToken), null, null, [meal.EatenOn], ids[0],
             cancellationToken);
+    }
+
+    /// <summary>
+    /// The photo of the entry named by <paramref name="reference"/>, for a new entry to show
+    /// (<c>bsk food log --photo-from</c>); refused in words when it has none.
+    /// </summary>
+    public async Task<Guid> PhotoOfAsync(string reference, CancellationToken cancellationToken = default)
+    {
+        var meal = await ResolveMealAsync(reference, cancellationToken);
+        return meal.PhotoArtifactId ?? throw new InvalidOperationException($"{meal.Name} has no photo to carry over.");
+    }
+
+    /// <summary>A photo a new entry shows must be stored here, as a JPEG, PNG or WebP.</summary>
+    private async Task CheckPhotoAsync(Guid photo, CancellationToken cancellationToken)
+    {
+        var stored = await blobs.GetMetadataAsync(photo, cancellationToken);
+        if (stored is null || !FoodPhotoService.PhotoTypes.Contains(stored.ContentType))
+        {
+            throw new ArgumentException("That photo isn't stored here: pick the photo again, or log the entry without one.");
+        }
     }
 
     // ---------------------------------------------------------------------------------

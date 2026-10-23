@@ -1,10 +1,10 @@
 import {
   AppleIcon,
   BeerIcon,
-  ChevronRightIcon,
   CupSodaIcon,
   EggIcon,
   HourglassIcon,
+  PencilIcon,
   PlusIcon,
   SandwichIcon,
   SoupIcon,
@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { scoreLabel } from "@/lib/diet-score";
 import { formatClock, mealTypeWord, SCORE_TILE } from "@/lib/food";
-import { groupMeals, groupName, groupTimeRange, type MealGroup } from "@/lib/meal-groups";
+import { anotherFrom, groupMeals, groupName, groupTimeRange, type MealGroup } from "@/lib/meal-groups";
 import type { FoodMealType, MealRow } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
 
@@ -54,8 +54,9 @@ function nutrients(group: MealGroup): string | null {
  * thumbnail shows the photo full size.
  *
  * Identical entries on the day show as one card (FOOD-7, plan §7.4), "Beer ×3", with the
- * calories and nutrients summed and the time as a range. Tapping any card lists its entries
- * (one for a single entry), each opening to change or delete, with Have another.
+ * calories and nutrients summed and the time as a range. Tapping a card opens a dialog: a
+ * single entry's offers Change or delete and Have another; a combined card's lists its copies,
+ * each with Change, and Have another.
  */
 export function MealGallery({
   meals,
@@ -169,39 +170,56 @@ export function MealGallery({
               <DialogDescription>
                 {listed.count > 1
                   ? "Each is its own entry, shown as one card because they're the same. Pick one to change or delete it."
-                  : "Pick the entry to change or delete it, or have another."}
+                  : `${formatClock(listed.first.eatenAt)} · ${mealTypeWord(listed.first.mealType)} · ${listed.first.calories.toLocaleString()} cal`}
               </DialogDescription>
             </DialogHeader>
-            <ul
-              aria-label={listed.count > 1 ? `Each ${listed.first.name}` : `The ${listed.first.name} entry`}
-              className="-mx-2 divide-y"
-            >
-              {listed.meals.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeCopies();
-                      onOpen(m);
-                    }}
-                    aria-label={`${m.name}, ${formatClock(m.eatenAt)}: change or delete`}
-                    className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 md:min-h-0"
-                  >
-                    <span className="font-medium tabular-nums">{formatClock(m.eatenAt)}</span>
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      {mealTypeWord(m.mealType)} · {m.calories.toLocaleString()} cal
-                      <ChevronRightIcon className="size-3.5" aria-hidden />
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {listed.count > 1 ? (
+              <ul aria-label={`Each ${listed.first.name}`} className="-mx-2 divide-y">
+                {listed.meals.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeCopies();
+                        onOpen(m);
+                      }}
+                      aria-label={`${m.name}, ${formatClock(m.eatenAt)}: change or delete`}
+                      className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 md:min-h-0"
+                    >
+                      <span className="min-w-0">
+                        <span className="block font-medium tabular-nums">{formatClock(m.eatenAt)}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {mealTypeWord(m.mealType)} · {m.calories.toLocaleString()} cal
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1 text-sm font-medium">
+                        <PencilIcon className="size-3.5" aria-hidden />
+                        Change
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <DialogFooter>
+              {listed.count === 1 ? (
+                <Button
+                  variant="outline"
+                  className="min-h-11 md:min-h-0"
+                  onClick={() => {
+                    closeCopies();
+                    onOpen(listed.first);
+                  }}
+                >
+                  <PencilIcon />
+                  Change or delete
+                </Button>
+              ) : null}
               <Button
                 className="min-h-11 md:min-h-0"
                 onClick={() => {
                   closeCopies();
-                  onAnother(listed.last);
+                  onAnother(anotherFrom(listed));
                 }}
               >
                 <PlusIcon />

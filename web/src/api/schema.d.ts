@@ -1732,6 +1732,8 @@ export interface components {
             fatG?: null | number | string;
             alcoholic?: null | boolean;
             endFast?: boolean;
+            /** Format: uuid */
+            photoArtifactId?: null | string;
         };
         FoodFastBody: {
             action?: null | string;

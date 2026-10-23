@@ -2330,14 +2330,24 @@ function foodResult(
   };
 }
 
-/** `POST /api/food/meals`: log an entry; with `endFast`, end the running fast at its time. */
+/**
+ * `POST /api/food/meals`: log an entry; with `endFast`, end the running fast at its time, and
+ * with `photoArtifactId`, show that stored photo (Log again) without storing it again.
+ */
 export function mockLogFood(req: FoodEntryRequest): FoodWriteResult {
   const now = Date.now();
   const entry = normalizeFood(req, now);
+  const photo = req.photoArtifactId ?? null;
+  if (photo !== null) {
+    const stored = state.artifacts[photo];
+    if (!stored?.hasBytes || !PHOTO_TYPES.includes(stored.contentType)) {
+      throw new Error("That photo isn't stored here: pick the photo again, or log the entry without one.");
+    }
+  }
   const recordedAt = new Date(now).toISOString();
   const mealId = newId();
   const events: Omit<MockFoodEvent, "id">[] = [
-    { occurredAt: entry.eatenAt, recordedAt, meal: mealPayload(mealId, entry, null) },
+    { occurredAt: entry.eatenAt, recordedAt, meal: mealPayload(mealId, entry, photo) },
   ];
   let ending: FoldedFast | undefined;
   if (req.endFast) {
@@ -2952,19 +2962,24 @@ export function mockFoodDays(from?: string, to?: string): FoodDaysRead {
   return { from: start, to: end, today, days, sobriety: asOf < start ? null : foodSobriety(fold, asOf) };
 }
 
-/** `GET /api/food/recent`: the newest version of each distinct name, for "Log again". */
+/**
+ * `GET /api/food/recent`: the newest entry of each distinct name, for "Log again", with the
+ * newest photo that name has had (its own, or an older entry's when it was logged without one).
+ */
 export function mockFoodRecent(limit = 20): MealRow[] {
   if (!Number.isInteger(limit) || limit < 1 || limit > FOOD_MAX_RECENT) {
     throw new Error(`Ask for 1 to ${FOOD_MAX_RECENT} recent entries.`);
   }
-  const seen = new Set<string>();
-  const recent: MealRow[] = [];
+  const byName = new Map<string, MealRow>();
   for (const m of [...foodFold().meals].sort((a, b) => b.eatenAt.localeCompare(a.eatenAt))) {
     const name = m.name.trim().toLowerCase();
-    if (seen.has(name)) continue;
-    seen.add(name);
-    recent.push(mealRow(m));
-    if (recent.length === limit) break;
+    const newest = byName.get(name);
+    if (!newest) {
+      if (byName.size === limit) continue;
+      byName.set(name, mealRow(m));
+    } else if (!newest.photoArtifactId && m.photoArtifactId) {
+      byName.set(name, { ...newest, photoArtifactId: m.photoArtifactId });
+    }
   }
-  return recent;
+  return [...byName.values()];
 }

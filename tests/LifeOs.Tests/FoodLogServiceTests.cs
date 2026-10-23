@@ -291,23 +291,23 @@ public sealed class FoodLogServiceTests(PostgresFixture postgres)
         var now = Now();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => food.LogAsync(Entry("Toast", 3, 200, now.AddHours(-1)), endFast: true, Ct));
+            () => food.LogAsync(Entry("Toast", 3, 200, now.AddHours(-1)), endFast: true, cancellationToken: Ct));
 
         var fast = (await food.BeginFastAsync(now.AddHours(-18), Ct)).Fast!;
 
         // Black coffee: logged, and the fast runs on. Asked to end it, it's refused.
         await Assert.ThrowsAsync<ArgumentException>(
-            () => food.LogAsync(Entry("Black coffee", 5, 0, now.AddHours(-4), "drink"), endFast: true, Ct));
+            () => food.LogAsync(Entry("Black coffee", 5, 0, now.AddHours(-4), "drink"), endFast: true, cancellationToken: Ct));
         var coffee = await food.LogAsync(Entry("Black coffee", 5, 0, now.AddHours(-4), "drink"), cancellationToken: Ct);
         Assert.Null(coffee.Fast);
         Assert.True((await db.Get<IFoodLogRepository>().GetFastAsync(fast.Id, Ct))!.Running);
 
         // Food from before the fast began can't end it.
         await Assert.ThrowsAsync<ArgumentException>(
-            () => food.LogAsync(Entry("Late snack", 2, 300, now.AddHours(-19)), endFast: true, Ct));
+            () => food.LogAsync(Entry("Late snack", 2, 300, now.AddHours(-19)), endFast: true, cancellationToken: Ct));
 
         // Lunch ends it at lunch's time, in the same write.
-        var lunch = await food.LogAsync(Entry("Salmon salad", 5, 1200, now.AddHours(-2)), endFast: true, Ct);
+        var lunch = await food.LogAsync(Entry("Salmon salad", 5, 1200, now.AddHours(-2)), endFast: true, cancellationToken: Ct);
         Assert.Equal(FoodActions.Logged, lunch.Action);
         Assert.Equal(fast.Id, lunch.Fast!.Id);
         Assert.Equal(now.AddHours(-2), lunch.Fast.EndedAt);

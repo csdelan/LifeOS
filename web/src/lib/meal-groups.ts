@@ -79,3 +79,12 @@ export function groupTimeRange(group: MealGroup): string {
 export function groupName(group: MealGroup): string {
   return group.count > 1 ? `${group.first.name} ×${group.count}` : group.first.name;
 }
+
+/**
+ * What Have another starts from: the last copy, with the card's photo when the last copy has
+ * none of its own, so the new entry shows the photo the card does.
+ */
+export function anotherFrom(group: MealGroup): MealRow {
+  const last = group.last;
+  return last.photoArtifactId || !group.photo ? last : { ...last, photoArtifactId: group.photo.artifactId };
+}

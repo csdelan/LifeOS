@@ -27,6 +27,9 @@ public sealed class FoodPhotoService(
     /// <summary>The largest photo accepted: 5 MiB.</summary>
     public const int MaxBytes = 5 * 1024 * 1024;
 
+    /// <summary>What a photo can be, known by its first bytes (<see cref="Sniff"/>).</summary>
+    public static readonly IReadOnlySet<string> PhotoTypes = new HashSet<string>(["image/jpeg", "image/png", "image/webp"]);
+
     /// <summary>The refusal when photos aren't set up on this host.</summary>
     public const string NotSetUp =
         "Photos aren't set up on this server yet: it needs a Supabase Storage key (Storage__SupabaseSecretKey).";

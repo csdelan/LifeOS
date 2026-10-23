@@ -191,6 +191,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IFoodLogRepository>(),
             sp.GetRequiredService<FoodRewards>(),
             sp.GetRequiredService<FoodReads>(),
+            sp.GetRequiredService<IArtifactBlobStore>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
 

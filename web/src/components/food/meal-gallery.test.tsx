@@ -59,14 +59,13 @@ describe("MealGallery (FOOD-7)", () => {
     expect(cards[0]).toHaveTextContent("1 · alcoholic");
   });
 
-  it("lists a single entry, opening to change or delete, and offers Have another", async () => {
+  it("offers a single entry's Change or delete and Have another as buttons", async () => {
     const { onOpen, onAnother } = renderGallery();
     await userEvent.click(screen.getByRole("button", { name: /^Grain bowl, / }));
     const dialog = await screen.findByRole("dialog", { name: "Grain bowl" });
-    expect(dialog).toHaveTextContent("Pick the entry to change or delete it, or have another.");
-    const entry = within(within(dialog).getByRole("list", { name: "The Grain bowl entry" })).getAllByRole("button");
-    expect(entry).toHaveLength(1);
-    await userEvent.click(entry[0]);
+    expect(dialog).toHaveTextContent(/7:30\sPM · Dinner · 700 cal/);
+    expect(within(dialog).queryByRole("list")).toBeNull();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Change or delete" }));
     expect(onOpen).toHaveBeenCalledWith(MEALS[1]);
 
     await userEvent.click(screen.getByRole("button", { name: /^Grain bowl, / }));
@@ -80,6 +79,9 @@ describe("MealGallery (FOOD-7)", () => {
     const dialog = await screen.findByRole("dialog", { name: "Lager ×3" });
     const copies = within(within(dialog).getByRole("list", { name: "Each Lager" })).getAllByRole("button");
     expect(copies).toHaveLength(3);
+    // Each says it opens to change.
+    expect(copies.every((c) => c.textContent?.endsWith("Change"))).toBe(true);
+    expect(within(dialog).queryByRole("button", { name: "Change or delete" })).toBeNull();
     await userEvent.click(copies[1]);
     expect(onOpen).toHaveBeenCalledWith(MEALS[2]);
 
