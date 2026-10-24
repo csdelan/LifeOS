@@ -54,6 +54,7 @@ import type {
 } from "@/lib/production-ui-types";
 import { isTerminal } from "@/lib/production-ui-types";
 import { composeRecap, type RecapSection } from "@/lib/review-recap";
+import { mapSubjects } from "@/lib/task-series";
 import { BOUNTY_DEFAULTS } from "@/lib/bounty";
 import { tagUniverse, toRelationEdge } from "@/lib/mock/seed";
 import {
@@ -498,6 +499,7 @@ export const mockReads: LifeOsReads = {
       history: s.history,
       occurrences: s.occurrences,
       inbox: s.inbox,
+      series: mockTaskSeries(false).flatMap((row) => mockTaskSeriesHistory(row.id) ?? []),
     });
   },
 
@@ -531,7 +533,8 @@ export const mockReads: LifeOsReads = {
   }) {
     await wait();
     const s = storeState();
-    return buildAlignmentForest(shown(s.subjects), s.edges, opts);
+    // A repeating Task is one node, its series; its repetitions stay off the Map (TASKS-3).
+    return buildAlignmentForest(mapSubjects(s.subjects.map(listed)), s.edges, opts);
   },
 };
 

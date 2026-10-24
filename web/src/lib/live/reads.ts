@@ -6,7 +6,7 @@ import {
 } from "@/lib/derive";
 import { api, ApiRequestError, unwrap } from "@/lib/live/http";
 import { normalizeCoverSearch, withNormalCover } from "@/lib/cover";
-import type { RecapSection } from "@/lib/review-recap";
+import { repeatingSection } from "@/lib/review-recap";
 import {
   normalizeBountyDefaults,
   normalizeDetailBounty,
@@ -20,7 +20,7 @@ import {
 import type { LifeOsReads } from "@/lib/mock/api";
 import { normalizeDomainDays, normalizeDomainReport, normalizeDomains } from "@/lib/domains";
 import { normalizeFoodDay, normalizeFoodDays, normalizeMeal } from "@/lib/food";
-import { normalizeRepeat, normalizeSeriesRow } from "@/lib/task-series";
+import { mapSubjects, normalizeRepeat, normalizeSeriesRow } from "@/lib/task-series";
 import {
   normalizeActivityDays,
   normalizeDayDetail,
@@ -362,9 +362,18 @@ export const liveReads: LifeOsReads = {
     return asType<ReviewDoc[]>([]);
   },
 
-  async recap() {
-    // TODO(api): recap is a composed read over the day's/week's events.
-    return asType<RecapSection[]>([]);
+  async recap(opts) {
+    // TODO(api): the rest of the recap is a composed read over the day's/week's events. The
+    // repeating Tasks' section is made here from their histories (TASKS-3).
+    const series = await this.taskSeries({});
+    const histories = await Promise.all(series.map((row) => this.taskSeriesHistory(row.id)));
+    const section = repeatingSection(
+      histories.filter((h): h is TaskSeriesHistory => h !== null),
+      opts.start,
+      opts.end,
+      opts.asOf,
+    );
+    return section.items.length > 0 ? [section] : [];
   },
 
   async edges(opts) {
@@ -401,9 +410,10 @@ export const liveReads: LifeOsReads = {
   async alignmentForest(opts) {
     const includeArchived = opts?.includeArchived ?? false;
     const [subjects, edges] = await Promise.all([
-      this.listSubjects({ includeArchived }),
+      this.listSubjects({ includeArchived, includeSeries: true }),
       this.edges({ includeArchived }),
     ]);
-    return buildAlignmentForest(subjects, edges, opts);
+    // A repeating Task is one node, its series; its repetitions stay off the Map (TASKS-3).
+    return buildAlignmentForest(mapSubjects(subjects), edges, opts);
   },
 };

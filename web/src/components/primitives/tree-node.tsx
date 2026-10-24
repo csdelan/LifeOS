@@ -1,4 +1,4 @@
-import { ChevronRightIcon, Link2Icon } from "lucide-react";
+import { ChevronRightIcon, Link2Icon, RepeatIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DateChip } from "@/components/primitives/date-chip";
 import { StatusPill } from "@/components/primitives/status-pill";
@@ -9,7 +9,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { SubjectListItem } from "@/lib/production-ui-types";
-import { defaultStatus } from "@/lib/production-ui-types";
+import { repeatLabel, shownStatus } from "@/lib/task-series";
 
 export function TreeNode({
   subject,
@@ -38,7 +38,9 @@ export function TreeNode({
   creating?: React.ReactNode;
   children?: React.ReactNode;
 }) {
-  const status = subject.status || defaultStatus(subject.type) || null;
+  const status = shownStatus(subject);
+  // A repeating Task is one row, its series (TASKS-3), saying how it repeats.
+  const repeats = subject.isSeries ? repeatLabel(subject.repeat) : null;
   const createLabel = subject.type === "Task" ? "sibling" : "child";
 
   return (
@@ -114,6 +116,12 @@ export function TreeNode({
           </button>
         ) : null}
         <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {repeats ? (
+            <span className="inline-flex items-center gap-1 text-[0.6875rem] text-muted-foreground">
+              <RepeatIcon className="size-3" aria-hidden />
+              {repeats}
+            </span>
+          ) : null}
           <DateChip date={subject.due} />
           <StatusPill status={status} />
         </div>

@@ -160,14 +160,51 @@ describe("repeating Tasks in the mock store (TASKS-3, D16)", () => {
     expect(() => setRecurrence("habit-mobility", { freq: "each", period: "week" })).toThrow(/for Tasks/);
   });
 
-  it("seeds four repeating tasks with a history to read", () => {
+  it("seeds five repeating tasks with a history to read", () => {
     const rows = mockTaskSeries();
-    expect(rows.map((r) => r.title)).toEqual(["Clean bathroom", "Clean fridge", "Pay rent", "Take out trash"]);
+    expect(rows.map((r) => r.title)).toEqual([
+      "Clean bathroom",
+      "Clean fridge",
+      "Pay rent",
+      "Shop for Sunday dinner",
+      "Take out trash",
+    ]);
     const trash = rows.find((r) => r.id === "task-trash")!;
     expect(trash).toMatchObject({ missedCount: 1, openCount: 1, nextDue: WED, stopped: false });
     expect(trash.completedCount).toBeGreaterThanOrEqual(3);
     expect(rows.find((r) => r.id === "task-fridge")?.nextDue).toBe(addDays(WED, 12));
     expect(rows.find((r) => r.id === "task-bathroom")).toMatchObject({ openCount: 1, nextDue: "2026-10-25" });
     expect(rows.find((r) => r.id === "task-rent")).toMatchObject({ openCount: 1, nextDue: "2026-11-01" });
+    expect(rows.find((r) => r.id === "task-dinner-shop")).toMatchObject({ cancelledCount: 1, nextDue: "2026-10-24" });
+  });
+
+  it("puts a repeating task on the Map once, under what it serves", async () => {
+    const forest = await mockReads.alignmentForest();
+    const flat = (nodes: typeof forest): typeof forest => nodes.flatMap((n) => [n, ...flat(n.children)]);
+    const shops = flat(forest).filter((n) => n.subject.title === "Shop for Sunday dinner");
+    expect(shops).toHaveLength(1);
+    expect(shops[0]).toMatchObject({ id: "task-dinner-shop", parentId: "proj-dinners" });
+    expect(shops[0].subject.isSeries).toBe(true);
+    // Its repetitions serve the project too, as Tasks to do.
+    const tasks = await mockReads.listSubjects({ type: "Task" });
+    expect(tasks.filter((t) => t.seriesId === "task-dinner-shop").length).toBeGreaterThan(1);
+  });
+
+  it("recaps each repeating task's week for the review", async () => {
+    // The week of Monday 19 October, reviewed on Wednesday the 21st.
+    const sections = await mockReads.recap({ start: "2026-10-19", end: "2026-10-25", asOf: WED });
+    const repeating = sections.find((s) => s.id === "repeating")!;
+    const line = (title: string) => repeating.items.find((i) => i.title === title)?.detail;
+    expect(repeating.items.map((i) => i.title)).toEqual([
+      "Clean bathroom",
+      "Shop for Sunday dinner",
+      "Take out trash",
+    ]);
+    expect(line("Take out trash")).toBe("None closed yet · 1 still to do");
+    expect(line("Clean bathroom")).toBe("None closed yet · 1 still to do");
+
+    const month = await mockReads.recap({ start: "2026-09-21", end: "2026-10-25", asOf: WED });
+    const trash = month.find((s) => s.id === "repeating")!.items.find((i) => i.title === "Take out trash");
+    expect(trash).toMatchObject({ subjectId: "task-trash", detail: "3 of 4 done · 1 missed · 1 still to do" });
   });
 });

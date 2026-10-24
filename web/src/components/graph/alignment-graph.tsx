@@ -21,6 +21,7 @@ import { EmptyState } from "@/components/primitives/empty-state";
 import { GraphSkeleton } from "@/components/primitives/skeletons";
 import { FloatingEdge } from "@/components/graph/floating-edge";
 import { toFlowEdge } from "@/components/graph/flow-edges";
+import { shownStatus } from "@/lib/task-series";
 import {
   SubjectGraphNode,
   type SubjectFlowNode,
@@ -129,7 +130,7 @@ function GraphCanvas({
           areaColor: areaAccent(n.subject.area, areas),
         },
         ariaLabel: `${n.subject.title}, ${typeLabel(n.subject.type)}${
-          n.subject.status ? `, ${n.subject.status}` : ""
+          n.subject.isSeries ? `, ${shownStatus(n.subject)}` : n.subject.status ? `, ${n.subject.status}` : ""
         }`,
         style: { width: size.width, height: size.height },
         selected: n.subject.id === selected,

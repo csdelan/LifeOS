@@ -29,6 +29,7 @@ import {
 import { useDirty } from "@/components/shell/app-shell";
 import { PeekPanel } from "@/components/shell/panels";
 import { loadExpanded, saveExpanded, loadView, saveView } from "@/lib/view-state";
+import { mapSubjects } from "@/lib/task-series";
 import { MapIcon } from "lucide-react";
 
 const LENSES: { id: MapLens; label: string }[] = [
@@ -67,7 +68,12 @@ export function MapPage() {
   const area = search.area;
   const colorByArea = Boolean(search.colorByArea);
   const { data, isLoading, isError } = useAlignmentForest(archived, lens);
-  const subjectsQuery = useSubjects(undefined, archived);
+  // A repeating Task is one node, its series; its repetitions stay off the Map (TASKS-3).
+  const subjectsQuery = useSubjects(undefined, archived, true);
+  const graphSubjects = useMemo(
+    () => mapSubjects(subjectsQuery.data ?? EMPTY_SUBJECTS),
+    [subjectsQuery.data],
+  );
   const edgesQuery = useAlignmentEdges(archived);
   const areasQuery = useAreas();
   const { setDirty, requestNavigation } = useDirty();
@@ -351,7 +357,7 @@ export function MapPage() {
                   keyboard and screen-reader accessible map.
                 </p>
                 <AlignmentGraph
-                subjects={subjectsQuery.data ?? EMPTY_SUBJECTS}
+                subjects={graphSubjects}
                 edges={edgesQuery.data ?? EMPTY_EDGES}
                 areas={areasQuery.data ?? EMPTY_AREAS}
                 lens={lens}

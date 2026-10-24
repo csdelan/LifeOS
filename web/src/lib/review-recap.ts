@@ -1,9 +1,11 @@
 import { localDateFromTimestamp } from "@/lib/dates";
+import { periodReading, seriesInPeriod } from "@/lib/task-series";
 import type {
   HabitOccurrenceRow,
   InboxItem,
   StatusHistoryEntry,
   SubjectListItem,
+  TaskSeriesHistory,
 } from "@/lib/production-ui-types";
 
 export interface RecapItem {
@@ -20,6 +22,26 @@ export interface RecapSection {
   items: RecapItem[];
 }
 
+/** The review's section for repeating Tasks (TASKS-3): each one's repetitions due in the period. */
+export function repeatingSection(
+  histories: TaskSeriesHistory[],
+  start: string,
+  end: string,
+  asOf: string,
+): RecapSection {
+  return {
+    id: "repeating",
+    label: "Repeating tasks",
+    items: seriesInPeriod(histories, start, end, asOf).map((row) => ({
+      kind: "task-series",
+      at: row.lastDue,
+      title: row.title,
+      detail: periodReading(row),
+      subjectId: row.seriesId,
+    })),
+  };
+}
+
 export function composeRecap(input: {
   start: string;
   end: string;
@@ -28,6 +50,8 @@ export function composeRecap(input: {
   history: Record<string, StatusHistoryEntry[]>;
   occurrences: HabitOccurrenceRow[];
   inbox: InboxItem[];
+  /** Each repeating Task with its repetitions, for "Take out trash: 3 of 4 done". */
+  series?: TaskSeriesHistory[];
 }): RecapSection[] {
   const { start, end, asOf, subjects, history, occurrences, inbox } = input;
   const byId = new Map(subjects.map((s) => [s.id, s]));
@@ -124,6 +148,7 @@ export function composeRecap(input: {
     { id: "status", label: "Status changes", items: statusChanges },
     { id: "completed", label: "Completed tasks", items: completed },
     { id: "overdue", label: "Overdue tasks", items: overdue },
+    repeatingSection(input.series ?? [], start, end, asOf),
     { id: "habits", label: "Habit adherence", items: habits },
     { id: "appointments", label: "Appointments", items: appointments },
     { id: "inbox", label: "Inbox history", items: inboxItems },

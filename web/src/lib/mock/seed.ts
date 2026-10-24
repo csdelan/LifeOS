@@ -1698,13 +1698,16 @@ interface SeededSeries {
   closes?: string[];
   /** After the last completion: the days before today each repetition was done, oldest first. */
   doneAgo?: number[];
+  /** The Goal or Project it serves: its repetitions serve it too, and the Map shows it once. */
+  serves?: string;
 }
 
 /**
- * Four repeating Tasks (TASKS-3, D16), made the way the store makes them and closed as Chris
+ * Five repeating Tasks (TASKS-3, D16), made the way the store makes them and closed as Chris
  * might have: the trash every Wednesday (one week missed), rent on the 1st, the fridge 30
- * days after it was last cleaned, and the bathroom once each week. Each repetition whose date
- * has passed is closed on its due date, so the current one is open and the history reads.
+ * days after it was last cleaned, the bathroom once each week, and Saturday's shop for the
+ * Sunday dinner, which serves that project so the Map has one to show. Each repetition whose
+ * date has passed is closed on its due date, so the current one is open and the history reads.
  */
 function seedRepeatingTasks(state: MockState, today: string, home: AreaRow) {
   const seeded: SeededSeries[] = [
@@ -1749,6 +1752,17 @@ function seedRepeatingTasks(state: MockState, today: string, home: AreaRow) {
       tags: "home,chores",
       closes: ["Completed", "Completed", "Completed"],
     },
+    {
+      id: "task-dinner-shop",
+      short: "s10005",
+      title: "Shop for Sunday dinner",
+      recurrence: { freq: "weekly", on: ["sat"] },
+      startAgo: 24,
+      description: "The list from the menu, Saturday morning.",
+      tags: "family,food",
+      closes: ["Completed", "Cancelled", "Completed"],
+      serves: "proj-dinners",
+    },
   ];
 
   for (const spec of seeded) {
@@ -1778,6 +1792,7 @@ function seedRepeatingTasks(state: MockState, today: string, home: AreaRow) {
     state.tagsByItem[spec.id] = spec.tags.split(",");
     state.journals[spec.id] = [];
     state.history[spec.id] = [{ id: `h-${spec.id}`, status: "Not started", occurredAt: created }];
+    if (spec.serves) state.edges = [...state.edges, { fromId: spec.id, relation: "serves", toId: spec.serves }];
 
     const closes = [...(spec.closes ?? [])];
     const done = [...(spec.doneAgo ?? [])];

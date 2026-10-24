@@ -1,7 +1,15 @@
 import { addDays, startOfWeekMonday } from "@/lib/dates";
 import { addMonthsClamped, isOccurrenceDate, parseRecurrence, recurrenceLabel } from "@/lib/recurrence";
 import { normalizeAmounts } from "@/lib/rewards";
-import type { RecurrenceSpec, TaskRepeat, TaskSeriesCounts, TaskSeriesRow } from "@/lib/production-ui-types";
+import { defaultStatus } from "@/lib/production-ui-types";
+import type {
+  RecurrenceSpec,
+  SubjectListItem,
+  TaskRepeat,
+  TaskSeriesCounts,
+  TaskSeriesHistory,
+  TaskSeriesRow,
+} from "@/lib/production-ui-types";
 
 /**
  * Repeating Tasks (TASKS-3, D16), the web's copy of the kernel's `TaskSeries`: how a pattern
@@ -72,6 +80,94 @@ export function seriesTally(counts: Pick<TaskSeriesCounts, "completedCount" | "m
   const done = counts.completedCount;
   const owed = done + counts.missedCount;
   return owed === 0 ? "None closed yet" : `${done} of ${owed} done`;
+}
+
+/** One repetition of a repeating Task, as the lists carry it (not the series itself). */
+export function isRepetition(item: Pick<SubjectListItem, "isSeries" | "seriesId">): boolean {
+  return !!item.seriesId && !item.isSeries;
+}
+
+/**
+ * The subjects the Map draws (TASKS-3): a repeating Task is one node, the series, which holds
+ * its pattern, price and links; its repetitions, one a week for a weekly chore, are left out.
+ * Give it a list read with `includeSeries`.
+ */
+export function mapSubjects(subjects: SubjectListItem[]): SubjectListItem[] {
+  return subjects.filter((s) => !isRepetition(s));
+}
+
+/**
+ * What a subject's status pill says. A repeating Task's own status is only Not started or
+ * Cancelled (D16), so the series reads "Repeating", or "Stopped" once Cancelled or archived.
+ */
+export function shownStatus(item: SubjectListItem): string | null {
+  if (item.isSeries) return item.status === "Cancelled" || item.archived ? "Stopped" : "Repeating";
+  return item.status || defaultStatus(item.type) || null;
+}
+
+/** How one repeating Task went over a review's days. */
+export interface SeriesPeriod {
+  seriesId: string;
+  title: string;
+  /** The latest due date among its repetitions in the period. */
+  lastDue: string;
+  completedCount: number;
+  missedCount: number;
+  /** Open, and due before the review's as-of day. */
+  lateCount: number;
+  /** Open, and not due yet. */
+  aheadCount: number;
+  /** Cancelled: skipped on purpose, so not counted against it. */
+  skippedCount: number;
+}
+
+/**
+ * Each repeating Task's repetitions due from `start` to `end`, counted for a review ("Take out
+ * trash: 3 of 4 done"). A repetition belongs to the period its due date falls in, so a late
+ * one done the next week still counts for its own week, and a hidden one is left out. Only
+ * the repeating Tasks with a repetition due in the period are listed, by title.
+ */
+export function seriesInPeriod(
+  histories: TaskSeriesHistory[],
+  start: string,
+  end: string,
+  asOf: string,
+): SeriesPeriod[] {
+  const out: SeriesPeriod[] = [];
+  for (const { series, repetitions } of histories) {
+    const due = repetitions.filter((r) => !r.archived && !!r.due && r.due >= start && r.due <= end);
+    if (due.length === 0) continue;
+    const row: SeriesPeriod = {
+      seriesId: series.id,
+      title: series.title,
+      lastDue: due.reduce((latest, r) => (r.due! > latest ? r.due! : latest), ""),
+      completedCount: 0,
+      missedCount: 0,
+      lateCount: 0,
+      aheadCount: 0,
+      skippedCount: 0,
+    };
+    for (const r of due) {
+      const status = (r.status ?? "").toLowerCase();
+      if (status === "completed") row.completedCount += 1;
+      else if (status === "missed") row.missedCount += 1;
+      else if (status === "cancelled") row.skippedCount += 1;
+      else if (r.due! < asOf) row.lateCount += 1;
+      else row.aheadCount += 1;
+    }
+    out.push(row);
+  }
+  return out.sort((a, b) => a.title.localeCompare(b.title));
+}
+
+/** A period's reading: "3 of 4 done · 1 missed", then what's late, still to do or skipped. */
+export function periodReading(row: SeriesPeriod): string {
+  const parts = [seriesTally(row)];
+  if (row.missedCount) parts.push(`${row.missedCount} missed`);
+  if (row.lateCount) parts.push(`${row.lateCount} late`);
+  if (row.aheadCount) parts.push(`${row.aheadCount} still to do`);
+  if (row.skippedCount) parts.push(`${row.skippedCount} skipped`);
+  return parts.join(" · ");
 }
 
 /** The API types int64 as `number | string`; the counts are numbers here. */

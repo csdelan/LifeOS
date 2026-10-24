@@ -5,7 +5,7 @@ import { NodeBackdrop } from "@/components/graph/node-backdrop";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { TypeIcon } from "@/components/primitives/type-icon";
-import { defaultStatus } from "@/lib/production-ui-types";
+import { shownStatus } from "@/lib/task-series";
 import type { SubjectListItem } from "@/lib/production-ui-types";
 import { creditText } from "@/lib/cover";
 import { typeAccent } from "@/lib/subject-meta";
@@ -26,7 +26,8 @@ const NODE_COVER_WIDTH = 300;
 export function SubjectGraphNode({ data, selected }: NodeProps<SubjectFlowNode>) {
   const { subject, colorByArea, areaColor } = data;
   const accent = colorByArea ? areaColor : typeAccent(subject.type);
-  const status = subject.status || defaultStatus(subject.type) || null;
+  // A repeating Task's series reads Repeating or Stopped (TASKS-3).
+  const status = shownStatus(subject);
   const cover = subject.cover ?? null;
 
   return (

@@ -77,13 +77,13 @@ test.describe("golden paths", () => {
     await expect(days.getByRole("button", { name: "Wednesday" })).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("button", { name: "Edit" })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Every Wednesday", { exact: true })).toBeVisible();
+    await expect(page.getByRole("tabpanel", { name: "Overview" }).getByText("Every Wednesday", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Edit" }).click();
     await page.getByRole("group", { name: "Repeat" }).getByRole("button", { name: "Doesn't repeat" }).click();
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("button", { name: "Edit" })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Every Wednesday", { exact: true })).toBeHidden();
+    await expect(page.getByRole("tabpanel", { name: "Overview" }).getByText("Every Wednesday", { exact: true })).toBeHidden();
   });
 
   test("a repeating task: make one, finish today's, the next appears, and mark a late one missed", async ({
@@ -147,6 +147,32 @@ test.describe("golden paths", () => {
     await expect(repeats.getByRole("button", { name: "Stop repeating" })).toBeVisible();
     // The task itself isn't timed; its repetitions are.
     await expect(detail.getByRole("region", { name: "Timer" })).toHaveCount(0);
+  });
+
+  test("a repeating task is one node on the Map, and a review counts its weeks", async ({ page }) => {
+    await page.clock.install({ time: new Date("2026-10-21T12:00:00") });
+    await page.goto("/map");
+    const outline = page.getByRole("tree", { name: "Alignment outline" });
+    await expect(outline).toBeVisible();
+    const expandAll = page.getByRole("switch", { name: "Expand all" });
+    if ((await expandAll.getAttribute("aria-checked")) !== "true") await expandAll.click();
+    // Saturday's shop serves the Sunday dinner project: once, not once a week.
+    const title = outline.getByRole("button", { name: "Shop for Sunday dinner", exact: true });
+    await expect(title).toHaveCount(1);
+    const shop = page.locator('[data-map-node="task-dinner-shop"]');
+    await expect(shop).toContainText("Every Saturday");
+    await expect(shop).toContainText("Repeating");
+    await title.click();
+    await expect(page.getByRole("region", { name: "Repeats" }).getByRole("button", { name: "Stop repeating" })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // The week before: the trash and the shop each done once.
+    await page.goto("/reviews?kind=weekly");
+    await page.getByRole("button", { name: "Previous" }).click();
+    const repeating = page.locator("div", { has: page.getByRole("heading", { name: "Repeating tasks" }) }).last();
+    await expect(repeating).toContainText("Take out trash — 1 of 1 done", { timeout: 10_000 });
+    await expect(repeating).toContainText("Shop for Sunday dinner — 1 of 1 done");
   });
 
   test("Inbox keyboard triage: arrows, Enter, Drop confirm", async ({ page }) => {

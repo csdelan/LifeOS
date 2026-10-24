@@ -3,15 +3,25 @@ import { parseRecurrence, recurrenceLabel, sameRecurrence, serializeRecurrence }
 import {
   afterCompletion,
   datesFor,
+  mapSubjects,
   nextOccurrence,
   normalizeSeriesRow,
+  periodReading,
   repeatKind,
   repeatLabel,
+  seriesInPeriod,
   seriesTally,
+  shownStatus,
   taskPatternProblem,
   weekOf,
 } from "@/lib/task-series";
-import type { TaskSeriesRow } from "@/lib/production-ui-types";
+import { composeRecap } from "@/lib/review-recap";
+import type {
+  SubjectListItem,
+  TaskRepetitionRow,
+  TaskSeriesHistory,
+  TaskSeriesRow,
+} from "@/lib/production-ui-types";
 
 describe("the Task-only repeat shapes (TASKS-3)", () => {
   it("reads and writes once each week and every N after the last completion", () => {
@@ -101,5 +111,121 @@ describe("the readings", () => {
     expect(row.openCount).toBe(1);
     expect(row.completedCount).toBe(3);
     expect(row.bounty).toEqual({ xp: 4 });
+  });
+});
+
+function seriesRow(id: string, title: string): TaskSeriesRow {
+  return {
+    id,
+    urn: `urn:bsk:task:${id}`,
+    title,
+    recurrence: '{"freq":"weekly","on":["wed"]}',
+    archived: false,
+    stopped: false,
+    openCount: 0,
+    completedCount: 0,
+    missedCount: 0,
+    cancelledCount: 0,
+  };
+}
+
+function repetition(due: string, status: string, extra: Partial<TaskRepetitionRow> = {}): TaskRepetitionRow {
+  const closed = ["Completed", "Missed", "Cancelled"].includes(status);
+  return {
+    id: `r-${due}`,
+    urn: `urn:bsk:task:r-${due}`,
+    title: "Take out trash",
+    occurrence: due,
+    due,
+    status,
+    closed,
+    archived: false,
+    ...extra,
+  };
+}
+
+describe("a review's repeating tasks (TASKS-3)", () => {
+  // Four Wednesdays in October, reviewed on Thursday the 29th.
+  const trash: TaskSeriesHistory = {
+    series: seriesRow("trash", "Take out trash"),
+    repetitions: [
+      repetition("2026-10-28", "Not started"),
+      repetition("2026-10-21", "Completed"),
+      repetition("2026-10-14", "Missed"),
+      repetition("2026-10-07", "Completed"),
+      repetition("2026-09-30", "Completed"),
+    ],
+  };
+
+  it("counts each one's repetitions due in the period, the done against the done and missed", () => {
+    const [row] = seriesInPeriod([trash], "2026-10-01", "2026-10-31", "2026-10-29");
+    expect(row).toMatchObject({ seriesId: "trash", lastDue: "2026-10-28", completedCount: 2, missedCount: 1, lateCount: 1 });
+    expect(periodReading(row)).toBe("2 of 3 done · 1 missed · 1 late");
+  });
+
+  it("says what's still to do, and leaves out a skipped one and a hidden one", () => {
+    const week: TaskSeriesHistory = {
+      series: seriesRow("dinner", "Shop for Sunday dinner"),
+      repetitions: [
+        repetition("2026-10-31", "Not started"),
+        repetition("2026-10-24", "Cancelled"),
+        repetition("2026-10-17", "Completed", { archived: true }),
+      ],
+    };
+    const [row] = seriesInPeriod([week], "2026-10-12", "2026-10-31", "2026-10-29");
+    expect(periodReading(row)).toBe("None closed yet · 1 still to do · 1 skipped");
+  });
+
+  it("lists only the ones with a repetition due in the period, by title", () => {
+    const rent: TaskSeriesHistory = {
+      series: seriesRow("rent", "Pay rent"),
+      repetitions: [repetition("2026-11-01", "Not started")],
+    };
+    expect(seriesInPeriod([trash, rent], "2026-10-26", "2026-11-01", "2026-10-29").map((r) => r.title)).toEqual([
+      "Pay rent",
+      "Take out trash",
+    ]);
+    expect(seriesInPeriod([rent], "2026-10-19", "2026-10-25", "2026-10-25")).toEqual([]);
+  });
+
+  it("is the recap's Repeating tasks section, each line opening its repeating task", () => {
+    const sections = composeRecap({
+      start: "2026-10-19",
+      end: "2026-10-25",
+      asOf: "2026-10-25",
+      subjects: [],
+      history: {},
+      occurrences: [],
+      inbox: [],
+      series: [trash],
+    });
+    const repeating = sections.find((s) => s.id === "repeating");
+    expect(repeating?.label).toBe("Repeating tasks");
+    expect(repeating?.items).toEqual([
+      { kind: "task-series", at: "2026-10-21", title: "Take out trash", detail: "1 of 1 done", subjectId: "trash" },
+    ]);
+  });
+});
+
+describe("a repeating task on the Map (TASKS-3)", () => {
+  const task = (id: string, extra: Partial<SubjectListItem>): SubjectListItem =>
+    ({ id, urn: `urn:bsk:task:${id}`, type: "Task", title: id, ...extra }) as SubjectListItem;
+
+  it("is one node, its series: the repetitions are left out", () => {
+    const subjects = [
+      task("series", { isSeries: true, seriesId: null, status: "Not started" }),
+      task("this-week", { isSeries: false, seriesId: "series" }),
+      task("last-week", { isSeries: false, seriesId: "series" }),
+      task("one-off", { isSeries: false, seriesId: null }),
+    ];
+    expect(mapSubjects(subjects).map((s) => s.id)).toEqual(["series", "one-off"]);
+  });
+
+  it("reads Repeating, or Stopped once Cancelled or hidden; other subjects keep their status", () => {
+    expect(shownStatus(task("s", { isSeries: true, status: "Not started" }))).toBe("Repeating");
+    expect(shownStatus(task("s", { isSeries: true, status: "Cancelled" }))).toBe("Stopped");
+    expect(shownStatus(task("s", { isSeries: true, status: "Not started", archived: true }))).toBe("Stopped");
+    expect(shownStatus(task("t", { status: "In progress" }))).toBe("In progress");
+    expect(shownStatus(task("t", {}))).toBe("Not started");
   });
 });

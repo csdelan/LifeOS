@@ -369,4 +369,23 @@ Chris approved all six phases on 2026-10-24.
      nothing, and Change status undoes it.
    - The Map and the forest still leave series out (as `GET /api/subjects` does); RT5 shows
      the series there as one node.
-6. **RT5:** the history and review read-outs and the graph node.
+6. **RT5:** the history and review read-outs and the graph node. **Done:** the Map's outline
+   and graph show a repeating Task once, as its series, with "Every Saturday" and a
+   **Repeating** (or **Stopped**) pill; its repetitions stay off the Map
+   (`mapSubjects`, from a list read with `includeSeries`). Before, every repetition was its
+   own node, so a weekly chore grew a row a week. A review's recap gains **Repeating tasks**:
+   each repeating Task with a repetition due in the period, read as "3 of 4 done · 1 missed",
+   then what's late, still to do or skipped (`seriesInPeriod`, `periodReading`). The history
+   read-out is the detail's Repeats panel (RT4). The mock seeds a fifth, "Shop for Sunday
+   dinner" every Saturday, serving the Sunday dinner project. Tests: `task-series.test.ts`,
+   `task-series-store.test.ts` and a golden path. Calls made while building it:
+   - A repetition belongs to the period its **due date** falls in, so a late trash done the
+     next week still counts for its own week. Cancelled is "skipped", not counted against it;
+     a hidden repetition is left out.
+   - The live recap was a stub that returned nothing (`TODO(api)` in `live/reads.ts`); it now
+     returns the Repeating tasks section, made from `GET /api/tasks/series` and each one's
+     history. The rest of the live recap is still to build, outside TASKS-3.
+   - Not changed: a Goal's Relationships tab still lists each repetition serving it, and
+     a link added to the series on the Map reaches the next repetition made, not the open
+     one. The Reviews page's week runs Sunday to Saturday, not Chris's Monday to Sunday;
+     that predates this work.
