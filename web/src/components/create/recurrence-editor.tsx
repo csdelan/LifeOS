@@ -18,6 +18,15 @@ const MODES: readonly (readonly [RecurrenceFreq, string])[] = [
   ["monthly", "Monthly"],
 ];
 
+/** A Task also repeats once a week on any day (TASKS-3). */
+const TASK_MODES: readonly (readonly [RecurrenceFreq, string])[] = [
+  ["daily", "Daily"],
+  ["weekly", "Weekly"],
+  ["each", "Once a week"],
+  ["interval", "Every…"],
+  ["monthly", "Monthly"],
+];
+
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /** The pattern a mode starts from, keeping what still applies from the current one. */
@@ -27,6 +36,7 @@ function startFor(freq: RecurrenceFreq, current: RecurrenceSpec | null): Recurre
   if (freq === "weekly") return { freq, on: [WEEKDAY_TOKENS[weekdayIndex(today)]] };
   if (freq === "interval") return { freq, every: 2, unit: "days" };
   if (freq === "monthly") return { freq, day: Number(today.slice(8, 10)) };
+  if (freq === "each") return { freq, period: "week" };
   return { freq: "daily" };
 }
 
@@ -34,18 +44,21 @@ function startFor(freq: RecurrenceFreq, current: RecurrenceSpec | null): Recurre
  * Edits a repeat pattern in the kernel's shape (D8). `value` and `onChange` carry the pattern
  * as text (`serializeRecurrence`), `""` for none; with `allowNone` the first choice is
  * "Doesn't repeat". A cue pattern (`bsk recur --freq trigger`) shows as text; choosing another
- * mode replaces it.
+ * mode replaces it. `forTask` adds a Task's two shapes (TASKS-3): once a week on any day, and
+ * every N counted from the last one done (the fridge) rather than from the start date.
  */
 export function RecurrenceEditor({
   value,
   onChange,
   disabled,
   allowNone,
+  forTask,
 }: {
   value?: string;
   onChange: (next: string) => void;
   disabled?: boolean;
   allowNone?: boolean;
+  forTask?: boolean;
 }) {
   const spec = parseRecurrence(value);
   const set = (next: RecurrenceSpec) => onChange(serializeRecurrence(next));
@@ -70,7 +83,7 @@ export function RecurrenceEditor({
             Doesn't repeat
           </button>
         ) : null}
-        {MODES.map(([freq, label]) => (
+        {(forTask ? TASK_MODES : MODES).map(([freq, label]) => (
           <button
             key={freq}
             type="button"
@@ -141,8 +154,36 @@ export function RecurrenceEditor({
               </button>
             ))}
           </div>
-          <span className="w-full text-xs text-muted-foreground">Counted from the start date.</span>
+          {forTask ? (
+            <div role="group" aria-label="Counted from" className="flex w-full flex-wrap items-center gap-1">
+              <span className="text-xs text-muted-foreground">Counted from</span>
+              <button
+                type="button"
+                disabled={disabled}
+                aria-pressed={spec.from !== "completion"}
+                onClick={() => set({ freq: "interval", every: spec.every, unit: spec.unit })}
+                className={chip(spec.from !== "completion")}
+              >
+                the start date
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                aria-pressed={spec.from === "completion"}
+                onClick={() => set({ ...spec, from: "completion" })}
+                className={chip(spec.from === "completion")}
+              >
+                the last one done
+              </button>
+            </div>
+          ) : (
+            <span className="w-full text-xs text-muted-foreground">Counted from the start date.</span>
+          )}
         </div>
+      ) : null}
+
+      {spec?.freq === "each" ? (
+        <p className="text-xs text-muted-foreground">Any day that week: it shows from Monday and is due Sunday.</p>
       ) : null}
 
       {spec?.freq === "monthly" ? (

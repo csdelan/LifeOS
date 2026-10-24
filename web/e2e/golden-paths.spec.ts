@@ -86,6 +86,69 @@ test.describe("golden paths", () => {
     await expect(page.getByText("Every Wednesday", { exact: true })).toBeHidden();
   });
 
+  test("a repeating task: make one, finish today's, the next appears, and mark a late one missed", async ({
+    page,
+  }) => {
+    // Wednesday 21 October 2026: a weekly Wednesday repeat from the 14th has a late one and today's.
+    await page.clock.install({ time: new Date("2026-10-21T12:00:00") });
+    await page.addInitScript(() => localStorage.removeItem("lifeos.view.tasks"));
+    await page.goto("/tasks");
+    await page.getByRole("textbox", { name: "New task title" }).fill("Water plants");
+    await page.getByRole("button", { name: "More…" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("group", { name: "Repeat" }).getByRole("button", { name: "Weekly" }).click();
+    await expect(
+      dialog.getByRole("group", { name: "On these days" }).getByRole("button", { name: "Wednesday" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    // A repeating Task's dates come from its repetitions, so its own due date is hidden.
+    await expect(dialog.getByLabel("Due", { exact: true })).toHaveCount(0);
+    await dialog.getByLabel("Repeats from").fill("2026-10-14");
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
+
+    const group = (name: string) => page.locator("section", { has: page.getByRole("heading", { name }) });
+    const overdue = group(/^Overdue/).getByRole("button", { name: /Water plants/ });
+    const today = group(/^Today/).getByRole("button", { name: /Water plants/ });
+    await expect(overdue).toContainText("Every Wednesday", { timeout: 10_000 });
+    await expect(overdue).toContainText("7 days overdue");
+    await expect(today).toContainText("Every Wednesday");
+
+    // Finish today's: it pays, and next Wednesday's is made.
+    await today.click();
+    const detail = page.locator("aside").filter({ has: page.getByRole("button", { name: "Close panel" }) });
+    const repeats = detail.getByRole("region", { name: "Repeats" });
+    await expect(repeats).toContainText("Every Wednesday");
+    await expect(repeats.getByRole("list", { name: "Repetitions" }).getByRole("listitem")).toHaveCount(2);
+    await detail.getByRole("button", { name: "Edit" }).click();
+    await detail.getByRole("combobox", { name: "Status" }).click();
+    await page.getByRole("option", { name: "Completed", exact: true }).click();
+    await detail.getByRole("button", { name: "Save" }).click();
+    await expect(detail.getByRole("button", { name: "Edit" })).toBeVisible({ timeout: 10_000 });
+    await expect(group(/^Upcoming/).getByRole("button", { name: /Water plants/ })).toContainText("Oct 28", {
+      timeout: 10_000,
+    });
+
+    // Close the late one myself: missed, not paid, and gone from the working view.
+    await overdue.click();
+    await expect(detail.getByRole("region", { name: "Timer" })).toBeVisible();
+    await expect(repeats.getByRole("listitem").filter({ hasText: "This one" })).toContainText("due Oct 14");
+    await repeats.getByRole("button", { name: "Mark missed" }).click();
+    await expect(page.getByText("Marked missed")).toBeVisible({ timeout: 10_000 });
+    await expect(group(/^Overdue/).getByRole("button", { name: /Water plants/ })).toHaveCount(0);
+
+    // The Repeating view lists the task itself, with how it's gone.
+    await page.getByRole("combobox", { name: "Status" }).first().click();
+    await page.getByRole("option", { name: "Repeating", exact: true }).click();
+    const series = group(/^Repeating/).getByRole("button", { name: /Water plants/ });
+    await expect(series).toContainText("1 of 2 done");
+    await expect(series).toContainText("Oct 28");
+    await series.click();
+    await expect(repeats.getByRole("button", { name: "Stop repeating" })).toBeVisible();
+    // The task itself isn't timed; its repetitions are.
+    await expect(detail.getByRole("region", { name: "Timer" })).toHaveCount(0);
+  });
+
   test("Inbox keyboard triage: arrows, Enter, Drop confirm", async ({ page }) => {
     await page.goto("/inbox");
     await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();

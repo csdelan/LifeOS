@@ -590,6 +590,34 @@ test.describe("accessibility", () => {
     expect(dayBack, JSON.stringify(dayBack, null, 2)).toEqual([]);
   });
 
+  // Repeating Tasks (TASKS-3): the Tasks page's Repeating view with a repeating task open,
+  // its history listed, then one of its repetitions with Mark missed, in both themes.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /tasks repeating view and a repetition, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        await settled(page);
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/tasks");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      await page.getByRole("combobox", { name: "Status" }).click();
+      await page.getByRole("option", { name: "Repeating", exact: true }).click();
+      await page.getByRole("button", { name: /Take out trash/ }).click();
+      const repeats = page.getByRole("region", { name: "Repeats" });
+      await expect(repeats.getByRole("list", { name: "Repetitions" })).toBeVisible({ timeout: 10_000 });
+      const series = await scan();
+      expect(series, JSON.stringify(series, null, 2)).toEqual([]);
+
+      await repeats.getByRole("list", { name: "Repetitions" }).getByRole("button").first().click();
+      await expect(repeats.getByRole("button", { name: "Mark missed" })).toBeVisible({ timeout: 10_000 });
+      const repetition = await scan();
+      expect(repetition, JSON.stringify(repetition, null, 2)).toEqual([]);
+    });
+  }
+
   // States the routes above don't reach: an Established habit checked off on the Habits
   // page, and Today's Maintaining group open (REWARD-2 maintenance).
   test("axe serious/critical: maintained habits", async ({ page }) => {

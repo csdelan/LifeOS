@@ -29,6 +29,7 @@ import type { TimerEvent } from "@/lib/timer";
 import type { MockFoodEvent } from "@/lib/mock/food-fold";
 import { sceneById, storedCoverOf } from "@/lib/mock/covers";
 import { applyMultiplier, DomainProgress, gemsFor, HEALTH, rankAwardKey, type DomainDay } from "@/lib/domain-fold";
+import { ensureSeries, repetitionRows } from "@/lib/mock/task-series";
 
 export interface MockEvent {
   id: string;
@@ -1637,7 +1638,7 @@ export function createSeed(): MockState {
     },
   ];
 
-  return {
+  const seeded: MockState = {
     subjects,
     details,
     edges,
@@ -1677,6 +1678,146 @@ export function createSeed(): MockState {
       { id: "obj-3", title: "Long run, easy pace", subjectId: "task-longrun" },
     ],
   };
+  seedRepeatingTasks(seeded, today, family);
+  return seeded;
+}
+
+/** One seeded repeating Task: its series, and how its past repetitions closed, oldest first. */
+interface SeededSeries {
+  id: string;
+  short: string;
+  title: string;
+  recurrence: Record<string, unknown>;
+  /** Days before today it repeats from. */
+  startAgo: number;
+  description: string;
+  priority?: string;
+  tags: string;
+  bounty?: Record<string, Amounts>;
+  /** How each repetition whose due date has passed closed, oldest first; the rest are Completed. */
+  closes?: string[];
+  /** After the last completion: the days before today each repetition was done, oldest first. */
+  doneAgo?: number[];
+}
+
+/**
+ * Four repeating Tasks (TASKS-3, D16), made the way the store makes them and closed as Chris
+ * might have: the trash every Wednesday (one week missed), rent on the 1st, the fridge 30
+ * days after it was last cleaned, and the bathroom once each week. Each repetition whose date
+ * has passed is closed on its due date, so the current one is open and the history reads.
+ */
+function seedRepeatingTasks(state: MockState, today: string, home: AreaRow) {
+  const seeded: SeededSeries[] = [
+    {
+      id: "task-trash",
+      short: "s10001",
+      title: "Take out trash",
+      recurrence: { freq: "weekly", on: ["wed"] },
+      startAgo: 35,
+      description: "Bins to the curb before the truck comes Thursday.",
+      tags: "home,chores",
+      bounty: { completed: { freedom: 5, xp: 5 } },
+      closes: ["Completed", "Completed", "Missed", "Completed", "Completed"],
+    },
+    {
+      id: "task-rent",
+      short: "s10002",
+      title: "Pay rent",
+      recurrence: { freq: "monthly", day: 1 },
+      startAgo: 70,
+      description: "Transfer to the landlord's account.",
+      priority: "High",
+      tags: "home,money",
+    },
+    {
+      id: "task-fridge",
+      short: "s10003",
+      title: "Clean fridge",
+      recurrence: { freq: "interval", every: 30, unit: "days", from: "completion" },
+      startAgo: 40,
+      description: "Shelves out, wipe down, toss what's turned.",
+      tags: "home,chores",
+      doneAgo: [18],
+    },
+    {
+      id: "task-bathroom",
+      short: "s10004",
+      title: "Clean bathroom",
+      recurrence: { freq: "each", period: "week" },
+      startAgo: 20,
+      description: "Any day this week.",
+      tags: "home,chores",
+      closes: ["Completed", "Completed", "Completed"],
+    },
+  ];
+
+  for (const spec of seeded) {
+    const created = isoAgo(spec.startAgo * 24 + 6);
+    const series = item({
+      id: spec.id,
+      short: spec.short,
+      type: "Task",
+      title: spec.title,
+      status: "Not started",
+      createdAt: created,
+      ...areaOf(home),
+      tags: spec.tags,
+    });
+    state.subjects = [...state.subjects, series];
+    state.details[spec.id] = detailFrom(series, {
+      scope: spec.description,
+      attributes: JSON.stringify({
+        description: spec.description,
+        priority: spec.priority ?? "Medium",
+        area: home.urn,
+        recurrence: spec.recurrence,
+        start: addDays(today, -spec.startAgo),
+        ...(spec.bounty ? { bounty: spec.bounty } : {}),
+      }),
+    });
+    state.tagsByItem[spec.id] = spec.tags.split(",");
+    state.journals[spec.id] = [];
+    state.history[spec.id] = [{ id: `h-${spec.id}`, status: "Not started", occurredAt: created }];
+
+    const closes = [...(spec.closes ?? [])];
+    const done = [...(spec.doneAgo ?? [])];
+    for (let round = 0; round < 60; round += 1) {
+      ensureSeries(state, spec.id, today);
+      const open = repetitionRows(state, series.urn)
+        .filter((r) => !r.closed)
+        .reverse();
+      const next = open[0];
+      if (!next?.occurrence) break;
+      backdate(state, next.id, next.scheduled ?? next.occurrence, today);
+      if (spec.doneAgo) {
+        const ago = done.shift();
+        if (ago === undefined) break;
+        closeSeeded(state, next.id, "Completed", addDays(today, -ago));
+      } else {
+        if (!next.due || next.due >= today) break;
+        closeSeeded(state, next.id, closes.shift() ?? "Completed", next.due);
+      }
+    }
+  }
+}
+
+/** A seeded repetition made on the morning it became current, not when the seed ran. */
+function backdate(state: MockState, id: string, from: string, today: string) {
+  if (from >= today) return;
+  const at = new Date(`${from}T07:00:00`).toISOString();
+  state.subjects = state.subjects.map((s) => (s.id === id ? { ...s, createdAt: at } : s));
+  const detail = state.details[id];
+  if (detail) state.details[id] = { ...detail, createdAt: at };
+  state.history[id] = (state.history[id] ?? []).map((h) => ({ ...h, occurredAt: at }));
+}
+
+/** Closes a seeded repetition on `on` (its evening), as a status change then would have. */
+function closeSeeded(state: MockState, id: string, status: string, on: string) {
+  const occurredAt = new Date(`${on}T19:00:00`).toISOString();
+  state.subjects = state.subjects.map((s) => (s.id === id ? { ...s, status } : s));
+  const detail = state.details[id];
+  if (detail) state.details[id] = { ...detail, status };
+  state.history[id] = [{ id: `h-${id}-closed`, status, occurredAt }, ...(state.history[id] ?? [])];
 }
 
 /**

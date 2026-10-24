@@ -424,6 +424,7 @@ export function MapPage() {
           <SubjectDetail
             subjectId={selected}
             onDirtyChange={setDirty}
+            onOpenSubject={select}
             onClose={() =>
               requestNavigation(() =>
                 void navigate({ search: (prev) => ({ ...prev, selected: undefined }) }),

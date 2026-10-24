@@ -344,5 +344,29 @@ Chris approved all six phases on 2026-10-24.
    that lists Tasks shows the repetitions only. The detail adds `repeating` (the series and its
    counts) and `bountyFromSeries`. Tests: `TaskEndpointTests`.
 5. **RT4:** web: the Repeat field, Tasks and Focus, settle on open, the repetition detail,
-   the mock store.
+   the mock store. **Done:** a Task's Repeat field adds "Once a week" (any day, shows from
+   Monday, due Sunday) and, for every N, "Counted from the start date / the last one done";
+   a repeating Task hides its own due and do dates and asks "Repeats from" instead (sent
+   with `recur` as `start`). Tasks and Focus ask for the settle once when they open. A
+   repetition's row says how it repeats ("Every Wednesday"). The detail's **Repeats** panel
+   lists the repetitions (latest first, six then "Show all"), the tally ("3 of 4 done"),
+   what's open and next due; on a repetition it offers **Mark missed** and a link to the
+   repeating task, on the series **Stop repeating** / **Repeat again**. The series has no
+   timer, its status offers only Not started and Cancelled, and once it has made one its
+   pattern can't be cleared. The Tasks page's Status filter gains **Repeating**, which lists
+   the repeating tasks themselves with their pattern, tally, price and next due. The price
+   panel says whose price it is (the series' for every repetition, or this one's own). The
+   mock store mirrors the kernel (`web/src/lib/mock/task-series.ts`) and seeds four: the trash
+   every Wednesday with a missed week, rent on the 1st, the fridge 30 days after it was last
+   cleaned, and the bathroom once each week. Tests: `task-series.test.ts`,
+   `task-series-store.test.ts`, the detail and Focus tests, a golden path and an axe scan of
+   the Repeating view. Calls made while building it:
+   - The kernel priced a repetition with no price of its own from the Task defaults when the
+     web read it to edit, so changing one amount on one repetition dropped the series' other
+     amounts. `BountyService` now starts a repetition from its series' price, as paying
+     already did.
+   - Mark missed is one tap, no confirm: it's how Chris closes a missed week (§1.1), it pays
+     nothing, and Change status undoes it.
+   - The Map and the forest still leave series out (as `GET /api/subjects` does); RT5 shows
+     the series there as one node.
 6. **RT5:** the history and review read-outs and the graph node.

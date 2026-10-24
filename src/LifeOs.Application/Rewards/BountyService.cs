@@ -184,9 +184,22 @@ public sealed class BountyService(SubjectService subjects, ISubjectRepository re
     private async Task<(Dictionary<string, Dictionary<string, long>> Stored, int? EveryMinutes)> ReadAsync(
         SubjectRef subject, CancellationToken cancellationToken)
     {
-        var json = await repository.GetAttributeValueAsync(subject.Id, Bounty.AttributeKey, cancellationToken);
+        var json = await repository.GetAttributeValueAsync(subject.Id, Bounty.AttributeKey, cancellationToken)
+                   ?? await SeriesBountyAsync(subject, cancellationToken);
         return (Bounty.Parse(json), Bounty.ParseEveryMinutes(json));
     }
+
+    /// <summary>
+    /// A repetition of a repeating Task without a price of its own pays its series' (D16), so
+    /// it reads, and is priced from, the series' bounty: changing one trigger on it keeps the
+    /// rest of the series' price rather than falling back to the defaults.
+    /// </summary>
+    private async Task<string?> SeriesBountyAsync(SubjectRef subject, CancellationToken cancellationToken)
+        => subject.Type == SubjectTypes.Task
+           && await repository.GetAttributeValueAsync(subject.Id, TaskSeries.SeriesKey, cancellationToken) is { } urn
+           && await repository.FindByUrnAsync(urn, cancellationToken) is { } series
+            ? await repository.GetAttributeValueAsync(series.Id, Bounty.AttributeKey, cancellationToken)
+            : null;
 
     private async Task<BountyView> WriteAsync(
         SubjectRef subject, Dictionary<string, Dictionary<string, long>> stored, int? everyMinutes,

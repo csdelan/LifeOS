@@ -54,6 +54,9 @@ export const qk = {
   habits: ["habits"] as const,
   occurrences: ["occurrences"] as const,
   timers: ["timers"] as const,
+  // Every repeating-Task read sits under ["task-series"], so a status change refreshes them all.
+  taskSeries: ["task-series"] as const,
+  taskSeriesHistory: (id: string) => ["task-series", "history", id] as const,
   wallet: ["wallet"] as const,
   domains: ["domains"] as const,
   // Nested under ["domains"], so every domains invalidation refreshes the chart too.
@@ -166,6 +169,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
           qk.wallet,
           qk.ledger,
           qk.domains,
+          qk.taskSeries,
           ["forest"],
           ["edges"],
         ]);
@@ -177,6 +181,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       await invalidate(qc, [
         qk.timers,
         qk.rewards,
+        qk.taskSeries,
         qk.subject(subject),
         qk.listItem(subject),
         qk.subjects,
@@ -192,6 +197,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       await invalidate(qc, [
         qk.timers,
         qk.rewards,
+        qk.taskSeries,
         qk.subject(subject),
         qk.listItem(subject),
         qk.subjects,
@@ -346,9 +352,27 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       return row;
     },
 
-    async recur(habit, spec) {
-      await client.recur(habit, spec);
-      await invalidate(qc, [qk.habits, qk.subject(habit), qk.dashboard]);
+    async recur(subject, spec, opts) {
+      await client.recur(subject, spec, opts);
+      // On a Task it makes (or re-dates) a repetition, which shows in the lists (TASKS-3).
+      await invalidate(qc, [
+        qk.habits,
+        qk.subject(subject),
+        qk.listItem(subject),
+        qk.subjects,
+        qk.dashboard,
+        qk.taskSeries,
+        ["forest"],
+        ["edges"],
+      ]);
+    },
+
+    async settleTasks() {
+      const result = await client.settleTasks();
+      if (result.made.length > 0) {
+        await invalidate(qc, [qk.subjects, qk.dashboard, qk.taskSeries, ["forest"], ["edges"]]);
+      }
+      return result;
     },
 
     async timer(task, action) {
@@ -366,6 +390,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
             qk.wallet,
             qk.ledger,
             qk.domains,
+            qk.taskSeries,
             ["forest"],
           ]);
         }
@@ -585,10 +610,28 @@ export function useCoverSearch(query: string, enabled = true) {
   });
 }
 
-export function useSubjects(type?: SubjectType, includeArchived = false) {
+/** Subjects by type; a repeating Task's series only with `includeSeries` (TASKS-3). */
+export function useSubjects(type?: SubjectType, includeArchived = false, includeSeries = false) {
   return useQuery({
-    queryKey: [...qk.subjects, type ?? "all", includeArchived],
-    queryFn: () => reads().listSubjects({ type, includeArchived }),
+    queryKey: [...qk.subjects, type ?? "all", includeArchived, includeSeries],
+    queryFn: () => reads().listSubjects({ type, includeArchived, includeSeries }),
+  });
+}
+
+/** Every repeating Task (TASKS-3), with its repetitions counted. */
+export function useTaskSeries(includeArchived = false) {
+  return useQuery({
+    queryKey: [...qk.taskSeries, "list", includeArchived],
+    queryFn: () => reads().taskSeries({ includeArchived }),
+  });
+}
+
+/** One repeating Task's repetitions, latest first. */
+export function useTaskSeriesHistory(seriesId: string | undefined) {
+  return useQuery({
+    queryKey: qk.taskSeriesHistory(seriesId ?? ""),
+    queryFn: () => reads().taskSeriesHistory(seriesId!),
+    enabled: !!seriesId,
   });
 }
 

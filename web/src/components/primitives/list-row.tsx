@@ -1,3 +1,4 @@
+import { RepeatIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CoverThumb } from "@/components/cover/cover-thumb";
 import { DateChip } from "@/components/primitives/date-chip";
@@ -6,6 +7,7 @@ import { TypeBadge } from "@/components/primitives/type-badge";
 import { BountyChip } from "@/components/rewards/bounty-chip";
 import type { SubjectListItem } from "@/lib/production-ui-types";
 import { defaultStatus, isTerminal } from "@/lib/production-ui-types";
+import { repeatLabel } from "@/lib/task-series";
 
 export function ListRow({
   item,
@@ -24,6 +26,8 @@ export function ListRow({
   className?: string;
 }) {
   const status = item.status || defaultStatus(item.type) || null;
+  // One repetition of a repeating Task (TASKS-3) says how it repeats.
+  const repeats = repeatLabel(item.repeat);
   return (
     <button
       type="button"
@@ -47,6 +51,12 @@ export function ListRow({
           <TypeBadge type={item.type} />
           {item.areaName ? (
             <span className="text-[0.6875rem] text-muted-foreground">{item.areaName}</span>
+          ) : null}
+          {repeats ? (
+            <span className="inline-flex items-center gap-1 text-[0.6875rem] text-muted-foreground">
+              <RepeatIcon className="size-3" aria-hidden />
+              {repeats}
+            </span>
           ) : null}
         </div>
       </div>

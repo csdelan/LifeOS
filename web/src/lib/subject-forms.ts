@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { todayIso } from "@/lib/dates";
 import {
+  SERIES_STATUSES,
   STATUS_BY_TYPE,
   defaultStatus,
   pickApplicableAttrs,
@@ -214,12 +215,29 @@ const CONFIG: Partial<Record<SubjectType, TypeFormConfig>> = {
     fields: [
       { key: "description", label: "Description", kind: "textarea" },
       statusField(),
-      { key: "due", label: "Due date", kind: "date", hint: "A real deadline. Independent of Scheduled." },
+      // A repeating Task's dates are its repetitions' (TASKS-3): each is dated from the pattern.
+      {
+        key: "due",
+        label: "Due date",
+        kind: "date",
+        hint: "A real deadline. Independent of Scheduled.",
+        hideWhen: isSeriesForm,
+      },
       {
         key: "scheduled",
         label: "Scheduled / do date",
         kind: "date",
         hint: "When you intend to work on it. Never copies Due.",
+        hideWhen: isSeriesForm,
+      },
+      // One repetition takes its series' pattern; the pattern is changed on the series.
+      { key: "recurrence", label: "Repeat", kind: "recurrence", hideWhen: isRepetitionForm },
+      {
+        key: "start",
+        label: "Repeats from",
+        kind: "date",
+        hint: "The first date it repeats from. Empty: its due date, or today.",
+        hideWhen: (v) => !isSeriesForm(v),
       },
       areaField(),
       {
@@ -416,6 +434,27 @@ const FALLBACK: TypeFormConfig = {
     areaField(),
   ],
 };
+
+/** The form is a repeating Task's series (D16): a Task with a pattern that isn't one repetition. */
+export function isSeriesForm(values: SubjectFormValues): boolean {
+  return values.type === "Task" && !!values.attrs.recurrence && !values.attrs.series;
+}
+
+/** The form is one repetition of a repeating Task: it carries its series' urn. */
+export function isRepetitionForm(values: SubjectFormValues): boolean {
+  return values.type === "Task" && !!values.attrs.series;
+}
+
+/**
+ * The statuses the form offers: a repeating Task is Not started while it repeats or Cancelled
+ * to stop it, its repetitions being the ones done or missed. The status it has stays listed.
+ */
+export function statusOptionsFor(type: SubjectType, values: SubjectFormValues): string[] {
+  const all = STATUS_BY_TYPE[type] ?? [];
+  if (!isSeriesForm(values)) return all;
+  const series: string[] = [...SERIES_STATUSES];
+  return values.status && !series.includes(values.status) ? [...series, values.status] : series;
+}
 
 export function formConfig(type: SubjectType): TypeFormConfig {
   return CONFIG[type] ?? { ...FALLBACK, type, hasStatus: (STATUS_BY_TYPE[type]?.length ?? 0) > 0 };

@@ -170,6 +170,7 @@ export function BountySection({
   onChange,
   editing,
   startOpen = false,
+  note,
 }: {
   idPrefix: string;
   type: SubjectType;
@@ -178,6 +179,8 @@ export function BountySection({
   onChange: (next: BountyDraft) => void;
   editing: boolean;
   startOpen?: boolean;
+  /** A line under the heading: where the price comes from (a repeating Task's, TASKS-3). */
+  note?: string;
 }) {
   const [open, setOpen] = useState(startOpen);
   if (lines.length === 0) return null;
@@ -200,6 +203,7 @@ export function BountySection({
           </Button>
         ) : null}
       </div>
+      {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
       {showEditor ? (
         <BountyEditor idPrefix={idPrefix} type={type} lines={lines} draft={draft} onChange={onChange} />
       ) : (

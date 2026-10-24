@@ -158,10 +158,16 @@ export function NewSubjectDialog({
     if (initialStatus && initialStatus !== defaultStatus(t)) {
       await writes.setStatus(created.id, initialStatus);
     }
-    // The repeat pattern is its own write (D8, POST /api/recur), not a string attribute.
+    // The repeat pattern is its own write (D8, POST /api/recur), not a string attribute. A
+    // Task's start, the first date it repeats from, goes with it and makes its first
+    // repetition (TASKS-3).
     const recurrence = hasRecurrenceField(t) ? parseRecurrence(values.attrs.recurrence) : null;
     if (recurrence) {
-      await writes.recur(created.id, recurrence);
+      await writes.recur(
+        created.id,
+        recurrence,
+        t === "Task" && values.attrs.start ? { start: values.attrs.start } : undefined,
+      );
     }
     if (values.tags.trim()) {
       const tags = splitTags(values.tags);

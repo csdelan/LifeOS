@@ -48,8 +48,11 @@ function normalize(o: Record<string, unknown>): RecurrenceSpec | null {
     case "interval": {
       const every = wholeNumber(o.every);
       const unit = INTERVAL_UNITS.find((u) => u === o.unit);
-      return every && every >= 1 && unit ? { freq: "interval", every, unit } : null;
+      if (!every || every < 1 || !unit) return null;
+      return o.from === "completion" ? { freq: "interval", every, unit, from: "completion" } : { freq: "interval", every, unit };
     }
+    case "each":
+      return o.period === "week" ? { freq: "each", period: "week" } : null;
     case "monthly": {
       const day = wholeNumber(o.day);
       if (day && day >= 1 && day <= 31) return { freq: "monthly", day };
@@ -98,7 +101,9 @@ export function serializeRecurrence(spec: RecurrenceSpec): string {
   if (spec.freq === "interval") {
     out.every = spec.every;
     out.unit = spec.unit;
+    if (spec.from === "completion") out.from = "completion";
   }
+  if (spec.freq === "each") out.period = spec.period ?? "week";
   if (spec.freq === "monthly") {
     if (spec.day) out.day = spec.day;
     else out.on = "last";
@@ -121,7 +126,10 @@ function ordinal(n: number): string {
   return `${n}${({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th"}`;
 }
 
-/** A short plain reading: "Daily", "Every Wednesday", "Every 30 days", "Monthly on the 1st". */
+/**
+ * A short plain reading: "Daily", "Every Wednesday", "Every 30 days", "Monthly on the 1st",
+ * "Once each week", "30 days after the last one's done".
+ */
 export function recurrenceLabel(spec: RecurrenceSpec): string {
   switch (spec.freq) {
     case "daily":
@@ -137,9 +145,14 @@ export function recurrenceLabel(spec: RecurrenceSpec): string {
     case "interval": {
       const n = Math.max(1, spec.every ?? 1);
       const unit = spec.unit ?? "days";
+      if (spec.from === "completion") {
+        return `${n === 1 ? `A ${unit.slice(0, -1)}` : `${n} ${unit}`} after the last one's done`;
+      }
       if (n === 1) return unit === "days" ? "Every day" : `Every ${unit.slice(0, -1)}`;
       return `Every ${n} ${unit}`;
     }
+    case "each":
+      return "Once each week";
     case "monthly":
       return spec.day ? `Monthly on the ${ordinal(spec.day)}` : "Monthly on the last day";
     case "trigger":
@@ -148,7 +161,7 @@ export function recurrenceLabel(spec: RecurrenceSpec): string {
 }
 
 /** Months added the way Postgres adds them: the day clamps to the month's last day. */
-function addMonthsClamped(iso: string, months: number): string {
+export function addMonthsClamped(iso: string, months: number): string {
   const [y, m, d] = iso.split("-").map(Number);
   const first = new Date(y, m - 1 + months, 1);
   const yy = first.getFullYear();
@@ -159,8 +172,8 @@ function addMonthsClamped(iso: string, months: number): string {
 
 /**
  * Whether `iso` is one of the pattern's dates, the way `bsk.recurrence_occurrences` expands
- * it: an interval counts from `start`; a monthly day skips months without it; a cue has no
- * dates.
+ * it: an interval counts from `start`; a monthly day skips months without it; a cue, once
+ * each week and an interval after the last completion have no dates of their own.
  */
 export function isOccurrenceDate(
   spec: RecurrenceSpec,
@@ -180,8 +193,10 @@ export function isOccurrenceDate(
       return spec.day ? dom === spec.day : dom === daysInMonth(iso);
     }
     case "trigger":
+    case "each":
       return false;
     case "interval": {
+      if (spec.from === "completion") return false;
       if (!start) return true;
       const every = Math.max(1, spec.every ?? 1);
       const unit = spec.unit ?? "days";

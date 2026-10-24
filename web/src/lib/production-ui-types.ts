@@ -87,7 +87,8 @@ export function shortIdOf(urn: string): string {
 export const STATUS_BY_TYPE: Partial<Record<SubjectType, string[]>> = {
   Goal:        ["New", "Active", "Completed", "Abandoned"],
   Project:     ["New", "Active", "Completed", "Abandoned"],
-  Task:        ["Not started", "In progress", "Waiting", "Completed", "Cancelled"],
+  // Missed closes a late repetition of a repeating Task without paying (TASKS-3); any Task may take it.
+  Task:        ["Not started", "In progress", "Waiting", "Completed", "Missed", "Cancelled"],
   Commitment:  ["Open", "Fulfilled", "Missed", "Cancelled"],
   Decision:    ["Open", "Implementing", "Cancelled", "Closed"],
   Problem:     ["Open", "Working", "Resolved", "Cancelled"],
@@ -97,6 +98,9 @@ export const STATUS_BY_TYPE: Partial<Record<SubjectType, string[]>> = {
   Habit:       ["Building", "Established", "Abandoned"],
   // Value (Identity Statement), Area, Person: no status workflow.
 };
+
+/** A repeating Task's own statuses (D16): Not started while it repeats, Cancelled to stop it. */
+export const SERIES_STATUSES = ["Not started", "Cancelled"] as const;
 
 /** Statuses that drop an item from default views (terminal). */
 export const TERMINAL_STATUSES = new Set([
@@ -188,16 +192,20 @@ export type AdherenceState = "unrecorded" | "followed" | "partial" | "not_follow
  * A repeat pattern in the kernel's own shape (D8): what `attributes.recurrence` holds and
  * `POST /api/recur` takes, so `bsk.recurrence_occurrences` can expand it.
  */
-export type RecurrenceFreq = "daily" | "weekly" | "interval" | "monthly" | "trigger";
+export type RecurrenceFreq = "daily" | "weekly" | "interval" | "monthly" | "trigger" | "each";
 export type WeekdayToken = "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat";
 export type IntervalUnit = "days" | "weeks" | "months";
 export interface RecurrenceSpec {
   freq: RecurrenceFreq;
   /** weekly: the weekdays, Sunday first; monthly: `["last"]` for the month's last day. */
   on?: string[];
-  /** interval: how many units between repeats, counted from the start date. */
+  /** interval: how many units between repeats, counted from the start date (or the last completion). */
   every?: number;
   unit?: IntervalUnit;
+  /** interval, Tasks only (TASKS-3): `"completion"` counts each from the day the last one closed. */
+  from?: "completion";
+  /** each, Tasks only (TASKS-3): once each week on any day (do-date Monday, due Sunday). */
+  period?: "week";
   /** monthly: the day of the month (1–31); a month without that day is skipped. */
   day?: number;
   /** trigger: the cue that prompts it (no scheduled dates). */
@@ -259,6 +267,14 @@ export interface SubjectListItem {
   bounty?: Amounts | null;
   /** Its cover photo (COVER-1); null when it has none, always for a type that can't have one. */
   cover?: CoverRead | null;
+  /** A repeating Task's series (D16): left out of the lists unless asked for (`includeSeries`). */
+  isSeries?: boolean;
+  /** A repetition of a repeating Task: its series' id. */
+  seriesId?: string | null;
+  /** A repetition: the date it stands for (`YYYY-MM-DD`). */
+  occurrence?: string | null;
+  /** A series or a repetition: the series' pattern, as text (`parseRecurrence` reads it). */
+  repeat?: string | null;
 }
 
 /** Detail-pane header for one subject, plus the raw attributes JSON. */
@@ -281,8 +297,92 @@ export interface SubjectDetail {
   attributes?: string | null;  // raw attributes jsonb as text
   /** What each trigger pays (REWARD-2); null for a type that doesn't earn. */
   bounty?: BountyLine[] | null;
+  /** A repetition without a price of its own: `bounty` is its series' (D16). */
+  bountyFromSeries?: boolean;
+  /** The repeating Task it is, or belongs to (TASKS-3); null for anything else. */
+  repeating?: TaskRepeat | null;
   /** Its cover photo (COVER-1); null when it has none, always for a type that can't have one. */
   cover?: CoverRead | null;
+}
+
+// ---------------------------------------------------------------------------
+// Repeating Tasks (TASKS-3, D16; recurring-tasks plan §7). A series is a Task holding the
+// pattern, the start and the price; each repetition is an ordinary Task for one date.
+// ---------------------------------------------------------------------------
+
+/** A repeating Task's counts: its repetitions open, done, missed and cancelled, and what's next. */
+export interface TaskSeriesCounts {
+  openCount: number;
+  completedCount: number;
+  missedCount: number;
+  cancelledCount: number;
+  /** The last day one was completed. */
+  lastCompletedOn?: string | null;
+  /** The earliest due date of an open one. */
+  nextDue?: string | null;
+  /** The latest date one was made for. */
+  latestOccurrence?: string | null;
+}
+
+/** The repeating Task a Task is (`isSeries`) or belongs to, on its detail. */
+export interface TaskRepeat extends TaskSeriesCounts {
+  isSeries: boolean;
+  seriesId: string;
+  seriesUrn: string;
+  seriesTitle: string;
+  /** The pattern, as text. */
+  recurrence: string;
+  /** The first date it repeats from. */
+  start?: string | null;
+  seriesStatus?: string | null;
+  /** Cancelled or archived: it makes no more. */
+  stopped: boolean;
+  /** On a repetition: the date it stands for. */
+  occurrence?: string | null;
+}
+
+/** One repeating Task (`GET /api/tasks/series`). */
+export interface TaskSeriesRow extends TaskSeriesCounts {
+  id: string;
+  urn: string;
+  title: string;
+  recurrence: string;
+  start?: string | null;
+  status?: string | null;
+  archived: boolean;
+  stopped: boolean;
+  area?: string | null;
+  areaName?: string | null;
+  /** What completing a repetition pays. */
+  bounty?: Amounts | null;
+}
+
+/** One repetition, as a series' history lists it. */
+export interface TaskRepetitionRow {
+  id: string;
+  urn: string;
+  title: string;
+  occurrence?: string | null;
+  due?: string | null;
+  scheduled?: string | null;
+  status?: string | null;
+  /** Completed, Missed or Cancelled. */
+  closed: boolean;
+  /** The day it closed. */
+  closedOn?: string | null;
+  archived: boolean;
+}
+
+/** A repeating Task and every repetition it made, latest first (`GET /api/tasks/series/{id}`). */
+export interface TaskSeriesHistory {
+  series: TaskSeriesRow;
+  repetitions: TaskRepetitionRow[];
+}
+
+/** What a settle made (`POST /api/tasks/settle`): how many series it looked at, and the repetitions. */
+export interface TaskSettleResult {
+  series: number;
+  made: CreatedSubject[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1541,8 +1641,16 @@ export interface LifeOsWriteClient {
   syncActivity(force?: boolean): Promise<ActivitySyncResult>;
   /** Set a workout's one-line note (at most 140 characters); `""` clears it. */
   setWorkoutNote(workout: string, text: string): Promise<WorkoutRow>;
-  /** Set a subject's repeat pattern (D8, `POST /api/recur`); `null` clears it. */
-  recur(subject: string, spec: RecurrenceSpec | null): Promise<void>;
+  /**
+   * Set a subject's repeat pattern (D8, `POST /api/recur`); `null` clears it. A Task's `start`
+   * is the first date it repeats from (TASKS-3); setting one makes its first repetition.
+   */
+  recur(subject: string, spec: RecurrenceSpec | null, opts?: { start?: string }): Promise<void>;
+  /**
+   * Make the repetitions every repeating Task is owed by today (`POST /api/tasks/settle`),
+   * which the Tasks and Focus pages do when they open. Changes no status.
+   */
+  settleTasks(): Promise<TaskSettleResult>;
   involve(subject: string, person: string, role: PersonRole, remove?: boolean): Promise<void>;
   /** Drive a Task's timer (TASKS-2). Starting or resuming pauses any other running timer. */
   timer(task: string, action: TimerAction): Promise<TimerActionResult>;

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SubjectDetail } from "@/components/detail/subject-detail";
 import { CreateActions } from "@/components/create/create-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getState, resetStore } from "@/lib/mock/store";
+import { getState, mockTaskSeriesHistory, resetStore } from "@/lib/mock/store";
 import { tagUniverse } from "@/lib/mock/seed";
 
 vi.mock("sonner", () => ({
@@ -139,6 +139,48 @@ describe("SubjectDetail task timer", () => {
     renderDetail("goal-lifeos");
     await screen.findByRole("heading", { name: /Ship LifeOS production UI/i }, { timeout: 4000 });
     expect(screen.queryByRole("region", { name: "Timer" })).not.toBeInTheDocument();
+  });
+});
+
+describe("SubjectDetail repeating tasks (TASKS-3)", () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  function openTrash() {
+    const open = mockTaskSeriesHistory("task-trash")!.repetitions.find((r) => !r.closed)!;
+    return open.id;
+  }
+
+  it("says how a repetition repeats, lists the history, and marks it missed", async () => {
+    const user = userEvent.setup();
+    const id = openTrash();
+    renderDetail(id);
+    const panel = await screen.findByRole("region", { name: "Repeats" }, { timeout: 4000 });
+    expect(within(panel).getByText("Every Wednesday")).toBeInTheDocument();
+    expect(within(panel).getByText(/of \d+ done/)).toBeInTheDocument();
+    const list = await within(panel).findByRole("list", { name: "Repetitions" }, { timeout: 4000 });
+    expect(within(list).getByText("This one")).toBeInTheDocument();
+    expect(within(list).getAllByText("Missed").length).toBeGreaterThanOrEqual(1);
+    // Its price is the series'.
+    expect(screen.getByText(/The repeating task's price/)).toBeInTheDocument();
+
+    await user.click(within(panel).getByRole("button", { name: "Mark missed" }));
+    await waitFor(() => expect(getState().details[id]?.status).toBe("Missed"), { timeout: 4000 });
+    // The next one was made.
+    expect(mockTaskSeriesHistory("task-trash")!.repetitions.filter((r) => !r.closed)).toHaveLength(1);
+  });
+
+  it("offers Stop repeating on the series, which has no timer", async () => {
+    const user = userEvent.setup();
+    renderDetail("task-trash");
+    const panel = await screen.findByRole("region", { name: "Repeats" }, { timeout: 4000 });
+    expect(screen.queryByRole("region", { name: "Timer" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Every repetition pays this/)).toBeInTheDocument();
+
+    await user.click(within(panel).getByRole("button", { name: "Stop repeating" }));
+    await waitFor(() => expect(getState().details["task-trash"]?.status).toBe("Cancelled"), { timeout: 4000 });
+    expect(await within(panel).findByRole("button", { name: "Repeat again" }, { timeout: 4000 })).toBeInTheDocument();
   });
 });
 

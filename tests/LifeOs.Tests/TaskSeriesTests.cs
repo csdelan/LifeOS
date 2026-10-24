@@ -355,13 +355,23 @@ public sealed class TaskSeriesTests(PostgresFixture postgres)
         Assert.Equal(new Dictionary<string, long> { [Currencies.Xp] = 3 }, award.Amounts);
         Assert.Empty(done.Repetitions);
 
-        // A repetition priced on its own pays its own.
+        // A repetition reads the series' price, and one priced on its own starts from it.
         var tomorrow = await RepetitionAsync(k, series, RealToday.AddDays(1));
+        var read = await k.Bounties.GetAsync(tomorrow.Urn, Ct);
+        Assert.Equal(
+            new Dictionary<string, long> { [Currencies.Xp] = 3 },
+            read.Lines.Single(l => l.Trigger == BountyTriggers.Completed).Amounts);
+        var priced = await k.Bounties.SetAsync(
+            tomorrow.Urn, BountyTriggers.Completed,
+            new Dictionary<string, long> { [Currencies.Karma] = 1 }, cancellationToken: Ct);
+        Assert.Equal(
+            new Dictionary<string, long> { [Currencies.Xp] = 3, [Currencies.Karma] = 1 },
+            priced.Lines.Single(l => l.Trigger == BountyTriggers.Completed).Amounts);
         await k.Bounties.SetAsync(
             tomorrow.Urn, BountyTriggers.Completed,
-            new Dictionary<string, long> { [Currencies.Freedom] = 0, [Currencies.Xp] = 7 }, cancellationToken: Ct);
+            new Dictionary<string, long> { [Currencies.Karma] = 0, [Currencies.Xp] = 7 }, cancellationToken: Ct);
         var own = await k.Status.ChangeStatusAsync(tomorrow.Urn, "Completed", Ct);
-        Assert.Equal(7, Assert.Single(own.Awards).Amounts[Currencies.Xp]);
+        Assert.Equal(new Dictionary<string, long> { [Currencies.Xp] = 7 }, Assert.Single(own.Awards).Amounts);
 
         // The series' price changed: the next one done pays the new price.
         await k.Bounties.SetAsync(

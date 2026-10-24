@@ -9,6 +9,7 @@ import { CardSkeleton, ListSkeleton } from "@/components/primitives/skeletons";
 import { AdherenceButtons } from "@/components/habits/adherence-buttons";
 import { MaintainingGroup } from "@/components/habits/maintaining-group";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
+import { useTaskSettleOnOpen } from "@/components/tasks/use-task-settle-on-open";
 import { cn } from "@/lib/utils";
 import { useDashboard, useWrites } from "@/lib/queries";
 import { todayIso } from "@/lib/dates";
@@ -20,6 +21,8 @@ export function FocusPage() {
   const { data, isLoading, isError } = useDashboard();
   const writes = useWrites();
   const navigate = useNavigate();
+  // A repeating Task's date that passed while the app was closed gets its repetition (TASKS-3).
+  useTaskSettleOnOpen();
 
   if (isLoading) {
     return (

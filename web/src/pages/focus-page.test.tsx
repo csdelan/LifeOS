@@ -7,6 +7,7 @@ import type { CoverRead, HabitOccurrenceRow, SubjectListItem } from "@/lib/produ
 import { FocusPage } from "@/pages/focus-page";
 
 const adhere = vi.fn();
+const settleTasks = vi.fn(() => Promise.resolve({ series: 0, made: [] }));
 
 function row(name: string, occurrenceDate: string): HabitOccurrenceRow {
   return {
@@ -35,7 +36,7 @@ let dashboard: DashboardRead = base;
 
 vi.mock("@/lib/queries", () => ({
   useDashboard: () => ({ data: dashboard, isLoading: false, isError: false }),
-  useWrites: () => ({ adhere }),
+  useWrites: () => ({ adhere, settleTasks }),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -60,6 +61,13 @@ describe("FocusPage habit check-offs", () => {
       ["walk", "followed", { on: "2026-10-20" }],
       ["floss", "followed", { on: "2026-10-20" }],
     ]);
+  });
+
+  it("catches up repeating tasks once when it opens (TASKS-3)", () => {
+    settleTasks.mockClear();
+    const { rerender } = render(<FocusPage />);
+    rerender(<FocusPage />);
+    expect(settleTasks).toHaveBeenCalledTimes(1);
   });
 });
 

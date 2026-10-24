@@ -286,7 +286,7 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       throw new Error("Voice capture is not on the live API yet.");
     },
 
-    async recur(subject, spec) {
+    async recur(subject, spec, opts) {
       await unwrap(
         api().POST("/api/recur", {
           body: {
@@ -299,11 +299,19 @@ export function createLiveWriteClient(): LifeOsWriteClient {
                   unit: spec.unit ?? null,
                   day: spec.day ?? null,
                   cue: spec.cue ?? null,
+                  period: spec.period ?? null,
+                  from: spec.from ?? null,
                 }
               : null,
+            start: opts?.start ?? null,
           },
         }),
       );
+    },
+
+    async settleTasks() {
+      const read = await unwrap(api().POST("/api/tasks/settle"));
+      return { series: Number(read.series) || 0, made: (read.made ?? []) as CreatedSubject[] };
     },
 
     async saveReview(_id, _body) {

@@ -50,6 +50,7 @@ import {
   renameTag,
   saveReviewBody,
   setRecurrence,
+  mockSettleTasks,
   setTags,
 } from "@/lib/mock/store";
 import { getState } from "@/lib/mock/store";
@@ -296,10 +297,17 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       return row;
     },
 
-    async recur(subject, spec) {
+    async recur(subject, spec, opts) {
       await wait();
-      setRecurrence(subject, spec);
+      setRecurrence(subject, spec, opts?.start);
       bump();
+    },
+
+    async settleTasks() {
+      await wait();
+      const result = mockSettleTasks();
+      if (result.made.length > 0) bump();
+      return result;
     },
 
     async timer(task, action) {

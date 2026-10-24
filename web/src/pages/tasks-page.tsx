@@ -18,6 +18,8 @@ import { useCreateActions } from "@/components/create/create-context";
 import { useDirty } from "@/components/shell/app-shell";
 import { PeekPanel } from "@/components/shell/panels";
 import { TimerChip } from "@/components/timer/task-timer";
+import { SeriesList } from "@/components/tasks/series-list";
+import { useTaskSettleOnOpen } from "@/components/tasks/use-task-settle-on-open";
 import {
   useAlignmentEdges,
   useAreas,
@@ -68,6 +70,9 @@ export function TasksPage() {
   const [entryError, setEntryError] = useState<string | null>(null);
   const entryRef = useRef<HTMLInputElement>(null);
   const today = todayIso();
+  // A repeating Task's date that passed while the app was closed gets its repetition (TASKS-3).
+  useTaskSettleOnOpen();
+  const repeatingView = filters.status === "repeating";
 
   // A saved tag filter whose tag was renamed (or is no longer used) falls back to
   // "Any tag" rather than silently hiding every task.
@@ -161,8 +166,8 @@ export function TasksPage() {
           <p className="type-scale-section text-primary">Tasks</p>
           <h1 className="font-heading text-2xl">Working view</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            Overdue, Today, Upcoming, Unscheduled. Each task once. Title-only Enter creates a
-            standalone Task.
+            Overdue, Today, Upcoming, Unscheduled. Each task once; a repeating task shows its
+            current repetition. Title-only Enter creates a standalone Task.
           </p>
           <form
             className="mt-3 flex gap-2"
@@ -200,6 +205,7 @@ export function TasksPage() {
               options={[
                 { value: "active", label: "Active" },
                 { value: "all", label: "All" },
+                { value: "repeating", label: "Repeating" },
                 ...(STATUS_BY_TYPE.Task ?? []).map((s) => ({ value: s, label: s })),
               ]}
             />
@@ -258,40 +264,46 @@ export function TasksPage() {
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          {isLoading ? <ListSkeleton rows={8} /> : null}
-          {isError ? (
-            <EmptyState
-              tone="error"
-              icon={ListTodoIcon}
-              title="Tasks failed to load"
-              description="This is not an empty list — the reader never returned."
-            />
-          ) : null}
-          {!isLoading && filtered.length === 0 ? (
-            <EmptyState
-              icon={ListTodoIcon}
-              title="No tasks in this filter"
-              description="Clear filters or add a title above."
-            />
-          ) : null}
-          {TASK_GROUPS.map((g) =>
-            grouped[g].length === 0 ? null : (
-              <section key={g} className="mb-5">
-                <h2 className="type-scale-section mb-1 px-2 text-muted-foreground">
-                  {TASK_GROUP_LABEL[g]}
-                  <span className="ml-2 tabular-nums">{grouped[g].length}</span>
-                </h2>
-                {grouped[g].map((item) => (
-                  <ListRow
-                    key={item.id}
-                    item={item}
-                    selected={selected === item.id}
-                    onSelect={() => select(item.id)}
-                    trailing={<TimerChip timer={timerById.get(item.id)} />}
-                  />
-                ))}
-              </section>
-            ),
+          {repeatingView ? (
+            <SeriesList area={filters.area} selected={selected} onSelect={select} />
+          ) : (
+            <>
+              {isLoading ? <ListSkeleton rows={8} /> : null}
+              {isError ? (
+                <EmptyState
+                  tone="error"
+                  icon={ListTodoIcon}
+                  title="Tasks failed to load"
+                  description="This is not an empty list — the reader never returned."
+                />
+              ) : null}
+              {!isLoading && filtered.length === 0 ? (
+                <EmptyState
+                  icon={ListTodoIcon}
+                  title="No tasks in this filter"
+                  description="Clear filters or add a title above."
+                />
+              ) : null}
+              {TASK_GROUPS.map((g) =>
+                grouped[g].length === 0 ? null : (
+                  <section key={g} className="mb-5">
+                    <h2 className="type-scale-section mb-1 px-2 text-muted-foreground">
+                      {TASK_GROUP_LABEL[g]}
+                      <span className="ml-2 tabular-nums">{grouped[g].length}</span>
+                    </h2>
+                    {grouped[g].map((item) => (
+                      <ListRow
+                        key={item.id}
+                        item={item}
+                        selected={selected === item.id}
+                        onSelect={() => select(item.id)}
+                        trailing={<TimerChip timer={timerById.get(item.id)} />}
+                      />
+                    ))}
+                  </section>
+                ),
+              )}
+            </>
           )}
         </div>
       </div>
@@ -308,6 +320,7 @@ export function TasksPage() {
           <SubjectDetail
             subjectId={selected}
             onDirtyChange={setDirty}
+            onOpenSubject={select}
             onClose={() =>
               requestNavigation(() =>
                 void navigate({ search: { selected: undefined } }),

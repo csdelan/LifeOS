@@ -87,6 +87,9 @@ import type {
   SubjectDetail,
   SubjectListItem,
   SubjectType,
+  TaskSeriesHistory,
+  TaskSeriesRow,
+  TaskSettleResult,
   TaskTimer,
   TimerAction,
   TimerActionResult,
@@ -122,6 +125,24 @@ import {
 } from "@/lib/domain-fold";
 import { applyStreakToHabit } from "@/lib/habit-streak";
 import { serializeRecurrence } from "@/lib/recurrence";
+import { taskPatternProblem } from "@/lib/task-series";
+import {
+  COPIED_KEYS,
+  afterPattern,
+  checkSeriesStatus,
+  copiedValues,
+  ensureSeries,
+  guardPattern,
+  isSeries,
+  openRepetitionIds,
+  repeatOf,
+  repetitionRows,
+  seriesOf,
+  seriesRow,
+  setStart,
+  settleAll,
+  valueOf,
+} from "@/lib/mock/task-series";
 import { creditDays, creditedOnFor, foldDomains, localDay } from "@/lib/mock/domain-credit";
 import { CURRENCIES, coinsToUsd, currency, orderedAmounts, shortfall } from "@/lib/rewards";
 import { sobrietyOn } from "@/lib/sobriety";
@@ -332,6 +353,8 @@ export function applyAttrs(subjectId: string, attrs: Record<string, string>) {
   const list = byId(subjectId);
   const detail = state.details[subjectId];
   if (!list || !detail) return;
+  // A repeating Task's edit follows to its open repetitions still holding the old value (D16).
+  const before = isSeries(state, subjectId) ? copiedValues(state, subjectId) : null;
   const next = { ...list };
   const nextDetail = { ...detail };
   // The whole bag, not just its strings: a Reward's price is an object.
@@ -377,6 +400,14 @@ export function applyAttrs(subjectId: string, attrs: Record<string, string>) {
   state.subjects = state.subjects.map((s) => (s.id === subjectId ? next : s));
   state.details[subjectId] = nextDetail;
   syncSpecial(subjectId);
+  if (before) {
+    for (const key of COPIED_KEYS) {
+      if (!(key in attrs) || (attrs[key] || undefined) === before[key]) continue;
+      for (const id of openRepetitionIds(state, list.urn)) {
+        if (valueOf(state, id, key) === before[key]) applyAttrs(id, { [key]: attrs[key] });
+      }
+    }
+  }
 }
 
 function syncSpecial(subjectId: string) {
@@ -452,6 +483,10 @@ export function setStatus(subject: string, status: string): Award[] {
 export function earnStatus(subject: string, status: string): Earned {
   const item = byRef(subject);
   if (!item) return { awards: [], progress: [] };
+  // A repeating Task's series is Not started or Cancelled; moving it back restarts it from today.
+  checkSeriesStatus(state, item.id, status);
+  const series = isSeries(state, item.id) ? item : seriesOf(state, item.id);
+  const restarting = series?.id === item.id && isTerminal(item.status) && !isTerminal(status);
   const occurredAt = nowIso();
   state.subjects = state.subjects.map((s) =>
     s.id === item.id ? { ...s, status } : s,
@@ -463,6 +498,11 @@ export function earnStatus(subject: string, status: string): Earned {
     ...(state.history[item.id] ?? []),
   ];
   const earned = earning(() => reconcileStatus(item.id, occurredAt));
+  // A repetition that closed makes the next (TASKS-3).
+  if (series) {
+    if (restarting) setStart(state, series.id, todayIso());
+    ensureSeries(state, series.id, todayIso());
+  }
   emit();
   return earned;
 }
@@ -493,6 +533,9 @@ export function applyTimer(taskRef: string, action: TimerAction): TimerActionRes
   if (!task) throw new Error(`No subject matches '${taskRef}'.`);
   if (task.type !== "Task") {
     throw new Error(`'${task.title}' is a ${task.type}, not a Task; the timer is kept on Tasks.`);
+  }
+  if (isSeries(state, task.id)) {
+    throw new Error(`'${task.title}' is a repeating task; time one of its repetitions instead.`);
   }
   const current = timerFor(task.id)?.state ?? "stopped";
   const at = nowIso();
@@ -569,6 +612,11 @@ export function archiveSubject(subject: string, archived: boolean) {
       h.id === item.id ? { ...h, archived } : h,
     );
   }
+  // A repeating Task restored from the archive repeats again, from today (D16).
+  if (!archived && isSeries(state, item.id)) {
+    setStart(state, item.id, todayIso());
+    ensureSeries(state, item.id, todayIso());
+  }
   emit();
 }
 
@@ -586,6 +634,10 @@ export function setTags(itemRef: string, add: string[] = [], remove: string[] = 
         ? { ...s, tags: state.tagsByItem[key].join(", ") || null }
         : s,
     );
+    // A repeating Task's tags follow to its open repetitions.
+    if (isSeries(state, item.id)) {
+      for (const id of openRepetitionIds(state, item.urn)) setTags(id, add, remove);
+    }
   }
   emit();
 }
@@ -624,7 +676,10 @@ export function renameSubject(subjectRef: string, rawTitle: string): RenamedSubj
               (s.due ?? "") >= today,
           )
           .map((s) => s.id)
-      : [];
+      : // A repeating Task's open repetitions still carrying the old title follow (D16).
+        isSeries(state, item.id)
+        ? openRepetitionIds(state, item.urn).filter((id) => byId(id)?.title === previousTitle)
+        : [];
   for (const id of [item.id, ...occurrenceIds]) retitle(id, title);
   emit();
   return { id: item.id, title, previousTitle, changed: true, occurrencesRenamed: occurrenceIds.length };
@@ -1128,18 +1183,79 @@ export function earnDay(
   return earned;
 }
 
-/** `bsk recur` / `POST /api/recur` (D8): the pattern is stored as an object; `null` clears it. */
-export function setRecurrence(subjectRef: string, spec: RecurrenceSpec | null) {
+/**
+ * `bsk recur` / `POST /api/recur` (D8): the pattern is stored as an object; `null` clears it.
+ * On a Task it makes a repeating Task (D16): `start` is the first date, and the first
+ * repetition is made (or the open one re-dated). Answers the repetitions made.
+ */
+export function setRecurrence(subjectRef: string, spec: RecurrenceSpec | null, start?: string): CreatedSubject[] {
   const subject = byRef(subjectRef);
   const detail = subject ? state.details[subject.id] : undefined;
   if (!subject || !detail) throw new Error(`No subject matches "${subjectRef}".`);
+  if (subject.type === "Task") {
+    const problem = taskPatternProblem(spec);
+    if (problem) throw new Error(problem);
+    guardPattern(state, subject.id, !spec);
+  } else if (spec && (spec.freq === "each" || spec.from === "completion")) {
+    throw new Error("Once each week, and every N after the last completion, are for Tasks.");
+  }
   const raw = spec ? serializeRecurrence(spec) : null;
   const bag = rawAttrs(detail.attributes);
   if (raw) bag.recurrence = JSON.parse(raw) as unknown;
   else delete bag.recurrence;
   state.details[subject.id] = { ...detail, attributes: JSON.stringify(bag) };
   state.habits = state.habits.map((h) => (h.id === subject.id ? { ...h, recurrence: raw } : h));
+  const made = subject.type === "Task" ? afterPattern(state, subject.id, todayIso(), start) : [];
   emit();
+  return made.map((m) => ({ id: m.id, urn: m.urn, type: m.type, title: m.title }));
+}
+
+/** `POST /api/tasks/settle`: the repetitions every repeating Task is owed by today. */
+export function mockSettleTasks(): TaskSettleResult {
+  const { series, made } = settleAll(state, todayIso());
+  if (made.length > 0) emit();
+  return { series, made: made.map((m) => ({ id: m.id, urn: m.urn, type: m.type, title: m.title })) };
+}
+
+/** `GET /api/tasks/series`: every repeating Task, by title. */
+export function mockTaskSeries(includeArchived = false): TaskSeriesRow[] {
+  return state.subjects
+    .filter((s) => isSeries(state, s.id) && (includeArchived || !s.archived))
+    .map((s) => ({ ...seriesRow(state, s), bounty: withBounty(s).bounty ?? null }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+}
+
+/** `GET /api/tasks/series/{id}`: a repeating Task and its repetitions, latest first. */
+export function mockTaskSeriesHistory(id: string): TaskSeriesHistory | null {
+  const series = byId(id);
+  if (!series || !isSeries(state, id)) return null;
+  return {
+    series: { ...seriesRow(state, series), bounty: withBounty(series).bounty ?? null },
+    repetitions: repetitionRows(state, series.urn),
+  };
+}
+
+/**
+ * A list row's repeating-Task fields (TASKS-3), as the API reads them: whether it's a series,
+ * a repetition's series and date, and the series' pattern.
+ */
+export function withRepeat(item: SubjectListItem): SubjectListItem {
+  if (item.type !== "Task") return item;
+  const series = isSeries(state, item.id) ? item : seriesOf(state, item.id);
+  if (!series) return { ...item, isSeries: false, seriesId: null, occurrence: null, repeat: null };
+  const own = series.id === item.id;
+  return {
+    ...item,
+    isSeries: own,
+    seriesId: own ? null : series.id,
+    occurrence: own ? null : (repeatOf(state, item.id)?.occurrence ?? null),
+    repeat: JSON.stringify(rawAttrs(state.details[series.id]?.attributes).recurrence ?? null),
+  };
+}
+
+/** True when the subject is a repeating Task's series: the lists leave it out unless asked. */
+export function isTaskSeries(id: string): boolean {
+  return isSeries(state, id);
 }
 
 export function ensureReviewDocs(today = todayIso()): ReviewDoc[] {
@@ -1613,12 +1729,20 @@ export type { CanonicalEdge, MockState };
 // click pays only for what it changed.
 // ---------------------------------------------------------------------------
 
+/** The stored bounty: a repetition without its own pays its series' (D16). */
+function bountyOf(subjectId: string): unknown {
+  const own = rawAttrs(state.details[subjectId]?.attributes).bounty;
+  if (own !== undefined) return own;
+  const series = seriesOf(state, subjectId);
+  return series ? rawAttrs(state.details[series.id]?.attributes).bounty : undefined;
+}
+
 function storedBounty(subjectId: string): Record<string, Amounts> {
-  return parseBounty(rawAttrs(state.details[subjectId]?.attributes).bounty);
+  return parseBounty(bountyOf(subjectId));
 }
 
 function storedEveryMinutes(subjectId: string): number | null {
-  return parseEveryMinutes(rawAttrs(state.details[subjectId]?.attributes).bounty);
+  return parseEveryMinutes(bountyOf(subjectId));
 }
 
 function netPaid(awardKey: string): Amounts {
@@ -1961,11 +2085,15 @@ export function withBounty(item: SubjectListItem): SubjectListItem {
 }
 
 export function detailWithBounty(detail: SubjectDetail): SubjectDetail {
+  const repeating = repeatOf(state, detail.id);
   return {
     ...detail,
     bounty: earns(detail.type)
       ? linesFor(detail.type, storedBounty(detail.id), storedEveryMinutes(detail.id))
       : null,
+    bountyFromSeries:
+      !!repeating && !repeating.isSeries && rawAttrs(state.details[detail.id]?.attributes).bounty === undefined,
+    repeating,
   };
 }
 

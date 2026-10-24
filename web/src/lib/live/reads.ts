@@ -20,6 +20,7 @@ import {
 import type { LifeOsReads } from "@/lib/mock/api";
 import { normalizeDomainDays, normalizeDomainReport, normalizeDomains } from "@/lib/domains";
 import { normalizeFoodDay, normalizeFoodDays, normalizeMeal } from "@/lib/food";
+import { normalizeRepeat, normalizeSeriesRow } from "@/lib/task-series";
 import {
   normalizeActivityDays,
   normalizeDayDetail,
@@ -59,6 +60,9 @@ import type {
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
+  TaskRepetitionRow,
+  TaskSeriesHistory,
+  TaskSeriesRow,
   TaskTimer,
   Wallet,
 } from "@/lib/production-ui-types";
@@ -105,6 +109,7 @@ export const liveReads: LifeOsReads = {
           query: {
             type: opts?.type,
             includeArchived: opts?.includeArchived,
+            includeSeries: opts?.includeSeries,
           },
         },
       }),
@@ -120,7 +125,8 @@ export const liveReads: LifeOsReads = {
     if (!response.ok || data === undefined) {
       throw new Error(`API ${response.status}`);
     }
-    return withNormalCover(normalizeDetailBounty(asType<SubjectDetail>(data)));
+    const detail = withNormalCover(normalizeDetailBounty(asType<SubjectDetail>(data)));
+    return { ...detail, repeating: normalizeRepeat(detail.repeating) };
   },
 
   async getListItem(id) {
@@ -225,6 +231,26 @@ export const liveReads: LifeOsReads = {
   async timers() {
     const data = await unwrap(api().GET("/api/timers"));
     return asType<TaskTimer[]>(data).map(normalizeTimer);
+  },
+
+  async taskSeries(opts) {
+    const data = await unwrap(
+      api().GET("/api/tasks/series", { params: { query: { includeArchived: opts?.includeArchived } } }),
+    );
+    return asType<TaskSeriesRow[]>(data).map(normalizeSeriesRow);
+  },
+
+  async taskSeriesHistory(id) {
+    const { data, response } = await api().GET("/api/tasks/series/{id}", { params: { path: { id } } });
+    if (response.status === 404) return null;
+    if (!response.ok || data === undefined) {
+      throw new Error(`API ${response.status}`);
+    }
+    const read = asType<TaskSeriesHistory>(data);
+    return {
+      series: normalizeSeriesRow(read.series),
+      repetitions: asType<TaskRepetitionRow[]>(read.repetitions ?? []),
+    };
   },
 
   async wallet() {

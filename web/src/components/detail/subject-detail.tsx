@@ -11,6 +11,7 @@ import {
   Link2Icon,
   PaperclipIcon,
   PlusIcon,
+  RepeatIcon,
   TagIcon,
   XIcon,
 } from "lucide-react";
@@ -41,6 +42,7 @@ import { ReadyToEstablish } from "@/components/habits/establish-dialog";
 import { BountyChip } from "@/components/rewards/bounty-chip";
 import { BountySection } from "@/components/rewards/bounty-editor";
 import { TaskTimerPanel } from "@/components/timer/task-timer";
+import { RepeatPanel } from "@/components/tasks/repeat-panel";
 import { JournalEditor, looksLikeHtml } from "@/components/journal/journal-editor";
 import { CoverBanner } from "@/components/cover/cover-banner";
 import { CoverPicker } from "@/components/cover/cover-picker";
@@ -83,6 +85,7 @@ import {
 } from "@/lib/establish";
 import { splitTags } from "@/lib/tag-suggest";
 import { parseRecurrence, sameRecurrence } from "@/lib/recurrence";
+import { repeatLabel } from "@/lib/task-series";
 import {
   attrsToWrite,
   emptyFormValues,
@@ -100,10 +103,13 @@ export function SubjectDetail({
   subjectId,
   onDirtyChange,
   onClose,
+  onOpenSubject,
 }: {
   subjectId: string;
   onDirtyChange?: (dirty: boolean) => void;
   onClose?: () => void;
+  /** Opens another subject here: a repeating Task's series, or one of its repetitions. */
+  onOpenSubject?: (id: string) => void;
 }) {
   const { data, isLoading, isError } = useSubject(subjectId);
   const { data: list } = useListItem(subjectId);
@@ -237,10 +243,23 @@ export function SubjectDetail({
     if (nextStatus && nextStatus !== (subject.status || defaultStatus(subject.type))) {
       await writes.setStatus(subject.id, nextStatus);
     }
-    // The repeat pattern is its own write (D8), sent only when it changed.
-    const savedRecurrence = form.formState.defaultValues?.attrs?.recurrence;
-    if (hasRecurrenceField(subject.type) && !sameRecurrence(values.attrs.recurrence, savedRecurrence)) {
-      await writes.recur(subject.id, parseRecurrence(values.attrs.recurrence));
+    // The repeat pattern is its own write (D8), sent only when it changed. A Task's start
+    // (the first date it repeats from) goes with it (TASKS-3).
+    const saved = form.formState.defaultValues?.attrs;
+    const patternChanged = !sameRecurrence(values.attrs.recurrence, saved?.recurrence);
+    const startChanged =
+      subject.type === "Task" && !!values.attrs.recurrence && (values.attrs.start ?? "") !== (saved?.start ?? "");
+    if (hasRecurrenceField(subject.type) && (patternChanged || startChanged)) {
+      try {
+        await writes.recur(
+          subject.id,
+          parseRecurrence(values.attrs.recurrence),
+          subject.type === "Task" && values.attrs.start ? { start: values.attrs.start } : undefined,
+        );
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : "Could not change the repeat.");
+        return;
+      }
     }
     if (subject.type === "Habit") {
       const existing = new Set((rels?.parents ?? []).map((p) => p.subjectId));
@@ -283,6 +302,10 @@ export function SubjectDetail({
 
   const headline = bountyLines[0];
   const coverable = canHaveCover(subject.type);
+  // A repeating Task (TASKS-3): its series holds the pattern; each repetition is the Task done.
+  const repeating = subject.repeating ?? null;
+  const series = !!repeating?.isSeries;
+  const repeats = repeating ? repeatLabel(repeating.recurrence) : null;
   // Each opening of the picker starts afresh from the title.
   function chooseCover() {
     setCoverPicks((n) => n + 1);
@@ -341,10 +364,18 @@ export function SubjectDetail({
                 date={
                   subject.type === "Goal" || subject.type === "Project"
                     ? subject.targetDate
-                    : subject.due
+                    : series
+                      ? repeating?.nextDue
+                      : subject.due
                 }
                 kind={subject.type === "Goal" || subject.type === "Project" ? "target" : "due"}
               />
+              {repeats ? (
+                <span className="inline-flex items-center gap-1 text-[0.75rem] text-muted-foreground">
+                  <RepeatIcon className="size-3" aria-hidden />
+                  {repeats}
+                </span>
+              ) : null}
               {subject.areaName ? (
                 <span className="text-[0.75rem] text-muted-foreground">{subject.areaName}</span>
               ) : null}
@@ -400,7 +431,8 @@ export function SubjectDetail({
             ) : null}
           </div>
         </div>
-        {subject.type === "Task" ? (
+        {/* The series is never worked on itself: its repetitions are timed. */}
+        {subject.type === "Task" && !series ? (
           <TaskTimerPanel
             taskId={subject.id}
             estimate={parseAttrBag(subject.attributes).estimated_duration}
@@ -432,7 +464,10 @@ export function SubjectDetail({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <TabsContent value="overview">
             <div className="space-y-5">
-              <SubjectTypeFields form={form} editing={editing} />
+              <SubjectTypeFields form={form} editing={editing} repeating={repeating} />
+              {repeating ? (
+                <RepeatPanel subjectId={subject.id} repeating={repeating} onOpenSubject={onOpenSubject} />
+              ) : null}
               {subject.type === "Habit" && habit ? (
                 <EstablishmentPanel
                   habit={habit}
@@ -449,6 +484,13 @@ export function SubjectDetail({
                 draft={bountyDraft}
                 onChange={setBountyDraft}
                 editing={editing}
+                note={
+                  series
+                    ? "Every repetition pays this, unless one has a price of its own."
+                    : subject.bountyFromSeries
+                      ? "The repeating task's price. A price set here is for this one only."
+                      : undefined
+                }
               />
               {(files ?? []).length > 0 ? (
                 <section>

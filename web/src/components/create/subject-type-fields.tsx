@@ -14,12 +14,13 @@ import { RecurrenceEditor } from "@/components/create/recurrence-editor";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { DateChip } from "@/components/primitives/date-chip";
 import { useAreas, usePeople, useSubjects } from "@/lib/queries";
-import { STATUS_BY_TYPE, defaultStatus, typeLabel } from "@/lib/production-ui-types";
-import type { SubjectType } from "@/lib/production-ui-types";
+import { defaultStatus, typeLabel } from "@/lib/production-ui-types";
+import type { SubjectType, TaskRepeat } from "@/lib/production-ui-types";
 import {
   NONE,
   areaSelectValue,
   formConfig,
+  statusOptionsFor,
   visibleFields,
   type FieldDef,
   type SubjectFormValues,
@@ -30,9 +31,12 @@ import { cn } from "@/lib/utils";
 export function SubjectTypeFields({
   form,
   editing,
+  repeating,
 }: {
   form: UseFormReturn<SubjectFormValues>;
   editing: boolean;
+  /** The repeating Task this is, or belongs to (TASKS-3): a series that has made one keeps its pattern. */
+  repeating?: TaskRepeat | null;
 }) {
   const type = form.watch("type") as SubjectType;
   const mode = form.watch("mode");
@@ -54,6 +58,7 @@ export function SubjectTypeFields({
           areas={areas ?? []}
           people={people ?? []}
           subjects={allSubjects ?? []}
+          repeating={repeating}
         />
       ))}
     </div>
@@ -68,6 +73,7 @@ function FieldBlock({
   areas,
   people,
   subjects,
+  repeating,
 }: {
   field: FieldDef;
   form: UseFormReturn<SubjectFormValues>;
@@ -76,13 +82,14 @@ function FieldBlock({
   areas: { id: string; urn: string; name: string }[];
   people: { id: string; title: string; personKind?: string | null }[];
   subjects: { id: string; title: string; type: SubjectType; archived: boolean }[];
+  repeating?: TaskRepeat | null;
 }) {
   const error = fieldError(form, field);
   const attr = form.watch(`attrs.${field.key}`) ?? "";
   const cfg = formConfig(type);
 
   if (field.kind === "status") {
-    const statuses = STATUS_BY_TYPE[type] ?? [];
+    const statuses = statusOptionsFor(type, form.watch());
     const status = form.watch("status") || defaultStatus(type);
     if (!cfg.hasStatus || statuses.length === 0) {
       return (
@@ -301,12 +308,18 @@ function FieldBlock({
   }
 
   if (field.kind === "recurrence") {
+    // A repeating Task that has made a repetition stops by being Cancelled, not by losing its pattern.
+    const keepsPattern = !!repeating?.isSeries && !!repeating.latestOccurrence;
     return (
-      <Field label={field.label} hint={field.hint}>
+      <Field
+        label={field.label}
+        hint={editing && keepsPattern ? "To stop it repeating, set its status to Cancelled." : field.hint}
+      >
         {editing ? (
           <RecurrenceEditor
             value={attr}
-            allowNone={type !== "Habit"}
+            allowNone={type !== "Habit" && !keepsPattern}
+            forTask={type === "Task"}
             onChange={(next) => form.setValue(`attrs.${field.key}`, next, { shouldDirty: true })}
           />
         ) : (

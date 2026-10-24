@@ -47,6 +47,8 @@ import type {
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
+  TaskSeriesHistory,
+  TaskSeriesRow,
   TaskTimer,
   Wallet,
 } from "@/lib/production-ui-types";
@@ -75,8 +77,12 @@ import {
   mockDomainDays,
   mockDomainReport,
   mockActivityPaid,
+  isTaskSeries,
+  mockTaskSeries,
+  mockTaskSeriesHistory,
   withBounty,
   withCover,
+  withRepeat,
 } from "@/lib/mock/store";
 import { mockSearchScenes } from "@/lib/mock/covers";
 import {
@@ -108,25 +114,34 @@ function inboxTags(row: InboxItem): string[] {
   return key ? (storeState().tagsByItem[key] ?? []) : [];
 }
 
-function listOf(type?: SubjectListItem["type"], includeArchived = false): SubjectListItem[] {
+function listOf(type?: SubjectListItem["type"], includeArchived = false, includeSeries = false): SubjectListItem[] {
   return storeState()
     .subjects.filter((s) => {
       if (!includeArchived && s.archived) return false;
       if (type && s.type !== type) return false;
+      // A repeating Task's series stays out of the lists: its repetitions are the Tasks (D16).
+      if (!includeSeries && isTaskSeries(s.id)) return false;
       return true;
     })
     .map(listed);
 }
 
-/** A subject as the list reads give it: with its bounty and cover, as the live API does. */
+/** A subject as the list reads give it: with its bounty, cover and repeat, as the live API does. */
 function listed(s: SubjectListItem): SubjectListItem {
-  return withCover(withBounty(s));
+  return withRepeat(withCover(withBounty(s)));
+}
+
+/** Every subject the lists show: the repeating Tasks' series left out, as the live API does. */
+function shown(subjects: SubjectListItem[]): SubjectListItem[] {
+  return subjects.filter((s) => !isTaskSeries(s.id)).map(listed);
 }
 
 export interface LifeOsReads {
+  /** Subjects by type; a repeating Task's series only with `includeSeries` (TASKS-3). */
   listSubjects(opts?: {
     type?: SubjectListItem["type"];
     includeArchived?: boolean;
+    includeSeries?: boolean;
   }): Promise<SubjectListItem[]>;
   getSubject(id: string): Promise<SubjectDetail | null>;
   getListItem(id: string): Promise<SubjectListItem | null>;
@@ -159,6 +174,10 @@ export interface LifeOsReads {
   occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]>;
   /** Every timed Task's timer (TASKS-2), running first. Archived tasks are left out. */
   timers(): Promise<TaskTimer[]>;
+  /** Every repeating Task (TASKS-3), by title, with its repetitions counted. */
+  taskSeries(opts?: { includeArchived?: boolean }): Promise<TaskSeriesRow[]>;
+  /** A repeating Task (by the series' id) and its repetitions, latest first; null when it isn't one. */
+  taskSeriesHistory(id: string): Promise<TaskSeriesHistory | null>;
   /** Every currency's balance (REWARD-1), and what a Coin is worth. */
   wallet(): Promise<Wallet>;
   /** Every life domain's progression (REWARD-6 / REWARD-7, xp-domains plan §3.11). */
@@ -231,9 +250,10 @@ export const mockReads: LifeOsReads = {
   async listSubjects(opts?: {
     type?: SubjectListItem["type"];
     includeArchived?: boolean;
+    includeSeries?: boolean;
   }): Promise<SubjectListItem[]> {
     await wait();
-    return listOf(opts?.type, opts?.includeArchived);
+    return listOf(opts?.type, opts?.includeArchived, opts?.includeSeries);
   },
 
   async getSubject(id: string): Promise<SubjectDetail | null> {
@@ -245,7 +265,7 @@ export const mockReads: LifeOsReads = {
   async getListItem(id: string): Promise<SubjectListItem | null> {
     await wait();
     const item = storeState().subjects.find((s) => s.id === id);
-    return item ? withCover(withBounty(item)) : null;
+    return item ? listed(item) : null;
   },
 
   async relations(id: string): Promise<SubjectRelations> {
@@ -355,6 +375,16 @@ export const mockReads: LifeOsReads = {
   async timers(): Promise<TaskTimer[]> {
     await wait();
     return listTimers();
+  },
+
+  async taskSeries(opts?: { includeArchived?: boolean }): Promise<TaskSeriesRow[]> {
+    await wait();
+    return mockTaskSeries(opts?.includeArchived);
+  },
+
+  async taskSeriesHistory(id: string): Promise<TaskSeriesHistory | null> {
+    await wait();
+    return mockTaskSeriesHistory(id);
   },
 
   async wallet(): Promise<Wallet> {
@@ -484,7 +514,7 @@ export const mockReads: LifeOsReads = {
     await wait();
     const s = storeState();
     return deriveDashboard({
-      subjects: s.subjects.map(listed),
+      subjects: shown(s.subjects),
       edges: s.edges,
       inboxCount: s.inbox.length,
       habits: mockHabits(),
@@ -501,7 +531,7 @@ export const mockReads: LifeOsReads = {
   }) {
     await wait();
     const s = storeState();
-    return buildAlignmentForest(s.subjects.map(listed), s.edges, opts);
+    return buildAlignmentForest(shown(s.subjects), s.edges, opts);
   },
 };
 
