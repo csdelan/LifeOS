@@ -29,8 +29,24 @@ public sealed class SubjectListItem
     public int? VisionOrder { get; set; }
 
     /// <summary>
+    /// A repeating Task's series (D16). Series stay out of the lists unless asked for
+    /// (<c>includeSeries</c>): their repetitions are the Tasks to do.
+    /// </summary>
+    public bool IsSeries { get; set; }
+
+    /// <summary>On a repetition: the id of the repeating Task it belongs to.</summary>
+    public Guid? SeriesId { get; set; }
+
+    /// <summary>On a repetition: the date it stands for (<c>yyyy-MM-dd</c>).</summary>
+    public string? Occurrence { get; set; }
+
+    /// <summary>On a series or a repetition: the series' pattern, the JSON object D8 stores.</summary>
+    public string? Repeat { get; set; }
+
+    /// <summary>
     /// What completing it (a Habit: following it for a day) pays, currency → amount — its
-    /// own bounty or the type default. Null for a type that doesn't earn (REWARD-2).
+    /// own bounty or the type default; a repetition without its own pays its series'. Null for
+    /// a type that doesn't earn (REWARD-2).
     /// </summary>
     public IReadOnlyDictionary<string, long>? Bounty { get; set; }
 
@@ -60,6 +76,15 @@ public sealed class SubjectDetail
 
     /// <summary>What each trigger pays (REWARD-2); null for a type that doesn't earn.</summary>
     public IReadOnlyList<BountyLineRow>? Bounty { get; set; }
+
+    /// <summary>
+    /// True on a repetition of a repeating Task that has no price of its own: <see cref="Bounty"/>
+    /// is its series' price (D16). Setting a bounty on the repetition prices that one only.
+    /// </summary>
+    public bool BountyFromSeries { get; set; }
+
+    /// <summary>On a repeating Task's series or one of its repetitions: the series and its counts (D16).</summary>
+    public TaskRepeatRead? Repeating { get; set; }
 
     /// <summary>Its cover image (COVER-1), or null — always null for a type that can't have one.</summary>
     public CoverRead? Cover { get; set; }

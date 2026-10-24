@@ -79,6 +79,7 @@ public static class WriteEndpoints
         SubjectService subjects,
         ChildCreationService children,
         TriageService triage,
+        TaskSeriesService taskSeries,
         SubjectReader reader,
         CancellationToken cancellationToken)
     {
@@ -100,6 +101,15 @@ public static class WriteEndpoints
         if (string.IsNullOrWhiteSpace(body.Parent) && !string.IsNullOrWhiteSpace(body.Relation))
         {
             return Results.BadRequest(new ApiError("relation only applies with parent."));
+        }
+
+        // A Task made with a pattern is a repeating Task (D16): one it can't repeat on is refused
+        // before anything is written.
+        if (canonicalType == SubjectTypes.Task
+            && attributes[Recurrence.AttributeKey] is JsonValue pattern
+            && pattern.TryGetValue<string>(out var patternText))
+        {
+            TaskSeries.CheckTaskPattern(Recurrence.Canonicalize(patternText));
         }
 
         SubjectRef created;
@@ -125,6 +135,12 @@ public static class WriteEndpoints
         if (canonicalType is SubjectTypes.Problem or SubjectTypes.Idea)
         {
             await triage.FlagItemAsync(isEvent: false, created.Id, cancellationToken);
+        }
+
+        // Its first repetition, from its start (else its due date or today).
+        if (canonicalType == SubjectTypes.Task)
+        {
+            await taskSeries.AfterPatternAsync(created, cancellationToken: cancellationToken);
         }
 
         return Results.Ok(ToCreated(created));
@@ -225,7 +241,9 @@ public static class WriteEndpoints
     /// <summary>
     /// Sets or clears a subject's recurrence (D8), the HTTP twin of <c>bsk recur</c>. The
     /// pattern is built and checked in <see cref="Recurrence"/> and stored as the object
-    /// the expander reads; no recurrence clears it.
+    /// the expander reads; no recurrence clears it. On a Task it makes a repeating Task (D16)
+    /// repeating from <c>start</c> (else its due date or today), and answers the repetitions
+    /// it made.
     /// </summary>
     private static async Task<IResult> Recur(
         RecurBody body,
@@ -246,9 +264,16 @@ public static class WriteEndpoints
         }
 
         var json = Recurrence.Build(
-            pattern.Freq, pattern.On, pattern.Every, pattern.Unit, pattern.Day, pattern.Cue);
-        var updated = await recurrence.SetAsync(subjectRef, json, cancellationToken);
-        return Results.Ok(new RecurResult { Id = updated.Id, Urn = updated.Urn, Recurrence = json });
+            pattern.Freq, pattern.On, pattern.Every, pattern.Unit, pattern.Day, pattern.Cue,
+            pattern.Period, pattern.From);
+        var updated = await recurrence.SetAsync(subjectRef, json, ParseOccurrence(body.Start), cancellationToken);
+        return Results.Ok(new RecurResult
+        {
+            Id = updated.Subject.Id,
+            Urn = updated.Subject.Urn,
+            Recurrence = updated.Recurrence,
+            Made = updated.Made.Select(ToCreated).ToList()
+        });
     }
 
     private static async Task<IResult> Archive(
@@ -646,18 +671,24 @@ public sealed class StatusBody
     public string Status { get; set; } = "";
 }
 
-/// <summary>A recurrence to set (D8); null clears it.</summary>
+/// <summary>
+/// A recurrence to set (D8); null clears it. <c>start</c> (<c>yyyy-MM-dd</c>) is the date a
+/// repeating Task repeats from (D16); other types take no start here.
+/// </summary>
 public sealed class RecurBody
 {
     public string Subject { get; set; } = "";
     public RecurrenceBody? Recurrence { get; set; }
+    public string? Start { get; set; }
 }
 
 /// <summary>
 /// A recurrence's parts, as <c>bsk recur</c> takes them: <c>freq</c> is daily | weekly |
-/// interval | monthly | trigger; <c>on</c> holds a weekly one's weekdays (sun..sat) or
+/// interval | monthly | trigger | each; <c>on</c> holds a weekly one's weekdays (sun..sat) or
 /// <c>last</c> for a monthly one on the month's last day; <c>every</c> + <c>unit</c>
-/// (days | weeks | months) an interval; <c>day</c> a monthly day (1-31); <c>cue</c> a trigger.
+/// (days | weeks | months) an interval, with <c>from</c> = completion to count from the last
+/// one done (Tasks); <c>day</c> a monthly day (1-31); <c>cue</c> a trigger; <c>period</c>
+/// (week) for once each period on any day (Tasks).
 /// </summary>
 public sealed class RecurrenceBody
 {
@@ -667,14 +698,20 @@ public sealed class RecurrenceBody
     public string? Unit { get; set; }
     public int? Day { get; set; }
     public string? Cue { get; set; }
+    public string? Period { get; set; }
+    public string? From { get; set; }
 }
 
-/// <summary>The subject whose recurrence was set, and the stored recurrence (JSON), null when cleared.</summary>
+/// <summary>
+/// The subject whose recurrence was set, the stored recurrence (JSON, null when cleared), and
+/// for a repeating Task the repetitions it made.
+/// </summary>
 public sealed class RecurResult
 {
     public Guid Id { get; set; }
     public string Urn { get; set; } = "";
     public string? Recurrence { get; set; }
+    public IReadOnlyList<CreatedSubject> Made { get; set; } = [];
 }
 
 public sealed class SubjectBody

@@ -334,7 +334,15 @@ Chris approved all six phases on 2026-10-24.
    - A pattern stored without a start (made with its attributes) gets one the first time it's
      settled: its due date, else that day.
 4. **RT3:** API: the settle endpoint, series fields on list items, the repeat field on
-   create and edit.
+   create and edit. **Done:** `POST /api/tasks/settle`; `GET /api/tasks/series` (each
+   repeating Task with its counts and price) and `GET /api/tasks/series/{id}` (its
+   repetitions, latest first); `POST /api/recur` takes `start`, `period` and `from` and
+   answers the repetitions it made; a Task made through `POST /api/subjects` with a pattern
+   starts repeating (a cue is refused). List items carry `isSeries`, `seriesId`, `occurrence`
+   and `repeat` (the series' pattern), and a repetition's price is its series' unless it has
+   its own. `GET /api/subjects` leaves series out unless `includeSeries=true`, so every page
+   that lists Tasks shows the repetitions only. The detail adds `repeating` (the series and its
+   counts) and `bountyFromSeries`. Tests: `TaskEndpointTests`.
 5. **RT4:** web: the Repeat field, Tasks and Focus, settle on open, the repetition detail,
    the mock store.
 6. **RT5:** the history and review read-outs and the graph node.

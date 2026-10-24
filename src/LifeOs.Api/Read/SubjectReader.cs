@@ -43,38 +43,57 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     public IReadOnlyList<SubjectListItem> GetSubjects(string type, bool includeArchived = false)
         => QuerySubjects(type, includeArchived);
 
-    public IReadOnlyList<SubjectListItem> QuerySubjects(string? type, bool includeArchived = false)
+    // A list row's columns. A repetition of a repeating Task (D16) carries its series, its date
+    // and its series' pattern, and pays its series' price unless it has its own.
+    private const string ListSelect = """
+        SELECT s.id, s.urn, s.type, s.title,
+               c.status,
+               s.attributes->>'due' AS due,
+               s.attributes->>'scheduled' AS scheduled,
+               s.attributes->>'target_date' AS target_date,
+               s.area,
+               a.name AS area_name,
+               (SELECT string_agg(t.tag, ', ' ORDER BY t.tag)
+                FROM bsk.v_item_tag t
+                WHERE t.item_kind = 'subject' AND t.item_id = s.id) AS tags,
+               s.archived,
+               s.created_at,
+               s.expected_cadence,
+               s.next_review_at,
+               s.attributes->>'person_kind' AS person_kind,
+               (s.attributes->>'vision_order')::int AS vision_order,
+               bsk.is_task_series(s.type, s.attributes) AS is_series,
+               ser.id AS series_id,
+               CASE WHEN ser.id IS NOT NULL THEN s.attributes->>'occurrence' END AS occurrence,
+               CASE WHEN bsk.is_task_series(s.type, s.attributes) THEN (s.attributes->'recurrence')::text
+                    WHEN ser.id IS NOT NULL THEN (ser.attributes->'recurrence')::text END AS repeat,
+               coalesce(s.attributes->>'bounty', ser.attributes->>'bounty') AS bounty_json,
+               s.attributes->>'cover' AS cover_json
+        FROM bsk.v_subject s
+        LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = s.id
+        LEFT JOIN bsk.v_area a ON a.urn = s.area
+        LEFT JOIN bsk.v_subject ser
+               ON s.type = 'Task' AND ser.type = 'Task' AND ser.urn = s.attributes->>'series'
+        """;
+
+    /// <summary>
+    /// Subjects of <paramref name="type"/> (every type when null), by title. Archived ones only
+    /// when asked (D9), and a repeating Task's series only when asked: its repetitions are the
+    /// Tasks to do (D16).
+    /// </summary>
+    public IReadOnlyList<SubjectListItem> QuerySubjects(
+        string? type, bool includeArchived = false, bool includeSeries = false)
     {
         using var db = Open();
         return db.Query<SubjectListItem, BountyText, CoverText, SubjectListItem>(
-            """
-            SELECT s.id, s.urn, s.type, s.title,
-                   c.status,
-                   s.attributes->>'due' AS due,
-                   s.attributes->>'scheduled' AS scheduled,
-                   s.attributes->>'target_date' AS target_date,
-                   s.area,
-                   a.name AS area_name,
-                   (SELECT string_agg(t.tag, ', ' ORDER BY t.tag)
-                    FROM bsk.v_item_tag t
-                    WHERE t.item_kind = 'subject' AND t.item_id = s.id) AS tags,
-                   s.archived,
-                   s.created_at,
-                   s.expected_cadence,
-                   s.next_review_at,
-                   s.attributes->>'person_kind' AS person_kind,
-                   (s.attributes->>'vision_order')::int AS vision_order,
-                   s.attributes->>'bounty' AS bounty_json,
-                   s.attributes->>'cover' AS cover_json
-            FROM bsk.v_subject s
-            LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = s.id
-            LEFT JOIN bsk.v_area a ON a.urn = s.area
+            ListSelect + """
             WHERE (@type IS NULL OR s.type = @type)
               AND (@includeArchived OR NOT s.archived)
+              AND (@includeSeries OR NOT bsk.is_task_series(s.type, s.attributes))
             ORDER BY s.title
             """,
             WithHeadline,
-            new { type, includeArchived },
+            new { type, includeArchived, includeSeries },
             splitOn: "bounty_json,cover_json").AsList();
     }
 
@@ -82,30 +101,7 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     {
         using var db = Open();
         return db.Query<SubjectListItem, BountyText, CoverText, SubjectListItem>(
-            """
-            SELECT s.id, s.urn, s.type, s.title,
-                   c.status,
-                   s.attributes->>'due' AS due,
-                   s.attributes->>'scheduled' AS scheduled,
-                   s.attributes->>'target_date' AS target_date,
-                   s.area,
-                   a.name AS area_name,
-                   (SELECT string_agg(t.tag, ', ' ORDER BY t.tag)
-                    FROM bsk.v_item_tag t
-                    WHERE t.item_kind = 'subject' AND t.item_id = s.id) AS tags,
-                   s.archived,
-                   s.created_at,
-                   s.expected_cadence,
-                   s.next_review_at,
-                   s.attributes->>'person_kind' AS person_kind,
-                   (s.attributes->>'vision_order')::int AS vision_order,
-                   s.attributes->>'bounty' AS bounty_json,
-                   s.attributes->>'cover' AS cover_json
-            FROM bsk.v_subject s
-            LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = s.id
-            LEFT JOIN bsk.v_area a ON a.urn = s.area
-            WHERE s.id = @id
-            """,
+            ListSelect + " WHERE s.id = @id",
             WithHeadline,
             new { id },
             splitOn: "bounty_json,cover_json").FirstOrDefault();
@@ -131,12 +127,155 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             new { id });
         if (detail is not null)
         {
-            detail.Bounty = BountyRows.Lines(detail.Type, MemberJsonOf(detail.Attributes, "bounty"));
+            var bountyJson = MemberJsonOf(detail.Attributes, "bounty");
+            if (detail.Type == SubjectTypes.Task && Repeat(db, id) is { } repeat)
+            {
+                detail.Repeating = repeat.Read;
+
+                // A repetition without a price of its own pays its series' (D16).
+                if (!repeat.Read.IsSeries && bountyJson is null)
+                {
+                    bountyJson = repeat.SeriesBountyJson;
+                    detail.BountyFromSeries = true;
+                }
+            }
+
+            detail.Bounty = BountyRows.Lines(detail.Type, bountyJson);
             detail.Cover = CoverOf(detail.Type, MemberJsonOf(detail.Attributes, Cover.AttributeKey));
         }
 
         return detail;
     }
+
+    /// <summary>The repeating Task a Task is (or belongs to), with the series' price; null for a plain Task.</summary>
+    private static (TaskRepeatRead Read, string? SeriesBountyJson)? Repeat(NpgsqlConnection db, Guid id)
+    {
+        var row = db.QueryFirstOrDefault<RepeatRow>(
+            """
+            SELECT (ts.id = t.id) AS is_series,
+                   ts.id AS series_id, ts.urn AS series_urn, ts.title AS series_title,
+                   ts.recurrence::text AS recurrence,
+                   to_char(ts.start_date, 'YYYY-MM-DD') AS start,
+                   ts.status AS series_status, ts.stopped,
+                   CASE WHEN ts.id <> t.id THEN t.attributes->>'occurrence' END AS occurrence,
+                   ts.open_count, ts.completed_count, ts.missed_count, ts.cancelled_count,
+                   to_char(ts.last_completed_on, 'YYYY-MM-DD') AS last_completed_on,
+                   to_char(ts.next_due, 'YYYY-MM-DD') AS next_due,
+                   to_char(ts.latest_occurrence, 'YYYY-MM-DD') AS latest_occurrence,
+                   ser.attributes->>'bounty' AS series_bounty_json
+            FROM bsk.v_subject t
+            JOIN bsk.v_task_series ts ON ts.id = t.id OR ts.urn = t.attributes->>'series'
+            JOIN bsk.v_subject ser ON ser.id = ts.id
+            WHERE t.id = @id AND t.type = 'Task'
+            LIMIT 1
+            """,
+            new { id });
+        return row is null
+            ? null
+            : (new TaskRepeatRead
+            {
+                IsSeries = row.IsSeries,
+                SeriesId = row.SeriesId,
+                SeriesUrn = row.SeriesUrn,
+                SeriesTitle = row.SeriesTitle,
+                Recurrence = row.Recurrence,
+                Start = row.Start,
+                SeriesStatus = row.SeriesStatus,
+                Stopped = row.Stopped,
+                Occurrence = row.Occurrence,
+                OpenCount = row.OpenCount,
+                CompletedCount = row.CompletedCount,
+                MissedCount = row.MissedCount,
+                CancelledCount = row.CancelledCount,
+                LastCompletedOn = row.LastCompletedOn,
+                NextDue = row.NextDue,
+                LatestOccurrence = row.LatestOccurrence
+            }, row.SeriesBountyJson);
+    }
+
+    /// <summary>A <see cref="TaskRepeatRead"/> as read, with the series' bounty alongside.</summary>
+    private sealed class RepeatRow
+    {
+        public bool IsSeries { get; set; }
+        public Guid SeriesId { get; set; }
+        public string SeriesUrn { get; set; } = "";
+        public string SeriesTitle { get; set; } = "";
+        public string Recurrence { get; set; } = "";
+        public string? Start { get; set; }
+        public string? SeriesStatus { get; set; }
+        public bool Stopped { get; set; }
+        public string? Occurrence { get; set; }
+        public long OpenCount { get; set; }
+        public long CompletedCount { get; set; }
+        public long MissedCount { get; set; }
+        public long CancelledCount { get; set; }
+        public string? LastCompletedOn { get; set; }
+        public string? NextDue { get; set; }
+        public string? LatestOccurrence { get; set; }
+        public string? SeriesBountyJson { get; set; }
+    }
+
+    /// <summary>Every repeating Task (D16), by title; archived ones only when asked.</summary>
+    public IReadOnlyList<TaskSeriesRow> GetTaskSeries(bool includeArchived = false)
+    {
+        using var db = Open();
+        return QuerySeries(db, includeArchived, id: null);
+    }
+
+    /// <summary>A repeating Task and every repetition it has made, latest first; null when it isn't one.</summary>
+    public TaskSeriesHistory? GetTaskSeriesHistory(Guid id)
+    {
+        using var db = Open();
+        var series = QuerySeries(db, includeArchived: true, id).FirstOrDefault();
+        if (series is null)
+        {
+            return null;
+        }
+
+        var repetitions = db.Query<TaskRepetitionRow>(
+            """
+            SELECT id, urn, title,
+                   to_char(occurrence, 'YYYY-MM-DD') AS occurrence,
+                   to_char(due, 'YYYY-MM-DD') AS due,
+                   to_char(scheduled, 'YYYY-MM-DD') AS scheduled,
+                   status, closed,
+                   to_char(closed_on, 'YYYY-MM-DD') AS closed_on,
+                   archived
+            FROM bsk.v_task_repetition
+            WHERE series_id = @id
+            ORDER BY occurrence DESC NULLS LAST, created_at DESC
+            """,
+            new { id }).AsList();
+        return new TaskSeriesHistory { Series = series, Repetitions = repetitions };
+    }
+
+    private static List<TaskSeriesRow> QuerySeries(NpgsqlConnection db, bool includeArchived, Guid? id)
+        => db.Query<TaskSeriesRow, BountyText, TaskSeriesRow>(
+            """
+            SELECT ts.id, ts.urn, ts.title,
+                   ts.recurrence::text AS recurrence,
+                   to_char(ts.start_date, 'YYYY-MM-DD') AS start,
+                   ts.status, ts.archived, ts.stopped,
+                   s.area, a.name AS area_name,
+                   ts.open_count, ts.completed_count, ts.missed_count, ts.cancelled_count,
+                   to_char(ts.last_completed_on, 'YYYY-MM-DD') AS last_completed_on,
+                   to_char(ts.next_due, 'YYYY-MM-DD') AS next_due,
+                   to_char(ts.latest_occurrence, 'YYYY-MM-DD') AS latest_occurrence,
+                   s.attributes->>'bounty' AS bounty_json
+            FROM bsk.v_task_series ts
+            JOIN bsk.v_subject s ON s.id = ts.id
+            LEFT JOIN bsk.v_area a ON a.urn = s.area
+            WHERE (@includeArchived OR NOT ts.archived)
+              AND (@id::uuid IS NULL OR ts.id = @id::uuid)
+            ORDER BY ts.title
+            """,
+            (row, bounty) =>
+            {
+                row.Bounty = BountyRows.Headline(SubjectTypes.Task, bounty?.BountyJson);
+                return row;
+            },
+            new { includeArchived, id },
+            splitOn: "bounty_json").AsList();
 
     /// <summary>
     /// The raw <paramref name="key"/> member of an attributes document, as

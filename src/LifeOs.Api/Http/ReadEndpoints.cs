@@ -54,8 +54,13 @@ public static class ReadEndpoints
     private static IResult GetTimers(SubjectReader reader)
         => Results.Ok(reader.GetTimers());
 
-    private static IResult ListSubjects(SubjectReader reader, string? type, bool includeArchived = false)
-        => Results.Ok(reader.QuerySubjects(type, includeArchived));
+    /// <summary>
+    /// Subjects of a type, or every type. A repeating Task's series is left out unless
+    /// <paramref name="includeSeries"/>: its repetitions are the Tasks to do (D16).
+    /// </summary>
+    private static IResult ListSubjects(
+        SubjectReader reader, string? type, bool includeArchived = false, bool includeSeries = false)
+        => Results.Ok(reader.QuerySubjects(type, includeArchived, includeSeries));
 
     private static IResult GetSubject(Guid id, SubjectReader reader)
     {

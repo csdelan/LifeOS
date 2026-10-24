@@ -580,6 +580,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ListTaskSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/series/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetTaskSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SettleTasks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/wallet": {
         parameters: {
             query?: never;
@@ -2142,12 +2190,14 @@ export interface components {
         RecurBody: {
             subject?: string;
             recurrence?: null | components["schemas"]["RecurrenceBody"];
+            start?: null | string;
         };
         RecurResult: {
             /** Format: uuid */
             id?: string;
             urn?: string;
             recurrence?: null | string;
+            made?: components["schemas"]["CreatedSubject"][];
         };
         RecurrenceBody: {
             freq?: string;
@@ -2158,6 +2208,8 @@ export interface components {
             /** Format: int32 */
             day?: null | number | string;
             cue?: null | string;
+            period?: null | string;
+            from?: null | string;
         };
         RedeemBody: {
             reward?: null | string;
@@ -2357,6 +2409,8 @@ export interface components {
             areaName?: null | string;
             attributes?: null | string;
             bounty?: null | components["schemas"]["BountyLineRow"][];
+            bountyFromSeries?: boolean;
+            repeating?: null | components["schemas"]["TaskRepeatRead"];
             cover?: null | components["schemas"]["CoverRead"];
         };
         SubjectListItem: {
@@ -2381,6 +2435,11 @@ export interface components {
             personKind?: null | string;
             /** Format: int32 */
             visionOrder?: null | number | string;
+            isSeries?: boolean;
+            /** Format: uuid */
+            seriesId?: null | string;
+            occurrence?: null | string;
+            repeat?: null | string;
             bounty?: null | {
                 [key: string]: number | string;
             };
@@ -2399,6 +2458,78 @@ export interface components {
             tag?: string;
             /** Format: int64 */
             itemCount?: number | string;
+        };
+        TaskRepeatRead: {
+            isSeries?: boolean;
+            /** Format: uuid */
+            seriesId?: string;
+            seriesUrn?: string;
+            seriesTitle?: string;
+            recurrence?: string;
+            start?: null | string;
+            seriesStatus?: null | string;
+            stopped?: boolean;
+            occurrence?: null | string;
+            /** Format: int64 */
+            openCount?: number | string;
+            /** Format: int64 */
+            completedCount?: number | string;
+            /** Format: int64 */
+            missedCount?: number | string;
+            /** Format: int64 */
+            cancelledCount?: number | string;
+            lastCompletedOn?: null | string;
+            nextDue?: null | string;
+            latestOccurrence?: null | string;
+        };
+        TaskRepetitionRow: {
+            /** Format: uuid */
+            id?: string;
+            urn?: string;
+            title?: string;
+            occurrence?: null | string;
+            due?: null | string;
+            scheduled?: null | string;
+            status?: null | string;
+            closed?: boolean;
+            closedOn?: null | string;
+            archived?: boolean;
+        };
+        TaskSeriesHistory: {
+            series?: components["schemas"]["TaskSeriesRow"];
+            repetitions?: components["schemas"]["TaskRepetitionRow"][];
+        };
+        TaskSeriesRow: {
+            /** Format: uuid */
+            id?: string;
+            urn?: string;
+            title?: string;
+            recurrence?: string;
+            start?: null | string;
+            status?: null | string;
+            archived?: boolean;
+            stopped?: boolean;
+            area?: null | string;
+            areaName?: null | string;
+            /** Format: int64 */
+            openCount?: number | string;
+            /** Format: int64 */
+            completedCount?: number | string;
+            /** Format: int64 */
+            missedCount?: number | string;
+            /** Format: int64 */
+            cancelledCount?: number | string;
+            lastCompletedOn?: null | string;
+            nextDue?: null | string;
+            latestOccurrence?: null | string;
+            bounty?: null | {
+                [key: string]: number | string;
+            };
+        };
+        TaskSettleRead: {
+            /** Format: int32 */
+            series?: number | string;
+            made?: components["schemas"]["CreatedSubject"][];
         };
         TaskTimer: {
             /** Format: uuid */
@@ -2512,6 +2643,7 @@ export interface operations {
             query?: {
                 type?: string;
                 includeArchived?: boolean;
+                includeSeries?: boolean;
             };
             header?: never;
             path?: never;
@@ -3518,6 +3650,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    ListTaskSeries: {
+        parameters: {
+            query?: {
+                includeArchived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSeriesRow"][];
+                };
+            };
+        };
+    };
+    GetTaskSeries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSeriesHistory"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SettleTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSettleRead"];
                 };
             };
         };
