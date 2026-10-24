@@ -305,14 +305,16 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
     mockLogFood({ name: "Bread", score: 3, calories: 200, eatenAt: ago(2 * 60_000) });
     const day = mockFoodDay();
     expect(day.meals.map((m) => m.name)).toEqual(["Bread", "Wine"]);
-    expect(day.sobriety).toMatchObject({ days: 0, bestDays: before.days - 1, lastDrinkOn: today });
+    // Today didn't count yet, so the run before it is the best.
+    expect(day.sobriety).toMatchObject({ days: 0, bestDays: before.days, lastDrinkOn: today });
 
     // A range reads the streak as of its last day so far.
     expect(mockFoodDays(addDays(today, -6), today).sobriety?.asOf).toBe(today);
     expect(mockFoodDays(addDays(today, -6), addDays(today, 7)).sobriety?.days).toBe(0);
+    // A past day counts itself, since it's over; today's streak runs to yesterday.
     expect(mockFoodDays(addDays(today, -6), addDays(today, -3)).sobriety).toMatchObject({
       asOf: addDays(today, -3),
-      days: before.days - 3,
+      days: before.days - 2,
     });
     // Nothing before the Food Log began, or ahead of today.
     expect(mockFoodDays("2001-01-01", "2001-01-07").sobriety).toBeNull();

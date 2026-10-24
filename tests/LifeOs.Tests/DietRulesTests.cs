@@ -242,30 +242,44 @@ public sealed class DietRulesTests
     }
 
     [Fact]
-    public void A_streak_counts_drink_free_days_from_the_last_drink_or_the_first_day()
+    public void A_streak_counts_completed_drink_free_days_from_the_last_drink_or_the_first_day()
     {
         var first = new DateOnly(2026, 10, 20);
+        var later = first.AddDays(30); // a day well after the ones read, so each of them is over
 
         // Nothing before the Food Log's first day.
-        Assert.Null(Sobriety.On(first.AddDays(-1), first, []));
+        Assert.Null(Sobriety.On(first.AddDays(-1), later, first, []));
 
-        // No drink yet: every day from the first counts, the first day included.
-        var none = Sobriety.On(first.AddDays(9), first, [])!;
+        // No drink yet: every day from the first counts once it's over, the first day included;
+        // today doesn't count until it's over.
+        var none = Sobriety.On(first.AddDays(9), later, first, [])!;
         Assert.Equal((10, 10, first, (DateOnly?)null), (none.Days, none.BestDays, none.Since, none.LastDrinkOn));
+        var noneToday = Sobriety.On(first.AddDays(9), first.AddDays(9), first, [])!;
+        Assert.Equal((9, 9), (noneToday.Days, noneToday.BestDays));
+        var firstToday = Sobriety.On(first, first, first, [])!;
+        Assert.Equal((0, 0, false), (firstToday.Days, firstToday.BestDays, firstToday.DrinkThatDay));
 
-        // Drinks on the 3rd and the 10th day, seen from the 15th: 5 since the last, best 6 between them.
+        // Drinks on the 3rd and the 10th day. Seen on the 15th: 4 done since the last (the
+        // 15th isn't over), best 6 between them; the 15th seen later has 5.
         var drinks = new[] { first.AddDays(2), first.AddDays(9) };
-        var later = Sobriety.On(first.AddDays(14), first, drinks)!;
-        Assert.Equal((5, 6, first.AddDays(10), (DateOnly?)first.AddDays(9)), (later.Days, later.BestDays, later.Since, later.LastDrinkOn));
+        var today = Sobriety.On(first.AddDays(14), first.AddDays(14), first, drinks)!;
+        Assert.Equal((4, 6, first.AddDays(10), (DateOnly?)first.AddDays(9)), (today.Days, today.BestDays, today.Since, today.LastDrinkOn));
+        Assert.Equal(5, Sobriety.On(first.AddDays(14), later, first, drinks)!.Days);
 
-        // A day with a drink has a streak of 0; a drink after it doesn't count.
-        var drinkDay = Sobriety.On(first.AddDays(9), first, drinks)!;
-        Assert.Equal((0, 6), (drinkDay.Days, drinkDay.BestDays));
-        var before = Sobriety.On(first.AddDays(5), first, drinks)!;
+        // The day after a drink, seen that day: 0, with no drink on it; it's 1 the day after.
+        var dayAfter = Sobriety.On(first.AddDays(10), first.AddDays(10), first, drinks)!;
+        Assert.Equal((0, 6, first.AddDays(10), false), (dayAfter.Days, dayAfter.BestDays, dayAfter.Since, dayAfter.DrinkThatDay));
+        Assert.Equal(1, Sobriety.On(first.AddDays(11), first.AddDays(11), first, drinks)!.Days);
+
+        // A day with a drink has a streak of 0 at once, today or later; a drink after it doesn't count.
+        var drinkDay = Sobriety.On(first.AddDays(9), later, first, drinks)!;
+        Assert.Equal((0, 6, true), (drinkDay.Days, drinkDay.BestDays, drinkDay.DrinkThatDay));
+        Assert.Equal(0, Sobriety.On(first.AddDays(9), first.AddDays(9), first, drinks)!.Days);
+        var before = Sobriety.On(first.AddDays(5), later, first, drinks)!;
         Assert.Equal((3, 3, (DateOnly?)first.AddDays(2)), (before.Days, before.BestDays, before.LastDrinkOn));
 
         // A drink on the first day.
-        var onFirst = Sobriety.On(first, first, [first])!;
+        var onFirst = Sobriety.On(first, later, first, [first])!;
         Assert.Equal((0, 0), (onFirst.Days, onFirst.BestDays));
     }
 

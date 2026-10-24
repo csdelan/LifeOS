@@ -2995,12 +2995,12 @@ function foodPaidByDay(from: string, to: string): Map<string, FoodPaid> {
   return byDay;
 }
 
-/** The sobriety streak as of `asOf` (`DrinkHistory`): from the Food Log's first day over its drink days. */
-function foodSobriety(fold: FoodFold, asOf: string): SobrietyRow | null {
+/** The sobriety streak as of `asOf` seen today (`DrinkHistory`): from the Food Log's first day over its drink days. */
+function foodSobriety(fold: FoodFold, asOf: string, today: string): SobrietyRow | null {
   const first = fold.days.keys().next();
   if (first.done) return null;
   const drinkDays = [...fold.days.values()].filter((d) => d.drinks > 0).map((d) => d.day);
-  return sobrietyOn(asOf, first.value, drinkDays);
+  return sobrietyOn(asOf, today, first.value, drinkDays);
 }
 
 /** `GET /api/food/day`: a day's entries (oldest first), its fasts, the running fast, its summary and the streak. */
@@ -3034,7 +3034,7 @@ export function mockFoodDay(date?: string): FoodDayRead {
     running: running ? fastRow(running) : null,
     lastMeal: last ? mealRow(last) : null,
     summary: toSummary(facts, foodPaidByDay(day, day).get(day) ?? NOTHING_PAID, DIET_CAP),
-    sobriety: foodSobriety(fold, day),
+    sobriety: foodSobriety(fold, day, today),
   };
 }
 
@@ -3053,7 +3053,7 @@ export function mockFoodDays(from?: string, to?: string): FoodDaysRead {
   }
   // The streak as of the range's last day so far: today, when the range holds it.
   const asOf = end < today ? end : today;
-  return { from: start, to: end, today, days, sobriety: asOf < start ? null : foodSobriety(fold, asOf) };
+  return { from: start, to: end, today, days, sobriety: asOf < start ? null : foodSobriety(fold, asOf, today) };
 }
 
 /**

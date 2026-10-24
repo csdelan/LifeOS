@@ -43,7 +43,7 @@ public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger)
         return new FoodDayView(
             target, today, meals.OrderBy(m => m.EatenAt).ThenBy(m => m.Id).ToList(), fasts, running, last, facts,
             Rules.Score(facts.Facts), await EatenDuringFastsAsync(meals, cancellationToken),
-            paid.GetValueOrDefault(target) ?? FoodDayPaid.None, history.StreakOn(target));
+            paid.GetValueOrDefault(target) ?? FoodDayPaid.None, history.StreakOn(target, today));
     }
 
     /// <summary>
@@ -75,7 +75,7 @@ public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger)
         }
 
         var asOf = to < today ? to : today;
-        var streak = asOf < from ? null : (await food.GetDrinkHistoryAsync(asOf, cancellationToken)).StreakOn(asOf);
+        var streak = asOf < from ? null : (await food.GetDrinkHistoryAsync(asOf, cancellationToken)).StreakOn(asOf, today);
         return new FoodRange(from, to, today, days, streak);
     }
 

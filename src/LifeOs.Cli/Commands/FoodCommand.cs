@@ -743,9 +743,9 @@ internal static class FoodOutput
         }
     }
 
-    /// <summary>"Sober 12 days (best 30)", or "A drink today: sober 0 days (best 30)".</summary>
+    /// <summary>"Sober 12 days (best 30)", or "A drink that day: sober 0 days (best 30)".</summary>
     private static string Streak(SobrietyStreak streak)
-        => (streak.Days == 0 ? "A drink that day: sober 0 days" : $"Sober {streak.Days} day{(streak.Days == 1 ? "" : "s")}")
+        => (streak.DrinkThatDay ? "A drink that day: sober 0 days" : $"Sober {streak.Days} day{(streak.Days == 1 ? "" : "s")}")
            + $" (best {streak.BestDays})";
 
     private static string Drinks(int drinks) => $"{drinks} drink{(drinks == 1 ? "" : "s")}";

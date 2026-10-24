@@ -589,12 +589,17 @@ fast, 39 of 40) plus beers of 150 calories each.
 
 - **A drink-free day** is a day with no alcoholic entry. A day with nothing logged counts as
   drink-free: only a logged drink breaks the streak (scout's honor, GEN-5).
-- **The streak on a day** is the drink-free days in a row ending on it, counted back to the
-  day after the last drink, or to the Food Log's first day (its earliest entry, fast or
-  close) when there's been no drink. A day with a drink has a streak of 0. Today counts from
-  its start, so a drink today makes it 0.
-- **The best streak** is the longest run of drink-free days from the Food Log's first day to
-  that day. Before the first day there's no streak.
+- **The streak counts completed days** (Chris, 2026-10-24: "The sobriety streak should
+  represent COMPLETED, consecutive alcohol free days. So if I don't drink anything today,
+  tomorrow's sobriety streak should be 1."). A day counts once it's over on the home-zone
+  calendar, so today never counts; closing a day by hand doesn't change that.
+- **The streak on a day** is the drink-free days in a row from the day after the last drink,
+  or from the Food Log's first day (its earliest entry, fast or close) when there's been no
+  drink, to the day itself once it's over, or to yesterday while it's today. A day with a
+  drink has a streak of 0 at once, and so does the day after it until it's over: a drink
+  yesterday reads "0 days sober" today and "1 day sober" tomorrow.
+- **The best streak** is the longest run of completed drink-free days from the Food Log's
+  first day to that day. Before the first day there's no streak.
 - **Where it shows:**
   - The Day view's summary: the streak as of that day and the best.
   - Week and Month: the drinks in the period, the drink-free days among its days so far (from
@@ -882,8 +887,9 @@ apart from those two columns.
   XP"; "2 drinks · the cut starts above 2"). While the day is open with a cut and a paid fast,
   it adds that the fast is re-scored when the day closes. "On track for" is already cut.
 - **The Sobriety streak card** sits under the Diet XP card on the Day view. It shows "12 days
-  sober" or "A drink today", then "Drink-free since Oct 14 · best 30 days", and a line on the
-  first day and unlogged days. Its heading names the day when it isn't today, and it's hidden
+  sober" ("0 days sober" the day after a drink) or "A drink today", then "Drink-free since
+  Oct 14 · best 30 days", and a line on the first day, that a day counts once it's over, and
+  unlogged days. Its heading names the day when it isn't today, and it's hidden
   before the Food Log's first day.
 - **Week and Month** add two totals from the Food Log's first day:
   - **Drinks:** "4 drinks", with "Drink-free 2 of 3 days".

@@ -107,15 +107,16 @@ public sealed class FoodDrinksTests(PostgresFixture postgres)
         Assert.Equal(2, day.Facts.DrinkVersions.Count);
         Assert.False(day.Score.Cut);
 
-        // The streak: 0 on the drinking day (best 5, the days before it), 2 today.
+        // The streak: 0 on the drinking day (best 5, the days before it), and 1 today, since
+        // only yesterday is over.
         Assert.Equal((0, 5, (DateOnly?)drinking, first), (day.Sobriety!.Days, day.Sobriety.BestDays, day.Sobriety.LastDrinkOn, day.Sobriety.FirstDay));
         var now = (await food.GetDayAsync(today, Ct)).Sobriety!;
-        Assert.Equal((2, 5, drinking.AddDays(1)), (now.Days, now.BestDays, now.Since));
+        Assert.Equal((1, 5, drinking.AddDays(1)), (now.Days, now.BestDays, now.Since));
 
         // A day before the first has none; a range's streak is as of its last day so far.
         Assert.Null((await food.GetDayAsync(first.AddDays(-1), Ct)).Sobriety);
         var week = await food.GetDaysAsync(first, today.AddDays(3), Ct);
-        Assert.Equal((today, 2), (week.Sobriety!.AsOf, week.Sobriety.Days));
+        Assert.Equal((today, 1), (week.Sobriety!.AsOf, week.Sobriety.Days));
         Assert.Equal(2, week.Days.Sum(d => d.Facts.Drinks));
         var past = await food.GetDaysAsync(first, first.AddDays(2), Ct);
         Assert.Equal((first.AddDays(2), 3), (past.Sobriety!.AsOf, past.Sobriety.Days));
@@ -272,8 +273,9 @@ public sealed class FoodDrinksTests(PostgresFixture postgres)
         var streak = read.GetProperty("sobriety");
         Assert.Equal((0, $"{day:yyyy-MM-dd}", $"{day:yyyy-MM-dd}"),
             (streak.GetProperty("days").GetInt32(), streak.GetProperty("lastDrinkOn").GetString(), streak.GetProperty("firstDay").GetString()));
+        // Today, the day after: 0, since today isn't over.
         var range = await host.Client.GetFromJsonAsync<JsonElement>($"/api/food/days?from={day:yyyy-MM-dd}&to={day.AddDays(1):yyyy-MM-dd}", Ct);
-        Assert.Equal(1, range.GetProperty("sobriety").GetProperty("days").GetInt32());
+        Assert.Equal(0, range.GetProperty("sobriety").GetProperty("days").GetInt32());
 
         // The count, by days (the last 30 by default) and by times.
         var count = await host.Client.GetFromJsonAsync<JsonElement>("/api/food/drinks", Ct);

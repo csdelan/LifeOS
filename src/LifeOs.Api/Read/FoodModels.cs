@@ -41,9 +41,10 @@ public sealed class FoodDaysRead
 
 /// <summary>
 /// A sobriety streak (FOOD-6, food-log plan §7.3) as of <see cref="AsOf"/>: <see cref="Days"/>
-/// drink-free days in a row ending on it (0 when it has a drink), counted from
-/// <see cref="Since"/>; the best run since the Food Log's <see cref="FirstDay"/>; and the last
-/// day with a drink, if any. A day with nothing logged counts as drink-free.
+/// completed drink-free days in a row, counted from <see cref="Since"/> to the day itself once
+/// it's over, or to yesterday while it's today (0 when it has a drink); the best run since the
+/// Food Log's <see cref="FirstDay"/>; and the last day with a drink, if any. A day with nothing
+/// logged counts as drink-free.
 /// </summary>
 public sealed class SobrietyRow
 {

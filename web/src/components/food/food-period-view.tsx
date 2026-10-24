@@ -11,7 +11,7 @@ import { dayInWords, dayStanding, dietHeat, foodTotals, type FoodPeriod } from "
 import type { FoodDaySummary, SobrietyRow } from "@/lib/production-ui-types";
 import { useFoodDays } from "@/lib/queries";
 import { monthCells } from "@/lib/rewards-history";
-import { daysText, sobrietyHeadline } from "@/lib/sobriety";
+import { daysText, drinkThatDay, sobrietyHeadline } from "@/lib/sobriety";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -157,7 +157,7 @@ function PeriodTotals({
         label: sobriety.asOf === today ? "Sobriety streak" : `Sobriety streak on ${formatDay(sobriety.asOf)}`,
         value: daysText(sobriety.days),
         note:
-          sobriety.days === 0
+          drinkThatDay(sobriety)
             ? `${sobrietyHeadline(sobriety, today)} · best ${daysText(sobriety.bestDays)}`
             : `Best ${daysText(sobriety.bestDays)}`,
       },

@@ -2971,6 +2971,14 @@ Horizon:    Pilot
 Definition: active
 Build:      built
 
+**Update (2026-10-24 — the streak counts completed days):** Chris: "The sobriety streak should
+represent COMPLETED, consecutive alcohol free days. So if I don't drink anything today,
+tomorrow's sobriety streak should be 1." It had counted today from its start, so the day
+after a drink read "1 day sober". Now a day counts once it's over: today's streak runs to
+yesterday, a past day's includes itself, and a drink still makes the day's streak 0 at once.
+The day after a drink reads "0 days sober". `Sobriety.On` and `lib/sobriety.ts` take today;
+the API's fields are unchanged ([food-log-plan.md](food-log-plan.md) §7.3).
+
 **Update (2026-10-22 — on the page, F8):** the Log food sheet's Alcoholic drink switch greys
 the score out at 1 and types the entry a drink; the gallery shows a drink as a glass; the Diet
 XP card names the drinks and their cut; a Sobriety streak card sits under it; Week and Month

@@ -316,13 +316,18 @@ public sealed record FoodDay(
 }
 
 /// <summary>
-/// A sobriety streak as of one day (FOOD-6, food-log plan §7.3): <see cref="Days"/> drink-free
-/// days in a row ending on it (0 when it has a drink), counted from <see cref="Since"/> — the
-/// day after the last drink, or the Food Log's first day when there's been none.
-/// <see cref="BestDays"/> is the longest run from <see cref="FirstDay"/> to that day.
+/// A sobriety streak as of one day (FOOD-6, food-log plan §7.3): <see cref="Days"/> completed
+/// drink-free days in a row, counted from <see cref="Since"/> — the day after the last drink,
+/// or the Food Log's first day when there's been none — to the day itself once it's over, or
+/// to yesterday while it's today. 0 when the day has a drink. <see cref="BestDays"/> is the
+/// longest run of completed days from <see cref="FirstDay"/> to that day.
 /// </summary>
 public sealed record SobrietyStreak(
-    DateOnly AsOf, int Days, int BestDays, DateOnly Since, DateOnly? LastDrinkOn, DateOnly FirstDay);
+    DateOnly AsOf, int Days, int BestDays, DateOnly Since, DateOnly? LastDrinkOn, DateOnly FirstDay)
+{
+    /// <summary>Whether the day itself has a drink, which is what makes its streak 0 at once.</summary>
+    public bool DrinkThatDay => LastDrinkOn == AsOf;
+}
 
 /// <summary>
 /// What the streak reads (FOOD-6): the Food Log's first day (null while it's empty) and the
@@ -330,9 +335,9 @@ public sealed record SobrietyStreak(
 /// </summary>
 public sealed record DrinkHistory(DateOnly? FirstDay, IReadOnlyList<DateOnly> DrinkDays)
 {
-    /// <summary>The streak as of <paramref name="asOf"/>, or null before the first day.</summary>
-    public SobrietyStreak? StreakOn(DateOnly asOf)
-        => FirstDay is { } first ? Sobriety.On(asOf, first, DrinkDays) : null;
+    /// <summary>The streak as of <paramref name="asOf"/> seen on <paramref name="today"/>, or null before the first day.</summary>
+    public SobrietyStreak? StreakOn(DateOnly asOf, DateOnly today)
+        => FirstDay is { } first ? Sobriety.On(asOf, today, first, DrinkDays) : null;
 }
 
 /// <summary>
@@ -355,17 +360,21 @@ public sealed record DrinkTally(
 }
 
 /// <summary>
-/// The sobriety streak (FOOD-6, food-log plan §7.3). A drink-free day is one with no
-/// alcoholic entry; a day with nothing logged counts as drink-free, since only a logged drink
-/// breaks the streak (scout's honor, GEN-5). Nothing counts before the Food Log's first day.
+/// The sobriety streak (FOOD-6, food-log plan §7.3). It counts completed drink-free days: a
+/// day counts once it's over, so today never does, though a drink today ends the streak at
+/// once (Chris, 2026-10-24: "if I don't drink anything today, tomorrow's sobriety streak
+/// should be 1"). A drink-free day is one with no alcoholic entry; a day with nothing logged
+/// counts as drink-free, since only a logged drink breaks the streak (scout's honor, GEN-5).
+/// Nothing counts before the Food Log's first day.
 /// </summary>
 public static class Sobriety
 {
     /// <summary>
-    /// The streak as of <paramref name="asOf"/>, from the Food Log's <paramref name="firstDay"/>
-    /// and the days with a drink; null before the first day.
+    /// The streak as of <paramref name="asOf"/> seen on <paramref name="today"/>, from the Food
+    /// Log's <paramref name="firstDay"/> and the days with a drink; null before the first day.
     /// </summary>
-    public static SobrietyStreak? On(DateOnly asOf, DateOnly firstDay, IEnumerable<DateOnly> drinkDays)
+    public static SobrietyStreak? On(
+        DateOnly asOf, DateOnly today, DateOnly firstDay, IEnumerable<DateOnly> drinkDays)
     {
         if (asOf < firstDay)
         {
@@ -381,7 +390,10 @@ public static class Sobriety
             runStart = day.AddDays(1);
         }
 
-        var current = asOf.DayNumber - runStart.DayNumber + 1;
+        // The last day that's over: the day itself once it's past, else yesterday. A drink on
+        // the day puts the run's start after it, so the streak is 0.
+        var lastDone = asOf < today ? asOf : today.AddDays(-1);
+        var current = Math.Max(0, lastDone.DayNumber - runStart.DayNumber + 1);
         best = Math.Max(best, current);
         DateOnly? last = drinks.Count > 0 ? drinks[^1] : null;
         return new SobrietyStreak(asOf, current, best, runStart, last, firstDay);
