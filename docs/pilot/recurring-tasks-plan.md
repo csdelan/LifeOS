@@ -1,6 +1,6 @@
 # Recurring Tasks Plan
 
-**Status: approved and building (2026-10-24).** Chris asked on 2026-10-24 to explore
+**Status: built (2026-10-24), RT0–RT5 on main.** Chris asked on 2026-10-24 to explore
 recurring Tasks and answered the exploration's questions the same day (§1.1). He then
 approved RT0–RT5 ("Approved Start RT0-RT5. Go straight through, only pause when you need
 additional input from me."). The requirement is **TASKS-3** and the decision **D16**, both
@@ -384,7 +384,9 @@ Chris approved all six phases on 2026-10-24.
      a hidden repetition is left out.
    - The live recap was a stub that returned nothing (`TODO(api)` in `live/reads.ts`); it now
      returns the Repeating tasks section, made from `GET /api/tasks/series` and each one's
-     history. The rest of the live recap is still to build, outside TASKS-3.
+     history. The rest of the live recap is still to build, outside TASKS-3. Review
+     documents aren't on the live API yet either (D3), so on staging the Reviews page has no
+     review to show the recap in; the section shows in the mock until they are.
    - Not changed: a Goal's Relationships tab still lists each repetition serving it, and
      a link added to the series on the Map reaches the next repetition made, not the open
      one. The Reviews page's week runs Sunday to Saturday, not Chris's Monday to Sunday;

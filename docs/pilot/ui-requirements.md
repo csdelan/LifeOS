@@ -1048,7 +1048,7 @@ Build:      built
 ### TASKS-3 — Tasks repeat on calendar dates, once a week, or after the last completion
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "I probably just need simple recurrence like: 'Take out trash' every Wednesday afternoon;
@@ -3982,8 +3982,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 - **Repeating Tasks** (TASKS-3 / D16): series and repetitions, Task's Missed, the
   once-each-week and after-completion shapes, `TaskSeriesService` with settle, the price
   from the series, migrations 0041 (the text repair) and 0042, `bsk tasks settle`, `POST /api/recur` and
-  `POST /api/tasks/settle`. — **Building** (planned in
-  [recurring-tasks-plan.md](recurring-tasks-plan.md), RT1–RT5).
+  `POST /api/tasks/settle`. — **Shipped** (RT1–RT5 in
+  [recurring-tasks-plan.md](recurring-tasks-plan.md), 2026-10-24).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **Oura
