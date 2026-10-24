@@ -1,11 +1,25 @@
 # Recurring Tasks Plan
 
-**Status: requirements gathered, not built.** Chris asked on 2026-10-24 to explore recurring
-Tasks (planning, requirement gathering and the blast radius, no build yet) and answered the
-exploration's questions the same day (§1.1). The requirement is **TASKS-3** in
-[ui-requirements.md](ui-requirements.md), still `drafting`. This doc says *how* and *in what
-order*, written so an agent with no session context can pick up any phase. Nothing is open:
-the last question (§9) was settled the same day by amending TASKS-1.
+**Status: approved and building (2026-10-24).** Chris asked on 2026-10-24 to explore
+recurring Tasks and answered the exploration's questions the same day (§1.1). He then
+approved RT0–RT5 ("Approved Start RT0-RT5. Go straight through, only pause when you need
+additional input from me."). The requirement is **TASKS-3** and the decision **D16**, both
+in [ui-requirements.md](ui-requirements.md). This doc says *how* and *in what order*,
+written so an agent with no session context can pick up any phase. Progress is in §10.
+
+## 0. Read these first
+
+- [ontology.md](../ontology.md): subjects are interpreted truth (attributes edited in
+  place); status moves only by `state_change` events; `bsk` is the one writer.
+- D8 (recurrence), D10 (Appointment occurrences), D11 (rewards reconcile) and D16 in
+  [ui-requirements.md](ui-requirements.md).
+- Prior art: `AppointmentService.MaterializeAsync` and `NpgsqlAppointmentRepository`
+  (occurrences from a series); `RenameService` (a series rename follows to its copies);
+  `NpgsqlTimerRepository` (an advisory lock with a re-check); the food and domains
+  settle endpoints (catching up when the app opens).
+- How a phase lands: [kernel-build-plan.md](kernel-build-plan.md) (migration + verb + view
+  + tests, `./test.ps1`, strict build). Web checks: `npm run lint`, `npm test`,
+  `npm run test:e2e` and `npm run a11y` from `web/` (CI doesn't run Playwright).
 
 ## 1. What Chris asked
 
@@ -278,10 +292,9 @@ Calls made without asking, since one option was clearly better:
 
 ## 10. Build order
 
-Each phase needs Chris's go-ahead.
+Chris approved all six phases on 2026-10-24.
 
-1. **RT0:** TASKS-3 in ui-requirements.md, `drafting` until Chris moves it to `active`; then
-   its ontology fit, and D16 if the second materialized type earns a decision entry.
+1. **RT0:** TASKS-3 active with its ontology fit, D16 and the backlog line. **Done.**
 2. **RT1:** repeat patterns round-trip from the web to the kernel (§8.1). Fixes Habits and
    Appointments on its own.
    - **RT1b:** TASKS-1's do-date rule (§9) in `taskGroup` and the Focus list, with unit

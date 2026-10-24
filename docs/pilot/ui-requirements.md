@@ -1047,8 +1047,8 @@ Build:      built
 
 ### TASKS-3 — Tasks repeat on calendar dates, once a week, or after the last completion
 Horizon:    Pilot
-Definition: drafting
-Build:      unmapped
+Definition: active
+Build:      building
 
 **Workflow (Chris):**
 - "I probably just need simple recurrence like: 'Take out trash' every Wednesday afternoon;
@@ -1086,9 +1086,50 @@ Build:      unmapped
   done or Sunday passes, then under Overdue. That's TASKS-1's do-date rule (2026-10-24).
 
 **Ontology fit (Claude):**
-- _pending_. Explored in [recurring-tasks-plan.md](recurring-tasks-plan.md); the
-  recommendation is that each repetition is its own Task linked to a series, as recurring
-  Appointments are (D10).
+- Maps to (D16): a repeating Task is a **series**: a Task subject carrying
+  `attributes.recurrence` (D8) and `attributes.start`. It never shows in the Task lists.
+- **Repetitions:** each is its own Task subject:
+  - `attributes.series` = the series' urn;
+  - `attributes.occurrence` = the date it stands for;
+  - `due` on that date, or for once-each-week `scheduled` = the Monday and `due` = the
+    Sunday.
+- **What a repetition copies** from the series when it's made: title, description, area,
+  priority, estimated duration, tags and the parent link. It does **not** copy the bounty:
+  `RewardService` falls back to the series' bounty, so every repetition pays the series'
+  price unless it has one of its own.
+- **Repeat shapes:**
+  - calendar dates use the existing daily / weekly / every-N / monthly shapes;
+  - once each week is `{"freq":"each","period":"week"}`;
+  - after the last completion is every-N with `"from":"completion"`.
+- **Lifecycle (`TaskSeriesService`):**
+  - the first repetition is made when the pattern is set;
+  - the next is made when one closes (Completed, Cancelled or Missed), from `StatusService`;
+  - for the two calendar kinds, the next is also made when its date passes. Settle does that
+    (`POST /api/tasks/settle` when Tasks and Focus open, `bsk tasks settle`).
+  - Settle only creates; nothing changes a status by itself.
+  - Each (series, occurrence) is unique: an index, plus an advisory lock per series.
+- **Status:** Task gains **Missed**, already terminal in `is_terminal_status`. Cancelling
+  the series stops it repeating, and setting it back to Not started restarts it; archiving
+  stops it too.
+- **Edits:** a series edit follows to the open repetitions that still carry the series' old
+  value. A new pattern re-dates the open repetition whose date hasn't passed.
+- **Rewards:** each repetition earns under its own `completed:` / `timed:` key, so the
+  engine, undo and the timer work unchanged (D11).
+- Kernel delta:
+  - migration 0041: the `each` branch of `recurrence_occurrences`, `v_task_series`, the
+    unique index, and the repair of patterns stored as text;
+  - Task's Missed;
+  - the two shapes in `Recurrence`;
+  - `TaskSeriesService` and its repository;
+  - the `StatusService` hook and the bounty fallback;
+  - `RenameService` for Task series;
+  - `bsk recur --each week | --from completion` and `bsk tasks settle`;
+  - `POST /api/recur`, `POST /api/tasks/settle` and the series on subject reads.
+- Implications:
+  - A weekly chore leaves 52 Tasks a year, hidden once closed.
+  - A calendar series can have several open, and after a gap each passed date has its own.
+  - Reopening a repetition never removes the next one.
+- Open decisions: none.
 
 
 ### GEN-11 — Identity Statements are timeless rather than status-driven work
@@ -3800,6 +3841,25 @@ Design and build order: [activity-plan.md](activity-plan.md).
 
 Design and build order: [cover-images-plan.md](cover-images-plan.md).
 
+**D16 — A repeating Task is a series, and each repetition is its own Task (TASKS-3,
+2026-10-24).**
+
+- **The second materialized repeat** after Appointments (D10). The series holds the pattern
+  and the price; each repetition is an ordinary Task with its own status, timer and notes,
+  linked by `attributes.series`.
+- **Why not one Task reused:** a Task pays under `completed:<task>`, and reconcile pays what
+  is due now (D11), so one Task reopened each week could hold only one payment.
+- **The price lives on the series:** a repetition with no bounty of its own pays the
+  series' current bounty, so every repetition pays the same, and a past earn is never
+  re-priced.
+- **Nothing closes by itself:** a late repetition waits under Overdue until Chris completes
+  it, cancels it or marks it Missed.
+- **Made by `TaskSeriesService`:** when the pattern is set, when a repetition closes, and,
+  for calendar repeats, when a date passes (a settle when the app opens, since nothing runs
+  on a clock). A repeat after the last completion counts from the day the last one closed.
+
+Design and build order: [recurring-tasks-plan.md](recurring-tasks-plan.md).
+
 ### Method for the Habit ↔ Commitment discrepancy
 
 "Habit" (UI concept) and "Commitment" (storage type) are deliberately decoupled — Chris
@@ -3918,6 +3978,11 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   the Unsplash client behind a port, `CoverService`, `bsk cover`, the cover endpoints and
   `cover` on the subject reads; no migration. — **Open** (planned in
   [cover-images-plan.md](cover-images-plan.md), C1–C5).
+- **Repeating Tasks** (TASKS-3 / D16): series and repetitions, Task's Missed, the
+  once-each-week and after-completion shapes, `TaskSeriesService` with settle, the price
+  from the series, migration 0041, `bsk tasks settle`, `POST /api/recur` and
+  `POST /api/tasks/settle`. — **Building** (planned in
+  [recurring-tasks-plan.md](recurring-tasks-plan.md), RT1–RT5).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **Oura
