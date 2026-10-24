@@ -21,6 +21,7 @@ import { AreasPage } from "@/pages/areas-page";
 import { GalleryPage } from "@/pages/gallery-page";
 import type { MapLens } from "@/lib/derive";
 import type { GraphLayoutKind, MapViewMode, OrphanFilter } from "@/lib/graph-model";
+import { parseMapShow, type MapShow } from "@/lib/map-show";
 import { Button } from "@/components/ui/button";
 
 export type MapSearch = {
@@ -32,6 +33,8 @@ export type MapSearch = {
   orphans?: OrphanFilter;
   area?: string;
   colorByArea?: boolean;
+  /** How much finished work shows; absent is Open. */
+  show?: MapShow;
 };
 
 export type InboxSearch = {
@@ -137,6 +140,7 @@ const mapRoute = createRoute({
         : search.colorByArea === true ||
           search.colorByArea === "true" ||
           search.colorByArea === "1",
+    show: parseMapShow(search.show),
   }),
   component: MapPage,
 });

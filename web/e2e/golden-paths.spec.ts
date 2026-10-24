@@ -55,6 +55,31 @@ test.describe("golden paths", () => {
     });
   });
 
+  test("the Map hides finished work until Show asks for it", async ({ page }) => {
+    await page.goto("/map");
+    const outline = page.getByRole("tree", { name: "Alignment outline" });
+    await expect(outline).toBeVisible();
+    const expandAll = page.getByRole("switch", { name: "Expand all" });
+    if ((await expandAll.getAttribute("aria-checked")) !== "true") await expandAll.click();
+    // The active project shows (under each of its parents); its completed task stays hidden
+    // until Show includes done steps.
+    await expect(
+      outline.getByRole("button", { name: "Production web UI — first pass", exact: true }).first(),
+    ).toBeVisible();
+    const done = outline.getByRole("button", { name: "Mirror production-ui-types.ts", exact: true });
+    await expect(done).toHaveCount(0);
+    await expect(page.getByTestId("map-hidden-count")).toHaveText("1 finished hidden");
+
+    await page.getByRole("combobox", { name: "Show" }).click();
+    await page.getByRole("option", { name: "Open + done steps" }).click();
+    await expect(done.first()).toBeVisible();
+    await expect(page.getByTestId("map-hidden-count")).toHaveCount(0);
+
+    // The choice is remembered.
+    await page.goto("/map");
+    await expect(done.first()).toBeVisible();
+  });
+
   test("edit and save a subject", async ({ page }) => {
     await page.goto("/map?selected=goal-lifeos");
     await expect(page.getByRole("heading", { name: /Ship LifeOS production UI/ })).toBeVisible();

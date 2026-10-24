@@ -30,13 +30,11 @@ import {
 import { layoutAlignmentGraph } from "@/lib/graph-layout";
 import {
   areaAccent,
-  buildAlignmentGraph,
   estimateNodeSize,
+  type AlignmentGraphModel,
   type GraphLayoutKind,
-  type OrphanFilter,
 } from "@/lib/graph-model";
-import type { AlignmentEdge, MapLens } from "@/lib/derive";
-import type { AreaRow, SubjectListItem } from "@/lib/production-ui-types";
+import type { AreaRow } from "@/lib/production-ui-types";
 import { typeLabel } from "@/lib/production-ui-types";
 import { motionMs } from "@/lib/media-query";
 import { typeAccent } from "@/lib/subject-meta";
@@ -59,23 +57,15 @@ function dimClass(dim: boolean): string | undefined {
 }
 
 function GraphCanvas({
-  subjects,
-  edges,
+  model,
   areas,
-  lens,
-  orphans,
-  area,
   colorByArea,
   layout,
   selected,
   onSelect,
 }: {
-  subjects: SubjectListItem[];
-  edges: AlignmentEdge[];
+  model: AlignmentGraphModel;
   areas: AreaRow[];
-  lens: MapLens;
-  orphans: OrphanFilter;
-  area: string | undefined;
   colorByArea: boolean;
   layout: GraphLayoutKind;
   selected?: string;
@@ -92,11 +82,6 @@ function GraphCanvas({
   const layoutGen = useRef(0);
   const edgesRef = useRef(rfEdges);
   edgesRef.current = rfEdges;
-
-  const model = useMemo(
-    () => buildAlignmentGraph(subjects, edges, { lens, area, orphans }),
-    [subjects, edges, lens, area, orphans],
-  );
 
   const layoutKey = useMemo(() => {
     const ids = model.nodes.map((n) => n.subject.id).join(",");
@@ -271,7 +256,7 @@ function GraphCanvas({
         <EmptyState
           icon={NetworkIcon}
           title="No nodes match these filters"
-          description="Widen the lens, include archived work, or show orphans — the graph is filtered, not missing."
+          description="Widen the lens, show finished or archived work, or show orphans — the graph is filtered, not missing."
         />
       </div>
     );
@@ -329,12 +314,9 @@ function GraphCanvas({
 }
 
 export function AlignmentGraph(props: {
-  subjects: SubjectListItem[];
-  edges: AlignmentEdge[];
+  /** The filtered graph (buildAlignmentGraph): the page builds it, so it can count what's hidden. */
+  model: AlignmentGraphModel;
   areas: AreaRow[];
-  lens: MapLens;
-  orphans: OrphanFilter;
-  area: string | undefined;
   colorByArea: boolean;
   layout: GraphLayoutKind;
   selected?: string;

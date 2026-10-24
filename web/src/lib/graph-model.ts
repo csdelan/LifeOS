@@ -6,6 +6,7 @@
  */
 
 import type { AlignmentEdge, MapLens } from "@/lib/derive";
+import { hiddenByShow, type MapShow } from "@/lib/map-show";
 import type { Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { ALIGNMENT_TYPES } from "@/lib/subject-meta";
 
@@ -34,6 +35,8 @@ export interface GraphRelationEdge {
 export interface AlignmentGraphModel {
   nodes: GraphSubjectNode[];
   edges: GraphRelationEdge[];
+  /** Finished items the Show filter left out (of those the other filters kept). */
+  hiddenFinished: number;
 }
 
 export function isGraphSubject(
@@ -65,11 +68,16 @@ export function buildAlignmentGraph(
     lens?: MapLens;
     area?: string | null;
     orphans?: OrphanFilter;
+    /** How much finished work to show; everything when absent. */
+    show?: MapShow;
+    /** An item Show keeps whatever its status: the selected one. */
+    keep?: string;
   },
 ): AlignmentGraphModel {
   const lens = opts?.lens ?? "all";
   const area = opts?.area ?? null;
   const orphans = opts?.orphans ?? "all";
+  const show = opts?.show ?? "all";
   const linked = linkedSubjectIds(edges);
   const byId = new Map(subjects.map((s) => [s.id, s]));
 
@@ -81,10 +89,14 @@ export function buildAlignmentGraph(
     bump(e.toId);
   }
 
-  let nodes: GraphSubjectNode[] = subjects
+  const candidates = subjects
     .filter((s) => isGraphSubject(s, linked))
     .filter((s) => matchesLens(s.type, lens))
-    .filter((s) => !area || s.area === area)
+    .filter((s) => !area || s.area === area);
+  const hidden = hiddenByShow(candidates, edges, show, opts?.keep);
+
+  let nodes: GraphSubjectNode[] = candidates
+    .filter((s) => !hidden.has(s.id))
     .map((subject) => ({
       subject,
       degree: degree.get(subject.id) ?? 0,
@@ -112,7 +124,7 @@ export function buildAlignmentGraph(
       a.subject.title.localeCompare(b.subject.title),
   );
 
-  return { nodes, edges: graphEdges };
+  return { nodes, edges: graphEdges, hiddenFinished: hidden.size };
 }
 
 function typeRank(type: SubjectType): number {

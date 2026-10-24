@@ -5,6 +5,7 @@ import { NodeBackdrop } from "@/components/graph/node-backdrop";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { TypeIcon } from "@/components/primitives/type-icon";
+import { isFinished } from "@/lib/map-show";
 import { shownStatus } from "@/lib/task-series";
 import type { SubjectListItem } from "@/lib/production-ui-types";
 import { creditText } from "@/lib/cover";
@@ -32,7 +33,13 @@ export function SubjectGraphNode({ data, selected }: NodeProps<SubjectFlowNode>)
 
   return (
     <div
-      className={cn("lifeos-node", selected && "is-selected", cover && "has-cover")}
+      className={cn(
+        "lifeos-node",
+        selected && "is-selected",
+        cover && "has-cover",
+        // Finished work that's still shown (Show filter) recedes.
+        isFinished(subject) && "is-finished",
+      )}
       data-type={subject.type}
       style={{ "--node-accent": accent } as CSSProperties}
     >

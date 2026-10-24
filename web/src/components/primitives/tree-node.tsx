@@ -17,6 +17,7 @@ export function TreeNode({
   expanded,
   expandable,
   selected,
+  finished,
   extraParents,
   onToggle,
   onSelect,
@@ -30,6 +31,8 @@ export function TreeNode({
   expanded?: boolean;
   expandable?: boolean;
   selected?: boolean;
+  /** Finished work still shown (the Map's Show filter): its title recedes. */
+  finished?: boolean;
   extraParents?: { id: string; title: string }[];
   onToggle?: () => void;
   onSelect?: () => void;
@@ -85,7 +88,9 @@ export function TreeNode({
           <span className="flex w-4 shrink-0 items-center justify-center" aria-hidden>
             <TypeIcon type={subject.type} className="size-3.5" />
           </span>
-          <span className="truncate font-medium">{subject.title}</span>
+          <span className={cn("truncate font-medium", finished && "text-muted-foreground")}>
+            {subject.title}
+          </span>
         </button>
         {extraParents?.map((parent) => (
           <Tooltip key={parent.id}>

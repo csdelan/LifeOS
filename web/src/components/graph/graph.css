@@ -107,6 +107,14 @@
   outline-offset: -1px;
 }
 
+/*
+ * Finished work still on the graph (a done step, or a parent of open work) turns grey.
+ * Grey keeps each color's lightness, so its words keep their contrast; fading would not.
+ */
+.lifeos-node.is-finished .lifeos-node__shell {
+  filter: grayscale(1);
+}
+
 .lifeos-node.is-selected .lifeos-node__shell {
   outline: 2px solid color-mix(in oklch, var(--primary) 70%, var(--node-accent));
   outline-offset: 1px;

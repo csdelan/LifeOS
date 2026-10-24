@@ -401,11 +401,21 @@ filters, and click-to-open detail. Build moves `unmapped → building`. Definiti
 only / omit orphans" filter is not yet confirmed built), so the Ontology fit remains pending
 per the handoff rule.
 
+**Update (2026-10-24 — Show filter):** the Map (outline and graph) hides finished work by
+default. A **Show** dropdown offers **Open** (default: a finished item is hidden with
+everything under it), **Open + done steps** (also a finished item directly under an open
+parent, greyed) and **All**. A finished item stays, greyed, while open work sits under it, and
+the selected item stays whatever its status. "Finished" is the terminal-status set (D7). A
+"N finished hidden" note sits beside the dropdown, and the choice is remembered with the Map's
+other view settings.
+
 **Workflow (Chris):**
 - Object graph very similar to obsidian
 - Filters to show orphans only, or omit orphans.
 - Filter for "Area", or only certain types.
 - Clicking on any node opens up the detail editor for that subject.
+- Completed work hidden by default, at least when its parent is completed (completed children
+  can still show), through a status filter dropdown — just show what's relevant (2026-10-24).
 
 **Ontology fit (Claude):**
 - pending

@@ -8,7 +8,15 @@ import {
   useSubjects,
 } from "@/lib/queries";
 import type { AlignmentEdge, AlignmentNode, MapLens } from "@/lib/derive";
+import { buildAlignmentGraph } from "@/lib/graph-model";
 import type { GraphLayoutKind, MapViewMode, OrphanFilter } from "@/lib/graph-model";
+import {
+  DEFAULT_MAP_SHOW,
+  MAP_SHOW_OPTIONS,
+  isFinished,
+  showForest,
+  type MapShow,
+} from "@/lib/map-show";
 import { childTypesFor, inferChildRelation, typeLabel } from "@/lib/production-ui-types";
 import type { AreaRow, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { TreeNode } from "@/components/primitives/tree-node";
@@ -53,6 +61,7 @@ type MapStored = {
   area?: string;
   colorByArea?: boolean;
   expandAll?: boolean;
+  show?: MapShow;
 };
 
 export function MapPage() {
@@ -67,7 +76,15 @@ export function MapPage() {
     search.orphans === "only" || search.orphans === "hide" ? search.orphans : "all";
   const area = search.area;
   const colorByArea = Boolean(search.colorByArea);
+  const show: MapShow = search.show ?? DEFAULT_MAP_SHOW;
   const { data, isLoading, isError } = useAlignmentForest(archived, lens);
+  // Show hides finished work; the selected item stays, so marking it Completed doesn't
+  // make it vanish from under you.
+  const shown = useMemo(
+    () => (data ? showForest(data, show, selected) : null),
+    [data, show, selected],
+  );
+  const forest = shown?.nodes;
   // A repeating Task is one node, its series; its repetitions stay off the Map (TASKS-3).
   const subjectsQuery = useSubjects(undefined, archived, true);
   const graphSubjects = useMemo(
@@ -76,16 +93,26 @@ export function MapPage() {
   );
   const edgesQuery = useAlignmentEdges(archived);
   const areasQuery = useAreas();
-  const { setDirty, requestNavigation } = useDirty();
-  const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded());
-  const [expandAll, setExpandAll] = useState(
-    () => Boolean(loadView<MapStored>("map", {}).expandAll),
+  const graphModel = useMemo(
+    () =>
+      buildAlignmentGraph(graphSubjects, edgesQuery.data ?? EMPTY_EDGES, {
+        lens,
+        area,
+        orphans,
+        show,
+        keep: selected,
+      }),
+    [graphSubjects, edgesQuery.data, lens, area, orphans, show, selected],
   );
+  const hiddenCount = view === "graph" ? graphModel.hiddenFinished : (shown?.hidden ?? 0);
+  const { setDirty, requestNavigation } = useDirty();
+  // The view saved last visit, read once before this visit's first save overwrites it.
+  const [storedAtMount] = useState(() => loadView<MapStored>("map", {}));
+  const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded());
+  const [expandAll, setExpandAll] = useState(() => Boolean(storedAtMount.expandAll));
   const [creating, setCreating] = useState<{ parentId: string } | null>(null);
   const pendingReveal = useRef<string | null>(null);
-  const skipExpandBootstrap = useRef(
-    loadView<MapStored>("map", {}).expandAll === false,
-  );
+  const skipExpandBootstrap = useRef(storedAtMount.expandAll === false);
 
   useEffect(() => {
     saveExpanded(expanded);
@@ -102,17 +129,19 @@ export function MapPage() {
       area,
       colorByArea,
       expandAll,
+      show,
     } satisfies MapStored);
-  }, [archived, lens, selected, view, layout, orphans, area, colorByArea, expandAll]);
+  }, [archived, lens, selected, view, layout, orphans, area, colorByArea, expandAll, show]);
 
   useEffect(() => {
-    const stored = loadView<MapStored>("map", {});
+    const stored = storedAtMount;
     const patch: MapStored = {};
     if (!search.selected && stored.selected) patch.selected = stored.selected;
     if (!search.view && stored.view) patch.view = stored.view;
     if (!search.layout && stored.layout) patch.layout = stored.layout;
     if (!search.orphans && stored.orphans) patch.orphans = stored.orphans;
     if (!search.area && stored.area) patch.area = stored.area;
+    if (!search.show && stored.show) patch.show = stored.show;
     if (search.colorByArea === undefined && stored.colorByArea) {
       patch.colorByArea = stored.colorByArea;
     }
@@ -256,6 +285,35 @@ export function MapPage() {
                   void navigate({ search: (prev) => ({ ...prev, lens: id }) })
                 }
               />
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground" aria-hidden>
+                  Show
+                </span>
+                <Select
+                  value={show}
+                  onValueChange={(value) =>
+                    void navigate({
+                      search: (prev) => ({ ...prev, show: value as MapShow }),
+                    })
+                  }
+                >
+                  <SelectTrigger size="sm" className="h-7 min-w-24" aria-label="Show">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MAP_SHOW_OPTIONS.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {hiddenCount > 0 ? (
+                  <span className="text-xs text-muted-foreground" data-testid="map-hidden-count">
+                    {hiddenCount} finished hidden
+                  </span>
+                ) : null}
+              </div>
               <label className="flex min-h-11 items-center gap-1.5 text-xs text-muted-foreground md:min-h-0">
                 <input
                   id="map-archived"
@@ -357,12 +415,8 @@ export function MapPage() {
                   keyboard and screen-reader accessible map.
                 </p>
                 <AlignmentGraph
-                subjects={graphSubjects}
-                edges={edgesQuery.data ?? EMPTY_EDGES}
+                model={graphModel}
                 areas={areasQuery.data ?? EMPTY_AREAS}
-                lens={lens}
-                orphans={orphans}
-                area={area}
                 colorByArea={colorByArea}
                 layout={layout}
                 selected={selected}
@@ -398,8 +452,15 @@ export function MapPage() {
                 description="Create an Identity Statement to grow the alignment graph from."
               />
             ) : null}
+            {data && data.length > 0 && forest?.length === 0 ? (
+              <EmptyState
+                icon={MapIcon}
+                title="Nothing open on the map"
+                description="Everything here is finished. Set Show to All to see it."
+              />
+            ) : null}
             <div role="tree" aria-label="Alignment outline">
-              {data?.map((n) => (
+              {forest?.map((n) => (
                 <MapBranch
                   key={n.instanceKey}
                   node={n}
@@ -506,6 +567,7 @@ function MapBranch({
       expanded={isOpen}
       expandable={node.children.length > 0 || !!showCreate}
       selected={selected === node.id}
+      finished={isFinished(node.subject)}
       extraParents={node.extraParents}
       onToggle={() => onToggle(node.id)}
       onSelect={() => onSelect(node.id)}
