@@ -939,7 +939,20 @@ Build:      built
 ### TASKS-1 — The Tasks tab optimizes daily execution and quick entry
 Horizon:    Pilot
 Definition: active
-Build:      built
+Build:      mapped
+
+**Update (2026-10-24, with TASKS-3):** Chris agreed that a Task whose do-date has arrived
+stays in **Today** until it's done or its due date passes, then moves to Overdue. Before
+this, a Task was in Today only on the exact day:
+
+- A do-date that had passed, with a future due date, showed under Upcoming.
+- A do-date that had passed, with no due date, dropped into Unscheduled.
+
+The rule covers every Task, not only repetitions. TASKS-3's once-each-week chore needs it
+(do-date Monday, due Sunday). The Focus page's Due & overdue section follows the same rule
+(DASHBOARD-1). Build drops back to `mapped`: it's a change to the web's grouping
+(`web/src/lib/task-groups.ts`, `lib/derive.ts`) with no kernel change. The frozen Pilot's
+Tasks view keeps the old rule.
 
 **Workflow (Chris):**
 - Provide the dedicated **Tasks** destination defined by NAV-1 as a focused working view,
@@ -947,8 +960,9 @@ Build:      built
 - Group the default active view into **Overdue**, **Today**, **Upcoming**, and
   **Unscheduled** sections.
 - Overdue contains incomplete Tasks whose Due date is before today.
-- Today contains incomplete Tasks whose Due date or Scheduled / Do date is today, unless
-  they already appear in Overdue.
+- Today contains incomplete Tasks whose Due date is today, or whose Scheduled / Do date is
+  today or earlier, unless they already appear in Overdue. A Task whose do-date has arrived
+  stays in Today until it's done or its Due date passes, then it moves to Overdue.
 - Upcoming contains incomplete Tasks with a future Due date or Scheduled / Do date.
 - Unscheduled contains incomplete Tasks with neither date.
 - Show each Task only once in the first applicable group, using the group order above as
@@ -976,8 +990,9 @@ Build:      built
 
 **Ontology fit (Claude):**
 - Maps to: pure **reads** over Task subjects. The four groups are a derived projection over
-  the two date attributes vs today — Overdue (incomplete, `due` < today), Today (`due` or
-  `scheduled` = today), Upcoming (future `due` / `scheduled`), Unscheduled (neither) — with
+  the two date attributes vs today — Overdue (incomplete, `due` < today), Today (`due` =
+  today, or `scheduled` ≤ today), Upcoming (future `due` / `scheduled`), Unscheduled
+  (neither) — with
   "show once, first group wins" as app precedence. Inline quick-entry = `bsk new Task`;
   status via Change status… = `state_change`.
 - Kernel delta: none — rides GEN-10's attribute keys, D7 status, Tags (GEN-1), Area (D1), and
@@ -1028,6 +1043,52 @@ Build:      built
   earns once per X minutes the timer recorded before it was completed.
 - Open decisions: manual time entry / correction; whether Start should also move a
   Not started Task to In progress.
+
+
+### TASKS-3 — Tasks repeat on calendar dates, once a week, or after the last completion
+Horizon:    Pilot
+Definition: drafting
+Build:      unmapped
+
+**Workflow (Chris):**
+- "I probably just need simple recurrence like: 'Take out trash' every Wednesday afternoon;
+  'Clean fridge' every 30 days (calculated from completion date of last instance)."
+  (2026-10-24)
+- "If I miss taking out the trash 1 week, that instance is missed, and I close out the task
+  without getting rewards. Whereas the Clean Fridge instance doesn't need to be done on a
+  specific day, but rather just routinely."
+- "Keep currency awards consistent across each repetition."
+- A Task can repeat three ways:
+  - on calendar dates: every Wednesday, or rent on the 1st;
+  - once each week on any day, Monday to Sunday, due Sunday;
+  - a number of days after the last one was done: the fridge, every 30 days.
+- Each repetition is its own Task in my lists, due on its date.
+- Nothing closes by itself: "Sometimes it will be Thursday morning that I take it out. … I
+  just need the ability to close out a missed task myself. It should not be automatic."
+  (2026-10-24)
+- A late repetition stays under Overdue until I do one of three things:
+  - complete it: the full reward;
+  - cancel it: a skip, no reward, not counted as missed;
+  - mark it **Missed**: no reward.
+- A Missed one can be corrected to Completed, and then it pays.
+- Completing one early counts for its date.
+- A calendar date stays open when late. If the next date arrives first, both are open (rent).
+- Dates only: the time of day isn't kept.
+- The fridge's first one is due on a date I pick, default today. A late one shows under
+  Overdue. Skipping it restarts the count from the skip.
+- Every repetition pays the same reward: the repeating task's price. One repetition can be
+  given its own. Changing the repeating task changes the repetitions still open, never a
+  reward already paid.
+- Not needed now: Nth weekday of a month, yearly dates, seasonal, pausing, ending after a
+  count, streak bonuses, steps or checklists, a count per period, assigning to someone,
+  reminders.
+- A once-each-week repetition shows in Today all week, from its Monday do-date until it's
+  done or Sunday passes, then under Overdue. That's TASKS-1's do-date rule (2026-10-24).
+
+**Ontology fit (Claude):**
+- _pending_. Explored in [recurring-tasks-plan.md](recurring-tasks-plan.md); the
+  recommendation is that each repetition is its own Task linked to a series, as recurring
+  Appointments are (D10).
 
 
 ### GEN-11 — Identity Statements are timeless rather than status-driven work
