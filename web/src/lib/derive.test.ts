@@ -148,3 +148,22 @@ describe("deriveDashboard's primary focus cover (COVER-3)", () => {
     expect(deriveDashboard({ ...base, subjects: [] }).primaryFocus).toMatchObject({ subjectId: "", cover: null });
   });
 });
+
+describe("deriveDashboard's Due & overdue list (TASKS-1)", () => {
+  const base = { edges: [], inboxCount: 0, habits: [], occurrences: [], today: "2026-10-28" };
+  const task = (id: string, extra: Partial<SubjectListItem>) =>
+    item(id, "Task", id, { status: "Not started", ...extra });
+
+  it("holds a Task once its do-date arrives, until it's done, beside the late and due-today ones", () => {
+    const subjects = [
+      task("week-chore", { scheduled: "2026-10-26", due: "2026-11-01" }),
+      task("yesterday", { scheduled: "2026-10-27" }),
+      task("late", { due: "2026-10-20" }),
+      task("due-today", { due: "2026-10-28" }),
+      task("next-week", { scheduled: "2026-11-02" }),
+      task("done", { scheduled: "2026-10-26", status: "Completed" }),
+    ];
+    const ids = deriveDashboard({ ...base, subjects }).dueAndOverdue.map((t) => t.id);
+    expect(ids.sort()).toEqual(["due-today", "late", "week-chore", "yesterday"]);
+  });
+});

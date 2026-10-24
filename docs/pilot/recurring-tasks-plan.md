@@ -279,7 +279,7 @@ Monday and a due date of Sunday. Settled in §9.
   passes, then moves to Overdue.
 - So the bathroom shows in Today all week with "due Sunday", and §8.2's one-off Task no
   longer drops into Unscheduled.
-- TASKS-1 is amended and its Build is back to `mapped`. The Focus page's Due & overdue list
+- TASKS-1 is amended (built again in RT1b). The Focus page's Due & overdue list
   follows the same rule. The frozen Pilot keeps the old one.
 
 Calls made without asking, since one option was clearly better:
@@ -307,7 +307,7 @@ Chris approved all six phases on 2026-10-24.
    Habits, Appointments and Commitments save the pattern through `recur` (it's no longer a
    string attribute), with "Doesn't repeat" on the last two.
    - **RT1b:** TASKS-1's do-date rule (§9) in `taskGroup` and the Focus list, with unit
-     tests. Independent of everything else here; it can ship first.
+     tests. Independent of everything else here; it can ship first. **Done.**
 3. **RT2:** kernel: Task series and repetitions, Missed, the two new repeat shapes,
    `TaskSeriesService` with settle, the price from the series, migration 0042,
    `bsk tasks settle`.

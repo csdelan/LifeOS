@@ -939,7 +939,7 @@ Build:      built
 ### TASKS-1 — The Tasks tab optimizes daily execution and quick entry
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Update (2026-10-24, with TASKS-3):** Chris agreed that a Task whose do-date has arrived
 stays in **Today** until it's done or its due date passes, then moves to Overdue. Before
@@ -950,8 +950,8 @@ this, a Task was in Today only on the exact day:
 
 The rule covers every Task, not only repetitions. TASKS-3's once-each-week chore needs it
 (do-date Monday, due Sunday). The Focus page's Due & overdue section follows the same rule
-(DASHBOARD-1). Build drops back to `mapped`: it's a change to the web's grouping
-(`web/src/lib/task-groups.ts`, `lib/derive.ts`) with no kernel change. The frozen Pilot's
+(DASHBOARD-1). It's a change to the web's grouping (`web/src/lib/task-groups.ts`,
+`lib/derive.ts`) with no kernel change, built in RT1b the same day. The frozen Pilot's
 Tasks view keeps the old rule.
 
 **Workflow (Chris):**

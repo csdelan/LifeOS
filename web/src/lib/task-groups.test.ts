@@ -37,6 +37,18 @@ describe("task grouping", () => {
     ).toBe("overdue");
   });
 
+  it("keeps a Task in Today once its do-date arrives, until it's done or its due date passes", () => {
+    // A "sometime this week" chore: do-date Monday, due Sunday.
+    const chore = { scheduled: "2026-09-14", due: "2026-09-20" };
+    expect(taskGroup(task("w", "bathroom", chore), "2026-09-14")).toBe("today");
+    expect(taskGroup(task("w", "bathroom", chore), "2026-09-17")).toBe("today");
+    expect(taskGroup(task("w", "bathroom", chore), "2026-09-20")).toBe("today");
+    expect(taskGroup(task("w", "bathroom", chore), "2026-09-21")).toBe("overdue");
+    expect(taskGroup(task("w", "bathroom", chore), "2026-09-13")).toBe("upcoming");
+    // A one-off planned for yesterday, with no due date, stays in Today.
+    expect(taskGroup(task("y", "call the bank", { scheduled: "2026-09-19" }), today)).toBe("today");
+  });
+
   it("places each task in exactly one group (show-once)", () => {
     const rows = [
       task("a", "late", { due: "2026-09-18", scheduled: today }),

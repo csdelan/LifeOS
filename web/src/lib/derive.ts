@@ -161,8 +161,9 @@ export function deriveDashboard(input: {
   const openTasks = subjects.filter(
     (x) => x.type === "Task" && !x.archived && !isTerminal(x.status),
   );
+  // TASKS-1: due today or late, or its do-date has arrived (the Tasks page's Overdue and Today).
   const dueAndOverdue = openTasks
-    .filter((x) => (x.due && x.due <= today) || x.scheduled === today)
+    .filter((x) => (x.due && x.due <= today) || (x.scheduled && x.scheduled <= today))
     .sort((a, b) =>
       (a.due ?? a.scheduled ?? "").localeCompare(b.due ?? b.scheduled ?? ""),
     );
