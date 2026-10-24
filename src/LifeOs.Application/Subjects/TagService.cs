@@ -11,7 +11,8 @@ namespace LifeOs.Application.Subjects;
 /// normalized before they hit the store, and this verb is deliberately separate from
 /// <c>relate</c> / <c>link</c> — tags classify, relations connect.
 /// </summary>
-public sealed class TagService(SubjectService subjects, IEventReader events, ITagRepository tags)
+public sealed class TagService(
+    SubjectService subjects, IEventReader events, ITagRepository tags, TaskSeriesService? taskSeries = null)
 {
     public async Task<TagResult> ApplyAsync(
         string reference, IEnumerable<string> add, IEnumerable<string> remove,
@@ -33,6 +34,12 @@ public sealed class TagService(SubjectService subjects, IEventReader events, ITa
         var added = toAdd.Count == 0
             ? 0
             : await tags.AddAsync(item.IsEvent, item.Id, toAdd, cancellationToken);
+
+        // A repeating Task's tags follow to its open repetitions (D16).
+        if (!item.IsEvent && taskSeries is not null)
+        {
+            await taskSeries.FollowTagsAsync(item.Id, toAdd, toRemove, cancellationToken);
+        }
 
         return new TagResult(item, toAdd, toRemove, added, removed);
     }

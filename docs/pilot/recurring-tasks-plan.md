@@ -310,7 +310,29 @@ Chris approved all six phases on 2026-10-24.
      tests. Independent of everything else here; it can ship first. **Done.**
 3. **RT2:** kernel: Task series and repetitions, Missed, the two new repeat shapes,
    `TaskSeriesService` with settle, the price from the series, migration 0042,
-   `bsk tasks settle`.
+   `bsk tasks settle`. **Done:** `{"freq":"each","period":"week"}` and every N with
+   `"from":"completion"` (`bsk recur --each week`, `--from completion`, `--start`); Task's
+   vocabulary gains Missed; `TaskSeriesService` makes repetitions on the pattern, on each
+   close (`StatusService`, so the timer's Complete too) and on settle (`bsk tasks settle`);
+   a repetition copies description, area, priority, estimated duration, tags and `serves`
+   links, and pays the series' price unless it has its own (`RewardService`); renames, edits
+   and tags follow to the open repetitions; migration 0042 (the expander's two shapes,
+   `bsk.is_task_series`, one repetition per date, `v_task_repetition`, `v_task_series`);
+   neglect skips series. Tests: `TaskSeriesTests`. Calls made while building it:
+   - A series' own status is **Not started** (repeating) or **Cancelled** (stopped); Completed,
+     In progress and Missed are for its repetitions. Back to Not started, or restored from
+     the archive, it repeats **from today**, so the weeks it was stopped aren't made.
+   - A repetition can't take a pattern of its own, and a series that has made repetitions
+     stops by being Cancelled, not by clearing its pattern (its history stays tied to it).
+   - A Task can't repeat on a cue ("after dinner"): it has no dates, so nothing would be made.
+   - Changing the pattern moves the open repetition whose date hasn't passed to the new
+     pattern; one already late keeps its date.
+   - An edit to the series reaches an open repetition only where it still had the series'
+     value, so a field changed on that repetition keeps its own. A done one keeps the name it
+     was done under.
+   - A hidden (archived) repetition counts as closed, so hiding one doesn't stall the series.
+   - A pattern stored without a start (made with its attributes) gets one the first time it's
+     settled: its due date, else that day.
 4. **RT3:** API: the settle endpoint, series fields on list items, the repeat field on
    create and edit.
 5. **RT4:** web: the Repeat field, Tasks and Focus, settle on open, the repetition detail,

@@ -11,8 +11,15 @@ namespace LifeOs.Application.Subjects;
 /// deliberately out of scope: it moves only by a <c>state_change</c> event
 /// (<see cref="StatusService"/>), so the record of how a subject's state changed
 /// stays append-only and explainable.
+/// <para>
+/// On a repeating Task's series (D16), an edit to a field its repetitions copy follows to the
+/// open ones still holding the series' old value, and a new pattern or start re-plans it
+/// (<see cref="TaskSeriesService"/>). A repetition's <c>series</c> and <c>occurrence</c> are
+/// the series' to set.
+/// </para>
 /// </summary>
-public sealed class AttributeService(SubjectService subjects, ISubjectRepository repository)
+public sealed class AttributeService(
+    SubjectService subjects, ISubjectRepository repository, TaskSeriesService? taskSeries = null)
 {
     /// <summary>
     /// Sets or removes attributes on the subject named by <paramref name="reference"/>
@@ -28,6 +35,30 @@ public sealed class AttributeService(SubjectService subjects, ISubjectRepository
         }
 
         var subject = await subjects.ResolveAsync(reference, cancellationToken);
+
+        if (subject.Type == SubjectTypes.Task)
+        {
+            var reserved = assignments.FirstOrDefault(a =>
+                string.Equals(a.Key.Trim(), TaskSeries.SeriesKey, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(a.Key.Trim(), TaskSeries.OccurrenceKey, StringComparison.OrdinalIgnoreCase));
+            if (reserved is not null)
+            {
+                throw new ArgumentException(
+                    $"A Task's '{reserved.Key.Trim()}' is set by its repeating task, not `bsk set`.", nameof(assignments));
+            }
+
+            var pattern = assignments.FirstOrDefault(a =>
+                string.Equals(a.Key.Trim(), Recurrence.AttributeKey, StringComparison.OrdinalIgnoreCase));
+            if (pattern is not null && taskSeries is not null)
+            {
+                await taskSeries.GuardPatternAsync(
+                    subject, clearing: string.IsNullOrWhiteSpace(pattern.Value), cancellationToken);
+            }
+        }
+
+        var edit = taskSeries is null
+            ? null
+            : await taskSeries.BeforeEditAsync(subject, assignments.Select(a => a.Key.Trim()), cancellationToken);
 
         var patch = new JsonObject();
         var removed = new List<string>();
@@ -66,7 +97,13 @@ public sealed class AttributeService(SubjectService subjects, ISubjectRepository
             {
                 // A recurrence is an object the expander reads (D8), never a string: text
                 // holding one is checked and stored as the object.
-                patch[Recurrence.AttributeKey] = JsonNode.Parse(Recurrence.Canonicalize(assignment.Value.Trim()));
+                var canonical = Recurrence.Canonicalize(assignment.Value.Trim());
+                if (subject.Type == SubjectTypes.Task)
+                {
+                    TaskSeries.CheckTaskPattern(canonical);
+                }
+
+                patch[Recurrence.AttributeKey] = JsonNode.Parse(canonical);
             }
             else
             {
@@ -83,6 +120,31 @@ public sealed class AttributeService(SubjectService subjects, ISubjectRepository
         }
 
         var setKeys = patch.Select(pair => pair.Key).ToList();
+
+        if (taskSeries is not null && subject.Type == SubjectTypes.Task)
+        {
+            if (edit is not null)
+            {
+                var values = new Dictionary<string, string?>(StringComparer.Ordinal);
+                foreach (var key in setKeys)
+                {
+                    values[key] = patch[key] is JsonValue v && v.TryGetValue<string>(out var text) ? text : null;
+                }
+
+                foreach (var key in removed)
+                {
+                    values[key] = null;
+                }
+
+                await taskSeries.FollowAsync(edit, values, cancellationToken);
+            }
+
+            if (setKeys.Concat(removed).Any(k => k is Recurrence.AttributeKey or TaskSeries.StartKey))
+            {
+                await taskSeries.AfterPatternAsync(subject, cancellationToken: cancellationToken);
+            }
+        }
+
         return new AttributeUpdateResult(subject, setKeys, removed);
     }
 }

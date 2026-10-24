@@ -49,7 +49,7 @@ internal static class PilotVocab
     {
         [Goal] = ["New", "Active", "Completed", "Abandoned"],
         [Project] = ["New", "Active", "Completed", "Abandoned"],
-        [Task] = ["Not started", "In progress", "Waiting", "Completed", "Cancelled"],
+        [Task] = ["Not started", "In progress", "Waiting", "Completed", "Missed", "Cancelled"],
         [Commitment] = ["Open", "Fulfilled", "Missed", "Cancelled"],
         [Decision] = ["Open", "Implementing", "Cancelled", "Closed"],
         [Problem] = ["Open", "Working", "Resolved", "Cancelled"],

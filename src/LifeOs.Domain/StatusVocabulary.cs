@@ -25,7 +25,7 @@ public static class StatusVocabulary
     {
         [SubjectTypes.Goal] = GoalProject,
         [SubjectTypes.Project] = GoalProject,
-        [SubjectTypes.Task] = ["Not started", "In progress", "Waiting", "Completed", "Cancelled"],
+        [SubjectTypes.Task] = ["Not started", "In progress", "Waiting", "Completed", "Missed", "Cancelled"],
         [SubjectTypes.Commitment] = ["Open", "Fulfilled", "Missed", "Cancelled"],
         [SubjectTypes.Decision] = ["Open", "Implementing", "Cancelled", "Closed"],
         [SubjectTypes.Problem] = ["Open", "Working", "Resolved", "Cancelled"],

@@ -18,9 +18,14 @@ namespace LifeOs.Application.Subjects;
 /// Completed gives that back. This covers <c>bsk status</c>, the web's Change status and
 /// the timer's Complete, which all come through here.
 /// </para>
+/// <para>
+/// Repeating Tasks (D16): a series only repeats (Not started) or stops (Cancelled), and a
+/// repetition that closes makes the next one (<see cref="TaskSeriesService"/>).
+/// </para>
 /// </summary>
 public sealed class StatusService(
-    SubjectService subjects, IEventStore events, RewardService rewards, IClock clock, string sourceId)
+    SubjectService subjects, IEventStore events, RewardService rewards, IClock clock, string sourceId,
+    TaskSeriesService? taskSeries = null)
 {
     public async Task<StatusResult> ChangeStatusAsync(
         string reference, string newStatus, CancellationToken cancellationToken = default)
@@ -32,6 +37,10 @@ public sealed class StatusService(
 
         var subject = await subjects.ResolveAsync(reference, cancellationToken);
         var status = VocabularyStatus(subject.Type, newStatus);
+
+        var followUp = taskSeries is null
+            ? TaskStatusFollowUp.None
+            : await taskSeries.BeforeStatusAsync(subject, status, cancellationToken);
 
         var payload = JsonSerializer.Serialize(new { subject_id = subject.Id.ToString(), status });
 
@@ -46,7 +55,8 @@ public sealed class StatusService(
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);
         var earned = await rewards.ReconcileWithProgressAsync(subject, eventId, cancellationToken);
-        return new StatusResult(eventId, subject, status, earned.Awards, earned.Progress);
+        var made = taskSeries is null ? [] : await taskSeries.AfterStatusAsync(followUp, cancellationToken);
+        return new StatusResult(eventId, subject, status, earned.Awards, earned.Progress) { Repetitions = made };
     }
 
     /// <summary>
@@ -78,4 +88,8 @@ public sealed class StatusService(
 /// earned or reversed, and each life domain whose level or rank that changed.
 /// </summary>
 public sealed record StatusResult(
-    Guid EventId, SubjectRef Subject, string Status, IReadOnlyList<Award> Awards, IReadOnlyList<DomainChange> Progress);
+    Guid EventId, SubjectRef Subject, string Status, IReadOnlyList<Award> Awards, IReadOnlyList<DomainChange> Progress)
+{
+    /// <summary>The repetitions it made, when it closed one of a repeating Task's (D16).</summary>
+    public IReadOnlyList<SubjectRef> Repetitions { get; init; } = [];
+}

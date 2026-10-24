@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Globalization;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure;
@@ -13,6 +14,12 @@ namespace LifeOs.Cli.Commands;
 /// <c>--freq interval --every 10 --unit days</c>; <c>--freq monthly --on last</c> or
 /// <c>--freq monthly --day 15</c>; <c>--freq trigger --cue "after lunch"</c>;
 /// <c>--clear</c>. The recurrence is validated and stored as a jsonb object.
+/// <para>
+/// On a Task it makes a repeating Task (TASKS-3, D16), which also takes
+/// <c>--each week</c> (once each week on any day) and <c>--from completion</c> (every N after
+/// the last one closed: <c>--freq interval --every 30 --unit days --from completion</c>), and
+/// <c>--start</c>, the date it repeats from (default its due date, else today).
+/// </para>
 /// </summary>
 internal static class RecurCommand
 {
@@ -37,10 +44,14 @@ internal static class RecurCommand
         var dayOption = new Option<int?>("--day") { Description = "monthly: the day of month (1-31)." };
         var cueOption = new Option<string?>("--cue") { Description = "trigger: the cue that prompts the occurrence." };
         var clearOption = new Option<bool>("--clear") { Description = "Remove any recurrence from the subject." };
+        var eachOption = new Option<string?>("--each") { Description = "Tasks: once each period on any day (week)." };
+        var fromOption = new Option<string?>("--from") { Description = "Tasks, with --freq interval: count from 'completion'." };
+        var startOption = new Option<string?>("--start") { Description = "Tasks: the date it repeats from (yyyy-MM-dd)." };
 
         var command = new Command("recur", "Set or clear a subject's recurrence (D8).");
         command.Arguments.Add(subjectArgument);
-        foreach (var option in new Option[] { freqOption, onOption, everyOption, unitOption, dayOption, cueOption, clearOption })
+        foreach (var option in new Option[]
+                 { freqOption, onOption, everyOption, unitOption, dayOption, cueOption, clearOption, eachOption, fromOption, startOption })
         {
             command.Options.Add(option);
         }
@@ -60,7 +71,7 @@ internal static class RecurCommand
                 if (clear)
                 {
                     var cleared = await service.ClearAsync(subject, cancellationToken);
-                    Report(asJson, cleared.Urn, null);
+                    Report(asJson, cleared.Urn, null, []);
                     return 0;
                 }
 
@@ -72,16 +83,29 @@ internal static class RecurCommand
                 var unit = parseResult.GetValue(unitOption);
                 var day = parseResult.GetValue(dayOption);
                 var cue = parseResult.GetValue(cueOption);
+                var each = parseResult.GetValue(eachOption);
+                var from = parseResult.GetValue(fromOption);
+                var start = ParseStart(parseResult.GetValue(startOption));
+
+                if (!string.IsNullOrWhiteSpace(each))
+                {
+                    if (freq.Length > 0 && freq != Recurrence.FreqEach)
+                    {
+                        throw new ArgumentException("Use --each on its own, without --freq.");
+                    }
+
+                    freq = Recurrence.FreqEach;
+                }
 
                 if (freq.Length == 0)
                 {
-                    throw new ArgumentException("A --freq is required (or use --clear).");
+                    throw new ArgumentException("A --freq is required (or --each, or --clear).");
                 }
 
-                var recurrenceJson = Recurrence.Build(freq, on, every, unit, day, cue);
+                var recurrenceJson = Recurrence.Build(freq, on, every, unit, day, cue, each, from);
 
-                var updated = await service.SetAsync(subject, recurrenceJson, cancellationToken);
-                Report(asJson, updated.Urn, recurrenceJson);
+                var updated = await service.SetAsync(subject, recurrenceJson, start, cancellationToken);
+                Report(asJson, updated.Subject.Urn, updated.Recurrence, updated.Made);
                 return 0;
             });
         });
@@ -89,17 +113,37 @@ internal static class RecurCommand
         return command;
     }
 
-    private static void Report(bool asJson, string urn, string? recurrenceJson)
+    private static DateOnly? ParseStart(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        return DateOnly.TryParseExact(text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date
+            : throw new ArgumentException($"--start takes a date as yyyy-MM-dd; got '{text}'.");
+    }
+
+    private static void Report(bool asJson, string urn, string? recurrenceJson, IReadOnlyList<SubjectRef> made)
     {
         if (asJson)
         {
-            Cli.WriteJson(new { urn, recurrence = recurrenceJson });
+            Cli.WriteJson(new
+            {
+                urn,
+                recurrence = recurrenceJson,
+                repetitions = made.Select(r => new { urn = r.Urn, title = r.Title })
+            });
+            return;
         }
-        else
+
+        Console.WriteLine(recurrenceJson is null
+            ? $"Cleared recurrence on {urn}."
+            : $"Set recurrence on {urn}: {recurrenceJson}.");
+        foreach (var repetition in made)
         {
-            Console.WriteLine(recurrenceJson is null
-                ? $"Cleared recurrence on {urn}."
-                : $"Set recurrence on {urn}: {recurrenceJson}.");
+            Console.WriteLine($"  made {repetition.Urn}");
         }
     }
 }

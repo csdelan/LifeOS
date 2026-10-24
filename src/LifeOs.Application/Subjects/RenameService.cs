@@ -14,10 +14,12 @@ namespace LifeOs.Application.Subjects;
 /// Renaming a recurring Appointment series also renames its upcoming materialized
 /// occurrences that still carry the series' old title (each copied it when it was
 /// created); past occurrences and ones renamed individually keep their own titles.
+/// Renaming a repeating Task does the same for its open repetitions (D16).
 /// </para>
 /// </summary>
 public sealed class RenameService(
-    SubjectService subjects, ISubjectRepository repository, IAppointmentRepository appointments, IClock clock)
+    SubjectService subjects, ISubjectRepository repository, IAppointmentRepository appointments, IClock clock,
+    ITaskSeriesRepository? taskSeries = null)
 {
     /// <summary>
     /// Renames the subject named by <paramref name="reference"/> (urn, short id, or
@@ -50,6 +52,11 @@ public sealed class RenameService(
             var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
             (updated, occurrencesRenamed) = await appointments.RenameWithUpcomingOccurrencesAsync(
                 subject.Id, subject.Urn, subject.Title, cleanTitle, today, cancellationToken);
+        }
+        else if (subject.Type == SubjectTypes.Task && taskSeries is not null)
+        {
+            (updated, occurrencesRenamed) = await taskSeries.RenameWithOpenRepetitionsAsync(
+                subject.Id, subject.Urn, subject.Title, cleanTitle, cancellationToken);
         }
         else
         {

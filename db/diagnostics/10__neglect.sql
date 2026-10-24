@@ -12,6 +12,8 @@
 -- Subjects with no focus tag are never parked; with no active Season, nothing is
 -- parked.
 --
+-- A repeating Task's series is excluded too (D16): its repetitions carry the work.
+--
 -- Finished subjects are excluded: a subject whose current status is terminal
 -- (bsk.is_terminal_status — done, abandoned, …) has nothing left to tend, so its
 -- silence is not neglect. Status is folded from source, so no rebuild is needed.
@@ -68,6 +70,8 @@ cadenced AS (
       AND NOT bsk.is_terminal_status(scs.status)
       -- Archived subjects are hidden from every default view (D9, migration 0012).
       AND NOT bsk.is_archived(s.id)
+      -- A repeating Task's series is never tended itself: its repetitions are (D16, 0042).
+      AND NOT bsk.is_task_series(s.type, s.attributes)
 ),
 -- The single most recent concerning event per subject, for the staleness clock
 -- and the evidence row. Rewards ledger entries (migration 0025) concern the item

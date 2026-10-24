@@ -121,7 +121,7 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
         var typo = await Assert.ThrowsAsync<ArgumentException>(
             () => status.ChangeStatusAsync(task.Urn, "Compelted", Ct));
         Assert.Equal(
-            "A Task's status is one of: Not started, In progress, Waiting, Completed, Cancelled; got 'Compelted'.",
+            "A Task's status is one of: Not started, In progress, Waiting, Completed, Missed, Cancelled; got 'Compelted'.",
             typo.Message);
         await Assert.ThrowsAsync<ArgumentException>(() => status.ChangeStatusAsync(task.Urn, "Resolved", Ct));
 

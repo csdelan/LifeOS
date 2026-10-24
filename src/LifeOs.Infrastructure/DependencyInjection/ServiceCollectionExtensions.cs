@@ -85,6 +85,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITagRepository>(_ => new NpgsqlTagRepository(connectionString));
         services.AddSingleton<IAppointmentRepository>(_ => new NpgsqlAppointmentRepository(connectionString));
         services.AddSingleton<ITimerRepository>(_ => new NpgsqlTimerRepository(connectionString));
+        services.AddSingleton<ITaskSeriesRepository>(_ => new NpgsqlTaskSeriesRepository(connectionString));
         services.AddSingleton<ILedgerRepository>(_ => new NpgsqlLedgerRepository(connectionString, homeZone));
         services.AddSingleton<IHomeCalendar>(_ => new NpgsqlHomeCalendar(connectionString, homeZone));
         services.AddSingleton<IFoodLogRepository>(_ => new NpgsqlFoodLogRepository(connectionString));
@@ -120,6 +121,14 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(sp => new SubjectService(sp.GetRequiredService<ISubjectRepository>()));
 
+        // Repeating Tasks (D16): the series service the status, pattern, edit, tag, archive and
+        // timer paths consult.
+        services.AddSingleton(sp => new TaskSeriesService(
+            sp.GetRequiredService<ITaskSeriesRepository>(),
+            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>()));
+
         services.AddSingleton(sp => new ChildCreationService(sp.GetRequiredService<SubjectService>()));
 
         services.AddSingleton(sp => new RelationService(
@@ -128,30 +137,35 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(sp => new AttributeService(
             sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>()));
+            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<TaskSeriesService>()));
 
         services.AddSingleton(sp => new RenameService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>(),
             sp.GetRequiredService<IAppointmentRepository>(),
-            sp.GetRequiredService<IClock>()));
+            sp.GetRequiredService<IClock>(),
+            sp.GetRequiredService<ITaskSeriesRepository>()));
 
         services.AddSingleton(sp => new RecurrenceService(
             sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>()));
+            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<TaskSeriesService>()));
 
         services.AddSingleton(sp => new StatusService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventStore>(),
             sp.GetRequiredService<RewardService>(),
             sp.GetRequiredService<IClock>(),
-            sourceId));
+            sourceId,
+            sp.GetRequiredService<TaskSeriesService>()));
 
         services.AddSingleton(sp => new ArchiveService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventStore>(),
             sp.GetRequiredService<IClock>(),
-            sourceId));
+            sourceId,
+            sp.GetRequiredService<TaskSeriesService>()));
 
         services.AddSingleton(sp => new PromotionService(
             sp.GetRequiredService<SubjectService>(),
@@ -183,7 +197,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ITimerRepository>(),
             sp.GetRequiredService<StatusService>(),
             sp.GetRequiredService<IClock>(),
-            sourceId));
+            sourceId,
+            sp.GetRequiredService<TaskSeriesService>()));
 
         services.AddSingleton(sp => new FoodRewards(
             sp.GetRequiredService<IFoodLogRepository>(),
@@ -248,7 +263,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new TagService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventReader>(),
-            sp.GetRequiredService<ITagRepository>()));
+            sp.GetRequiredService<ITagRepository>(),
+            sp.GetRequiredService<TaskSeriesService>()));
 
         services.AddSingleton(sp => new PeopleService(
             sp.GetRequiredService<SubjectService>(),

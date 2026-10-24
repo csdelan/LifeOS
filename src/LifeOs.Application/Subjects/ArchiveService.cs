@@ -12,7 +12,8 @@ namespace LifeOs.Application.Subjects;
 /// subject. Nothing is ever deleted — archive merely hides a subject from default
 /// views, and restore reverses it, with both recorded in history.
 /// </summary>
-public sealed class ArchiveService(SubjectService subjects, IEventStore events, IClock clock, string sourceId)
+public sealed class ArchiveService(
+    SubjectService subjects, IEventStore events, IClock clock, string sourceId, TaskSeriesService? taskSeries = null)
 {
     /// <summary>Archives the subject — hides it from default views, reversibly.</summary>
     public Task<ArchiveResult> ArchiveAsync(
@@ -49,6 +50,13 @@ public sealed class ArchiveService(SubjectService subjects, IEventStore events, 
             PayloadJson: payload);
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);
+
+        // Archiving a repeating Task stops it; restoring it repeats again from today (D16).
+        if (!archived && taskSeries is not null)
+        {
+            await taskSeries.AfterRestoreAsync(subject, cancellationToken);
+        }
+
         return new ArchiveResult(eventId, subject, archived);
     }
 }

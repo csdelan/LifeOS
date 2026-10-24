@@ -18,6 +18,18 @@ public static class Recurrence
     public const string FreqMonthly = "monthly";
     public const string FreqTrigger = "trigger";
 
+    /// <summary>Once each period, on any day in it (TASKS-3): <c>{"freq":"each","period":"week"}</c>.</summary>
+    public const string FreqEach = "each";
+
+    /// <summary>The periods an <see cref="FreqEach"/> repeat takes. Weeks run Monday to Sunday.</summary>
+    public static readonly IReadOnlyList<string> Periods = ["week"];
+
+    /// <summary>
+    /// An every-N repeat counted from the day the last one closed rather than from the start
+    /// (TASKS-3: the fridge, every 30 days): <c>"from":"completion"</c>.
+    /// </summary>
+    public const string FromCompletion = "completion";
+
     /// <summary>Weekday tokens used by a weekly recurrence, Sunday first.</summary>
     public static readonly IReadOnlyList<string> Weekdays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
@@ -55,7 +67,7 @@ public static class Recurrence
         }.ToJsonString();
     }
 
-    public static string Interval(int every, string unit)
+    public static string Interval(int every, string unit, string? from = null)
     {
         if (every < 1)
         {
@@ -69,7 +81,33 @@ public static class Recurrence
                 $"Unknown unit '{unit}'. Expected: {string.Join(", ", Units)}.", nameof(unit));
         }
 
-        return new JsonObject { ["freq"] = FreqInterval, ["every"] = every, ["unit"] = u }.ToJsonString();
+        var interval = new JsonObject { ["freq"] = FreqInterval, ["every"] = every, ["unit"] = u };
+        var f = from?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrEmpty(f))
+        {
+            if (f != FromCompletion)
+            {
+                throw new ArgumentException(
+                    $"An every-N repeat counts from the start, or from '{FromCompletion}'; got '{from}'.", nameof(from));
+            }
+
+            interval["from"] = FromCompletion;
+        }
+
+        return interval.ToJsonString();
+    }
+
+    /// <summary>Once each <paramref name="period"/> on any day in it: <c>{"freq":"each","period":"week"}</c>.</summary>
+    public static string Each(string period)
+    {
+        var p = (period ?? "").Trim().ToLowerInvariant();
+        if (!Periods.Contains(p))
+        {
+            throw new ArgumentException(
+                $"Once each what? Expected: {string.Join(", ", Periods)}; got '{period}'.", nameof(period));
+        }
+
+        return new JsonObject { ["freq"] = FreqEach, ["period"] = p }.ToJsonString();
     }
 
     public static string MonthlyLast()
@@ -101,29 +139,37 @@ public static class Recurrence
     /// <summary>
     /// Builds a recurrence from its parts, the way <c>bsk recur</c> and <c>POST /api/recur</c>
     /// name them: <paramref name="on"/> holds a weekly recurrence's weekdays, or <c>last</c> for
-    /// a monthly one on the month's last day.
+    /// a monthly one on the month's last day; <paramref name="period"/> is an <c>each</c>
+    /// repeat's period; <paramref name="from"/> is <c>completion</c> for an every-N repeat
+    /// counted from the last one closed.
     /// </summary>
     public static string Build(
         string? freq, IReadOnlyList<string>? on = null, int? every = null, string? unit = null,
-        int? day = null, string? cue = null)
+        int? day = null, string? cue = null, string? period = null, string? from = null)
     {
         var f = (freq ?? "").Trim().ToLowerInvariant();
         var days = on ?? [];
+        if (!string.IsNullOrWhiteSpace(from) && f != FreqInterval)
+        {
+            throw new ArgumentException("Only an every-N repeat can count from the last completion.", nameof(from));
+        }
+
         return f switch
         {
             FreqDaily => Daily(),
             FreqWeekly => Weekly(days),
             FreqInterval => Interval(
-                every ?? throw new ArgumentException("An interval recurrence needs 'every'."), unit ?? ""),
+                every ?? throw new ArgumentException("An interval recurrence needs 'every'."), unit ?? "", from),
             FreqMonthly => day is { } d
                 ? MonthlyDay(d)
                 : days.Contains("last", StringComparer.OrdinalIgnoreCase)
                     ? MonthlyLast()
                     : throw new ArgumentException("A monthly recurrence needs a day (1-31) or 'last'."),
             FreqTrigger => Trigger(cue ?? ""),
+            FreqEach => Each(period ?? ""),
             "" => throw new ArgumentException("A recurrence needs a freq."),
             _ => throw new ArgumentException(
-                $"Unknown freq '{freq}'. Expected: daily, weekly, interval, monthly, trigger.")
+                $"Unknown freq '{freq}'. Expected: daily, weekly, interval, monthly, trigger, each.")
         };
     }
 
@@ -153,7 +199,9 @@ public static class Recurrence
             Int(recurrence, "every"),
             Text(recurrence, "unit"),
             Int(recurrence, "day"),
-            Text(recurrence, "cue"));
+            Text(recurrence, "cue"),
+            Text(recurrence, "period"),
+            Text(recurrence, "from"));
     }
 
     /// <inheritdoc cref="Canonicalize(JsonNode?)"/>

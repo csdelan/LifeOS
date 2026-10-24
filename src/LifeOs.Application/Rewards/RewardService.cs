@@ -702,6 +702,18 @@ public sealed class RewardService(
     private async Task<StoredBounty> ReadBountyAsync(SubjectRef subject, CancellationToken cancellationToken)
     {
         var json = await subjects.GetAttributeValueAsync(subject.Id, Bounty.AttributeKey, cancellationToken);
+
+        // A repetition of a repeating Task pays the series' price unless it has its own (D16),
+        // so every repetition pays the same and changing the series' price changes the ones
+        // completed after.
+        if (json is null
+            && subject.Type == SubjectTypes.Task
+            && await subjects.GetAttributeValueAsync(subject.Id, TaskSeries.SeriesKey, cancellationToken) is { } seriesUrn
+            && await subjects.FindByUrnAsync(seriesUrn, cancellationToken) is { } series)
+        {
+            json = await subjects.GetAttributeValueAsync(series.Id, Bounty.AttributeKey, cancellationToken);
+        }
+
         return new StoredBounty(Bounty.Parse(json), Bounty.ParseEveryMinutes(json) ?? Bounty.DefaultEveryMinutes);
     }
 
