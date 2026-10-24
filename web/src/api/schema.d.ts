@@ -340,6 +340,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/recur": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["Recur"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/archive": {
         parameters: {
             query?: never;
@@ -2123,6 +2139,26 @@ export interface components {
             type?: string;
             title?: string;
         };
+        RecurBody: {
+            subject?: string;
+            recurrence?: null | components["schemas"]["RecurrenceBody"];
+        };
+        RecurResult: {
+            /** Format: uuid */
+            id?: string;
+            urn?: string;
+            recurrence?: null | string;
+        };
+        RecurrenceBody: {
+            freq?: string;
+            on?: null | string[];
+            /** Format: int32 */
+            every?: null | number | string;
+            unit?: null | string;
+            /** Format: int32 */
+            day?: null | number | string;
+            cue?: null | string;
+        };
         RedeemBody: {
             reward?: null | string;
             amounts?: null | {
@@ -2991,6 +3027,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EarnResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    Recur: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecurBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurResult"];
                 };
             };
             /** @description Bad Request */

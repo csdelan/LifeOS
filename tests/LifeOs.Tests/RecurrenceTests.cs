@@ -139,4 +139,69 @@ public sealed class RecurrenceTests(PostgresFixture postgres)
         // Weekly canonicalizes to Sunday-first order regardless of input order.
         Assert.Contains("\"sun\",\"wed\"", Recurrence.Weekly(["wed", "sun"]));
     }
+    [Fact]
+    public void Canonicalize_takes_the_object_or_text_holding_it()
+    {
+        Assert.Equal(Recurrence.Weekly(["wed"]), Recurrence.Canonicalize("""{"freq":"weekly","on":["wed"]}"""));
+        Assert.Equal(Recurrence.Daily(), Recurrence.Canonicalize("\"{\\\"freq\\\": \\\"daily\\\"}\""));
+        Assert.Equal(Recurrence.MonthlyLast(), Recurrence.Canonicalize("""{"freq":"monthly","on":"last"}"""));
+        Assert.Equal(Recurrence.MonthlyDay(15), Recurrence.Canonicalize("""{"freq":"monthly","day":15}"""));
+        Assert.Equal(Recurrence.Interval(2, "weeks"), Recurrence.Canonicalize("""{"freq":"interval","every":"2","unit":"weeks"}"""));
+
+        Assert.Throws<ArgumentException>(() => Recurrence.Canonicalize("daily"));
+        Assert.Throws<ArgumentException>(() => Recurrence.Canonicalize("""{"kind":"daily"}"""));
+        Assert.Throws<ArgumentException>(() => Recurrence.Canonicalize("""{"freq":"weekly","on":[]}"""));
+        Assert.Throws<ArgumentException>(() => Recurrence.Canonicalize("[1,2]"));
+    }
+
+    [Fact]
+    public async Task A_recurrence_written_as_text_is_stored_as_the_object()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var attributes = provider.GetRequiredService<AttributeService>();
+
+        // How the web and `bsk new --attr` sent it: a string attribute holding the object.
+        var created = await subjects.CreateAsync(
+            SubjectTypes.Habit, $"text habit {Guid.NewGuid():N}",
+            attributesJson: """{"recurrence":"{\"freq\":\"weekly\",\"on\":[\"wed\",\"mon\"]}"}""",
+            cancellationToken: Ct);
+        var edited = await subjects.CreateAsync(
+            SubjectTypes.Appointment, $"text appointment {Guid.NewGuid():N}", cancellationToken: Ct);
+        await attributes.SetAsync(
+            edited.Urn, [new AttributeAssignment("recurrence", """{"freq":"monthly","day":1}""")], Ct);
+
+        await using var c = await OpenAsync();
+        var stored = (await c.QueryAsync<(string Kind, string Json)>(new CommandDefinition(
+                """
+                SELECT jsonb_typeof(attributes->'recurrence'), (attributes->'recurrence')::text
+                FROM bsk.subject WHERE id = ANY(@ids) ORDER BY type DESC;
+                """,
+                new { ids = new[] { created.Id, edited.Id } }, cancellationToken: Ct)))
+            .ToList();
+        Assert.All(stored, s => Assert.Equal("object", s.Kind));
+        Assert.Equal("""{"on": ["mon", "wed"], "freq": "weekly"}""", stored[0].Json);
+        Assert.Equal("""{"day": 1, "freq": "monthly"}""", stored[1].Json);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => attributes.SetAsync(
+            edited.Urn, [new AttributeAssignment("recurrence", "fortnightly")], Ct));
+    }
+
+    [Theory]
+    [InlineData("""{"freq": "daily"}""", """{"freq": "daily"}""")]
+    [InlineData("""{"kind":"daily"}""", """{"freq": "daily"}""")]
+    [InlineData("""{"kind":"weekly","weekdays":[3,1,3]}""", """{"on": ["mon", "wed"], "freq": "weekly"}""")]
+    [InlineData("""{"kind":"weekly","weekdays":[]}""", """{"freq": "daily"}""")]
+    [InlineData("""{"kind":"interval","intervalDays":3}""", """{"freq": "interval", "unit": "days", "every": 3}""")]
+    [InlineData("weekdays", """{"on": ["mon", "tue", "wed", "thu", "fri"], "freq": "weekly"}""")]
+    [InlineData("weekly", """{"on": ["sun"], "freq": "weekly"}""")]
+    [InlineData("every so often", null)]
+    [InlineData("""{"kind":"lunar"}""", null)]
+    public async Task Text_recurrences_are_read_back_as_objects(string text, string? expected)
+    {
+        await using var c = await OpenAsync();
+        var fixedJson = await c.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT bsk.recurrence_from_text(@text)::text;", new { text }, cancellationToken: Ct));
+        Assert.Equal(expected, fixedJson);
+    }
 }

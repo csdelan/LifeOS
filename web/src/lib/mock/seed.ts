@@ -818,7 +818,7 @@ export function createSeed(): MockState {
   details["appt-run"].scope = "Easy conversational pace. Sam at the north gate, 7:00.";
   details["appt-dinner"].scope = "Maya cooking; Jonah sets the table. No laptops.";
 
-  function bag(id: string, attrs: Record<string, string>) {
+  function bag(id: string, attrs: Record<string, unknown>) {
     const d = details[id];
     if (!d) return;
     details[id] = { ...d, attributes: JSON.stringify(attrs) };
@@ -901,7 +901,7 @@ export function createSeed(): MockState {
   bag("cmt-inbox", {
     description: "Triage until empty or 15 minutes, each weekday.",
     due: today,
-    recurrence: JSON.stringify({ kind: "weekly", weekdays: [1, 2, 3, 4, 5] }),
+    recurrence: { freq: "weekly", on: ["mon", "tue", "wed", "thu", "fri"] },
   });
   bag("person-maya", {
     person_kind: "human",
@@ -1326,7 +1326,7 @@ export function createSeed(): MockState {
       reward: "Coffee tastes earned",
       startDate: t(-80),
       allowsPartial: true,
-      recurrence: "daily",
+      recurrence: '{"freq":"daily"}',
       archived: false,
       createdAt: isoAgo(800),
       currentStreak: 0,
@@ -1341,7 +1341,7 @@ export function createSeed(): MockState {
       reward: "A clear queue",
       startDate: t(-40),
       allowsPartial: true,
-      recurrence: "daily",
+      recurrence: '{"freq":"daily"}',
       archived: false,
       createdAt: isoAgo(400),
       currentStreak: 0,
@@ -1354,7 +1354,7 @@ export function createSeed(): MockState {
       cue: "Lights dimmed",
       routine: "Hamstrings + breath, 5 minutes",
       allowsPartial: true,
-      recurrence: "daily",
+      recurrence: '{"freq":"daily"}',
       archived: false,
       createdAt: isoAgo(200),
       currentStreak: 0,
@@ -1369,7 +1369,7 @@ export function createSeed(): MockState {
       reward: "Tomorrow's self has a chance",
       startDate: t(-60),
       allowsPartial: true,
-      recurrence: "weekdays",
+      recurrence: '{"freq":"weekly","on":["mon","tue","wed","thu","fri"]}',
       archived: false,
       createdAt: isoAgo(500),
       currentStreak: 0,
@@ -1448,7 +1448,8 @@ export function createSeed(): MockState {
         start: h.startDate ?? "",
         end: h.endDate ?? "",
         allows_partial: h.allowsPartial ? "true" : "false",
-        recurrence: h.recurrence ?? "daily",
+        // The kernel stores the pattern as an object (D8).
+        recurrence: JSON.parse(h.recurrence ?? '{"freq":"daily"}') as unknown,
         // Morning mobility pays Health XP (xp-domains plan): the Character page's history.
         ...(h.id === "habit-mobility" ? { bounty: { followed: MOBILITY_DAY } } : {}),
       }),

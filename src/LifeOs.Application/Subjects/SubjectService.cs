@@ -91,7 +91,7 @@ public sealed class SubjectService(ISubjectRepository subjects)
         var cleanTitle = NormalizeTitle(title);
         var urn = Urns.Build(type, cleanTitle);
         var id = await subjects.CreateAsync(
-            new NewSubject(urn, type, cleanTitle, attributesJson, originEventId), cancellationToken);
+            new NewSubject(urn, type, cleanTitle, Recurrence.NormalizeAttributes(attributesJson), originEventId), cancellationToken);
         return new SubjectRef(id, urn, type, cleanTitle);
     }
 
@@ -114,7 +114,7 @@ public sealed class SubjectService(ISubjectRepository subjects)
         var cleanTitle = NormalizeTitle(title);
         var urn = Urns.Build(type, cleanTitle);
         var (childId, edgeId) = await subjects.CreateWithParentEdgeAsync(
-            new NewSubject(urn, type, cleanTitle, attributesJson, OriginEventId: null),
+            new NewSubject(urn, type, cleanTitle, Recurrence.NormalizeAttributes(attributesJson), OriginEventId: null),
             relation, parentId, Provenances.Declared, cancellationToken);
         return (new SubjectRef(childId, urn, type, cleanTitle), edgeId);
     }
@@ -136,7 +136,7 @@ public sealed class SubjectService(ISubjectRepository subjects)
         var cleanTitle = NormalizeTitle(title);
         var urn = Urns.Build(type, cleanTitle);
         var (newId, edgeId) = await subjects.CreateWithIncomingEdgeAsync(
-            new NewSubject(urn, type, cleanTitle, attributesJson, OriginEventId: null),
+            new NewSubject(urn, type, cleanTitle, Recurrence.NormalizeAttributes(attributesJson), OriginEventId: null),
             relation, fromId, Provenances.Declared, cancellationToken);
         return (new SubjectRef(newId, urn, type, cleanTitle), edgeId);
     }
@@ -180,7 +180,7 @@ public sealed class SubjectService(ISubjectRepository subjects)
         var urn = Urns.Build(type, title);
         try
         {
-            var id = await subjects.CreateAsync(new NewSubject(urn, type, title, attributesJson), cancellationToken);
+            var id = await subjects.CreateAsync(new NewSubject(urn, type, title, Recurrence.NormalizeAttributes(attributesJson)), cancellationToken);
             return new ResolvedSubject(new SubjectRef(id, urn, type, title), Created: true);
         }
         catch (DuplicateSubjectException)

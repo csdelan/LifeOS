@@ -19,7 +19,7 @@ public sealed class RecurrenceService(SubjectService subjects, ISubjectRepositor
     {
         var subject = await subjects.ResolveAsync(reference, cancellationToken);
 
-        var patch = new JsonObject { ["recurrence"] = JsonNode.Parse(recurrenceJson) };
+        var patch = new JsonObject { ["recurrence"] = JsonNode.Parse(Recurrence.Canonicalize(recurrenceJson)) };
         var updated = await repository.UpdateAttributesAsync(
             subject.Id, patch.ToJsonString(), [], cancellationToken);
         if (!updated)

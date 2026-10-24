@@ -82,12 +82,13 @@ import {
   type TargetDraft,
 } from "@/lib/establish";
 import { splitTags } from "@/lib/tag-suggest";
-import { parseRecurrence } from "@/lib/recurrence";
+import { parseRecurrence, sameRecurrence } from "@/lib/recurrence";
 import {
   attrsToWrite,
   emptyFormValues,
   formConfig,
   formValuesFromDetail,
+  hasRecurrenceField,
   isDetailDirty,
   parseAttrBag,
   selectedParentIds,
@@ -236,7 +237,9 @@ export function SubjectDetail({
     if (nextStatus && nextStatus !== (subject.status || defaultStatus(subject.type))) {
       await writes.setStatus(subject.id, nextStatus);
     }
-    if (subject.type === "Habit" && values.attrs.recurrence) {
+    // The repeat pattern is its own write (D8), sent only when it changed.
+    const savedRecurrence = form.formState.defaultValues?.attrs?.recurrence;
+    if (hasRecurrenceField(subject.type) && !sameRecurrence(values.attrs.recurrence, savedRecurrence)) {
       await writes.recur(subject.id, parseRecurrence(values.attrs.recurrence));
     }
     if (subject.type === "Habit") {

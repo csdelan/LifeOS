@@ -145,10 +145,11 @@ export const ATTR_KEYS_BY_TYPE: Record<SubjectType, readonly string[]> = {
   Decision: ["description", "decision_date"],
   Person: ["role", "description", "contact", "notes", "person_kind"],
   Area: ["description", "notes"],
-  Habit: ["cue", "routine", "reward", "start", "end", "allows_partial", "recurrence"],
-  Appointment: ["date", "start", "end", "location", "meeting_link", "notes", "all_day", "recurrence", "attendees"],
+  // A repeat pattern is an object written by `recur` (POST /api/recur), not a string attribute.
+  Habit: ["cue", "routine", "reward", "start", "end", "allows_partial"],
+  Appointment: ["date", "start", "end", "location", "meeting_link", "notes", "all_day", "attendees"],
   Idea: ["description", "notes"],
-  Commitment: ["description", "notes", "due", "recurrence"],
+  Commitment: ["description", "notes", "due"],
   Constraint: ["scope", "limit", "notes"],
   Season: ["focus", "ends", "notes"],
   // The price ({currency: n}) is an object the rewards API writes, not a string attribute.
@@ -183,14 +184,24 @@ export type PersonRole = (typeof PERSON_ROLES)[number];
 /** Habit occurrence / adherence states (GEN-3). */
 export type AdherenceState = "unrecorded" | "followed" | "partial" | "not_followed";
 
-/** Recurrence for Habits, Commitments, Appointments (app-layer; kernel TBD). */
-export type RecurrenceKind = "daily" | "weekly" | "interval";
+/**
+ * A repeat pattern in the kernel's own shape (D8): what `attributes.recurrence` holds and
+ * `POST /api/recur` takes, so `bsk.recurrence_occurrences` can expand it.
+ */
+export type RecurrenceFreq = "daily" | "weekly" | "interval" | "monthly" | "trigger";
+export type WeekdayToken = "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat";
+export type IntervalUnit = "days" | "weeks" | "months";
 export interface RecurrenceSpec {
-  kind: RecurrenceKind;
-  /** weekly: 0 = Sunday … 6 = Saturday. Empty / omitted = every day. */
-  weekdays?: number[];
-  /** interval: every N days (from start). */
-  intervalDays?: number;
+  freq: RecurrenceFreq;
+  /** weekly: the weekdays, Sunday first; monthly: `["last"]` for the month's last day. */
+  on?: string[];
+  /** interval: how many units between repeats, counted from the start date. */
+  every?: number;
+  unit?: IntervalUnit;
+  /** monthly: the day of the month (1–31); a month without that day is skipped. */
+  day?: number;
+  /** trigger: the cue that prompts it (no scheduled dates). */
+  cue?: string;
 }
 
 /** Review working document (REVIEW-1/2). Mock-only until the kernel ships D3. */
@@ -1530,8 +1541,8 @@ export interface LifeOsWriteClient {
   syncActivity(force?: boolean): Promise<ActivitySyncResult>;
   /** Set a workout's one-line note (at most 140 characters); `""` clears it. */
   setWorkoutNote(workout: string, text: string): Promise<WorkoutRow>;
-  /** Set structured recurrence on a Habit (GEN-3). */
-  recur(habit: string, spec: RecurrenceSpec): Promise<void>;
+  /** Set a subject's repeat pattern (D8, `POST /api/recur`); `null` clears it. */
+  recur(subject: string, spec: RecurrenceSpec | null): Promise<void>;
   involve(subject: string, person: string, role: PersonRole, remove?: boolean): Promise<void>;
   /** Drive a Task's timer (TASKS-2). Starting or resuming pauses any other running timer. */
   timer(task: string, action: TimerAction): Promise<TimerActionResult>;

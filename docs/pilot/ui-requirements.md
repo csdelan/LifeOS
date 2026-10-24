@@ -1116,8 +1116,9 @@ Build:      building
 - **Rewards:** each repetition earns under its own `completed:` / `timed:` key, so the
   engine, undo and the timer work unchanged (D11).
 - Kernel delta:
-  - migration 0041: the `each` branch of `recurrence_occurrences`, `v_task_series`, the
-    unique index, and the repair of patterns stored as text;
+  - migration 0041: the repair of patterns stored as text (RT1);
+  - migration 0042: the `each` branch of `recurrence_occurrences`, `v_task_series` and
+    the unique index;
   - Task's Missed;
   - the two shapes in `Recurrence`;
   - `TaskSeriesService` and its repository;
@@ -3980,7 +3981,7 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   [cover-images-plan.md](cover-images-plan.md), C1–C5).
 - **Repeating Tasks** (TASKS-3 / D16): series and repetitions, Task's Missed, the
   once-each-week and after-completion shapes, `TaskSeriesService` with settle, the price
-  from the series, migration 0041, `bsk tasks settle`, `POST /api/recur` and
+  from the series, migrations 0041 (the text repair) and 0042, `bsk tasks settle`, `POST /api/recur` and
   `POST /api/tasks/settle`. — **Building** (planned in
   [recurring-tasks-plan.md](recurring-tasks-plan.md), RT1–RT5).
 

@@ -73,22 +73,12 @@ internal static class RecurCommand
                 var day = parseResult.GetValue(dayOption);
                 var cue = parseResult.GetValue(cueOption);
 
-                var recurrenceJson = freq switch
+                if (freq.Length == 0)
                 {
-                    Recurrence.FreqDaily => Recurrence.Daily(),
-                    Recurrence.FreqWeekly => Recurrence.Weekly(on),
-                    Recurrence.FreqInterval => Recurrence.Interval(
-                        every ?? throw new ArgumentException("interval recurrence needs --every."), unit ?? ""),
-                    Recurrence.FreqMonthly => day is { } d
-                        ? Recurrence.MonthlyDay(d)
-                        : on.Contains("last", StringComparer.OrdinalIgnoreCase)
-                            ? Recurrence.MonthlyLast()
-                            : throw new ArgumentException("monthly recurrence needs --day <n> or --on last."),
-                    Recurrence.FreqTrigger => Recurrence.Trigger(cue ?? ""),
-                    "" => throw new ArgumentException("A --freq is required (or use --clear)."),
-                    _ => throw new ArgumentException(
-                        $"Unknown --freq '{freq}'. Expected: daily, weekly, interval, monthly, trigger.")
-                };
+                    throw new ArgumentException("A --freq is required (or use --clear).");
+                }
+
+                var recurrenceJson = Recurrence.Build(freq, on, every, unit, day, cue);
 
                 var updated = await service.SetAsync(subject, recurrenceJson, cancellationToken);
                 Report(asJson, updated.Urn, recurrenceJson);

@@ -121,6 +121,7 @@ import {
   toDomainRow,
 } from "@/lib/domain-fold";
 import { applyStreakToHabit } from "@/lib/habit-streak";
+import { serializeRecurrence } from "@/lib/recurrence";
 import { creditDays, creditedOnFor, foldDomains, localDay } from "@/lib/mock/domain-credit";
 import { CURRENCIES, coinsToUsd, currency, orderedAmounts, shortfall } from "@/lib/rewards";
 import { sobrietyOn } from "@/lib/sobriety";
@@ -279,7 +280,7 @@ export function createSubject(req: NewSubjectRequest): CreatedSubject {
         startDate: attrs.start,
         endDate: attrs.end,
         allowsPartial,
-        recurrence: attrs.recurrence ?? JSON.stringify({ kind: "daily" }),
+        recurrence: attrs.recurrence ?? JSON.stringify({ freq: "daily" }),
         archived: false,
         createdAt,
         currentStreak: 0,
@@ -1127,14 +1128,17 @@ export function earnDay(
   return earned;
 }
 
-export function setHabitRecurrence(habitRef: string, spec: RecurrenceSpec) {
-  const habit = state.habits.find((h) => h.id === habitRef || h.urn === habitRef);
-  if (!habit) return;
-  const raw = JSON.stringify(spec);
-  state.habits = state.habits.map((h) =>
-    h.id === habit.id ? { ...h, recurrence: raw } : h,
-  );
-  applyAttrs(habit.id, { recurrence: raw });
+/** `bsk recur` / `POST /api/recur` (D8): the pattern is stored as an object; `null` clears it. */
+export function setRecurrence(subjectRef: string, spec: RecurrenceSpec | null) {
+  const subject = byRef(subjectRef);
+  const detail = subject ? state.details[subject.id] : undefined;
+  if (!subject || !detail) throw new Error(`No subject matches "${subjectRef}".`);
+  const raw = spec ? serializeRecurrence(spec) : null;
+  const bag = rawAttrs(detail.attributes);
+  if (raw) bag.recurrence = JSON.parse(raw) as unknown;
+  else delete bag.recurrence;
+  state.details[subject.id] = { ...detail, attributes: JSON.stringify(bag) };
+  state.habits = state.habits.map((h) => (h.id === subject.id ? { ...h, recurrence: raw } : h));
   emit();
 }
 

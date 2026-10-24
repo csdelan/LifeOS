@@ -41,6 +41,8 @@ public static class WriteEndpoints
             .Produces<ApiError>(StatusCodes.Status409Conflict);
         api.MapPost("/status", SetStatus).WithName("SetStatus")
             .Produces<EarnResult>().Produces<ApiError>(StatusCodes.Status400BadRequest);
+        api.MapPost("/recur", Recur).WithName("Recur")
+            .Produces<RecurResult>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/archive", Archive).WithName("Archive")
             .Produces(StatusCodes.Status200OK).Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/restore", Restore).WithName("Restore")
@@ -218,6 +220,35 @@ public static class WriteEndpoints
         var result = await status.ChangeStatusAsync(
             ResolveWriteRef(body.Subject, reader), body.Status, cancellationToken);
         return Results.Ok(RewardRows.Earned(result.Awards, result.Progress));
+    }
+
+    /// <summary>
+    /// Sets or clears a subject's recurrence (D8), the HTTP twin of <c>bsk recur</c>. The
+    /// pattern is built and checked in <see cref="Recurrence"/> and stored as the object
+    /// the expander reads; no recurrence clears it.
+    /// </summary>
+    private static async Task<IResult> Recur(
+        RecurBody body,
+        RecurrenceService recurrence,
+        SubjectReader reader,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(body.Subject))
+        {
+            return Results.BadRequest(new ApiError("subject is required."));
+        }
+
+        var subjectRef = ResolveWriteRef(body.Subject, reader);
+        if (body.Recurrence is not { } pattern)
+        {
+            var cleared = await recurrence.ClearAsync(subjectRef, cancellationToken);
+            return Results.Ok(new RecurResult { Id = cleared.Id, Urn = cleared.Urn });
+        }
+
+        var json = Recurrence.Build(
+            pattern.Freq, pattern.On, pattern.Every, pattern.Unit, pattern.Day, pattern.Cue);
+        var updated = await recurrence.SetAsync(subjectRef, json, cancellationToken);
+        return Results.Ok(new RecurResult { Id = updated.Id, Urn = updated.Urn, Recurrence = json });
     }
 
     private static async Task<IResult> Archive(
@@ -613,6 +644,37 @@ public sealed class StatusBody
 {
     public string Subject { get; set; } = "";
     public string Status { get; set; } = "";
+}
+
+/// <summary>A recurrence to set (D8); null clears it.</summary>
+public sealed class RecurBody
+{
+    public string Subject { get; set; } = "";
+    public RecurrenceBody? Recurrence { get; set; }
+}
+
+/// <summary>
+/// A recurrence's parts, as <c>bsk recur</c> takes them: <c>freq</c> is daily | weekly |
+/// interval | monthly | trigger; <c>on</c> holds a weekly one's weekdays (sun..sat) or
+/// <c>last</c> for a monthly one on the month's last day; <c>every</c> + <c>unit</c>
+/// (days | weeks | months) an interval; <c>day</c> a monthly day (1-31); <c>cue</c> a trigger.
+/// </summary>
+public sealed class RecurrenceBody
+{
+    public string Freq { get; set; } = "";
+    public string[]? On { get; set; }
+    public int? Every { get; set; }
+    public string? Unit { get; set; }
+    public int? Day { get; set; }
+    public string? Cue { get; set; }
+}
+
+/// <summary>The subject whose recurrence was set, and the stored recurrence (JSON), null when cleared.</summary>
+public sealed class RecurResult
+{
+    public Guid Id { get; set; }
+    public string Urn { get; set; } = "";
+    public string? Recurrence { get; set; }
 }
 
 public sealed class SubjectBody

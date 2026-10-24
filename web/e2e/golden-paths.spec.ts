@@ -65,6 +65,27 @@ test.describe("golden paths", () => {
     await expect(page.getByRole("button", { name: "Edit" })).toBeVisible({ timeout: 10_000 });
   });
 
+  test("a repeat pattern is saved in the kernel's shape and read back", async ({ page }) => {
+    await page.goto("/map?selected=cmt-inbox");
+    await expect(page.getByRole("heading", { name: /Reach Inbox Zero each weekday/ })).toBeVisible();
+    await expect(page.getByText("Weekdays", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Edit" }).click();
+    const days = page.getByRole("group", { name: "On these days" });
+    for (const day of ["Monday", "Tuesday", "Thursday", "Friday"]) {
+      await days.getByRole("button", { name: day }).click();
+    }
+    await expect(days.getByRole("button", { name: "Wednesday" })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Every Wednesday", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Edit" }).click();
+    await page.getByRole("group", { name: "Repeat" }).getByRole("button", { name: "Doesn't repeat" }).click();
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Every Wednesday", { exact: true })).toBeHidden();
+  });
+
   test("Inbox keyboard triage: arrows, Enter, Drop confirm", async ({ page }) => {
     await page.goto("/inbox");
     await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();

@@ -62,6 +62,12 @@ public sealed class AttributeService(SubjectService subjects, ISubjectRepository
             {
                 removed.Add(key);
             }
+            else if (string.Equals(key, Recurrence.AttributeKey, StringComparison.OrdinalIgnoreCase))
+            {
+                // A recurrence is an object the expander reads (D8), never a string: text
+                // holding one is checked and stored as the object.
+                patch[Recurrence.AttributeKey] = JsonNode.Parse(Recurrence.Canonicalize(assignment.Value.Trim()));
+            }
             else
             {
                 patch[key] = assignment.Value.Trim();

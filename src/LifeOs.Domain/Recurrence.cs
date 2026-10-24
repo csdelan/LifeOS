@@ -94,4 +94,132 @@ public static class Recurrence
 
         return new JsonObject { ["freq"] = FreqTrigger, ["cue"] = cue.Trim() }.ToJsonString();
     }
+
+    /// <summary>The attribute that holds a subject's recurrence.</summary>
+    public const string AttributeKey = "recurrence";
+
+    /// <summary>
+    /// Builds a recurrence from its parts, the way <c>bsk recur</c> and <c>POST /api/recur</c>
+    /// name them: <paramref name="on"/> holds a weekly recurrence's weekdays, or <c>last</c> for
+    /// a monthly one on the month's last day.
+    /// </summary>
+    public static string Build(
+        string? freq, IReadOnlyList<string>? on = null, int? every = null, string? unit = null,
+        int? day = null, string? cue = null)
+    {
+        var f = (freq ?? "").Trim().ToLowerInvariant();
+        var days = on ?? [];
+        return f switch
+        {
+            FreqDaily => Daily(),
+            FreqWeekly => Weekly(days),
+            FreqInterval => Interval(
+                every ?? throw new ArgumentException("An interval recurrence needs 'every'."), unit ?? ""),
+            FreqMonthly => day is { } d
+                ? MonthlyDay(d)
+                : days.Contains("last", StringComparer.OrdinalIgnoreCase)
+                    ? MonthlyLast()
+                    : throw new ArgumentException("A monthly recurrence needs a day (1-31) or 'last'."),
+            FreqTrigger => Trigger(cue ?? ""),
+            "" => throw new ArgumentException("A recurrence needs a freq."),
+            _ => throw new ArgumentException(
+                $"Unknown freq '{freq}'. Expected: daily, weekly, interval, monthly, trigger.")
+        };
+    }
+
+    /// <summary>
+    /// Checks a recurrence given as JSON and returns its canonical form: the object
+    /// <c>bsk.recurrence_occurrences</c> reads. It takes the object itself, or text holding
+    /// one, which is how a recurrence arrives through a plain string attribute. Every door that
+    /// writes a recurrence comes through here, so a pattern is never stored as text the
+    /// expander can't read. Throws <see cref="ArgumentException"/> for anything else.
+    /// </summary>
+    public static string Canonicalize(JsonNode? node)
+    {
+        if (node is JsonValue value && value.TryGetValue<string>(out var text))
+        {
+            node = ParseText(text);
+        }
+
+        if (node is not JsonObject recurrence)
+        {
+            throw new ArgumentException(
+                """A recurrence is a JSON object such as {"freq":"weekly","on":["wed"]}.""");
+        }
+
+        return Build(
+            Text(recurrence, "freq"),
+            On(recurrence["on"]),
+            Int(recurrence, "every"),
+            Text(recurrence, "unit"),
+            Int(recurrence, "day"),
+            Text(recurrence, "cue"));
+    }
+
+    /// <inheritdoc cref="Canonicalize(JsonNode?)"/>
+    public static string Canonicalize(string json) => Canonicalize(ParseText(json));
+
+    /// <summary>
+    /// <paramref name="attributesJson"/> with its <c>recurrence</c>, if it has one, in canonical
+    /// form (<see cref="Canonicalize(JsonNode?)"/>), so creating a subject with a recurrence
+    /// written as text stores the object. Anything without one comes back unchanged.
+    /// </summary>
+    public static string NormalizeAttributes(string attributesJson)
+    {
+        if (string.IsNullOrWhiteSpace(attributesJson)
+            || JsonNode.Parse(attributesJson) is not JsonObject attributes
+            || !attributes.ContainsKey(AttributeKey))
+        {
+            return attributesJson;
+        }
+
+        var recurrence = attributes[AttributeKey];
+        if (recurrence is null)
+        {
+            attributes.Remove(AttributeKey);
+        }
+        else
+        {
+            attributes[AttributeKey] = JsonNode.Parse(Canonicalize(recurrence));
+        }
+
+        return attributes.ToJsonString();
+    }
+
+    private static JsonNode? ParseText(string text)
+    {
+        try
+        {
+            return JsonNode.Parse(text);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            throw new ArgumentException(
+                $$"""'{{text}}' is not a recurrence. A recurrence is a JSON object such as {"freq":"weekly","on":["wed"]}.""");
+        }
+    }
+
+    private static string? Text(JsonObject o, string key)
+        => o[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+
+    private static int? Int(JsonObject o, string key)
+        => o[key] switch
+        {
+            JsonValue v when v.TryGetValue<int>(out var n) => n,
+            JsonValue v when v.TryGetValue<string>(out var s) && int.TryParse(s, out var n) => n,
+            null => null,
+            _ => throw new ArgumentException($"A recurrence's '{key}' must be a whole number.")
+        };
+
+    private static List<string> On(JsonNode? node)
+        => node switch
+        {
+            null => [],
+            JsonArray a => a.Select(x => x is JsonValue v && v.TryGetValue<string>(out var s)
+                    ? s
+                    : throw new ArgumentException("A recurrence's 'on' holds weekday names such as \"wed\"."))
+                .ToList(),
+            JsonValue v when v.TryGetValue<string>(out var s) => [s],
+            _ => throw new ArgumentException("A recurrence's 'on' holds weekday names such as \"wed\".")
+        };
 }

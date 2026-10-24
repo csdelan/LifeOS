@@ -49,7 +49,7 @@ import {
   renameSubject,
   renameTag,
   saveReviewBody,
-  setHabitRecurrence,
+  setRecurrence,
   setTags,
 } from "@/lib/mock/store";
 import { getState } from "@/lib/mock/store";
@@ -296,10 +296,9 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       return row;
     },
 
-    async recur(habit, spec) {
+    async recur(subject, spec) {
       await wait();
-      setHabitRecurrence(habit, spec);
-      notify("Recurrence saved");
+      setRecurrence(subject, spec);
       bump();
     },
 

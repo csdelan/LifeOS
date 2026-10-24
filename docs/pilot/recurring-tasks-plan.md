@@ -195,7 +195,7 @@ Sizes are rough: XS is a line or two, S is under a day's phase, M is a phase of 
 | `StatusService` | After a repetition is Completed, Cancelled or Missed, call the series service. The timer's Complete goes through here, so it comes free | S |
 | `RewardService.ReadBountyAsync` | Fall back to the series' bounty | S |
 | `RenameService` | Already renames an Appointment series' upcoming copies; extend it to Task series | S |
-| Migration **0041** | The once-each-week branch of `recurrence_occurrences`; a `v_task_series` view (pattern, open repetitions, next date, done / missed counts, last done); an index on `attributes->>'series'` | S |
+| Migration **0042** | The once-each-week branch of `recurrence_occurrences`; a `v_task_series` view (pattern, open repetitions, next date, done / missed counts, last done); an index on `attributes->>'series'` | S |
 | Archive (D9) | An archived series stops repeating; settle skips it | XS |
 | Diagnostics | Neglect would flag a series if it carried `expected_cadence`; exclude series | XS |
 | `AppointmentService.MaterializeAsync` | Unchanged. It could later share the new service and make appointments automatic too | none now |
@@ -250,8 +250,11 @@ domains, Food, Activity and Covers.
   stores strings. `bsk.recurrence_occurrences` reads `recur->>'freq'` and finds nothing.
 - **Likely effect today:** a Habit created on the web has no scheduled days. Its unlogged
   days are never marked missed, so its adherence and "Ready to establish" may read higher
-  than they should. Habits set up with `bsk recur` are fine. This hasn't been checked
-  against staging's data.
+  than they should. Habits set up with `bsk recur` are fine.
+- **Staging, checked 2026-10-24:** one subject had a pattern, the Habit "Clean as I go",
+  stored as text. Migration 0041 turns it into the object, so from then on its scheduled
+  days without a check-off read as missed. No habit-day award changes: those pay only for
+  days followed.
 - Recurring Tasks need this path fixed anyway, so it is phase RT1 (§10).
 
 ### 8.2 A do-date that has passed
@@ -296,11 +299,17 @@ Chris approved all six phases on 2026-10-24.
 
 1. **RT0:** TASKS-3 active with its ontology fit, D16 and the backlog line. **Done.**
 2. **RT1:** repeat patterns round-trip from the web to the kernel (§8.1). Fixes Habits and
-   Appointments on its own.
+   Appointments on its own. **Done:** every door that writes a pattern checks it and
+   stores the object (`Recurrence.Canonicalize`: `bsk new`/`set`/`recur`, `POST /api/subjects`,
+   `/api/set` and the new `POST /api/recur`); migration 0041 repairs the patterns already
+   stored as text (`bsk.recurrence_from_text`). The web's `RecurrenceSpec` is the kernel's
+   shape, its editor adds every N weeks or months and monthly on a day or the last day, and
+   Habits, Appointments and Commitments save the pattern through `recur` (it's no longer a
+   string attribute), with "Doesn't repeat" on the last two.
    - **RT1b:** TASKS-1's do-date rule (§9) in `taskGroup` and the Focus list, with unit
      tests. Independent of everything else here; it can ship first.
 3. **RT2:** kernel: Task series and repetitions, Missed, the two new repeat shapes,
-   `TaskSeriesService` with settle, the price from the series, migration 0041,
+   `TaskSeriesService` with settle, the price from the series, migration 0042,
    `bsk tasks settle`.
 4. **RT3:** API: the settle endpoint, series fields on list items, the repeat field on
    create and edit.

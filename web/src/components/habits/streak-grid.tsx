@@ -8,7 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { addDays, addMonths, daysInMonth, formatDay, startOfMonth, todayIso, weekdayIndex } from "@/lib/dates";
-import { isOccurrenceDate, parseRecurrence } from "@/lib/recurrence";
+import { DAILY, isOccurrenceDate, parseRecurrence } from "@/lib/recurrence";
 import type { AdherenceState, HabitOccurrenceRow, RecurrenceSpec } from "@/lib/production-ui-types";
 import { HABIT_STATE_SURFACE } from "@/components/habits/habit-state-styles";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,8 @@ export function StreakGrid({
 }) {
   const today = todayIso();
   const [month, setMonth] = useState(startOfMonth(today));
-  const spec = parseRecurrence(recurrence);
+  // A habit without a pattern reads as daily, as it always has on this grid.
+  const spec = parseRecurrence(recurrence) ?? DAILY;
   const byDate = useMemo(() => {
     const map = new Map<string, HabitOccurrenceRow>();
     for (const o of occurrences) map.set(o.occurrenceDate, o);

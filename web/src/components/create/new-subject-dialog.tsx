@@ -41,6 +41,7 @@ import {
   attrsToWrite,
   emptyFormValues,
   formConfig,
+  hasRecurrenceField,
   selectedParentIds,
   subjectFormSchema,
   type SubjectFormValues,
@@ -157,8 +158,10 @@ export function NewSubjectDialog({
     if (initialStatus && initialStatus !== defaultStatus(t)) {
       await writes.setStatus(created.id, initialStatus);
     }
-    if (t === "Habit" && attrs.recurrence) {
-      await writes.recur(created.id, parseRecurrence(attrs.recurrence));
+    // The repeat pattern is its own write (D8, POST /api/recur), not a string attribute.
+    const recurrence = hasRecurrenceField(t) ? parseRecurrence(values.attrs.recurrence) : null;
+    if (recurrence) {
+      await writes.recur(created.id, recurrence);
     }
     if (values.tags.trim()) {
       const tags = splitTags(values.tags);

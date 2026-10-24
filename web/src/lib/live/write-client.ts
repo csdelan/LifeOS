@@ -286,9 +286,24 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       throw new Error("Voice capture is not on the live API yet.");
     },
 
-    async recur(_habit, _spec) {
-      // TODO(api): POST /api/habits/{id}/recur — kernel has no recurrence verb yet.
-      toast.error("Recurrence is not on the live API yet.");
+    async recur(subject, spec) {
+      await unwrap(
+        api().POST("/api/recur", {
+          body: {
+            subject,
+            recurrence: spec
+              ? {
+                  freq: spec.freq,
+                  on: spec.on ?? null,
+                  every: spec.every ?? null,
+                  unit: spec.unit ?? null,
+                  day: spec.day ?? null,
+                  cue: spec.cue ?? null,
+                }
+              : null,
+          },
+        }),
+      );
     },
 
     async saveReview(_id, _body) {

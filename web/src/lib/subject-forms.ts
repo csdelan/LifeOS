@@ -421,6 +421,11 @@ export function formConfig(type: SubjectType): TypeFormConfig {
   return CONFIG[type] ?? { ...FALLBACK, type, hasStatus: (STATUS_BY_TYPE[type]?.length ?? 0) > 0 };
 }
 
+/** True when the type's form has a repeat pattern, written with `recur` (D8). */
+export function hasRecurrenceField(type: SubjectType): boolean {
+  return formConfig(type).fields.some((f) => f.kind === "recurrence");
+}
+
 export function visibleFields(type: SubjectType, mode: FormMode, values: SubjectFormValues): FieldDef[] {
   return formConfig(type).fields.filter((f) => {
     if (f.createOnly && mode !== "create") return false;
@@ -437,7 +442,7 @@ export function emptyFormValues(type: SubjectType, mode: FormMode = "create"): S
   if (type === "Problem") attrs.date_identified = todayIso();
   if (type === "Habit") {
     attrs.allows_partial = "true";
-    attrs.recurrence = JSON.stringify({ kind: "daily" });
+    attrs.recurrence = JSON.stringify({ freq: "daily" });
   }
   return {
     mode,
@@ -461,6 +466,8 @@ export function parseAttrBag(raw?: string | null): Record<string, string> {
     for (const [k, v] of Object.entries(parsed)) {
       if (typeof v === "string") out[k] = v;
       else if (typeof v === "boolean" || typeof v === "number") out[k] = String(v);
+      // A repeat pattern is an object (D8); the form carries it as its JSON text.
+      else if (k === "recurrence" && v && typeof v === "object") out[k] = JSON.stringify(v);
     }
     return out;
   } catch {

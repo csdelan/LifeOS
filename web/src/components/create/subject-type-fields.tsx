@@ -306,10 +306,11 @@ function FieldBlock({
         {editing ? (
           <RecurrenceEditor
             value={attr}
+            allowNone={type !== "Habit"}
             onChange={(next) => form.setValue(`attrs.${field.key}`, next, { shouldDirty: true })}
           />
         ) : (
-          <p className="text-sm">{attr ? recurrenceLabel(parseRecurrence(attr)) : "—"}</p>
+          <p className="text-sm">{repeatText(attr)}</p>
         )}
       </Field>
     );
@@ -477,4 +478,9 @@ function Field({
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
   );
+}
+
+function repeatText(raw?: string): string {
+  const spec = parseRecurrence(raw);
+  return spec ? recurrenceLabel(spec) : "—";
 }
