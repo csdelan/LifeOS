@@ -123,31 +123,37 @@ public sealed class ExceptionDayTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Sleep_xp_is_split_out_as_passive_and_the_fold_still_ignores_the_new_inputs()
+    public async Task Sleep_xp_is_split_out_as_passive_and_a_marked_day_stops_counting()
     {
+        // Two and three days back, so both have settled whatever the hour.
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
         var today = await db.TodayAsync();
-        var day = today.AddDays(-1);
+        var day = today.AddDays(-2);
         await CreditKeyedAsync(db, ActivityAwards.SleepKey(day), ActivityAwards.SleepTrigger, day, 15);
         await CreditKeyedAsync(db, ActivityAwards.StepsKey(day), ActivityAwards.StepsTrigger, day, 25);
         await db.CreditAsync(day, 30);
-        await db.CreditAsync(today.AddDays(-2), 70);
+        await db.CreditAsync(today.AddDays(-3), 70);
 
         var before = DomainService.Fold(LifeDomains.Health, await Credit(db));
         var credit = await Credit(db);
-        var yesterday = credit.Days.Single(d => d.Day == day);
-        Assert.Equal((70L, 15L), (yesterday.Base, yesterday.Passive));
-        Assert.Equal(0, credit.Days.Single(d => d.Day == today.AddDays(-2)).Passive);
+        var sick = credit.Days.Single(d => d.Day == day);
+        Assert.Equal((70L, 15L), (sick.Base, sick.Passive));
+        Assert.Equal(0, credit.Days.Single(d => d.Day == today.AddDays(-3)).Passive);
 
-        var domainDay = new DomainDay(yesterday.Day, yesterday.Base, yesterday.Paid, yesterday.Passive);
+        var domainDay = new DomainDay(sick.Day, sick.Base, sick.Paid, sick.Passive);
         Assert.Equal(55, domainDay.Action);
+        Assert.True(before.StandingOn(day).Counted);
+        Assert.True(before.ActiveOn(day));
 
-        // Marking a day changes nothing the fold reads yet (X10 makes it skip them).
+        // Marked, the day no longer counts toward consistency or the multiplier, and the last
+        // 90 days reach back past it. Its XP still counts toward lifetime.
         await db.Get<ExceptionDayService>().MarkAsync(day, "Sick", Ct);
         var after = DomainService.Fold(LifeDomains.Health, await Credit(db));
-        Assert.Equal(
-            (before.Level, before.Rank, before.Consistency.SuccessfulDays, before.TotalXp),
-            (after.Level, after.Rank, after.Consistency.SuccessfulDays, after.TotalXp));
+        var marked = after.StandingOn(day);
+        Assert.Equal((true, false, false), (marked.Exception, marked.Counted, marked.Active));
+        Assert.Contains(day, after.ExceptionDays);
+        Assert.Equal(before.Window.Days - 1, after.Window.Days);
+        Assert.Equal(before.TotalXp, after.TotalXp);
     }
 
     [Fact]

@@ -18,18 +18,30 @@ public sealed record DomainReading(Currency Currency, long TotalXp, DomainProgre
 public sealed record DomainsReading(DateOnly Today, IReadOnlyList<DomainReading> Domains);
 
 /// <summary>
-/// One day of a domain's series: its credit, and whether it succeeded — null for a domain
-/// without rules, which has no success test.
+/// One day of a domain's series (xp-domains plan §7.4.8): its credit — base, the passive part of
+/// it (sleep) and paid — and, for a configured domain, the exception comment if the day is
+/// marked and where the domain stood at the end of the day. A domain without rules has neither.
 /// </summary>
-public sealed record DomainSeriesDay(DateOnly Day, long Base, long Paid, bool? Succeeded);
+public sealed record DomainSeriesDay(
+    DateOnly Day, long Base, long Passive, long Paid, string? Exception, DomainStanding? Standing)
+{
+    /// <summary>The base XP from things done, not slept.</summary>
+    public long Action => Base - Passive;
+
+    /// <summary>Whether the day was active; null for a domain without rules.</summary>
+    public bool? Active => Standing?.Active;
+
+    /// <summary>Whether the day counted (settled, not an exception); null for a domain without rules.</summary>
+    public bool? Counted => Standing?.Counted;
+}
 
 /// <summary>A domain's reading and its daily series up to today.</summary>
 public sealed record DomainSeries(DomainReading Domain, IReadOnlyList<DomainSeriesDay> Days);
 
 /// <summary>
 /// One life domain over a report's period: the XP credited to the period's days and, for a
-/// configured domain, its period report (whose days end yesterday until today succeeds). A
-/// domain without rules reports the XP credited to the period's days ending today.
+/// configured domain, its period report (whose days end at the last settled day). A domain
+/// without rules reports the XP credited to the period's days ending today.
 /// </summary>
 public sealed record DomainReportEntry(
     DomainReading Domain, DateOnly From, DateOnly To, long Base, long Paid, DomainPeriodReport? Period);
@@ -38,16 +50,28 @@ public sealed record DomainReportEntry(
 public sealed record DomainReportReading(DateOnly Today, int Days, IReadOnlyList<DomainReportEntry> Domains);
 
 /// <summary>
-/// A configured life domain whose level or rank a write changed (xp-domains plan §3.8): its
-/// currency, the level and rank (an index into its ranks) before and after, and the title of
-/// the rank after.
+/// A configured life domain whose level, rank or bests a write changed (xp-domains plan §3.8,
+/// §7.4.7): its currency, the shown level and rank (an index into its ranks) before and after,
+/// the title of the rank after, and the best level and best rank before and after. A new best
+/// is what celebrates; getting back to a level below the best is a quiet note.
 /// </summary>
-public sealed record DomainChange(string Domain, int LevelFrom, int LevelTo, int RankFrom, int RankTo, string RankTitle);
+public sealed record DomainChange(
+    string Domain,
+    int LevelFrom,
+    int LevelTo,
+    int RankFrom,
+    int RankTo,
+    string RankTitle,
+    int BestLevelFrom,
+    int BestLevelTo,
+    int BestRankFrom,
+    int BestRankTo);
 
 /// <summary>
-/// Reads life-domain progression (REWARD-6 / REWARD-7, D12, xp-domains plan §3.4–3.5):
-/// the ledger's daily credit per domain, folded under each configured domain's rules on every
-/// read. Nothing here is stored, so a retuned rule or a corrected entry shows at once.
+/// Reads life-domain progression (REWARD-6 / REWARD-7 / REWARD-8, D12, D17, xp-domains plan
+/// §3.4, §7.4.4): the ledger's daily credit per domain, the exception days and the last settled
+/// day, folded under each configured domain's rules on every read. Nothing here is stored, so a
+/// retuned rule, a corrected entry or a marked day shows at once.
 /// </summary>
 public sealed class DomainService(ILedgerRepository ledger)
 {
@@ -81,25 +105,32 @@ public sealed class DomainService(ILedgerRepository ledger)
         if (reading.Progress is { } progress)
         {
             var periods = progress.Periods.ToDictionary(p => p.Start);
-            series = Dates(from, credit.Today).Select(day => periods.TryGetValue(day, out var p)
-                ? new DomainSeriesDay(day, p.Base, p.Paid, p.Succeeded)
-                : new DomainSeriesDay(day, 0, 0, false));
+            var comments = credit.ExceptionDays.ToDictionary(d => d.Day, d => d.Comment);
+            series = Dates(from, credit.Today).Select(day =>
+            {
+                var standing = progress.StandingOn(day);
+                var comment = comments.GetValueOrDefault(day);
+                return periods.TryGetValue(day, out var p)
+                    ? new DomainSeriesDay(day, p.Base, p.Passive, p.Paid, comment, standing)
+                    : new DomainSeriesDay(day, 0, 0, 0, comment, standing);
+            });
         }
         else
         {
             var byDay = credit.Days.ToDictionary(d => d.Day);
             series = Dates(from, credit.Today).Select(day => byDay.TryGetValue(day, out var d)
-                ? new DomainSeriesDay(day, d.Base, d.Paid, null)
-                : new DomainSeriesDay(day, 0, 0, null));
+                ? new DomainSeriesDay(day, d.Base, d.Passive, d.Paid, null, null)
+                : new DomainSeriesDay(day, 0, 0, 0, null, null));
         }
 
         return new DomainSeries(reading, series.ToList());
     }
 
     /// <summary>
-    /// Every life domain over its last <paramref name="days"/> days (xp-domains plan §3.11,
-    /// §3.13): a configured domain's consistency over the days it has history for, its XP and
-    /// the levels and ranks it gained; a domain without rules, its XP. Throws
+    /// Every life domain over its last <paramref name="days"/> days (xp-domains plan §3.13,
+    /// §7.4.8): a configured domain's counted, exception and active days, its XP, its level and
+    /// rank from start to end, its best rank and its rank each day; a domain without rules, its
+    /// XP. Throws
     /// <see cref="ArgumentException"/> for a day count below 1.
     /// </summary>
     public async Task<DomainReportReading> GetReportAsync(int days, CancellationToken cancellationToken = default)
@@ -142,9 +173,14 @@ public sealed class DomainService(ILedgerRepository ledger)
                    $"'{reference}' isn't a life domain. Expected one of: {string.Join(", ", Currencies.LifeDomains.Select(c => c.Key))}.");
     }
 
-    /// <summary>One configured domain's progression, folded from <paramref name="credit"/>.</summary>
+    /// <summary>One configured domain's progression, folded from <paramref name="credit"/>: its days, the exception days and the last settled day.</summary>
     public static DomainProgress Fold(DomainRules rules, DomainCredit credit)
-        => DomainProgress.Fold(rules, DaysOf(rules.Currency, credit), credit.Today);
+        => DomainProgress.Fold(
+            rules,
+            DaysOf(rules.Currency, credit),
+            credit.Today,
+            credit.ExceptionDays.Select(d => d.Day),
+            credit.SettledThrough);
 
     private static DomainReading Read(Currency currency, DomainCredit credit)
     {

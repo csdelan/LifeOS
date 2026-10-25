@@ -113,8 +113,10 @@ public sealed class AwardRow
 }
 
 /// <summary>
-/// A life domain whose level or rank a write changed (xp-domains plan §3.8): its currency key,
-/// the level (1–100) and rank (0 is Novice) before and after, and the title of the rank after.
+/// A life domain whose level, rank or bests a write changed (xp-domains plan §3.8, §7.4.7): its
+/// currency key, the shown level (1–100) and rank (0 is Novice) before and after, the title of
+/// the rank after, and the best level and best rank before and after. A new best celebrates;
+/// getting back to a level below the best is a quiet note.
 /// </summary>
 public sealed class DomainChangeRow
 {
@@ -124,6 +126,10 @@ public sealed class DomainChangeRow
     public int RankFrom { get; set; }
     public int RankTo { get; set; }
     public string RankTitle { get; set; } = "";
+    public int BestLevelFrom { get; set; }
+    public int BestLevelTo { get; set; }
+    public int BestRankFrom { get; set; }
+    public int BestRankTo { get; set; }
 }
 
 /// <summary>
@@ -234,7 +240,11 @@ public static class RewardRows
         LevelTo = change.LevelTo,
         RankFrom = change.RankFrom,
         RankTo = change.RankTo,
-        RankTitle = change.RankTitle
+        RankTitle = change.RankTitle,
+        BestLevelFrom = change.BestLevelFrom,
+        BestLevelTo = change.BestLevelTo,
+        BestRankFrom = change.BestRankFrom,
+        BestRankTo = change.BestRankTo
     };
 
     public static EarnResult Earned(IEnumerable<Award> awards, IEnumerable<DomainChange> progress) => new()

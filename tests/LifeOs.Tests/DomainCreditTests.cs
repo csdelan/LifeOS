@@ -239,15 +239,15 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
         Assert.Same(LifeDomains.Health, health.Progress!.Rules);
         Assert.Equal(health.Progress.TotalXp, health.TotalXp);
 
-        // Day by day: no success test, so no day succeeds or fails.
+        // Day by day: no success test, so no day is active or not.
         var series = await kernel.Domains.GetDaysAsync("environment", 3, Ct);
         Assert.Equal([TodayUtc.AddDays(-2), TodayUtc.AddDays(-1), TodayUtc], series.Days.Select(d => d.Day));
-        Assert.All(series.Days, d => Assert.Null(d.Succeeded));
+        Assert.All(series.Days, d => Assert.Null(d.Active));
         Assert.True(series.Days[^1].Paid >= 12);
     }
 
     [Fact]
-    public async Task A_configured_domains_series_says_which_days_succeeded()
+    public async Task A_configured_domains_series_says_which_days_were_active()
     {
         var kernel = Build();
 
@@ -255,7 +255,7 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
 
         Assert.Equal(5, series.Days.Count);
         Assert.Equal(TodayUtc, series.Days[^1].Day);
-        Assert.All(series.Days, d => Assert.Equal(d.Base >= ((MinimumBaseXp)LifeDomains.Health.Success).Minimum, d.Succeeded));
+        Assert.All(series.Days, d => Assert.Equal(d.Exception is null && d.Action >= d.Standing!.ActiveMinimum, d.Active));
         await Assert.ThrowsAsync<ArgumentException>(() => kernel.Domains.GetDaysAsync("health", 0, Ct));
         await Assert.ThrowsAsync<ArgumentException>(() => kernel.Domains.GetDaysAsync("coins", 3, Ct));
     }

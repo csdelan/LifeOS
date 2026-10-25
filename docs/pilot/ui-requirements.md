@@ -2754,6 +2754,22 @@ Horizon:    Pilot
 Definition: active
 Build:      building
 
+**Update (2026-10-25 — X10 landed):** the kernel runs levels v2.
+- Health's lifetime level is on the cheaper cubic curve. The consistency level is the
+  highest the last 90 counted days support, and the shown level is the lower of the two:
+  it rises at once and falls 1% of itself a day, pausing while the last 7 days are back on
+  track.
+- Rank is the shown level's 10-level band. The best level and best rank are kept, and a
+  rank pays its Gems the first time the best rank reaches it, never again for one the old
+  rules paid.
+- The multiplier counts days active at the shown level, skipping marked days.
+- `GET /api/domains`, `days`, `report` and earning writes' `progress` carry the new shape,
+  and `bsk domains health` reads each level and what the next one needs.
+- `bsk domains simulate` runs v2, with `--sleep` and `--exception`.
+
+The web still reads the old shape until X11, so X10 and X11 deploy together. Build stays
+`building`.
+
 **Update (2026-10-25 — levels v2 planned):** Health's level and rank will follow recent
 consistency (D17, [xp-domains-plan.md](xp-domains-plan.md) §7).
 - The level is the lower of the lifetime level (on a new curve, cheaper for the early
@@ -2892,6 +2908,11 @@ successful day gets retuned after a few weeks of real XP.
 Horizon:    Pilot
 Definition: active
 Build:      building
+
+**Update (2026-10-25 — X10 landed):** the fold skips marked days. They don't count toward
+consistency or the multiplier, the last 90 days reach back past them, and a fall pauses on
+them; their XP still counts toward lifetime. `bsk domains simulate --exception` tries a
+marked span. X11 adds the Character page's control. Build stays `building`.
 
 **Update (2026-10-25 — X9 landed):** a day can be marked, its comment changed, and unmarked:
 `bsk domains exception [<date>] "<comment>"`, `--unmark <date>`, `bsk domains exceptions`,

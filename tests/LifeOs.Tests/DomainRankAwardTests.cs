@@ -11,13 +11,15 @@ using Npgsql;
 namespace LifeOs.Tests;
 
 /// <summary>
-/// REWARD-7 (xp-domains plan X4, §3.7–3.8, §3.11): rank-up Gems and what earning writes say
-/// about levels and ranks. A rank pays its Gems once, from the write that reaches it, the
-/// sweep, or <c>POST /api/domains/settle</c> — never twice, never for a rank that qualified
-/// before the wallet opened, and never reversed. <c>GET /api/domains</c> reads the fold.
+/// REWARD-7 / REWARD-8 (xp-domains plan X4, X10, §3.7, §7.2): rank-up Gems and what earning
+/// writes say about levels and ranks. A rank pays its Gems once, the first time the best rank
+/// reaches it, from the write that gets there, the sweep, or <c>POST /api/domains/settle</c> —
+/// never twice, never for a rank first reached before the wallet opened, and never reversed.
+/// <c>GET /api/domains</c> reads the fold.
 /// <para>
 /// Each test runs in a database of its own (<see cref="DomainTestDatabase"/>): a wallet opens
-/// once, and a rank pays once, per database.
+/// once, and a rank pays once, per database. Every day that decides something is two or more
+/// days back, so it has settled whatever the hour.
 /// </para>
 /// </summary>
 [Collection(PostgresCollection.Name)]
@@ -52,22 +54,22 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
         var today = await database.TodayAsync();
         var rewards = kernel.GetRequiredService<RewardService>();
         await rewards.OpenAsync(DateTimeOffset.UtcNow.AddDays(-40), Ct);
-        var habit = await database.HabitAsync(today, startOffset: 30, healthXp: 400);
+        var habit = await database.HabitAsync(today, startOffset: 30, healthXp: 200);
         var adherence = kernel.GetRequiredService<AdherenceService>();
 
-        // Eight followed days: 3,200 XP, level 9, no rank yet.
-        for (var ago = 20; ago > 12; ago--)
+        // Ten followed days: 2,000 XP is lifetime level 11, but ten active days only let the
+        // last 90 days hold level 9 (level L asks L + 1 active days so far). No rank yet.
+        for (var ago = 13; ago > 3; ago--)
         {
             var earlier = await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today.AddDays(-ago), cancellationToken: Ct);
             Assert.DoesNotContain(earlier.Awards, a => a.Trigger == LifeDomains.RankTrigger);
         }
 
-        // The ninth makes 3,600: level 10, and Apprentice's window — 9 of 14 days, once the
-        // domain is 14 days old — first fits on the day 7 days ago.
+        // The eleventh lets it hold level 10: Apprentice, on the day it was followed.
         await using var host = await ApiTestHost.StartAsync(database.ConnectionString, Ct, DomainTestDatabase.ApiZone);
         var response = await host.Client.PostAsJsonAsync(
             "/api/adhere",
-            new { habit = habit.Id.ToString(), state = "followed", on = today.AddDays(-12).ToString("yyyy-MM-dd") },
+            new { habit = habit.Id.ToString(), state = "followed", on = today.AddDays(-3).ToString("yyyy-MM-dd") },
             Ct);
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(Ct));
         var earned = await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
@@ -84,21 +86,26 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
             (change.GetProperty("domain").GetString(), change.GetProperty("levelFrom").GetInt32(),
                 change.GetProperty("levelTo").GetInt32(), change.GetProperty("rankFrom").GetInt32(),
                 change.GetProperty("rankTo").GetInt32(), change.GetProperty("rankTitle").GetString()));
+        Assert.Equal(
+            (9, 10, 0, 1),
+            (change.GetProperty("bestLevelFrom").GetInt32(), change.GetProperty("bestLevelTo").GetInt32(),
+                change.GetProperty("bestRankFrom").GetInt32(), change.GetProperty("bestRankTo").GetInt32()));
 
-        // Credited to the day it qualified, citing that day's latest Health earn.
+        // Credited to the day it was first reached, citing that day's latest Health earn.
         var entry = await RankEntryAsync(database.ConnectionString, "rank:health_xp:10");
         var payload = entry.GetProperty("payload");
-        Assert.Equal(today.AddDays(-7).ToString("yyyy-MM-dd"), payload.GetProperty("credited_on").GetString());
+        Assert.Equal(today.AddDays(-3).ToString("yyyy-MM-dd"), payload.GetProperty("credited_on").GetString());
         Assert.Equal(Currencies.HealthXp, payload.GetProperty("domain").GetString());
         Assert.False(payload.TryGetProperty("subject_id", out _));
-        var dayTwelve = await kernel.GetRequiredService<ILedgerRepository>()
-            .GetLatestCreditEventAsync(Currencies.HealthXp, today.AddDays(-7), Ct);
-        Assert.Equal(dayTwelve, entry.GetProperty("derivedFrom")[0].GetGuid());
+        var reachedOn = await kernel.GetRequiredService<ILedgerRepository>()
+            .GetLatestCreditEventAsync(Currencies.HealthXp, today.AddDays(-3), Ct);
+        Assert.Equal(reachedOn, entry.GetProperty("derivedFrom")[0].GetGuid());
 
-        // Never twice: the next day, the sweep and a settle pay nothing more.
-        var tenth = await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today.AddDays(-11), cancellationToken: Ct);
-        Assert.DoesNotContain(tenth.Awards, a => a.Trigger == LifeDomains.RankTrigger);
-        Assert.Empty(tenth.Progress); // 4,000 XP is still level 10
+        // Never twice: the next day lifts the level to 11, but the rank stays and pays nothing,
+        // and neither the sweep nor a settle pays it again.
+        var twelfth = await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today.AddDays(-2), cancellationToken: Ct);
+        Assert.DoesNotContain(twelfth.Awards, a => a.Trigger == LifeDomains.RankTrigger);
+        Assert.Equal([new DomainChange(Currencies.HealthXp, 10, 11, 1, 1, "Apprentice", 10, 11, 1, 1)], twelfth.Progress);
         Assert.DoesNotContain(await rewards.ReconcileAllAsync(Ct), a => a.Trigger == LifeDomains.RankTrigger);
         Assert.Empty((await rewards.SettleDomainsAsync(Ct)).Awards);
         Assert.Equal(
@@ -107,7 +114,7 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task A_rank_reached_by_time_alone_pays_when_settled_and_celebrates_from_the_rank_below()
+    public async Task A_rank_reached_without_a_write_pays_when_settled_and_celebrates_from_the_rank_below()
     {
         await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);
         var kernel = database.Kernel;
@@ -115,24 +122,28 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
         var rewards = kernel.GetRequiredService<RewardService>();
         await rewards.OpenAsync(DateTimeOffset.UtcNow.AddDays(-40), Ct);
 
-        // Seven successful days from 20 days ago, 3,640 XP: Apprentice's gate opened 7 days
-        // ago, when the domain turned 14 days old — and no write has run since.
-        for (var ago = 20; ago > 13; ago--)
-        {
-            await database.CreditAsync(today.AddDays(-ago), 520);
-        }
+        // Eleven active days of 200, credited with no write after them: 2,200 XP is lifetime
+        // level 12, and the eleventh active day lets the last 90 days hold level 10.
+        await database.CreditDaysAsync(today, fromAgo: 13, toAgo: 3, xp: 200);
 
         await using var host = await ApiTestHost.StartAsync(database.ConnectionString, Ct, DomainTestDatabase.ApiZone);
         var domains = await host.Client.GetFromJsonAsync<JsonElement>("/api/domains", Ct);
         var health = domains.GetProperty("domains").EnumerateArray().Single(d => d.GetProperty("key").GetString() == "health_xp");
         Assert.True(health.GetProperty("configured").GetBoolean());
+        Assert.Equal(2_200, health.GetProperty("totalXp").GetInt64());
         var lifetime = health.GetProperty("lifetime");
-        Assert.Equal((10, 1, "Apprentice"), (lifetime.GetProperty("level").GetInt32(), lifetime.GetProperty("rank").GetInt32(), lifetime.GetProperty("rankTitle").GetString()));
-        Assert.Equal(today.AddDays(-7).ToString("yyyy-MM-dd"), lifetime.GetProperty("qualifiedOn").GetString());
-        Assert.Equal(3_640, health.GetProperty("totalXp").GetInt64());
-        Assert.Equal(3_640 - 3_600, lifetime.GetProperty("xpIntoLevel").GetInt64());
-        Assert.Equal("Journeyman", health.GetProperty("nextRank").GetProperty("title").GetString());
-        Assert.Equal(60, health.GetProperty("current").GetProperty("target").GetInt64());
+        // Level 12 starts at 2,121 and is 370 long: 79 into it, 291 to go.
+        Assert.Equal((12, 370L, 79L, 291L),
+            (lifetime.GetProperty("level").GetInt32(), lifetime.GetProperty("levelXp").GetInt64(),
+                lifetime.GetProperty("xpIntoLevel").GetInt64(), lifetime.GetProperty("xpToNext").GetInt64()));
+        Assert.Equal(10, health.GetProperty("consistency").GetProperty("level").GetInt32());
+        var shown = health.GetProperty("shown");
+        Assert.Equal((10, 10, 1, "Apprentice", "consistency"),
+            (shown.GetProperty("level").GetInt32(), shown.GetProperty("target").GetInt32(), shown.GetProperty("rank").GetInt32(),
+                shown.GetProperty("rankTitle").GetString(), shown.GetProperty("limitedBy").GetString()));
+        var best = health.GetProperty("best");
+        Assert.Equal((10, 1, today.AddDays(-3).ToString("yyyy-MM-dd")),
+            (best.GetProperty("level").GetInt32(), best.GetProperty("rank").GetInt32(), best.GetProperty("rankOn").GetString()));
         Assert.Equal(11, health.GetProperty("ranks").GetArrayLength());
         Assert.False(domains.GetProperty("domains").EnumerateArray().Single(d => d.GetProperty("key").GetString() == "social_xp").GetProperty("configured").GetBoolean());
 
@@ -141,9 +152,13 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
         var earned = await settled.Content.ReadFromJsonAsync<JsonElement>(Ct);
         var rank = Assert.Single(earned.GetProperty("awards").EnumerateArray());
         Assert.Equal(("rank:health_xp:10", "Health Apprentice"), (rank.GetProperty("awardKey").GetString(), rank.GetProperty("note").GetString()));
+
+        // Nothing moved at the settle itself, so it celebrates from just below the rank it paid.
         var change = Assert.Single(earned.GetProperty("progress").EnumerateArray());
         Assert.Equal((9, 10, 0, 1), (change.GetProperty("levelFrom").GetInt32(), change.GetProperty("levelTo").GetInt32(),
             change.GetProperty("rankFrom").GetInt32(), change.GetProperty("rankTo").GetInt32()));
+        Assert.Equal((9, 10, 0, 1), (change.GetProperty("bestLevelFrom").GetInt32(), change.GetProperty("bestLevelTo").GetInt32(),
+            change.GetProperty("bestRankFrom").GetInt32(), change.GetProperty("bestRankTo").GetInt32()));
 
         // Settling again pays and announces nothing.
         var again = await (await host.Client.PostAsync("/api/domains/settle", null, Ct)).Content.ReadFromJsonAsync<JsonElement>(Ct);
@@ -152,24 +167,63 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task A_rank_that_qualified_before_the_wallet_opened_never_pays_but_still_reads()
+    public async Task A_rank_first_reached_before_the_wallet_opened_never_pays_but_still_reads()
     {
         await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);
         var kernel = database.Kernel;
         var today = await database.TodayAsync();
         var rewards = kernel.GetRequiredService<RewardService>();
         await rewards.OpenAsync(DateTimeOffset.UtcNow.AddDays(-3), Ct);
-        for (var ago = 20; ago > 13; ago--)
-        {
-            await database.CreditAsync(today.AddDays(-ago), 520);
-        }
+
+        // Twelve active days of 200 from 25 days ago: Apprentice on the eleventh, 15 days ago.
+        await database.CreditDaysAsync(today, fromAgo: 25, toAgo: 14, xp: 200);
 
         Assert.Empty(await rewards.ReconcileDomainsAsync(Ct));
         Assert.Empty(await rewards.ReconcileAllAsync(Ct));
         Assert.Empty(await kernel.GetRequiredService<ILedgerRepository>().GetPaidKeysAsync(LifeDomains.RankTrigger, Ct));
         var health = (await kernel.GetRequiredService<DomainService>().GetAsync(Ct)).Domains
             .Single(d => d.Currency.Key == Currencies.HealthXp).Progress!;
-        Assert.Equal((1, today.AddDays(-7)), (health.Rank, health.RankQualifiedOn));
+        Assert.Equal(1, health.BestRank);
+        Assert.Equal(new[] { (1, today.AddDays(-15)) }, health.RanksReached.Select(r => (r.Rank, r.QualifiedOn)));
+    }
+
+    [Fact]
+    public async Task A_rank_the_old_rules_paid_never_pays_again()
+    {
+        // The old rules (X4) paid Apprentice on a day of their own. The new rules reach it on
+        // another day, but under the same award key, so nothing pays twice.
+        await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var kernel = database.Kernel;
+        var today = await database.TodayAsync();
+        var rewards = kernel.GetRequiredService<RewardService>();
+        await rewards.OpenAsync(DateTimeOffset.UtcNow.AddDays(-40), Ct);
+        var key = LifeDomains.Health.RankAwardKey(1);
+        var now = DateTimeOffset.UtcNow;
+        var payload = JsonSerializer.Serialize(new
+        {
+            entry = LedgerEntries.Earn,
+            amounts = new Dictionary<string, long> { [Currencies.Gems] = 1 },
+            award_key = key,
+            trigger = LifeDomains.RankTrigger,
+            credited_on = today.AddDays(-30).ToString("yyyy-MM-dd"),
+            domain = Currencies.HealthXp
+        });
+        await kernel.GetRequiredService<ILedgerRepository>().AppendAsync(
+            [new LedgerWrite(
+                new NewEvent(EventKinds.Ledger, Provenances.Declared, now, now, KernelSources.Cli, PayloadJson: payload),
+                [], GuardBalance: false, AwardKey: key, ExpectPaid: false)],
+            Ct);
+        await database.CreditDaysAsync(today, fromAgo: 13, toAgo: 3, xp: 200);
+
+        var settled = await rewards.SettleDomainsAsync(Ct);
+
+        Assert.Equal("rank:health_xp:10", key);
+        Assert.Empty(settled.Awards);
+        Assert.Empty(settled.Progress);
+        var health = (await kernel.GetRequiredService<DomainService>().GetAsync(Ct)).Domains
+            .Single(d => d.Currency.Key == Currencies.HealthXp).Progress!;
+        Assert.Equal((1, today.AddDays(-3)), (health.BestRank, health.RanksReached.Single().QualifiedOn));
+        Assert.Equal([key], await kernel.GetRequiredService<ILedgerRepository>().GetPaidKeysAsync(LifeDomains.RankTrigger, Ct));
     }
 
     [Fact]
@@ -178,10 +232,7 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
         await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);
         var kernel = database.Kernel;
         var today = await database.TodayAsync();
-        for (var ago = 20; ago > 13; ago--)
-        {
-            await database.CreditAsync(today.AddDays(-ago), 520);
-        }
+        await database.CreditDaysAsync(today, fromAgo: 13, toAgo: 3, xp: 200);
 
         var settled = await kernel.GetRequiredService<RewardService>().SettleDomainsAsync(Ct);
 
@@ -197,16 +248,19 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
         var today = await database.TodayAsync();
         var rewards = kernel.GetRequiredService<RewardService>();
         await rewards.OpenAsync(DateTimeOffset.UtcNow.AddDays(-40), Ct);
+
+        // Nine active days of 100: 900 XP is lifetime level 7, which the last 90 days support.
+        await database.CreditDaysAsync(today, fromAgo: 12, toAgo: 4, xp: 100);
         var habit = await database.HabitAsync(today, startOffset: 5, healthXp: 650);
         var status = kernel.GetRequiredService<StatusService>();
 
         var recorded = await kernel.GetRequiredService<AdherenceService>()
-            .RecordAsync(habit.Urn, AdherenceResults.Followed, today.AddDays(-1), cancellationToken: Ct);
+            .RecordAsync(habit.Urn, AdherenceResults.Followed, today.AddDays(-3), cancellationToken: Ct);
         var task = await kernel.GetRequiredService<SubjectService>().CreateAsync(SubjectTypes.Task, "plain task", "{}", cancellationToken: Ct);
         var completed = await status.ChangeStatusAsync(task.Urn, "Completed", Ct);
 
-        // 650 XP: level 1 → 3 (300, then 325 more), still a Novice.
-        Assert.Equal([new DomainChange(Currencies.HealthXp, 1, 3, 0, 0, "Novice")], recorded.Progress);
+        // 650 more: lifetime level 10, but ten active days hold 9. Level 7 → 9, still a Novice.
+        Assert.Equal([new DomainChange(Currencies.HealthXp, 7, 9, 0, 0, "Novice", 7, 9, 0, 0)], recorded.Progress);
         Assert.NotEmpty(completed.Awards);
         Assert.Empty(completed.Progress);
     }

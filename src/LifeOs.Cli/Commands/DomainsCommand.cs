@@ -8,21 +8,23 @@ using Microsoft.Extensions.DependencyInjection;
 namespace LifeOs.Cli.Commands;
 
 /// <summary>
-/// <c>bsk domains</c> — every life domain's XP and, for a domain with rules, its level and
-/// rank (with any XP banked above the rank's top), what the next rank still needs, today
-/// against its success rule, its consistency over the last 30 complete days, and the
-/// multiplier that earns (REWARD-6 / REWARD-7, xp-domains plan §3.5).
+/// <c>bsk domains</c> — every life domain's XP and, for a domain with rules (xp-domains plan
+/// §7.4.8): its level and rank with the best of each ("Level 47, Expert (best 52, Veteran)"), the
+/// target and what limits it, whether the level is falling or paused, the lifetime level and its
+/// XP to go, the consistency level and what the next one needs, today against the active minimum,
+/// the multiplier, and recent exception days (REWARD-6 / REWARD-7 / REWARD-8).
 /// <para>
 /// <c>bsk domains [&lt;domain&gt;] --days &lt;n&gt;</c> (or just a domain) adds the daily series —
-/// each day's base and paid XP and whether it succeeded, the last 14 days by default — for that
-/// domain, or for every domain when none is named. Days are read in the home zone
-/// (<c>Rewards:HomeTimeZone</c>).
+/// each day's base, action and paid XP, whether it was active, its level and rank, and any
+/// exception comment, the last 14 days by default — for that domain, or for every domain when
+/// none is named. Days are read in the home zone (<c>Rewards:HomeTimeZone</c>).
 /// </para>
 /// <para>
-/// <c>bsk domains [&lt;domain&gt;] --report &lt;n&gt;</c> is the period report (xp-domains plan
-/// §3.13): each domain over its last <c>n</c> days — 7, 30, 90, 180 or 365, as the Character
-/// page offers — with a configured domain's consistency over the days it has history for, its
-/// XP and base XP a day, and the levels and ranks it gained; a domain without rules, its XP.
+/// <c>bsk domains [&lt;domain&gt;] --report &lt;n&gt;</c> is the period report (§3.13, §7.4.4):
+/// each domain over its last <c>n</c> days to the last settled day — 7, 30, 90, 180 or 365, as
+/// the reports offer — with a configured domain's counted, exception and active days, base XP a
+/// day, its level and rank at the start and end, its best, and the ranks first reached; a domain
+/// without rules, its XP.
 /// </para>
 /// <para><c>bsk domains simulate</c> is the simulator (<see cref="DomainsSimulateCommand"/>).</para>
 /// <para>
@@ -47,10 +49,10 @@ internal static class DomainsCommand
         };
         var reportOption = new Option<int?>("--report")
         {
-            Description = "Report each domain over its last this many days (7, 30, 90, 180 or 365): consistency, XP, levels and ranks gained."
+            Description = "Report each domain over its last this many days (7, 30, 90, 180 or 365): days counted and active, XP, level and rank."
         };
 
-        var command = new Command("domains", "Show life-domain XP, levels, ranks, consistency and multipliers.");
+        var command = new Command("domains", "Show life-domain XP, levels, ranks, consistency, multipliers and exception days.");
         command.Arguments.Add(domainArgument);
         command.Options.Add(daysOption);
         command.Options.Add(reportOption);
@@ -157,27 +159,29 @@ internal static class DomainsCommand
                 continue;
             }
 
-            var rules = e.Domain.Progress!.Rules;
+            var ranks = e.Domain.Progress!.Rules.Ranks;
             Console.WriteLine($"    days        {Day(p.From)} to {Day(p.To)}"
-                + (p.To < reading.Today ? " (today counts once it succeeds)" : ""));
+                + (p.To < reading.Today ? " (to the last settled day)" : ""));
             if (p.DaysCounted == 0)
             {
-                Console.WriteLine("    consistency no days yet: the domain starts with its first XP");
+                Console.WriteLine("    counted     no days yet"
+                    + (p.ExceptionDays > 0 ? $" ({Plural(p.ExceptionDays, "exception day")})" : ""));
             }
             else
             {
-                Console.WriteLine($"    consistency {p.SuccessfulDays} of {Plural(p.DaysCounted, "day")} successful ({Percent(p.Consistency)})"
-                    + (p.FullHistory ? "" : $" — {p.DaysCounted} of the {p.Days} days since the start"));
+                Console.WriteLine($"    counted     {Plural(p.DaysCounted, "day")}"
+                    + (p.ExceptionDays > 0 ? $" and {Plural(p.ExceptionDays, "exception day")}" : "")
+                    + $"; {p.ActiveDays} active ({Percent(p.ActiveShare)})");
                 Console.WriteLine($"    per day     {p.AverageBase.ToString("0.#", CultureInfo.InvariantCulture)} base XP on average");
             }
 
-            var levels = p.Before.Level == p.Now.Level
-                ? $"{p.Now.Level}, unchanged"
-                : $"{p.Before.Level} → {p.Now.Level}";
-            Console.WriteLine($"    level       {levels} ({rules.Ranks[p.Now.Rank].Title})");
+            var levels = p.Before.Level == p.End.Level
+                ? $"{p.End.Level}, unchanged"
+                : $"{p.Before.Level} → {p.End.Level}";
+            Console.WriteLine($"    level       {levels} ({ranks[p.End.Rank].Title}); best {p.End.BestLevel} ({ranks[p.BestRank].Title})");
             Console.WriteLine(p.RanksReached.Count == 0
-                ? "    ranks       none reached"
-                : $"    ranks       {string.Join(", ", p.RanksReached.Select(r => $"{r.Rule.Title} on {Day(r.QualifiedOn)}"))}");
+                ? "    new ranks   none"
+                : $"    new ranks   {string.Join(", ", p.RanksReached.Select(r => $"{r.Rule.Title} on {Day(r.QualifiedOn)}"))}");
         }
     }
 
@@ -195,31 +199,62 @@ internal static class DomainsCommand
             : new
             {
                 daysCounted = p.DaysCounted,
-                successfulDays = p.SuccessfulDays,
-                consistency = p.Consistency,
+                exceptionDays = p.ExceptionDays,
+                activeDays = p.ActiveDays,
+                activeShare = p.ActiveShare,
                 averageBase = p.AverageBase,
-                fullHistory = p.FullHistory,
                 levelFrom = p.Before.Level,
-                levelTo = p.Now.Level,
+                levelTo = p.End.Level,
                 rankFrom = p.Before.Rank,
-                rankTo = p.Now.Rank,
-                ranksReached = p.RanksReached.Select(r => new { index = r.Rank, title = r.Rule.Title, qualifiedOn = r.QualifiedOn })
+                rankTo = p.End.Rank,
+                bestLevelFrom = p.Before.BestLevel,
+                bestLevelTo = p.End.BestLevel,
+                bestRank = p.BestRank,
+                ranksReached = p.RanksReached.Select(r => new { index = r.Rank, title = r.Rule.Title, qualifiedOn = r.QualifiedOn }),
+                ranks = p.Standings.Select(s => new { day = s.Day, level = s.Level, rank = s.Rank, bestRank = s.BestRank, exception = s.Exception })
             }
     };
 
     private static void WriteSeries(DomainSeries series)
     {
         WriteReading(series.Domain);
+        var ranks = series.Domain.Progress?.Rules.Ranks;
         foreach (var d in series.Days)
         {
-            Console.WriteLine($"    {Day(d.Day)}{d.Base,8} base{d.Paid,8} paid{(d.Succeeded == true ? "   success" : "")}");
+            var line = $"    {Day(d.Day)}{d.Base,8} base{d.Action,8} action{d.Paid,8} paid";
+            if (d.Standing is { } s && ranks is not null)
+            {
+                line += $"  {(d.Active == true ? "active" : ""),-6}  level {s.Level} {ranks[s.Rank].Title}";
+            }
+
+            if (d.Exception is { } comment)
+            {
+                line += $"  exception: {comment}";
+            }
+
+            Console.WriteLine(line);
         }
     }
 
     private static object SeriesJson(DomainSeries series) => new
     {
         domain = ReadingJson(series.Domain),
-        days = series.Days.Select(d => new { day = d.Day, @base = d.Base, paid = d.Paid, succeeded = d.Succeeded })
+        days = series.Days.Select(d => new
+        {
+            day = d.Day,
+            @base = d.Base,
+            action = d.Action,
+            passive = d.Passive,
+            paid = d.Paid,
+            exception = d.Exception,
+            counted = d.Counted,
+            active = d.Active,
+            activeMinimum = d.Standing?.ActiveMinimum,
+            lifetimeLevel = d.Standing?.LifetimeLevel,
+            consistencyLevel = d.Standing?.ConsistencyLevel,
+            level = d.Standing?.Level,
+            rank = d.Standing?.Rank
+        })
     };
 
     private static void WriteReading(DomainReading d)
@@ -233,51 +268,65 @@ internal static class DomainsCommand
 
         if (p.Start is null)
         {
-            Console.WriteLine($"    not started: level 1 ({p.RankRule.Title}); a successful day is {p.Rules.Success.Describe()}");
+            Console.WriteLine($"    not started: level 1 ({p.RankRule.Title}); an active day is {p.Rules.Success.Describe(1)}");
             return;
         }
 
-        Console.WriteLine(p.Capped
-            ? $"    level       {p.Level} — the top of {p.RankRule.Title}; {Xp(p.BankedXp)} banked toward level {p.RawLevel}"
-            : p.XpToNext == 0
-                ? $"    level       {p.Level} ({p.RankRule.Title})"
-                : $"    level       {p.Level} ({p.RankRule.Title}) — {Xp(p.XpIntoLevel)} of {Xp(p.Rules.Curve.CostToNext(p.Level))} toward level {p.Level + 1}");
-        if (p.RankQualifiedOn is { } qualifiedOn)
+        var consistency = p.Rules.Consistency;
+        var best = p.BestLevel > p.Level ? $" (best {p.BestLevel}, {p.BestRankRule.Title})" : "";
+        Console.WriteLine($"    level       {p.Level}, {p.RankRule.Title}{best}");
+        Console.WriteLine(p.LimitedBy switch
         {
-            Console.WriteLine($"    rank        {p.RankRule.Title} since {Day(qualifiedOn)}");
+            LevelLimit.Lifetime => $"    target      {p.Target}: lifetime XP limits it (the last 90 days support {p.ConsistencyLevel})",
+            LevelLimit.Consistency => $"    target      {p.Target}: the last 90 days limit it (lifetime XP reaches {p.LifetimeLevel})",
+            _ => $"    target      {p.Target}: lifetime XP and the last 90 days agree"
+        });
+        if (p.Falling)
+        {
+            var days = p.Rules.Fall.BackOnTrackDays;
+            Console.WriteLine(
+                $"    falling     {Number(p.Rules.Fall.PercentPerDay)}% a day toward {p.Target}"
+                + (p.FallingSince is { } since ? $", since {Day(since)} (from {p.FallingFrom})" : "")
+                + $"; {Plural(days, "day")} back on track pauses it: {consistency.Average(p.Level)}+ base XP a day,"
+                + $" {consistency.ActiveDaysNeeded(p.Level, days)} active ({consistency.ActiveMinimum(p.Level)}+ action XP)");
+        }
+        else if (p.Paused)
+        {
+            Console.WriteLine(p.TodayException
+                ? "    paused      today is an exception day"
+                : $"    paused      the last {Plural(p.Rules.Fall.BackOnTrackDays, "counted day")} are back on track");
         }
 
-        if (p.Next is { } rank)
+        Console.WriteLine(p.XpToNext == 0
+            ? $"    lifetime    level {p.LifetimeLevel}, the top"
+            : $"    lifetime    level {p.LifetimeLevel} — {Xp(p.XpIntoLevel)} of {Xp(p.Rules.Curve.CostToNext(p.LifetimeLevel))} toward level {p.LifetimeLevel + 1}");
+        var window = p.Window;
+        var over = window.Days == 0
+            ? "no counted days yet"
+            : $"over {Plural(window.Days, "counted day")} ({window.Average.ToString("0.#", CultureInfo.InvariantCulture)} base XP a day)";
+        Console.WriteLine($"    consistency level {p.ConsistencyLevel} {over}");
+        if (p.NextConsistency is { } next)
         {
-            var rule = rank.Rule;
-            var gate = $"level {rule.StartLevel}, {Percent(rule.MinConsistency)} of {rule.WindowDays} days successful";
-            var standing = new List<string>
-            {
-                rank.LevelReached ? "level reached" : $"level {p.RawLevel} so far",
-                $"{rank.Window.SuccessfulDays} of {rank.Required} successful days"
-            };
-            if (!rank.OldEnough)
-            {
-                standing.Add($"{rank.DaysOld} of {rule.WindowDays} days old");
-            }
-
-            Console.WriteLine($"    next rank   {rule.Title} at {gate}: {string.Join(", ", standing)}");
-        }
-        else
-        {
-            Console.WriteLine("    next rank   none: the top rank");
+            Console.WriteLine(
+                $"    next        level {next.Level} needs an average of {next.Average} ({next.AverageNow.ToString("0.#", CultureInfo.InvariantCulture)}{Met(next.AverageMet)}),"
+                + $" {next.ActiveDaysNeeded} of {next.WindowDays} days active at {next.ActiveMinimum}+ action XP ({next.ActiveDaysNow}{Met(next.ActiveDaysMet)}),"
+                + $" {next.AgeNeeded} active days so far ({next.AgeNow}{Met(next.AgeMet)})");
         }
 
-        Console.WriteLine(p.TodaySucceeded
-            ? $"    today       {p.TodayBase} base XP — succeeded ({p.Rules.Success.Describe()})"
-            : $"    today       {p.TodayBase} base XP — not yet ({p.Rules.Success.Describe()})");
+        Console.WriteLine(p.TodayException
+            ? $"    today       an exception day ({p.TodayAction} action XP)"
+            : p.TodayActive
+                ? $"    today       {p.TodayAction} action XP — active ({p.ActiveMinimum}+ counts)"
+                : $"    today       {p.TodayAction} of {p.ActiveMinimum} action XP to count as active ({p.TodayBase} base)");
         var c = p.Consistency;
-        Console.WriteLine(
-            $"    consistency {c.SuccessfulDays} of the last {c.Days} days ({Percent(c.Share)})"
-            + (c.CoveredDays < c.Days ? $", {c.Days - c.CoveredDays} of them before the start" : ""));
-        Console.WriteLine(p.NextTier is { } next
-            ? $"    multiplier  ×{Multiplier(p.MultiplierNow)} — ×{Multiplier(next.Multiplier)} at {Percent(next.MinShare)} ({Plural(c.DaysNeededFor(next.MinShare), "more successful day")})"
-            : $"    multiplier  ×{Multiplier(p.MultiplierNow)} — the top tier");
+        Console.WriteLine(p.NextTier is { } tier
+            ? $"    multiplier  ×{Multiplier(p.MultiplierNow)} — {c.SuccessfulDays} of the last {c.Days} days active; ×{Multiplier(tier.Multiplier)} at {Percent(tier.MinShare)} ({Plural(c.DaysNeededFor(tier.MinShare), "more active day")})"
+            : $"    multiplier  ×{Multiplier(p.MultiplierNow)} — {c.SuccessfulDays} of the last {c.Days} days active, the top tier");
+        var recent = p.ExceptionDays.Where(x => x > p.Today.AddDays(-30)).Order().ToList();
+        if (recent.Count > 0)
+        {
+            Console.WriteLine($"    exceptions  {string.Join(", ", recent.Select(Day))} (the last 30 days)");
+        }
     }
 
     private static object ReadingJson(DomainReading d) => new
@@ -291,59 +340,97 @@ internal static class DomainsCommand
             : new
             {
                 start = p.Start,
-                level = p.Level,
-                rawLevel = p.RawLevel,
-                topLevel = p.TopLevel,
-                capped = p.Capped,
-                xpIntoLevel = p.XpIntoLevel,
-                xpToNext = p.XpToNext,
-                bankedXp = p.BankedXp,
-                rank = new { index = p.Rank, title = p.RankRule.Title, qualifiedOn = p.RankQualifiedOn },
-                ranksReached = p.RanksReached.Select(r => new { index = r.Rank, title = r.Rule.Title, qualifiedOn = r.QualifiedOn }),
-                nextRank = p.Next is not { } rank
-                    ? null
-                    : new
-                    {
-                        index = rank.Rank,
-                        title = rank.Rule.Title,
-                        level = rank.Rule.StartLevel,
-                        bar = rank.Rule.MinConsistency,
-                        windowDays = rank.Rule.WindowDays,
-                        successfulDays = rank.Window.SuccessfulDays,
-                        requiredDays = rank.Required,
-                        daysNeeded = rank.DaysNeeded,
-                        daysOld = rank.DaysOld,
-                        levelReached = rank.LevelReached,
-                        oldEnough = rank.OldEnough,
-                        barMet = rank.BarMet
-                    },
-                success = p.Rules.Success.Describe(),
-                todayBase = p.TodayBase,
-                todaySucceeded = p.TodaySucceeded,
+                settledThrough = p.SettledThrough,
+                lifetime = new
+                {
+                    level = p.LifetimeLevel,
+                    levelXp = p.Rules.Curve.CostToNext(p.LifetimeLevel),
+                    xpIntoLevel = p.XpIntoLevel,
+                    xpToNext = p.XpToNext
+                },
                 consistency = new
                 {
-                    from = p.Consistency.From,
-                    to = p.Consistency.To,
-                    days = p.Consistency.Days,
-                    coveredDays = p.Consistency.CoveredDays,
-                    successfulDays = p.Consistency.SuccessfulDays,
-                    share = p.Consistency.Share
+                    level = p.ConsistencyLevel,
+                    windowDays = p.Window.Days,
+                    from = p.Window.From,
+                    to = p.Window.To,
+                    averageBase = p.Window.Average,
+                    next = p.NextConsistency is not { } next
+                        ? null
+                        : new
+                        {
+                            level = next.Level,
+                            windowDays = next.WindowDays,
+                            average = next.Average,
+                            averageNow = next.AverageNow,
+                            averageMet = next.AverageMet,
+                            activeMinimum = next.ActiveMinimum,
+                            activeDaysNeeded = next.ActiveDaysNeeded,
+                            activeDays = next.ActiveDaysNow,
+                            activeDaysMet = next.ActiveDaysMet,
+                            ageNeeded = next.AgeNeeded,
+                            age = next.AgeNow,
+                            ageMet = next.AgeMet
+                        }
                 },
-                multiplier = p.MultiplierNow,
-                nextTier = p.NextTier is not { } next
-                    ? null
-                    : new
+                shown = new
+                {
+                    level = p.Level,
+                    exact = (decimal)p.ShownExact / FallRule.Scale,
+                    target = p.Target,
+                    rank = new { index = p.Rank, title = p.RankRule.Title },
+                    limitedBy = p.LimitedBy?.ToString().ToLowerInvariant(),
+                    falling = p.Falling,
+                    paused = p.Paused,
+                    fallingSince = p.FallingSince,
+                    fallingFrom = p.FallingFrom,
+                    lastChange = p.LastChange is not { } change ? null : new { day = change.Day, from = change.From, to = change.To }
+                },
+                best = new
+                {
+                    level = p.BestLevel,
+                    levelOn = p.BestLevelOn,
+                    rank = new { index = p.BestRank, title = p.BestRankRule.Title },
+                    ranksReached = p.RanksReached.Select(r => new { index = r.Rank, title = r.Rule.Title, qualifiedOn = r.QualifiedOn })
+                },
+                current = new
+                {
+                    todayBase = p.TodayBase,
+                    todayAction = p.TodayAction,
+                    activeMinimum = p.ActiveMinimum,
+                    todayActive = p.TodayActive,
+                    todayException = p.TodayException,
+                    rule = p.Rules.Success.Describe(p.Level),
+                    window = new
                     {
-                        minShare = next.MinShare,
-                        multiplier = next.Multiplier,
-                        daysNeeded = p.Consistency.DaysNeededFor(next.MinShare)
-                    }
+                        from = p.Consistency.From,
+                        to = p.Consistency.To,
+                        days = p.Consistency.Days,
+                        coveredDays = p.Consistency.CoveredDays,
+                        activeDays = p.Consistency.SuccessfulDays,
+                        share = p.Consistency.Share
+                    },
+                    multiplier = p.MultiplierNow,
+                    nextTier = p.NextTier is not { } tier
+                        ? null
+                        : new
+                        {
+                            minShare = tier.MinShare,
+                            multiplier = tier.Multiplier,
+                            daysNeeded = p.Consistency.DaysNeededFor(tier.MinShare)
+                        }
+                },
+                exceptionDays = p.ExceptionDays.Order()
             }
     };
+
+    private static string Met(bool met) => met ? ", met" : "";
 
     private static string Day(DateOnly day) => day.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static string Xp(long xp) => xp.ToString("#,0", CultureInfo.InvariantCulture) + " XP";
+
+    private static string Number(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
     private static string Percent(decimal share)
         => (share * 100m).ToString("0.#", CultureInfo.InvariantCulture) + "%";

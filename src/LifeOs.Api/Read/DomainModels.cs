@@ -5,9 +5,9 @@ using LifeOs.Domain;
 namespace LifeOs.Api.Read;
 
 /// <summary>
-/// <c>GET /api/domains</c> (REWARD-6 / REWARD-7, xp-domains plan §3.11): every life domain in
-/// display order, as of <see cref="Today"/> (<c>yyyy-MM-dd</c>) in the home zone. Dates are
-/// home-zone days, not the viewer's.
+/// <c>GET /api/domains</c> (REWARD-6 / REWARD-7 / REWARD-8, xp-domains plan §7.4.8): every life
+/// domain in display order, as of <see cref="Today"/> (<c>yyyy-MM-dd</c>) in the home zone.
+/// Dates are home-zone days, not the viewer's.
 /// </summary>
 public sealed class DomainsRead
 {
@@ -17,8 +17,9 @@ public sealed class DomainsRead
 
 /// <summary>
 /// One life domain: its currency, the XP it has collected, and whether it has rules. Only a
-/// configured domain (Health in the pilot) has <see cref="Lifetime"/>, <see cref="Current"/>
-/// and <see cref="Ranks"/>; <see cref="NextRank"/> is null at the last rank.
+/// configured domain (Health in the pilot) has the rest: <see cref="Lifetime"/>,
+/// <see cref="Consistency"/>, <see cref="Shown"/>, <see cref="Best"/>, <see cref="Current"/>
+/// and the rank ladder.
 /// </summary>
 public sealed class DomainRow
 {
@@ -29,78 +30,143 @@ public sealed class DomainRow
     public long TotalXp { get; set; }
     public bool Configured { get; set; }
     public DomainLifetime? Lifetime { get; set; }
-    public DomainNextRank? NextRank { get; set; }
+    public DomainConsistency? Consistency { get; set; }
+    public DomainShown? Shown { get; set; }
+    public DomainBest? Best { get; set; }
     public DomainCurrent? Current { get; set; }
     public IReadOnlyList<DomainRankRow>? Ranks { get; set; }
 }
 
 /// <summary>
-/// Lifetime advancement, which a bad month never lowers: the level (stopped at the top of the
-/// rank held), the level the XP alone reaches, the rank and the day it qualified (null for
-/// Novice), the XP into the level and still to go, and — while capped — the XP banked.
+/// The lifetime level, which never falls (§7.1): the level lifetime XP reaches, the ceiling the
+/// shown level can't pass, with what the level costs, the XP into it and still to go.
 /// </summary>
 public sealed class DomainLifetime
 {
     /// <summary>The first day with paid XP, or null before there is any.</summary>
     public string? Start { get; set; }
     public int Level { get; set; }
-    public int RawLevel { get; set; }
-    /// <summary>The highest level the rank allows (9 for Novice).</summary>
-    public int TopLevel { get; set; }
-    public bool Capped { get; set; }
-    /// <summary>The rank held: 0 is Novice.</summary>
-    public int Rank { get; set; }
-    public string RankTitle { get; set; } = "";
-    public string? QualifiedOn { get; set; }
-    /// <summary>What the current level costs in all; the whole of it while capped.</summary>
+    /// <summary>What the current level costs in all; 0 at the top.</summary>
     public long LevelXp { get; set; }
     public long XpIntoLevel { get; set; }
     public long XpToNext { get; set; }
-    public long BankedXp { get; set; }
 }
 
 /// <summary>
-/// The next rank's gate as it reads today: its level, bar (0–1) and window, the window's
-/// successful days against those the bar takes, and the domain's age against the window.
-/// Today counts once it has succeeded.
+/// The consistency level (§7.2): the highest level the last <see cref="WindowDays"/> counted days
+/// (at most 90, <see cref="From"/>–<see cref="To"/>) support, their base XP a day, and what the
+/// next level needs. <see cref="Next"/> is null at the top.
 /// </summary>
-public sealed class DomainNextRank
+public sealed class DomainConsistency
 {
-    public int Rank { get; set; }
-    public string Title { get; set; } = "";
     public int Level { get; set; }
-    public decimal Bar { get; set; }
     public int WindowDays { get; set; }
-    public decimal Consistency { get; set; }
-    public int SuccessfulDays { get; set; }
-    public int RequiredDays { get; set; }
-    public int DaysNeeded { get; set; }
-    public int DaysOld { get; set; }
-    public bool LevelReached { get; set; }
-    public bool OldEnough { get; set; }
-    public bool BarMet { get; set; }
+    public string? From { get; set; }
+    public string? To { get; set; }
+    public decimal AverageBase { get; set; }
+    public DomainConsistencyNeed? Next { get; set; }
 }
 
 /// <summary>
-/// Current performance, which does drop: today's base XP against the success rule
-/// (<see cref="Target"/> is its number when it has one), consistency over the last 30
-/// complete days, the multiplier it sets, and the next tier with the days it still needs.
+/// What a consistency level needs over the window, each test against where it stands: a base XP
+/// average, active days (action XP at the level's minimum) in the window, and active days so far.
+/// </summary>
+public sealed class DomainConsistencyNeed
+{
+    public int Level { get; set; }
+    public int WindowDays { get; set; }
+    public int Average { get; set; }
+    public decimal AverageNow { get; set; }
+    public bool AverageMet { get; set; }
+    public int ActiveMinimum { get; set; }
+    public int ActiveDaysNeeded { get; set; }
+    public int ActiveDays { get; set; }
+    public bool ActiveDaysMet { get; set; }
+    public int AgeNeeded { get; set; }
+    public int Age { get; set; }
+    public bool AgeMet { get; set; }
+}
+
+/// <summary>
+/// The shown level (§7.2): it follows <see cref="Target"/> (the lower of the lifetime and
+/// consistency levels), rising at once and falling <see cref="PercentPerDay"/> of itself a day.
+/// <see cref="Exact"/> is it to two places. <see cref="LimitedBy"/> is <c>lifetime</c> or
+/// <c>consistency</c>, whichever sets the target, or null when they're equal. While it's above
+/// the target it's <see cref="Falling"/> or <see cref="Paused"/>, since <see cref="FallingSince"/>
+/// from <see cref="FallingFrom"/>, and <see cref="BackOnTrack"/> says what pauses the fall.
+/// </summary>
+public sealed class DomainShown
+{
+    public int Level { get; set; }
+    public decimal Exact { get; set; }
+    public int Target { get; set; }
+    /// <summary>The rank the level is in: 0 is Novice.</summary>
+    public int Rank { get; set; }
+    public string RankTitle { get; set; } = "";
+    public string? LimitedBy { get; set; }
+    public bool Falling { get; set; }
+    public bool Paused { get; set; }
+    public string? FallingSince { get; set; }
+    public int? FallingFrom { get; set; }
+    public decimal PercentPerDay { get; set; }
+    public DomainLevelChange? LastChange { get; set; }
+    public DomainBackOnTrack? BackOnTrack { get; set; }
+}
+
+/// <summary>The last day the shown level moved, and from what to what.</summary>
+public sealed class DomainLevelChange
+{
+    public string Day { get; set; } = "";
+    public int From { get; set; }
+    public int To { get; set; }
+}
+
+/// <summary>
+/// What pauses a fall: the last <see cref="Days"/> counted days averaging <see cref="Average"/>
+/// base XP, with <see cref="ActiveDays"/> of them active (<see cref="ActiveMinimum"/> action XP).
+/// </summary>
+public sealed class DomainBackOnTrack
+{
+    public int Days { get; set; }
+    public int Average { get; set; }
+    public int ActiveMinimum { get; set; }
+    public int ActiveDays { get; set; }
+}
+
+/// <summary>The best level and best rank ever reached, and the first day each was.</summary>
+public sealed class DomainBest
+{
+    public int Level { get; set; }
+    public string? LevelOn { get; set; }
+    public int Rank { get; set; }
+    public string RankTitle { get; set; } = "";
+    /// <summary>The first day the best rank reached <see cref="Rank"/>; null for Novice.</summary>
+    public string? RankOn { get; set; }
+}
+
+/// <summary>
+/// Today: base and action XP against the active minimum (the shown level's, going into today),
+/// whether today is active or an exception day, the multiplier's 30 non-exception days before
+/// today, the multiplier it sets, the next tier, and the last settled day.
 /// </summary>
 public sealed class DomainCurrent
 {
     public long TodayBase { get; set; }
-    public bool TodaySucceeded { get; set; }
-    /// <summary>The success rule in words, e.g. "at least 70 base XP".</summary>
+    public long TodayAction { get; set; }
+    public int ActiveMinimum { get; set; }
+    public bool TodayActive { get; set; }
+    public bool TodayException { get; set; }
+    /// <summary>The active day in words, e.g. "at least 17 action XP (base XP less sleep)".</summary>
     public string Rule { get; set; } = "";
-    public long? Target { get; set; }
-    public decimal Consistency { get; set; }
-    public int SuccessfulDays { get; set; }
+    public decimal ActiveShare { get; set; }
+    public int ActiveDays { get; set; }
     public int WindowDays { get; set; }
     public decimal Multiplier { get; set; }
     public DomainTierRow? NextTier { get; set; }
+    public string SettledThrough { get; set; } = "";
 }
 
-/// <summary>A multiplier tier above now: the share it takes, what it pays, and the successful days still needed.</summary>
+/// <summary>A multiplier tier above now: the share it takes, what it pays, and the active days still needed.</summary>
 public sealed class DomainTierRow
 {
     public decimal MinShare { get; set; }
@@ -108,23 +174,30 @@ public sealed class DomainTierRow
     public int DaysNeeded { get; set; }
 }
 
-/// <summary>One rung of the rank ladder: its gate, its Gems, and the day it qualified when it has.</summary>
+/// <summary>
+/// One rung of the rank ladder: its levels, what holding its first level takes over a full
+/// window (null for the first rank, which needs nothing), the total XP to reach it, its Gems,
+/// and the first day the best rank reached it.
+/// </summary>
 public sealed class DomainRankRow
 {
     public int Rank { get; set; }
     public string Title { get; set; } = "";
     public int Level { get; set; }
-    public int TopLevel { get; set; }
-    public decimal Bar { get; set; }
+    public int LastLevel { get; set; }
+    public int? Average { get; set; }
+    public int? ActiveMinimum { get; set; }
+    public int? ActiveDays { get; set; }
     public int WindowDays { get; set; }
+    public long TotalXp { get; set; }
     public int Gems { get; set; }
-    public string? QualifiedOn { get; set; }
+    public string? ReachedOn { get; set; }
 }
 
 /// <summary>
-/// <c>GET /api/domains/{key}/days</c> (xp-domains plan §3.11): one domain's last days, oldest
+/// <c>GET /api/domains/{key}/days</c> (xp-domains plan §7.4.8): one domain's last days, oldest
 /// first and ending today (<c>yyyy-MM-dd</c>, home zone) — the Character page's daily chart.
-/// <see cref="Target"/> is the success rule's number for a configured domain (70 for Health).
+/// <see cref="SettledThrough"/> is the last settled day, for a configured domain.
 /// </summary>
 public sealed class DomainDaysRead
 {
@@ -133,26 +206,37 @@ public sealed class DomainDaysRead
     public string Name { get; set; } = "";
     public bool Configured { get; set; }
     public string Today { get; set; } = "";
-    public long? Target { get; set; }
+    public string? SettledThrough { get; set; }
     public IReadOnlyList<DomainDayRow> Days { get; set; } = [];
 }
 
 /// <summary>
-/// One day of a domain: base XP (before any multiplier), paid XP, and whether the success rule
-/// passed — null for a domain without rules.
+/// One day of a domain: base XP (before any multiplier), its action and passive (sleep) parts,
+/// and paid XP. A configured domain adds the exception comment (null on an unmarked day), whether
+/// the day counted and was active, the active minimum that day, and the lifetime, consistency and
+/// shown levels and rank at its end; those are null for a domain without rules.
 /// </summary>
 public sealed class DomainDayRow
 {
     public string Day { get; set; } = "";
     public long Base { get; set; }
+    public long Action { get; set; }
+    public long Passive { get; set; }
     public long Paid { get; set; }
-    public bool? Succeeded { get; set; }
+    public string? Exception { get; set; }
+    public bool? Counted { get; set; }
+    public bool? Active { get; set; }
+    public int? ActiveMinimum { get; set; }
+    public int? LifetimeLevel { get; set; }
+    public int? ConsistencyLevel { get; set; }
+    public int? Level { get; set; }
+    public int? Rank { get; set; }
 }
 
 /// <summary>
-/// <c>GET /api/domains/report?days=N</c> (xp-domains plan §3.11, §3.13): every life domain over
+/// <c>GET /api/domains/report?days=N</c> (xp-domains plan §3.13, §7.4.8): every life domain over
 /// its last <see cref="Days"/> days, as of <see cref="Today"/> (<c>yyyy-MM-dd</c>, home zone) —
-/// what the Character page's reports plot.
+/// what the reports plot.
 /// </summary>
 public sealed class DomainReportRead
 {
@@ -163,11 +247,11 @@ public sealed class DomainReportRead
 
 /// <summary>
 /// One life domain over a report's period: the days it covers (<see cref="From"/>–<see cref="To"/>;
-/// a configured domain's end yesterday until today succeeds) and the XP credited to them. A
-/// configured domain adds the days counted (those on or after its start), the successful days,
-/// consistency (0–1) and base XP a day over the days counted, and the level and rank (indexes,
-/// 0 is Novice) the period started from against now, with each rank reached in it. Those are
-/// null for a domain without rules.
+/// a configured domain's end at the last settled day) and the XP credited to them. A configured
+/// domain adds the days counted, exception days, active days and their share, base XP a counted
+/// day, the level and rank (indexes, 0 is Novice) at the start against the end, the bests, each
+/// rank the best rank first reached in the period, and its rank each day (<see cref="Ranks"/>).
+/// Those are null for a domain without rules.
 /// </summary>
 public sealed class DomainReportRow
 {
@@ -180,24 +264,40 @@ public sealed class DomainReportRow
     public long Base { get; set; }
     public long Paid { get; set; }
     public int? DaysCounted { get; set; }
-    public int? SuccessfulDays { get; set; }
-    public decimal? Consistency { get; set; }
+    public int? ExceptionDays { get; set; }
+    public int? ActiveDays { get; set; }
+    public decimal? ActiveShare { get; set; }
     public decimal? AverageBase { get; set; }
     public int? LevelFrom { get; set; }
     public int? LevelTo { get; set; }
     public int? RankFrom { get; set; }
     public int? RankTo { get; set; }
-    /// <summary>The rank held now, e.g. "Apprentice".</summary>
+    /// <summary>The rank at the end of the period, e.g. "Apprentice".</summary>
     public string? RankTitle { get; set; }
+    public int? BestLevelFrom { get; set; }
+    public int? BestLevelTo { get; set; }
+    public int? BestRank { get; set; }
+    public string? BestRankTitle { get; set; }
     public IReadOnlyList<DomainRankReachedRow>? RanksReached { get; set; }
+    public IReadOnlyList<DomainReportDayRow>? Ranks { get; set; }
 }
 
-/// <summary>A rank a domain entered in a report's period, and the day it qualified.</summary>
+/// <summary>A rank the best rank first reached in a report's period, and the day it did.</summary>
 public sealed class DomainRankReachedRow
 {
     public int Rank { get; set; }
     public string Title { get; set; } = "";
     public string QualifiedOn { get; set; } = "";
+}
+
+/// <summary>One day of a report's period: the shown level and rank at its end, the best rank, and whether it was an exception day.</summary>
+public sealed class DomainReportDayRow
+{
+    public string Day { get; set; } = "";
+    public int Level { get; set; }
+    public int Rank { get; set; }
+    public int BestRank { get; set; }
+    public bool Exception { get; set; }
 }
 
 /// <summary>
@@ -222,8 +322,8 @@ public sealed class ExceptionDayRow
 
 /// <summary>
 /// <c>POST /api/domains/exceptions</c> and <c>…/{day}/unmark</c>: the day as it now reads (null
-/// once unmarked), any rank-up the change paid, and each life domain whose level or rank it
-/// moved — as an earning write answers.
+/// once unmarked), any rank-up the change paid, and each life domain whose level, rank or bests
+/// it moved — as an earning write answers.
 /// </summary>
 public sealed class ExceptionDayResult
 {
@@ -266,7 +366,6 @@ public static class DomainRows
     public static DomainDaysRead From(DomainSeries series)
     {
         var domain = series.Domain;
-        var rules = domain.Progress?.Rules;
         return new DomainDaysRead
         {
             Key = domain.Currency.Key,
@@ -274,13 +373,22 @@ public static class DomainRows
             Name = LifeDomains.Name(domain.Currency.Key),
             Configured = domain.Configured,
             Today = series.Days.Count > 0 ? Day(series.Days[^1].Day) : "",
-            Target = rules?.Success is MinimumBaseXp minimum ? minimum.Minimum : null,
+            SettledThrough = domain.Progress is { } p ? Day(p.SettledThrough) : null,
             Days = series.Days.Select(d => new DomainDayRow
             {
                 Day = Day(d.Day),
                 Base = d.Base,
+                Action = d.Action,
+                Passive = d.Passive,
                 Paid = d.Paid,
-                Succeeded = d.Succeeded
+                Exception = d.Exception,
+                Counted = d.Counted,
+                Active = d.Active,
+                ActiveMinimum = d.Standing?.ActiveMinimum,
+                LifetimeLevel = d.Standing?.LifetimeLevel,
+                ConsistencyLevel = d.Standing?.ConsistencyLevel,
+                Level = d.Standing?.Level,
+                Rank = d.Standing?.Rank
             }).ToList()
         };
     }
@@ -311,17 +419,33 @@ public static class DomainRows
             return row;
         }
 
+        var ranks = progress.Rules.Ranks;
         row.DaysCounted = period.DaysCounted;
-        row.SuccessfulDays = period.SuccessfulDays;
-        row.Consistency = Math.Round(period.Consistency, 4);
+        row.ExceptionDays = period.ExceptionDays;
+        row.ActiveDays = period.ActiveDays;
+        row.ActiveShare = Math.Round(period.ActiveShare, 4);
         row.AverageBase = Math.Round(period.AverageBase, 1, MidpointRounding.AwayFromZero);
         row.LevelFrom = period.Before.Level;
-        row.LevelTo = period.Now.Level;
+        row.LevelTo = period.End.Level;
         row.RankFrom = period.Before.Rank;
-        row.RankTo = period.Now.Rank;
-        row.RankTitle = progress.Rules.Ranks[period.Now.Rank].Title;
+        row.RankTo = period.End.Rank;
+        row.RankTitle = ranks[period.End.Rank].Title;
+        row.BestLevelFrom = period.Before.BestLevel;
+        row.BestLevelTo = period.End.BestLevel;
+        row.BestRank = period.BestRank;
+        row.BestRankTitle = ranks[period.BestRank].Title;
         row.RanksReached = period.RanksReached
             .Select(r => new DomainRankReachedRow { Rank = r.Rank, Title = r.Rule.Title, QualifiedOn = Day(r.QualifiedOn) })
+            .ToList();
+        row.Ranks = period.Standings
+            .Select(s => new DomainReportDayRow
+            {
+                Day = Day(s.Day),
+                Level = s.Level,
+                Rank = s.Rank,
+                BestRank = s.BestRank,
+                Exception = s.Exception
+            })
             .ToList();
         return row;
     }
@@ -348,49 +472,91 @@ public static class DomainRows
         }
 
         var rules = p.Rules;
+        var consistency = rules.Consistency;
         row.Lifetime = new DomainLifetime
         {
             Start = p.Start is { } start ? Day(start) : null,
+            Level = p.LifetimeLevel,
+            LevelXp = rules.Curve.CostToNext(p.LifetimeLevel),
+            XpIntoLevel = p.XpIntoLevel,
+            XpToNext = p.XpToNext
+        };
+        row.Consistency = new DomainConsistency
+        {
+            Level = p.ConsistencyLevel,
+            WindowDays = p.Window.Days,
+            From = p.Window.From is { } from ? Day(from) : null,
+            To = p.Window.To is { } to ? Day(to) : null,
+            AverageBase = Math.Round(p.Window.Average, 1, MidpointRounding.AwayFromZero),
+            Next = p.NextConsistency is { } next
+                ? new DomainConsistencyNeed
+                {
+                    Level = next.Level,
+                    WindowDays = next.WindowDays,
+                    Average = next.Average,
+                    AverageNow = Math.Round(next.AverageNow, 1, MidpointRounding.AwayFromZero),
+                    AverageMet = next.AverageMet,
+                    ActiveMinimum = next.ActiveMinimum,
+                    ActiveDaysNeeded = next.ActiveDaysNeeded,
+                    ActiveDays = next.ActiveDaysNow,
+                    ActiveDaysMet = next.ActiveDaysMet,
+                    AgeNeeded = next.AgeNeeded,
+                    Age = next.AgeNow,
+                    AgeMet = next.AgeMet
+                }
+                : null
+        };
+        var backOnTrackDays = rules.Fall.BackOnTrackDays;
+        row.Shown = new DomainShown
+        {
             Level = p.Level,
-            RawLevel = p.RawLevel,
-            TopLevel = p.TopLevel,
-            Capped = p.Capped,
+            Exact = Math.Round((decimal)p.ShownExact / FallRule.Scale, 2, MidpointRounding.AwayFromZero),
+            Target = p.Target,
             Rank = p.Rank,
             RankTitle = p.RankRule.Title,
-            QualifiedOn = p.RankQualifiedOn is { } on ? Day(on) : null,
-            LevelXp = rules.Curve.CostToNext(p.Level),
-            XpIntoLevel = p.XpIntoLevel,
-            XpToNext = p.XpToNext,
-            BankedXp = p.BankedXp
-        };
-        if (p.Next is { } next)
-        {
-            row.NextRank = new DomainNextRank
+            LimitedBy = p.LimitedBy switch
             {
-                Rank = next.Rank,
-                Title = next.Rule.Title,
-                Level = next.Rule.StartLevel,
-                Bar = next.Rule.MinConsistency,
-                WindowDays = next.Rule.WindowDays,
-                Consistency = Math.Round(next.Window.Share, 4),
-                SuccessfulDays = next.Window.SuccessfulDays,
-                RequiredDays = next.Required,
-                DaysNeeded = next.DaysNeeded,
-                DaysOld = next.DaysOld,
-                LevelReached = next.LevelReached,
-                OldEnough = next.OldEnough,
-                BarMet = next.BarMet
-            };
-        }
-
+                LevelLimit.Lifetime => "lifetime",
+                LevelLimit.Consistency => "consistency",
+                _ => null
+            },
+            Falling = p.Falling,
+            Paused = p.Paused,
+            FallingSince = p.FallingSince is { } since ? Day(since) : null,
+            FallingFrom = p.FallingFrom,
+            PercentPerDay = rules.Fall.PercentPerDay,
+            LastChange = p.LastChange is { } change
+                ? new DomainLevelChange { Day = Day(change.Day), From = change.From, To = change.To }
+                : null,
+            BackOnTrack = p.Level > p.Target
+                ? new DomainBackOnTrack
+                {
+                    Days = backOnTrackDays,
+                    Average = consistency.Average(p.Level),
+                    ActiveMinimum = consistency.ActiveMinimum(p.Level),
+                    ActiveDays = consistency.ActiveDaysNeeded(p.Level, backOnTrackDays)
+                }
+                : null
+        };
+        var reached = p.RanksReached.ToDictionary(r => r.Rank, r => r.QualifiedOn);
+        row.Best = new DomainBest
+        {
+            Level = p.BestLevel,
+            LevelOn = p.BestLevelOn is { } levelOn ? Day(levelOn) : null,
+            Rank = p.BestRank,
+            RankTitle = p.BestRankRule.Title,
+            RankOn = reached.TryGetValue(p.BestRank, out var rankOn) ? Day(rankOn) : null
+        };
         row.Current = new DomainCurrent
         {
             TodayBase = p.TodayBase,
-            TodaySucceeded = p.TodaySucceeded,
-            Rule = rules.Success.Describe(),
-            Target = rules.Success is MinimumBaseXp minimum ? minimum.Minimum : null,
-            Consistency = Math.Round(p.Consistency.Share, 4),
-            SuccessfulDays = p.Consistency.SuccessfulDays,
+            TodayAction = p.TodayAction,
+            ActiveMinimum = p.ActiveMinimum,
+            TodayActive = p.TodayActive,
+            TodayException = p.TodayException,
+            Rule = rules.Success.Describe(p.Level),
+            ActiveShare = Math.Round(p.Consistency.Share, 4),
+            ActiveDays = p.Consistency.SuccessfulDays,
             WindowDays = p.Consistency.Days,
             Multiplier = p.MultiplierNow,
             NextTier = p.NextTier is { } tier
@@ -400,19 +566,22 @@ public static class DomainRows
                     Multiplier = tier.Multiplier,
                     DaysNeeded = p.Consistency.DaysNeededFor(tier.MinShare)
                 }
-                : null
+                : null,
+            SettledThrough = Day(p.SettledThrough)
         };
-        var qualified = p.RanksReached.ToDictionary(r => r.Rank, r => r.QualifiedOn);
         row.Ranks = rules.Ranks.Select((rank, i) => new DomainRankRow
         {
             Rank = i,
             Title = rank.Title,
             Level = rank.StartLevel,
-            TopLevel = rules.TopLevelOf(i),
-            Bar = rank.MinConsistency,
-            WindowDays = rank.WindowDays,
+            LastLevel = i + 1 < rules.Ranks.Count ? rules.Ranks[i + 1].StartLevel - 1 : rules.Curve.MaxLevel,
+            Average = i == 0 ? null : consistency.Average(rank.StartLevel),
+            ActiveMinimum = i == 0 ? null : consistency.ActiveMinimum(rank.StartLevel),
+            ActiveDays = i == 0 ? null : consistency.ActiveDaysNeeded(rank.StartLevel, consistency.WindowDays),
+            WindowDays = consistency.WindowDays,
+            TotalXp = rules.Curve.TotalFor(rank.StartLevel),
             Gems = i == 0 ? 0 : rules.GemsFor(i),
-            QualifiedOn = qualified.TryGetValue(i, out var day) ? Day(day) : null
+            ReachedOn = reached.TryGetValue(i, out var day) ? Day(day) : null
         }).ToList();
         return row;
     }

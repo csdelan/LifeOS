@@ -4,10 +4,11 @@ using LifeOs.Domain;
 namespace LifeOs.Tests;
 
 /// <summary>
-/// REWARD-6 / REWARD-7 (xp-domains plan X3, §3.2): the drift test for <see cref="LifeDomains"/>.
-/// Rules live in code, so these checks are what keep a retune honest: every configured domain
-/// reads a tracked life-domain currency, ranks climb from level 1 to 100 with gates that never
-/// loosen, and a better share never earns a smaller multiplier.
+/// REWARD-6 / REWARD-7 / REWARD-8 (xp-domains plan X3, §3.2, §7.4.1): the drift test for
+/// <see cref="LifeDomains"/>. Rules live in code, so these checks are what keep a retune honest:
+/// every configured domain reads a tracked life-domain currency, ranks start every 10 levels from
+/// 1 to 100, what consistency asks only rises with the level, the curve never gets cheaper, a
+/// better share never earns a smaller multiplier, and passive XP comes from known award triggers.
 /// </summary>
 public sealed class LifeDomainsTests
 {
@@ -32,26 +33,45 @@ public sealed class LifeDomainsTests
 
     [Theory]
     [MemberData(nameof(ConfiguredCurrencies))]
-    public void Ranks_climb_from_level_1_to_100_and_their_gates_never_loosen(string currency)
+    public void Ranks_start_every_10_levels_from_1_to_100(string currency)
     {
-        var ranks = LifeDomains.For(currency)!.Ranks;
+        var rules = LifeDomains.For(currency)!;
+        var ranks = rules.Ranks;
 
-        Assert.Equal(1, ranks[0].StartLevel);
-        Assert.Equal(100, ranks[^1].StartLevel);
-        Assert.Equal((0m, 0), (ranks[0].MinConsistency, ranks[0].WindowDays));
+        Assert.Equal([1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], ranks.Select(r => r.StartLevel));
         Assert.Equal(ranks.Count, ranks.Select(r => r.Title).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        for (var i = 1; i < ranks.Count; i++)
+        for (var level = 1; level <= rules.Curve.MaxLevel; level++)
         {
-            var (lower, higher) = (ranks[i - 1], ranks[i]);
-            Assert.True(higher.StartLevel > lower.StartLevel, $"{higher.Title} starts no higher than {lower.Title}");
-            Assert.True(higher.MinConsistency >= lower.MinConsistency, $"{higher.Title} asks less than {lower.Title}");
-            Assert.True(higher.WindowDays >= lower.WindowDays, $"{higher.Title} looks back less than {lower.Title}");
-            Assert.InRange(higher.MinConsistency, 0.01m, 1m);
-            Assert.InRange(higher.WindowDays, 1, 365);
+            Assert.Equal(Math.Min(10, level / 10), rules.RankFor(level));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(ConfiguredCurrencies))]
+    public void What_consistency_asks_only_rises_with_the_level(string currency)
+    {
+        var rules = LifeDomains.For(currency)!;
+        var consistency = rules.Consistency;
+
+        Assert.Equal(rules.Curve.MaxLevel, consistency.MaxLevel);
+        Assert.True(consistency.AverageFrom > 0 && consistency.AverageTo > consistency.AverageFrom, "the average runs upward");
+        Assert.True(consistency.ShareFrom > 0 && consistency.ShareTo > consistency.ShareFrom && consistency.ShareTo <= 1, "the active share runs upward");
+        Assert.InRange(consistency.ActiveShare, 0.01m, 1m);
+        Assert.InRange(consistency.WindowDays, 7, 365);
+        Assert.Equal(consistency.AverageFrom, consistency.Average(2));
+        Assert.Equal(consistency.AverageTo, consistency.Average(consistency.MaxLevel));
+        for (var level = 3; level <= consistency.MaxLevel; level++)
+        {
+            Assert.True(consistency.Average(level) >= consistency.Average(level - 1), $"level {level} asks a lower average");
+            Assert.True(consistency.ActiveMinimum(level) >= consistency.ActiveMinimum(level - 1), $"level {level} asks less of an active day");
+            Assert.True(
+                consistency.ActiveDaysNeeded(level, consistency.WindowDays) >= consistency.ActiveDaysNeeded(level - 1, consistency.WindowDays),
+                $"level {level} asks fewer active days");
+            Assert.True(consistency.AgeNeeded(level) >= consistency.AgeNeeded(level - 1), $"level {level} asks a younger domain");
         }
 
-        // Milestone gates are designed, not built (§2.2): no pilot rank asks for one.
-        Assert.All(ranks, r => Assert.Empty(r.Milestones));
+        Assert.True(rules.Fall.PercentPerDay is > 0 and < 100, "the fall is a share of the level");
+        Assert.True(rules.Fall.HoldDays >= 0 && rules.Fall.BackOnTrackDays > 0);
     }
 
     [Theory]
@@ -106,8 +126,26 @@ public sealed class LifeDomainsTests
         Assert.All(keys, k => Assert.Equal(LifeDomains.RankTrigger, AwardKeys.TriggerOf(k)));
     }
 
+    [Theory]
+    [MemberData(nameof(ConfiguredCurrencies))]
+    public void Passive_xp_comes_from_known_day_award_triggers(string currency)
+    {
+        var rules = LifeDomains.For(currency)!;
+
+        // Passive XP is split out by the award key's trigger (§7.4.2), so it must be a day award's
+        // trigger, never an item's.
+        Assert.All(rules.PassiveTriggers, trigger =>
+        {
+            Assert.Contains(trigger, ActivityAwards.Triggers.Concat(FoodAwards.Triggers));
+            Assert.DoesNotContain(
+                trigger,
+                new[] { BountyTriggers.Completed, BountyTriggers.Timed, BountyTriggers.Followed, BountyTriggers.Partial, BountyTriggers.Established });
+        });
+        Assert.All(rules.PassiveTriggers, t => Assert.Contains(t, LifeDomains.PassiveTriggers));
+    }
+
     [Fact]
-    public void Health_is_the_pilot_domain_judged_daily_at_70_base_xp()
+    public void Health_is_the_pilot_domain_with_the_levels_v2_rules()
     {
         var health = LifeDomains.Health;
 
@@ -115,14 +153,18 @@ public sealed class LifeDomainsTests
         Assert.Same(health, LifeDomains.For("HEALTH_XP"));
         Assert.Equal(Currencies.HealthXp, health.Currency);
         Assert.Equal(Cadence.Daily, health.Cadence);
-        Assert.Equal(new RampCurve(Base: 300, PerLevel: 25, RampFrom: 45, RampPerLevel: 70), health.Curve);
-        Assert.Equal(new MinimumBaseXp(60), health.Success);
-        Assert.Equal("at least 60 base XP", health.Success.Describe());
+        Assert.Equal(new CubicCurve(Linear: 60, Quadratic: 24, Cubic: 0.85m), health.Curve);
+        Assert.Equal(new ConsistencyRule(90, 20, 80, 0.4m, 10, 0.50m, 0.90m), health.Consistency);
+        Assert.Equal(new FallRule(PercentPerDay: 1, HoldDays: 0, BackOnTrackDays: 7), health.Fall);
+        Assert.Equal(new ActiveAtShownLevel(health.Consistency), health.Success);
+        Assert.Equal("at least 17 action XP (base XP less sleep)", health.Success.Describe(40));
+        Assert.Equal(["sleep"], health.PassiveTriggers);
         Assert.Equal(30, health.Multiplier.WindowDays);
         Assert.Equal(new RankUpGems(1, 5), health.RankUpGems);
         Assert.Equal(
             ["Novice", "Apprentice", "Journeyman", "Adept", "Expert", "Veteran", "Elite", "Master", "Champion", "Legend", "Grandmaster"],
             health.Ranks.Select(r => r.Title));
+        Assert.Equal(4, LifeDomains.SettleHour);
 
         // The other domains collect XP and nothing else until they get rules.
         Assert.Null(LifeDomains.For(Currencies.SocialXp));

@@ -255,10 +255,10 @@ public sealed class ActivityRewardsTests(PostgresFixture postgres)
             (paid.Steps, paid.Exercise, paid.Sleep, paid.Total, paid.BaseTotal));
         Assert.Equal(ActivityDayPaid.None, await new ActivityPaidReads(w.Db.Get<ILedgerRepository>()).GetDayAsync(w.Today, Ct));
 
-        // 60 base XP: a successful day on activity alone.
+        // 60 base XP, 45 of it action (sleep is passive): an active day on activity alone.
         var health = (await w.Db.Get<DomainService>().GetAsync(Ct)).Domains
             .Single(d => d.Currency.Key == Currencies.HealthXp).Progress!;
-        Assert.True(health.SucceededOn(day));
+        Assert.True(health.ActiveOn(day));
     }
 
     [Fact]

@@ -264,17 +264,18 @@ public sealed class FoodRewardsTests(PostgresFixture postgres)
         var salmon = await food.LogAsync(Entry("Salmon salad", 5, 1200, At(day, 12)), cancellationToken: Ct);
 
         // 7 x 1.3 = 9.1 -> 9 and 32 x 1.3 = 41.6 -> 42, each stamping its base.
-        var fastAward = Assert.Single(fast.Earned.Awards);
+        // 26 days of 70 also reach Apprentice, paid from the first write; that's beside the point here.
+        var fastAward = Assert.Single(fast.Earned.Awards, a => a.Trigger != LifeDomains.RankTrigger);
         Assert.Equal((9L, 7L, 1.3m), (Health(fastAward), fastAward.Base![Currencies.HealthXp], fastAward.Multipliers![Currencies.HealthXp]));
-        var dietAward = Assert.Single(salmon.Earned.Awards);
+        var dietAward = Assert.Single(salmon.Earned.Awards, a => a.Trigger != LifeDomains.RankTrigger);
         Assert.Equal((42L, 32L, 1.3m), (Health(dietAward), dietAward.Base![Currencies.HealthXp], dietAward.Multipliers![Currencies.HealthXp]));
         Assert.Equal(32, (await db.PayloadAsync(dietAward.EventId)).GetProperty("base").GetProperty(Currencies.HealthXp).GetInt64());
 
-        // The day's base is 31 + 7 + 32 = 70: a success, read on the base, not the 82 paid.
+        // The day's base is 31 + 7 + 32 = 70: active, read on the action XP, not the 82 paid.
         Assert.Equal((70L, 82L), await CreditAsync(db, day));
         var series = await db.Get<DomainService>().GetDaysAsync("health", 4, Ct);
         var row = series.Days.Single(d => d.Day == day);
-        Assert.Equal((70L, 82L, true), (row.Base, row.Paid, row.Succeeded));
+        Assert.Equal((70L, 70L, 82L, true), (row.Base, row.Action, row.Paid, row.Active));
 
         var paid = (await food.GetDayAsync(day, Ct)).Paid;
         Assert.Equal(new FoodPaid(32, 42, 1.3m), paid.Diet);

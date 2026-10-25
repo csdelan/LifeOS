@@ -11,7 +11,7 @@ namespace LifeOs.Tests;
 /// REWARD-7 (xp-domains plan X5, §3.6): the multiplier on earns. A configured domain's XP is
 /// paid at the multiplier of the day it's credited to, from the record as it stands when it's
 /// paid, and frozen there: the earn stamps <c>base</c> and <c>multipliers</c>, nothing re-prices
-/// it, a reversal gives back exactly what it paid, and success rules read the base.
+/// it, a reversal gives back exactly what it paid, and the active test reads the action XP.
 /// <para>
 /// Each test runs in a database of its own (<see cref="DomainTestDatabase"/>): the multiplier
 /// reads every Health day in it.
@@ -31,13 +31,16 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
     private static Dictionary<string, long> Negated(IReadOnlyDictionary<string, long> amounts)
         => amounts.ToDictionary(kv => kv.Key, kv => -kv.Value);
 
+    /// <summary>The one award that isn't a rank-up: weeks of 70 a day reach Apprentice, which pays beside it.</summary>
+    private static Award Paid(IEnumerable<Award> awards) => Assert.Single(awards, a => a.Trigger != LifeDomains.RankTrigger);
+
     [Fact]
-    public async Task A_day_logged_on_the_day_pays_at_todays_multiplier_but_succeeds_on_its_base()
+    public async Task A_day_logged_on_the_day_pays_at_todays_multiplier_but_is_active_on_its_action_xp()
     {
         await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);
         var today = await database.TodayAsync();
         await database.OpenWalletAsync(daysAgo: 40);
-        // 26 of the 30 days before today succeeded: ×1.3.
+        // 26 of the 30 days before today were active: ×1.3.
         await database.CreditDaysAsync(today, fromAgo: 30, toAgo: 5, xp: 70);
         var habit = await database.HabitAsync(today, startOffset: 3, healthXp: 50);
 
@@ -45,7 +48,9 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
         var response = await host.Client.PostAsJsonAsync(
             "/api/adhere", new { habit = habit.Id.ToString(), state = "followed", on = today.ToString("yyyy-MM-dd") }, Ct);
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(Ct));
-        var award = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("awards").EnumerateArray());
+        var award = Assert.Single(
+            (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("awards").EnumerateArray(),
+            a => a.GetProperty("trigger").GetString() != LifeDomains.RankTrigger);
 
         // 50 × 1.3 = 65, and the earn says how. The day's default Freedom and Life XP aren't
         // domain XP, so they pay as priced.
@@ -59,23 +64,26 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
         Assert.Equal(50, payload.GetProperty("base").GetProperty(Currencies.HealthXp).GetInt64());
         Assert.Equal(1.3m, payload.GetProperty("multipliers").GetProperty(Currencies.HealthXp).GetDecimal());
 
-        // Paid 65, but the day's base is 50: under the 60, so today hasn't succeeded.
+        // Paid 65, but the active test reads the day's action XP, 50, against the level's minimum.
         var health = (await database.Get<DomainService>().GetAsync(Ct)).Domains
             .Single(d => d.Currency.Key == Currencies.HealthXp).Progress!;
-        Assert.Equal((50L, false), (health.TodayBase, health.TodaySucceeded));
+        Assert.Equal((50L, 50L, true), (health.TodayBase, health.TodayAction, health.TodayActive));
         Assert.Equal(65, health.Periods[^1].Paid);
+        Assert.Equal(health.Rules.Consistency.ActiveMinimum(health.Standings[^2].Level), health.ActiveMinimum);
 
-        // The Character page's chart reads the same days: base against the 60, paid beside it.
+        // The Character page's chart reads the same days: action against each day's minimum, paid beside it.
         var days = await host.Client.GetFromJsonAsync<JsonElement>("/api/domains/health/days?days=6", Ct);
-        Assert.Equal(("health_xp", 60L), (days.GetProperty("key").GetString(), days.GetProperty("target").GetInt64()));
+        Assert.Equal("health_xp", days.GetProperty("key").GetString());
         Assert.Equal(today.ToString("yyyy-MM-dd"), days.GetProperty("today").GetString());
         var rows = days.GetProperty("days").EnumerateArray().ToList();
         Assert.Equal(6, rows.Count);
-        Assert.Equal((today.AddDays(-5).ToString("yyyy-MM-dd"), 70L, true),
-            (rows[0].GetProperty("day").GetString(), rows[0].GetProperty("base").GetInt64(), rows[0].GetProperty("succeeded").GetBoolean()));
-        Assert.Equal((0L, false), (rows[1].GetProperty("base").GetInt64(), rows[1].GetProperty("succeeded").GetBoolean()));
-        Assert.Equal((50L, 65L, false),
-            (rows[5].GetProperty("base").GetInt64(), rows[5].GetProperty("paid").GetInt64(), rows[5].GetProperty("succeeded").GetBoolean()));
+        Assert.Equal((today.AddDays(-5).ToString("yyyy-MM-dd"), 70L, 70L, true),
+            (rows[0].GetProperty("day").GetString(), rows[0].GetProperty("base").GetInt64(), rows[0].GetProperty("action").GetInt64(),
+                rows[0].GetProperty("active").GetBoolean()));
+        Assert.Equal((0L, false), (rows[1].GetProperty("base").GetInt64(), rows[1].GetProperty("active").GetBoolean()));
+        Assert.Equal((50L, 65L, true, health.ActiveMinimum),
+            (rows[5].GetProperty("action").GetInt64(), rows[5].GetProperty("paid").GetInt64(), rows[5].GetProperty("active").GetBoolean(),
+                rows[5].GetProperty("activeMinimum").GetInt32()));
         Assert.Equal(30, (await host.Client.GetFromJsonAsync<JsonElement>("/api/domains/health/days", Ct)).GetProperty("days").GetArrayLength());
         foreach (var bad in new[] { "/api/domains/health/days?days=0", "/api/domains/health/days?days=732", "/api/domains/coins/days" })
         {
@@ -84,7 +92,7 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
 
         // Undoing the day gives back exactly what it paid.
         var undone = await database.Get<AdherenceService>().RecordAsync(habit.Urn, AdherenceResults.Missed, today, cancellationToken: Ct);
-        var reversal = Assert.Single(undone.Awards);
+        var reversal = Paid(undone.Awards);
         Assert.Equal(LedgerEntries.Reversal, reversal.Entry);
         Assert.Equal(Negated(earned), reversal.Amounts);
         Assert.Null(reversal.Base);
@@ -97,13 +105,13 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
         await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);
         var today = await database.TodayAsync();
         await database.OpenWalletAsync(daysAgo: 40);
-        // The last 25 days succeeded: ×1.2 today, but only 5 of the 30 days before 20 days ago.
+        // The last 25 days were active: ×1.2 today, but only 5 of the 30 days before 20 days ago.
         await database.CreditDaysAsync(today, fromAgo: 25, toAgo: 1, xp: 70);
         var habit = await database.HabitAsync(today, startOffset: 30, healthXp: 60);
         var adherence = database.Get<AdherenceService>();
 
-        var late = Assert.Single((await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today.AddDays(-20), cancellationToken: Ct)).Awards);
-        var onTime = Assert.Single((await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today, cancellationToken: Ct)).Awards);
+        var late = Paid((await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today.AddDays(-20), cancellationToken: Ct)).Awards);
+        var onTime = Paid((await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today, cancellationToken: Ct)).Awards);
 
         Assert.Equal(60, late.Amounts[Currencies.HealthXp]);
         Assert.Null(late.Base);
@@ -126,9 +134,9 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
         var yoga = await database.HabitAsync(today, startOffset: 10, healthXp: 25);
         var adherence = database.Get<AdherenceService>();
 
-        var ran = Assert.Single((await adherence.RecordAsync(run.Urn, AdherenceResults.Followed, monday, cancellationToken: Ct)).Awards);
+        var ran = Paid((await adherence.RecordAsync(run.Urn, AdherenceResults.Followed, monday, cancellationToken: Ct)).Awards);
         await database.CreditDaysAsync(monday, fromAgo: 22, toAgo: 1, xp: 70); // 22 of 30: 73%
-        var stretched = Assert.Single((await adherence.RecordAsync(yoga.Urn, AdherenceResults.Followed, monday, cancellationToken: Ct)).Awards);
+        var stretched = Paid((await adherence.RecordAsync(yoga.Urn, AdherenceResults.Followed, monday, cancellationToken: Ct)).Awards);
 
         Assert.Equal(40, ran.Amounts[Currencies.HealthXp]);
         Assert.Null(ran.Multipliers);
@@ -154,22 +162,22 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
         await database.Get<BountyService>().SetAsync(task.Urn, BountyTriggers.Completed, price, cancellationToken: Ct);
         var status = database.Get<StatusService>();
 
-        // No successful days yet: ×1.0, and the reopen gives back exactly that.
-        var first = Assert.Single((await status.ChangeStatusAsync(task.Urn, "Completed", Ct)).Awards);
-        var reopened = Assert.Single((await status.ChangeStatusAsync(task.Urn, "In progress", Ct)).Awards);
+        // No active days yet: ×1.0, and the reopen gives back exactly that.
+        var first = Paid((await status.ChangeStatusAsync(task.Urn, "Completed", Ct)).Awards);
+        var reopened = Paid((await status.ChangeStatusAsync(task.Urn, "In progress", Ct)).Awards);
         Assert.All(price, kv => Assert.Equal(kv.Value, first.Amounts[kv.Key]));
         Assert.Null(first.Multipliers);
         Assert.Equal(Negated(first.Amounts), reopened.Amounts);
 
-        // 26 of the last 30 days succeed since: completing again pays Health at ×1.3. Social XP
+        // 26 of the last 30 days are active since: completing again pays Health at ×1.3. Social XP
         // has no rules and Life XP is no domain, so neither multiplies.
         await database.CreditDaysAsync(today, fromAgo: 30, toAgo: 5, xp: 70);
-        var again = Assert.Single((await status.ChangeStatusAsync(task.Urn, "Completed", Ct)).Awards);
+        var again = Paid((await status.ChangeStatusAsync(task.Urn, "Completed", Ct)).Awards);
         Assert.Equal(WithHealth(first.Amounts, 33), again.Amounts);
         Assert.Equal(Health(25), again.Base);
         Assert.Equal(new Dictionary<string, decimal> { [Currencies.HealthXp] = 1.3m }, again.Multipliers);
 
-        var reopenedAgain = Assert.Single((await status.ChangeStatusAsync(task.Urn, "In progress", Ct)).Awards);
+        var reopenedAgain = Paid((await status.ChangeStatusAsync(task.Urn, "In progress", Ct)).Awards);
         Assert.Equal(Negated(again.Amounts), reopenedAgain.Amounts);
     }
 }

@@ -324,11 +324,12 @@ public sealed class RewardService(
     }
 
     /// <summary>
-    /// Pays each rank-up the configured life domains have reached (xp-domains plan §3.7):
+    /// Pays each rank-up the configured life domains have reached (xp-domains plan §3.7, §7.4.6):
     /// <see cref="RankUpGems"/> once per rank, under the award key
-    /// <c>rank:&lt;domain&gt;:&lt;start level&gt;</c>, for a rank that qualified on or after the
-    /// day the wallet opened. It earns only: a rank award is never reversed, so losing a rank
-    /// to a retune and reaching it again never pays twice. Returns the entries written.
+    /// <c>rank:&lt;domain&gt;:&lt;start level&gt;</c>, the first time the best rank reached it, on
+    /// or after the day the wallet opened. It earns only: a rank award is never reversed, so
+    /// losing a rank and reaching it again never pays twice, and a rank paid under X4's gates is
+    /// never paid again. Returns the entries written.
     /// </summary>
     public async Task<IReadOnlyList<Award>> ReconcileDomainsAsync(CancellationToken cancellationToken = default)
         => (await PayRankUpsAsync(cancellationToken)).Awards.Select(r => r.Award).ToList();
@@ -480,10 +481,11 @@ public sealed class RewardService(
     }
 
     /// <summary>
-    /// Each configured domain whose level or rank moved from <paramref name="before"/> to
-    /// <paramref name="after"/>. A rank-up paid in <paramref name="rankUps"/> counts as reached
-    /// now, even when time alone opened its gate earlier: its domain moves from the rank below
-    /// it, at the level that rank allowed.
+    /// Each configured domain whose shown level, rank or bests moved from <paramref name="before"/>
+    /// to <paramref name="after"/> (xp-domains plan §7.4.7). A rank-up paid in
+    /// <paramref name="rankUps"/> counts as reached now, even when days settling reached it
+    /// earlier: its domain and its best move from below the lowest rank paid, so the rank still
+    /// announces.
     /// </summary>
     private static IReadOnlyList<DomainChange> DomainChanges(
         IReadOnlyList<DomainProgress> before, IReadOnlyList<DomainProgress> after, IReadOnlyList<RankUp> rankUps)
@@ -492,17 +494,32 @@ public sealed class RewardService(
         foreach (var now in after)
         {
             var then = before.First(b => b.Rules.Currency == now.Rules.Currency);
-            var (levelFrom, rankFrom) = (then.Level, then.Rank);
+            var (levelFrom, rankFrom, bestLevelFrom, bestRankFrom) = (then.Level, then.Rank, then.BestLevel, then.BestRank);
             var paid = rankUps.Where(r => r.Currency == now.Rules.Currency).Select(r => r.Rank).ToList();
-            if (paid.Count > 0 && paid.Min() - 1 < rankFrom)
+            if (paid.Count > 0)
             {
-                rankFrom = paid.Min() - 1;
-                levelFrom = Math.Min(then.RawLevel, now.Rules.TopLevelOf(rankFrom));
+                var below = paid.Min() - 1;
+                var belowTop = now.Rules.Ranks[paid.Min()].StartLevel - 1;
+                rankFrom = Math.Min(rankFrom, below);
+                levelFrom = Math.Min(levelFrom, belowTop);
+                bestRankFrom = Math.Min(bestRankFrom, below);
+                bestLevelFrom = Math.Min(bestLevelFrom, belowTop);
             }
 
-            if (levelFrom != now.Level || rankFrom != now.Rank)
+            if (levelFrom != now.Level || rankFrom != now.Rank
+                || bestLevelFrom != now.BestLevel || bestRankFrom != now.BestRank)
             {
-                changes.Add(new DomainChange(now.Rules.Currency, levelFrom, now.Level, rankFrom, now.Rank, now.RankRule.Title));
+                changes.Add(new DomainChange(
+                    now.Rules.Currency,
+                    levelFrom,
+                    now.Level,
+                    rankFrom,
+                    now.Rank,
+                    now.RankRule.Title,
+                    bestLevelFrom,
+                    now.BestLevel,
+                    bestRankFrom,
+                    now.BestRank));
             }
         }
 

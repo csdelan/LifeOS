@@ -77,7 +77,7 @@ internal static class RewardOutput
                 : amount;
         }));
 
-    /// <summary>Each life domain whose level or rank a write changed, as JSON-ready data.</summary>
+    /// <summary>Each life domain whose level, rank or bests a write changed, as JSON-ready data.</summary>
     public static object ProgressJson(IEnumerable<DomainChange> progress) => progress.Select(p => new
     {
         domain = p.Domain,
@@ -85,10 +85,17 @@ internal static class RewardOutput
         levelTo = p.LevelTo,
         rankFrom = p.RankFrom,
         rankTo = p.RankTo,
-        rankTitle = p.RankTitle
+        rankTitle = p.RankTitle,
+        bestLevelFrom = p.BestLevelFrom,
+        bestLevelTo = p.BestLevelTo,
+        bestRankFrom = p.BestRankFrom,
+        bestRankTo = p.BestRankTo
     });
 
-    /// <summary>Prints one line per domain that moved: "Health: level 9 → 12, now Apprentice."</summary>
+    /// <summary>
+    /// Prints one line per domain that moved: "Health: level 9 → 12 (a new best), now
+    /// Apprentice." A level below the best says so, e.g. "level 20 → 22 (best 25)".
+    /// </summary>
     public static void WriteProgress(IEnumerable<DomainChange> progress)
     {
         foreach (var p in progress)
@@ -96,12 +103,21 @@ internal static class RewardOutput
             var parts = new List<string>();
             if (p.LevelTo != p.LevelFrom)
             {
-                parts.Add($"level {p.LevelFrom} → {p.LevelTo}");
+                var best = p.BestLevelTo > p.BestLevelFrom ? " (a new best)"
+                    : p.LevelTo < p.BestLevelTo ? $" (best {p.BestLevelTo})"
+                    : "";
+                parts.Add($"level {p.LevelFrom} → {p.LevelTo}{best}");
             }
 
             if (p.RankTo != p.RankFrom)
             {
                 parts.Add(p.RankTo > p.RankFrom ? $"now {p.RankTitle}" : $"back to {p.RankTitle}");
+            }
+
+            if (parts.Count == 0)
+            {
+                // Only a best moved: a rank reached as days settled, paid now.
+                parts.Add($"best rank now {LifeDomains.For(p.Domain)?.Ranks[p.BestRankTo].Title ?? p.RankTitle}");
             }
 
             Console.WriteLine($"{LifeDomains.Name(p.Domain)}: {string.Join(", ", parts)}.");

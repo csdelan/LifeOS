@@ -1353,17 +1353,26 @@ Health's card:
 - **Regression scenarios,** each set from C# runs and checked against §7.3:
   - **Steady** (the calibration routine's average): Grandmaster in every run in 6–8 years;
     the lowest level in years 9–10 stays in the 90s.
-  - **Human** (10% of days off): Champion by year 5 in every run, rarely level 100.
+  - **Human** (10% of days off): Champion by year 5 in every run; level 100 in about a
+    third of runs.
   - **High activity** (100 a day): level 100 in about 5.3 years, with no rank drops after.
   - **Lapse** (6 months off in year 3): the level falls, then is back within about a year
     of returning.
   - **Marked lapse** (the same 6 months as exception days): level and rank don't move.
   - **Below the bar** (a flat 30 base XP): settles at the level that average supports,
-    about level 17, and stays there.
+    level 19 (A(19) = 30, A(20) = 31), and stays there.
   - **Level 100, then nothing:** Legend on day 10, Champion on day 21, Novice on day 249
     (§7.3).
 - `--replay` folds the real days, exception days and passive split included, and projects
   from tomorrow. `--no-multiplier` stays.
+- **What the C# runs gave** (20 runs of 10 years, seed 1), and the bands the tests hold:
+  - Steady: Grandmaster in every run at 6.8–7.3 years; the lowest level in the last 2 years
+    91–94; 3 to 7 rank drops a year (short Legend dips).
+  - Human: Champion at about 4.3 years in every run; Grandmaster in 7 of 20.
+  - High activity: level 100 at 5.3–5.4 years, and no drops after.
+  - Lapse: back to the level it had within a year of returning; Grandmaster at 7.3–7.7 years.
+  - Marked lapse: nothing moves during the span; the same final results as the lapse.
+  - Below the bar: level 19 (Apprentice) in every run.
 
 #### 7.4.12 Switching over
 
@@ -1472,5 +1481,5 @@ default:
 - [x] X7 — Reports + charts (no migration)
 - [x] X8 — Levels v2: requirements + plan (§7)
 - [x] X9 — v2 inputs: exception days, action XP, settled days (migration 0043)
-- [ ] X10 — Levels v2 in the kernel (no migration; push with X11)
+- [x] X10 — Levels v2 in the kernel (no migration; push with X11)
 - [ ] X11 — Levels v2 on the web (no migration). Then calibrate (§2.4).

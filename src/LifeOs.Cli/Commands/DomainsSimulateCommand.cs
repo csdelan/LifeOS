@@ -10,15 +10,19 @@ using Microsoft.Extensions.DependencyInjection;
 namespace LifeOs.Cli.Commands;
 
 /// <summary>
-/// <c>bsk domains simulate [&lt;domain&gt;]</c> — the simulator (xp-domains plan §3.10): seeded
-/// runs of an earning pattern under a domain's rules, multiplier included, reporting for each
-/// rank the share of runs that reach it and when (10th / 50th / 90th percentile), the final
-/// level spread, and the average consistency. For calibrating the rules (§2.4).
+/// <c>bsk domains simulate [&lt;domain&gt;]</c> — the simulator (xp-domains plan §3.10, §7.4.11):
+/// seeded runs of an earning pattern under a domain's rules, multiplier included, reporting for
+/// each rank the share of runs whose best rank reaches it and when (10th / 50th / 90th
+/// percentile), the final and best level spreads, rank drops a year in the run's second half,
+/// the lowest level in the last two years, and the average active share. For calibrating the
+/// rules (§2.4). <c>--sleep</c> sets the passive XP a day, <c>--lapse</c> a break and
+/// <c>--exception</c> (repeatable) a break marked as exception days.
 /// <para>
-/// <c>--replay</c> starts from the domain's real days and projects from tomorrow. Without
-/// <c>--avg</c> or <c>--sd</c>, it projects the real days themselves: each full day is one of
-/// them at random, and days off come at the real rate unless <c>--off</c> says otherwise.
-/// Without <c>--replay</c> nothing is read, so no database is needed.
+/// <c>--replay</c> starts from the domain's real days (exception days and the passive split
+/// included) and projects from tomorrow. Without <c>--avg</c> or <c>--sd</c>, it projects the
+/// real days themselves: each full day is one of them at random, days off come at the real rate
+/// unless <c>--off</c> says otherwise, and sleep is the real days' average unless <c>--sleep</c>
+/// says otherwise. Without <c>--replay</c> nothing is read, so no database is needed.
 /// </para>
 /// </summary>
 internal static partial class DomainsSimulateCommand
@@ -39,6 +43,12 @@ internal static partial class DomainsSimulateCommand
         var halfOption = new Option<string?>("--half") { Description = "Share of half days, which do half the essentials (or earn half, without essentials), e.g. 5% (default 5%)." };
         var growthOption = new Option<decimal?>("--growth") { Description = "Extra base XP a day for each year in (default 0)." };
         var lapseOption = new Option<string?>("--lapse") { Description = "A break with no XP: <start>:<length>, e.g. 3y:6m (d, w, m or y)." };
+        var exceptionOption = new Option<string[]>("--exception")
+        {
+            Description = "A break with no XP marked as exception days: <start>:<length>, e.g. 3y:6m. Repeatable.",
+            AllowMultipleArgumentsPerToken = false
+        };
+        var sleepOption = new Option<decimal?>("--sleep") { Description = $"Passive (sleep) XP a day, at most the day's base XP (default {Defaults.SleepXp})." };
         var yearsOption = new Option<int>("--years") { Description = "Years to simulate.", DefaultValueFactory = _ => 10 };
         var runsOption = new Option<int>("--runs") { Description = "Seeded runs.", DefaultValueFactory = _ => 20 };
         var seedOption = new Option<int>("--seed") { Description = "The first run's seed; the same seed gives the same runs.", DefaultValueFactory = _ => 1 };
@@ -49,7 +59,8 @@ internal static partial class DomainsSimulateCommand
         command.Arguments.Add(domainArgument);
         foreach (var option in new Option[]
                  {
-                     avgOption, sdOption, essentialsOption, offOption, halfOption, growthOption, lapseOption, yearsOption,
+                     avgOption, sdOption, essentialsOption, offOption, halfOption, growthOption, lapseOption, exceptionOption,
+                     sleepOption, yearsOption,
                      runsOption, seedOption, noMultiplierOption, replayOption
                  })
         {
@@ -68,6 +79,7 @@ internal static partial class DomainsSimulateCommand
                 var sd = parseResult.GetValue(sdOption);
                 var off = Share(parseResult.GetValue(offOption), "--off");
                 var half = Share(parseResult.GetValue(halfOption), "--half");
+                var sleep = parseResult.GetValue(sleepOption);
                 var pattern = new SimulationPattern(
                     AverageXp: avg ?? Defaults.AverageXp,
                     SpreadXp: sd ?? Defaults.SpreadXp,
@@ -75,7 +87,11 @@ internal static partial class DomainsSimulateCommand
                     OffShare: off ?? Defaults.OffShare,
                     HalfShare: half ?? Defaults.HalfShare,
                     GrowthPerYear: parseResult.GetValue(growthOption) ?? 0,
-                    Lapse: Lapse(parseResult.GetValue(lapseOption)));
+                    Lapse: Lapse(parseResult.GetValue(lapseOption)),
+                    SleepXp: sleep ?? Defaults.SleepXp,
+                    Exceptions: (parseResult.GetValue(exceptionOption) ?? [])
+                        .Select(text => Lapse(text, "--exception")!)
+                        .ToList());
                 var options = new SimulationOptions(
                     parseResult.GetValue(yearsOption), parseResult.GetValue(runsOption), parseResult.GetValue(seedOption),
                     Multiplier: !parseResult.GetValue(noMultiplierOption));
@@ -88,20 +104,22 @@ internal static partial class DomainsSimulateCommand
                     var credit = await provider.GetRequiredService<ILedgerRepository>()
                         .GetDomainDaysAsync([currency.Key], cancellationToken);
                     var history = DomainService.Fold(rules, credit).Periods
-                        .Select(p => new DomainDay(p.Start, p.Base, p.Paid))
+                        .Select(p => new DomainDay(p.Start, p.Base, p.Paid, p.Passive))
                         .ToList();
-                    if (avg is null && sd is null && Replayed(history, credit.Today) is { } real)
+                    var marked = credit.ExceptionDays.Select(d => d.Day).ToHashSet();
+                    if (avg is null && sd is null && Replayed(history, marked, credit.Today) is { } real)
                     {
                         // Project the real days themselves.
                         pattern = pattern with
                         {
                             Sample = real.Active,
                             OffShare = off ?? real.OffShare,
-                            HalfShare = half ?? 0
+                            HalfShare = half ?? 0,
+                            SleepXp = sleep ?? real.Sleep
                         };
                     }
 
-                    result = DomainSimulator.Run(rules, pattern, options, credit.Today.AddDays(1), history);
+                    result = DomainSimulator.Run(rules, pattern, options, credit.Today.AddDays(1), history, marked);
                 }
                 else
                 {
@@ -125,15 +143,21 @@ internal static partial class DomainsSimulateCommand
     }
 
     /// <summary>
-    /// The real full days (base XP above zero) and the share of days off, over the complete
-    /// days since the start (today too when it's the only one), or null with nothing to replay.
+    /// The real full days (base XP above zero), the share of days off and the sleep XP a full day
+    /// averages, over the complete days since the start that aren't exception days (today too
+    /// when it's the only one), or null with nothing to replay.
     /// </summary>
-    private static (IReadOnlyList<long> Active, decimal OffShare)? Replayed(IReadOnlyList<DomainDay> history, DateOnly today)
+    private static (IReadOnlyList<long> Active, decimal OffShare, decimal Sleep)? Replayed(
+        IReadOnlyList<DomainDay> history, IReadOnlySet<DateOnly> exceptions, DateOnly today)
     {
-        var complete = history.Where(d => d.Day < today).ToList();
+        var complete = history.Where(d => d.Day < today && !exceptions.Contains(d.Day)).ToList();
         var days = complete.Count > 0 ? complete : history;
-        var active = days.Where(d => d.Base > 0).Select(d => d.Base).ToList();
-        return active.Count == 0 ? null : (active, (decimal)(days.Count - active.Count) / days.Count);
+        var full = days.Where(d => d.Base > 0).ToList();
+        return full.Count == 0
+            ? null
+            : (full.Select(d => d.Base).ToList(),
+                (decimal)(days.Count - full.Count) / days.Count,
+                Math.Round((decimal)full.Average(d => d.Passive), MidpointRounding.AwayFromZero));
     }
 
     private static void Write(Currency currency, SimulationResult result)
@@ -148,10 +172,12 @@ internal static partial class DomainsSimulateCommand
         }
 
         Console.WriteLine($"  pattern: {result.Pattern.Describe()}");
+        var consistency = result.Rules.Consistency;
         Console.WriteLine(
-            $"  rules: a successful day is {result.Rules.Success.Describe()}; multiplier {(options.Multiplier ? "on" : "off")}");
+            $"  rules: an active day is {consistency.ActiveMinimum(1)}–{consistency.ActiveMinimum(consistency.MaxLevel)} action XP by level;"
+            + $" the level follows the last {consistency.WindowDays} days; multiplier {(options.Multiplier ? "on" : "off")}");
         Console.WriteLine();
-        Console.WriteLine($"  {"Rank",-13}{"Reached",-10}{"p10",-9}{"p50",-9}{"p90",-9}median date");
+        Console.WriteLine($"  {"Best rank",-13}{"Reached",-10}{"p10",-9}{"p50",-9}{"p90",-9}median date");
         foreach (var rank in result.Ranks)
         {
             var reached = $"{rank.RunsReached}/{rank.Runs}";
@@ -164,7 +190,13 @@ internal static partial class DomainsSimulateCommand
         var ranks = string.Join(", ", result.FinalRanks.Select(kv => $"{result.Rules.Ranks[kv.Key].Title} {kv.Value}"));
         Console.WriteLine(
             $"  final level: p10 {result.FinalLevel.P10} · p50 {result.FinalLevel.P50} · p90 {result.FinalLevel.P90}; final ranks: {ranks}");
-        Console.WriteLine($"  consistency over a run: {Percent(result.AverageConsistency)} of days successful");
+        Console.WriteLine(
+            $"  best level: p10 {result.BestLevel.P10} · p50 {result.BestLevel.P50} · p90 {result.BestLevel.P90}");
+        Console.WriteLine(
+            $"  rank drops a year from {Day(result.DropsFrom)}: p10 {Rate(result.RankDropsPerYear.P10)} · p50 {Rate(result.RankDropsPerYear.P50)} · p90 {Rate(result.RankDropsPerYear.P90)}");
+        Console.WriteLine(
+            $"  lowest level in the last 2 years: p10 {result.LowestLevel.P10} · p50 {result.LowestLevel.P50} · p90 {result.LowestLevel.P90}");
+        Console.WriteLine($"  active days: {Percent(result.AverageActiveShare)} of the projected days, on average");
     }
 
     private static object Json(Currency currency, SimulationResult result) => new
@@ -187,6 +219,8 @@ internal static partial class DomainsSimulateCommand
             halfShare = result.Pattern.HalfShare,
             growthPerYear = result.Pattern.GrowthPerYear,
             lapse = result.Pattern.Lapse is { } lapse ? new { afterDays = lapse.AfterDays, lengthDays = lapse.LengthDays } : null,
+            exceptions = (result.Pattern.Exceptions ?? []).Select(x => new { afterDays = x.AfterDays, lengthDays = x.LengthDays }),
+            sleepXp = result.Pattern.SleepXp,
             description = result.Pattern.Describe()
         },
         ranks = result.Ranks.Select(r => new
@@ -200,7 +234,16 @@ internal static partial class DomainsSimulateCommand
         }),
         finalLevel = new { p10 = result.FinalLevel.P10, p50 = result.FinalLevel.P50, p90 = result.FinalLevel.P90 },
         finalRanks = result.FinalRanks.Select(kv => new { rank = kv.Key, title = result.Rules.Ranks[kv.Key].Title, runs = kv.Value }),
-        averageConsistency = Math.Round(result.AverageConsistency, 4)
+        bestLevel = new { p10 = result.BestLevel.P10, p50 = result.BestLevel.P50, p90 = result.BestLevel.P90 },
+        rankDropsPerYear = new
+        {
+            from = result.DropsFrom,
+            p10 = Round(result.RankDropsPerYear.P10),
+            p50 = Round(result.RankDropsPerYear.P50),
+            p90 = Round(result.RankDropsPerYear.P90)
+        },
+        lowestLevelLastTwoYears = new { p10 = result.LowestLevel.P10, p50 = result.LowestLevel.P50, p90 = result.LowestLevel.P90 },
+        averageActiveShare = Math.Round(result.AverageActiveShare, 4)
     };
 
     /// <summary>A share given as a percentage, "8%" or "8"; null when not given.</summary>
@@ -217,8 +260,8 @@ internal static partial class DomainsSimulateCommand
             : throw new ArgumentException($"{option} is a percentage from 0 to 100, e.g. 8%; got '{text}'.");
     }
 
-    /// <summary>A lapse given as <c>&lt;start&gt;:&lt;length&gt;</c>, e.g. <c>3y:6m</c>; null when not given.</summary>
-    internal static SimulationLapse? Lapse(string? text)
+    /// <summary>A span given as <c>&lt;start&gt;:&lt;length&gt;</c>, e.g. <c>3y:6m</c>, for <paramref name="option"/>; null when not given.</summary>
+    internal static SimulationLapse? Lapse(string? text, string option = "--lapse")
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -228,7 +271,7 @@ internal static partial class DomainsSimulateCommand
         var parts = text.Split(':');
         return parts.Length == 2 && Days(parts[0]) is { } after && Days(parts[1]) is { } length && length > 0
             ? new SimulationLapse(after, length)
-            : throw new ArgumentException($"--lapse is <start>:<length>, each a number with d, w, m or y, e.g. 3y:6m; got '{text}'.");
+            : throw new ArgumentException($"{option} is <start>:<length>, each a number with d, w, m or y, e.g. 3y:6m; got '{text}'.");
     }
 
     /// <summary>A span such as "6m" in days: d, w, m (a twelfth of a year) or y (365.25 days).</summary>
@@ -259,6 +302,8 @@ internal static partial class DomainsSimulateCommand
     private static string Years(double years) => years.ToString("0.0", CultureInfo.InvariantCulture) + " y";
 
     private static double Round(double years) => Math.Round(years, 2);
+
+    private static string Rate(double perYear) => perYear.ToString("0.#", CultureInfo.InvariantCulture);
 
     private static string Percent(decimal share) => (share * 100m).ToString("0.#", CultureInfo.InvariantCulture) + "%";
 

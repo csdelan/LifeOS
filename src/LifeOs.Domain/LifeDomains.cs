@@ -13,49 +13,131 @@ public enum Cadence
 /// <summary>
 /// What a success rule sees of one period: its first and last day, and the domain XP
 /// credited to it — <paramref name="BaseXp"/> before any multiplier, <paramref name="PaidXp"/>
-/// as the ledger pays it. It can grow (habits followed, commitments kept, a recovery-day
-/// flag) without changing the fold.
+/// as the ledger pays it, and <paramref name="ActionXp"/>, the base XP less passive awards
+/// such as sleep (xp-domains plan §7.4.2). <paramref name="ShownLevel"/> is the shown level
+/// going into the period, which the walk supplies because it comes from the days before.
 /// </summary>
-public sealed record PeriodFacts(DateOnly Start, DateOnly End, long BaseXp, long PaidXp);
+public sealed record PeriodFacts(DateOnly Start, DateOnly End, long BaseXp, long PaidXp, long ActionXp, int ShownLevel);
 
 /// <summary>
-/// Decides whether a period was a success for a domain (xp-domains plan §3.2). Replaceable
-/// per domain: swapping the rule changes no other code. Rules judge <see cref="PeriodFacts.BaseXp"/>,
-/// so the multiplier can never make a day succeed.
+/// Decides whether a period was a success for a domain: the multiplier's successful day
+/// (xp-domains plan §7.1). Replaceable per domain: swapping the rule changes no other code.
+/// Rules judge XP before any multiplier, so the multiplier can never make a day succeed.
 /// </summary>
 public interface ISuccessRule
 {
     bool Succeeded(PeriodFacts facts);
 
-    /// <summary>The rule in words, e.g. "at least 70 base XP".</summary>
-    string Describe();
+    /// <summary>The rule in words at <paramref name="level"/>, e.g. "at least 17 action XP".</summary>
+    string Describe(int level);
 }
 
-/// <summary>A period succeeds when its base XP reaches <paramref name="Minimum"/>.</summary>
+/// <summary>A period succeeds when its base XP reaches <paramref name="Minimum"/>, at any level.</summary>
 public sealed record MinimumBaseXp(long Minimum) : ISuccessRule
 {
     public bool Succeeded(PeriodFacts facts) => facts.BaseXp >= Minimum;
 
-    public string Describe() => $"at least {Minimum} base XP";
+    public string Describe(int level) => $"at least {Minimum} base XP";
 }
 
 /// <summary>
-/// One rank (xp-domains plan §2.2): entered at <paramref name="StartLevel"/> once the share of
-/// successful periods over the last <paramref name="WindowDays"/> reaches
-/// <paramref name="MinConsistency"/> (0–1) and the domain is at least that old.
-/// <paramref name="Milestones"/> are achievements a rank could also require (Goals
-/// completed, say): designed, not built, so every pilot rank lists none.
+/// A period succeeds when it's <b>active at the shown level</b> (xp-domains plan §7.1): its
+/// action XP reaches <see cref="ConsistencyRule.ActiveMinimum"/> of the shown level going into it.
 /// </summary>
-public sealed record RankRule(
-    int StartLevel, string Title, decimal MinConsistency, int WindowDays, IReadOnlyList<string> Milestones);
+public sealed record ActiveAtShownLevel(ConsistencyRule Consistency) : ISuccessRule
+{
+    public bool Succeeded(PeriodFacts facts) => facts.ActionXp >= Consistency.ActiveMinimum(facts.ShownLevel);
+
+    public string Describe(int level) => $"at least {Consistency.ActiveMinimum(level)} action XP (base XP less sleep)";
+}
+
+/// <summary>
+/// What the last days must show for a level to hold (xp-domains plan §7.2). Level L (2 and
+/// up) qualifies over a window of the last N counted days when all three pass:
+/// <list type="bullet">
+/// <item><b>age</b>: active days so far (action XP ≥ <see cref="ActiveMinimum"/>) ≥ <see cref="AgeNeeded"/>;</item>
+/// <item><b>average</b>: the window's base XP ≥ <see cref="Average"/> · N;</item>
+/// <item><b>active days</b>: the window's active days ≥ <see cref="ActiveDaysNeeded"/>.</item>
+/// </list>
+/// The average runs from <paramref name="AverageFrom"/> at level 2 to <paramref name="AverageTo"/>
+/// at <paramref name="MaxLevel"/>; an active day takes <paramref name="ActiveShare"/> of the
+/// average in action XP, at least <paramref name="ActiveFloor"/>; and the share of days active
+/// runs from <paramref name="ShareFrom"/> to <paramref name="ShareTo"/>.
+/// </summary>
+public sealed record ConsistencyRule(
+    int WindowDays,
+    int AverageFrom,
+    int AverageTo,
+    decimal ActiveShare,
+    int ActiveFloor,
+    decimal ShareFrom,
+    decimal ShareTo,
+    int MaxLevel = 100)
+{
+    private int Span => MaxLevel - 2;
+
+    /// <summary>The average base XP a day level <paramref name="level"/> needs: 20 at level 2, 80 at 100 for Health.</summary>
+    public int Average(int level)
+        => AverageFrom + (int)Math.Round((decimal)(AverageTo - AverageFrom) * (level - 2) / Span, MidpointRounding.AwayFromZero);
+
+    /// <summary>The action XP that makes a day active at <paramref name="level"/>: 10 to 32 for Health.</summary>
+    public int ActiveMinimum(int level)
+        => Math.Max(ActiveFloor, (int)Math.Round(ActiveShare * Average(level), MidpointRounding.AwayFromZero));
+
+    /// <summary>
+    /// The active days level <paramref name="level"/> needs in a window of <paramref name="days"/>:
+    /// <c>⌈P(L) · N⌉</c>, where P runs from <see cref="ShareFrom"/> to <see cref="ShareTo"/>.
+    /// Worked in exact decimals, so 70% of 90 is 63, never 64.
+    /// </summary>
+    public int ActiveDaysNeeded(int level, int days)
+        => (int)Math.Ceiling(days * (ShareFrom * Span + (ShareTo - ShareFrom) * (level - 2)) / Span);
+
+    /// <summary>The active days so far level <paramref name="level"/> needs: <c>min(WindowDays, L + 1)</c>.</summary>
+    public int AgeNeeded(int level) => Math.Min(WindowDays, level + 1);
+
+    /// <summary>
+    /// Whether <paramref name="level"/> passes all three tests, given its active days so far,
+    /// and the window's days, base XP and active days.
+    /// </summary>
+    public bool Qualifies(int level, int activeSoFar, int days, long windowBase, int windowActive)
+        => days > 0
+            && activeSoFar >= AgeNeeded(level)
+            && windowBase >= (long)Average(level) * days
+            && windowActive >= ActiveDaysNeeded(level, days);
+}
+
+/// <summary>
+/// How the shown level falls toward a lower target (xp-domains plan §7.2), in ten-thousandths
+/// of a level: <paramref name="PercentPerDay"/> of itself a day, after <paramref name="HoldDays"/>
+/// counted days below the target. The fall pauses while the last <paramref name="BackOnTrackDays"/>
+/// counted days pass the shown level's own average and active-day tests.
+/// </summary>
+public sealed record FallRule(decimal PercentPerDay, int HoldDays, int BackOnTrackDays)
+{
+    /// <summary>A level in ten-thousandths: level 47 is 470,000.</summary>
+    public const long Scale = 10_000;
+
+    /// <summary>The shown level a day's fall leaves, before the target's floor: <c>⌊Ŝ · (100 − p) / 100⌋</c>.</summary>
+    public long Next(long exact) => (long)Math.Floor(exact * (100 - PercentPerDay) / 100);
+
+    /// <summary>The whole level <paramref name="exact"/> (ten-thousandths) shows: rounded up.</summary>
+    public static int LevelOf(long exact) => (int)((exact + Scale - 1) / Scale);
+}
+
+/// <summary>
+/// One rank (xp-domains plan §7.1): held while the shown level is at or above
+/// <paramref name="StartLevel"/> and below the next rank's start. Health's start every 10
+/// levels, so rank = <c>min(10, ⌊S / 10⌋)</c>.
+/// </summary>
+public sealed record RankRule(int StartLevel, string Title);
 
 /// <summary>A multiplier tier: a successful share at or above <paramref name="MinShare"/> (0–1) earns <paramref name="Multiplier"/>.</summary>
 public sealed record MultiplierTier(decimal MinShare, decimal Multiplier);
 
 /// <summary>
-/// The consistency multiplier (xp-domains plan §2.3): the successful share of the
-/// <paramref name="WindowDays"/> complete days before a day picks the highest tier it reaches;
-/// below every tier it's 1.0.
+/// The consistency multiplier (xp-domains plan §2.3, §7.1): the successful share of the
+/// <paramref name="WindowDays"/> complete days before a day, exception days skipped, picks the
+/// highest tier it reaches; below every tier it's 1.0.
 /// </summary>
 public sealed record MultiplierRule(int WindowDays, IReadOnlyList<MultiplierTier> Tiers)
 {
@@ -75,7 +157,7 @@ public sealed record MultiplierRule(int WindowDays, IReadOnlyList<MultiplierTier
         => (long)Math.Round(amount * multiplier, MidpointRounding.AwayFromZero);
 }
 
-/// <summary>Gems paid once for entering each rank, and <paramref name="Top"/> for the last one.</summary>
+/// <summary>Gems paid once for the best rank first reaching each rank, and <paramref name="Top"/> for the last one.</summary>
 public sealed record RankUpGems(int PerRank, int Top);
 
 /// <summary>
@@ -99,21 +181,21 @@ public interface ILevelCurve
 
 /// <summary>
 /// A level curve that rises steadily, then faster (xp-domains plan §2.1): going from level L to
-/// L+1 costs <c>Base + PerLevel·(L−1) + RampPerLevel·max(0, L−RampFrom)</c>. Health's
-/// <c>RampCurve(300, 25, 45, 70)</c> reaches level 100 at 254,925 XP.
+/// L+1 costs <c>Base + PerLevel·(L−1) + RampPerLevel·max(0, L−RampFrom)</c>. Health used
+/// <c>RampCurve(300, 25, 45, 70)</c> until levels v2; it stays as a shape a domain can pick.
 /// </summary>
 public sealed record RampCurve(long Base, long PerLevel, int RampFrom, long RampPerLevel, int MaxLevel = 100)
     : ILevelCurve
 {
     public long CostToNext(int level)
     {
-        Check(level);
+        LevelCurves.Check(level, MaxLevel);
         return level == MaxLevel ? 0 : Base + PerLevel * (level - 1) + RampPerLevel * Math.Max(0, level - RampFrom);
     }
 
     public long TotalFor(int level)
     {
-        Check(level);
+        LevelCurves.Check(level, MaxLevel);
 
         // The sum of CostToNext(1 .. level−1), in closed form.
         long steps = level - 1;
@@ -121,14 +203,52 @@ public sealed record RampCurve(long Base, long PerLevel, int RampFrom, long Ramp
         return Base * steps + PerLevel * steps * (steps - 1) / 2 + RampPerLevel * ramped * (ramped + 1) / 2;
     }
 
-    public int LevelFor(long totalXp)
+    public int LevelFor(long totalXp) => LevelCurves.LevelFor(this, totalXp);
+}
+
+/// <summary>
+/// Levels v2's curve (xp-domains plan §7.2): the total XP that reaches level L is
+/// <c>⌈Linear·n + Quadratic·C(n,2) + Cubic·C(n,3)⌉</c> with n = L − 1, in whole numbers.
+/// Health's <c>CubicCurve(60, 24, 0.85)</c> reaches level 10 at 1,476 XP and 100 at 255,686.
+/// </summary>
+public sealed record CubicCurve(long Linear, long Quadratic, decimal Cubic, int MaxLevel = 100) : ILevelCurve
+{
+    public long CostToNext(int level)
     {
-        // The highest level whose total is within reach.
-        int low = 1, high = MaxLevel;
+        LevelCurves.Check(level, MaxLevel);
+        return level == MaxLevel ? 0 : TotalFor(level + 1) - TotalFor(level);
+    }
+
+    public long TotalFor(int level)
+    {
+        LevelCurves.Check(level, MaxLevel);
+        long n = level - 1;
+        var pairs = n * (n - 1) / 2;
+        var triples = n * (n - 1) * (n - 2) / 6;
+        return Linear * n + Quadratic * pairs + (long)Math.Ceiling(Cubic * triples);
+    }
+
+    public int LevelFor(long totalXp) => LevelCurves.LevelFor(this, totalXp);
+}
+
+internal static class LevelCurves
+{
+    public static void Check(int level, int maxLevel)
+    {
+        if (level < 1 || level > maxLevel)
+        {
+            throw new ArgumentOutOfRangeException(nameof(level), level, $"Levels run from 1 to {maxLevel}.");
+        }
+    }
+
+    /// <summary>The highest level whose total is within reach, by binary search.</summary>
+    public static int LevelFor(ILevelCurve curve, long totalXp)
+    {
+        int low = 1, high = curve.MaxLevel;
         while (low < high)
         {
             var middle = (low + high + 1) / 2;
-            if (TotalFor(middle) <= totalXp)
+            if (curve.TotalFor(middle) <= totalXp)
             {
                 low = middle;
             }
@@ -140,38 +260,42 @@ public sealed record RampCurve(long Base, long PerLevel, int RampFrom, long Ramp
 
         return low;
     }
-
-    private void Check(int level)
-    {
-        if (level < 1 || level > MaxLevel)
-        {
-            throw new ArgumentOutOfRangeException(nameof(level), level, $"Levels run from 1 to {MaxLevel}.");
-        }
-    }
 }
 
 /// <summary>
-/// One configured life domain's rules (xp-domains plan §3.2): the currency it reads, the
-/// period its success rule judges, the level curve, the ranks, the multiplier and the rank-up
-/// Gems. Retuning means editing these numbers and deploying: every reading is folded from
-/// the XP on each read, so a change shows at once.
+/// One configured life domain's rules (xp-domains plan §3.2, §7.4.1): the currency it reads,
+/// the period its success rule judges, the lifetime curve, what consistency each level takes,
+/// how the shown level falls, the multiplier's successful day, the ranks, the multiplier and
+/// the rank-up Gems. Retuning means editing these numbers and deploying: every reading is
+/// folded from the XP on each read, so a change shows at once.
 /// </summary>
 public sealed record DomainRules(
     string Currency,
     Cadence Cadence,
     ILevelCurve Curve,
+    ConsistencyRule Consistency,
+    FallRule Fall,
     ISuccessRule Success,
     IReadOnlyList<RankRule> Ranks,
     MultiplierRule Multiplier,
     RankUpGems RankUpGems)
 {
-    /// <summary>The highest level <paramref name="rank"/> (an index into <see cref="Ranks"/>) allows: 9 for Novice.</summary>
-    public int TopLevelOf(int rank) => rank + 1 < Ranks.Count ? Ranks[rank + 1].StartLevel - 1 : Curve.MaxLevel;
+    /// <summary>The rank <paramref name="level"/> falls in: an index into <see cref="Ranks"/>.</summary>
+    public int RankFor(int level)
+    {
+        var rank = 0;
+        for (var i = 1; i < Ranks.Count && Ranks[i].StartLevel <= level; i++)
+        {
+            rank = i;
+        }
 
-    /// <summary>The Gems for entering <paramref name="rank"/>: <see cref="RankUpGems.Top"/> for the last one.</summary>
+        return rank;
+    }
+
+    /// <summary>The Gems for the best rank first reaching <paramref name="rank"/>: <see cref="RankUpGems.Top"/> for the last one.</summary>
     public int GemsFor(int rank) => rank == Ranks.Count - 1 ? RankUpGems.Top : RankUpGems.PerRank;
 
-    /// <summary>The award key for entering <paramref name="rank"/> (xp-domains plan §3.7), e.g. <c>rank:health_xp:10</c>.</summary>
+    /// <summary>The award key for <paramref name="rank"/>'s Gems (xp-domains plan §3.7), e.g. <c>rank:health_xp:10</c>.</summary>
     public string RankAwardKey(int rank) => $"{LifeDomains.RankTrigger}:{Currency}:{Ranks[rank].StartLevel}";
 
     /// <summary>
@@ -182,40 +306,50 @@ public sealed record DomainRules(
 }
 
 /// <summary>
-/// The life domains with rules (REWARD-6 / REWARD-7, D12). Only Health is configured in the
-/// pilot. Social, Environment and Finance collect XP and nothing else until each gets rules of
-/// its own; because progression is folded from history, their whole history counts the day
-/// they do. The drift test keeps these consistent with <see cref="Currencies"/>.
+/// The life domains with rules (REWARD-6 / REWARD-7 / REWARD-8, D12, D17). Only Health is
+/// configured in the pilot. Social, Environment and Finance collect XP and nothing else until
+/// each gets rules of its own; because progression is folded from history, their whole history
+/// counts the day they do. The drift test keeps these consistent with <see cref="Currencies"/>.
 /// </summary>
 public static class LifeDomains
 {
     /// <summary>The trigger of a rank-up award (xp-domains plan §3.7).</summary>
     public const string RankTrigger = "rank";
 
-    private static readonly IReadOnlyList<string> NoMilestones = [];
+    private static readonly ConsistencyRule HealthConsistency = new(
+        WindowDays: 90,
+        AverageFrom: 20,
+        AverageTo: 80,
+        ActiveShare: 0.4m,
+        ActiveFloor: 10,
+        ShareFrom: 0.50m,
+        ShareTo: 0.90m);
 
     /// <summary>
-    /// Health, the pilot domain (xp-domains plan §2): a successful day is 60+ base XP at every
-    /// rank. It was 70 until activity XP's calibration (activity plan §3.8, 2026-10-22), and is
-    /// still to recalibrate after a few weeks of real XP (§2.4).
+    /// Health, the pilot domain (xp-domains plan §7.2): its level follows the last 90 counted
+    /// days, falls 1% a day while they don't support it, and a day is active when its action
+    /// XP reaches the shown level's minimum. Still to recalibrate after a few weeks of real
+    /// XP (§2.4).
     /// </summary>
     public static readonly DomainRules Health = new(
         Currencies.HealthXp,
         Cadence.Daily,
-        new RampCurve(Base: 300, PerLevel: 25, RampFrom: 45, RampPerLevel: 70),
-        new MinimumBaseXp(60),
+        new CubicCurve(Linear: 60, Quadratic: 24, Cubic: 0.85m),
+        HealthConsistency,
+        new FallRule(PercentPerDay: 1, HoldDays: 0, BackOnTrackDays: 7),
+        new ActiveAtShownLevel(HealthConsistency),
         [
-            new(1, "Novice", 0m, 0, NoMilestones),
-            new(10, "Apprentice", 0.50m, 14, NoMilestones),
-            new(20, "Journeyman", 0.60m, 30, NoMilestones),
-            new(30, "Adept", 0.65m, 60, NoMilestones),
-            new(40, "Expert", 0.70m, 90, NoMilestones),
-            new(50, "Veteran", 0.75m, 120, NoMilestones),
-            new(60, "Elite", 0.78m, 180, NoMilestones),
-            new(70, "Master", 0.80m, 240, NoMilestones),
-            new(80, "Champion", 0.85m, 300, NoMilestones),
-            new(90, "Legend", 0.88m, 365, NoMilestones),
-            new(100, "Grandmaster", 0.90m, 365, NoMilestones),
+            new(1, "Novice"),
+            new(10, "Apprentice"),
+            new(20, "Journeyman"),
+            new(30, "Adept"),
+            new(40, "Expert"),
+            new(50, "Veteran"),
+            new(60, "Elite"),
+            new(70, "Master"),
+            new(80, "Champion"),
+            new(90, "Legend"),
+            new(100, "Grandmaster"),
         ],
         new MultiplierRule(30, [new(0.85m, 1.3m), new(0.70m, 1.2m), new(0.50m, 1.1m)]),
         new RankUpGems(PerRank: 1, Top: 5))
