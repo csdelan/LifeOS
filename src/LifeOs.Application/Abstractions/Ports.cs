@@ -293,9 +293,23 @@ public interface ILedgerRepository
     /// day, or, for an earn from before credited days, on its instant's date in the home zone.
     /// Days without credit have no row. Also answers today's date in the home zone, so a fold
     /// and its data agree on what today is, and the day the wallet opened there.
+    /// <para>
+    /// Each day splits out its passive base XP (<see cref="LifeDomains.PassiveTriggers"/>), and
+    /// the answer carries the days marked as exceptions (<c>bsk.v_exception_day</c>) and the
+    /// last settled day, all read together (xp-domains plan §7.4.2), so every fold sees the
+    /// same inputs.
+    /// </para>
     /// </summary>
     Task<DomainCredit> GetDomainDaysAsync(
         IReadOnlyCollection<string> currencies, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Today's date in the home zone and the days marked as exceptions among the last
+    /// <paramref name="days"/> (today included), newest first (<c>bsk.v_exception_day</c>,
+    /// REWARD-8).
+    /// </summary>
+    Task<(DateOnly Today, IReadOnlyList<ExceptionDay> Days)> GetExceptionDaysAsync(
+        int days, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// The award keys with <paramref name="trigger"/> the ledger currently holds (keys that net

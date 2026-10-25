@@ -1105,49 +1105,51 @@ An exception day is a fact Chris declares about a day, so it's an event, like a 
 or a food day's close. Nothing about it is managed over time, so it isn't a subject.
 
 - **Event:** kind `note`, provenance `declared`, `occurred_at = recorded_at = now`. The day
-  lives in the payload: `{"exception_day": {"on": "2026-10-25", "comment": "Flu, in bed"}}`.
+  lives in the payload: `{"exception_day": {"day": "2026-10-25", "comment": "Flu, in bed"}}`.
   - **Changing the comment** writes a newer version.
-  - **Unmarking** writes `{"exception_day": {"on": "2026-10-25", "voided": true}}`, as
+  - **Unmarking** writes `{"exception_day": {"day": "2026-10-25", "voided": true}}`, as
     deleting a meal does.
   - The newest version per day wins, by `recorded_at DESC, id DESC`.
   - No new event kind, so the kind check is untouched.
 - **Migration 0043** (`0043__exception_days.sql`):
-  - `bsk.v_exception_day`: one row per marked day that isn't voided, with `on`, `comment`,
+  - `bsk.v_exception_day`: one row per marked day that isn't voided, with `day`, `comment`,
     `marked_at` and `event_id`. Days are parsed with `bsk.try_to_date`, and the payload's
     shape is checked with `jsonb_typeof`.
-  - A partial index, `event_exception_day_idx ON bsk.event ((payload->'exception_day'->>'on'),
+  - A partial index, `event_exception_day_idx ON bsk.event ((payload->'exception_day'->>'day'),
     recorded_at) WHERE kind = 'note' AND jsonb_exists(payload, 'exception_day')`.
   - `COMMENT ON VIEW` naming REWARD-8 and D17, `GRANT SELECT … TO bsk_reader`, and the view
     added to `ReaderRoleTests`.
-- **Domain:** `ExceptionDay(On, Comment, MarkedAt)`.
+- **Domain:** `ExceptionDay(Day, Comment, MarkedAt)`. (`day`, not `on`, throughout: `on` is a
+  reserved word in SQL.)
 - **`ExceptionDayService`** (Application/Rewards), with `sourceId` and `IHomeCalendar` like
   the other services:
-  - `MarkAsync(DateOnly? on, string comment)`:
+  - `MarkAsync(DateOnly? day, string comment)`:
     - No day means today in the home zone.
     - A day after today is refused, in words.
     - The comment is required, and normalized by `WorkoutNoteService`'s rules: one line, at
       most 140 characters, no control characters.
     - Marking a day already marked with the same comment writes nothing. A different
       comment writes a new version.
-  - `UnmarkAsync(DateOnly on)`: a day that isn't marked writes nothing.
+  - `UnmarkAsync(DateOnly day)`: a day that isn't marked writes nothing.
   - `ListAsync(days)`: the marked days among the last N, newest first.
   - Every write folds the configured domains before it. After it, `RewardService` pays any
-    rank-up the change unlocks and answers `progress`, as `POST /api/domains/settle` does.
+    rank-up the change unlocks and answers `progress`, as `POST /api/domains/settle` does
+    (`RewardService.ChangeDomainInputsAsync`).
 - **Reads for the fold:**
   - `ILedgerRepository.GetDomainDaysAsync` returns the marked days in `DomainCredit`, read
     from `v_exception_day` on the same connection, with `SettledThrough` and the passive
-    split (§7.4.2).
-  - `RewardReader` has its own copy of that read for the API connection, and it changes the
-    same way.
+    split (§7.4.2). `GetExceptionDaysAsync(days)` answers the list.
+  - `RewardReader` reuses the same repository on the reader connection, so it changes with
+    it.
   - Every fold caller then sees the same days: `DomainService`, `RewardService`,
     `DomainPricing`, the simulator's `--replay`, and the API reader.
 - **API,** all in the `/api/domains` group, allowlisted. Writes are POSTs, as elsewhere:
 
   | Endpoint | Does |
   |---|---|
-  | `GET /api/domains/exceptions?days=N` | Default 90, 1–731. Answers `{ today, days: [{ on, comment, markedAt }] }`. |
-  | `POST /api/domains/exceptions` | Body `{ on?, comment }`. Answers `{ exception, awards, progress }`. A future day or a blank comment is a 400 in words. |
-  | `POST /api/domains/exceptions/{on}/unmark` | Answers `{ awards, progress }`. |
+  | `GET /api/domains/exceptions?days=N` | Default 90, 1–731. Answers `{ today, from, exceptions: [{ day, comment, markedAt }] }`. |
+  | `POST /api/domains/exceptions` | Body `{ day?, comment }`. Answers `{ exception, awards, progress }`. A future day, a blank comment or a malformed date is a 400 in words. |
+  | `POST /api/domains/exceptions/{day}/unmark` | Answers `{ exception: null, awards, progress }`. |
 
 - **CLI:**
   - `bsk domains exception [<date>] "<comment>"` (the date can also be `today` or
@@ -1469,6 +1471,6 @@ default:
 - [x] X6 — Character page (no migration)
 - [x] X7 — Reports + charts (no migration)
 - [x] X8 — Levels v2: requirements + plan (§7)
-- [ ] X9 — v2 inputs: exception days, action XP, settled days (migration 0043)
+- [x] X9 — v2 inputs: exception days, action XP, settled days (migration 0043)
 - [ ] X10 — Levels v2 in the kernel (no migration; push with X11)
 - [ ] X11 — Levels v2 on the web (no migration). Then calibrate (§2.4).

@@ -247,12 +247,15 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
 
-        // Aliased to CreditRow's names (no underscore matching in the CLI host).
+        // Aliased to CreditRow's names (no underscore matching in the CLI host). A passive
+        // award's key starts with its trigger (sleep:2026-10-24, §7.4.2), and no item trigger
+        // shares a passive trigger's name, so the key's first part says which base is passive.
         const string daysSql = """
             SELECT c.currency,
                    to_char(coalesce(c.credited_on, (c.occurred_at AT TIME ZONE @tz)::date), 'YYYY-MM-DD') AS day,
                    sum(c.base)::bigint AS base,
-                   sum(c.paid)::bigint AS paid
+                   sum(c.paid)::bigint AS paid,
+                   coalesce(sum(c.base) FILTER (WHERE split_part(c.award_key, ':', 1) = ANY(@passive)), 0)::bigint AS passive
             FROM bsk.v_award_credit c
             WHERE c.currency = ANY(@currencies)
             GROUP BY 1, 2
@@ -261,26 +264,74 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
 
         try
         {
+            // The last settled day: yesterday once it's past the settle hour in the home zone,
+            // the day before until then.
             var dates = await connection.QuerySingleAsync<DatesRow>(new CommandDefinition(
                 """
                 SELECT to_char((now() AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS today,
-                       to_char((bsk.ledger_opened_at() AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS openedon;
+                       to_char((bsk.ledger_opened_at() AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS openedon,
+                       to_char(((now() AT TIME ZONE @tz) - make_interval(hours => @settle))::date - 1, 'YYYY-MM-DD') AS settledthrough;
                 """,
-                new { tz = homeTimeZone }, cancellationToken: cancellationToken));
+                new { tz = homeTimeZone, settle = LifeDomains.SettleHour }, cancellationToken: cancellationToken));
             var rows = await connection.QueryAsync<CreditRow>(new CommandDefinition(
                 daysSql,
-                new { tz = homeTimeZone, currencies = currencies.ToArray() },
+                new { tz = homeTimeZone, currencies = currencies.ToArray(), passive = LifeDomains.PassiveTriggers.ToArray() },
+                cancellationToken: cancellationToken));
+            var exceptions = await connection.QueryAsync<ExceptionRow>(new CommandDefinition(
+                """
+                SELECT to_char(x.day, 'YYYY-MM-DD') AS day, x.comment, x.marked_at AS markedat
+                FROM bsk.v_exception_day x
+                ORDER BY x.day;
+                """,
                 cancellationToken: cancellationToken));
             return new DomainCredit(
                 ParseDay(dates.Today),
-                rows.Select(r => new CreditDay(r.Currency, ParseDay(r.Day), r.Base, r.Paid)).ToList(),
-                dates.OpenedOn is { } openedOn ? ParseDay(openedOn) : null);
+                rows.Select(r => new CreditDay(r.Currency, ParseDay(r.Day), r.Base, r.Paid, r.Passive)).ToList(),
+                dates.OpenedOn is { } openedOn ? ParseDay(openedOn) : null)
+            {
+                ExceptionDays = exceptions.Select(ToExceptionDay).ToList(),
+                SettledThrough = ParseDay(dates.SettledThrough)
+            };
         }
         catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
         {
             throw UnknownHomeZone(e);
         }
     }
+
+    public async Task<(DateOnly Today, IReadOnlyList<ExceptionDay> Days)> GetExceptionDaysAsync(
+        int days, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        try
+        {
+            var today = ParseDay(await connection.QuerySingleAsync<string>(new CommandDefinition(
+                "SELECT to_char((now() AT TIME ZONE @tz)::date, 'YYYY-MM-DD');",
+                new { tz = homeTimeZone }, cancellationToken: cancellationToken)));
+            var rows = await connection.QueryAsync<ExceptionRow>(new CommandDefinition(
+                """
+                SELECT to_char(x.day, 'YYYY-MM-DD') AS day, x.comment, x.marked_at AS markedat
+                FROM bsk.v_exception_day x
+                WHERE x.day BETWEEN @from::date AND @to::date
+                ORDER BY x.day DESC;
+                """,
+                new
+                {
+                    from = today.AddDays(1 - days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    to = today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                },
+                cancellationToken: cancellationToken));
+            return (today, rows.Select(ToExceptionDay).ToList());
+        }
+        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
+        {
+            throw UnknownHomeZone(e);
+        }
+    }
+
+    private static ExceptionDay ToExceptionDay(ExceptionRow row)
+        => new(ParseDay(row.Day), row.Comment, new DateTimeOffset(DateTime.SpecifyKind(row.MarkedAt, DateTimeKind.Utc)));
 
     public async Task<IReadOnlySet<string>> GetPaidKeysAsync(
         string trigger, CancellationToken cancellationToken = default)
@@ -824,6 +875,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     {
         public string Today { get; set; } = "";
         public string? OpenedOn { get; set; }
+        public string SettledThrough { get; set; } = "";
     }
 
     private sealed class CreditRow
@@ -832,6 +884,14 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
         public string Day { get; set; } = "";
         public long Base { get; set; }
         public long Paid { get; set; }
+        public long Passive { get; set; }
+    }
+
+    private sealed class ExceptionRow
+    {
+        public string Day { get; set; } = "";
+        public string Comment { get; set; } = "";
+        public DateTime MarkedAt { get; set; }
     }
 
     private sealed class PaidRow

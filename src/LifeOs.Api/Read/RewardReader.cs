@@ -79,6 +79,19 @@ public sealed class RewardReader(string readerConnectionString, decimal coinValu
     }
 
     /// <summary>
+    /// The days marked as exceptions among the last <paramref name="days"/>, newest first
+    /// (<c>GET /api/domains/exceptions</c>, REWARD-8) — as <c>bsk domains exceptions</c> lists
+    /// them. Throws <see cref="ArgumentException"/> for a count outside 1 to
+    /// <see cref="ExceptionDayService.MaxDays"/>.
+    /// </summary>
+    public async Task<ExceptionDaysRead> GetExceptionDaysAsync(int days, CancellationToken cancellationToken = default)
+    {
+        ExceptionDayService.Check(days);
+        var (today, marked) = await ledger.GetExceptionDaysAsync(days, cancellationToken);
+        return DomainRows.From(new ExceptionDays(today, days, marked));
+    }
+
+    /// <summary>
     /// Every life domain over its last <paramref name="days"/> days (xp-domains plan §3.13), at
     /// most <see cref="DomainRows.MaxDays"/>.
     /// </summary>

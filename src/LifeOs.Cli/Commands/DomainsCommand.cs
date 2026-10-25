@@ -25,6 +25,10 @@ namespace LifeOs.Cli.Commands;
 /// XP and base XP a day, and the levels and ranks it gained; a domain without rules, its XP.
 /// </para>
 /// <para><c>bsk domains simulate</c> is the simulator (<see cref="DomainsSimulateCommand"/>).</para>
+/// <para>
+/// <c>bsk domains exception</c> and <c>bsk domains exceptions</c> mark, unmark and list
+/// exception days (<see cref="DomainsExceptionCommand"/>).
+/// </para>
 /// </summary>
 internal static class DomainsCommand
 {
@@ -51,6 +55,8 @@ internal static class DomainsCommand
         command.Options.Add(daysOption);
         command.Options.Add(reportOption);
         command.Subcommands.Add(DomainsSimulateCommand.Create(connectionOption, jsonOption));
+        command.Subcommands.Add(DomainsExceptionCommand.CreateMark(connectionOption, jsonOption));
+        command.Subcommands.Add(DomainsExceptionCommand.CreateList(connectionOption, jsonOption));
 
         command.SetAction((parseResult, cancellationToken) =>
         {

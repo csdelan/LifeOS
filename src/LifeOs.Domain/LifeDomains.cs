@@ -173,6 +173,12 @@ public sealed record DomainRules(
 
     /// <summary>The award key for entering <paramref name="rank"/> (xp-domains plan §3.7), e.g. <c>rank:health_xp:10</c>.</summary>
     public string RankAwardKey(int rank) => $"{LifeDomains.RankTrigger}:{Currency}:{Ranks[rank].StartLevel}";
+
+    /// <summary>
+    /// The award triggers whose XP is passive (xp-domains plan §7.4.2): earned without doing
+    /// anything that day, like sleep. A day's action XP is its base XP less these.
+    /// </summary>
+    public IReadOnlyList<string> PassiveTriggers { get; init; } = [];
 }
 
 /// <summary>
@@ -212,10 +218,23 @@ public static class LifeDomains
             new(100, "Grandmaster", 0.90m, 365, NoMilestones),
         ],
         new MultiplierRule(30, [new(0.85m, 1.3m), new(0.70m, 1.2m), new(0.50m, 1.1m)]),
-        new RankUpGems(PerRank: 1, Top: 5));
+        new RankUpGems(PerRank: 1, Top: 5))
+    {
+        PassiveTriggers = [ActivityAwards.SleepTrigger]
+    };
 
     /// <summary>Every configured domain.</summary>
     public static readonly IReadOnlyList<DomainRules> Configured = [Health];
+
+    /// <summary>
+    /// The hour a day settles (xp-domains plan §7.4.2): a day is over at 4 a.m. the next
+    /// morning in the home zone, matching Oura's day (<see cref="ActivityAwards.DayStartHour"/>).
+    /// </summary>
+    public const int SettleHour = ActivityAwards.DayStartHour;
+
+    /// <summary>Every configured domain's passive triggers, once each: what the credit read splits out.</summary>
+    public static readonly IReadOnlyList<string> PassiveTriggers =
+        Configured.SelectMany(r => r.PassiveTriggers).Distinct(StringComparer.Ordinal).ToList();
 
     /// <summary>A domain's name: its currency label's first word, e.g. "Health" for <c>health_xp</c>.</summary>
     public static string Name(string currency)

@@ -2891,7 +2891,14 @@ successful day gets retuned after a few weeks of real XP.
 ### REWARD-8 — I can mark a day as an exception, so sickness or travel doesn't count against my domains
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
+
+**Update (2026-10-25 — X9 landed):** a day can be marked, its comment changed, and unmarked:
+`bsk domains exception [<date>] "<comment>"`, `--unmark <date>`, `bsk domains exceptions`,
+and `GET` / `POST /api/domains/exceptions` (migration 0043 `v_exception_day`). The life-domain
+credit now carries the marked days, each day's passive (sleep) XP and the last settled day,
+but nothing reads them yet, so no level or rank moves. Build moves `needs-kernel → building`:
+X10 makes the fold skip marked days, and X11 adds the Character page's control.
 
 **Workflow (Chris):**
 - "Rather than tracking 'vacation' or 'sick' days explicitly, I would instead generalize it

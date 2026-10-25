@@ -115,15 +115,36 @@ public sealed record LedgerDayTotal(DateOnly Date, string Currency, long Earned,
 /// <summary>
 /// One currency's credit on one local day (xp-domains plan §3.4): what the ledger pays now for
 /// the awards credited to that day in the home zone — <see cref="Base"/> before any
-/// life-domain multiplier, <see cref="Paid"/> as paid.
+/// life-domain multiplier, <see cref="Paid"/> as paid, and <see cref="Passive"/>, the part of
+/// the base from passive awards (<see cref="LifeDomains.PassiveTriggers"/>, §7.4.2).
 /// </summary>
-public sealed record CreditDay(string Currency, DateOnly Day, long Base, long Paid);
+public sealed record CreditDay(string Currency, DateOnly Day, long Base, long Paid, long Passive = 0);
 
 /// <summary>
 /// The life-domain credit per currency and day, with today's date in the home zone and the
 /// day the wallet opened there (null before it has), before which no rank-up pays.
+/// <para>
+/// It also carries what the fold reads beside the credit (xp-domains plan §7.4.2): the days
+/// Chris marked as exceptions (<see cref="ExceptionDays"/>, oldest first) and
+/// <see cref="SettledThrough"/>, the last day that has settled — yesterday from
+/// <see cref="LifeDomains.SettleHour"/> in the home zone, the day before until then.
+/// </para>
 /// </summary>
-public sealed record DomainCredit(DateOnly Today, IReadOnlyList<CreditDay> Days, DateOnly? OpenedOn = null);
+public sealed record DomainCredit(DateOnly Today, IReadOnlyList<CreditDay> Days, DateOnly? OpenedOn = null)
+{
+    /// <summary>The days marked as exceptions, oldest first (REWARD-8).</summary>
+    public IReadOnlyList<ExceptionDay> ExceptionDays { get; init; } = [];
+
+    /// <summary>The last settled day: yesterday from 4 a.m. in the home zone, the day before until then.</summary>
+    public DateOnly SettledThrough { get; init; } = Today.AddDays(-1);
+}
+
+/// <summary>
+/// A day Chris marked as an exception (REWARD-8, xp-domains plan §7.4.3): sickness, injury or
+/// travel, with <paramref name="Comment"/> saying which. <paramref name="MarkedAt"/> is when
+/// its newest version was written.
+/// </summary>
+public sealed record ExceptionDay(DateOnly Day, string Comment, DateTimeOffset MarkedAt);
 
 /// <summary>
 /// One ledger entry as <c>bsk.v_ledger</c> reads it (REWARD-5): what it was

@@ -44,7 +44,8 @@ public sealed class ReaderRoleTests(PostgresFixture postgres)
                      "bsk_derived.subject_current",
                      "bsk.v_subject", "bsk.v_event", "bsk.v_subject_relation", "bsk.v_subject_event",
                      "bsk.v_subject_current",
-                     "bsk.v_meal", "bsk.v_fast", "bsk.v_food_day"
+                     "bsk.v_meal", "bsk.v_fast", "bsk.v_food_day",
+                     "bsk.v_exception_day"
                  })
         {
             var count = await reader.ExecuteScalarAsync<long>(new CommandDefinition(

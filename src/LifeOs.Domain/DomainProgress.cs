@@ -3,9 +3,14 @@ namespace LifeOs.Domain;
 /// <summary>
 /// One day's credit in one life domain (xp-domains plan §3.4): what the ledger pays now for
 /// the awards credited to that day — <paramref name="Base"/> before any multiplier,
-/// <paramref name="Paid"/> as paid.
+/// <paramref name="Paid"/> as paid. <paramref name="Passive"/> is the part of the base from
+/// passive awards (sleep, §7.4.2); the rest is <see cref="Action"/>.
 /// </summary>
-public sealed record DomainDay(DateOnly Day, long Base, long Paid);
+public sealed record DomainDay(DateOnly Day, long Base, long Paid, long Passive = 0)
+{
+    /// <summary>The base XP from things done, not slept: <see cref="Base"/> less <see cref="Passive"/>.</summary>
+    public long Action => Base - Passive;
+}
 
 /// <summary>One period of a domain's walk: its days, its credit, and whether its success rule passed.</summary>
 public sealed record DomainPeriod(DateOnly Start, DateOnly End, long Base, long Paid, bool Succeeded);

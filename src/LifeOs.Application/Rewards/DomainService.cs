@@ -160,7 +160,7 @@ public sealed class DomainService(ILedgerRepository ledger)
     }
 
     private static IEnumerable<DomainDay> DaysOf(string currency, DomainCredit credit)
-        => credit.Days.Where(d => d.Currency == currency).Select(d => new DomainDay(d.Day, d.Base, d.Paid));
+        => credit.Days.Where(d => d.Currency == currency).Select(d => new DomainDay(d.Day, d.Base, d.Paid, d.Passive));
 
     private static IEnumerable<DateOnly> Dates(DateOnly from, DateOnly to)
     {

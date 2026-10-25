@@ -390,6 +390,21 @@ public sealed class RewardService(
         }
     }
 
+    /// <summary>
+    /// Runs <paramref name="write"/>, a change to what the life-domain fold reads beside the
+    /// ledger (an exception day, xp-domains plan §7.4.3), between two folds: any rank-up the
+    /// change unlocks is paid, and each configured domain whose level or rank moved comes back,
+    /// as an earning write answers.
+    /// </summary>
+    public async Task<Earned> ChangeDomainInputsAsync(
+        Func<CancellationToken, Task> write, CancellationToken cancellationToken = default)
+    {
+        var before = Fold(await ReadDomainsAsync(cancellationToken));
+        await write(cancellationToken);
+        var (ranks, after) = await PayRankUpsAsync(cancellationToken);
+        return new Earned(ranks.Select(r => r.Award).ToList(), DomainChanges(before, after, ranks));
+    }
+
     /// <summary>Folds the configured domains, then pays their rank-ups, re-reading after a lost race.</summary>
     private async Task<(IReadOnlyList<RankUp> Awards, IReadOnlyList<DomainProgress> Folds)> PayRankUpsAsync(
         CancellationToken cancellationToken)

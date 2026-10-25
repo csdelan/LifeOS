@@ -200,11 +200,68 @@ public sealed class DomainRankReachedRow
     public string QualifiedOn { get; set; } = "";
 }
 
+/// <summary>
+/// <c>GET /api/domains/exceptions?days=N</c> (REWARD-8, xp-domains plan §7.4.3): the days Chris
+/// marked as exceptions from <see cref="From"/> to <see cref="Today"/> (<c>yyyy-MM-dd</c>, home
+/// zone), newest first.
+/// </summary>
+public sealed class ExceptionDaysRead
+{
+    public string Today { get; set; } = "";
+    public string From { get; set; } = "";
+    public IReadOnlyList<ExceptionDayRow> Exceptions { get; set; } = [];
+}
+
+/// <summary>One marked day: the day (<c>yyyy-MM-dd</c>, home zone), why, and when it was last marked.</summary>
+public sealed class ExceptionDayRow
+{
+    public string Day { get; set; } = "";
+    public string Comment { get; set; } = "";
+    public DateTimeOffset MarkedAt { get; set; }
+}
+
+/// <summary>
+/// <c>POST /api/domains/exceptions</c> and <c>…/{day}/unmark</c>: the day as it now reads (null
+/// once unmarked), any rank-up the change paid, and each life domain whose level or rank it
+/// moved — as an earning write answers.
+/// </summary>
+public sealed class ExceptionDayResult
+{
+    public ExceptionDayRow? Exception { get; set; }
+    public IReadOnlyList<AwardRow> Awards { get; set; } = [];
+    public IReadOnlyList<DomainChangeRow> Progress { get; set; } = [];
+}
+
 /// <summary>Maps the Application's domain readings onto the API's shapes.</summary>
 public static class DomainRows
 {
     /// <summary>The longest series a days read answers: two years.</summary>
     public const int MaxDays = 731;
+
+    public static ExceptionDaysRead From(ExceptionDays list) => new()
+    {
+        Today = Day(list.Today),
+        From = Day(list.Today.AddDays(1 - list.Days)),
+        Exceptions = list.Marked.Select(From).ToList()
+    };
+
+    public static ExceptionDayRow From(ExceptionDay day) => new()
+    {
+        Day = Day(day.Day),
+        Comment = day.Comment,
+        MarkedAt = day.MarkedAt
+    };
+
+    public static ExceptionDayResult From(ExceptionDayChange change)
+    {
+        var earned = RewardRows.Earned(change.Earned.Awards, change.Earned.Progress);
+        return new ExceptionDayResult
+        {
+            Exception = change.Exception is { } day ? From(day) : null,
+            Awards = earned.Awards,
+            Progress = earned.Progress
+        };
+    }
 
     public static DomainDaysRead From(DomainSeries series)
     {

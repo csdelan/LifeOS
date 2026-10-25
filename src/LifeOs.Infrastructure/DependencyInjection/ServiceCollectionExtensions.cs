@@ -236,6 +236,15 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(sp => new DomainService(sp.GetRequiredService<ILedgerRepository>()));
 
+        // Exception days (REWARD-8, xp-domains plan §7.4.3).
+        services.AddSingleton(sp => new ExceptionDayService(
+            sp.GetRequiredService<ILedgerRepository>(),
+            sp.GetRequiredService<IEventStore>(),
+            sp.GetRequiredService<RewardService>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
+
         services.AddSingleton(sp => new RewardCatalogService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>(),
