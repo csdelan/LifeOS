@@ -72,20 +72,48 @@ test.describe("accessibility", () => {
     });
   }
 
-  // The Character page's Reports, over a period longer than Health's history (a hollow bar)
-  // against a second period (a tick), in both themes, with any activity XP toast settled.
+  // The Character page's Reports over 3 months: the rank chart (with the seeded exception day
+  // hatched), then its table, in both themes, with any activity XP toast settled.
   for (const theme of ["dark", "light"] as const) {
-    test(`axe serious/critical: /character?view=reports compared, ${theme} theme`, async ({ page }) => {
+    test(`axe serious/critical: /character?view=reports, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        await settled(page);
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
       await page.emulateMedia({ reducedMotion: "reduce" });
       await page.addInitScript((t) => {
         localStorage.setItem("theme", t);
-        localStorage.setItem("lifeos.view.character.reports", JSON.stringify({ period: "90", compare: "30" }));
+        localStorage.setItem("lifeos.view.character.reports", JSON.stringify({ period: "90" }));
       }, theme);
       await page.goto("/character?view=reports");
       await expect(page.locator("html")).toHaveClass(new RegExp(theme));
-      await expect(page.getByRole("list", { name: "Consistency, last 3 months" })).toContainText("30 days: 80%", {
+      await expect(page.getByTestId("rank-chart")).toHaveAccessibleName(/^Rank over the last 3 months\./, {
         timeout: 10_000,
       });
+      await expect(page.getByTestId("exception-band")).toHaveCount(1);
+      const chart = await scan();
+      expect(chart, JSON.stringify(chart, null, 2)).toEqual([]);
+
+      await page.getByRole("button", { name: "Table", exact: true }).click();
+      await expect(page.getByRole("region", { name: "Rank over the last 3 months, as a table" })).toBeVisible();
+      const table = await scan();
+      expect(table, JSON.stringify(table, null, 2)).toEqual([]);
+    });
+  }
+
+  // The Mark a day as an exception dialog, with an earlier day's date field showing, in both themes.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /character exception dialog, ${theme} theme`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/character");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      await page.getByRole("button", { name: "Mark a day as an exception" }).click({ timeout: 10_000 });
+      const dialog = page.getByRole("dialog", { name: "Mark a day as an exception" });
+      await dialog.getByRole("radio", { name: "An earlier day" }).check();
+      await expect(dialog.getByLabel("Date")).toBeVisible();
+      await dialog.getByRole("textbox", { name: "Why" }).fill("Sick with the flu");
       await settled(page);
       const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       const blocking = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");

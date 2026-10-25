@@ -6,8 +6,15 @@
  *   latest earn; a reversal takes it off its day; earning it again files it on the new day.
  * - `base` is the latest earn's `base` for the currency (stamped when a multiplier above 1.0
  *   applied), else its amount; `paid` is the key's net.
+ * - `passive` is the base of an award whose trigger is passive (sleep, xp-domains plan §7.4.2).
  */
-import { CONFIGURED_DOMAINS, DomainProgress, shiftDay, type DomainDay } from "@/lib/domain-fold";
+import {
+  CONFIGURED_DOMAINS,
+  DomainProgress,
+  PASSIVE_TRIGGERS,
+  shiftDay,
+  type DomainDay,
+} from "@/lib/domain-fold";
 import type { Amounts } from "@/lib/production-ui-types";
 import type { MockLedgerEntry } from "@/lib/mock/seed";
 
@@ -53,14 +60,34 @@ export function creditDays(ledger: readonly MockLedgerEntry[]): Map<string, Doma
     for (const [currency, paid] of Object.entries(sums)) {
       if (paid <= 0) continue;
       const base = earn.base?.[currency] ?? earn.amounts[currency] ?? paid;
-      out.set(currency, [...(out.get(currency) ?? []), { day, base, paid }]);
+      const passive = earn.trigger && PASSIVE_TRIGGERS.includes(earn.trigger) ? base : 0;
+      out.set(currency, [...(out.get(currency) ?? []), { day, base, paid, passive }]);
     }
   }
   return out;
 }
 
-/** Every configured domain folded from `ledger`, as of `today`. */
-export function foldDomains(ledger: readonly MockLedgerEntry[], today: string): DomainProgress[] {
+/**
+ * The last settled day (xp-domains plan §7.4.2): a day is over at 4 a.m. the next morning, so
+ * it's yesterday from 4 a.m. and the day before until then (the mock's home zone is the browser's).
+ */
+export function settledThrough(now: Date = new Date()): string {
+  const today = localDay(now.toISOString());
+  return shiftDay(today, now.getHours() >= SETTLE_HOUR ? -1 : -2);
+}
+
+/** The hour a day settles: Oura's day start. */
+export const SETTLE_HOUR = 4;
+
+/** Every configured domain folded from `ledger` and the marked days, as of `today`. */
+export function foldDomains(
+  ledger: readonly MockLedgerEntry[],
+  today: string,
+  exceptions: readonly string[] = [],
+  settled: string = settledThrough(),
+): DomainProgress[] {
   const credit = creditDays(ledger);
-  return CONFIGURED_DOMAINS.map((rules) => DomainProgress.fold(rules, credit.get(rules.currency) ?? [], today));
+  return CONFIGURED_DOMAINS.map((rules) =>
+    DomainProgress.fold(rules, credit.get(rules.currency) ?? [], today, exceptions, settled),
+  );
 }

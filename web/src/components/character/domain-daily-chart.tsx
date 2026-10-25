@@ -16,6 +16,10 @@ type Range = (typeof RANGES)[number]["id"];
 
 const VIEW = "character.chart";
 
+/** Hatching for an exception day's band. */
+const HATCH =
+  "repeating-linear-gradient(135deg, color-mix(in oklch, var(--muted-foreground) 22%, transparent) 0 2px, transparent 2px 6px)";
+
 /** A clean axis top at or above `n`: 100, 150, 200, 250, 300, 400, 500, 600, 800, 1,000… */
 function niceTop(n: number): number {
   const steps = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
@@ -23,18 +27,24 @@ function niceTop(n: number): number {
   return (steps.find((s) => s * scale >= n) ?? 10) * scale;
 }
 
-function describe(d: DomainDayRow, target: number | null): string {
+function verdict(d: DomainDayRow): string {
+  if (d.exception != null) return ` · exception: ${d.exception}`;
+  if (d.active == null) return "";
+  if (d.active) return d.activeMinimum != null ? ` · active (${d.activeMinimum}+ needed)` : " · active";
+  return d.activeMinimum != null ? ` · not active (${d.activeMinimum} needed)` : " · not active";
+}
+
+function describe(d: DomainDayRow): string {
+  const sleep = d.passive > 0 ? ` + ${d.passive.toLocaleString()} sleep` : "";
   const paid = d.paid !== d.base ? ` (${d.paid.toLocaleString()} paid)` : "";
-  const verdict =
-    d.succeeded == null ? "" : d.succeeded ? " · a successful day" : target != null ? ` · short of ${target}` : "";
-  return `${formatDay(d.day)}: ${d.base.toLocaleString()} base XP${paid}${verdict}`;
+  return `${formatDay(d.day)}: ${d.action.toLocaleString()} action XP${sleep}${paid}${verdict(d)}`;
 }
 
 /**
- * A domain's daily chart (xp-domains plan §3.12): bars of base XP per day with the success
- * line (70 for Health) across them, the last 30 days by default. Successful days are the
- * full tone; days short of the line a lighter step of it, so position and tone agree. Hover
- * or arrow keys read any day; the table view lists them all.
+ * A domain's daily chart (xp-domains plan §7.4.9): bars of action XP per day, the full tone on
+ * active days and a lighter step otherwise, with sleep (passive XP) stacked on top in its own
+ * tone. The active minimum is a dashed step line, since it moves with the level, and exception
+ * days are hatched bands. Hover or arrow keys read any day; the table view lists them all.
  */
 export function DomainDailyChart({ domain, name }: { domain: string; name: string }) {
   const [range, setRangeState] = useState<Range>(() => loadView<{ range: Range }>(VIEW, { range: "30" }).range);
@@ -56,13 +66,27 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
 
   const data = days.data;
   const rows = data?.days ?? [];
-  const target = data?.target ?? null;
+  const configured = data?.configured ?? false;
+  const minimums = rows.map((d) => d.activeMinimum ?? 0);
   // Headroom above the tallest bar keeps the readout clear of the marks.
-  const top = niceTop(Math.max(target ?? 0, ...rows.map((d) => d.base), 1) * 1.35);
-  const successful = rows.filter((d) => d.succeeded).length;
+  const top = niceTop(Math.max(...minimums, ...rows.map((d) => d.base), 1) * 1.35);
+  const active = rows.filter((d) => d.active).length;
+  const exceptions = rows.filter((d) => d.exception != null).length;
   const label = RANGES.find((r) => r.id === range)!.label;
   const dense = rows.length > 90;
   const shown = hovered != null ? rows[hovered] : null;
+  const hasSleep = rows.some((d) => d.passive > 0);
+  const lastMinimum = configured ? (rows.at(-1)?.activeMinimum ?? null) : null;
+
+  // The active minimum as a step line, in a 0–N by 0–100 box (the plot stretches it).
+  const steps = configured
+    ? rows
+        .map((d, i) => {
+          const y = 100 - ((d.activeMinimum ?? 0) / top) * 100;
+          return `${i === 0 ? "M" : "L"}${i},${y} L${i + 1},${y}`;
+        })
+        .join(" ")
+    : "";
 
   function pick(clientX: number, el: HTMLElement) {
     const box = el.getBoundingClientRect();
@@ -86,7 +110,7 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
     <section aria-labelledby={titleId} className="space-y-3 border-t px-4 py-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id={titleId} className="type-scale-section text-muted-foreground">
-          {name} base XP by day
+          {name} XP by day
         </h3>
         <div className="flex flex-wrap items-center gap-3">
           <ToggleGroup label="Range" value={range} onChange={setRange} options={[...RANGES]} />
@@ -111,12 +135,17 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
 
       {data ? (
         <div className={cn("space-y-2 transition-opacity", days.isPlaceholderData && "opacity-60")}>
-          {target != null ? (
+          {configured ? (
             <p className="text-sm">
               <span className="font-medium">
-                {successful} of the last {rows.length} days
-              </span>{" "}
-              <span className="text-muted-foreground">reached {target} base XP</span>
+                {active} of the last {rows.length} days active
+              </span>
+              {exceptions > 0 ? (
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {exceptions} exception {exceptions === 1 ? "day" : "days"}
+                </span>
+              ) : null}
             </p>
           ) : null}
 
@@ -128,19 +157,19 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                   aria-hidden
                 >
                   <span className="absolute right-0 top-0 -translate-y-1/2">{top.toLocaleString()}</span>
-                  {target != null ? (
+                  {lastMinimum != null ? (
                     <span
                       className="absolute right-0 translate-y-1/2 font-semibold text-foreground"
-                      style={{ bottom: `${(target / top) * 100}%` }}
+                      style={{ bottom: `${(lastMinimum / top) * 100}%` }}
                     >
-                      {target}
+                      {lastMinimum}
                     </span>
                   ) : null}
                   <span className="absolute bottom-0 right-0 translate-y-1/2">0</span>
                 </div>
                 <div
                   role="group"
-                  aria-label={`${name} base XP by day, last ${label}. Use the arrow keys to read a day.`}
+                  aria-label={`${name} XP by day, last ${label}. Use the arrow keys to read a day.`}
                   aria-describedby={readoutId}
                   tabIndex={0}
                   onKeyDown={onKey}
@@ -156,26 +185,49 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                     aria-hidden
                   >
                     {rows.map((d, i) => (
-                      <div key={d.day} className="flex h-full min-w-0 flex-1 items-end justify-center">
+                      <div
+                        key={d.day}
+                        data-testid="day-column"
+                        data-exception={d.exception != null ? "true" : undefined}
+                        className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
+                        style={d.exception != null ? { backgroundImage: HATCH } : undefined}
+                      >
+                        {d.passive > 0 ? (
+                          <div
+                            data-testid="sleep-bar"
+                            className={cn("w-full max-w-6 bg-chart-3/55", !dense && "rounded-t-[4px]")}
+                            style={{ height: `max(1px, ${(d.passive / top) * 100}%)` }}
+                          />
+                        ) : null}
                         <div
                           data-testid="day-bar"
                           className={cn(
                             "w-full max-w-6",
-                            !dense && "rounded-t-[4px]",
-                            d.succeeded ? "bg-chart-earned" : "bg-chart-earned/35",
+                            !dense && d.passive === 0 && "rounded-t-[4px]",
+                            d.active || !configured ? "bg-chart-earned" : "bg-chart-earned/35",
                             hovered === i && "brightness-110 ring-2 ring-foreground/40",
                           )}
-                          style={{ height: d.base > 0 ? `max(2px, ${(d.base / top) * 100}%)` : 0 }}
+                          style={{ height: d.action > 0 ? `max(2px, ${(d.action / top) * 100}%)` : 0 }}
                         />
                       </div>
                     ))}
                   </div>
-                  {target != null ? (
-                    <div
-                      className="pointer-events-none absolute inset-x-0 border-t-2 border-dashed border-foreground/60"
-                      style={{ bottom: `${(target / top) * 100}%` }}
+                  {configured && rows.length > 0 ? (
+                    <svg
+                      className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+                      viewBox={`0 0 ${rows.length} 100`}
+                      preserveAspectRatio="none"
                       aria-hidden
-                    />
+                    >
+                      <path
+                        d={steps}
+                        fill="none"
+                        className="stroke-foreground/60"
+                        strokeWidth={2}
+                        strokeDasharray="5 4"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </svg>
                   ) : null}
                   {shown ? (
                     <div
@@ -186,13 +238,16 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                       }}
                       aria-hidden
                     >
-                      <span className="font-semibold">{shown.base.toLocaleString()} base XP</span>
+                      <span className="font-semibold">{shown.action.toLocaleString()} action XP</span>
+                      {shown.passive > 0 ? (
+                        <span className="text-muted-foreground"> + {shown.passive.toLocaleString()} sleep</span>
+                      ) : null}
                       {shown.paid !== shown.base ? (
                         <span className="text-muted-foreground"> · {shown.paid.toLocaleString()} paid</span>
                       ) : null}
                       <span className="block text-muted-foreground">
                         {formatDay(shown.day)}
-                        {shown.succeeded ? " · successful" : ""}
+                        {verdict(shown)}
                       </span>
                     </div>
                   ) : null}
@@ -207,19 +262,32 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                 </div>
               </div>
               <p id={readoutId} className="sr-only" aria-live="polite">
-                {shown ? describe(shown, target) : ""}
+                {shown ? describe(shown) : ""}
               </p>
               <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] text-muted-foreground" aria-label="Legend">
                 <li className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-[2px] bg-chart-earned" aria-hidden /> A successful day
+                  <span className="size-2.5 rounded-[2px] bg-chart-earned" aria-hidden />
+                  {configured ? "Action XP, an active day" : "XP"}
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-[2px] bg-chart-earned/35" aria-hidden />
-                  {target != null ? `Short of ${target}` : "Base XP"}
-                </li>
-                {target != null ? (
+                {configured ? (
                   <li className="flex items-center gap-1.5">
-                    <span className="w-3 border-t-2 border-dashed border-foreground/60" aria-hidden /> {target} base XP
+                    <span className="size-2.5 rounded-[2px] bg-chart-earned/35" aria-hidden /> Action XP, not active
+                  </li>
+                ) : null}
+                {hasSleep ? (
+                  <li className="flex items-center gap-1.5">
+                    <span className="size-2.5 rounded-[2px] bg-chart-3/55" aria-hidden /> Sleep (passive)
+                  </li>
+                ) : null}
+                {configured ? (
+                  <li className="flex items-center gap-1.5">
+                    <span className="w-3 border-t-2 border-dashed border-foreground/60" aria-hidden /> Active minimum
+                  </li>
+                ) : null}
+                {exceptions > 0 ? (
+                  <li className="flex items-center gap-1.5">
+                    <span className="size-2.5 rounded-[2px] ring-1 ring-foreground/20" style={{ backgroundImage: HATCH }} aria-hidden />
+                    Exception day
                   </li>
                 ) : null}
               </ul>
@@ -229,12 +297,12 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
             <div
               tabIndex={0}
               role="region"
-              aria-label={`${name} base XP by day, as a table`}
+              aria-label={`${name} XP by day, as a table`}
               className="max-h-80 overflow-y-auto rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               <table className="w-full text-sm">
                 <caption className="sr-only">
-                  {name} base XP by day, last {label}, newest first
+                  {name} XP by day, last {label}, newest first
                 </caption>
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground">
@@ -242,15 +310,23 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                       Day
                     </th>
                     <th scope="col" className="py-1 text-right font-medium">
-                      Base XP
+                      Action XP
+                    </th>
+                    <th scope="col" className="py-1 text-right font-medium">
+                      Sleep
                     </th>
                     <th scope="col" className="py-1 text-right font-medium">
                       Paid
                     </th>
-                    {target != null ? (
-                      <th scope="col" className="py-1 text-right font-medium">
-                        Successful
-                      </th>
+                    {configured ? (
+                      <>
+                        <th scope="col" className="py-1 text-right font-medium">
+                          Active
+                        </th>
+                        <th scope="col" className="py-1 pl-3 font-medium">
+                          Exception
+                        </th>
+                      </>
                     ) : null}
                   </tr>
                 </thead>
@@ -260,9 +336,17 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                       <th scope="row" className="py-1.5 text-left font-normal">
                         {formatDay(d.day)}
                       </th>
-                      <td className="py-1.5 text-right tabular-nums">{d.base.toLocaleString()}</td>
+                      <td className="py-1.5 text-right tabular-nums">{d.action.toLocaleString()}</td>
+                      <td className="py-1.5 text-right tabular-nums">{d.passive.toLocaleString()}</td>
                       <td className="py-1.5 text-right tabular-nums">{d.paid.toLocaleString()}</td>
-                      {target != null ? <td className="py-1.5 text-right">{d.succeeded ? "Yes" : "No"}</td> : null}
+                      {configured ? (
+                        <>
+                          <td className="py-1.5 text-right">
+                            {d.exception != null ? "—" : d.active ? "Yes" : `No (${d.activeMinimum ?? 0} needed)`}
+                          </td>
+                          <td className="py-1.5 pl-3 text-muted-foreground">{d.exception ?? ""}</td>
+                        </>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>

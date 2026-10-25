@@ -27,6 +27,7 @@ import type {
   DomainDaysRead,
   DomainReportRead,
   DomainsRead,
+  ExceptionDaysRead,
   BountyTypeDefaults,
   FoodDayRead,
   FoodDaysRead,
@@ -77,6 +78,7 @@ import {
   mockFoodRecent,
   mockDomainDays,
   mockDomainReport,
+  mockExceptionDays,
   mockActivityPaid,
   isTaskSeries,
   mockTaskSeries,
@@ -187,6 +189,8 @@ export interface LifeOsReads {
   domainDays(domain: string, days?: number): Promise<DomainDaysRead>;
   /** Every life domain over its last `days` days (30 by default): the Reports view. */
   domainReport(days?: number): Promise<DomainReportRead>;
+  /** The days marked as exceptions among the last `days` (90 by default), newest first (REWARD-8). */
+  exceptionDays(days?: number): Promise<ExceptionDaysRead>;
   /** One day of the Food Log (today by default): its entries, fasts and diet score (FOOD-4). */
   foodDay(date?: string): Promise<FoodDayRead>;
   /** Every day of a range, at most 62 (the week so far by default): the Week and Month views. */
@@ -406,6 +410,11 @@ export const mockReads: LifeOsReads = {
   async domainReport(days?: number): Promise<DomainReportRead> {
     await wait();
     return mockDomainReport(days);
+  },
+
+  async exceptionDays(days?: number): Promise<ExceptionDaysRead> {
+    await wait();
+    return mockExceptionDays(days);
   },
 
   async foodDay(date?: string): Promise<FoodDayRead> {

@@ -852,6 +852,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/domains/exceptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetExceptionDays"];
+        put?: never;
+        post: operations["MarkExceptionDay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/domains/exceptions/{day}/unmark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["UnmarkExceptionDay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/food/day": {
         parameters: {
             query?: never;
@@ -1640,6 +1672,25 @@ export interface components {
             type?: string;
             title?: string;
         };
+        DomainBackOnTrack: {
+            /** Format: int32 */
+            days?: number | string;
+            /** Format: int32 */
+            average?: number | string;
+            /** Format: int32 */
+            activeMinimum?: number | string;
+            /** Format: int32 */
+            activeDays?: number | string;
+        };
+        DomainBest: {
+            /** Format: int32 */
+            level?: number | string;
+            levelOn?: null | string;
+            /** Format: int32 */
+            rank?: number | string;
+            rankTitle?: string;
+            rankOn?: null | string;
+        };
         DomainChangeRow: {
             domain?: string;
             /** Format: int32 */
@@ -1651,31 +1702,93 @@ export interface components {
             /** Format: int32 */
             rankTo?: number | string;
             rankTitle?: string;
+            /** Format: int32 */
+            bestLevelFrom?: number | string;
+            /** Format: int32 */
+            bestLevelTo?: number | string;
+            /** Format: int32 */
+            bestRankFrom?: number | string;
+            /** Format: int32 */
+            bestRankTo?: number | string;
+        };
+        DomainConsistency: {
+            /** Format: int32 */
+            level?: number | string;
+            /** Format: int32 */
+            windowDays?: number | string;
+            from?: null | string;
+            to?: null | string;
+            /** Format: double */
+            averageBase?: number | string;
+            next?: null | components["schemas"]["DomainConsistencyNeed"];
+        };
+        DomainConsistencyNeed: {
+            /** Format: int32 */
+            level?: number | string;
+            /** Format: int32 */
+            windowDays?: number | string;
+            /** Format: int32 */
+            average?: number | string;
+            /** Format: double */
+            averageNow?: number | string;
+            averageMet?: boolean;
+            /** Format: int32 */
+            activeMinimum?: number | string;
+            /** Format: int32 */
+            activeDaysNeeded?: number | string;
+            /** Format: int32 */
+            activeDays?: number | string;
+            activeDaysMet?: boolean;
+            /** Format: int32 */
+            ageNeeded?: number | string;
+            /** Format: int32 */
+            age?: number | string;
+            ageMet?: boolean;
         };
         DomainCurrent: {
             /** Format: int64 */
             todayBase?: number | string;
-            todaySucceeded?: boolean;
-            rule?: string;
             /** Format: int64 */
-            target?: null | number | string;
-            /** Format: double */
-            consistency?: number | string;
+            todayAction?: number | string;
             /** Format: int32 */
-            successfulDays?: number | string;
+            activeMinimum?: number | string;
+            todayActive?: boolean;
+            todayException?: boolean;
+            rule?: string;
+            /** Format: double */
+            activeShare?: number | string;
+            /** Format: int32 */
+            activeDays?: number | string;
             /** Format: int32 */
             windowDays?: number | string;
             /** Format: double */
             multiplier?: number | string;
             nextTier?: null | components["schemas"]["DomainTierRow"];
+            settledThrough?: string;
         };
         DomainDayRow: {
             day?: string;
             /** Format: int64 */
             base?: number | string;
             /** Format: int64 */
+            action?: number | string;
+            /** Format: int64 */
+            passive?: number | string;
+            /** Format: int64 */
             paid?: number | string;
-            succeeded?: null | boolean;
+            exception?: null | string;
+            counted?: null | boolean;
+            active?: null | boolean;
+            /** Format: int32 */
+            activeMinimum?: null | number | string;
+            /** Format: int32 */
+            lifetimeLevel?: null | number | string;
+            /** Format: int32 */
+            consistencyLevel?: null | number | string;
+            /** Format: int32 */
+            level?: null | number | string;
+            /** Format: int32 */
+            rank?: null | number | string;
         };
         DomainDaysRead: {
             key?: string;
@@ -1683,55 +1796,26 @@ export interface components {
             name?: string;
             configured?: boolean;
             today?: string;
-            /** Format: int64 */
-            target?: null | number | string;
+            settledThrough?: null | string;
             days?: components["schemas"]["DomainDayRow"][];
+        };
+        DomainLevelChange: {
+            day?: string;
+            /** Format: int32 */
+            from?: number | string;
+            /** Format: int32 */
+            to?: number | string;
         };
         DomainLifetime: {
             start?: null | string;
             /** Format: int32 */
             level?: number | string;
-            /** Format: int32 */
-            rawLevel?: number | string;
-            /** Format: int32 */
-            topLevel?: number | string;
-            capped?: boolean;
-            /** Format: int32 */
-            rank?: number | string;
-            rankTitle?: string;
-            qualifiedOn?: null | string;
             /** Format: int64 */
             levelXp?: number | string;
             /** Format: int64 */
             xpIntoLevel?: number | string;
             /** Format: int64 */
             xpToNext?: number | string;
-            /** Format: int64 */
-            bankedXp?: number | string;
-        };
-        DomainNextRank: {
-            /** Format: int32 */
-            rank?: number | string;
-            title?: string;
-            /** Format: int32 */
-            level?: number | string;
-            /** Format: double */
-            bar?: number | string;
-            /** Format: int32 */
-            windowDays?: number | string;
-            /** Format: double */
-            consistency?: number | string;
-            /** Format: int32 */
-            successfulDays?: number | string;
-            /** Format: int32 */
-            requiredDays?: number | string;
-            /** Format: int32 */
-            daysNeeded?: number | string;
-            /** Format: int32 */
-            daysOld?: number | string;
-            levelReached?: boolean;
-            oldEnough?: boolean;
-            barMet?: boolean;
         };
         DomainRankReachedRow: {
             /** Format: int32 */
@@ -1746,14 +1830,30 @@ export interface components {
             /** Format: int32 */
             level?: number | string;
             /** Format: int32 */
-            topLevel?: number | string;
-            /** Format: double */
-            bar?: number | string;
+            lastLevel?: number | string;
+            /** Format: int32 */
+            average?: null | number | string;
+            /** Format: int32 */
+            activeMinimum?: null | number | string;
+            /** Format: int32 */
+            activeDays?: null | number | string;
             /** Format: int32 */
             windowDays?: number | string;
+            /** Format: int64 */
+            totalXp?: number | string;
             /** Format: int32 */
             gems?: number | string;
-            qualifiedOn?: null | string;
+            reachedOn?: null | string;
+        };
+        DomainReportDayRow: {
+            day?: string;
+            /** Format: int32 */
+            level?: number | string;
+            /** Format: int32 */
+            rank?: number | string;
+            /** Format: int32 */
+            bestRank?: number | string;
+            exception?: boolean;
         };
         DomainReportRead: {
             today?: string;
@@ -1775,9 +1875,11 @@ export interface components {
             /** Format: int32 */
             daysCounted?: null | number | string;
             /** Format: int32 */
-            successfulDays?: null | number | string;
+            exceptionDays?: null | number | string;
+            /** Format: int32 */
+            activeDays?: null | number | string;
             /** Format: double */
-            consistency?: null | number | string;
+            activeShare?: null | number | string;
             /** Format: double */
             averageBase?: null | number | string;
             /** Format: int32 */
@@ -1789,7 +1891,15 @@ export interface components {
             /** Format: int32 */
             rankTo?: null | number | string;
             rankTitle?: null | string;
+            /** Format: int32 */
+            bestLevelFrom?: null | number | string;
+            /** Format: int32 */
+            bestLevelTo?: null | number | string;
+            /** Format: int32 */
+            bestRank?: null | number | string;
+            bestRankTitle?: null | string;
             ranksReached?: null | components["schemas"]["DomainRankReachedRow"][];
+            ranks?: null | components["schemas"]["DomainReportDayRow"][];
         };
         DomainRow: {
             key?: string;
@@ -1799,9 +1909,32 @@ export interface components {
             totalXp?: number | string;
             configured?: boolean;
             lifetime?: null | components["schemas"]["DomainLifetime"];
-            nextRank?: null | components["schemas"]["DomainNextRank"];
+            consistency?: null | components["schemas"]["DomainConsistency"];
+            shown?: null | components["schemas"]["DomainShown"];
+            best?: null | components["schemas"]["DomainBest"];
             current?: null | components["schemas"]["DomainCurrent"];
             ranks?: null | components["schemas"]["DomainRankRow"][];
+        };
+        DomainShown: {
+            /** Format: int32 */
+            level?: number | string;
+            /** Format: double */
+            exact?: number | string;
+            /** Format: int32 */
+            target?: number | string;
+            /** Format: int32 */
+            rank?: number | string;
+            rankTitle?: string;
+            limitedBy?: null | string;
+            falling?: boolean;
+            paused?: boolean;
+            fallingSince?: null | string;
+            /** Format: int32 */
+            fallingFrom?: null | number | string;
+            /** Format: double */
+            percentPerDay?: number | string;
+            lastChange?: null | components["schemas"]["DomainLevelChange"];
+            backOnTrack?: null | components["schemas"]["DomainBackOnTrack"];
         };
         DomainTierRow: {
             /** Format: double */
@@ -1818,6 +1951,26 @@ export interface components {
         EarnResult: {
             awards?: components["schemas"]["AwardRow"][];
             progress?: components["schemas"]["DomainChangeRow"][];
+        };
+        ExceptionDayBody: {
+            day?: null | string;
+            comment?: null | string;
+        };
+        ExceptionDayResult: {
+            exception?: null | components["schemas"]["ExceptionDayRow"];
+            awards?: components["schemas"]["AwardRow"][];
+            progress?: components["schemas"]["DomainChangeRow"][];
+        };
+        ExceptionDayRow: {
+            day?: string;
+            comment?: string;
+            /** Format: date-time */
+            markedAt?: string;
+        };
+        ExceptionDaysRead: {
+            today?: string;
+            from?: string;
+            exceptions?: components["schemas"]["ExceptionDayRow"][];
         };
         FastRow: {
             /** Format: uuid */
@@ -4133,6 +4286,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EarnResult"];
+                };
+            };
+        };
+    };
+    GetExceptionDays: {
+        parameters: {
+            query?: {
+                days?: number | string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExceptionDaysRead"];
+                };
+            };
+        };
+    };
+    MarkExceptionDay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExceptionDayBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExceptionDayResult"];
+                };
+            };
+        };
+    };
+    UnmarkExceptionDay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExceptionDayResult"];
                 };
             };
         };

@@ -1,32 +1,44 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { ChartColumnIcon, ChevronDownIcon, MedalIcon } from "lucide-react";
+import { toast } from "sonner";
+import { CheckIcon, ChartColumnIcon, ChevronDownIcon, MedalIcon, XIcon } from "lucide-react";
 import { useOuraSyncOnOpen } from "@/components/activity/use-oura-sync-on-open";
 import { DomainDailyChart } from "@/components/character/domain-daily-chart";
 import { DomainReports } from "@/components/character/domain-reports";
+import { ExceptionDays } from "@/components/character/exception-days";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton } from "@/components/primitives/skeletons";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { celebrate } from "@/lib/celebrate";
 import { formatDay } from "@/lib/dates";
+import { newBest } from "@/lib/domain-best";
 import {
+  bestText,
   domainSymbol,
+  fallHistoryText,
+  multiplierChipText,
   multiplierLabel,
-  nextRankText,
-  percent,
-  rankRequirement,
+  needParts,
+  rankHoldText,
+  stateLine,
+  todayText,
 } from "@/lib/domains";
-import type { DomainCurrent, DomainLifetime, DomainRow } from "@/lib/production-ui-types";
+import type { DomainConsistency, DomainCurrent, DomainLifetime, DomainRow } from "@/lib/production-ui-types";
 import { useDomains, useWrites } from "@/lib/queries";
 import { loadView, saveView } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 
 /**
- * The Character page (REWARD-7, xp-domains plan §3.12): each configured life domain's
- * lifetime advancement beside how it's going now, its daily chart, and its rank ladder;
- * domains without rules show their XP. The Reports tab (§3.13) compares the domains over a
- * period. Opening the page settles any rank time alone has reached
- * (`POST /api/domains/settle`), which celebrates like any other rank-up.
+ * The Character page (REWARD-7 / REWARD-8, xp-domains plan §7.4.9): each configured life
+ * domain's level, which follows its last 90 days, beside its best, what sets it now, its two
+ * levels (lifetime and consistency), today against the active minimum, the multiplier, its
+ * daily chart and its rank ladder; then the exception days. Domains without rules show their
+ * XP. The Reports tab (§7.4.10) shows each domain's rank over time.
+ *
+ * Opening the page settles any rank time alone has reached (`POST /api/domains/settle`), which
+ * celebrates like any other rank-up; once it's done, a new best level or rank reached as days
+ * settled is celebrated once (§7.4.7).
  */
 export function CharacterPage() {
   const search = useSearch({ from: "/character" });
@@ -34,19 +46,25 @@ export function CharacterPage() {
   const view = search.view === "reports" ? "reports" : "domains";
   const domains = useDomains();
   const writes = useWrites();
-  const settled = useRef(false);
+  const started = useRef(false);
+  const [settled, setSettled] = useState(false);
   useOuraSyncOnOpen();
 
   useEffect(() => {
-    if (settled.current) return;
-    settled.current = true;
+    if (started.current) return;
+    started.current = true;
     // A failed settle changes nothing on screen: the reads still show where each domain stands.
-    void writes.settleDomains().catch(() => undefined);
+    void writes
+      .settleDomains()
+      .catch(() => undefined)
+      .finally(() => setSettled(true));
   }, [writes]);
 
   const rows = domains.data?.domains ?? [];
   const configured = rows.filter((d) => d.configured);
   const others = rows.filter((d) => !d.configured);
+
+  useBestCelebration(configured, settled && !domains.isFetching);
 
   const showView = (next: string) =>
     void navigate({ search: (prev) => ({ ...prev, view: next === "reports" ? "reports" : undefined }) });
@@ -57,8 +75,7 @@ export function CharacterPage() {
         <p className="type-scale-section text-primary">Character</p>
         <h1 className="font-heading text-2xl">Your life domains</h1>
         <p className="mt-1 max-w-prose text-xs text-muted-foreground">
-          Levels and ranks are for life: a bad month never takes them back. Today's ring, the last 30 days
-          and the multiplier show how it's going now.
+          Your level follows your last 90 days. It rises at once, falls slowly, and your best is kept.
         </p>
         <TabsList variant="line" className="mt-3 -mb-px h-auto">
           <TabsTrigger value="domains">Domains</TabsTrigger>
@@ -93,6 +110,8 @@ export function CharacterPage() {
           </div>
         ))}
 
+        {configured.length > 0 && domains.data ? <ExceptionDays today={domains.data.today} /> : null}
+
         {others.length > 0 ? (
           <section aria-labelledby="character-other">
             <h2 id="character-other" className="type-scale-section mb-3 text-muted-foreground">
@@ -119,13 +138,43 @@ export function CharacterPage() {
   );
 }
 
+/**
+ * Celebrates, once, a new best level or rank reached by time alone (§7.4.7): when `ready` (the
+ * settle is done and the read is fresh), each domain's best is compared with the last one kept.
+ */
+function useBestCelebration(rows: DomainRow[], ready: boolean) {
+  useEffect(() => {
+    if (!ready) return;
+    let scale: "full" | "grand" | null = null;
+    for (const d of rows) {
+      if (!d.best) continue;
+      const kind = newBest(d.key, { level: d.best.level, rank: d.best.rank });
+      if (kind === "rank") {
+        toast(`You're now a ${d.name} ${d.best.rankTitle}.`, {
+          icon: "🏅",
+          description: "A new best rank, reached as your days settled.",
+        });
+        scale = "grand";
+      } else if (kind === "level") {
+        toast(`${domainSymbol(d.key)} ${d.name} level ${d.best.level}!`.trim(), {
+          icon: "⬆️",
+          description: "A new best level, reached as your days settled.",
+        });
+        scale ??= "full";
+      }
+    }
+    if (scale) celebrate(scale);
+  }, [rows, ready]);
+}
+
 function DomainCard({ domain }: { domain: DomainRow }) {
   const headingId = useId();
   const chartId = useId();
   const view = `character.${domain.key}.chart`;
   const [chartOpen, setChartOpenState] = useState(() => loadView<{ open: boolean }>(view, { open: false }).open);
-  const lifetime = domain.lifetime!;
-  const current = domain.current!;
+  const shown = domain.shown!;
+  const best = domain.best!;
+  const fallHistory = fallHistoryText(domain);
 
   const setChartOpen = (open: boolean) => {
     setChartOpenState(open);
@@ -143,11 +192,25 @@ function DomainCard({ domain }: { domain: DomainRow }) {
           <span aria-hidden>{domainSymbol(domain.key)} </span>
           {domain.name}
         </h2>
-        <RankBadge title={lifetime.rankTitle} />
+        <RankBadge title={shown.rankTitle} />
       </div>
-      <div className="grid md:grid-cols-2">
-        <LifetimeHalf domain={domain} lifetime={lifetime} />
-        <CurrentHalf domain={domain} current={current} />
+      <div className="space-y-1.5 px-4 pt-2 pb-4">
+        <p className="flex flex-wrap items-baseline gap-x-3">
+          <span className="font-heading text-4xl">Level {shown.level}</span>
+          {shown.falling || shown.paused ? (
+            <span className="text-xs tabular-nums text-muted-foreground">{shown.exact.toFixed(2)}</span>
+          ) : null}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {bestText(best)}
+          {best.levelOn ? ` · ${formatDay(best.levelOn)}` : ""}
+        </p>
+        <p className="max-w-prose text-sm">{stateLine(domain)}</p>
+        {fallHistory ? <p className="text-xs text-muted-foreground">{fallHistory}</p> : null}
+      </div>
+      <div className="grid border-t md:grid-cols-2">
+        <LevelsHalf domain={domain} lifetime={domain.lifetime!} consistency={domain.consistency!} />
+        <CurrentHalf domain={domain} current={domain.current!} />
       </div>
       <div className="border-t px-2 py-1.5">
         <Button
@@ -176,37 +239,54 @@ function RankBadge({ title }: { title: string }) {
   );
 }
 
-function LifetimeHalf({ domain, lifetime }: { domain: DomainRow; lifetime: DomainLifetime }) {
-  const next = domain.nextRank;
-  const top = lifetime.level === 100 && !lifetime.capped;
-  const fill = lifetime.capped || top ? 100 : lifetime.levelXp > 0 ? (lifetime.xpIntoLevel / lifetime.levelXp) * 100 : 0;
+function Bar({ label, value, max, text }: { label: string; value: number; max: number; text: string }) {
+  const fill = max > 0 ? Math.min(Math.max(value / max, 0), 1) * 100 : 0;
+  return (
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={max || 1}
+      aria-valuenow={Math.min(value, max || 1)}
+      aria-valuetext={text}
+      className="h-2 overflow-hidden rounded-full bg-muted"
+    >
+      <div className="h-full rounded-full bg-chart-earned" style={{ width: `${fill}%` }} />
+    </div>
+  );
+}
+
+/** The two levels the shown level follows: lifetime (XP) and consistency (the last 90 days). */
+function LevelsHalf({
+  domain,
+  lifetime,
+  consistency,
+}: {
+  domain: DomainRow;
+  lifetime: DomainLifetime;
+  consistency: DomainConsistency;
+}) {
+  const top = lifetime.xpToNext === 0;
+  const next = consistency.next;
+  const parts = next && next.windowDays > 0 ? needParts(next) : [];
 
   return (
-    <div className="space-y-3 p-4">
-      <p className="text-xs font-medium text-muted-foreground">Lifetime</p>
-      <p className="font-heading text-4xl">Level {lifetime.level}</p>
+    <div className="space-y-4 p-4">
       <div className="space-y-1">
-        <div
-          role="progressbar"
-          aria-label={top ? `${domain.name}: top level` : `Progress to ${domain.name} level ${lifetime.level + 1}`}
-          aria-valuemin={0}
-          aria-valuemax={lifetime.levelXp || 1}
-          aria-valuenow={lifetime.capped ? lifetime.levelXp : lifetime.xpIntoLevel}
-          aria-valuetext={
-            lifetime.capped
-              ? `Full: the top of ${lifetime.rankTitle}`
-              : `${lifetime.xpIntoLevel.toLocaleString()} of ${lifetime.levelXp.toLocaleString()} XP`
-          }
-          className="h-2 overflow-hidden rounded-full bg-muted"
-        >
-          <div className="h-full rounded-full bg-chart-earned" style={{ width: `${fill}%` }} />
-        </div>
+        <p className="flex items-baseline justify-between gap-2 text-sm">
+          <span className="font-medium">Lifetime level {lifetime.level}</span>
+          {domain.shown?.limitedBy === "lifetime" ? (
+            <span className="text-xs text-muted-foreground">sets your level</span>
+          ) : null}
+        </p>
+        <Bar
+          label={top ? `${domain.name} lifetime: top level` : `Progress to ${domain.name} lifetime level ${lifetime.level + 1}`}
+          value={top ? 1 : lifetime.xpIntoLevel}
+          max={top ? 1 : lifetime.levelXp}
+          text={top ? "The top level" : `${lifetime.xpIntoLevel.toLocaleString()} of ${lifetime.levelXp.toLocaleString()} XP`}
+        />
         <p className="text-xs">
-          {lifetime.capped ? (
-            <>
-              Level {lifetime.level} (top of {lifetime.rankTitle}) · {lifetime.bankedXp.toLocaleString()} XP banked
-            </>
-          ) : top ? (
+          {top ? (
             "The top level"
           ) : (
             <>
@@ -219,72 +299,102 @@ function LifetimeHalf({ domain, lifetime }: { domain: DomainRow; lifetime: Domai
           )}
         </p>
       </div>
-      <p className="text-sm">{next ? nextRankText(next) : `${lifetime.rankTitle}: the top rank.`}</p>
+
+      <div className="space-y-1">
+        <p className="flex items-baseline justify-between gap-2 text-sm">
+          <span className="font-medium">Consistency level {consistency.level}</span>
+          {domain.shown?.limitedBy === "consistency" ? (
+            <span className="text-xs text-muted-foreground">sets your level</span>
+          ) : null}
+        </p>
+        {next ? (
+          <>
+            <Bar
+              label={`${domain.name} average toward consistency level ${next.level}`}
+              value={next.averageNow}
+              max={next.average}
+              text={`${next.averageNow.toLocaleString()} of ${next.average} base XP a day`}
+            />
+            {parts.length > 0 ? (
+              <>
+                <p className="text-xs">Level {next.level} needs:</p>
+                <ul aria-label={`What consistency level ${next.level} needs`} className="space-y-0.5 text-xs">
+                  {parts.map((p) => (
+                    <li key={p.key} className="flex items-start gap-1.5">
+                      {p.met ? (
+                        <CheckIcon aria-hidden className="mt-px size-3.5 shrink-0 text-chart-earned" />
+                      ) : (
+                        <XIcon aria-hidden className="mt-px size-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <span>
+                        {p.text}
+                        <span className="sr-only">{p.met ? ": met" : ": not yet"}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">Your consistency level starts once a day settles.</p>
+            )}
+          </>
+        ) : (
+          <p className="text-xs">The top level.</p>
+        )}
+      </div>
+
       <p className="text-[0.6875rem] text-muted-foreground">
         {domain.totalXp.toLocaleString()} {domain.label} in all
         {lifetime.start ? ` · since ${formatDay(lifetime.start)}` : ""}
-        {lifetime.qualifiedOn ? ` · ${lifetime.rankTitle} since ${formatDay(lifetime.qualifiedOn)}` : ""}
+        {consistency.windowDays > 0 ? ` · ${consistency.averageBase.toLocaleString()} base XP a day over the last ${consistency.windowDays} days` : ""}
       </p>
     </div>
   );
 }
 
 function CurrentHalf({ domain, current }: { domain: DomainRow; current: DomainCurrent }) {
-  const target = current.target ?? 0;
-  const lapsed = current.successfulDays === 0 && domain.totalXp > 0;
+  const lapsed = current.activeDays === 0 && domain.totalXp > 0;
 
   return (
     <div className="space-y-3 border-t p-4 md:border-t-0 md:border-l">
       <p className="text-xs font-medium text-muted-foreground">Now</p>
       <div className="flex items-center gap-4">
-        <TodayRing base={current.todayBase} target={target} succeeded={current.todaySucceeded} />
+        <TodayRing current={current} />
         <div className="min-w-0 space-y-1.5">
-          <p className="text-sm">
-            <span className="font-medium">Today: {current.todayBase.toLocaleString()}</span>
-            <span className="text-muted-foreground">
-              {current.todaySucceeded || target === 0
-                ? " base XP · a successful day"
-                : ` of ${target} base XP · ${(target - current.todayBase).toLocaleString()} to go`}
-            </span>
-          </p>
-          <p className="text-sm">
-            {current.successfulDays} of the last {current.windowDays} days successful
-          </p>
+          <p className="text-sm">{todayText(current)}</p>
           <p>
             <span className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
-              {multiplierLabel(current.multiplier)} · {percent(current.consistency)} of the last {current.windowDays} days
+              {multiplierChipText(current)}
             </span>
           </p>
           <p className="text-xs text-muted-foreground">
             {current.nextTier
-              ? `${current.nextTier.daysNeeded} more successful ${current.nextTier.daysNeeded === 1 ? "day" : "days"} in the window for ${multiplierLabel(current.nextTier.multiplier)}`
+              ? `${current.nextTier.daysNeeded} more active ${current.nextTier.daysNeeded === 1 ? "day" : "days"} in the window for ${multiplierLabel(current.nextTier.multiplier)}`
               : "The top multiplier."}
           </p>
         </div>
       </div>
       {lapsed ? (
         <p className="text-xs text-muted-foreground">
-          No successful days in the last {current.windowDays}: the multiplier is back to ×1.0 for now. Your level and
-          rank stay where they were.
+          No active days in the last {current.windowDays}: the multiplier is back to ×1.0, and your level falls slowly
+          until you're back on track. Your best stays.
         </p>
       ) : null}
-      <p className="text-[0.6875rem] text-muted-foreground">A successful day is {current.rule}.</p>
+      <p className="text-[0.6875rem] text-muted-foreground">
+        An active day is {current.rule}. Days count once they settle at 4 a.m.
+      </p>
     </div>
   );
 }
 
-/** Today's base XP against the success line, as a ring. */
-function TodayRing({ base, target, succeeded }: { base: number; target: number; succeeded: boolean }) {
+/** Today's action XP against the active minimum, as a ring. */
+function TodayRing({ current }: { current: DomainCurrent }) {
   const r = 28;
   const circumference = 2 * Math.PI * r;
-  const share = target > 0 ? Math.min(base / target, 1) : 0;
+  const { todayAction: action, activeMinimum: minimum, todayActive: active, todayException: exception } = current;
+  const share = exception ? 0 : minimum > 0 ? Math.min(Math.max(action, 0) / minimum, 1) : 0;
   return (
-    <svg
-      viewBox="0 0 72 72"
-      className="size-20 shrink-0"
-      role="img"
-      aria-label={`Today: ${base} of ${target} base XP${succeeded ? ", a successful day" : ""}`}
-    >
+    <svg viewBox="0 0 72 72" className="size-20 shrink-0" role="img" aria-label={todayText(current)}>
       <circle cx="36" cy="36" r={r} fill="none" strokeWidth="8" className="stroke-muted" />
       {share > 0 ? (
         <circle
@@ -296,14 +406,14 @@ function TodayRing({ base, target, succeeded }: { base: number; target: number; 
           strokeLinecap="round"
           strokeDasharray={`${share * circumference} ${circumference}`}
           transform="rotate(-90 36 36)"
-          className={cn(succeeded ? "stroke-chart-earned" : "stroke-chart-earned/60")}
+          className={cn(active ? "stroke-chart-earned" : "stroke-chart-earned/60")}
         />
       ) : null}
       <text x="36" y="35" textAnchor="middle" className="fill-foreground text-[15px] font-semibold">
-        {succeeded ? "✓" : base}
+        {exception ? "–" : active ? "✓" : action}
       </text>
       <text x="36" y="49" textAnchor="middle" className="fill-muted-foreground text-[9px]">
-        {succeeded ? `${base}/${target}` : `/${target}`}
+        {exception ? "exception" : active ? `${action}/${minimum}` : `/${minimum}`}
       </text>
     </svg>
   );
@@ -312,7 +422,8 @@ function TodayRing({ base, target, succeeded }: { base: number; target: number; 
 function RankLadder({ domain }: { domain: DomainRow }) {
   const headingId = useId();
   const ranks = domain.ranks ?? [];
-  const held = domain.lifetime?.rank ?? 0;
+  const held = domain.shown?.rank ?? 0;
+  const best = domain.best?.rank ?? 0;
   return (
     <section aria-labelledby={headingId}>
       <h2 id={headingId} className="type-scale-section mb-3 text-muted-foreground">
@@ -321,6 +432,7 @@ function RankLadder({ domain }: { domain: DomainRow }) {
       <ol className="divide-y rounded-xl bg-card ring-1 ring-foreground/10">
         {ranks.map((r) => {
           const current = r.rank === held;
+          const isBest = r.rank === best && best > held;
           return (
             <li
               key={r.rank}
@@ -331,14 +443,16 @@ function RankLadder({ domain }: { domain: DomainRow }) {
               )}
             >
               <span className="text-xs tabular-nums text-muted-foreground">
-                {r.level === r.topLevel ? `Lv ${r.level}` : `Lv ${r.level}–${r.topLevel}`}
+                {r.level === r.lastLevel ? `Lv ${r.level}` : `Lv ${r.level}–${r.lastLevel}`}
               </span>
               <span className={cn("font-medium", current && "text-primary")}>
                 {r.title}
                 {current ? <span className="ml-1.5 text-xs font-normal text-muted-foreground">(you)</span> : null}
+                {isBest ? <span className="ml-1.5 text-xs font-normal text-muted-foreground">(best)</span> : null}
               </span>
               <span className="col-start-2 text-xs text-muted-foreground sm:col-start-auto">
-                {rankRequirement(r)}
+                {rankHoldText(r)}
+                {r.rank > 0 ? ` · ${r.totalXp.toLocaleString()} XP to reach` : ""}
               </span>
               <span className="col-start-2 text-xs text-muted-foreground sm:col-start-auto sm:text-right">
                 {r.gems > 0 ? (
@@ -347,7 +461,7 @@ function RankLadder({ domain }: { domain: DomainRow }) {
                     {r.gems} {r.gems === 1 ? "Gem" : "Gems"}
                   </>
                 ) : null}
-                {r.qualifiedOn ? ` · reached ${formatDay(r.qualifiedOn)}` : ""}
+                {r.reachedOn ? ` · reached ${formatDay(r.reachedOn)}` : ""}
               </span>
             </li>
           );

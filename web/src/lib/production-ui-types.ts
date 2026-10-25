@@ -725,9 +725,9 @@ export interface Award {
 }
 
 // ---------------------------------------------------------------------------
-// Life domains (REWARD-6 / REWARD-7, xp-domains plan §3.11): `GET /api/domains` and
-// `GET /api/domains/{key}/days`. Dates are home-zone days (`yyyy-MM-dd`); ranks are indexes
-// into the domain's ladder (0 is Novice); shares and bars run 0–1.
+// Life domains (REWARD-6 / REWARD-7 / REWARD-8, xp-domains plan §7.4.8): `GET /api/domains`,
+// `GET /api/domains/{key}/days`, the report and the exception days. Dates are home-zone days
+// (`yyyy-MM-dd`); ranks are indexes into the domain's ladder (0 is Novice); shares run 0–1.
 // ---------------------------------------------------------------------------
 
 export interface DomainsRead {
@@ -736,8 +736,8 @@ export interface DomainsRead {
 }
 
 /**
- * One life domain. Only a configured one (Health in the pilot) has `lifetime`, `current`
- * and `ranks`; `nextRank` is null at the last rank.
+ * One life domain. Only a configured one (Health in the pilot) has `lifetime`, `consistency`,
+ * `shown`, `best`, `current` and `ranks`.
  */
 export interface DomainRow {
   key: string;
@@ -747,60 +747,118 @@ export interface DomainRow {
   totalXp: number;
   configured: boolean;
   lifetime: DomainLifetime | null;
-  nextRank: DomainNextRank | null;
+  consistency: DomainConsistency | null;
+  shown: DomainShown | null;
+  best: DomainBest | null;
   current: DomainCurrent | null;
   ranks: DomainRankRow[] | null;
 }
 
-/** Lifetime advancement, which a bad month never lowers. */
+/** The lifetime level, which never falls: the ceiling the shown level can't pass. */
 export interface DomainLifetime {
+  /** The first day with paid XP. */
   start: string | null;
   level: number;
-  /** The level the XP alone reaches, before the rank's cap. */
-  rawLevel: number;
-  /** The highest level the rank allows (9 for Novice). */
-  topLevel: number;
-  capped: boolean;
-  rank: number;
-  rankTitle: string;
-  qualifiedOn: string | null;
-  /** What the current level costs in all. */
+  /** What the current level costs in all; 0 at the top. */
   levelXp: number;
-  /** The XP into the level; the whole of it while capped. */
   xpIntoLevel: number;
   xpToNext: number;
-  bankedXp: number;
 }
 
-/** The next rank's gate as it reads today; today counts once it has succeeded. */
-export interface DomainNextRank {
-  rank: number;
-  title: string;
+/** The highest level the last `windowDays` counted days (at most 90) support, and what the next needs. */
+export interface DomainConsistency {
   level: number;
-  bar: number;
   windowDays: number;
-  consistency: number;
-  successfulDays: number;
-  requiredDays: number;
-  daysNeeded: number;
-  daysOld: number;
-  levelReached: boolean;
-  oldEnough: boolean;
-  barMet: boolean;
+  from: string | null;
+  to: string | null;
+  averageBase: number;
+  /** Null at the top. */
+  next: DomainConsistencyNeed | null;
 }
 
-/** Current performance, which does drop: today against the rule, and the last 30 days. */
+/** What a consistency level needs over the window, each test against where it stands now. */
+export interface DomainConsistencyNeed {
+  level: number;
+  windowDays: number;
+  average: number;
+  averageNow: number;
+  averageMet: boolean;
+  activeMinimum: number;
+  activeDaysNeeded: number;
+  activeDays: number;
+  activeDaysMet: boolean;
+  /** Active days so far the level needs (min(90, level + 1)), against those there are. */
+  ageNeeded: number;
+  age: number;
+  ageMet: boolean;
+}
+
+/**
+ * The shown level: it follows `target` (the lower of the lifetime and consistency levels),
+ * rising at once and falling `percentPerDay` of itself a day. `limitedBy` says which sets the
+ * target (null when they're equal). While above the target it's falling or paused, since
+ * `fallingSince` from `fallingFrom`, and `backOnTrack` says what pauses the fall.
+ */
+export interface DomainShown {
+  level: number;
+  /** The level to two places, e.g. 46.57. */
+  exact: number;
+  target: number;
+  rank: number;
+  rankTitle: string;
+  limitedBy: "lifetime" | "consistency" | null;
+  falling: boolean;
+  paused: boolean;
+  fallingSince: string | null;
+  fallingFrom: number | null;
+  percentPerDay: number;
+  lastChange: DomainLevelChange | null;
+  backOnTrack: DomainBackOnTrack | null;
+}
+
+/** The last day the shown level moved. */
+export interface DomainLevelChange {
+  day: string;
+  from: number;
+  to: number;
+}
+
+/** What pauses a fall: the last `days` counted days averaging `average`, with `activeDays` active. */
+export interface DomainBackOnTrack {
+  days: number;
+  average: number;
+  activeMinimum: number;
+  activeDays: number;
+}
+
+/** The best level and rank ever reached, and the first day each was. */
+export interface DomainBest {
+  level: number;
+  levelOn: string | null;
+  rank: number;
+  rankTitle: string;
+  /** Null for Novice. */
+  rankOn: string | null;
+}
+
+/**
+ * Today against the active minimum (the shown level's, going into today), and the multiplier's
+ * 30 non-exception days before today.
+ */
 export interface DomainCurrent {
   todayBase: number;
-  todaySucceeded: boolean;
-  /** "at least 70 base XP". */
+  todayAction: number;
+  activeMinimum: number;
+  todayActive: boolean;
+  todayException: boolean;
+  /** "at least 17 action XP (base XP less sleep)". */
   rule: string;
-  target: number | null;
-  consistency: number;
-  successfulDays: number;
+  activeShare: number;
+  activeDays: number;
   windowDays: number;
   multiplier: number;
   nextTier: DomainTier | null;
+  settledThrough: string;
 }
 
 export interface DomainTier {
@@ -809,15 +867,22 @@ export interface DomainTier {
   daysNeeded: number;
 }
 
+/**
+ * One rung of the ladder: its levels, what holding its first level takes over a full window
+ * (null for Novice), the total XP to reach it, its Gems, and the first day the best rank did.
+ */
 export interface DomainRankRow {
   rank: number;
   title: string;
   level: number;
-  topLevel: number;
-  bar: number;
+  lastLevel: number;
+  average: number | null;
+  activeMinimum: number | null;
+  activeDays: number | null;
   windowDays: number;
+  totalXp: number;
   gems: number;
-  qualifiedOn: string | null;
+  reachedOn: string | null;
 }
 
 /** One domain's last days, oldest first, ending today. */
@@ -827,23 +892,33 @@ export interface DomainDaysRead {
   name: string;
   configured: boolean;
   today: string;
-  /** The success rule's number (70 for Health); null without rules. */
-  target: number | null;
+  /** The last settled day; null without rules. */
+  settledThrough: string | null;
   days: DomainDayRow[];
 }
 
-/** One day: base XP (before any multiplier), paid XP, and whether it succeeded (null without rules). */
+/**
+ * One day: base XP (before any multiplier), its action and passive (sleep) parts, and paid XP.
+ * A configured domain adds the exception comment, whether the day counted and was active, the
+ * active minimum that day, and the levels and rank at its end; those are null without rules.
+ */
 export interface DomainDayRow {
   day: string;
   base: number;
+  action: number;
+  passive: number;
   paid: number;
-  succeeded: boolean | null;
+  exception: string | null;
+  counted: boolean | null;
+  active: boolean | null;
+  activeMinimum: number | null;
+  lifetimeLevel: number | null;
+  consistencyLevel: number | null;
+  level: number | null;
+  rank: number | null;
 }
 
-/**
- * `GET /api/domains/report?days=N` (xp-domains plan §3.11, §3.13): every life domain over its
- * last `days` days, as of `today` (home zone) — the Character page's Reports.
- */
+/** `GET /api/domains/report?days=N`: every life domain over its last `days` days. */
 export interface DomainReportRead {
   today: string;
   days: number;
@@ -851,11 +926,11 @@ export interface DomainReportRead {
 }
 
 /**
- * One life domain over a report's period: the days it covers (`from`–`to`; a configured
- * domain's end yesterday until today succeeds) and the XP credited to them. A configured
- * domain adds the days counted (on or after its start), the successful ones, consistency (0–1)
- * and base XP a day over the days counted, and the level and rank (indexes, 0 is Novice) the
- * period started from against now. Those are null for a domain without rules.
+ * One life domain over a report's period (`from`–`to`; a configured domain's end at the last
+ * settled day) and the XP credited to it. A configured domain adds the days counted, exception
+ * days, active days and share, base XP a counted day, level and rank at the start against the
+ * end, the bests, the ranks the best rank first reached, and its rank each day. Those are null
+ * for a domain without rules.
  */
 export interface DomainReportRow {
   key: string;
@@ -867,29 +942,45 @@ export interface DomainReportRow {
   base: number;
   paid: number;
   daysCounted: number | null;
-  successfulDays: number | null;
-  consistency: number | null;
+  exceptionDays: number | null;
+  activeDays: number | null;
+  activeShare: number | null;
   averageBase: number | null;
   levelFrom: number | null;
   levelTo: number | null;
   rankFrom: number | null;
   rankTo: number | null;
-  /** The rank held now, e.g. "Apprentice". */
+  /** The rank at the end of the period, e.g. "Apprentice". */
   rankTitle: string | null;
+  bestLevelFrom: number | null;
+  bestLevelTo: number | null;
+  bestRank: number | null;
+  bestRankTitle: string | null;
   ranksReached: DomainRankReached[] | null;
+  ranks: DomainReportDay[] | null;
 }
 
-/** A rank a domain entered in a report's period, and the day it qualified. */
+/** A rank the best rank first reached in a report's period, and the day it did. */
 export interface DomainRankReached {
   rank: number;
   title: string;
   qualifiedOn: string;
 }
 
+/** One day of a report's period: the shown level and rank at its end, the best rank, and whether it was an exception day. */
+export interface DomainReportDay {
+  day: string;
+  level: number;
+  rank: number;
+  bestRank: number;
+  exception: boolean;
+}
+
 /**
- * A configured life domain whose level or rank a write changed (xp-domains plan §3.8):
- * `domain` is its currency (`health_xp`), ranks are indexes into its ladder (0 is Novice),
- * and `rankTitle` names the rank after.
+ * A configured life domain whose level, rank or bests a write changed (xp-domains plan §7.4.7):
+ * `domain` is its currency (`health_xp`), ranks are indexes into its ladder (0 is Novice), and
+ * `rankTitle` names the rank after. A new best celebrates; getting back to a level below the
+ * best is a quiet note.
  */
 export interface DomainChange {
   domain: string;
@@ -898,6 +989,30 @@ export interface DomainChange {
   rankFrom: number;
   rankTo: number;
   rankTitle: string;
+  bestLevelFrom: number;
+  bestLevelTo: number;
+  bestRankFrom: number;
+  bestRankTo: number;
+}
+
+/** A day marked as an exception (REWARD-8): sickness, travel, injury. */
+export interface ExceptionDay {
+  day: string;
+  comment: string;
+  /** ISO instant it was last marked. */
+  markedAt: string;
+}
+
+/** `GET /api/domains/exceptions?days=N`: the marked days from `from` to `today`, newest first. */
+export interface ExceptionDaysRead {
+  today: string;
+  from: string;
+  exceptions: ExceptionDay[];
+}
+
+/** Marking or unmarking a day: the day as it now reads (null once unmarked), and what it moved. */
+export interface ExceptionDayResult extends Earned {
+  exception: ExceptionDay | null;
 }
 
 /** What an earning write answers: the entries it wrote, and each domain it moved. */
@@ -1609,6 +1724,14 @@ export interface LifeOsWriteClient {
    * §3.7), which the Character page does when it opens.
    */
   settleDomains(): Promise<Earned>;
+  /**
+   * Mark a day as an exception (REWARD-8, `POST /api/domains/exceptions`): today when `day` is
+   * left out. The comment is required, one line of at most 140 characters; marking a marked
+   * day changes its comment. Answers the day and any level, rank or best it moved.
+   */
+  markException(comment: string, day?: string): Promise<ExceptionDayResult>;
+  /** Unmark an exception day (`POST /api/domains/exceptions/{day}/unmark`). */
+  unmarkException(day: string): Promise<ExceptionDayResult>;
   /** Log a food entry (FOOD-1); answers what it earned (`endFast` can end a fast, which pays). */
   logFood(req: FoodEntryRequest): Promise<FoodWriteResult>;
   /** Replace a food entry as a whole; a day that already paid is re-scored. */

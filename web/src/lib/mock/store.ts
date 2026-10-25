@@ -56,6 +56,8 @@ import type {
   DomainReportRead,
   DomainsRead,
   Earned,
+  ExceptionDayResult,
+  ExceptionDaysRead,
   EventRelation,
   FastActionRequest,
   FoodAction,
@@ -112,7 +114,6 @@ import {
 } from "@/lib/bounty";
 import {
   applyMultiplier,
-  CONFIGURED_DOMAINS,
   domainChanges,
   DomainProgress,
   gemsFor,
@@ -143,7 +144,7 @@ import {
   settleAll,
   valueOf,
 } from "@/lib/mock/task-series";
-import { creditDays, creditedOnFor, foldDomains, localDay } from "@/lib/mock/domain-credit";
+import { creditDays, creditedOnFor, foldDomains, localDay, settledThrough } from "@/lib/mock/domain-credit";
 import { CURRENCIES, coinsToUsd, currency, orderedAmounts, shortfall } from "@/lib/rewards";
 import { sobrietyOn } from "@/lib/sobriety";
 import { foldTimer, timedSecondsBefore, type TimerEvent } from "@/lib/timer";
@@ -1818,17 +1819,27 @@ function settle(
 }
 
 // ---------------------------------------------------------------------------
-// Life domains (REWARD-6 / REWARD-7, xp-domains plan §3.4–3.8): RewardService's domain
-// half. Each earning write prices domain XP from the record as it stood before the write,
-// then pays any rank-up it reached and says which domains moved.
+// Life domains (REWARD-6 / REWARD-7 / REWARD-8, xp-domains plan §3.4–3.8, §7.4): RewardService's
+// domain half and the exception days. Each earning write prices domain XP from the record as it
+// stood before the write, then pays any rank-up the best rank reached and says which domains moved.
 // ---------------------------------------------------------------------------
 
 /** The write in progress: the ledger before it, and its domains folded once, when needed. */
 let pricing: { ledger: MockLedgerEntry[]; folds: DomainProgress[] | null } | null = null;
 
+/** The marked days, as the fold reads them. */
+function markedDays(): string[] {
+  return state.exceptionDays.map((e) => e.day);
+}
+
+/** Every configured domain as the ledger and the marked days read now. */
+function foldNow(ledger: readonly MockLedgerEntry[] = state.ledger): DomainProgress[] {
+  return foldDomains(ledger, todayIso(), markedDays(), settledThrough());
+}
+
 function foldsBefore(): DomainProgress[] {
-  if (!pricing) return foldDomains(state.ledger, todayIso());
-  pricing.folds ??= foldDomains(pricing.ledger, todayIso());
+  if (!pricing) return foldNow();
+  pricing.folds ??= foldNow(pricing.ledger);
   return pricing.folds;
 }
 
@@ -1855,7 +1866,7 @@ function priceDomains(
 
 /**
  * Runs an earning write's reconcile. When it wrote domain XP, it also pays any rank-up the
- * domain reached and answers each domain whose level or rank moved.
+ * best rank reached and answers each domain whose level, rank or bests moved.
  */
 function earning(reconcile: () => Award[]): Earned {
   pricing = { ledger: state.ledger, folds: null };
@@ -1874,15 +1885,14 @@ function earning(reconcile: () => Award[]): Earned {
 }
 
 /**
- * `PayRankUpsAsync`: each rank a configured domain reached on or after the day the wallet
- * opened, paid once under `rank:<domain>:<start level>` and never reversed.
+ * `PayRankUpsAsync`: each rank a configured domain's best rank first reached on or after the
+ * day the wallet opened, paid once under `rank:<domain>:<start level>` and never reversed.
  */
 function payRankUps(): {
   rankUps: { award: Award; currency: string; rank: number }[];
   folds: DomainProgress[];
 } {
-  const today = todayIso();
-  const folds = foldDomains(state.ledger, today);
+  const folds = foldNow();
   const open = state.ledger.find((e) => e.entry === "open");
   if (!open) return { rankUps: [], folds };
   const openedOn = localDay(open.occurredAt);
@@ -1925,15 +1935,13 @@ function payRankUps(): {
 export function mockDomains(): DomainsRead {
   const today = todayIso();
   const credit = creditDays(state.ledger);
+  const folds = foldNow();
   return {
     today,
     domains: CURRENCIES.filter((c) => c.group === "domain").map((c) => {
-      const rules = rulesFor(c.key);
+      const progress = folds.find((p) => p.rules.currency === c.key);
+      if (progress) return toDomainRow(c, progress.totalXp, progress);
       const days = credit.get(c.key) ?? [];
-      if (rules) {
-        const progress = DomainProgress.fold(rules, days, today);
-        return toDomainRow(c, progress.totalXp, progress);
-      }
       return toDomainRow(c, days.filter((d) => d.day <= today).reduce((sum, d) => sum + d.paid, 0), null);
     }),
   };
@@ -1953,7 +1961,14 @@ export function mockDomainDays(reference: string, days = 30): DomainDaysRead {
   if (!match) {
     throw new Error(`'${reference}' isn't a life domain. Expected one of: ${domains.map((c) => c.key).join(", ")}.`);
   }
-  return toDomainDays(match, creditDays(state.ledger).get(match.key) ?? [], todayIso(), days);
+  return toDomainDays(
+    match,
+    creditDays(state.ledger).get(match.key) ?? [],
+    todayIso(),
+    days,
+    state.exceptionDays,
+    settledThrough(),
+  );
 }
 
 /** `GET /api/domains/report?days=N`: every life domain over its last `days` days. */
@@ -1962,11 +1977,12 @@ export function mockDomainReport(days = 30): DomainReportRead {
   if (days > MAX_DOMAIN_DAYS) throw new Error(`Ask for at most ${MAX_DOMAIN_DAYS} days; got ${days}.`);
   const today = todayIso();
   const credit = creditDays(state.ledger);
+  const settled = settledThrough();
   return {
     today,
     days,
     domains: CURRENCIES.filter((c) => c.group === "domain").map((c) =>
-      toDomainReportRow(c, credit.get(c.key) ?? [], today, days),
+      toDomainReportRow(c, credit.get(c.key) ?? [], today, days, markedDays(), settled),
     ),
   };
 }
@@ -1987,9 +2003,85 @@ export function mockSettleDomains(): Earned {
 
 /** The configured domains as they read now (tests and the seed). */
 export function mockDomainFolds(): DomainProgress[] {
-  return CONFIGURED_DOMAINS.map((rules) =>
-    DomainProgress.fold(rules, creditDays(state.ledger).get(rules.currency) ?? [], todayIso()),
-  );
+  return foldNow();
+}
+
+const EXCEPTION_DAYS_DEFAULT = 90;
+const EXCEPTION_COMMENT_MAX = 140;
+
+/** `GET /api/domains/exceptions?days=N`: the marked days among the last `days`, newest first. */
+export function mockExceptionDays(days = EXCEPTION_DAYS_DEFAULT): ExceptionDaysRead {
+  if (!Number.isInteger(days) || days < 1 || days > MAX_DOMAIN_DAYS) {
+    throw new Error(`Ask for 1 to ${MAX_DOMAIN_DAYS} days; got ${days}.`);
+  }
+  const today = todayIso();
+  const from = addDays(today, 1 - days);
+  return {
+    today,
+    from,
+    exceptions: state.exceptionDays
+      .filter((e) => e.day >= from && e.day <= today)
+      .sort((a, b) => b.day.localeCompare(a.day))
+      .map((e) => ({ ...e })),
+  };
+}
+
+// Control characters and Unicode's own line breaks: an exception day's comment is one line.
+// eslint-disable-next-line no-control-regex
+const LINE_BREAK = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+
+/** `ExceptionDayService.Normalize`: the comment trimmed, or a refusal in words. */
+function exceptionComment(comment: string): string {
+  const text = (comment ?? "").trim();
+  if (text.length === 0) {
+    throw new Error("Say why the day is an exception (sick, injured, travelling…): the comment is required.");
+  }
+  if (LINE_BREAK.test(text)) {
+    throw new Error("An exception day's comment is one line: take out the line break.");
+  }
+  if (text.length > EXCEPTION_COMMENT_MAX) {
+    throw new Error(`An exception day's comment is up to ${EXCEPTION_COMMENT_MAX} characters; that one is ${text.length}.`);
+  }
+  return text;
+}
+
+/** `RewardService.ChangeDomainInputsAsync`: folds before and after a change, then pays what it reached. */
+function changeDomainInputs(change: () => void): Earned {
+  const before = foldNow();
+  change();
+  const { rankUps, folds } = payRankUps();
+  emit();
+  return { awards: rankUps.map((r) => r.award), progress: domainChanges(before, folds, rankUps) };
+}
+
+/**
+ * `POST /api/domains/exceptions`: marks `day` (today when left out) as an exception. Marking it
+ * again with the same comment writes nothing; a different comment replaces it.
+ */
+export function mockMarkException(comment: string, day?: string): ExceptionDayResult {
+  const text = exceptionComment(comment);
+  const today = todayIso();
+  const on = day ?? today;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) throw new Error(`'${on}' isn't a date (yyyy-MM-dd).`);
+  if (on > today) {
+    throw new Error(`An exception day is today or earlier; ${on} hasn't happened yet (today is ${today}).`);
+  }
+  const current = state.exceptionDays.find((e) => e.day === on);
+  if (current && current.comment === text) return { exception: { ...current }, awards: [], progress: [] };
+  const marked = { day: on, comment: text, markedAt: nowIso() };
+  const earned = changeDomainInputs(() => {
+    state.exceptionDays = [...state.exceptionDays.filter((e) => e.day !== on), marked];
+  });
+  return { exception: { ...marked }, ...earned };
+}
+
+/** `POST /api/domains/exceptions/{day}/unmark`: unmarks `day`; a day that isn't marked writes nothing. */
+export function mockUnmarkException(day: string): ExceptionDayResult {
+  if (!state.exceptionDays.some((e) => e.day === day)) return { exception: null, awards: [], progress: [] };
+  const earned = changeDomainInputs(() => {
+    state.exceptionDays = state.exceptionDays.filter((e) => e.day !== day);
+  });
+  return { exception: null, ...earned };
 }
 
 function reconcileStatus(subjectId: string, at: string): Award[] {

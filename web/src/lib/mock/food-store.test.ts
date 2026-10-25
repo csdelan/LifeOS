@@ -59,9 +59,9 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
     const diet = earned.awards.find((a) => a.awardKey === `diet:${addDays(todayIso(), -2)}`)!;
     expect(diet).toMatchObject({ subject: null, base: { health_xp: 32 }, multipliers: { health_xp: 1.2 }, amounts: { health_xp: 38 } });
     expect(diet.note).toMatch(/^Food day \w{3} \w{3} \d+$/);
-    // Health was 40 XP short of level 10: a week of diet XP reaches it, and Apprentice with it.
+    // Health was 37 XP short of level 10: a week of diet XP reaches it, and Apprentice with it.
     expect(earned.progress).toEqual([
-      { domain: "health_xp", levelFrom: 9, levelTo: 10, rankFrom: 0, rankTo: 1, rankTitle: "Apprentice" },
+      { domain: "health_xp", levelFrom: 9, levelTo: 10, rankFrom: 0, rankTo: 1, rankTitle: "Apprentice", bestLevelFrom: 9, bestLevelTo: 10, bestRankFrom: 0, bestRankTo: 1 },
     ]);
 
     expect(mockSettleFood().awards).toEqual([]);
@@ -205,9 +205,9 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
   });
 
   it("keeps Health's seeded history until the Food Log settles", () => {
-    expect(health().totalXp).toBe(3_560);
+    expect(health().totalXp).toBe(1_439);
     mockSettleFood();
-    expect(health().totalXp).toBeGreaterThan(3_560);
+    expect(health().totalXp).toBeGreaterThan(1_439);
   });
   it("keeps a photo as an artifact on a new version, through an edit, until it's removed (FOOD-5)", () => {
     const meal = mockLogFood({ name: "Ramen", score: 3, calories: 900 }).meal!;

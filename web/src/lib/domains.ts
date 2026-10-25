@@ -1,89 +1,146 @@
 /**
- * Life domains on the web (REWARD-6 / REWARD-7, xp-domains plan §3.8, §3.12): reading
- * `/api/domains` leniently, and the words the Character page and the level-up toasts use.
+ * Life domains on the web (REWARD-6 / REWARD-7 / REWARD-8, xp-domains plan §7.4.7–§7.4.9):
+ * reading `/api/domains` leniently, and the words the Character page and the toasts use.
  */
 import type {
   DomainChange,
+  DomainConsistencyNeed,
+  DomainCurrent,
   DomainDaysRead,
-  DomainNextRank,
+  DomainRankRow,
+  DomainReportDay,
   DomainReportRead,
+  DomainReportRow,
   DomainRow,
   DomainsRead,
   Earned,
+  ExceptionDay,
+  ExceptionDayResult,
+  ExceptionDaysRead,
 } from "@/lib/production-ui-types";
+import { formatDay } from "@/lib/dates";
 import { currency, normalizeAward } from "@/lib/rewards";
 
 const num = (v: unknown) => Number(v ?? 0);
 const numOrNull = (v: unknown) => (v == null ? null : Number(v));
+const boolOrNull = (v: unknown) => (v == null ? null : Boolean(v));
 
 // --- Normalizing (int64 and decimal fields may arrive as strings) -------------
 
+function normalizeNeed(n: DomainConsistencyNeed): DomainConsistencyNeed {
+  return {
+    ...n,
+    level: num(n.level),
+    windowDays: num(n.windowDays),
+    average: num(n.average),
+    averageNow: num(n.averageNow),
+    averageMet: !!n.averageMet,
+    activeMinimum: num(n.activeMinimum),
+    activeDaysNeeded: num(n.activeDaysNeeded),
+    activeDays: num(n.activeDays),
+    activeDaysMet: !!n.activeDaysMet,
+    ageNeeded: num(n.ageNeeded),
+    age: num(n.age),
+    ageMet: !!n.ageMet,
+  };
+}
+
+function normalizeCurrent(c: DomainCurrent): DomainCurrent {
+  return {
+    ...c,
+    todayBase: num(c.todayBase),
+    todayAction: num(c.todayAction),
+    activeMinimum: num(c.activeMinimum),
+    todayActive: !!c.todayActive,
+    todayException: !!c.todayException,
+    activeShare: num(c.activeShare),
+    activeDays: num(c.activeDays),
+    windowDays: num(c.windowDays),
+    multiplier: num(c.multiplier),
+    nextTier: c.nextTier
+      ? {
+          minShare: num(c.nextTier.minShare),
+          multiplier: num(c.nextTier.multiplier),
+          daysNeeded: num(c.nextTier.daysNeeded),
+        }
+      : null,
+  };
+}
+
+function normalizeRank(r: DomainRankRow): DomainRankRow {
+  return {
+    ...r,
+    rank: num(r.rank),
+    level: num(r.level),
+    lastLevel: num(r.lastLevel),
+    average: numOrNull(r.average),
+    activeMinimum: numOrNull(r.activeMinimum),
+    activeDays: numOrNull(r.activeDays),
+    windowDays: num(r.windowDays),
+    totalXp: num(r.totalXp),
+    gems: num(r.gems),
+    reachedOn: r.reachedOn ?? null,
+  };
+}
+
 export function normalizeDomainRow(raw: DomainRow): DomainRow {
   const l = raw.lifetime;
-  const n = raw.nextRank;
-  const c = raw.current;
+  const c = raw.consistency;
+  const s = raw.shown;
+  const b = raw.best;
   return {
     ...raw,
     totalXp: num(raw.totalXp),
     lifetime: l
       ? {
-          ...l,
+          start: l.start ?? null,
           level: num(l.level),
-          rawLevel: num(l.rawLevel),
-          topLevel: num(l.topLevel),
-          rank: num(l.rank),
           levelXp: num(l.levelXp),
           xpIntoLevel: num(l.xpIntoLevel),
           xpToNext: num(l.xpToNext),
-          bankedXp: num(l.bankedXp),
-          start: l.start ?? null,
-          qualifiedOn: l.qualifiedOn ?? null,
         }
       : null,
-    nextRank: n
+    consistency: c
       ? {
-          ...n,
-          rank: num(n.rank),
-          level: num(n.level),
-          bar: num(n.bar),
-          windowDays: num(n.windowDays),
-          consistency: num(n.consistency),
-          successfulDays: num(n.successfulDays),
-          requiredDays: num(n.requiredDays),
-          daysNeeded: num(n.daysNeeded),
-          daysOld: num(n.daysOld),
-        }
-      : null,
-    current: c
-      ? {
-          ...c,
-          todayBase: num(c.todayBase),
-          target: numOrNull(c.target),
-          consistency: num(c.consistency),
-          successfulDays: num(c.successfulDays),
+          level: num(c.level),
           windowDays: num(c.windowDays),
-          multiplier: num(c.multiplier),
-          nextTier: c.nextTier
+          from: c.from ?? null,
+          to: c.to ?? null,
+          averageBase: num(c.averageBase),
+          next: c.next ? normalizeNeed(c.next) : null,
+        }
+      : null,
+    shown: s
+      ? {
+          ...s,
+          level: num(s.level),
+          exact: num(s.exact),
+          target: num(s.target),
+          rank: num(s.rank),
+          limitedBy: s.limitedBy ?? null,
+          falling: !!s.falling,
+          paused: !!s.paused,
+          fallingSince: s.fallingSince ?? null,
+          fallingFrom: numOrNull(s.fallingFrom),
+          percentPerDay: num(s.percentPerDay),
+          lastChange: s.lastChange
+            ? { day: s.lastChange.day, from: num(s.lastChange.from), to: num(s.lastChange.to) }
+            : null,
+          backOnTrack: s.backOnTrack
             ? {
-                minShare: num(c.nextTier.minShare),
-                multiplier: num(c.nextTier.multiplier),
-                daysNeeded: num(c.nextTier.daysNeeded),
+                days: num(s.backOnTrack.days),
+                average: num(s.backOnTrack.average),
+                activeMinimum: num(s.backOnTrack.activeMinimum),
+                activeDays: num(s.backOnTrack.activeDays),
               }
             : null,
         }
       : null,
-    ranks: raw.ranks
-      ? raw.ranks.map((r) => ({
-          ...r,
-          rank: num(r.rank),
-          level: num(r.level),
-          topLevel: num(r.topLevel),
-          bar: num(r.bar),
-          windowDays: num(r.windowDays),
-          gems: num(r.gems),
-          qualifiedOn: r.qualifiedOn ?? null,
-        }))
+    best: b
+      ? { ...b, level: num(b.level), levelOn: b.levelOn ?? null, rank: num(b.rank), rankOn: b.rankOn ?? null }
       : null,
+    current: raw.current ? normalizeCurrent(raw.current) : null,
+    ranks: raw.ranks ? raw.ranks.map(normalizeRank) : null,
   };
 }
 
@@ -94,12 +151,21 @@ export function normalizeDomains(raw: DomainsRead): DomainsRead {
 export function normalizeDomainDays(raw: DomainDaysRead): DomainDaysRead {
   return {
     ...raw,
-    target: numOrNull(raw.target),
+    settledThrough: raw.settledThrough ?? null,
     days: (raw.days ?? []).map((d) => ({
       day: d.day,
       base: num(d.base),
+      action: num(d.action),
+      passive: num(d.passive),
       paid: num(d.paid),
-      succeeded: d.succeeded ?? null,
+      exception: d.exception ?? null,
+      counted: boolOrNull(d.counted),
+      active: boolOrNull(d.active),
+      activeMinimum: numOrNull(d.activeMinimum),
+      lifetimeLevel: numOrNull(d.lifetimeLevel),
+      consistencyLevel: numOrNull(d.consistencyLevel),
+      level: numOrNull(d.level),
+      rank: numOrNull(d.rank),
     })),
   };
 }
@@ -113,15 +179,29 @@ export function normalizeDomainReport(raw: DomainReportRead): DomainReportRead {
       base: num(d.base),
       paid: num(d.paid),
       daysCounted: numOrNull(d.daysCounted),
-      successfulDays: numOrNull(d.successfulDays),
-      consistency: numOrNull(d.consistency),
+      exceptionDays: numOrNull(d.exceptionDays),
+      activeDays: numOrNull(d.activeDays),
+      activeShare: numOrNull(d.activeShare),
       averageBase: numOrNull(d.averageBase),
       levelFrom: numOrNull(d.levelFrom),
       levelTo: numOrNull(d.levelTo),
       rankFrom: numOrNull(d.rankFrom),
       rankTo: numOrNull(d.rankTo),
       rankTitle: d.rankTitle ?? null,
+      bestLevelFrom: numOrNull(d.bestLevelFrom),
+      bestLevelTo: numOrNull(d.bestLevelTo),
+      bestRank: numOrNull(d.bestRank),
+      bestRankTitle: d.bestRankTitle ?? null,
       ranksReached: d.ranksReached ? d.ranksReached.map((r) => ({ ...r, rank: num(r.rank) })) : null,
+      ranks: d.ranks
+        ? d.ranks.map((r) => ({
+            day: r.day,
+            level: num(r.level),
+            rank: num(r.rank),
+            bestRank: num(r.bestRank),
+            exception: !!r.exception,
+          }))
+        : null,
     })),
   };
 }
@@ -133,6 +213,11 @@ export function normalizeProgress(raw: DomainChange[] | null | undefined): Domai
     levelTo: num(c.levelTo),
     rankFrom: num(c.rankFrom),
     rankTo: num(c.rankTo),
+    // An older API had no bests: read them as the level and rank.
+    bestLevelFrom: num(c.bestLevelFrom ?? c.levelFrom),
+    bestLevelTo: num(c.bestLevelTo ?? c.levelTo),
+    bestRankFrom: num(c.bestRankFrom ?? c.rankFrom),
+    bestRankTo: num(c.bestRankTo ?? c.rankTo),
   }));
 }
 
@@ -143,6 +228,19 @@ export function normalizeEarned(raw: unknown): Earned {
     awards: Array.isArray(r.awards) ? r.awards.map(normalizeAward) : [],
     progress: normalizeProgress(r.progress),
   };
+}
+
+function normalizeException(e: ExceptionDay): ExceptionDay {
+  return { day: e.day, comment: e.comment ?? "", markedAt: e.markedAt ?? "" };
+}
+
+export function normalizeExceptionDays(raw: ExceptionDaysRead): ExceptionDaysRead {
+  return { today: raw.today, from: raw.from, exceptions: (raw.exceptions ?? []).map(normalizeException) };
+}
+
+export function normalizeExceptionResult(raw: unknown): ExceptionDayResult {
+  const r = (raw ?? {}) as Partial<ExceptionDayResult>;
+  return { exception: r.exception ? normalizeException(r.exception) : null, ...normalizeEarned(raw) };
 }
 
 // --- Words ----------------------------------------------------------------------
@@ -162,19 +260,10 @@ export function percent(share: number): string {
   return `${Math.round(share * 100)}%`;
 }
 
-/** A report period in words: "30 days", "3 months", "12 months". */
+/** A report period in words: "7 days", "30 days", "3 months", "12 months". */
 export function periodLabel(days: number): string {
   const months: Record<number, string> = { 90: "3 months", 180: "6 months", 365: "12 months" };
   return months[days] ?? `${days} ${days === 1 ? "day" : "days"}`;
-}
-
-/**
- * How much of a period a value covers: "all 30 days", "12 of 30 days", or "no days yet" for a
- * domain that hasn't started (§3.13).
- */
-export function historyText(daysCounted: number, days: number): string {
-  if (daysCounted === 0) return "no days yet";
-  return daysCounted >= days ? `all ${days} days` : `${daysCounted} of ${days} days`;
 }
 
 /** "×1.2". */
@@ -182,38 +271,196 @@ export function multiplierLabel(multiplier: number): string {
   return `×${multiplier.toFixed(1)}`;
 }
 
-/** "a successful day on 60% of days over 30 days". */
-export function rankRequirement(rank: { bar: number; windowDays: number }): string {
-  return rank.windowDays === 0
-    ? "where every domain starts"
-    : `a successful day on ${percent(rank.bar)} of days over ${rank.windowDays} days`;
+/** "Oct 24": a home-zone day, short. */
+export function shortDay(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** "Best: level 52, Veteran". */
+export function bestText(best: { level: number; rankTitle: string }): string {
+  return `Best: level ${best.level}, ${best.rankTitle}`;
+}
+
+/** How far a 1%-a-day fall moves from `exact` in a day, in words: "about half a level a day". */
+export function fallSpeedText(exact: number, percentPerDay: number): string {
+  const perDay = (exact * percentPerDay) / 100;
+  if (perDay >= 1.5) return `about ${Math.round(perDay)} levels a day`;
+  const words: [number, string][] = [
+    [0.1, "a tenth of a level"],
+    [0.2, "a fifth of a level"],
+    [0.25, "a quarter of a level"],
+    [1 / 3, "a third of a level"],
+    [0.5, "half a level"],
+    [2 / 3, "two-thirds of a level"],
+    [0.75, "three-quarters of a level"],
+    [1, "a level"],
+  ];
+  const nearest = words.reduce((best, w) => (Math.abs(w[0] - perDay) < Math.abs(best[0] - perDay) ? w : best));
+  return `about ${nearest[1]} a day`;
 }
 
 /**
- * What still stands between the domain and its next rank (§3.12). While the level is
- * there (capped): "Journeyman needs a successful day on 60% of days over 30 days: 14 of 18
- * so far". Otherwise the level leads: "Apprentice at level 10, with a successful day on 50%
- * of days over 14 days: met". A domain younger than the window says how old it is.
+ * The card's one state line (§7.4.9): falling with what pauses it, paused, or which level sets
+ * the shown level now.
  */
-export function nextRankText(next: DomainNextRank): string {
-  const tally = next.barMet ? "met" : `${next.successfulDays} of ${next.requiredDays} so far`;
-  const age = next.oldEnough ? "" : ` · ${next.daysOld} of ${next.windowDays} days old`;
-  return next.levelReached
-    ? `${next.title} needs ${rankRequirement(next)}: ${tally}${age}`
-    : `${next.title} at level ${next.level}, with ${rankRequirement(next)}: ${tally}${age}`;
+export function stateLine(row: DomainRow): string {
+  const shown = row.shown!;
+  const lifetime = row.lifetime!;
+  if (shown.paused) {
+    return row.current?.todayException
+      ? `Paused: today is an exception day, so the fall toward ${shown.target} waits.`
+      : `Paused: your last ${shown.backOnTrack?.days ?? 7} days are back on track.`;
+  }
+  if (shown.falling) {
+    const fall = `Falling ${shown.percentPerDay}% a day toward ${shown.target} (${fallSpeedText(shown.exact, shown.percentPerDay)}).`;
+    const b = shown.backOnTrack;
+    return b
+      ? `${fall} ${b.days} days back on track pauses it: ${b.average}+ base XP a day on average, with ${b.activeDays} active.`
+      : fall;
+  }
+  if (shown.limitedBy === "lifetime") {
+    return lifetime.xpToNext > 0
+      ? `Lifetime XP sets your level: ${lifetime.xpToNext.toLocaleString()} XP to level ${lifetime.level + 1}.`
+      : "Lifetime XP sets your level.";
+  }
+  const days = row.consistency?.windowDays ?? 0;
+  if (days === 0) return "Your level starts counting once a day settles.";
+  return `Your last ${days === 90 ? "90 days" : `${days} ${days === 1 ? "day" : "days"}`} support level ${row.consistency!.level}.`;
+}
+
+/** "Down from 96 on Oct 24 · falling 1% a day toward 90", or null while nothing has fallen. */
+export function fallHistoryText(row: DomainRow): string | null {
+  const shown = row.shown!;
+  if (!shown.fallingSince || shown.fallingFrom == null || shown.level >= shown.fallingFrom) return null;
+  const since = `Down from ${shown.fallingFrom} on ${shortDay(shown.fallingSince)}`;
+  return shown.falling ? `${since} · falling ${shown.percentPerDay}% a day toward ${shown.target}` : since;
+}
+
+/** One part of what the next consistency level needs, and whether it's met. */
+export interface NeedPart {
+  key: "average" | "active" | "age";
+  text: string;
+  met: boolean;
 }
 
 /**
- * The toast for a domain that moved (§3.8): a rank-up names the title, a level-up the level,
- * and a level lost says so quietly.
+ * What the next consistency level needs (§7.4.9), part by part: "a 90-day average of 49 base
+ * XP (you're at 47)", "62 active days of 90 (you have 60)", and, while the domain is young,
+ * "49 active days so far (you have 30)".
  */
-export function progressMessage(change: DomainChange): { kind: "rank" | "level" | "lost"; text: string } {
+export function needParts(next: DomainConsistencyNeed): NeedPart[] {
+  const days = next.windowDays;
+  const parts: NeedPart[] = [
+    {
+      key: "average",
+      text: `a ${days}-day average of ${next.average} base XP (you're at ${next.averageNow.toLocaleString()})`,
+      met: next.averageMet,
+    },
+    {
+      key: "active",
+      text: `${next.activeDaysNeeded} active ${next.activeDaysNeeded === 1 ? "day" : "days"} of ${days} (you have ${next.activeDays})`,
+      met: next.activeDaysMet,
+    },
+  ];
+  if (!next.ageMet) {
+    parts.push({
+      key: "age",
+      text: `${next.ageNeeded} active days so far (you have ${next.age})`,
+      met: false,
+    });
+  }
+  return parts;
+}
+
+/** "Level 48 needs a 90-day average of 49 base XP (you're at 47) and 62 active days of 90 (you have 60)." */
+export function needText(next: DomainConsistencyNeed): string {
+  if (next.windowDays === 0) return `Level ${next.level} needs days to settle first.`;
+  const parts = needParts(next).map((p) => p.text);
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
+  return `Level ${next.level} needs ${list}.`;
+}
+
+/** Today against the active minimum, in words (§7.4.9). */
+export function todayText(current: DomainCurrent): string {
+  if (current.todayException) return "Today is an exception day: it doesn't count for or against you.";
+  return current.todayActive
+    ? `Today: ${current.todayAction} of ${current.activeMinimum} action XP, active`
+    : `Today: ${current.todayAction} of ${current.activeMinimum} action XP to count as active`;
+}
+
+/** "×1.2 · 24 of the last 30 days active". */
+export function multiplierChipText(current: DomainCurrent): string {
+  return `${multiplierLabel(current.multiplier)} · ${current.activeDays} of the last ${current.windowDays} days active`;
+}
+
+/** What holding a rank's first level takes: "a 90-day average of 25 base XP, 48 active days of 90 (10+ action XP)". */
+export function rankHoldText(rank: DomainRankRow): string {
+  if (rank.average == null) return "where every domain starts";
+  return `a ${rank.windowDays}-day average of ${rank.average} base XP, ${rank.activeDays} active days of ${rank.windowDays} (${rank.activeMinimum}+ action XP)`;
+}
+
+/** "Marked Oct 24 as an exception": the confirmation a mark answers. */
+export function exceptionMarkedMessage(day: string | undefined): string {
+  return day ? `Marked ${shortDay(day)} as an exception` : "Marked today as an exception";
+}
+
+/** "Unmarked Oct 24: it counts again". */
+export function exceptionUnmarkedMessage(day: string): string {
+  return `Unmarked ${shortDay(day)}: it counts again`;
+}
+
+/** What moved, as a toast says it (§7.4.7). */
+export type ProgressKind = "rank" | "level" | "back" | "lost";
+
+/**
+ * The toast for a domain that moved: a new best rank names the title (grand), a new best level
+ * the level (full), getting back to a level below the best is a quiet note, and a level lost
+ * says so quietly.
+ */
+export function progressMessage(change: DomainChange): { kind: ProgressKind; text: string } {
   const name = domainNameOf(change.domain);
-  if (change.rankTo > change.rankFrom) {
+  if (change.bestRankTo > change.bestRankFrom) {
     return { kind: "rank", text: `You're now a ${name} ${change.rankTitle}.` };
   }
-  if (change.levelTo > change.levelFrom) {
-    return { kind: "level", text: `${domainSymbol(change.domain)} ${name} level ${change.levelTo}!`.trim() };
+  if (change.bestLevelTo > change.bestLevelFrom) {
+    return { kind: "level", text: `${domainSymbol(change.domain)} ${name} level ${change.bestLevelTo}!`.trim() };
   }
-  return { kind: "lost", text: `${name} back to level ${change.levelTo}` };
+  if (change.levelTo > change.levelFrom) {
+    return { kind: "back", text: `${name} back to level ${change.levelTo}` };
+  }
+  return { kind: "lost", text: `${name} down to level ${change.levelTo}` };
+}
+
+// --- Report words ---------------------------------------------------------------
+
+/** One configured domain's rank over a period, as the rank chart plots it. */
+export interface RankSeries {
+  key: string;
+  name: string;
+  days: DomainReportDay[];
+  /** Rank titles, Novice first. */
+  titles: string[];
+}
+
+/** "Health: Novice at the start, Apprentice at the end, best Apprentice." */
+export function rankSummary(s: RankSeries): string {
+  const first = s.days[0];
+  const last = s.days.at(-1);
+  if (!first || !last) return `${s.name}: no days yet.`;
+  const title = (rank: number) => s.titles[rank] ?? `rank ${rank}`;
+  const start = title(first.rank);
+  const end = title(last.rank);
+  const trend = start === end ? `${end} throughout` : `${start} at the start, ${end} at the end`;
+  return `${s.name}: ${trend}, best ${title(last.bestRank)}.`;
+}
+
+/** "Level 12 (from 9) · Apprentice Oct 24": the bests a period reached. */
+export function newBestsText(d: DomainReportRow): string | null {
+  const parts: string[] = [];
+  if (d.bestLevelFrom != null && d.bestLevelTo != null && d.bestLevelTo > d.bestLevelFrom) {
+    parts.push(`Level ${d.bestLevelTo} (from ${d.bestLevelFrom})`);
+  }
+  for (const r of d.ranksReached ?? []) parts.push(`${r.title} ${formatDay(r.qualifiedOn)}`);
+  return parts.length > 0 ? parts.join(" · ") : null;
 }

@@ -2679,7 +2679,14 @@ Build:      built
 ### REWARD-6 — Life domains earn their own XP and chart my life balance
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-10-25 — X11 landed):** Reports plot **each configured domain's rank over
+time**: a step line per domain across 7 days to a year, the best rank dotted and exception
+days hatched, with a table view. "Since the start" shows each level with a tick at its best,
+and the By domain table counts days counted, exception days and active days, the level and
+rank from start to end, the best rank and the bests the period reached. Build → `built`.
+
 
 **Update (2026-10-25 — levels v2 planned):** the cross-domain report becomes **each
 domain's rank over time**, since a rank now follows recent consistency and can fall
@@ -2752,7 +2759,18 @@ Finance report XP only until they get rules. Build stays `building`.
 ### REWARD-7 — Each life domain levels up, ranks up on consistency, and rewards a steady streak
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-10-25 — X11 landed):** the web runs levels v2. The Character page shows each
+configured domain's shown level with its best, one line saying what sets it now (falling
+toward a target with what pauses it, paused, lifetime XP or the last 90 days), the lifetime
+and consistency levels with what the next consistency level needs, today's action XP against
+the active minimum, the multiplier and the rank ladder with what holding each rank takes. A
+new best rank gets the grand celebration and a new best level the full one; getting back to
+a level below the best is a quiet note and a lost level a quiet toast saying why. A best
+reached as days settle is celebrated once, the next time the page opens. Build → `built`;
+calibration continues in use (xp-domains plan §2.4).
+
 
 **Update (2026-10-25 — X10 landed):** the kernel runs levels v2.
 - Health's lifetime level is on the cheaper cubic curve. The consistency level is the
@@ -2907,7 +2925,13 @@ successful day gets retuned after a few weeks of real XP.
 ### REWARD-8 — I can mark a day as an exception, so sickness or travel doesn't count against my domains
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-10-25 — X11 landed):** the Character page lists the last 90 days' exception
+days with Unmark, and **Mark a day as an exception** marks today, yesterday or an earlier day
+with a one-line comment (140 characters at most). Marked days are hatched on the daily chart
+and the rank chart. Build → `built`.
+
 
 **Update (2026-10-25 — X10 landed):** the fold skips marked days. They don't count toward
 consistency or the multiplier, the last 90 days reach back past them, and a fall pauses on
@@ -4081,8 +4105,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 - **Levels v2** (REWARD-7 / REWARD-8 / D17): exception days (migration 0043, `bsk`, the API),
   the consistency level, the shown level's 1% fall, rank from the shown level, best level and
   rank, the new lifetime curve, the multiplier's active-day success, Gems on a new best, the
-  simulator, then the Character page and reports. — **Open** (planned in
-  [xp-domains-plan.md](xp-domains-plan.md) §7, X9–X11).
+  simulator, then the Character page and reports. — **Shipped** (X9–X11 in
+  [xp-domains-plan.md](xp-domains-plan.md) §7, migration 0043). Calibration continues in use.
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;

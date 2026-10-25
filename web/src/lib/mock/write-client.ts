@@ -8,11 +8,14 @@ import { inferChildRelation, renamedMessage } from "@/lib/production-ui-types";
 import { extensionForMime, sha256Hex } from "@/lib/artifacts";
 import { redemptionMessage } from "@/lib/rewards";
 import { foodWriteMessage } from "@/lib/food";
+import { exceptionMarkedMessage, exceptionUnmarkedMessage } from "@/lib/domains";
 import {
   addEdge,
   earnDay,
   earnStatus,
   mockSettleDomains,
+  mockMarkException,
+  mockUnmarkException,
   mockCloseFoodDay,
   mockDeleteFood,
   mockEditFood,
@@ -204,6 +207,22 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       const earned = mockSettleDomains();
       if (earned.awards.length > 0) bump();
       return earned;
+    },
+
+    async markException(comment, day) {
+      await wait();
+      const result = mockMarkException(comment, day);
+      notify(exceptionMarkedMessage(result.exception?.day ?? day));
+      bump();
+      return result;
+    },
+
+    async unmarkException(day) {
+      await wait();
+      const result = mockUnmarkException(day);
+      notify(exceptionUnmarkedMessage(day));
+      bump();
+      return result;
     },
 
     async logFood(req) {

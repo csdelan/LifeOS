@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { celebrate } from "@/lib/celebrate";
-import { addDays, todayIso } from "@/lib/dates";
+import { addDays, formatDay, formatDayFull, todayIso } from "@/lib/dates";
+import { shortDay } from "@/lib/domains";
 import { clearMockActivity, setMockOura } from "@/lib/mock/activity-store";
 import { getState, resetStore } from "@/lib/mock/store";
 import { createMockWriteClient } from "@/lib/mock/write-client";
@@ -37,12 +38,19 @@ vi.mock("@/lib/client", async (importOriginal) => ({
 }));
 
 beforeEach(() => {
+  // Midday, so yesterday has settled (days settle at 4 a.m.).
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 9, 25, 12, 0, 0));
   resetStore();
   clearMockActivity();
   localStorage.clear();
   vi.clearAllMocks();
   router.search = {};
   writes = createMockWriteClient();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function renderPage() {
@@ -58,27 +66,45 @@ function renderPage() {
 
 const healthCard = async () => within(await screen.findByRole("region", { name: "Health" }));
 
-describe("Character page (xp-domains plan §3.12)", () => {
-  it("shows Health's lifetime beside how it's going now, and settles once on opening", async () => {
+describe("Character page (xp-domains plan §7.4.9)", () => {
+  it("shows Health's level, its best, what sets it, its two levels and today; and settles once on opening", async () => {
     const settle = vi.spyOn(writes, "settleDomains");
     renderPage();
     const card = await healthCard();
 
     expect(card.getByText("Level 9")).toBeInTheDocument();
     expect(card.getByText("Novice")).toBeInTheDocument();
-    expect(card.getByRole("progressbar", { name: "Progress to Health level 10" })).toBeInTheDocument();
-    expect(card.getByText(/· 40 to level 10/)).toBeInTheDocument();
-    expect(
-      card.getByText("Apprentice at level 10, with a successful day on 50% of days over 14 days: met"),
-    ).toBeInTheDocument();
-    expect(card.getByText(/3,560 Health XP in all/)).toBeInTheDocument();
+    expect(card.getByText(`Best: level 9, Novice · ${formatDay(addDays(todayIso(), -3))}`)).toBeInTheDocument();
+    expect(card.getByText("Lifetime XP sets your level: 37 XP to level 10.")).toBeInTheDocument();
 
-    expect(card.getByRole("img", { name: "Today: 0 of 60 base XP" })).toBeInTheDocument();
-    expect(card.getByText("24 of the last 30 days successful")).toBeInTheDocument();
-    expect(card.getByText("×1.2 · 80% of the last 30 days")).toBeInTheDocument();
-    expect(card.getByText("2 more successful days in the window for ×1.3")).toBeInTheDocument();
+    // Lifetime: 239 of the 276 XP level 9 costs.
+    expect(card.getByText("Lifetime level 9")).toBeInTheDocument();
+    expect(card.getByRole("progressbar", { name: "Progress to Health lifetime level 10" })).toHaveAttribute(
+      "aria-valuetext",
+      "239 of 276 XP",
+    );
+    expect(card.getByText(/· 37 to level 10/)).toBeInTheDocument();
+
+    // Consistency: the last 43 counted days support 17; 18 needs a higher average.
+    expect(card.getByText("Consistency level 17")).toBeInTheDocument();
+    expect(card.getByRole("progressbar", { name: "Health average toward consistency level 18" })).toBeInTheDocument();
+    const needs = within(card.getByRole("list", { name: "What consistency level 18 needs" }));
+    expect(needs.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "a 43-day average of 30 base XP (you're at 29.1): not yet",
+      "25 active days of 43 (you have 34): met",
+    ]);
+    expect(card.getByText(/1,439 Health XP in all · since .+ · 29\.1 base XP a day over the last 43 days/)).toBeInTheDocument();
+
+    expect(card.getByRole("img", { name: "Today: 0 of 10 action XP to count as active" })).toBeInTheDocument();
+    expect(card.getByText("×1.2 · 24 of the last 30 days active")).toBeInTheDocument();
+    expect(card.getByText("2 more active days in the window for ×1.3")).toBeInTheDocument();
+    expect(
+      card.getByText("An active day is at least 10 action XP (base XP less sleep). Days count once they settle at 4 a.m."),
+    ).toBeInTheDocument();
 
     expect(settle).toHaveBeenCalledTimes(1);
+    // Nothing kept yet: the page keeps the current best without celebrating it.
+    await waitFor(() => expect(localStorage.getItem("lifeos.domains.best")).not.toBeNull());
     expect(toast).not.toHaveBeenCalled();
   });
 
@@ -100,16 +126,18 @@ describe("Character page (xp-domains plan §3.12)", () => {
     expect(sync).not.toHaveBeenCalled();
   });
 
-  it("lists all 11 ranks with the one held marked and each requirement", async () => {
+  it("lists all 11 ranks with the one held marked and what holding each takes", async () => {
     renderPage();
     const ladder = within(await screen.findByRole("region", { name: "Health ranks" }));
     const ranks = ladder.getAllByRole("listitem");
     expect(ranks).toHaveLength(11);
     expect(ranks[0]).toHaveAttribute("aria-current", "step");
-    expect(ranks[0]).toHaveTextContent("Novice(you)where every domain starts");
+    expect(ranks[0]).toHaveTextContent("Lv 1–9Novice(you)where every domain starts");
     expect(ranks[1]).not.toHaveAttribute("aria-current");
-    expect(ranks[1]).toHaveTextContent("Lv 10–19Apprenticea successful day on 50% of days over 14 days💎 1 Gem");
-    expect(ranks[10]).toHaveTextContent("Grandmaster");
+    expect(ranks[1]).toHaveTextContent(
+      "Lv 10–19Apprenticea 90-day average of 25 base XP, 48 active days of 90 (10+ action XP) · 1,476 XP to reach💎 1 Gem",
+    );
+    expect(ranks[10]).toHaveTextContent("Lv 100Grandmaster");
     expect(ranks[10]).toHaveTextContent("5 Gems");
   });
 
@@ -125,7 +153,7 @@ describe("Character page (xp-domains plan §3.12)", () => {
     expect(others.getAllByText("Levels start once this domain has its own rules.")).toHaveLength(3);
   });
 
-  it("opens the daily chart: 30 days of bars, a keyboard readout and a table view", async () => {
+  it("opens the daily chart: 30 days of action and sleep, a keyboard readout and a table view", async () => {
     const user = userEvent.setup();
     renderPage();
     const card = await healthCard();
@@ -135,23 +163,28 @@ describe("Character page (xp-domains plan §3.12)", () => {
     await user.click(toggle);
     expect(card.getByRole("button", { name: "Hide the daily chart" })).toHaveAttribute("aria-expanded", "true");
 
-    const chart = within(await card.findByRole("region", { name: "Health base XP by day" }));
+    const chart = within(await card.findByRole("region", { name: "Health XP by day" }));
     expect(await chart.findAllByTestId("day-bar")).toHaveLength(30);
-    expect(chart.getByText("24 of the last 30 days")).toBeInTheDocument();
+    expect(chart.getAllByTestId("day-column").filter((c) => c.dataset.exception === "true")).toHaveLength(1);
+    expect(chart.getByText(/^\d+ of the last 30 days active$/)).toBeInTheDocument();
+    expect(chart.getByText("· 1 exception day")).toBeInTheDocument();
 
-    const plot = chart.getByRole("group", { name: /Health base XP by day, last 30 days/ });
+    const plot = chart.getByRole("group", { name: /Health XP by day, last 30 days/ });
     // Focus reads today; the left arrow steps back to yesterday, a followed day at ×1.2.
     plot.focus();
-    await waitFor(() => expect(plot).toHaveAccessibleDescription(/: 0 base XP · short of 60$/));
+    await waitFor(() => expect(plot).toHaveAccessibleDescription(/: 0 action XP · not active \(10 needed\)$/));
     await user.keyboard("{ArrowLeft}");
-    await waitFor(() => expect(plot).toHaveAccessibleDescription(/: 90 base XP \(108 paid\) · a successful day$/));
+    await waitFor(() => expect(plot).toHaveAccessibleDescription(/: 90 action XP \(108 paid\) · active \(10\+ needed\)$/));
 
     await user.click(chart.getByRole("button", { name: "Table" }));
     const table = chart.getByRole("table", { name: /newest first/ });
     const rows = within(table).getAllByRole("row");
     expect(rows).toHaveLength(31);
-    expect(within(rows[1]).getAllByRole("cell").map((c) => c.textContent)).toEqual(["0", "0", "No"]);
-    expect(within(rows[2]).getAllByRole("cell").map((c) => c.textContent)).toEqual(["90", "108", "Yes"]);
+    const cellsOf = (row: HTMLElement) => within(row).getAllByRole("cell").map((c) => c.textContent);
+    expect(cellsOf(rows[1])).toEqual(["0", "0", "0", "No (10 needed)", ""]);
+    expect(cellsOf(rows[2])).toEqual(["90", "0", "108", "Yes", ""]);
+    // Sick 14 days ago, marked as an exception.
+    expect(cellsOf(rows[15])).toEqual(["0", "0", "0", "—", "Sick with a cold"]);
   });
 
   it("switches to the Reports tab through the URL, and shows them there", async () => {
@@ -166,11 +199,11 @@ describe("Character page (xp-domains plan §3.12)", () => {
     router.search = { view: "reports" };
     renderPage();
     expect(screen.getByRole("tab", { name: "Reports" })).toHaveAttribute("aria-selected", "true");
-    expect(await screen.findByRole("list", { name: "Consistency, last 30 days" })).toBeInTheDocument();
+    expect(await screen.findByTestId("rank-chart")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Health" })).not.toBeInTheDocument();
   });
 
-  it("pays a rank time alone reached when it opens, and celebrates it", async () => {
+  it("pays a rank time alone reached when it opens, and celebrates it once", async () => {
     // Health XP filed on yesterday without a reconcile, as an import would: level 10 then.
     getState().ledger.push({
       id: "imported",
@@ -192,5 +225,74 @@ describe("Character page (xp-domains plan §3.12)", () => {
     const card = await healthCard();
     await waitFor(() => expect(card.getByText("Level 10")).toBeInTheDocument());
     expect(card.getByText("Apprentice")).toBeInTheDocument();
+    // The settle's toast kept the best, so the page doesn't celebrate it a second time.
+    expect(vi.mocked(toast).mock.calls.filter(([text]) => text === "You're now a Health Apprentice.")).toHaveLength(1);
+    expect(celebrate).toHaveBeenCalledTimes(1);
+  });
+
+  it("celebrates a new best reached as days settled, once, the next time it opens", async () => {
+    localStorage.setItem("lifeos.domains.best", JSON.stringify({ health_xp: { level: 8, rank: 0 } }));
+    const { unmount } = renderPage();
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith("❤️ Health level 9!", {
+        icon: "⬆️",
+        description: "A new best level, reached as your days settled.",
+      }),
+    );
+    expect(celebrate).toHaveBeenCalledWith("full");
+    unmount();
+
+    vi.clearAllMocks();
+    const settle = vi.spyOn(writes, "settleDomains");
+    renderPage();
+    await healthCard();
+    await waitFor(() => expect(settle).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await settle.mock.results[0].value;
+    });
+    expect(JSON.parse(localStorage.getItem("lifeos.domains.best")!)).toEqual({ health_xp: { level: 9, rank: 0 } });
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("marks a day as an exception with a comment, and unmarks one", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await healthCard();
+    const section = within(screen.getByRole("region", { name: "Exception days" }));
+    const sick = addDays(todayIso(), -14);
+    expect(await section.findByRole("list", { name: "Exception days, last 90 days" })).toHaveTextContent(
+      `${formatDayFull(sick)} · Sick with a cold`,
+    );
+
+    await user.click(section.getByRole("button", { name: "Mark a day as an exception" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Mark a day as an exception" }));
+    expect(dialog.getByRole("radio", { name: "Today" })).toBeChecked();
+    // A comment of spaces alone says why it's needed.
+    await user.type(dialog.getByRole("textbox", { name: "Why" }), "   ");
+    await user.click(dialog.getByRole("button", { name: "Mark as exception" }));
+    expect(dialog.getByRole("alert")).toHaveTextContent("Say why the day is an exception");
+
+    await user.clear(dialog.getByRole("textbox", { name: "Why" }));
+    await user.type(dialog.getByRole("textbox", { name: "Why" }), "Flying home");
+    expect(dialog.getByText("11 of 140 characters")).toBeInTheDocument();
+    await user.click(dialog.getByRole("button", { name: "Mark as exception" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(toast.success).toHaveBeenCalledWith(`Marked ${shortDay(todayIso())} as an exception`);
+    const list = within(await section.findByRole("list", { name: "Exception days, last 90 days" }));
+    await waitFor(() => expect(list.getAllByRole("listitem")).toHaveLength(2));
+    expect(list.getAllByRole("listitem")[0]).toHaveTextContent("Flying home");
+    const card = await healthCard();
+    await waitFor(() =>
+      expect(
+        card.getByRole("img", { name: "Today is an exception day: it doesn't count for or against you." }),
+      ).toBeInTheDocument(),
+    );
+
+    await user.click(section.getByRole("button", { name: `Unmark ${formatDayFull(sick)}` }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(`Unmarked ${shortDay(sick)}: it counts again`));
+    await waitFor(() => expect(list.getAllByRole("listitem")).toHaveLength(1));
+    expect(list.getByRole("listitem")).toHaveTextContent("Flying home");
   });
 });

@@ -20,7 +20,13 @@ import { normalizeOuraStatus, normalizeSync, normalizeWorkout } from "@/lib/acti
 import { normalizeCover } from "@/lib/cover";
 import { renamedMessage } from "@/lib/production-ui-types";
 import { normalizeTimer } from "@/lib/live/reads";
-import { normalizeEarned, normalizeProgress } from "@/lib/domains";
+import {
+  exceptionMarkedMessage,
+  exceptionUnmarkedMessage,
+  normalizeEarned,
+  normalizeExceptionResult,
+  normalizeProgress,
+} from "@/lib/domains";
 import { foodWriteMessage, normalizeFoodWrite } from "@/lib/food";
 import {
   normalizeBountyResult,
@@ -151,6 +157,22 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async settleDomains() {
       return normalizeEarned(await unwrap(api().POST("/api/domains/settle")));
+    },
+
+    async markException(comment, day) {
+      const result = normalizeExceptionResult(
+        await unwrap(api().POST("/api/domains/exceptions", { body: { day: day ?? null, comment } })),
+      );
+      notify(exceptionMarkedMessage(result.exception?.day ?? day));
+      return result;
+    },
+
+    async unmarkException(day) {
+      const result = normalizeExceptionResult(
+        await unwrap(api().POST("/api/domains/exceptions/{day}/unmark", { params: { path: { day } } })),
+      );
+      notify(exceptionUnmarkedMessage(day));
+      return result;
     },
 
     async logFood(req) {

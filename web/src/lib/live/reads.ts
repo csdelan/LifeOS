@@ -18,7 +18,7 @@ import {
   normalizeWallet,
 } from "@/lib/rewards";
 import type { LifeOsReads } from "@/lib/mock/api";
-import { normalizeDomainDays, normalizeDomainReport, normalizeDomains } from "@/lib/domains";
+import { normalizeDomainDays, normalizeDomainReport, normalizeDomains, normalizeExceptionDays } from "@/lib/domains";
 import { normalizeFoodDay, normalizeFoodDays, normalizeMeal } from "@/lib/food";
 import { mapSubjects, normalizeRepeat, normalizeSeriesRow } from "@/lib/task-series";
 import {
@@ -40,6 +40,7 @@ import type {
   DomainDaysRead,
   DomainReportRead,
   DomainsRead,
+  ExceptionDaysRead,
   BountyTypeDefaults,
   FoodDayRead,
   FoodDaysRead,
@@ -273,6 +274,11 @@ export const liveReads: LifeOsReads = {
   async domainReport(days) {
     const data = await unwrap(api().GET("/api/domains/report", { params: { query: { days } } }));
     return normalizeDomainReport(asType<DomainReportRead>(data));
+  },
+
+  async exceptionDays(days) {
+    const data = await unwrap(api().GET("/api/domains/exceptions", { params: { query: { days } } }));
+    return normalizeExceptionDays(asType<ExceptionDaysRead>(data));
   },
 
   async foodDay(date) {

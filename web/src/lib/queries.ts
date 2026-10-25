@@ -62,6 +62,7 @@ export const qk = {
   // Nested under ["domains"], so every domains invalidation refreshes the chart too.
   domainDays: (domain: string, days: number) => ["domains", "days", domain, days] as const,
   domainReport: (days: number) => ["domains", "report", days] as const,
+  exceptionDays: (days: number) => ["domains", "exceptions", days] as const,
   food: ["food"] as const,
   foodDay: (date: string) => ["food", "day", date] as const,
   foodDays: (from: string, to: string) => ["food", "days", from, to] as const,
@@ -280,6 +281,27 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       // The settle pays food days that closed themselves and activity XP that's due, too.
       if (earned.awards.length > 0) await invalidate(qc, [qk.wallet, qk.ledger, qk.domains, qk.food, qk.activity]);
       return earned;
+    },
+
+    async markException(comment, day) {
+      try {
+        const result = await client.markException(comment, day);
+        announceEarned(result, { lostBecause: "Without that day, your last 90 days support a lower level." });
+        return result;
+      } finally {
+        // The exception list sits under ["domains"], so this refreshes it too.
+        await invalidate(qc, [qk.domains, qk.wallet, qk.ledger]);
+      }
+    },
+
+    async unmarkException(day) {
+      try {
+        const result = await client.unmarkException(day);
+        announceEarned(result, { lostBecause: "The day counts again, and your last 90 days support a lower level." });
+        return result;
+      } finally {
+        await invalidate(qc, [qk.domains, qk.wallet, qk.ledger]);
+      }
     },
 
     async logFood(req) {
@@ -834,6 +856,14 @@ export function useDomainReport(days: number, enabled = true) {
     queryFn: () => reads().domainReport(days),
     enabled,
     placeholderData: keepPreviousData,
+  });
+}
+
+/** The days marked as exceptions among the last `days` (REWARD-8): the Character page's list. */
+export function useExceptionDays(days = 90) {
+  return useQuery({
+    queryKey: qk.exceptionDays(days),
+    queryFn: () => reads().exceptionDays(days),
   });
 }
 

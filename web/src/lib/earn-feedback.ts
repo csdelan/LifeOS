@@ -4,10 +4,11 @@
  * reaches a streak milestone or establishes a habit. A reversal — reopening a completed
  * Task, correcting a day — gets a quiet toast and no sound.
  *
- * A life domain that moved (xp-domains plan §3.8) gets its own toast: a level-up the full
- * celebration ("❤️ Health level 12!"), a rank-up the grand one with its title ("You're now a
- * Health Journeyman."), and a level lost to a reversal a quiet one. One write celebrates once,
- * at the size of the biggest thing it did.
+ * A life domain that moved (xp-domains plan §7.4.7) gets its own toast: a new best level the
+ * full celebration ("❤️ Health level 12!"), a new best rank the grand one with its title
+ * ("You're now a Health Journeyman."), getting back to a level below the best a quiet note,
+ * and a level lost a quiet toast saying why. One write celebrates once, at the size of the
+ * biggest thing it did.
  *
  * A food day re-scored in one write (given back, then earned at its new score) is one toast:
  * "Food day Tue Oct 20 re-scored: 38 → 35 Health XP". Activity XP from Oura (activity plan
@@ -16,6 +17,7 @@
  */
 import { toast } from "sonner";
 import { celebrate, chime } from "@/lib/celebrate";
+import { keepBest } from "@/lib/domain-best";
 import { progressMessage } from "@/lib/domains";
 import type { Amounts, Award, DomainChange } from "@/lib/production-ui-types";
 import { formatAmounts, multipliedLabel, triggerLabel } from "@/lib/rewards";
@@ -148,12 +150,19 @@ export function announceAwards(awards: Award[] | undefined) {
 
 /**
  * Toast what an earning write earned, gave back and moved, then celebrate once: the grand
- * celebration for a rank-up, the full one for a level-up or a big earn, else a chime for any
- * earn. Losing a level or giving back is quiet.
+ * celebration for a new best rank, the full one for a new best level or a big earn, else a
+ * chime for any earn. Losing a level, getting back to one or giving back is quiet. `lostBecause`
+ * says why a level was lost when the write wasn't a reversal (an exception day's change).
  */
-export function announceEarned(earned: { awards?: Award[]; progress?: DomainChange[] } | undefined) {
+export function announceEarned(
+  earned: { awards?: Award[]; progress?: DomainChange[] } | undefined,
+  options: { lostBecause?: string } = {},
+) {
   const awards = earned?.awards ?? [];
-  const moved = (earned?.progress ?? []).map(progressMessage);
+  const progress = earned?.progress ?? [];
+  const moved = progress.map(progressMessage);
+  // A best this write celebrates is kept, so the Character page doesn't celebrate it again.
+  for (const change of progress) keepBest(change.domain, { level: change.bestLevelTo, rank: change.bestRankTo });
   let celebration: "none" | "chime" | "full" | "grand" = "none";
 
   if (awards.length > 0) {
@@ -180,15 +189,23 @@ export function announceEarned(earned: { awards?: Award[]; progress?: DomainChan
     }
   }
 
+  const reversed = awards.some((a) => a.entry === "reversal");
   for (const m of moved) {
     if (m.kind === "rank") {
-      toast(m.text, { icon: "🏅", description: "A new rank: see it on your Character page." });
+      toast(m.text, { icon: "🏅", description: "A new best rank: see it on your Character page." });
       celebration = "grand";
     } else if (m.kind === "level") {
-      toast(m.text, { icon: "⬆️" });
+      toast(m.text, { icon: "⬆️", description: "A new best level." });
       if (celebration !== "grand") celebration = "full";
+    } else if (m.kind === "back") {
+      toast(m.text, { icon: "↗" });
     } else {
-      toast(m.text, { icon: "↩", description: "A reversal took back the XP that level needed." });
+      toast(m.text, {
+        icon: "↩",
+        description:
+          options.lostBecause ??
+          (reversed ? "A reversal took back the XP that level needed." : "Your last 90 days support a lower level now."),
+      });
     }
   }
 

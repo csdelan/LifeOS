@@ -6,6 +6,7 @@ import type {
   ArtifactRecord,
   ConcerningEvent,
   EventRelation,
+  ExceptionDay,
   FoodMealType,
   HabitOccurrenceRow,
   HabitRow,
@@ -107,6 +108,8 @@ export interface MockState {
   timerEvents: TimerEvent[];
   /** Ledger entries, oldest first (REWARD-1). Catalog Rewards are ordinary `Reward` subjects. */
   ledger: MockLedgerEntry[];
+  /** Days marked as exceptions (REWARD-8), the newest mark per day; the life domains skip them. */
+  exceptionDays: ExceptionDay[];
   /** `Rewards:CoinValueUsd`: what one Coin is worth in dollars. */
   coinValueUsd: number;
   /** Food Log events, in write order (FOOD-1..3): entries, fasts and day closes. */
@@ -135,8 +138,14 @@ function mobilityState(ago: number): HabitOccurrenceRow["state"] {
 /** What a followed day of Morning mobility pays (its stored bounty); a partial day pays half. */
 const MOBILITY_DAY: Amounts = { coins: 1, freedom: 5, xp: 5, health_xp: 90 };
 
+/** What a followed day of Morning mobility paid in Health XP before its bounty went up, nine days ago. */
+const MOBILITY_EARLY_HEALTH_XP = 16;
+
 /** How far back the seeded Health history goes; the wallet opened the day before. */
 const HEALTH_DAYS = 45;
+
+/** The seeded exception day (REWARD-8): a cold, 14 days ago, when Morning mobility was missed. */
+const SICK_DAY_AGO = 14;
 
 function makeUrn(type: SubjectType, title: string, short: string): string {
   return `urn:bsk:${type.toLowerCase()}:${slugify(title)}-${short}`;
@@ -1665,6 +1674,9 @@ export function createSeed(): MockState {
       { subjectId: "task-longrun", action: "stop", occurredAt: isoAgo(25.53333) },
     ],
     ledger: seedLedger(),
+    exceptionDays: [
+      { day: addDays(todayIso(), -SICK_DAY_AGO), comment: "Sick with a cold", markedAt: isoAgo(24 * (SICK_DAY_AGO - 1)) },
+    ],
     coinValueUsd: 0.5,
     foodEvents: seedFood(),
     primaryFocus: {
@@ -1900,11 +1912,12 @@ function seedFood(): MockFoodEvent[] {
 
 /**
  * Rewards since the wallet opened, 46 days ago: Morning mobility's days, which pay Health XP
- * (the Character page's history — 45 days at about 75%, so Health is an Apprentice), a
- * 7-day streak, journal days, one completed Task (priced with Karma and Resolve), an episode
- * redeemed with a note, and a first deposit into the vacation fund. Mobility's days before
- * the last nine paid Health XP only. Balances: 60 Freedom, 13 Coins, 3 Karma and the one Gem
- * Apprentice paid — so some catalog rewards are affordable and Movie night and Road trip are not.
+ * (the Character page's history — 45 days at about 75%, one of them marked sick, so Health is
+ * a level 9 Novice, 37 XP short of level 10 and Apprentice), a 7-day streak, journal days, one
+ * completed Task (priced with Karma and Resolve), an episode redeemed with a note, and a first
+ * deposit into the vacation fund. Mobility's days before the last nine paid Health XP only,
+ * and less of it (16 a followed day). Balances: 60 Freedom, 13 Coins and 3 Karma — so some
+ * catalog rewards are affordable and Movie night and Road trip are not.
  */
 function seedLedger(): MockLedgerEntry[] {
   const today = todayIso();
@@ -1928,14 +1941,16 @@ function seedLedger(): MockLedgerEntry[] {
   };
 
   // Mobility's days, oldest first, each paid on the day at the multiplier its 30 days before
-  // set (§3.6) — the last nine also pay its Coins, Freedom and Life XP.
+  // set (§3.6), the sick day skipped — the last nine also pay its Coins, Freedom and Life XP.
   const health: DomainDay[] = [];
+  const sick = [addDays(today, -SICK_DAY_AGO)];
   for (let ago = HEALTH_DAYS; ago >= 1; ago--) {
     const state = mobilityState(ago);
     if (state !== "followed" && state !== "partial") continue;
     const date = addDays(today, -ago);
-    const baseXp = state === "followed" ? MOBILITY_DAY.health_xp : Math.floor(MOBILITY_DAY.health_xp / 2);
-    const multiplier = DomainProgress.fold(HEALTH, health, today).multiplierFor(date);
+    const full = ago <= 9 ? MOBILITY_DAY.health_xp : MOBILITY_EARLY_HEALTH_XP;
+    const baseXp = state === "followed" ? full : Math.floor(full / 2);
+    const multiplier = DomainProgress.fold(HEALTH, health, today, sick).multiplierFor(date);
     const paid = applyMultiplier(baseXp, multiplier);
     health.push({ day: date, base: baseXp, paid });
     entries.push({
@@ -1955,7 +1970,7 @@ function seedLedger(): MockLedgerEntry[] {
 
   // Each rank reached after the wallet opened paid its Gems a minute after the day that reached it.
   const openedOn = addDays(today, -(HEALTH_DAYS + 1));
-  for (const reached of DomainProgress.fold(HEALTH, health, today).ranksReached) {
+  for (const reached of DomainProgress.fold(HEALTH, health, today, sick).ranksReached) {
     if (reached.qualifiedOn < openedOn) continue;
     const reaching = entries.find((e) => e.subjectId === "habit-mobility" && e.creditedOn === reached.qualifiedOn);
     entries.push({

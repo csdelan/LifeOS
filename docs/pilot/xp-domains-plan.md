@@ -1482,4 +1482,4 @@ default:
 - [x] X8 — Levels v2: requirements + plan (§7)
 - [x] X9 — v2 inputs: exception days, action XP, settled days (migration 0043)
 - [x] X10 — Levels v2 in the kernel (no migration; push with X11)
-- [ ] X11 — Levels v2 on the web (no migration). Then calibrate (§2.4).
+- [x] X11 — Levels v2 on the web (no migration). Next: calibrate (§2.4).

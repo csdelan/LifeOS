@@ -218,14 +218,27 @@ describe("activity awards (activity plan §3.8, A9)", () => {
   });
 });
 
-describe("announceEarned (xp-domains plan §3.8)", () => {
-  const change = (levelFrom: number, levelTo: number, rankFrom = 0, rankTo = rankFrom, rankTitle = "Novice"): DomainChange => ({
+describe("announceEarned (xp-domains plan §7.4.7)", () => {
+  /** A change whose bests moved with the level unless given. */
+  const change = (
+    levelFrom: number,
+    levelTo: number,
+    rankFrom = 0,
+    rankTo = rankFrom,
+    rankTitle = "Novice",
+    best: Partial<DomainChange> = {},
+  ): DomainChange => ({
     domain: "health_xp",
     levelFrom,
     levelTo,
     rankFrom,
     rankTo,
     rankTitle,
+    bestLevelFrom: levelFrom,
+    bestLevelTo: Math.max(levelFrom, levelTo),
+    bestRankFrom: rankFrom,
+    bestRankTo: Math.max(rankFrom, rankTo),
+    ...best,
   });
   const rankUp: Award = {
     id: "rank",
@@ -237,22 +250,26 @@ describe("announceEarned (xp-domains plan §3.8)", () => {
     amounts: { gems: 1 },
   };
 
-  it("toasts a level-up and gives it the full celebration", () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("toasts a new best level and gives it the full celebration", () => {
     announceEarned({ awards: [award("followed", { health_xp: 90 })], progress: [change(11, 12, 1)] });
-    expect(toast).toHaveBeenCalledWith("❤️ Health level 12!", { icon: "⬆️" });
+    expect(toast).toHaveBeenCalledWith("❤️ Health level 12!", { icon: "⬆️", description: "A new best level." });
     expect(celebrate).toHaveBeenCalledTimes(1);
     expect(celebrate).toHaveBeenCalledWith();
     expect(chime).not.toHaveBeenCalled();
   });
 
-  it("names a rank-up's title and celebrates it bigger, once, over the Gem's own celebration", () => {
+  it("names a new best rank's title and celebrates it bigger, once, over the Gem's own celebration", () => {
     announceEarned({
       awards: [award("followed", { health_xp: 108 }), rankUp],
       progress: [change(9, 10, 0, 1, "Apprentice")],
     });
     expect(toast).toHaveBeenCalledWith("You're now a Health Apprentice.", {
       icon: "🏅",
-      description: "A new rank: see it on your Character page.",
+      description: "A new best rank: see it on your Character page.",
     });
     expect(toast).toHaveBeenCalledTimes(2);
     expect(celebrate).toHaveBeenCalledTimes(1);
@@ -266,17 +283,46 @@ describe("announceEarned (xp-domains plan §3.8)", () => {
     expect(celebrate).toHaveBeenCalledWith("grand");
   });
 
-  it("is quiet about a level a reversal took back", () => {
+  it("keeps every best it announces, so the Character page doesn't celebrate it again", () => {
+    announceEarned({ awards: [rankUp], progress: [change(19, 20, 1, 2, "Journeyman")] });
+    expect(JSON.parse(localStorage.getItem("lifeos.domains.best")!)).toEqual({ health_xp: { level: 20, rank: 2 } });
+  });
+
+  it("notes getting back to a level below the best quietly", () => {
+    announceEarned({
+      awards: [award("followed", { health_xp: 60 })],
+      progress: [change(21, 22, 2, 2, "Journeyman", { bestLevelFrom: 30, bestLevelTo: 30, bestRankFrom: 3, bestRankTo: 3 })],
+    });
+    expect(toast).toHaveBeenCalledWith("Health back to level 22", { icon: "↗" });
+    expect(celebrate).not.toHaveBeenCalled();
+    expect(chime).toHaveBeenCalledTimes(1);
+  });
+
+  it("is quiet about a level a reversal took back, and keeps the best", () => {
     announceEarned({
       awards: [award("followed", { health_xp: -108 }, "reversal")],
-      progress: [change(10, 9, 1, 0)],
+      progress: [change(10, 9, 1, 0, "Novice", { bestLevelTo: 10, bestRankTo: 1 })],
     });
-    expect(toast).toHaveBeenCalledWith("Health back to level 9", {
+    expect(toast).toHaveBeenCalledWith("Health down to level 9", {
       icon: "↩",
       description: "A reversal took back the XP that level needed.",
     });
     expect(celebrate).not.toHaveBeenCalled();
     expect(chime).not.toHaveBeenCalled();
+  });
+
+  it("says why a level was lost when the write says so, else that the last 90 days support less", () => {
+    const lost = change(23, 22, 2, 2, "Journeyman", { bestLevelTo: 23 });
+    announceEarned({ awards: [], progress: [lost] }, { lostBecause: "Without that day, your last 90 days support a lower level." });
+    expect(toast).toHaveBeenLastCalledWith("Health down to level 22", {
+      icon: "↩",
+      description: "Without that day, your last 90 days support a lower level.",
+    });
+    announceEarned({ awards: [], progress: [lost] });
+    expect(toast).toHaveBeenLastCalledWith("Health down to level 22", {
+      icon: "↩",
+      description: "Your last 90 days support a lower level now.",
+    });
   });
 
   it("chimes an ordinary earn that moved nothing", () => {

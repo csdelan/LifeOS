@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
 import { formatDay } from "@/lib/dates";
-import { domainSymbol, historyText, percent, periodLabel } from "@/lib/domains";
+import { domainSymbol, newBestsText, percent, periodLabel, rankSummary, type RankSeries } from "@/lib/domains";
 import type { DomainReportRow, DomainRow } from "@/lib/production-ui-types";
 import { useDomainReport, useDomains } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -17,58 +17,69 @@ const PERIODS = [
 ] as const;
 type Period = (typeof PERIODS)[number]["id"];
 
+export type { RankSeries };
+
 const VIEW = "character.reports";
 
-/** Below this many configured domains, horizontal bars stand in for the spider charts (§3.13). */
+/** From this many configured domains, spider charts join the lines (§7.4.10). */
 const SPIDER_MIN = 3;
 
-/** One configured domain's consistency over a period, as the charts plot it. */
-export interface ConsistencyPoint {
-  key: string;
-  name: string;
-  /** 0–1 over the days counted; null before the domain has any. */
-  value: number | null;
-  daysCounted: number;
-  days: number;
-  /** The comparison period's figures, when one is chosen. */
-  compare?: { value: number | null; daysCounted: number; days: number; label: string };
-}
+/** Hatching for an exception day's band. */
+const HATCH =
+  "repeating-linear-gradient(135deg, color-mix(in oklch, var(--muted-foreground) 22%, transparent) 0 2px, transparent 2px 6px)";
 
-/** One configured domain's lifetime level, with its rank, as the level charts plot it. */
+/** Each configured domain's line, in order: Health first. */
+const LINE_TONES = [
+  { stroke: "stroke-chart-earned", swatch: "bg-chart-earned" },
+  { stroke: "stroke-chart-3", swatch: "bg-chart-3" },
+  { stroke: "stroke-chart-2", swatch: "bg-chart-2" },
+  { stroke: "stroke-chart-4", swatch: "bg-chart-4" },
+  { stroke: "stroke-chart-5", swatch: "bg-chart-5" },
+] as const;
+
+/** One configured domain's shown level and best, as the level charts plot them. */
 export interface LevelPoint {
   key: string;
   name: string;
   level: number;
   rankTitle: string;
-  /** The level each rank above Novice starts at (10, 20, … 100): the rings and ticks. */
+  best: number;
+  bestRankTitle: string;
+  /** The level each rank above Novice starts at (10, 20, … 100): the ticks and rings. */
   rankLevels: number[];
 }
 
+/** One configured domain's rank at a period's start and end, as the rank spider plots it. */
+export interface RankPoint {
+  key: string;
+  name: string;
+  rankFrom: number;
+  rankTo: number;
+  titleFrom: string;
+  titleTo: string;
+  /** The top rank's index (10 for Health). */
+  topRank: number;
+}
+
 /**
- * The Character page's Reports (REWARD-6 / REWARD-7, xp-domains plan §3.13): each configured
- * domain's consistency over a period (7 days to a year), optionally against a second period,
- * and its level since the start. Each value says how much history backs it, and a domain
- * younger than the period is drawn hollow. With fewer than three configured domains these are
- * horizontal bars; from three, spider charts. The table under them holds every figure, for
- * every domain, and doubles as the charts' table view.
+ * The Character page's Reports (REWARD-6 / REWARD-7, xp-domains plan §7.4.10): each configured
+ * domain's rank over a period (7 days to a year), its best rank dotted and exception days
+ * hatched; each domain's level since the start with its best; and the period's figures for every
+ * domain in a table. From three configured domains, spider charts compare ranks and levels too.
  */
 export function DomainReports() {
-  const [view, setViewState] = useState(() =>
-    loadView<{ period: Period; compare: Period | "none" }>(VIEW, { period: "30", compare: "none" }),
-  );
-  const compare = view.compare !== view.period ? view.compare : "none";
-  const report = useDomainReport(Number(view.period));
-  const compared = useDomainReport(Number(compare === "none" ? view.period : compare), compare !== "none");
+  const [view, setViewState] = useState(() => loadView<{ period: Period }>(VIEW, { period: "30" }));
+  const period = PERIODS.some((p) => p.id === view.period) ? view.period : "30";
+  const report = useDomainReport(Number(period));
   const domains = useDomains();
-  const consistencyId = useId();
+  const ranksId = useId();
   const levelsId = useId();
   const tableId = useId();
 
-  const setView = (next: Partial<typeof view>) => {
-    const merged = { ...view, ...next };
-    setViewState(merged);
+  const setPeriod = (next: Period) => {
+    setViewState({ period: next });
     try {
-      saveView(VIEW, merged);
+      saveView(VIEW, { period: next });
     } catch {
       // Storage can be full or blocked; the choice still applies to this view.
     }
@@ -76,71 +87,47 @@ export function DomainReports() {
 
   // The period the data on screen covers: while a new one loads, the last one stays (dimmed),
   // labelled as what it is.
-  const days = report.data?.days ?? Number(view.period);
+  const days = report.data?.days ?? Number(period);
   const rows = report.data?.domains ?? [];
-  const configured = rows.filter((d) => d.configured);
-  const compareData = compare !== "none" ? compared.data : undefined;
-  const compareRows = compareData && compareData.days !== days ? compareData.domains : [];
-  const compareLabel = compareData ? periodLabel(compareData.days) : "";
-  const points: ConsistencyPoint[] = configured.map((d) => {
-    const other = compareRows.find((c) => c.key === d.key);
+  const configured = rows.filter((d) => d.configured && d.ranks);
+  const ladders = new Map((domains.data?.domains ?? []).map((d) => [d.key, (d.ranks ?? []).map((r) => r.title)]));
+  const series: RankSeries[] = configured.map((d) => ({
+    key: d.key,
+    name: d.name,
+    days: d.ranks ?? [],
+    titles: ladders.get(d.key) ?? [],
+  }));
+  const rankPoints: RankPoint[] = configured.map((d) => {
+    const titles = ladders.get(d.key) ?? [];
     return {
       key: d.key,
       name: d.name,
-      value: d.daysCounted ? d.consistency : null,
-      daysCounted: d.daysCounted ?? 0,
-      days,
-      compare: other
-        ? {
-            value: other.daysCounted ? other.consistency : null,
-            daysCounted: other.daysCounted ?? 0,
-            days: compareData!.days,
-            label: compareLabel,
-          }
-        : undefined,
+      rankFrom: d.rankFrom ?? 0,
+      rankTo: d.rankTo ?? 0,
+      titleFrom: titles[d.rankFrom ?? 0] ?? "",
+      titleTo: d.rankTitle ?? "",
+      topRank: Math.max(titles.length - 1, 1),
     };
   });
   const levels: LevelPoint[] = (domains.data?.domains ?? [])
-    .filter((d) => d.configured && d.lifetime)
+    .filter((d) => d.configured && d.shown && d.best)
     .map((d) => levelPoint(d));
   const label = periodLabel(days);
 
   return (
     <div className="space-y-8">
-      <section aria-labelledby={consistencyId} className="space-y-3">
+      <section aria-labelledby={ranksId} className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 id={consistencyId} className="font-heading text-xl">
-              Consistency
+            <h2 id={ranksId} className="font-heading text-xl">
+              Rank over time
             </h2>
             <p className="max-w-prose text-xs text-muted-foreground">
-              The share of successful days, over the days each domain has history for. Today counts once it
-              succeeds.
+              Each domain's rank at the end of each settled day. The dotted line is the best rank; hatched days are
+              exception days.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <ToggleGroup
-              label="Period"
-              value={view.period}
-              onChange={(period) => setView({ period })}
-              options={[...PERIODS]}
-            />
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              Compare with
-              <select
-                value={compare}
-                onChange={(e) => setView({ compare: e.target.value as Period | "none" })}
-                className="min-h-11 rounded-md border bg-background px-2 text-xs text-foreground md:min-h-8"
-              >
-                <option value="none">Nothing</option>
-                {PERIODS.filter((p) => p.id !== view.period).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <ToggleGroup label="Period" value={period} onChange={setPeriod} options={[...PERIODS]} />
         </div>
 
         {report.isLoading ? <ListSkeleton rows={2} /> : null}
@@ -152,17 +139,16 @@ export function DomainReports() {
         {report.data ? (
           <div
             className={cn(
-              "rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-opacity",
-              (report.isPlaceholderData || compared.isPlaceholderData) && "opacity-60",
+              "space-y-6 rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-opacity",
+              report.isPlaceholderData && "opacity-60",
             )}
           >
-            {points.length === 0 ? (
+            {series.length === 0 ? (
               <p className="text-sm text-muted-foreground">No domain has rules yet, so there's nothing to plot.</p>
-            ) : points.length >= SPIDER_MIN ? (
-              <ConsistencySpider points={points} periodLabel={label} />
             ) : (
-              <ConsistencyBars points={points} periodLabel={label} />
+              <RankChart series={series} periodLabel={label} />
             )}
+            {rankPoints.length >= SPIDER_MIN ? <RankSpider points={rankPoints} periodLabel={label} /> : null}
           </div>
         ) : null}
       </section>
@@ -173,7 +159,7 @@ export function DomainReports() {
             Since the start
           </h2>
           <p className="max-w-prose text-xs text-muted-foreground">
-            Each domain's level, 1 to 100, with a mark where each rank begins. Levels are for life.
+            Each domain's level, 1 to 100, with a mark where each rank begins and a tick at your best.
           </p>
         </div>
         {domains.isLoading ? <ListSkeleton rows={1} /> : null}
@@ -189,7 +175,7 @@ export function DomainReports() {
           <h2 id={tableId} className="font-heading text-xl">
             By domain, last {label}
           </h2>
-          <ReportTable rows={rows} days={days} periodLabel={label} />
+          <ReportTable rows={rows} ladders={ladders} periodLabel={label} />
         </section>
       ) : null}
     </div>
@@ -200,96 +186,283 @@ function levelPoint(d: DomainRow): LevelPoint {
   return {
     key: d.key,
     name: d.name,
-    level: d.lifetime!.level,
-    rankTitle: d.lifetime!.rankTitle,
+    level: d.shown!.level,
+    rankTitle: d.shown!.rankTitle,
+    best: d.best!.level,
+    bestRankTitle: d.best!.rankTitle,
     rankLevels: (d.ranks ?? []).filter((r) => r.rank > 0).map((r) => r.level),
   };
 }
 
-const valueText = (value: number | null) => (value == null ? "no days yet" : percent(value));
-
-/** "Health: 80% of days successful, over all 30 days." */
-function inWords(p: { name: string; value: number | null; daysCounted: number; days: number }): string {
-  return p.value == null
-    ? `${p.name}: no days yet in the last ${periodLabel(p.days)}.`
-    : `${p.name}: ${percent(p.value)} of days successful, over ${historyText(p.daysCounted, p.days)}.`;
-}
+const CHART_HEIGHT = 176;
 
 /**
- * Consistency as horizontal bars, one per configured domain (fewer than three configured). A
- * domain with less history than the period is a hollow, dashed bar; a comparison period is a
- * tick across the bar, named under it.
+ * Rank over time (§7.4.10): one step line per configured domain across the period, the best rank
+ * dotted, exception days as hatched bands, rank titles on the axis (from Novice to one rank above
+ * the highest best, so a young domain's line isn't flat on the floor). Hover or arrow keys read a
+ * day; the table view lists every day.
  */
-export function ConsistencyBars({ points, periodLabel: label }: { points: ConsistencyPoint[]; periodLabel: string }) {
-  const partial = points.some((p) => p.daysCounted < p.days);
-  const comparing = points.find((p) => p.compare)?.compare?.label;
+export function RankChart({ series, periodLabel: label }: { series: RankSeries[]; periodLabel: string }) {
+  const [mode, setMode] = useState<"chart" | "table">("chart");
+  const [hovered, setHovered] = useState<number | null>(null);
+  const readoutId = useId();
+  const length = Math.max(...series.map((s) => s.days.length), 0);
+  const titles = series.reduce<string[]>((a, s) => (s.titles.length > a.length ? s.titles : a), []);
+  const topRank = Math.max(titles.length - 1, 1);
+  const ceiling = Math.min(
+    topRank,
+    Math.max(1, ...series.flatMap((s) => s.days.map((d) => Math.max(d.rank, d.bestRank) + 1))),
+  );
+  const axis = Array.from({ length: ceiling + 1 }, (_, i) => i);
+  const y = (rank: number) => 100 - (rank / ceiling) * 100;
+  const exceptionDays = series[0]?.days.map((d) => d.exception) ?? [];
+  const summary = series.map(rankSummary).join(" ");
+
+  const stepPath = (values: number[]) =>
+    values.map((v, i) => `${i === 0 ? "M" : "L"}${i},${y(v)} L${i + 1},${y(v)}`).join(" ");
+
+  function pick(clientX: number, el: HTMLElement) {
+    const box = el.getBoundingClientRect();
+    if (length === 0 || box.width === 0) return;
+    const i = Math.floor(((clientX - box.left) / box.width) * length);
+    setHovered(Math.min(Math.max(i, 0), length - 1));
+  }
+
+  function onKey(e: React.KeyboardEvent) {
+    if (length === 0) return;
+    const last = length - 1;
+    const now = hovered ?? last;
+    const next =
+      e.key === "ArrowLeft" ? now - 1 : e.key === "ArrowRight" ? now + 1 : e.key === "Home" ? 0 : e.key === "End" ? last : null;
+    if (next == null) return;
+    e.preventDefault();
+    setHovered(Math.min(Math.max(next, 0), last));
+  }
+
+  const readout = (i: number) =>
+    series
+      .map((s) => {
+        const d = s.days[i];
+        if (!d) return "";
+        const exception = d.exception ? " · exception day" : "";
+        return `${s.name} ${formatDay(d.day)}: ${s.titles[d.rank] ?? d.rank} (level ${d.level}), best ${s.titles[d.bestRank] ?? d.bestRank}${exception}`;
+      })
+      .filter(Boolean)
+      .join(" · ");
+  const days = series[0]?.days ?? [];
+
   return (
-    <div className="space-y-4">
-      <ul className="space-y-4" aria-label={`Consistency, last ${label}`}>
-        {points.map((p) => {
-          const full = p.daysCounted === p.days;
-          return (
-            <li key={p.key} className="space-y-1.5">
-              <p className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
-                <span className="font-medium">
-                  <span aria-hidden>{domainSymbol(p.key)} </span>
-                  {p.name}
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm">{summary}</p>
+        <ToggleGroup
+          label="Show as"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { id: "chart", label: "Chart" },
+            { id: "table", label: "Table" },
+          ]}
+        />
+      </div>
+      {mode === "chart" ? (
+        <div>
+          <div className="flex gap-2">
+            <div
+              className="relative w-20 shrink-0 text-right text-[0.625rem] text-muted-foreground"
+              style={{ height: CHART_HEIGHT }}
+              aria-hidden
+            >
+              {axis.map((rank) => (
+                <span
+                  key={rank}
+                  className="absolute right-0 translate-y-1/2 truncate"
+                  style={{ bottom: `${(rank / ceiling) * 100}%` }}
+                >
+                  {titles[rank] ?? rank}
                 </span>
-                <span className="tabular-nums">
-                  <span className="font-semibold">{valueText(p.value)}</span>
-                  <span className="text-muted-foreground"> · {historyText(p.daysCounted, p.days)}</span>
-                </span>
-              </p>
-              <div className="relative h-3 rounded-sm bg-muted" aria-hidden>
-                {p.value != null && p.value > 0 ? (
+              ))}
+            </div>
+            <div
+              role="group"
+              aria-label={`Rank over the last ${label}. ${summary} Use the arrow keys to read a day.`}
+              aria-describedby={readoutId}
+              tabIndex={0}
+              onKeyDown={onKey}
+              onFocus={() => setHovered((h) => h ?? length - 1)}
+              onBlur={() => setHovered(null)}
+              onPointerMove={(e) => pick(e.clientX, e.currentTarget)}
+              onPointerLeave={() => setHovered(null)}
+              data-testid="rank-chart"
+              className="relative min-w-0 flex-1 touch-none rounded-sm border-b border-foreground/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              style={{ height: CHART_HEIGHT }}
+            >
+              <div className="absolute inset-0 flex" aria-hidden>
+                {exceptionDays.map((exception, i) => (
                   <div
-                    data-testid="consistency-bar"
-                    data-history={full ? "full" : "partial"}
-                    className={cn(
-                      "absolute inset-y-0 left-0 rounded-r-[4px]",
-                      full ? "bg-chart-earned" : "border-2 border-dashed border-chart-earned bg-chart-earned/15",
-                    )}
-                    style={{ width: `${p.value * 100}%` }}
+                    key={i}
+                    data-testid={exception ? "exception-band" : undefined}
+                    className="h-full min-w-0 flex-1"
+                    style={exception ? { backgroundImage: HATCH } : undefined}
                   />
-                ) : null}
-                {p.compare?.value != null ? (
-                  <div
-                    data-testid="compare-tick"
-                    className="absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded-full bg-foreground"
-                    style={{ left: `${p.compare.value * 100}%` }}
-                  />
-                ) : null}
+                ))}
               </div>
-              {p.compare ? (
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  {p.compare.label}: {valueText(p.compare.value)} · {historyText(p.compare.daysCounted, p.compare.days)}
-                </p>
+              {axis.map((rank) => (
+                <div
+                  key={rank}
+                  className="pointer-events-none absolute inset-x-0 border-t border-foreground/8"
+                  style={{ bottom: `${(rank / ceiling) * 100}%` }}
+                  aria-hidden
+                />
+              ))}
+              {length > 0 ? (
+                <svg
+                  className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+                  viewBox={`0 0 ${length} 100`}
+                  preserveAspectRatio="none"
+                  aria-hidden
+                >
+                  {series.map((s, i) => {
+                    const tone = LINE_TONES[i % LINE_TONES.length];
+                    return (
+                      <g key={s.key}>
+                        <path
+                          data-testid="best-line"
+                          d={stepPath(s.days.map((d) => d.bestRank))}
+                          fill="none"
+                          className={cn(tone.stroke, "opacity-70")}
+                          strokeWidth={2}
+                          strokeDasharray="1 4"
+                          strokeLinecap="round"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                        <path
+                          data-testid="rank-line"
+                          d={stepPath(s.days.map((d) => d.rank))}
+                          fill="none"
+                          className={tone.stroke}
+                          strokeWidth={2.5}
+                          strokeLinejoin="round"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </g>
+                    );
+                  })}
+                </svg>
               ) : null}
+              {hovered != null ? (
+                <>
+                  <div
+                    className="pointer-events-none absolute inset-y-0 w-px bg-foreground/40"
+                    style={{ left: `${((hovered + 0.5) / length) * 100}%` }}
+                    aria-hidden
+                  />
+                  <div
+                    className="pointer-events-none absolute top-1 z-10 max-w-[80%] rounded-md bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/10"
+                    style={{
+                      left: `${((hovered + 0.5) / length) * 100}%`,
+                      transform: `translateX(${hovered < length / 2 ? "-10%" : "-90%"})`,
+                    }}
+                    aria-hidden
+                  >
+                    {readout(hovered)}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1 text-[0.625rem] tabular-nums text-muted-foreground" aria-hidden>
+            <div className="w-20 shrink-0" />
+            <div className="flex min-w-0 flex-1 justify-between">
+              <span>{days[0] ? formatDay(days[0].day) : ""}</span>
+              <span>{days.length > 2 ? formatDay(days[Math.floor(days.length / 2)].day) : ""}</span>
+              <span>{days.at(-1) ? formatDay(days.at(-1)!.day) : ""}</span>
+            </div>
+          </div>
+          <p id={readoutId} className="sr-only" aria-live="polite">
+            {hovered != null ? readout(hovered) : ""}
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] text-muted-foreground" aria-label="Legend">
+            {series.map((s, i) => {
+              const tone = LINE_TONES[i % LINE_TONES.length];
+              return (
+                <li key={s.key} className="flex items-center gap-1.5">
+                  <span className={cn("h-0.5 w-4 rounded-full", tone.swatch)} aria-hidden /> {s.name} rank
+                </li>
+              );
+            })}
+            <li className="flex items-center gap-1.5">
+              <span className="w-4 border-t-2 border-dotted border-foreground/60" aria-hidden /> Best rank
             </li>
-          );
-        })}
-      </ul>
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] text-muted-foreground" aria-label="Legend">
-        <li className="flex items-center gap-1.5">
-          <span className="h-2.5 w-4 rounded-[2px] bg-chart-earned" aria-hidden /> Last {label}
-        </li>
-        {partial ? (
-          <li className="flex items-center gap-1.5">
-            <span className="h-2.5 w-4 rounded-[2px] border-2 border-dashed border-chart-earned bg-chart-earned/15" aria-hidden />
-            Less history than the period
-          </li>
-        ) : null}
-        {comparing ? (
-          <li className="flex items-center gap-1.5">
-            <span className="h-3 w-0.5 rounded-full bg-foreground" aria-hidden /> Last {comparing}
-          </li>
-        ) : null}
-      </ul>
+            {exceptionDays.some(Boolean) ? (
+              <li className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-[2px] ring-1 ring-foreground/20" style={{ backgroundImage: HATCH }} aria-hidden />
+                Exception day
+              </li>
+            ) : null}
+          </ul>
+        </div>
+      ) : (
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label={`Rank over the last ${label}, as a table`}
+          className="max-h-80 overflow-y-auto rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <table className="w-full text-sm">
+            <caption className="sr-only">Rank by day over the last {label}, newest first</caption>
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th scope="col" className="py-1 font-medium">
+                  Day
+                </th>
+                {series.length > 1 ? (
+                  <th scope="col" className="py-1 font-medium">
+                    Domain
+                  </th>
+                ) : null}
+                <th scope="col" className="py-1 text-right font-medium">
+                  Level
+                </th>
+                <th scope="col" className="py-1 pl-3 font-medium">
+                  Rank
+                </th>
+                <th scope="col" className="py-1 pl-3 font-medium">
+                  Best rank
+                </th>
+                <th scope="col" className="py-1 pl-3 font-medium">
+                  Exception
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {[...Array(length).keys()].reverse().flatMap((i) =>
+                series.map((s) => {
+                  const d = s.days[i];
+                  if (!d) return null;
+                  return (
+                    <tr key={`${s.key}-${d.day}`}>
+                      <th scope="row" className="py-1.5 text-left font-normal">
+                        {formatDay(d.day)}
+                      </th>
+                      {series.length > 1 ? <td className="py-1.5">{s.name}</td> : null}
+                      <td className="py-1.5 text-right tabular-nums">{d.level}</td>
+                      <td className="py-1.5 pl-3">{s.titles[d.rank] ?? d.rank}</td>
+                      <td className="py-1.5 pl-3">{s.titles[d.bestRank] ?? d.bestRank}</td>
+                      <td className="py-1.5 pl-3 text-muted-foreground">{d.exception ? "Yes" : ""}</td>
+                    </tr>
+                  );
+                }),
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
-/** Each configured domain's level as a bar from 1 to 100, ticked where each rank begins. */
+/** Each configured domain's shown level as a bar from 1 to 100, ticked where each rank begins and at its best. */
 export function LevelBars({ points }: { points: LevelPoint[] }) {
   return (
     <ul className="space-y-4" aria-label="Level since the start">
@@ -302,7 +475,11 @@ export function LevelBars({ points }: { points: LevelPoint[] }) {
             </span>
             <span className="tabular-nums">
               <span className="font-semibold">Level {p.level}</span>
-              <span className="text-muted-foreground"> of 100 · {p.rankTitle}</span>
+              <span className="text-muted-foreground">
+                {" "}
+                of 100 · {p.rankTitle}
+                {p.best > p.level ? ` · best ${p.best}, ${p.bestRankTitle}` : ""}
+              </span>
             </span>
           </p>
           <div className="relative h-3 rounded-sm bg-muted" aria-hidden>
@@ -312,12 +489,15 @@ export function LevelBars({ points }: { points: LevelPoint[] }) {
               style={{ width: `${p.level}%` }}
             />
             {p.rankLevels.map((level) => (
-              <div
-                key={level}
-                className="absolute inset-y-0 w-px bg-background/90"
-                style={{ left: `${level}%` }}
-              />
+              <div key={level} className="absolute inset-y-0 w-px bg-background/90" style={{ left: `${level}%` }} />
             ))}
+            {p.best > p.level ? (
+              <div
+                data-testid="best-tick"
+                className="absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded-full bg-foreground"
+                style={{ left: `${p.best}%` }}
+              />
+            ) : null}
           </div>
           <div className="relative h-3 text-[0.625rem] text-muted-foreground tabular-nums" aria-hidden>
             {[1, 25, 50, 75, 100].map((level) => (
@@ -332,6 +512,11 @@ export function LevelBars({ points }: { points: LevelPoint[] }) {
           </div>
         </li>
       ))}
+      {points.some((p) => p.best > p.level) ? (
+        <li className="flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground" aria-hidden>
+          <span className="h-3 w-0.5 rounded-full bg-foreground" /> Best level
+        </li>
+      ) : null}
     </ul>
   );
 }
@@ -355,20 +540,18 @@ const pointsOf = (values: number[]) => values.map((v, i) => at(i, values.length,
 interface SpiderAxis {
   key: string;
   name: string;
-  /** 0–1 along the axis; null draws no vertex. */
-  value: number | null;
-  /** The value's words under the axis name, e.g. "88% · 12 of 30 days". */
+  /** 0–1 along the axis. */
+  value: number;
+  /** The value's words under the axis name, e.g. "Expert · from Adept". */
   detail: string;
-  /** Less history than the period: a hollow vertex. */
-  partial: boolean;
-  /** The comparison period's value along the axis. */
-  compare?: number | null;
+  /** A second value along the axis, dashed (the period's start). */
+  compare?: number;
 }
 
 /**
- * A spider chart: one axis per domain, rings at `rings` (fractions of the axis), the period's
- * polygon filled, and an optional comparison polygon dashed. Hovering a vertex reads it out;
- * the table under the chart holds every value.
+ * A spider chart: one axis per domain, rings at `rings` (fractions of the axis), the value's
+ * polygon filled, and an optional second polygon dashed. Hovering a vertex reads it out; the
+ * table under the charts holds every value.
  */
 function Spider({
   axes,
@@ -387,7 +570,6 @@ function Spider({
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
   const n = axes.length;
-  const values = axes.map((a) => a.value ?? 0);
   const comparing = axes.some((a) => a.compare != null);
   const shown = hovered != null ? axes[hovered] : null;
   return (
@@ -402,12 +584,7 @@ function Spider({
         {rings.map((r) => (
           <g key={r}>
             <polygon points={pointsOf(axes.map(() => r))} fill="none" className="stroke-foreground/12" strokeWidth={1} />
-            <text
-              x={CX - 4}
-              y={CY - RADIUS * r - 2}
-              textAnchor="end"
-              className="fill-muted-foreground text-[9px] tabular-nums"
-            >
+            <text x={CX - 4} y={CY - RADIUS * r - 2} textAnchor="end" className="fill-muted-foreground text-[9px] tabular-nums">
               {ringLabel(r)}
             </text>
           </g>
@@ -417,7 +594,7 @@ function Spider({
           return <line key={a.key} x1={CX} y1={CY} x2={x} y2={y} className="stroke-foreground/12" strokeWidth={1} />;
         })}
         <polygon
-          points={pointsOf(values)}
+          points={pointsOf(axes.map((a) => a.value))}
           className="fill-chart-earned/20 stroke-chart-earned"
           strokeWidth={2}
           strokeLinejoin="round"
@@ -434,21 +611,11 @@ function Spider({
           />
         ) : null}
         {axes.map((a, i) => {
-          if (a.value == null) return null;
           const [x, y] = at(i, n, a.value);
           return (
             <g key={a.key} onPointerEnter={() => setHovered(i)} onPointerLeave={() => setHovered(null)}>
               <circle cx={x} cy={y} r={12} fill="transparent" />
-              <circle
-                data-testid="spider-vertex"
-                data-history={a.partial ? "partial" : "full"}
-                cx={x}
-                cy={y}
-                r={4.5}
-                strokeWidth={2}
-                className={cn("stroke-chart-earned", a.partial ? "fill-card" : "fill-chart-earned")}
-                strokeDasharray={a.partial ? "2 2" : undefined}
-              />
+              <circle data-testid="spider-vertex" cx={x} cy={y} r={4.5} strokeWidth={2} className="fill-chart-earned stroke-chart-earned" />
             </g>
           );
         })}
@@ -474,15 +641,9 @@ function Spider({
         <li className="flex items-center gap-1.5">
           <span className="h-2.5 w-4 rounded-[2px] bg-chart-earned" aria-hidden /> {title}
         </li>
-        {axes.some((a) => a.partial) ? (
-          <li className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-full border-2 border-dashed border-chart-earned" aria-hidden /> Less
-            history than the period
-          </li>
-        ) : null}
         {comparing && compareLabel ? (
           <li className="flex items-center gap-1.5">
-            <span className="w-4 border-t-2 border-dashed border-foreground/70" aria-hidden /> Last {compareLabel}
+            <span className="w-4 border-t-2 border-dashed border-foreground/70" aria-hidden /> {compareLabel}
           </li>
         ) : null}
       </ul>
@@ -490,23 +651,24 @@ function Spider({
   );
 }
 
-/** Consistency per configured domain as a spider (three or more configured), 0–100%. */
-export function ConsistencySpider({ points, periodLabel: label }: { points: ConsistencyPoint[]; periodLabel: string }) {
-  const compareLabel = points.find((p) => p.compare)?.compare?.label;
+/** Rank per configured domain as a spider (three or more configured): now filled, the period's start dashed. */
+export function RankSpider({ points, periodLabel: label }: { points: RankPoint[]; periodLabel: string }) {
+  const top = Math.max(...points.map((p) => p.topRank), 1);
   return (
     <Spider
-      title={`Last ${label}`}
-      description={points.map(inWords).join(" ")}
-      rings={[0.25, 0.5, 0.75, 1]}
-      ringLabel={(r) => `${Math.round(r * 100)}%`}
-      compareLabel={compareLabel}
+      title="Rank now"
+      description={points
+        .map((p) => (p.rankFrom === p.rankTo ? `${p.name}: ${p.titleTo}.` : `${p.name}: ${p.titleTo}, from ${p.titleFrom}.`))
+        .join(" ")}
+      rings={Array.from({ length: top }, (_, i) => (i + 1) / top)}
+      ringLabel={(r) => (Math.round(r * top) % 2 === 0 ? `${Math.round(r * top)}` : "")}
+      compareLabel={`${label} ago`}
       axes={points.map((p) => ({
         key: p.key,
         name: p.name,
-        value: p.value,
-        detail: `${valueText(p.value)} · ${historyText(p.daysCounted, p.days)}`,
-        partial: p.daysCounted < p.days,
-        compare: p.compare?.value ?? null,
+        value: p.rankTo / top,
+        detail: p.rankFrom === p.rankTo ? p.titleTo : `${p.titleTo} · from ${p.titleFrom}`,
+        compare: p.rankFrom / top,
       }))}
     />
   );
@@ -518,23 +680,37 @@ export function LevelSpider({ points }: { points: LevelPoint[] }) {
   return (
     <Spider
       title="Level"
-      description={points.map((p) => `${p.name}: level ${p.level}, ${p.rankTitle}.`).join(" ")}
+      description={points.map((p) => `${p.name}: level ${p.level}, ${p.rankTitle}; best ${p.best}.`).join(" ")}
       rings={ranks.map((level) => level / 100)}
       ringLabel={(r) => (Math.round(r * 100) % 20 === 0 ? `${Math.round(r * 100)}` : "")}
+      compareLabel="Best level"
       axes={points.map((p) => ({
         key: p.key,
         name: p.name,
         value: p.level / 100,
         detail: `Level ${p.level} · ${p.rankTitle}`,
-        partial: false,
+        compare: p.best / 100,
       }))}
     />
   );
 }
 
-/** Every domain's figures for the period; the charts' table view. */
-function ReportTable({ rows, days, periodLabel: label }: { rows: DomainReportRow[]; days: number; periodLabel: string }) {
+/** Every domain's figures for the period. */
+function ReportTable({
+  rows,
+  ladders,
+  periodLabel: label,
+}: {
+  rows: DomainReportRow[];
+  ladders: Map<string, string[]>;
+  periodLabel: string;
+}) {
   const dash = <span className="text-muted-foreground">—</span>;
+  const head = (text: string, right = true) => (
+    <th scope="col" className={cn("px-3 py-2 font-medium", right && "text-right")}>
+      {text}
+    </th>
+  );
   return (
     <div
       tabIndex={0}
@@ -546,66 +722,55 @@ function ReportTable({ rows, days, periodLabel: label }: { rows: DomainReportRow
         <caption className="sr-only">Every life domain over the last {label}</caption>
         <thead>
           <tr className="border-b text-left text-xs text-muted-foreground">
-            <th scope="col" className="px-3 py-2 font-medium">
-              Domain
-            </th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">
-              Days counted
-            </th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">
-              Successful
-            </th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">
-              Consistency
-            </th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">
-              XP
-            </th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">
-              Base XP a day
-            </th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">
-              Level
-            </th>
-            <th scope="col" className="px-3 py-2 font-medium">
-              Ranks reached
-            </th>
+            {head("Domain", false)}
+            {head("Days counted")}
+            {head("Exception days")}
+            {head("Active days")}
+            {head("Base XP a day")}
+            {head("XP")}
+            {head("Level")}
+            {head("Rank", false)}
+            {head("Best rank", false)}
+            {head("New bests", false)}
           </tr>
         </thead>
         <tbody className="divide-y">
-          {rows.map((d) => (
-            <tr key={d.key}>
-              <th scope="row" className="px-3 py-2 text-left font-medium">
-                <span aria-hidden>{domainSymbol(d.key)} </span>
-                {d.name}
-                {d.configured ? null : <span className="block text-xs font-normal text-muted-foreground">XP only</span>}
-              </th>
-              <td className="px-3 py-2 text-right tabular-nums">
-                {d.daysCounted != null ? historyText(d.daysCounted, days) : dash}
-              </td>
-              <td className="px-3 py-2 text-right tabular-nums">{d.successfulDays ?? dash}</td>
-              <td className="px-3 py-2 text-right tabular-nums">
-                {d.consistency != null && d.daysCounted ? percent(d.consistency) : dash}
-              </td>
-              <td className="px-3 py-2 text-right tabular-nums">
-                {d.paid.toLocaleString()}
-                {d.base !== d.paid ? (
-                  <span className="block text-xs text-muted-foreground">{d.base.toLocaleString()} base</span>
-                ) : null}
-              </td>
-              <td className="px-3 py-2 text-right tabular-nums">
-                {d.averageBase != null && d.daysCounted ? d.averageBase.toLocaleString() : dash}
-              </td>
-              <td className="px-3 py-2 text-right tabular-nums">
-                {d.levelTo == null ? dash : d.levelFrom === d.levelTo ? d.levelTo : `${d.levelFrom} → ${d.levelTo}`}
-              </td>
-              <td className="px-3 py-2">
-                {d.ranksReached && d.ranksReached.length > 0
-                  ? d.ranksReached.map((r) => `${r.title} (${formatDay(r.qualifiedOn)})`).join(", ")
-                  : dash}
-              </td>
-            </tr>
-          ))}
+          {rows.map((d) => {
+            const titles = ladders.get(d.key) ?? [];
+            const bests = newBestsText(d);
+            const rankFrom = d.rankFrom != null ? (titles[d.rankFrom] ?? `${d.rankFrom}`) : null;
+            return (
+              <tr key={d.key}>
+                <th scope="row" className="px-3 py-2 text-left font-medium">
+                  <span aria-hidden>{domainSymbol(d.key)} </span>
+                  {d.name}
+                  {d.configured ? null : <span className="block text-xs font-normal text-muted-foreground">XP only</span>}
+                </th>
+                <td className="px-3 py-2 text-right tabular-nums">{d.daysCounted ?? dash}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{d.exceptionDays ?? dash}</td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {d.activeDays != null && d.daysCounted ? `${d.activeDays} (${percent(d.activeShare ?? 0)})` : dash}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {d.averageBase != null && d.daysCounted ? d.averageBase.toLocaleString() : dash}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {d.paid.toLocaleString()}
+                  {d.base !== d.paid ? (
+                    <span className="block text-xs text-muted-foreground">{d.base.toLocaleString()} base</span>
+                  ) : null}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {d.levelTo == null ? dash : d.levelFrom === d.levelTo ? d.levelTo : `${d.levelFrom} → ${d.levelTo}`}
+                </td>
+                <td className="px-3 py-2">
+                  {d.rankTitle == null ? dash : rankFrom && rankFrom !== d.rankTitle ? `${rankFrom} → ${d.rankTitle}` : d.rankTitle}
+                </td>
+                <td className="px-3 py-2">{d.bestRankTitle ?? dash}</td>
+                <td className="px-3 py-2">{bests ?? (d.configured ? <span className="text-muted-foreground">None</span> : dash)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
