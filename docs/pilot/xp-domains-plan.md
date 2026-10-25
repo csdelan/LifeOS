@@ -15,6 +15,15 @@ Social, Environment and Finance collect XP only until each gets rules of its own
 and unlock ranks through demonstrated consistency. That's enough to learn whether
 gamification changes Chris's days. Everything in §6 has to earn its place through use.
 
+**Added on 2026-10-25 (§7), levels v2:**
+- Health's level follows recent consistency, so level and rank can fall slowly, while a best
+  level and best rank are kept.
+- Days marked as exceptions are skipped.
+- The lifetime curve is cheaper for the early levels.
+
+Phases X8–X11. Until X10 lands the app runs §1–§3's rules. After that, §7 replaces what they
+say about ranks, the level cap, banked XP and the successful day.
+
 ## 0. Read these first
 
 - [rewards-plan.md](rewards-plan.md): the ledger, award keys, reconcile, bounties. Everything
@@ -32,6 +41,9 @@ gamification changes Chris's days. Everything in §6 has to earn its place throu
     the vocabulary.
 
 ## 1. The rules (agreed 2026-10-20)
+
+> **Levels v2 (§7)** replaces the rows on levels, ranks, rank regression, lifetime vs current,
+> "XP ahead of consistency", the successful day and the spider charts once X10 lands.
 
 | Question | Decision |
 |---|---|
@@ -67,6 +79,8 @@ gamification changes Chris's days. Everything in §6 has to earn its place throu
 ## 2. Health, the pilot domain
 
 ### 2.1 Level curve
+
+> **Levels v2 (§7.2)** replaces this curve with a cheaper cubic one once X10 lands.
 
 `XPnext(L) = 300 + 25(L−1) + 70·max(0, L−45)`, the cost of going from level L to L+1.
 Level L needs the sum of `XPnext(1..L−1)`.
@@ -105,6 +119,9 @@ which the sketch put at "always Legend; Grandmaster in about 1 run in 4, after 8
 Human sits right on the top two bars, so it's the first line to check at calibration (§2.4).
 
 ### 2.2 Ranks
+
+> **Levels v2 (§7.2)** replaces these gates. Each rank is held, and can be lost, through the
+> consistency level, with no window per rank.
 
 | Rank | Levels | Title | To enter: consistency over window | Rank-up Gems |
 |---|---|---|---|---|
@@ -322,6 +339,8 @@ per day, filling a null `credited_on` from `occurred_at` in the zone.
 
 ### 3.5 The progression fold
 
+> **Levels v2 (§7.4.4)** replaces this fold's level cap, banked XP and rank walk.
+
 `DomainProgress.Fold(rules, days, today)` is a pure C# function over one domain's daily
 series. Every progression number in the app comes from it.
 
@@ -424,6 +443,9 @@ series. Every progression number in the app comes from it.
     above, not a bug.
 
 ### 3.7 Rank-up Gems
+
+> **Levels v2 (§7.4.6):** Gems are paid the first time the best rank reaches a rank, with the
+> same keys.
 
 - Award key `rank:<domain>:<start level>` (for example `rank:health_xp:10`), trigger `rank`,
   priced from the domain's `RankUpGems`, not an item bounty. It's due when the fold says the
@@ -645,6 +667,8 @@ Dates are local days in the home zone, not the viewer's zone.
 
 ### 3.12 The Character page (web)
 
+> **Levels v2 (§7.4.9)** redesigns this page once X11 lands.
+
 - **`/character`**, called "Character", in the nav and the command palette.
 - **One card per configured domain**, showing lifetime and current side by side:
   - **Lifetime:** symbol and name, "Level 12", a rank badge ("Apprentice"), and a progress
@@ -704,6 +728,8 @@ Dates are local days in the home zone, not the viewer's zone.
     - axe on the page with the chart open, as a chart and as a table, in both themes.
 
 ### 3.13 Reports and spider charts (web)
+
+> **Levels v2 (§7.4.10):** rank over time replaces the period consistency chart once X11 lands.
 
 - Period chips: 7 days, 30 days, 3 months, 6 months, 1 year.
 - **Only configured domains are plotted.** With fewer than three configured, the page shows
@@ -795,6 +821,19 @@ Each phase also updates the Build fields of the requirements it advances.
 - Migrations continue from 0030. Merging to `main` promotes them to staging through CI as
   usual.
 
+**Levels v2 (added 2026-10-25, §7):**
+
+| # | Phase | Delivers | Depends on |
+|---|---|---|---|
+| X8 | Requirements + plan | REWARD-6 and REWARD-7 updated, REWARD-8 (exception days), D17, the backlog line; §7 and its pointers in §1–§6; the formulas doc marked settled. | X7 |
+| X9 | v2 inputs: exception days, action XP, settled days | Migration 0043 (`v_exception_day`, §7.4.3); `ExceptionDayService`; the three `/api/domains/exceptions` endpoints; `bsk domains exception` and `bsk domains exceptions`; `DomainCredit` gains `ExceptionDays` and `SettledThrough`, and `DomainDay` gains `Passive`, in both the ledger repository and `RewardReader` (§7.4.2). The fold ignores the new inputs, so no number Chris sees changes. Tests: mark, change the comment, unmark and mark again; a blank comment and a future day are refused; no day means today in the home zone; the list's range and order; a voided day drops out of the view; the reader role sees the view; the passive split by trigger; `SettledThrough` either side of 4 a.m.; the endpoints' 400s. REWARD-8 Build → `building`. | X8 |
+| X10 | Levels v2 in the kernel | §7.4.1 and §7.4.4–§7.4.8: `CubicCurve`, `ConsistencyRule`, `FallRule`, `ActiveAtShownLevel`, the new `RankRule` and the drift test; the v2 fold; pricing, Gems on a first best rank, `progress` with best fields, the reads and `bsk domains`; the simulator and its scenarios (§7.4.11). The Domain and `LifeDomains` tests are rewritten for v2. Tests: curve totals (60 / 1,476 / 46,825 / 255,686 at levels 2 / 10 / 50 / 100); the rank table; a level never passes while one below it fails; the age test counts active days; S rises to T at once; the fall timeline from 100 with no XP (Legend day 10, Champion 21, Master 33, Elite 46, Novice 249); S never falls below T; 7 days back on track pauses the fall; exception days are skipped and pause it; a marked lapse leaves level and rank unchanged; an unsettled day never lowers S; best never falls; Gems on the first best rank only, and never again for a rank X4 paid; multiplier success at the shown level, exception days skipped; unconfigured domains report XP only. **Push with X11.** | X9 |
+| X11 | Levels v2 on the web | `npm run gen:api`; the types; the `domain-fold.ts` port; the mock and a new seed (a follow lifts a new best level, 10 / Apprentice, and one exception day); `domains.ts` words; `announceEarned`; the Character page and the exception dialog, chart and ladder (§7.4.9); Reports' rank over time (§7.4.10). Vitest on the port and the views, the e2e golden path and the Reports path, and axe in both themes. REWARD-6, REWARD-7 and REWARD-8 Build → `built`. **Then calibrate (§2.4).** | X10 |
+
+- **X9 can be pushed alone**; X10 and X11 are pushed together, because X10 changes the API's
+  shape (§7.5).
+- **0043 is the only v2 migration.**
+
 ## 5. How this design was settled
 
 **Review rounds (2026-10-20).** Chris's brainstorming agent reviewed the first draft, and its
@@ -840,10 +879,10 @@ Each of these has to earn its place through use of the pilot.
 
 - **Rank milestones:** the evaluator (Goals completed), and simulating them.
 - **Richer success rules:** `AllOf` / `AnyOf`, habits followed, commitments kept, an approved
-  recovery-day routine.
+  recovery-day routine. *v2's exception days cover recovery days (§7.4.3).*
 - **A weekly cadence**, for Social and Finance.
 - **"Rank achieved" vs "currently qualified":** a permanent record of the highest rank ever
-  reached, shown beside what today's rules qualify.
+  reached, shown beside what today's rules qualify. *v2 builds this as the best rank (§7).*
 - **Tuning the rules in the app** instead of in code.
 - **Each other domain's own rules**, one at a time, the way Health was done.
 - **More domains:** a line in `Currencies`, plus a rules record when it's configured.
@@ -853,6 +892,571 @@ Each of these has to earn its place through use of the pilot.
 - **Penalties** in domain XP: §3.4's credit read would need to count entries without an award
   key.
 - **Area hints:** pre-fill an item's domain XP from its Area.
+
+## 7. Levels v2: consistency sets the level, ranks can fall (agreed 2026-10-25)
+
+Under X1–X7 a rank is entered through a gate and never lost, so it says what Chris once did,
+not how he's doing. Rank is the figure he wants to track over time and compare across
+domains, so v2 ties level and rank to recent consistency:
+
+- The level is the lower of what lifetime XP has paid for and what the last 90 days support.
+- It falls slowly while he isn't keeping up, and a best level and best rank keep the record.
+- Days he marks as exceptions (sickness, injury, travel) neither help nor hurt.
+
+The formulas were settled in the Claude Doc **Health XP Model — Formulas**
+(<https://claude.ai/artifact/Wo23SEZ7arEgeCLix3dzBn>). They were checked with a Python model
+and the consistency simulator (<https://claude.ai/artifact/QRoGVdpFzZnMBW5yUqBx1S>). This
+section is the build-side copy. Once X10 lands, §7 replaces what §1, §2.2, §3.5, §3.7 and
+§3.12 say about ranks, the level cap, banked XP and the successful day. Everything else in
+§1–§3 still holds.
+
+### 7.1 The rules
+
+| Question | X1–X7 (live) | v2 |
+|---|---|---|
+| A day's Health XP | Food, activity, habits and tasks. | Unchanged. Sleep is now labelled **passive**, and everything else is **action XP**: `B = H − sleep`. |
+| Lifetime level | From total paid XP on §2.1's curve. Never falls. | From total paid XP on **the new curve** (§7.2). Never falls. It's the ceiling the level can't pass. |
+| Counted days | Every calendar day since the start. | **Settled** days since the first Health XP, minus exception days. A day settles at 4 a.m. the next morning, when steps and exercise pay (Oura's day runs 4 a.m. to 4 a.m.). |
+| Consistency level | No such thing: rank gates read consistency. | **C**: the highest level the last `N = min(90, counted days)` counted days support. It has to pass an age test, an average test and an active-day test (§7.2). |
+| Level | `min(raw level, top of the rank held)`, with the rest banked. | **Shown level S** follows the target `T = min(lifetime level, C)`. It **rises to T at once**. It **falls 1% of itself a day**, with no hold, never below T. The fall **pauses** while the last 7 counted days pass level S's own average and active-day tests, and on exception days. S is shown rounded up. |
+| Level cap, banked XP | Yes. | **Gone.** |
+| Rank | Entered through a gate (level, bar over a window, age). Never falls from inactivity. | **`min(10, ⌊S / 10⌋)`**, so it can fall. The titles are unchanged (§2.2). The gates are gone. |
+| Best level, best rank | None. A permanent record was a §6 "later". | The highest S and rank ever reached, worked out from history like everything else (D12). Inactivity never lowers them. A retune or a correction can, as before. |
+| Multiplier tiers | §2.3. | Unchanged. |
+| The multiplier's successful day | 60+ base XP. | **Active at the shown level:** that day's action XP ≥ `M(S)`, where S is the level going into the day. |
+| The multiplier's 30 days | The 30 complete calendar days before the credited day. | The 30 complete days before it **with exception days skipped**, so the window reaches back one more day for each. Days before the start still count as unsuccessful. Still frozen when issued. |
+| Rank-up Gems | 1 per rank and 5 for Grandmaster, paid once. | The same, paid **the first time the best rank reaches it**. Same award keys, so a rank already paid under X4 is never paid again, and none is ever reversed. |
+| Celebrations | Every level-up and rank-up. | **Only a new best level (full) or a new best rank (grand).** Getting back to an earlier level is a quiet note. A drop caused by an undo is a quiet toast. A drop over time shows on the Character page, not as a toast (§7.4.7). |
+| Exception days | None. | A day Chris marks with a **required comment**. There's no limit, and he can unmark it later. It covers every configured domain, which is Health only for now. It's skipped by every window and pauses a fall. XP earned on it still counts toward lifetime XP. |
+| Reports across domains | Consistency % per period, level since the start. | **Each domain's rank over time** (§7.4.10). |
+
+### 7.2 Health's formulas
+
+For a counted day d, `H_d` is the day's base Health XP and `B_d` its action XP. The window is
+the last N counted days. Level L (2–100) qualifies when all three of these pass:
+
+```
+age:          #{counted days so far with B_d ≥ M(L)}  ≥  min(90, L + 1)
+average:      Σ_window H_d                             ≥  A(L) · N
+active days:  #{d in window : B_d ≥ M(L)}              ≥  ⌈P(L) · N⌉
+
+A(L) = 20 + round(60 · (L − 2) / 98)      average base XP a day: 20 at level 2, 80 at level 100
+M(L) = max(10, round(0.4 · A(L)))         action XP for an active day: 10 to 32
+P(L) = 0.50 + 0.40 · (L − 2) / 98         share of days active: 50% to 90%
+```
+
+- **C** is the highest qualifying L, or 1. Every level reads the same window, so when a level
+  passes, every level below it passes too, and the walk can stop at the first failure.
+- **Whole-number math:**
+  - Neither rounding ever lands exactly on a half, so the rounding rule doesn't matter. A half
+    would need `60(L − 2)` to equal 49 times an odd number, or `4A` to be odd.
+  - `⌈P(L) · N⌉ = ⌈N · (490 + 4(L − 2)) / 980⌉`.
+  - The average test is `Σ H ≥ A · N` in integers.
+- **Age counts active days**, not days of any kind. Counting any day let consistency climb
+  after a short binge stopped.
+
+The shown level, kept as a whole number of **ten-thousandths of a level** so C# and
+TypeScript agree to the digit:
+
+```
+T_t = min(lifetime level_t, C_t)
+Ŝ_t = T_t · 10000                          if T_t ≥ S_(t−1)                (rising)
+Ŝ_t = Ŝ_(t−1)                              on an exception day, or back on track
+Ŝ_t = max(T_t · 10000, ⌊Ŝ_(t−1) · 99 / 100⌋)  otherwise                     (falling)
+S_t = ⌈Ŝ_t / 10000⌉          rank_t = min(10, ⌊S_t / 10⌋)
+back on track: the last 7 counted days pass level S_(t−1)'s average and active-day tests (N = 7)
+```
+
+The lifetime curve, as the total XP that reaches level L:
+
+```
+XP(L) = 60n + 12n(n − 1) + ⌈17n(n − 1)(n − 2) / 120⌉,   n = L − 1
+```
+
+This is `⌈60n + 24·C(n,2) + 0.85·C(n,3)⌉` in whole numbers, and it matches the float form at
+every level. Each level costs at least as much as the one before.
+
+| Level | Total XP (new) | Total XP (§2.1) | At about 100 paid XP a day | Cost of the next level |
+|---|---|---|---|---|
+| 2 | 60 | 300 | day 1 | 84 |
+| 3 | 144 | 625 | day 2 | 109 |
+| 10 | 1,476 | 3,600 | about 2 weeks | 306 |
+| 20 | 6,068 | 9,975 | about 2 months | 661 |
+| 30 | 14,590 | 18,850 | about 5 months | 1,101 |
+| 45 | 36,602 | 36,850 | about 1 year | 1,920 |
+| 50 | 46,825 | 44,800 | about 15 months | 2,235 |
+| 70 | 104,979 | 100,350 | about 2.9 years | 3,710 |
+| 90 | 195,854 | 193,900 | about 5.4 years | 5,524 |
+| 100 | 255,686 | 254,925 | about 7 years | — |
+
+What each rank takes to hold its first level over a full 90-day window:
+
+| Rank | Levels | Average base XP a day | Action XP for an active day | Active days of 90 | Total XP to reach |
+|---|---|---|---|---|---|
+| Novice | 1–9 | — | — | — | 0 |
+| Apprentice | 10–19 | 25 | 10 | 48 (53%) | 1,476 |
+| Journeyman | 20–29 | 31 | 12 | 52 (57%) | 6,068 |
+| Adept | 30–39 | 37 | 15 | 56 (61%) | 14,590 |
+| Expert | 40–49 | 43 | 17 | 59 (66%) | 27,893 |
+| Veteran | 50–59 | 49 | 20 | 63 (70%) | 46,825 |
+| Elite | 60–69 | 56 | 22 | 67 (74%) | 72,237 |
+| Master | 70–79 | 62 | 25 | 70 (78%) | 104,979 |
+| Champion | 80–89 | 68 | 27 | 74 (82%) | 145,902 |
+| Legend | 90–99 | 74 | 30 | 78 (86%) | 195,854 |
+| Grandmaster | 100 | 80 | 32 | 81 (90%) | 255,686 |
+
+The tunable numbers are 20 and 80 (the average), 0.4 and 10 (the active day), 50% and 90%
+(the active share), 90 days (the window), 1% a day with no hold and 7 days back on track (the
+fall), and §2.3's multiplier tiers.
+
+### 7.3 What it produces
+
+From the Python model (6 seeded runs of 10 years each, using the routines of activity plan
+§3.8). These are the targets X10's simulator bands are checked against:
+
+| Routine (average base XP a day) | Year 1 | Year 5 | Level 100 | Lowest level, years 9–10 | Rank drops a year |
+|---|---|---|---|---|---|
+| High activity (100) | 49–50, Expert | 96–97, Legend | 5.3–5.4 years | 100 | 0 |
+| Calibration routine (79) | 44–45, Expert | 88, Champion | 6.8–6.9 years | 90–94 | 3–6 |
+| Food at the Food Log's good day (75) | 43–44, Expert | 86, Champion | 2 runs of 6 (7.2 and 9.6 years) | 84–89 | 2–5 |
+| Routine with 10% of days off (71) | 41–43, Expert | 82–84, Champion | 1 run of 6 (9.6 years) | 69–79 | 3–5 |
+| Lower adherence (56) | 38, Adept | 53–64, Veteran to Elite | Never | 50–56 | 2–6 |
+
+- **The calibration routine's rank drops** are nearly all short dips from Grandmaster to
+  Legend, usually regained in about 9 days. Grandmaster is the only one-level rank, so falling
+  one level loses it. Chris accepted them rather than add a hold.
+- **Breaks from Grandmaster** (90 base XP a day before and after; lowest level on the right):
+
+  | Break | Level on return | Lowest | Back to 100 |
+  |---|---|---|---|
+  | 7 days | 100 | 100 | No change |
+  | 14 days | 95 | 90 | 80 days after return |
+  | 30 days | 81 | 78 | 80 days after return |
+  | 60 days | 60 | 57 | 80 days after return |
+  | 120 days | 33 | 32 | 80 days after return |
+  | Any length, marked as exception days | 100 | 100 | No change |
+
+- **Level 100, then nothing logged:** raw consistency holds 9 days (90-day window × 10%
+  missable), so the fall starts on day 10. It reaches Legend on day 10, Champion on day 21,
+  Master on day 33, Elite on day 46, level 60 at two months, 45 at three, and Novice on day
+  249.
+
+### 7.4 Design
+
+#### 7.4.1 Rules in code
+
+`DomainRules` changes shape (Domain, `LifeDomains.cs`). Its X3–X4 parts that v2 drops go
+with it:
+
+- `Curve`: Health gets a new `ILevelCurve`, **`CubicCurve(Linear: 60, Quadratic: 24,
+  Cubic: 0.85)`**. `TotalFor` is the closed form in §7.2, in whole numbers. `CostToNext` is
+  the difference of totals, and `LevelFor` is a binary search, as `RampCurve` does.
+  `RampCurve` stays, unused, as another shape a domain can pick.
+- `Consistency`: new, **`ConsistencyRule(WindowDays: 90, AverageFrom: 20, AverageTo: 80,
+  ActiveShare: 0.4, ActiveFloor: 10, ShareFrom: 0.50, ShareTo: 0.90)`**.
+  - It answers `Average(level)`, `ActiveMinimum(level)` and `ActiveDaysNeeded(level, n)`,
+    and the age test's `min(WindowDays, level + 1)`.
+  - It uses the whole-number forms in §7.2.
+- `Fall`: new, **`FallRule(PercentPerDay: 1, HoldDays: 0, BackOnTrackDays: 7)`**. It works
+  in ten-thousandths of a level (§7.2). `HoldDays` stays at 0, but it's there because the
+  simulator tried other values.
+- `Success`: Health's becomes **`ActiveAtShownLevel`**: a day succeeds when its action XP
+  reaches `ActiveMinimum` of the shown level going into that day. `MinimumBaseXp` stays as
+  another rule.
+  - `PeriodFacts` gains `ActionXp` and `ShownLevel`, so the rule stays a pure function of
+    the facts.
+  - The walk supplies `ShownLevel`, because it comes from the days before.
+- `Ranks`: **`RankRule(StartLevel, Title)`**, one every 10 levels, the same eleven titles.
+  `MinConsistency`, `WindowDays` and `Milestones` go, and `TopLevelOf` goes with the cap.
+- `PassiveTriggers`: new, the award triggers whose XP is passive. Health's is `["sleep"]`
+  (`ActivityAwards.SleepTrigger`). Action XP is base minus passive.
+- `Multiplier` and `RankUpGems`: unchanged. `GemsFor` and `RankAwardKey` keep their keys,
+  `rank:health_xp:<start level>`.
+- The drift test drops its gate checks and adds:
+  - the consistency rule's ranges run upward
+  - `ActiveMinimum` never falls as the level rises
+  - ranks start every 10 levels from 1 to 100
+  - the curve never gets cheaper per level
+  - the passive triggers are known award triggers
+
+#### 7.4.2 Daily credit: action XP and exception days
+
+- **`DomainDay(Day, Base, Paid)` gains `Passive`**, the base XP of passive awards credited
+  that day. Action XP is `Base − Passive`.
+  - `v_award_credit` already carries `award_key`, and activity awards are keyed
+    `<trigger>:<yyyy-MM-dd>` (`sleep:2026-10-24`). No item trigger is named `sleep`.
+  - So `GetDomainDaysAsync` can total passive base per day in its SQL with no migration:
+    `sum(base) FILTER (WHERE split_part(award_key, ':', 1) = ANY(@passive))`.
+  - It returns that in `CreditDay`, and `DomainService.DaysOf` passes it into `DomainDay`.
+    The passive triggers come from the rules, so only Domain knows that sleep is passive.
+- **Exception days** come back with the credit, as `DomainCredit.ExceptionDays` (date and
+  comment), so the fold takes them as an input and every reader agrees. Their storage is
+  §7.4.3.
+- **The settle cutoff:** `DomainCredit` also returns **`SettledThrough`**, the last settled
+  day. That's yesterday from 4 a.m. in the home zone, and the day before until then. Postgres
+  computes it, like today's date (§3.3):
+  `((now() AT TIME ZONE @tz) - interval '4 hours')::date - 1`.
+  The 4 hours is a constant in Domain beside the rules (`LifeDomains.SettleHour`), matching
+  Oura's day.
+
+#### 7.4.3 Exception days: storage, writes and reads
+
+An exception day is a fact Chris declares about a day, so it's an event, like a workout note
+or a food day's close. Nothing about it is managed over time, so it isn't a subject.
+
+- **Event:** kind `note`, provenance `declared`, `occurred_at = recorded_at = now`. The day
+  lives in the payload: `{"exception_day": {"on": "2026-10-25", "comment": "Flu, in bed"}}`.
+  - **Changing the comment** writes a newer version.
+  - **Unmarking** writes `{"exception_day": {"on": "2026-10-25", "voided": true}}`, as
+    deleting a meal does.
+  - The newest version per day wins, by `recorded_at DESC, id DESC`.
+  - No new event kind, so the kind check is untouched.
+- **Migration 0043** (`0043__exception_days.sql`):
+  - `bsk.v_exception_day`: one row per marked day that isn't voided, with `on`, `comment`,
+    `marked_at` and `event_id`. Days are parsed with `bsk.try_to_date`, and the payload's
+    shape is checked with `jsonb_typeof`.
+  - A partial index, `event_exception_day_idx ON bsk.event ((payload->'exception_day'->>'on'),
+    recorded_at) WHERE kind = 'note' AND jsonb_exists(payload, 'exception_day')`.
+  - `COMMENT ON VIEW` naming REWARD-8 and D17, `GRANT SELECT … TO bsk_reader`, and the view
+    added to `ReaderRoleTests`.
+- **Domain:** `ExceptionDay(On, Comment, MarkedAt)`.
+- **`ExceptionDayService`** (Application/Rewards), with `sourceId` and `IHomeCalendar` like
+  the other services:
+  - `MarkAsync(DateOnly? on, string comment)`:
+    - No day means today in the home zone.
+    - A day after today is refused, in words.
+    - The comment is required, and normalized by `WorkoutNoteService`'s rules: one line, at
+      most 140 characters, no control characters.
+    - Marking a day already marked with the same comment writes nothing. A different
+      comment writes a new version.
+  - `UnmarkAsync(DateOnly on)`: a day that isn't marked writes nothing.
+  - `ListAsync(days)`: the marked days among the last N, newest first.
+  - Every write folds the configured domains before it. After it, `RewardService` pays any
+    rank-up the change unlocks and answers `progress`, as `POST /api/domains/settle` does.
+- **Reads for the fold:**
+  - `ILedgerRepository.GetDomainDaysAsync` returns the marked days in `DomainCredit`, read
+    from `v_exception_day` on the same connection, with `SettledThrough` and the passive
+    split (§7.4.2).
+  - `RewardReader` has its own copy of that read for the API connection, and it changes the
+    same way.
+  - Every fold caller then sees the same days: `DomainService`, `RewardService`,
+    `DomainPricing`, the simulator's `--replay`, and the API reader.
+- **API,** all in the `/api/domains` group, allowlisted. Writes are POSTs, as elsewhere:
+
+  | Endpoint | Does |
+  |---|---|
+  | `GET /api/domains/exceptions?days=N` | Default 90, 1–731. Answers `{ today, days: [{ on, comment, markedAt }] }`. |
+  | `POST /api/domains/exceptions` | Body `{ on?, comment }`. Answers `{ exception, awards, progress }`. A future day or a blank comment is a 400 in words. |
+  | `POST /api/domains/exceptions/{on}/unmark` | Answers `{ awards, progress }`. |
+
+- **CLI:**
+  - `bsk domains exception [<date>] "<comment>"` (the date can also be `today` or
+    `yesterday`) and `bsk domains exception --unmark <date>`.
+  - `bsk domains exceptions [--days N]`.
+  - Each takes `--json`, and the writes print `progress` like `bsk adhere`.
+
+#### 7.4.4 The fold, v2
+
+`DomainProgress.Fold(rules, days, exceptions, today, settledThrough)` stays a pure function,
+and it's still the only source of progression numbers (D12, D17). It walks each calendar day
+from the start (the first day with paid XP) to today:
+
+1. **Lifetime XP:** add the day's paid XP to the total, and read the lifetime level off the
+   curve. Paid XP counts the moment it's paid, on any day.
+2. **What kind of day it is:**
+   - An **exception day** isn't counted.
+   - A day **after `settledThrough`** (today, and yesterday before 4 a.m.) isn't counted yet.
+   - Every other day is a **counted day**. It joins the running sums: base XP, and, for each
+     distinct `ActiveMinimum`, how many counted days reached it. Those make the age, average
+     and active-day tests O(1) per level.
+3. **Consistency level:** on a counted day, test levels upward from 2 over the last
+   `N = min(90, counted days)` counted days, stopping at the first failure (§7.2). On any
+   other day C stays where it was.
+4. **Target and shown level,** in ten-thousandths (§7.2), where `T = min(lifetime level, C)`:
+   - If T ≥ S, S rises to T, on any day.
+   - On a counted day with T < S, S falls 1%, never below T, unless the last 7 counted days
+     are back on track for level S.
+   - On an exception day or an unsettled day, S doesn't fall.
+5. **Multiplier success:** a day is **active** when its action XP reaches `ActiveMinimum(S)`,
+   using S as it stood going into the day. That's the multiplier's successful day.
+6. **Best:** best level and best rank are the running maxima of S and rank. The first day the
+   best rank reaches each rank is recorded, which is when its Gems are due (§7.4.6).
+
+Each day's `DomainStanding` gets:
+
+- day, total XP, lifetime level, consistency level, target, `ShownExact` (ten-thousandths),
+  level (S) and rank
+- best level and best rank
+- whether the day was counted, an exception or active
+- whether the shown level was falling or paused
+
+**`MultiplierFor(day)`** reads the 30 complete days before `day`, skipping exception days:
+the share that were active, with days before the start counting as not active.
+
+**Outputs** replace the X4 ones:
+
+- **Lifetime:** `TotalXp`, `LifetimeLevel`, `XpIntoLevel`, `XpToNext`.
+- **Consistency:** `ConsistencyLevel`, the window (N, from, to), its average base XP, and
+  `NextConsistency`. That's what level C + 1 needs: the average against the window's, active
+  days of `ActiveMinimum(C + 1)` against the window's, and the age test against the active
+  days so far. It's null at 100.
+- **Shown:** `Level`, `ShownExact`, `Target` and `Rank`.
+  - `LimitedBy` says whether lifetime or consistency sets the target (null when they're
+    equal).
+  - Also `Falling`, `Paused`, `FallingSince`, and `LastChange`, the last day S moved and
+    from what.
+- **Best:** `BestLevel`, `BestRank`, `RanksReached` (rank and the day it was first reached),
+  and the day the best level was reached.
+- **Current:**
+  - today's base and action XP, `ActiveMinimum(S)`, and whether today is already active
+  - the last 30 counted days' active share, `MultiplierNow` and `NextTier`
+  - `SettledThrough`
+- **`Report(days)`:**
+  - The last N calendar days ending at `SettledThrough`, so an unfinished day never counts.
+  - Days counted, exception days, active days, average base XP, XP paid and base.
+  - Level and rank at the start against now, best rank, and the ranks first reached in the
+    period.
+  - The daily `Standings`, for the rank-over-time chart.
+
+**Gone:** `Capped`, `BankedXp`, `TopLevel`, `RawLevel`, `NextRank`, `DaysOld`, the rank walk
+and `Qualifies`. `ConsistencyWindow` stays for the multiplier's window.
+
+**Cost:** about 2,600 days × at most 100 levels, with O(1) tests, so still trivial per read.
+
+#### 7.4.5 The multiplier on earns
+
+`DomainPricing.Price(price, creditedOn, folds)` doesn't change. It calls `MultiplierFor`,
+which now reads active days (§7.4.4). The frozen-when-issued rule (§3.6) and rounding are
+unchanged. Earns paid before X10 keep what they paid.
+
+#### 7.4.6 Rank-up Gems
+
+`RewardService.PayRankUpsAsync` keeps its shape. It now loops over `RanksReached` as the
+first days the **best** rank reached each rank, on or after the wallet's opening.
+
+- Same award keys, so a rank paid under X4's gates is never paid again, and it stays paid
+  even if the v2 best rank is lower.
+- `RankEntry` keeps dating the earn on that day and citing the domain's latest credit event
+  on or before it.
+
+#### 7.4.7 Progress and feedback
+
+- **`DomainChange`** (and `DomainChangeRow`) gains `BestLevelFrom`, `BestLevelTo`,
+  `BestRankFrom` and `BestRankTo` beside the level and rank. It's still built by folding
+  before and after the write.
+  - `RewardService.DomainChanges` drops its capped-level logic.
+  - When a write pays a rank-up, the row's best rank starts from the rank below the lowest
+    one paid, as now, so a rank reached by time alone still announces on settle.
+- Every response that answers `progress` keeps answering it: status, adhere, timer, food
+  writes and food settle, activity sync, domains settle. So do the exception-day writes, since
+  marking or unmarking a day can move a level.
+- **Web (`announceEarned`, `progressMessage`):**
+  - A new best rank gets the grand celebration ("You're now a Health Expert.").
+  - A new best level gets the full one ("❤️ Health level 23!").
+  - Getting back to a level below the best is a quiet note: "Health back to level 22".
+  - A level lost in a write is a quiet toast whose words fit the cause. The old reason text
+    ("A reversal took back the XP that level needed") is wrong for an exception day being
+    unmarked.
+- **Changes over time** (a fall, or a rise as days settle) happen at 4 a.m., when nothing is
+  writing:
+  - The Character page shows them. Its card reads "Down from 96 on Oct 24 · falling 1% a day
+    toward 90", from `LastChange` and the standings.
+  - A new best reached by time alone is celebrated once, the next time the page opens. The
+    page keeps the last best it celebrated per domain in `localStorage` and compares. If
+    nothing is stored (the first visit after v2), it stores the current best without
+    celebrating.
+  - A rank reached by time still pays and celebrates through settle, as now. The page then
+    updates what it stored, so it doesn't celebrate twice.
+
+#### 7.4.8 Reads
+
+| Read | v2 shape |
+|---|---|
+| `GET /api/domains` | Configured rows replace `lifetime` / `nextRank` / `current` / `ranks` with: **`lifetime`** (total XP, lifetime level, XP into it and to the next); **`consistency`** (level, the window's days, dates and average, and what the next level needs: average, active minimum, active days and age, each with where it stands now); **`shown`** (level, exact level to two places, target, rank and title, `limitedBy`, `falling`, `paused`, `fallingSince`, `lastChange`); **`best`** (level, rank, title, and the day each was reached); **`current`** (today's base and action XP, the active minimum, today active, the rule in words, the 30-day active share, multiplier and next tier, `settledThrough`); **`ranks`** (the ladder: title, start level, the average, active minimum and active days of 90 it takes to hold, total XP to reach, Gems, and the day the best rank first reached it). |
+| `GET /api/domains/{key}/days?days=N` | Per day: base, **action**, paid, **exception** (its comment, or null), **counted**, **active** (replacing `succeeded`), and the lifetime, consistency and shown levels and rank. The top level adds the active minimum per day, which replaces the flat `target` line. |
+| `GET /api/domains/report?days=N` | Per configured domain: `from`/`to` (ending at `settledThrough`), days counted, **exception days**, **active days** (replacing successful days), average base XP, XP, level and rank from → to, **best rank**, the ranks first reached in the period, and **`ranks`**: the rank (and level) for each day of the period. Unconfigured domains: XP only, as now. |
+| Exception days | See §7.4.3. |
+| `bsk domains [<domain>]` | The same in text: "Level 47, Expert (best 52, Veteran)", then the target and what limits it, then falling or paused. Then the lifetime level and its XP to go, the consistency level and what the next one needs, today against the active minimum, the multiplier, and recent exception days. `--days` adds the action, exception and active columns. `--report` gets the period's figures and the rank at the start and end. `--json` carries all of it. |
+
+#### 7.4.9 The Character page (web)
+
+The header line "Levels and ranks are for life" goes. It becomes: "Your level follows your
+last 90 days. It rises at once, falls slowly, and your best is kept."
+
+Health's card:
+
+- **Level and rank:** "Level 47", the rank badge, and "Best: level 52, Veteran" with its day.
+- **One state line:**
+  - "Lifetime XP sets your level: 1,240 XP to level 48."
+  - "Your last 90 days support level 47."
+  - "Falling 1% a day toward 41 (about half a level a day). Seven days back on track pauses
+    it: 43+ base XP a day on average, with 5 active days."
+  - "Paused: your last 7 days are back on track."
+- **Two bars:**
+  - **Lifetime level**, with XP progress to the next level.
+  - **Consistency level**, with what the next one needs: "Level 48 needs a 90-day average
+    of 49 base XP (you're at 47) and 62 active days of 90 (you have 60)." Each part shows
+    whether it's met.
+- **Now:**
+  - Today's ring is action XP against the active minimum: "Today: 12 of 17 action XP to
+    count as active".
+  - The multiplier chip reads "×1.2 · 24 of the last 30 days active".
+  - The note after a long break now says the level is falling, not that it stays.
+- **Exception days:**
+  - A "Mark a day as an exception" button opens a dialog with the date (today, yesterday, or
+    pick an earlier one) and a required comment.
+  - The last 90 days' exception days are listed with their comments, each with "Unmark".
+  - Marking or unmarking answers `progress`, so the toasts above apply.
+- **The daily chart** (`domain-daily-chart.tsx`):
+  - Bars are action XP, the full tone on active days and a lighter step otherwise. Sleep is
+    stacked on top in a lighter tone, labelled "sleep (passive)".
+  - The active minimum is a dashed step line, since it moves with the level.
+  - Exception days get a hatched band, with the comment in the hover text and the table.
+  - The table view adds action, sleep, active and exception columns.
+- **The rank ladder:** each rank's levels, what it takes to hold (average, active minimum,
+  active days of 90), total XP to reach, Gems, and the day the best rank first reached it.
+  The current rank is marked "(you)" with `aria-current`, and the best rank is marked
+  "best" when it's higher.
+
+#### 7.4.10 Reports (web)
+
+- **Rank over time** replaces the period consistency chart.
+  - It's a step line per configured domain across the chosen period (7 days to a year),
+    with the rank titles on the axis.
+  - The best rank is a dotted line, and exception days are hatched bands.
+  - "Compare with" goes, since the line shows the trend itself.
+  - With Health alone that's one line. From three configured domains, the lines share the
+    chart, which is the balance view Chris asked for.
+- **Since the start:** each configured domain's shown level as a bar from 1 to 100, ticked
+  at each rank, with the best level as a second tick.
+- **Spiders,** from three configured domains: rank per domain, today filled and the period's
+  start dashed. They're built and unit-tested but stay unreachable until two more domains
+  have rules, as now.
+- **The By domain table:** days counted, exception days, active days and share, base XP a
+  day, XP, level from → to, rank from → to, best rank, and new bests in the period.
+- The same words, colours and dataviz validation as X7 (§3.13).
+
+#### 7.4.11 The simulator
+
+`DomainSimulator.Run` folds and prices with the v2 fold.
+
+- **Patterns gain:**
+  - passive XP a day, `--sleep` (default 15, drawn from the activity plan's sleep spread)
+  - exception spans, `--exception <start>:<length>`, beside `--lapse`
+- **Output:**
+  - per rank, the runs whose best rank reaches it, with p10 / p50 / p90 years
+  - the final shown level and rank, and the best level
+  - **rank drops a year** (years 6–10), the **lowest level in the last 2 years**, and the
+    average active share
+- **Regression scenarios,** each set from C# runs and checked against §7.3:
+  - **Steady** (the calibration routine's average): Grandmaster in every run in 6–8 years;
+    the lowest level in years 9–10 stays in the 90s.
+  - **Human** (10% of days off): Champion by year 5 in every run, rarely level 100.
+  - **High activity** (100 a day): level 100 in about 5.3 years, with no rank drops after.
+  - **Lapse** (6 months off in year 3): the level falls, then is back within about a year
+    of returning.
+  - **Marked lapse** (the same 6 months as exception days): level and rank don't move.
+  - **Below the bar** (a flat 30 base XP): settles at the level that average supports,
+    about level 17, and stays there.
+  - **Level 100, then nothing:** Legend on day 10, Champion on day 21, Novice on day 249
+    (§7.3).
+- `--replay` folds the real days, exception days and passive split included, and projects
+  from tomorrow. `--no-multiplier` stays.
+
+#### 7.4.12 Switching over
+
+- **No data migration.** The deploy that carries X10 re-reads all of Health's history under
+  v2, and Chris's level is recomputed on the spot.
+  - His history began on 2026-10-20. The cheaper curve lifts his lifetime level.
+  - The age test holds the consistency level near his count of active days for now.
+  - The shown level is the lower of the two.
+- **Gems:** ranks already paid stay paid, and none is paid twice. A best rank lower than one
+  already paid doesn't take anything back.
+- **Before pushing,** run `bsk domains health --json` on staging and keep the output, so the
+  before and after can be compared.
+
+### 7.5 Build notes
+
+The phases are X8–X11 in §4.
+
+- **X8 is docs only:** the requirements and this section.
+- **X9 can be pushed alone.** It adds a migration, endpoints and `bsk` verbs, but no number
+  Chris sees changes, because the fold ignores the new inputs until X10.
+- **X10 and X11 are pushed together.** X10 changes the shape of `GET /api/domains`, `days`,
+  `report` and `progress`, so the live web would break between them. Commit X10, then X11,
+  then push once. Before that push, keep `bsk domains health --json` from staging
+  (§7.4.12).
+- **X10 is the biggest phase.** While building it can be split into the fold (Domain and its
+  tests) and the wiring (pricing, Gems, reads, CLI, simulator), as long as both land before
+  the push.
+- **0043 is the only migration.** Merging to `main` promotes it to staging through CI, as
+  usual.
+- Each phase updates the Build fields of REWARD-6, REWARD-7 and REWARD-8 as it advances them.
+- **Then calibrate** (§2.4): replay the real days with `bsk domains simulate --replay`, and
+  revisit the average needed for level 100 once there are a few weeks of them.
+
+### 7.6 How v2 was settled
+
+**The proposal (2026-10-25).** Chris's planning agent proposed dual-gated levels: the level
+would be the lower of the lifetime level and a consistency level. It came with per-level
+formulas (each level its own window of L + 1 days, an active share from 75% to 90%), a cubic
+lifetime curve, and a fall capped at 2 levels a day. A review, run against Python models of
+the rules, changed:
+
+- **One shared 90-day window**, not a window per level. Per-level windows judged low levels
+  on only a few days (level 10 on 11), so they swung with every bad day. A level could also
+  pass while one below it failed.
+- **An active share from 50% to 90%**, not 75% to 90%. In the narrow band each 1% of active
+  days was worth 6–7 levels, so one bad patch failed every level at once.
+- **Exception days with a comment**, generalizing separate sick and vacation days.
+- **Rank follows the shown level, and the fall is slowed**, rather than rank keeping its own
+  slower clock. Rank is the figure Chris compares across domains.
+- **Celebrations only for a new best**, so a dip and a recovery stay quiet.
+- **The age test counts active days.** Counting days of any kind let consistency climb after
+  a short binge stopped.
+
+**The fall.** Fixed falls of 2, 1 and 0.25 levels a day were tried in the simulator. Chris
+wanted a sedentary stretch to cost more at high levels than low ones, and chose **1% of the
+level a day, with no hold**: 1 level a day at level 100, 0.1 a day at level 10. He accepted
+the short Grandmaster dips it brings (§7.3) rather than add a 3-day hold, which would have cut
+them by about 40%.
+
+**Decisions (2026-10-25).** Chris chose the new lifetime curve and took every other proposed
+default:
+
+| Decision | Chosen | Not chosen |
+|---|---|---|
+| Lifetime curve | The new curve (§7.2) | Keep §2.1's curve |
+| Limit on exception days | None; a comment is required | A cap, such as 30 a quarter, or a confirmation for runs over 14 days |
+| Which domains an exception covers | Every configured domain | Chosen per domain when marking |
+| When a day settles | 4 a.m. the next morning | Also wait for the Oura sync |
+| Average needed for level 100 | 80 base XP a day, recalibrated in use | Set from real days now (the routine sits at about 79) |
+| The multiplier's successful day | Active at the shown level | Keep 60 base XP (nearly the same results) |
+| Reports across domains | Each domain's rank over time | Today's consistency % and level |
+
+**Chosen in planning** (not raised with Chris; each is easy to revisit):
+
+- **Exception days are today or earlier.** Marking a future day, such as a planned trip, is
+  in §7.7.
+- **The shown level is kept in ten-thousandths**, as a whole number, so the C# fold and its
+  TypeScript port can't drift apart on rounding.
+- **The multiplier's window stays on complete calendar days**, as live, with exception days
+  skipped. It doesn't wait for 4 a.m., so the multiplier doesn't shift overnight.
+- **Lifetime XP counts as soon as it's paid**, so a level-up from earning shows straight
+  away. Consistency moves only as days settle, and a fall only happens on a settled day.
+- **A drop over time isn't toasted.** It happens at 4 a.m., when nobody is writing, so the
+  Character page shows it. A new best reached by time alone celebrates the next time Chris
+  opens the page (§7.4.7).
+- **X10 and X11 are pushed together**, because X10 changes the API's shape.
+
+### 7.7 Later (outside X8–X11)
+
+- **Exception days ahead of time**, for a planned trip.
+- **Exception days per domain**, or a cap on them, if the defaults don't hold up in use.
+- **Rank milestones** (§6) need rethinking: they gated entering a rank, and a rank can now
+  fall.
+- **Calibrating the average needed for level 100** from Chris's real days. It's part of
+  calibration (§2.4), using `bsk domains simulate --replay`.
 
 ## Status
 
@@ -864,3 +1468,7 @@ Each of these has to earn its place through use of the pilot.
 - [x] X5 — The multiplier on earns (no migration)
 - [x] X6 — Character page (no migration)
 - [x] X7 — Reports + charts (no migration)
+- [x] X8 — Levels v2: requirements + plan (§7)
+- [ ] X9 — v2 inputs: exception days, action XP, settled days (migration 0043)
+- [ ] X10 — Levels v2 in the kernel (no migration; push with X11)
+- [ ] X11 — Levels v2 on the web (no migration). Then calibrate (§2.4).

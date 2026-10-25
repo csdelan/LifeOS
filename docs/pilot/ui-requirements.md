@@ -2679,7 +2679,12 @@ Build:      built
 ### REWARD-6 — Life domains earn their own XP and chart my life balance
 Horizon:    Pilot
 Definition: active
-Build:      built
+Build:      building
+
+**Update (2026-10-25 — levels v2 planned):** the cross-domain report becomes **each
+domain's rank over time**, since a rank now follows recent consistency and can fall
+(REWARD-7, D17). Marked exception days show on it (REWARD-8). Build moves `built →
+building` until X10 and X11 in [xp-domains-plan.md](xp-domains-plan.md) §7 land.
 
 **Update (2026-10-20 — X7 landed):** life balance is charted. The Character page's Reports
 tab plots each configured domain's consistency over 7 days, 30 days, 3 months, 6 months or a
@@ -2747,7 +2752,21 @@ Finance report XP only until they get rules. Build stays `building`.
 ### REWARD-7 — Each life domain levels up, ranks up on consistency, and rewards a steady streak
 Horizon:    Pilot
 Definition: active
-Build:      built
+Build:      building
+
+**Update (2026-10-25 — levels v2 planned):** Health's level and rank will follow recent
+consistency (D17, [xp-domains-plan.md](xp-domains-plan.md) §7).
+- The level is the lower of the lifetime level (on a new curve, cheaper for the early
+  levels) and a **consistency level**: the highest level the last 90 counted days support,
+  by average base XP and share of active days.
+- The shown level rises at once, and falls 1% of itself a day while Chris isn't keeping up.
+- Rank is its 10-level band, so it can fall. The best level and best rank are kept, and only
+  new bests celebrate and pay Gems.
+- The level cap, banked XP and rank gates go.
+- The multiplier's successful day becomes "active at the shown level".
+- Marked exception days are skipped (REWARD-8).
+
+Planned as X9–X11. Build moves `built → building` until they land.
 
 **Update (2026-10-20 — X3 landed):** Health's rules are in code (`LifeDomains`): a
 successful day is 70+ base XP, plus the eleven ranks, the multiplier tiers and the rank-up
@@ -2832,13 +2851,27 @@ successful day gets retuned after a few weeks of real XP.
   a result, should be fine."
 - A 10-year simulator over realistic patterns guards the tuning and is part of the core
   regression tests.
+- **Revised (2026-10-25, levels v2):** "Rank is more meaningful than level to me, as it has a
+  lookback mechanism … That being said, I don't want to lose too much progress too quickly
+  after a period of inactivity, so slowing down the reversal of my rank makes total sense to
+  me."
+  - Rank is the figure Chris tracks over time and compares across domains. It now follows
+    the shown level, which falls slowly after inactivity, so "you can't lose a rank" and the
+    banked-XP cap above are superseded. The best rank is the permanent record.
+  - "Penalties for sedentary at high consistency levels should be steeper IMO." The fall is
+    1% of the level a day: 1 level a day at level 100, 0.1 at level 10. "Keep the 1% fall
+    with no hold. The short Grandmaster dips are fine."
+  - Chris chose the new lifetime curve and took the other proposed defaults (plan §7.6).
 
 **Ontology fit (Claude):**
 - Maps to: a pure fold over each configured domain's daily credit (D12). It walks the days
   from the domain's start, tests each against the domain's success rule, and promotes when a
   rank's level, age, consistency (and, later, milestones) are all met. Nothing about levels or
   ranks is stored, so a retuned rule shows on the next read, and a rank, once the walk
-  qualifies it, holds through any later bad stretch.
+  qualifies it, holds through any later bad stretch. **Revised by D17 (2026-10-25):** the
+  walk computes a consistency level from the last 90 counted days and a shown level that
+  falls 1% a day; rank is its band and can fall; best level and best rank are the highest
+  reached.
 - Kernel delta: domain rules in Domain code (cadence, curve, success rule, ranks with
   optional milestones, multiplier tiers, rank-up Gems); the credited day's multiplier applied
   in reconcile and frozen on each earn (`base` / `multipliers`); earn-only
@@ -2850,8 +2883,41 @@ successful day gets retuned after a few weeks of real XP.
   "highest rank achieved" record is a later option. Late logging can see a different
   multiplier than logging on time when backfills move the window; that's documented and
   tested. Tasks count on the day they're checked off, since a status change can't be
-  backdated.
+  backdated. Under D17 the best rank is the permanent record (the "highest rank achieved"
+  option, computed rather than stored), and the shown rank can fall.
 - Open decisions: none blocking.
+
+
+### REWARD-8 — I can mark a day as an exception, so sickness or travel doesn't count against my domains
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "Rather than tracking 'vacation' or 'sick' days explicitly, I would instead generalize it
+  to track 'exception' days with a comment. It could be sickness, injury, or other
+  circumstances." (2026-10-25)
+- A marked day neither helps nor hurts. Consistency, the multiplier's 30 days and a falling
+  level all skip it. XP earned on it still counts toward lifetime XP.
+- A comment is required, there's no limit on how many, and a day can be unmarked later.
+  Level and rank are then worked out again from history.
+- One mark covers every configured domain (only Health has rules for now).
+
+**Ontology fit (Claude):**
+- Maps to: a declared `note` event per marked day, with an `exception_day` payload (the day
+  and the comment). The newest version per day wins; changing the comment writes a newer
+  version, and unmarking writes a voided one, as deleting a meal does. `v_exception_day`
+  (migration 0043) reads the marked days, and the fold takes them as an input beside each
+  domain's daily credit (D17). No new event kind.
+- Kernel delta: migration 0043 (`v_exception_day` and its index); `ExceptionDayService`
+  (mark, change, unmark, list); `GET /api/domains/exceptions` and two POSTs to mark and
+  unmark; `bsk domains exception` and `bsk domains exceptions`. Phase X9 of
+  [xp-domains-plan.md](xp-domains-plan.md) §7 builds the record and its reads. X10 makes the
+  fold skip marked days, and X11 adds the web control.
+- Implications: progression is a reading of history (D12, D17), so marking or unmarking a
+  past day can move today's level and rank either way. Gems already paid stay. Days are
+  today or earlier; marking ahead is later.
+- Open decisions: none blocking (2026-10-25, plan §7.6).
 
 
 ### FOOD-1 — A Food Log records what I eat, how healthy it was and roughly how many calories
@@ -3792,7 +3858,9 @@ therefore shows immediately, and a rank, once the walk qualifies it, holds throu
 bad stretch. A rank changes only if the past does (recomputed qualification, not a stored
 achievement). The only writes are ordinary ledger entries: each earn freezes the multiplier
 it was paid at, and a rank-up's Gems are an earn-only award, paid once and never reversed.
-Design and build order: [xp-domains-plan.md](xp-domains-plan.md).
+Design and build order: [xp-domains-plan.md](xp-domains-plan.md). **Revised by D17
+(2026-10-25):** a rank now follows recent consistency and can fall; only the best rank is
+permanent.
 
 **D13 — The Food Log is events, and a day's diet XP is re-priced when its entries change
 (FOOD-1..5, 2026-10-20).** A food entry is a `measurement` event; a fast and a day's close are
@@ -3870,6 +3938,23 @@ Design and build order: [cover-images-plan.md](cover-images-plan.md).
   on a clock). A repeat after the last completion counts from the day the last one closed.
 
 Design and build order: [recurring-tasks-plan.md](recurring-tasks-plan.md).
+
+**D17 — A life domain's level follows recent consistency, and only its best rank is
+permanent (REWARD-7 / REWARD-8, 2026-10-25).** This revises D12's "a rank, once the walk
+qualifies it, holds through any later bad stretch". Everything is still a pure fold over the
+ledger, and nothing about progression is stored.
+
+- **Level:** the lower of the lifetime level (from all paid XP; never falls) and the
+  consistency level, the highest level the last 90 counted days support.
+- **Shown level:** rises to that at once, and falls 1% of itself a day toward it.
+- **Rank:** the shown level's 10-level band, so it can fall.
+- **Best level and best rank:** the highest ever reached. Inactivity can't lower them; a
+  retune or a correction still can.
+- **Rank-up Gems:** paid when the best rank first reaches a rank, under the same earn-only
+  award keys, never reversed.
+- **Exception days,** marked by Chris with a comment, are left out of every window.
+
+Design and build order: [xp-domains-plan.md](xp-domains-plan.md) §7.
 
 ### Method for the Habit ↔ Commitment discrepancy
 
@@ -3965,6 +4050,11 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   credited day, established habits keep earning, Health's rules and daily consistency,
   levels, ranks, rank-up Gems and the simulator, the multiplier on earns, the Character page
   with level-up / rank-up feedback, and the period reports). Calibration continues in use.
+- **Levels v2** (REWARD-7 / REWARD-8 / D17): exception days (migration 0043, `bsk`, the API),
+  the consistency level, the shown level's 1% fall, rank from the shown level, best level and
+  rank, the new lifetime curve, the multiplier's active-day success, Gems on a new best, the
+  simulator, then the Character page and reports. — **Open** (planned in
+  [xp-domains-plan.md](xp-domains-plan.md) §7, X9–X11).
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;
