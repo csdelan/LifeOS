@@ -73,6 +73,14 @@ export const BROWSE_TYPE_ORDER: readonly SubjectType[] = [
   "Reward",
 ];
 
+/**
+ * The items Browse and the search box show: those of a type Browse lists. The kernel's list
+ * also holds types the web doesn't model yet, such as the Environment page's Spaces.
+ */
+export function browsableItems(items: SubjectListItem[]): SubjectListItem[] {
+  return items.filter((i) => BROWSE_TYPE_ORDER.includes(i.type));
+}
+
 export function parseBrowseType(value: unknown): BrowseType | undefined {
   if (value === "all") return "all";
   return BROWSE_TYPE_ORDER.find((t) => t === value);
@@ -377,7 +385,7 @@ export function searchSubjects(items: SubjectListItem[], query: string, limit = 
   if (!qWords.length) return { matches: [], total: 0 };
 
   const scored: { item: SubjectListItem; rank: number }[] = [];
-  for (const item of items) {
+  for (const item of browsableItems(items)) {
     const title = item.title.toLowerCase();
     const hay = [title, typeLabel(item.type), item.type, item.urn, item.areaName ?? "", ...tagsOf(item)]
       .join(" ")

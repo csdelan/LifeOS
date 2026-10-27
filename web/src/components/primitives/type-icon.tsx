@@ -9,6 +9,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   CalendarDaysIcon,
   CircleAlertIcon,
+  CircleDashedIcon,
   CompassIcon,
   FingerprintIcon,
   FolderKanbanIcon,
@@ -54,7 +55,8 @@ export function TypeIcon({
   className?: string;
   strokeWidth?: number;
 }) {
-  const Icon = TYPE_ICONS[type];
+  // The kernel can hold a type the web doesn't know yet (a Space, say): a plain glyph, not a crash.
+  const Icon = TYPE_ICONS[type] ?? CircleDashedIcon;
   return (
     <Icon
       aria-hidden

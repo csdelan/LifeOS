@@ -47,6 +47,7 @@ import {
   browseOptions,
   browseRows,
   browseTypeCounts,
+  browsableItems,
   itemsOfType,
   localDay,
   parseBrowseType,
@@ -141,7 +142,7 @@ export function BrowsePage() {
     saveView<BrowseStored>("browse", { ...filters, type, selected });
   }, [filters, type, selected]);
 
-  const all = useMemo(() => data ?? [], [data]);
+  const all = useMemo(() => browsableItems(data ?? []), [data]);
   const counts = useMemo(() => browseTypeCounts(all, filters.archived), [all, filters.archived]);
   const typed = useMemo(
     () => itemsOfType(all, type, filters.archived),

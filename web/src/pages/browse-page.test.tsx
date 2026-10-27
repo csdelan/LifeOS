@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { CreateActions, type CreateOpts } from "@/components/create/create-context";
 import { createWriteClient } from "@/lib/client";
 import { resetStore } from "@/lib/mock/store";
+import { mockReads } from "@/lib/mock/api";
+import type { SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { BrowsePage } from "@/pages/browse-page";
 
 const router = vi.hoisted(() => {
@@ -209,5 +211,32 @@ describe("Browse page (BROWSE-2)", () => {
     await listOf("Decision");
     expect(router.get()).toEqual({ type: "Decision", selected: "dec-stack" });
     expect(screen.getByRole("checkbox", { name: "Implementing" })).toBeChecked();
+  });
+});
+
+describe("Browse page with the kernel's Spaces in the list", () => {
+  it("still shows All types, leaving the Spaces to the Environment page", async () => {
+    const list = mockReads.listSubjects.bind(mockReads);
+    const kitchen: SubjectListItem = {
+      id: "space-kitchen",
+      urn: "urn:bsk:space:kitchen-5a1b2c",
+      type: "Space" as SubjectType,
+      title: "Kitchen",
+      status: null,
+      archived: false,
+      createdAt: "2026-10-20T12:00:00.000Z",
+    };
+    const spy = vi.spyOn(mockReads, "listSubjects").mockImplementation(async (opts) => [...(await list(opts)), kitchen]);
+    try {
+      renderPage({ type: "all" });
+      const all = await listOf("Everything");
+      const shown = rowTitles(all);
+      expect(shown.length).toBeGreaterThan(0);
+      expect(shown).not.toContain("Kitchen");
+      // The count leaves it out too, so it matches the list.
+      expect(typeButton(/^All types\s*\d+$/)).toHaveTextContent(new RegExp(`^All types\\s*${shown.length}$`));
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

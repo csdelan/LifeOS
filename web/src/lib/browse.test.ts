@@ -7,6 +7,7 @@ import {
   browseOptions,
   browseRows,
   browseTypeCounts,
+  browsableItems,
   effectiveFilters,
   itemsOfType,
   openTarget,
@@ -300,5 +301,15 @@ describe("Search box: subjects", () => {
       to: "/browse",
       search: { type: "Decision", selected: "d1" },
     });
+  });
+});
+
+describe("types the web doesn't model yet", () => {
+  // The kernel's subject list holds the Environment page's Spaces too.
+  const kitchen = item("s1", "Space" as SubjectType, "Kitchen");
+
+  it("leaves them out of Browse and the search box", () => {
+    expect(titles(browsableItems([...items, kitchen]))).toEqual(titles(items));
+    expect(searchSubjects([...items, kitchen], "kitchen").matches).toEqual([]);
   });
 });
