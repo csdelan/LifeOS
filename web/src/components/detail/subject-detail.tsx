@@ -48,6 +48,18 @@ import { CoverBanner } from "@/components/cover/cover-banner";
 import { CoverPicker } from "@/components/cover/cover-picker";
 import { canHaveCover } from "@/lib/cover";
 import {
+  DecisionActions,
+  DecisionRelationships,
+  RecordDecisionAction,
+} from "@/components/detail/decision-relationships";
+import {
+  DECISION_LINK_GROUPS,
+  canStartDecisionFrom,
+  decisionLinkWrite,
+  type DecisionLinkGroup,
+  type LinkedItem,
+} from "@/lib/decisions";
+import {
   useHabits,
   useHistory,
   useJournal,
@@ -312,6 +324,13 @@ export function SubjectDetail({
     setChoosingCover(true);
   }
   const cover = coverable ? subject.cover : null;
+  // What a Decision started here, or work created from this Decision, links back to (GEN-13).
+  const linked: LinkedItem = {
+    id: subject.id,
+    title: subject.title,
+    type: subject.type,
+    status: subject.status || defaultStatus(subject.type),
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -341,6 +360,13 @@ export function SubjectDetail({
                 >
                   <ImagePlusIcon aria-hidden /> Add cover
                 </Button>
+              ) : null}
+              {/* Off while editing, so a replacement's Cancelled isn't undone by the Save. */}
+              {!editing && subject.type === "Decision" ? (
+                <DecisionActions decision={linked} openNew={openNew} />
+              ) : null}
+              {!editing && canStartDecisionFrom(subject.type) ? (
+                <RecordDecisionAction item={linked} openNew={openNew} />
               ) : null}
             </div>
             {editing ? (
@@ -556,7 +582,7 @@ export function SubjectDetail({
             </div>
           </TabsContent>
           <TabsContent value="relationships">
-            <RelationshipsTab subjectId={subject.id} />
+            <RelationshipsTab subjectId={subject.id} type={subject.type} onOpenSubject={onOpenSubject} />
           </TabsContent>
           <TabsContent value="tags">
             <TagsTab subjectId={subject.id} />
@@ -573,9 +599,20 @@ export function SubjectDetail({
   );
 }
 
-function RelationshipsTab({ subjectId }: { subjectId: string }) {
+function RelationshipsTab({
+  subjectId,
+  type,
+  onOpenSubject,
+}: {
+  subjectId: string;
+  type: SubjectType;
+  onOpenSubject?: (id: string) => void;
+}) {
   const { data, isLoading } = useRelations(subjectId);
   const [rel, setRel] = useState<Relation>("serves");
+  // A Decision adds to its groups instead of naming a relation (GEN-13).
+  const decision = type === "Decision";
+  const [group, setGroup] = useState<DecisionLinkGroup>("context");
   const [targetType, setTargetType] = useState<SubjectType | "any">("any");
   const [includeArchived, setIncludeArchived] = useState(false);
   const [to, setTo] = useState("");
@@ -603,70 +640,105 @@ function RelationshipsTab({ subjectId }: { subjectId: string }) {
 
   const grouped = groupByType(data?.children ?? []);
 
+  function addLink() {
+    const edge = decision ? decisionLinkWrite(group, subjectId, to) : { from: subjectId, relation: rel, to };
+    void writes.link(edge.from, edge.relation, edge.to);
+    setTo("");
+  }
+
   return (
     <div className="space-y-6">
-      <section className="rounded-xl bg-muted/40 p-3">
-        <h3 className="type-scale-section text-muted-foreground">Parents</h3>
-        <p className="mt-1 mb-2 text-xs text-muted-foreground">
-          Alignment edges — this is structure, not tagging.
-        </p>
-        {data?.parents.length ? (
-          <ul className="space-y-1">
-            {data.parents.map((e) => (
-              <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
-                <TypeBadge type={e.type} />
-                <span>{e.title}</span>
-                <span className="text-[0.6875rem] text-muted-foreground">{e.relation}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">No parents — unaligned for now.</p>
-        )}
-      </section>
-      <section className="rounded-xl bg-muted/40 p-3">
-        <h3 className="type-scale-section text-muted-foreground">Children</h3>
-        {data?.children.length ? (
-          <div className="mt-2 space-y-3">
-            {Object.entries(grouped).map(([type, rows]) => (
-              <div key={type}>
-                <p className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">
-                  {typeLabel(type as SubjectType)}
-                </p>
-                <ul className="space-y-1">
-                  {rows.map((e) => (
-                    <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
-                      <TypeBadge type={e.type} />
-                      <span>{e.title}</span>
-                    </li>
-                  ))}
-                </ul>
+      {decision ? (
+        <DecisionRelationships rels={data} onOpenSubject={onOpenSubject} />
+      ) : (
+        <>
+          <section className="rounded-xl bg-muted/40 p-3">
+            <h3 className="type-scale-section text-muted-foreground">Parents</h3>
+            <p className="mt-1 mb-2 text-xs text-muted-foreground">
+              Alignment edges — this is structure, not tagging.
+            </p>
+            {data?.parents.length ? (
+              <ul className="space-y-1">
+                {data.parents.map((e) => (
+                  <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
+                    <TypeBadge type={e.type} />
+                    <span>{e.title}</span>
+                    <span className="text-[0.6875rem] text-muted-foreground">{e.relation}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">No parents — unaligned for now.</p>
+            )}
+          </section>
+          <section className="rounded-xl bg-muted/40 p-3">
+            <h3 className="type-scale-section text-muted-foreground">Children</h3>
+            {data?.children.length ? (
+              <div className="mt-2 space-y-3">
+                {Object.entries(grouped).map(([type, rows]) => (
+                  <div key={type}>
+                    <p className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">
+                      {typeLabel(type as SubjectType)}
+                    </p>
+                    <ul className="space-y-1">
+                      {rows.map((e) => (
+                        <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
+                          <TypeBadge type={e.type} />
+                          <span>{e.title}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-2 text-sm text-muted-foreground">No children yet.</p>
-        )}
-      </section>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">No children yet.</p>
+            )}
+          </section>
+        </>
+      )}
       <section>
         <h3 className="type-scale-section text-muted-foreground">Add relationship</h3>
         <p className="mt-1 text-xs text-muted-foreground">
+          {decision
+            ? "Add an existing item to Context (what prompted it), Resulting work (what carries it out) or Replaces (an earlier Decision this one reversed). "
+            : null}
           Choose a type to filter, then pick an existing item. Archived items are
           hidden unless you check Archived. This is a link between two items, not a
           tag.
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">This item</span>
-          <Select value={rel} onValueChange={(v) => setRel(v as Relation)}>
-            <SelectTrigger className="w-32" aria-label="Relation">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="serves">serves</SelectItem>
-              <SelectItem value="results_in">results_in</SelectItem>
-              <SelectItem value="supersedes">supersedes</SelectItem>
-            </SelectContent>
-          </Select>
+          {decision ? (
+            <>
+              <span className="text-xs text-muted-foreground">Add to</span>
+              <Select value={group} onValueChange={(v) => setGroup(v as DecisionLinkGroup)}>
+                <SelectTrigger className="w-40" aria-label="Group">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DECISION_LINK_GROUPS.map((g) => (
+                    <SelectItem key={g.value} value={g.value}>
+                      {g.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          ) : (
+            <>
+              <span className="text-xs text-muted-foreground">This item</span>
+              <Select value={rel} onValueChange={(v) => setRel(v as Relation)}>
+                <SelectTrigger className="w-32" aria-label="Relation">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="serves">serves</SelectItem>
+                  <SelectItem value="results_in">results_in</SelectItem>
+                  <SelectItem value="supersedes">supersedes</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          )}
           <span className="text-xs text-muted-foreground">this existing</span>
           <Select
             value={targetType}
@@ -709,14 +781,7 @@ function RelationshipsTab({ subjectId }: { subjectId: string }) {
             />
             Archived
           </label>
-          <Button
-            size="sm"
-            disabled={!to}
-            onClick={() => {
-              void writes.link(subjectId, rel, to);
-              setTo("");
-            }}
-          >
+          <Button size="sm" disabled={!to} onClick={addLink}>
             Link
           </Button>
         </div>

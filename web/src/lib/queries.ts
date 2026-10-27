@@ -145,7 +145,9 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
               : req.type === "Habit"
                 ? [qk.habits]
                 : [];
-      await invalidate(qc, [qk.subjects, qk.dashboard, ["forest"], ["edges"], ...extra]);
+      // Made under a parent, it's on the parent's Relationships tab too (a replacement Decision's original).
+      const parent = req.parent ? [qk.relations(req.parent)] : [];
+      await invalidate(qc, [qk.subjects, qk.dashboard, ["forest"], ["edges"], ...extra, ...parent]);
       return created;
     },
 

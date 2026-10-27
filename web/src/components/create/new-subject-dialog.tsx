@@ -25,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { SubjectTypeFields } from "@/components/create/subject-type-fields";
 import { BountySection } from "@/components/rewards/bounty-editor";
 import { TagListField } from "@/components/primitives/tag-input";
+import { TypeBadge } from "@/components/primitives/type-badge";
 import { splitTags } from "@/lib/tag-suggest";
 import {
   CREATABLE_TYPES,
@@ -35,6 +36,14 @@ import {
 } from "@/lib/production-ui-types";
 import type { CreatedSubject, NewSubjectRequest, SubjectType } from "@/lib/production-ui-types";
 import { parseRecurrence } from "@/lib/recurrence";
+import {
+  pendingLinkParent,
+  pendingLinkStatus,
+  pendingLinkTypes,
+  pendingLinkView,
+  pendingLinkWrite,
+  type PendingLink,
+} from "@/lib/decisions";
 import { bountyProblem, bountyWrites, defaultLines, type BountyDraft } from "@/lib/bounty";
 import { useBountyDefaults, useCreateSubject, useSubjects, useWrites } from "@/lib/queries";
 import {
@@ -55,6 +64,7 @@ export function NewSubjectDialog({
   initialType,
   initialParent,
   initialTitle,
+  initialLink,
   onCreated,
 }: {
   open: boolean;
@@ -62,6 +72,8 @@ export function NewSubjectDialog({
   initialType?: SubjectType;
   initialParent?: CreateParent;
   initialTitle?: string;
+  /** A Decision link saved with the new item, shown before Save (GEN-13). */
+  initialLink?: PendingLink;
   /** Told once the subject exists, after its details are saved. */
   onCreated?: (created: CreatedSubject) => void;
 }) {
@@ -69,7 +81,11 @@ export function NewSubjectDialog({
   const writes = useWrites();
   const { data: allSubjects } = useSubjects();
   const childTypes = initialParent ? childTypesFor(initialParent.type) : [];
-  const typeChoices = childTypes.length > 0 ? childTypes : CREATABLE_TYPES;
+  const typeChoices = initialLink
+    ? pendingLinkTypes(initialLink)
+    : childTypes.length > 0
+      ? childTypes
+      : CREATABLE_TYPES;
   const startType = (
     initialType && typeChoices.includes(initialType) ? initialType : typeChoices[0]
   ) as SubjectType;
@@ -120,12 +136,15 @@ export function NewSubjectDialog({
         ? (inferChildRelation(t, parentType) ?? (t === "Habit" ? "serves" : undefined))
         : undefined;
     const attrs = attrsToWrite(t, values, { omitEmpty: true });
+    // A replacement Decision is made already superseding its original (GEN-13), in one write.
+    const linkParent = initialLink ? pendingLinkParent(initialLink) : null;
+    const carriesLink = !!linkParent && !primaryParent;
     const req: NewSubjectRequest = {
       type: t,
       title: values.title.trim(),
       area: values.area || undefined,
-      parent: primaryParent || undefined,
-      relation,
+      parent: (carriesLink ? linkParent.parent : primaryParent) || undefined,
+      relation: carriesLink ? linkParent.relation : relation,
       attrs,
     };
     let created: CreatedSubject;
@@ -138,12 +157,25 @@ export function NewSubjectDialog({
     // The subject exists now; a failed follow-up must not leave the dialog open,
     // or a second Save would create a duplicate.
     try {
+      await applyLink(created, carriesLink);
       await applyFollowUps(created, values, t, attrs, parents, primaryParent);
     } catch (err) {
       toast.error(`Created ${created.title}, but not every detail saved: ${errorMessage(err, "unknown error")}`);
     }
     onCreated?.(created);
     onOpenChange(false);
+  }
+
+  /** The pending Decision link, then the original's Cancelled when this replaces it. */
+  async function applyLink(created: CreatedSubject, carried: boolean) {
+    if (!initialLink) return;
+    const linkParent = pendingLinkParent(initialLink);
+    const edge =
+      pendingLinkWrite(initialLink, created.id) ??
+      (linkParent && !carried ? { from: created.id, relation: linkParent.relation, to: linkParent.parent } : null);
+    if (edge) await writes.link(edge.from, edge.relation, edge.to);
+    const status = pendingLinkStatus(initialLink);
+    if (status) await writes.setStatus(status.subject, status.status);
   }
 
   async function applyFollowUps(
@@ -245,6 +277,8 @@ export function NewSubjectDialog({
             </div>
           ) : null}
 
+          {initialLink ? <PendingLinkNote link={initialLink} type={type} /> : null}
+
           <div className="space-y-1.5">
             <Label htmlFor="title">{cfg.titleLabel}</Label>
             <Input
@@ -315,6 +349,30 @@ export function NewSubjectDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** The Decision link the save makes, shown before it (GEN-13). */
+function PendingLinkNote({ link, type }: { link: PendingLink; type: SubjectType }) {
+  const view = pendingLinkView(link, type);
+  return (
+    <div
+      role="group"
+      aria-labelledby="pending-link-heading"
+      aria-describedby="pending-link-note"
+      className="rounded-lg border border-dashed border-border p-3"
+    >
+      <p id="pending-link-heading" className="type-scale-section text-muted-foreground">
+        {view.heading}
+      </p>
+      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+        <TypeBadge type={view.item.type} />
+        <span className="font-medium">{view.item.title}</span>
+      </p>
+      <p id="pending-link-note" className="mt-1 text-xs text-muted-foreground">
+        {view.note}
+      </p>
+    </div>
   );
 }
 

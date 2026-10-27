@@ -9,6 +9,7 @@ import { getState, resetStore } from "@/lib/mock/store";
 import { tagUniverse } from "@/lib/mock/seed";
 import type { LifeOsWriteClient, SubjectType } from "@/lib/production-ui-types";
 import type { CreateParent } from "@/components/create/new-subject-dialog";
+import type { LinkedItem, PendingLink } from "@/lib/decisions";
 
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), {
@@ -32,6 +33,7 @@ afterEach(() => {
 function renderDialog(props: {
   initialType?: SubjectType;
   initialParent?: CreateParent;
+  initialLink?: PendingLink;
   onOpenChange?: (open: boolean) => void;
 }) {
   const client = new QueryClient({
@@ -129,5 +131,93 @@ describe("NewSubjectDialog", () => {
 
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     expect(tag).toHaveBeenCalledWith(expect.any(String), { add: [existing, "gear"] });
+  });
+});
+
+describe("NewSubjectDialog with a Decision link (GEN-13)", () => {
+  const stack: LinkedItem = {
+    id: "dec-stack",
+    title: "React + Vite for Production UI",
+    type: "Decision",
+    status: "Implementing",
+  };
+
+  function edgesOf(id: string) {
+    return getState().edges.filter((e) => e.fromId === id || e.toId === id);
+  }
+
+  it("creates resulting work linked from the Decision, shown before Save, and leaves its status", async () => {
+    resetStore();
+    writes = createMockWriteClient();
+    const create = vi.spyOn(writes, "newSubject");
+    const link = vi.spyOn(writes, "link");
+    const onOpenChange = vi.fn();
+    renderDialog({ initialType: "Task", initialLink: { kind: "resulting-work", decision: stack }, onOpenChange });
+
+    expect(screen.getByRole("heading", { name: "New Task" })).toBeInTheDocument();
+    const pending = screen.getByRole("group", { name: "Resulting work of" });
+    expect(pending).toHaveTextContent("React + Vite for Production UI");
+    expect(pending).toHaveAccessibleDescription(/The Decision's status stays as it is/);
+    // The type can still change, among work that carries a Decision out.
+    expect(screen.getByRole("combobox", { name: "Subject type" })).toHaveTextContent("Task");
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Scaffold the Vite app" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ type: "Task", parent: undefined }));
+    const made = await create.mock.results[0].value;
+    expect(link).toHaveBeenCalledWith("dec-stack", "results_in", made.id);
+    expect(edgesOf(made.id)).toEqual([{ fromId: "dec-stack", relation: "results_in", toId: made.id }]);
+    expect(getState().details["dec-stack"]?.status).toBe("Implementing");
+  });
+
+  it("creates a Decision with the item it was started from as its Context", async () => {
+    resetStore();
+    writes = createMockWriteClient();
+    const onOpenChange = vi.fn();
+    const problem: LinkedItem = { id: "prob-sleep", title: "How do I sleep through the night?", type: "Problem" };
+    renderDialog({ initialType: "Decision", initialLink: { kind: "context", item: problem }, onOpenChange });
+
+    expect(screen.getByRole("group", { name: "Context" })).toHaveTextContent("How do I sleep through the night?");
+    // Only a Decision is made here.
+    expect(screen.queryByRole("combobox", { name: "Subject type" })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "No caffeine after noon" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    const made = getState().subjects.find((s) => s.title === "No caffeine after noon")!;
+    expect(made.type).toBe("Decision");
+    expect(edgesOf(made.id)).toEqual([{ fromId: "prob-sleep", relation: "results_in", toId: made.id }]);
+    expect(getState().details["prob-sleep"]?.status).toBe("Working");
+  });
+
+  it("creates a replacement that supersedes the original, which becomes Cancelled and keeps its conclusion", async () => {
+    resetStore();
+    writes = createMockWriteClient();
+    const create = vi.spyOn(writes, "newSubject");
+    const onOpenChange = vi.fn();
+    renderDialog({ initialType: "Decision", initialLink: { kind: "replacement", decision: stack }, onOpenChange });
+
+    const pending = screen.getByRole("group", { name: "Replaces" });
+    expect(pending).toHaveTextContent("React + Vite for Production UI");
+    expect(pending).toHaveAccessibleDescription(/Saving marks it Cancelled/);
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "SvelteKit for Production UI" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    // One write makes it and its link.
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "Decision", parent: "dec-stack", relation: "supersedes" }),
+    );
+    const made = await create.mock.results[0].value;
+    expect(edgesOf(made.id)).toEqual([{ fromId: made.id, relation: "supersedes", toId: "dec-stack" }]);
+    const original = getState().details["dec-stack"]!;
+    expect(original.status).toBe("Cancelled");
+    expect(original.title).toBe("React + Vite for Production UI");
+    expect(original.scope).toBe("React + TypeScript + Vite. Kernel stays C#.");
+    expect(getState().history["dec-stack"]?.map((h) => h.status).slice(0, 1)).toEqual(["Cancelled"]);
   });
 });

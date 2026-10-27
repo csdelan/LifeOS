@@ -289,6 +289,7 @@ export function AppShell() {
         initialType={createOpts?.type}
         initialParent={createOpts?.parent}
         initialTitle={createOpts?.title}
+        initialLink={createOpts?.link}
         onCreated={createOpts?.onCreated}
       />
       <QuickCaptureDialog open={capturing} onOpenChange={setCapturing} />

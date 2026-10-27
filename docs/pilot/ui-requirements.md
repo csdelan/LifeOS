@@ -1330,6 +1330,24 @@ Build:      built
 - Open decisions: Context-via-incoming-`results_in` fits Problems / Ideas (causal) cleanly but
   is a looser "informed by" for a Goal that merely informed without causing — fine for the
   Pilot, or allow a generic association later if it grates.
+- Web (2026-10-27): a Decision's Relationships tab shows **Context** (incoming `results_in`)
+  and **Resulting work** (outgoing `results_in`) instead of Parents / Children, plus
+  **Replaces** / **Replaced by** (`supersedes`) when it reversed or was reversed, and any other
+  link under Other links in words ("Serves", "Served by"). Each item opens in the panel. Its
+  Add relationship adds an existing item to Context, Resulting work or Replaces, with the
+  edge's direction chosen for it. Beside the type badge, a Decision offers **Resulting work**
+  (Goal, Project, Task, Habit, Commitment or Appointment, then that type's normal New form)
+  and **Replacement** (a New Decision form); any other item except an Area, Person or Reward
+  offers **Record decision** (a New Decision form). Each form shows the pending link before
+  Save ("Resulting work of", "Context", "Replaces"). A replacement is created already
+  superseding the original in one write (`POST /api/subjects` with `parent` and `relation:
+  supersedes`), then the original is set Cancelled unless it already is; its title,
+  description and history are untouched. Resulting work and Context are linked right after
+  the create (`POST /api/link`). These actions are hidden while editing, so a Save can't undo
+  the replacement's Cancelled. Nothing else moves a Decision's status: finishing or
+  cancelling its work or context leaves it where it is. Linking an earlier Decision as
+  Replaces from Add relationship is only a link; its status is moved by hand. No API or kernel
+  change. Not in the Pilot yet.
 
 
 ### GEN-14 — Problems track unresolved situations that need thought or action
