@@ -2,7 +2,8 @@
 
 The design and build order for Environment's rules: the home's spaces, their ratings, the
 Home Score, and Environment's level (HOME-1 to HOME-3 and REWARD-9 in
-[ui-requirements.md](ui-requirements.md)). The decision behind it is **D18**, in the same
+[ui-requirements.md](ui-requirements.md)), and photos of each space from a baseline (HOME-4,
+§8). The decision behind it is **D18**, in the same
 doc. It builds on Health's levels v2 in [xp-domains-plan.md](xp-domains-plan.md) §7, which it
 reuses almost whole, and on the rewards ledger in [rewards-plan.md](rewards-plan.md). The
 requirements say *what*; this doc says *how* and *in what order*, written so an agent with no
@@ -449,10 +450,12 @@ The regression bands come from §3, with the C# runs setting the exact edges:
 | **E3** | `IConsistencyRule`, `HomeConditionRule`, `KeptUpAtShownLevel`, `LifeDomains.Environment`, the Home Score in the daily credit, rating writes answering `progress`, the API's `consistency.kind`, the simulator's Environment patterns and bands | — | No: with E4 |
 | **E4** | The Environment page, walk-through sheet and spaces editor; the Character card; Reports; the mock store and TypeScript ports | — | With E3 |
 | **E5** | Chris adds his nine spaces and does the first walk-through. Calibration: recheck the curve's price once the home is clean, and edit the rating examples. | — | — |
+| **E6** | Photos in the kernel (§8): `v_space_photo`, shots and baselines, `SpacePhotoService`, `bsk space photo` / `baseline` / `shot`, the photo endpoints, the photo checks shared with the Food Log | 0045 | Yes |
+| **E7** | Photos on the web (§8): a camera button per shot in the walk-through, Then and Now on each space card, the compare dialog, shots in the spaces editor, the day read from the photo | — | After E6 |
 
 - **E3 changes the API's shape** for Environment's row, and the live web would break
   without E4, so they're committed separately and pushed together, as X10 and X11 were.
-- Each phase updates the Build fields of HOME-1 to HOME-3 and REWARD-9 as it advances them.
+- Each phase updates the Build fields of HOME-1 to HOME-4 and REWARD-9 as it advances them.
 - Checks before each commit: `./test.ps1` (.NET), and from `web/`: `npm test`,
   `npm run test:e2e` and `npm run a11y` after UI changes, plus a light-mode a11y spec for
   the new page. CI doesn't run Playwright.
@@ -495,11 +498,12 @@ level holds. That gave three rules:
 - **The bar isn't rounded,** because Q(51) lands on a half.
 - **Space is its own subject type,** not an Area.
 - **Ratings use the Food Log's picker and versioning.**
-- **Rating photos** wait (§7).
+- **Rating photos** wait (§7). Chris asked for them the same day, with a baseline photo
+  from the start, and settled them in one round (§8.1).
 
 ## 7. Later
 
-- **Photos on ratings,** with FOOD-5's storage, to compare a room over time.
+- **Rating photos** moved to §8 (E6–E7).
 - **Rating examples per space** (a bathroom's "4" isn't an office's), if the shared ones
   don't hold up.
 - **The walk-through completing its repeating Task** when saved, so it pays without a second
@@ -509,6 +513,134 @@ level holds. That gave three rules:
   by something measured rather than daily XP. For Finance, that could be a savings rate or a
   budget kept.
 
+## 8. Rating photos and the baseline (HOME-4, agreed 2026-10-27)
+
+**The ask.** Chris, after E4: "I think rating photos are something I'll want to add. I think
+having a 'baseline' photo from the start is especially important so I can see at a glance my
+progress from the photos rather than just the ratings."
+
+**Settled the same day.** Three questions were laid out, each with a recommendation, and
+Chris took all three (§8.1). The rest (§8.2) was chosen in planning and is easy to revisit.
+
+### 8.1 Agreed with Chris
+
+1. **Shots, not one photo per space.** A room photographed from a different corner each time
+   is hard to compare, and the Kitchen or Stairway/Foyer/Halls may not fit one frame.
+   - A **shot** is a spot a space is photographed from, like "Office: Desk" or "Kitchen:
+     Counters".
+   - Every space starts with one shot, named after it, so most spaces need no setup. A space
+     can add more.
+   - Each shot has its own baseline and its own Then and Now.
+   - Rejected: one photo per space (simpler, but a grouped space gets only its worst part).
+2. **The first walk-through doesn't wait for photos.**
+   - Chris does E5's first walk-through now and photographs each space with the phone's
+     camera the same day, one photo from each spot he'll want to compare.
+   - When E7 lands, he adds them. Each photo's day comes from its date taken, so they land on
+     the walk-through's day as the baselines.
+   - So E7 has to take past days, read the date taken, and let a shot be added before or
+     after its photos are uploaded.
+   - Rejected: holding the first walk-through until photos are built.
+3. **Then and Now show on each space card:** the baseline beside the newest photo, each with
+   that day's score. Tapping opens the compare dialog. A home gallery and a swipe slider
+   wait (§8.4).
+
+### 8.2 Chosen in planning
+
+- **A photo belongs to a space (and shot) on a day, not to one rating.** The walk-through
+  and the quick check offer a photo per shot, saved with the sheet's day. A photo can also
+  be added with no rating (a before and after of a clean), and deleting a rating keeps its
+  photos. Beside each photo the compare view shows the space's score that day.
+- **The baseline is a shot's first photo,** until Chris picks another ("Make this the
+  baseline", after rearranging or a renovation). Removing the baseline falls back to the
+  earliest photo left.
+- **Photos never change the Home Score or pay XP.** They're for seeing; the timer pays for
+  the work.
+- **The Food Log's photo pipeline (F6), reused:**
+  - resized in the browser to 1,200 px, a JPEG at 0.8 (about 150 KB)
+  - re-encoded, so the location never leaves the phone
+  - stored in the private Supabase Storage bucket, served by `/api/artifacts/{id}/content`
+  - Take photo and Choose photo buttons
+  - the same refusals: JPEG, PNG or WebP only, at most 5 MB
+- **The day comes from the photo** when the file carries its date taken (EXIF
+  DateTimeOriginal, read before re-encoding). Otherwise it's the sheet's day. Chris can
+  change it. Days are today or earlier.
+- **Lining up the shot:** the camera button shows the shot's baseline as a thumbnail, so the
+  next photo can match it. A camera overlay is later.
+- **Removing a photo** hides it. Its bytes stay in the record, as food photos' do.
+- **No reminders.** Each card says when its newest photo was taken ("photo 34 days ago").
+- **Storage:** nine spaces photographed weekly is about 70 MB a year. The Food Log adds
+  about 165 MB a year at three photos a day. Supabase's free 1 GB holds about four years of
+  both.
+
+### 8.3 Design
+
+- **A photo is an `observation` event:** provenance `declared`, with the photo as its
+  `artifact_id` and a `concerns` edge to the space. Payload:
+  `{"space_photo": {"id": "<uuid>", "space": "<space id>", "shot": "<shot id>", "day": "2026-10-27", "photo": "<artifact id>"}}`.
+  - A change of day or shot writes a newer version with the same `id`, carrying `photo` but
+    not setting `artifact_id`, as the Food Log's versions do (one event owns the artifact).
+  - Remove writes `{"space_photo": {"id": "…", "voided": true}}`.
+  - Newest `recorded_at, id` wins.
+- **Shots and baselines** are a space attribute written only by `SpaceService`:
+  `shots: [{"id": "…", "name": "Desk", "baseline": "<photo id>"}]`.
+  - With no `shots`, a space has one shot, `main`, named after the space.
+  - `baseline` is left out while it's the first photo. A baseline whose photo was removed is
+    ignored, so the earliest photo left takes over.
+  - A shot can be renamed or removed. A removed shot's photos stay in the record and drop
+    out of the page.
+  - `bsk set` refuses `shots`, as it does `weight` and `pace`.
+- **Migration 0045:**
+  - `bsk.v_space_photo`: the newest version per photo id that isn't voided, with `id`,
+    `space_id`, `shot_id`, `day`, `artifact_id`, `taken_at` and `event_id`
+  - an index like the ratings' (`event_space_photo_idx`)
+  - `bsk.v_space` recreated with `shots` (jsonb)
+  - comments, grants and `ReaderRoleTests`
+- **`SpacePhotoService`** (Application): add, change, remove and set the baseline. The
+  checks move out of `FoodPhotoService` into a shared `PhotoChecks` (the sniff, the 5 MB
+  limit, file names, the "not set up" refusal). Both services use it.
+- **API:**
+  - `POST /api/environment/spaces/{id}/photos`: multipart, with `photo`, `day` and `shot`
+  - `POST /api/environment/photos/{id}` (day, shot) and `/photos/{id}/delete`
+  - `POST /api/environment/photos/{id}/baseline`
+  - `GET /api/environment/spaces/{id}/photos`: every photo, newest first, each with the
+    space's score and parts on its day
+  - `GET /api/environment`: each space row gains its shots, each shot with its baseline,
+    its newest photo, a count and the newest photo's day
+- **CLI:** `bsk space photo <space> --file <path> [--day] [--shot]`,
+  `bsk space photo --remove <photo>`, `bsk space baseline <photo>`, and
+  `bsk space shot add / rename / remove`.
+- **Web:**
+  - **The walk-through and quick check:** a camera button per shot, showing its baseline.
+    The photos are held and sent after the ratings save, as a new food entry's are.
+  - **Add photos** on a space card takes several files at once, for photos taken earlier
+    (§8.1, answer 2). Each is dated from its date taken, or the day picked, and goes to the
+    shot chosen.
+  - **Space cards:** Then and Now side by side, each with its day and the space's score that
+    day ("Then · Oct 27 · 48", "Now · Jan 12 · 81"). With one photo it shows alone, with "Add
+    a photo to compare".
+  - **The compare dialog** (tapping Then or Now): the two side by side (stacked on a
+    phone), and a filmstrip of the shot's photos to pick either side. It also offers Make
+    this the baseline, Change day and Remove photo.
+  - **The spaces editor:** each space's shots (add, rename, remove).
+  - **The mock store:** two seeded spaces get placeholder photos.
+- **Tests:**
+  - an upload round-trips byte for byte
+  - the baseline defaults to the first photo, moves when picked, and falls back when
+    removed
+  - the Food Log's refusals, now from `PhotoChecks`, still hold for both
+  - the date-taken reader on sample JPEGs (with and without EXIF)
+  - an e2e golden path adds a photo in the walk-through and opens the compare dialog
+  - a11y for the compare dialog, light and dark
+
+### 8.4 Later
+
+- **A camera overlay:** the baseline faded over the live camera to line up the shot.
+- **A home gallery:** one screen with every space's Then and Now.
+- **A swipe slider** in the compare dialog, dragging between Then and Now over one frame. It
+  works only when the shots line up.
+- **Suggesting ratings from a photo** (AI). This would need Chris's OK first, as the Oura
+  data does.
+
 ## Status
 
 - [x] E0 — Plan + requirements (HOME-1 to HOME-3, REWARD-9, D18)
@@ -517,3 +649,6 @@ level holds. That gave three rules:
 - [x] E3 — Environment's rules (no migration; push with E4)
 - [x] E4 — Environment on the web (no migration)
 - [ ] E5 — Chris's spaces, first walk-through, calibration
+- [x] E6–E7 planned (§8, HOME-4)
+- [ ] E6 — Photos in the kernel (migration 0045)
+- [ ] E7 — Photos on the web (no migration)

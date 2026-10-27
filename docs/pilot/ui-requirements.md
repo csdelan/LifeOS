@@ -3913,8 +3913,8 @@ Build:      built
   sheet.
 - Implications: a rating can move Environment's level (REWARD-9), so every rating write
   answers `progress`, and a backdated one re-reads past days. Days are today or earlier.
-- Open decisions: none blocking (plan §6). Photos on ratings and per-space examples are
-  later (plan §7).
+- Open decisions: none blocking (plan §6). Photos are HOME-4. Per-space examples are later
+  (plan §7).
 
 ### HOME-3 — Ratings fade, and a Home Score shows how well my home is kept and what to fix next
 Horizon:    Pilot
@@ -3951,6 +3951,62 @@ Build:      built
 - Implications: the Home Score is what holds Environment's level (REWARD-9). Retuning a fade
   or a weight re-reads all of history.
 - Open decisions: none blocking (plan §6). Reminders for fading spaces are later (plan §7).
+
+### HOME-4 — Photos of each space, from a baseline, show my progress at a glance
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "I think rating photos are something I'll want to add. I think having a 'baseline' photo
+  from the start is especially important so I can see at a glance my progress from the
+  photos rather than just the ratings." (2026-10-27)
+- Agreed in Q&A (2026-10-27), taking all three recommendations:
+  - **Shots:** a space is photographed from set spots, like "Office: Desk" or "Kitchen:
+    Counters". Every space starts with one shot, named after it, and can add more. Each
+    shot has its own baseline.
+  - **The first walk-through doesn't wait.** Chris photographs each space with the phone on
+    the day of his first walk-through and adds the photos once the app takes them. Each
+    photo is dated from when it was taken.
+  - **Then and Now on each space card:** the baseline beside the newest photo, each with
+    the space's score that day. Tapping opens a side-by-side compare with every photo of
+    that shot.
+- Chosen in planning (plan §8.2):
+  - A photo goes with a space on a day: added in the walk-through or a quick check, or on
+    its own (a before and after of a clean). Deleting a rating keeps its photos.
+  - A shot's first photo is its baseline until Chris picks another.
+  - Photos don't change the Home Score or pay XP.
+  - The Food Log's photo handling: resized on the phone, location stripped, a private
+    bucket.
+
+**Ontology fit (Claude):**
+- Maps to: an `observation` event per photo, as the Food Log's photos are (FOOD-5).
+  - Its artifact is the photo, and a `concerns` edge points to the space.
+  - Its `space_photo` payload holds an id, the space, the shot, the day and the photo.
+  - Versioned by id, as ratings are: a change of day or shot writes a newer version, and
+    removing writes a voided one. No new event kind.
+  - Shots and their baselines are a space attribute, `shots`, written only by
+    `SpaceService`. No new subject type.
+- Kernel delta:
+  - migration 0045: `v_space_photo` and its index, and `v_space` with `shots`
+  - `SpacePhotoService`, with the photo checks shared with the Food Log (`PhotoChecks`)
+  - `bsk space photo`, `bsk space baseline` and `bsk space shot`
+  - `POST /api/environment/spaces/{id}/photos`, `/photos/{id}`, `/photos/{id}/delete` and
+    `/photos/{id}/baseline`, and `GET /api/environment/spaces/{id}/photos`
+  - shots, baselines and newest photos on `GET /api/environment`
+
+  Phase E6 of [environment-plan.md](environment-plan.md); E7 brings Then and Now, the
+  compare dialog and the camera buttons.
+- Implications:
+  - The Home Score, the level and the ledger never read photos, so HOME-1 to HOME-3 and
+    REWARD-9 are unchanged.
+  - Nine spaces photographed weekly is about 70 MB a year of Supabase Storage, beside the
+    Food Log's.
+  - A removed photo's bytes stay in the record, as food photos' do.
+  - Uploads take past days, so the photos Chris takes before E7 land on the day they were
+    taken.
+- Open decisions: none blocking (plan §8.1). A home gallery, a swipe slider, a camera
+  overlay and ratings suggested from photos are later (plan §8.4).
 
 
 
@@ -4340,6 +4396,11 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 
   — **Shipped** (E1–E4 in [environment-plan.md](environment-plan.md), migration 0044). E5,
   Chris's spaces, first walk-through and calibration, continues in use.
+- **Space photos and baselines** (HOME-4): photos as `observation` events with a
+  `space_photo` payload, read by `v_space_photo` (migration 0045); shots and baselines as
+  the space attribute `shots`; `SpacePhotoService` with the photo checks shared with the Food
+  Log; `bsk space photo`, `baseline` and `shot`; the photo endpoints; Then and Now on the
+  space cards. — **Open** (planned in [environment-plan.md](environment-plan.md) §8, E6–E7).
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;
