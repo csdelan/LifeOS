@@ -1,4 +1,6 @@
-/** The long side a food photo is sent at (food-log plan §3.8). */
+import { readDateTaken } from "@/lib/exif";
+
+/** The long side a photo is sent at (food-log plan §3.8; space photos too, environment plan §8.2). */
 export const PHOTO_MAX_EDGE = 1200;
 
 /** The JPEG quality a food photo is sent at: about 150 KB at 1,200 px. */
@@ -43,4 +45,26 @@ export async function resizePhoto(file: Blob): Promise<Blob> {
   if (!blob) throw new Error("Couldn't prepare that photo.");
   if (blob.size > PHOTO_MAX_BYTES) throw new Error("That photo is still over 5 MB after shrinking it.");
   return blob;
+}
+
+/** The name a photo is sent under: the picked file's, as a JPEG once resized. */
+export function jpegName(filename: string): string {
+  return `${filename.replace(/\.[^.]*$/, "") || "photo"}.jpg`;
+}
+
+/** A picked photo made ready to send: resized, its name, and the day its EXIF says it was taken. */
+export interface PreparedPhoto {
+  blob: Blob;
+  name: string;
+  /** `yyyy-MM-dd`, or null when the file doesn't say. */
+  takenOn: string | null;
+}
+
+/**
+ * A space photo as it's sent (HOME-4): its date taken read first, since resizing drops the
+ * EXIF, then shrunk and re-encoded as `resizePhoto` does.
+ */
+export async function preparePhoto(file: File): Promise<PreparedPhoto> {
+  const takenOn = await readDateTaken(file);
+  return { blob: await resizePhoto(file), name: jpegName(file.name), takenOn };
 }

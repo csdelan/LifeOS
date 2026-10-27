@@ -953,6 +953,50 @@ test.describe("golden paths", () => {
     await expect(page.getByRole("article", { name: "Office" })).toContainText("rated today");
   });
 
+  test("Environment: a photo in the walk-through becomes Now, and the compare dialog makes it the baseline", async ({
+    page,
+  }) => {
+    await page.goto("/environment");
+    await expect(page.getByTestId("home-score")).toHaveText(/^\d+\.\d$/, { timeout: 10_000 });
+    const png = await bigPng(page);
+    const office = page.getByRole("article", { name: "Office" });
+    await expect(office.getByTestId("then-and-now")).toContainText("2 photos");
+
+    // Office's panel shows its baseline to line the new photo up with.
+    await page.getByRole("button", { name: "Walk-through" }).click();
+    const sheet = page.getByRole("dialog", { name: "Walk-through" });
+    await sheet.getByRole("button", { name: /^Office/ }).click();
+    await expect(sheet.getByRole("img", { name: /^Office's baseline, / })).toBeVisible();
+    await expect(sheet.getByText(/^Line the new photo up with Then, /)).toBeVisible();
+    const chooser = page.waitForEvent("filechooser");
+    await sheet.getByRole("button", { name: "Choose photo of Office" }).click();
+    await (await chooser).setFiles({ name: "IMG_6001.png", mimeType: "image/png", buffer: png });
+    await expect(sheet.getByRole("img", { name: "New photo of Office" })).toBeVisible();
+    await expect(sheet.getByText("New photo, dated with the walk-through.")).toBeVisible();
+    await expect(sheet.getByRole("button", { name: /^Office/ })).toContainText("1 photo");
+    await expect(sheet.getByText("Nothing rated yet · 1 photo to add")).toBeVisible();
+    await sheet.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText("Added a photo of Office")).toBeVisible({ timeout: 10_000 });
+    await expect(office.getByTestId("then-and-now")).toContainText("photo today · 3 photos");
+
+    // Now is today's photo, shrunk to 1,200 px; the compare dialog opens on it, Then beside it.
+    await office.getByTestId("photo-now").click();
+    const compare = page.getByRole("dialog", { name: "Office" });
+    await expect(compare.getByRole("button", { name: /^Right side: Now · / })).toHaveAttribute("aria-pressed", "true");
+    await expect(compare.getByRole("button", { name: /^Left side: Then · / })).toBeVisible();
+    await expect(compare.getByTestId("filmstrip").getByRole("button")).toHaveCount(3);
+    const now = compare.getByTestId("compare-right").locator("img");
+    await expect.poll(() => now.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1200);
+    await compare.getByRole("button", { name: "Make this the baseline" }).click();
+    await expect(page.getByText("Made the baseline")).toBeVisible({ timeout: 10_000 });
+    await expect(compare.getByRole("button", { name: "This is the baseline" })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(compare).toBeHidden();
+    // Then and Now are the same photo now, so the card asks for another to compare.
+    await expect(office.getByRole("button", { name: "Add a photo of Office to compare" })).toBeVisible();
+  });
+
   test("Environment: add a space, change its weight, and archive it out of the score", async ({ page }) => {
     await page.goto("/environment");
     const editor = page.getByRole("region", { name: "Manage spaces" });

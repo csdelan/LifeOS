@@ -29,7 +29,12 @@ import {
   normalizeProgress,
 } from "@/lib/domains";
 import { foodWriteMessage, normalizeFoodWrite } from "@/lib/food";
-import { normalizeSpace, normalizeSpaceRatingResult, ratedMessage } from "@/lib/environment";
+import {
+  normalizeSpace,
+  normalizeSpacePhotoResult,
+  normalizeSpaceRatingResult,
+  ratedMessage,
+} from "@/lib/environment";
 import {
   normalizeBountyResult,
   normalizeHabitTarget,
@@ -308,6 +313,81 @@ export function createLiveWriteClient(): LifeOsWriteClient {
         await unwrap(api().POST("/api/environment/ratings/{id}/delete", { params: { path: { id: rating } } })),
       );
       notify("Rating deleted");
+      return result;
+    },
+
+    async addSpacePhoto(space, photo, req) {
+      const form = new FormData();
+      form.append("photo", photo, req?.filename ?? "photo.jpg");
+      if (req?.day) form.append("day", req.day);
+      if (req?.shot) form.append("shot", req.shot);
+      // No toast here: a batch of photos is announced once, by the sheet that sends it.
+      return normalizeSpacePhotoResult(
+        await unwrap(
+          api().POST("/api/environment/spaces/{id}/photos", {
+            params: { path: { id: space } },
+            // The browser sets the multipart boundary; openapi-fetch leaves FormData as it is.
+            body: form as unknown as { photo?: string; day?: string; shot?: string },
+            bodySerializer: (body) => body as unknown as FormData,
+          }),
+        ),
+      );
+    },
+
+    async changeSpacePhoto(photo, req) {
+      const result = normalizeSpacePhotoResult(
+        await unwrap(api().POST("/api/environment/photos/{id}", { params: { path: { id: photo } }, body: req })),
+      );
+      notify("Photo moved");
+      return result;
+    },
+
+    async removeSpacePhoto(photo) {
+      const result = normalizeSpacePhotoResult(
+        await unwrap(api().POST("/api/environment/photos/{id}/delete", { params: { path: { id: photo } } })),
+      );
+      notify("Photo removed");
+      return result;
+    },
+
+    async setSpaceBaseline(photo) {
+      const result = normalizeSpacePhotoResult(
+        await unwrap(api().POST("/api/environment/photos/{id}/baseline", { params: { path: { id: photo } } })),
+      );
+      notify("Made the baseline");
+      return result;
+    },
+
+    async addShot(space, name) {
+      const result = normalizeSpacePhotoResult(
+        await unwrap(
+          api().POST("/api/environment/spaces/{id}/shots", { params: { path: { id: space } }, body: { name } }),
+        ),
+      );
+      notify(`Added the shot ${name.trim()}`);
+      return result;
+    },
+
+    async renameShot(space, shot, name) {
+      const result = normalizeSpacePhotoResult(
+        await unwrap(
+          api().POST("/api/environment/spaces/{id}/shots/{shot}", {
+            params: { path: { id: space, shot } },
+            body: { name },
+          }),
+        ),
+      );
+      notify("Shot renamed");
+      return result;
+    },
+
+    async removeShot(space, shot) {
+      const result = normalizeSpacePhotoResult(
+        await unwrap(
+          api().POST("/api/environment/spaces/{id}/shots/{shot}/delete", { params: { path: { id: space, shot } } }),
+        ),
+      );
+      notify("Shot removed");
       return result;
     },
 

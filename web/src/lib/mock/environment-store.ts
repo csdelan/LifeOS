@@ -7,30 +7,45 @@
  * kernel's own sums. Environment's level reads the daily scores through `mockHomeScoreUnits`,
  * and the main store's `mockHomeWrite` answers a rating write's level change and rank-up (E3).
  * Exception days come from the main store, passed in, so this half doesn't import it back.
+ *
+ * Photos (HOME-4, environment plan §8): the Office and the Kitchen hold placeholder photos — a
+ * drawn room whose clutter thins as its Tidiness climbs — from the first Sunday and the last,
+ * the Kitchen with a second shot, Counters, photographed once. A photo's bytes live here too,
+ * so `artifactBytesUrl` asks `mockSpacePhotoUrl` for a space photo's.
  */
-import { addDays, nowIso, startOfWeekSunday, todayIso } from "@/lib/dates";
+import { objectUrlFor } from "@/lib/artifacts";
+import { addDays, formatDay, nowIso, startOfWeekSunday, todayIso } from "@/lib/dates";
 import {
   DEFAULT_DAYS,
   DEFAULT_PACE,
   DEFAULT_WEIGHT,
   HOME_PARTS,
+  MAIN_SHOT,
   MAX_DAYS,
   NAME_MAX,
   NOTE_MAX,
   PACE_MAX,
   PACE_MIN,
   PART_LABEL,
+  SHOTS_MAX,
+  SHOT_NAME_MAX,
   WEIGHT_MAX,
   WEIGHT_MIN,
   isRating,
 } from "@/lib/environment";
 import { fixNext, homeDays, lastRatedOn, toPoints, type HomeDay } from "@/lib/home-score";
+import { PHOTO_MAX_BYTES } from "@/lib/photo";
 import type {
   EnvironmentRead,
   HomeDaysRead,
   HomePart,
   HomePartRow,
   HomeSpaceRow,
+  SpacePhotoChangeRequest,
+  SpacePhotoRequest,
+  SpacePhotoResult,
+  SpacePhotoRow,
+  SpacePhotosRead,
   SpaceRatingEditRequest,
   SpaceRatingRequest,
   SpaceRatingResult,
@@ -38,12 +53,20 @@ import type {
   SpaceRatingsRead,
   SpaceRequest,
   SpaceRow,
+  SpaceShotRow,
 } from "@/lib/production-ui-types";
 
 /** A marked exception day, as the main store keeps it. */
 export interface MockException {
   day: string;
   comment: string;
+}
+
+/** A shot as the space's `shots` attribute holds it: a name only once it differs from the space's. */
+interface MockShot {
+  id: string;
+  name: string | null;
+  baseline: string | null;
 }
 
 interface MockSpace {
@@ -54,13 +77,28 @@ interface MockSpace {
   pace: number;
   archivedAt: string | null;
   archivedOn: string | null;
+  /** Null until a shot is added: the one shot, `main`, named after the space. */
+  shots: MockShot[] | null;
 }
 
 type MockRating = Omit<SpaceRatingRow, "space">;
 
+/** A photo as `v_space_photo` reads it: its newest version; a removed one is gone. */
+interface MockPhoto {
+  id: string;
+  spaceId: string;
+  shotId: string;
+  day: string;
+  artifactId: string;
+  addedAt: string;
+}
+
 interface EnvironmentState {
   spaces: MockSpace[];
   ratings: MockRating[];
+  photos: MockPhoto[];
+  /** Every photo's bytes by artifact id, removed photos' too: the record keeps them. */
+  photoUrls: Map<string, string>;
   nextId: number;
 }
 
@@ -75,11 +113,12 @@ export function resetEnvironmentStore() {
   seeded = null;
 }
 
-/** Test seam: no spaces and no ratings, as on the first day. */
+/** Test seam: no spaces, ratings or photos, as on the first day. */
 export function clearMockEnvironment() {
   const state = store();
   state.spaces = [];
   state.ratings = [];
+  state.photos = [];
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +182,7 @@ function seedEnvironment(): EnvironmentState {
     pace: s.pace,
     archivedAt: null,
     archivedOn: null,
+    shots: null,
   }));
 
   const ratings: MockRating[] = [];
@@ -174,7 +214,94 @@ function seedEnvironment(): EnvironmentState {
     }
   });
 
-  return { spaces, ratings, nextId: n + 1 };
+  const { photos, photoUrls } = seedPhotos(spaces, sundays, at);
+  return { spaces, ratings, photos, photoUrls, nextId: n + 1 };
+}
+
+/**
+ * A placeholder photo of a room: a wall, a window, a floor, a table, and clutter that thins as
+ * `tidy` (0 to 1) rises, with the shot and day written in the corner. The same room for the
+ * same space and shot, so Then and Now differ only in the mess.
+ */
+export function placeholderPhoto(space: string, shot: string, day: string, tidy: number): string {
+  let seed = [...`${space}|${shot}`].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const random = () => {
+    seed = (seed * 1_103_515_245 + 12_345) >>> 0;
+    return seed / 0x1_0000_0000;
+  };
+  const hue = Math.floor(random() * 360);
+  const boxes = Array.from({ length: 14 }, () => ({
+    x: 30 + random() * 330,
+    y: 160 + random() * 120,
+    w: 14 + random() * 34,
+    h: 10 + random() * 22,
+    hue: Math.floor(random() * 360),
+  }));
+  const clutter = Math.round((1 - Math.min(1, Math.max(0, tidy))) * boxes.length);
+  const mess = boxes
+    .slice(0, clutter)
+    .map(
+      (b) =>
+        `<rect x='${b.x.toFixed(0)}' y='${(b.y - b.h).toFixed(0)}' width='${b.w.toFixed(0)}' height='${b.h.toFixed(0)}' rx='3' fill='hsl(${b.hue} 55% 55%)'/>`,
+    )
+    .join("");
+  const label = `${shot === space ? space : `${space} · ${shot}`} · ${formatDay(day)}`.replace(/[<>&'"]/g, "");
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'>` +
+    `<rect width='400' height='300' fill='hsl(${hue} 30% 86%)'/>` +
+    `<rect y='190' width='400' height='110' fill='hsl(${hue} 18% 62%)'/>` +
+    `<rect x='250' y='40' width='110' height='80' rx='4' fill='hsl(${(hue + 180) % 360} 40% 78%)' stroke='white' stroke-width='6'/>` +
+    `<rect x='60' y='140' width='200' height='12' rx='2' fill='hsl(30 35% 35%)'/>` +
+    `<rect x='72' y='152' width='10' height='70' fill='hsl(30 35% 30%)'/>` +
+    `<rect x='238' y='152' width='10' height='70' fill='hsl(30 35% 30%)'/>` +
+    mess +
+    `<rect x='8' y='8' width='${Math.min(384, 18 + label.length * 8)}' height='26' rx='4' fill='rgb(0 0 0 / 0.55)'/>` +
+    `<text x='16' y='26' font-family='sans-serif' font-size='14' fill='white'>${label}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+/** The Kitchen's second shot, a fixed id so the seed reads the same on every load. */
+const COUNTERS_SHOT = "c0a7e125";
+
+/** The Office and Kitchen's placeholder photos (see the top of this file). */
+function seedPhotos(
+  spaces: MockSpace[],
+  sundays: readonly string[],
+  at: (s: (typeof SEED)[number], p: number, step: number) => number,
+): { photos: MockPhoto[]; photoUrls: Map<string, string> } {
+  const photos: MockPhoto[] = [];
+  const photoUrls = new Map<string, string>();
+  let n = 0;
+  const take = (i: number, shotId: string, shot: string, step: number) => {
+    const space = spaces[i];
+    const day = sundays[step];
+    // As tidy as Tidiness was rated that Sunday: a 1 is all clutter, a 5 none.
+    const tidy = (at(SEED[i], 0, step) - 1) / 4;
+    n += 1;
+    const artifactId = mockId(4, n);
+    photoUrls.set(artifactId, placeholderPhoto(space.name, shot, day, tidy));
+    photos.push({
+      id: mockId(3, n),
+      spaceId: space.id,
+      shotId,
+      day,
+      artifactId,
+      addedAt: `${day}T16:${String(n).padStart(2, "0")}:00.000Z`,
+    });
+  };
+  const last = SEEDED_WALK_THROUGHS - 1;
+  take(0, MAIN_SHOT, "Office", 0);
+  take(0, MAIN_SHOT, "Office", last);
+  take(1, MAIN_SHOT, "Kitchen", 0);
+  take(1, MAIN_SHOT, "Kitchen", 2);
+  take(1, MAIN_SHOT, "Kitchen", last);
+  spaces[1].shots = [
+    { id: MAIN_SHOT, name: null, baseline: null },
+    { id: COUNTERS_SHOT, name: "Counters", baseline: null },
+  ];
+  take(1, COUNTERS_SHOT, "Counters", last);
+  return { photos, photoUrls };
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +407,7 @@ export function mockEnvironment(exceptions: readonly MockException[] = []): Envi
     .spaces.filter((s) => s.archivedAt == null)
     .sort(byName);
   const names = new Map(spaces.map((s) => [s.id, s.name]));
+  const on = photoDays(exceptions);
   return {
     today,
     settledThrough: addDays(today, -1),
@@ -301,6 +429,7 @@ export function mockEnvironment(exceptions: readonly MockException[] = []): Envi
         score: scored?.score == null ? null : toPoints(scored.score),
         lastRatedOn: scored ? lastRatedOn(scored) : null,
         parts,
+        shots: shotRows(space, on),
       };
     }),
     fixNext: fixNext(day).map((x) => ({
@@ -409,6 +538,7 @@ export function mockAddSpace(req: SpaceRequest): SpaceRow {
     pace,
     archivedAt: null,
     archivedOn: null,
+    shots: null,
   };
   state.spaces.push(space);
   return spaceRow(space);
@@ -563,4 +693,293 @@ export function mockDeleteSpaceRating(id: string): SpaceRatingResult {
   const state = store();
   state.ratings = state.ratings.filter((r) => r !== rating);
   return { ratings: [], awards: [], progress: [] };
+}
+
+// ---------------------------------------------------------------------------
+// Photos (HOME-4)
+// ---------------------------------------------------------------------------
+
+/** A space photo's bytes, as `artifactBytesUrl` serves them; null for any other artifact. */
+export function mockSpacePhotoUrl(artifactId: string): string | null {
+  return store().photoUrls.get(artifactId) ?? null;
+}
+
+function shotsOf(space: MockSpace): MockShot[] {
+  return space.shots ?? [{ id: MAIN_SHOT, name: null, baseline: null }];
+}
+
+function shotName(space: MockSpace, shot: MockShot): string {
+  return shot.name ?? space.name;
+}
+
+/** A space's photos, oldest first: by day, then when added. */
+function photosOf(spaceId: string): MockPhoto[] {
+  return store()
+    .photos.filter((p) => p.spaceId === spaceId)
+    .sort((a, b) => a.day.localeCompare(b.day) || a.addedAt.localeCompare(b.addedAt) || a.id.localeCompare(b.id));
+}
+
+function inShot(shot: MockShot, photo: MockPhoto): boolean {
+  return same(shot.id, photo.shotId);
+}
+
+/** The shot's baseline: the picked photo while it's still the shot's, else its first. */
+function baselineOf(shot: MockShot, photos: readonly MockPhoto[]): MockPhoto | undefined {
+  const own = photos.filter((p) => inShot(shot, p));
+  return own.find((p) => p.id === shot.baseline) ?? own[0];
+}
+
+/** A photo's day as its space scored then: the score and each part. */
+type PhotoDays = (photo: MockPhoto) => { score: number | null; parts: Record<HomePart, HomePartRow> };
+
+/** Scores every day from the first photo through today once, for each photo's day to read. */
+function photoDays(exceptions: readonly MockException[]): PhotoDays {
+  const state = store();
+  const days = new Map<string, HomeDay>();
+  if (state.photos.length > 0) {
+    const first = state.photos.reduce((min, p) => (p.day < min ? p.day : min), state.photos[0].day);
+    for (const d of score(first, todayIso(), exceptions)) days.set(d.day, d);
+  }
+  return (photo) => {
+    const scored = days.get(photo.day)?.spaces.find((s) => s.spaceId === photo.spaceId);
+    const parts = Object.fromEntries(
+      HOME_PARTS.map((p) => {
+        const found = scored?.parts.find((x) => x.part === p);
+        return [p, partRow(found ?? { rated: null, ratedOn: null, value: null, drag: 0 })];
+      }),
+    ) as Record<HomePart, HomePartRow>;
+    return { score: scored?.score == null ? null : toPoints(scored.score), parts };
+  };
+}
+
+function photoRow(photo: MockPhoto, space: MockSpace, baseline: boolean, on: PhotoDays): SpacePhotoRow {
+  const shot = shotsOf(space).find((s) => inShot(s, photo));
+  return {
+    id: photo.id,
+    spaceId: space.id,
+    space: space.name,
+    shotId: photo.shotId,
+    shot: shot ? shotName(space, shot) : null,
+    day: photo.day,
+    artifactId: photo.artifactId,
+    addedAt: photo.addedAt,
+    baseline,
+    ...on(photo),
+  };
+}
+
+/** Each shot with Then (its baseline) and Now (its newest photo). */
+function shotRows(space: MockSpace, on: PhotoDays): SpaceShotRow[] {
+  const photos = photosOf(space.id);
+  return shotsOf(space).map((shot) => {
+    const own = photos.filter((p) => inShot(shot, p));
+    const baseline = baselineOf(shot, photos);
+    const newest = own.at(-1);
+    return {
+      id: shot.id,
+      name: shotName(space, shot),
+      photos: own.length,
+      baseline: baseline ? photoRow(baseline, space, true, on) : null,
+      newest: newest ? photoRow(newest, space, newest.id === baseline?.id, on) : null,
+    };
+  });
+}
+
+/** The shot `reference` names: the first when blank, else by id, then by name (`SpaceService.ResolveShot`). */
+function resolveShot(space: MockSpace, reference: string | undefined): MockShot {
+  const shots = shotsOf(space);
+  const wanted = reference?.trim() ?? "";
+  if (!wanted) return shots[0];
+  const found = shots.find((s) => same(s.id, wanted)) ?? shots.find((s) => same(shotName(space, s), wanted));
+  if (!found) {
+    const names = shots.map((s) => shotName(space, s)).join(", ");
+    throw new Error(`${space.name} has no shot called '${wanted}'. Its shots: ${names}.`);
+  }
+  return found;
+}
+
+function resolvePhoto(id: string): MockPhoto {
+  const photo = store().photos.find((p) => p.id === id.trim().toLowerCase());
+  if (!photo) throw new Error(`No photo has the id ${id} (it may have been removed).`);
+  return photo;
+}
+
+function spaceOf(photo: MockPhoto): MockSpace {
+  const space = store().spaces.find((s) => s.id === photo.spaceId);
+  if (!space) throw new Error("That photo's space no longer exists.");
+  return space;
+}
+
+function checkPhotoDay(day: string, today: string): string {
+  if (day > today) throw new Error(`A photo is for today or earlier; ${day} hasn't happened yet (today is ${today}).`);
+  return day;
+}
+
+/** `PhotoChecks`: the mock can only go by the blob's type, where the kernel reads its first bytes. */
+function checkPhotoBytes(photo: Blob) {
+  if (photo.size === 0) throw new Error("That photo is empty.");
+  if (photo.size > PHOTO_MAX_BYTES) {
+    throw new Error(`That photo is ${(photo.size / (1024 * 1024)).toFixed(1)} MB; a photo can be at most 5 MB.`);
+  }
+  if (!["image/jpeg", "image/png", "image/webp"].includes(photo.type)) {
+    throw new Error("That isn't a photo: send a JPEG, PNG or WebP image.");
+  }
+}
+
+function photoResult(space: MockSpace, photo: MockPhoto | null, exceptions: readonly MockException[]): SpacePhotoResult {
+  const on = photoDays(exceptions);
+  const shots = shotRows(space, on);
+  const live = photo ? store().photos.find((p) => p.id === photo.id) : undefined;
+  return {
+    photo: live ? photoRow(live, space, shots.some((s) => s.baseline?.id === live.id), on) : null,
+    spaceId: space.id,
+    shots,
+  };
+}
+
+/** A space's photos, newest first, of one shot when given; a removed shot's left out (`GET …/spaces/{id}/photos`). */
+export function mockSpacePhotos(
+  reference: string,
+  shot?: string,
+  exceptions: readonly MockException[] = [],
+): SpacePhotosRead {
+  const space = resolveSpace(reference);
+  const wanted = shot?.trim() ? [resolveShot(space, shot)] : shotsOf(space);
+  const on = photoDays(exceptions);
+  const all = photosOf(space.id);
+  const baselines = new Set(shotsOf(space).map((s) => baselineOf(s, all)?.id));
+  return {
+    spaceId: space.id,
+    space: space.name,
+    shots: shotRows(space, on),
+    photos: all
+      .filter((p) => wanted.some((s) => inShot(s, p)))
+      .reverse()
+      .map((p) => photoRow(p, space, baselines.has(p.id), on)),
+  };
+}
+
+/** Adds a photo of a space: today and the first shot unless said (`POST …/spaces/{id}/photos`). */
+export function mockAddSpacePhoto(
+  reference: string,
+  photo: Blob,
+  req: SpacePhotoRequest = {},
+  exceptions: readonly MockException[] = [],
+): SpacePhotoResult {
+  const space = resolveSpace(reference);
+  if (space.archivedAt != null) throw new Error(`'${space.name}' is archived: bring it back before adding photos.`);
+  const shot = resolveShot(space, req.shot);
+  const today = todayIso();
+  const day = checkPhotoDay(req.day?.trim() || today, today);
+  checkPhotoBytes(photo);
+  const state = store();
+  const n = state.nextId++;
+  const added: MockPhoto = {
+    id: mockId(3, 0x1000 + n),
+    spaceId: space.id,
+    shotId: shot.id,
+    day,
+    artifactId: mockId(4, 0x1000 + n),
+    addedAt: nowIso(),
+  };
+  state.photoUrls.set(added.artifactId, objectUrlFor(photo));
+  state.photos.push(added);
+  return photoResult(space, added, exceptions);
+}
+
+/** Moves a photo to another day or shot (`POST /api/environment/photos/{id}`). */
+export function mockChangeSpacePhoto(
+  id: string,
+  req: SpacePhotoChangeRequest,
+  exceptions: readonly MockException[] = [],
+): SpacePhotoResult {
+  if (!req.day?.trim() && !req.shot?.trim()) throw new Error("Say what to change: a day or a shot.");
+  const photo = resolvePhoto(id);
+  const space = spaceOf(photo);
+  const day = checkPhotoDay(req.day?.trim() || photo.day, todayIso());
+  const shotId = req.shot?.trim() ? resolveShot(space, req.shot).id : photo.shotId;
+  photo.day = day;
+  photo.shotId = shotId;
+  return photoResult(space, photo, exceptions);
+}
+
+/** Removes a photo; its bytes stay in the record (`POST /api/environment/photos/{id}/delete`). */
+export function mockRemoveSpacePhoto(id: string, exceptions: readonly MockException[] = []): SpacePhotoResult {
+  const photo = resolvePhoto(id);
+  const space = spaceOf(photo);
+  const state = store();
+  state.photos = state.photos.filter((p) => p.id !== photo.id);
+  return photoResult(space, null, exceptions);
+}
+
+/** Makes a photo its shot's baseline (`POST /api/environment/photos/{id}/baseline`). */
+export function mockSetSpaceBaseline(id: string, exceptions: readonly MockException[] = []): SpacePhotoResult {
+  const photo = resolvePhoto(id);
+  const space = spaceOf(photo);
+  const shots = shotsOf(space);
+  const shot = shots.find((s) => inShot(s, photo));
+  if (!shot) throw new Error(`That photo's shot was removed from ${space.name}: move it to one of its shots first.`);
+  space.shots = shots.map((s) => (s.id === shot.id ? { ...s, baseline: photo.id } : s));
+  return photoResult(space, photo, exceptions);
+}
+
+function liveSpaceForShots(reference: string): MockSpace {
+  const space = resolveSpace(reference);
+  if (space.archivedAt != null) throw new Error(`'${space.name}' is archived: bring it back before changing its shots.`);
+  return space;
+}
+
+function checkShotName(name: string): string {
+  const text = name.trim();
+  if (!text) throw new Error("Give the shot a name, e.g. Desk.");
+  if (/[\r\n]/.test(text)) throw new Error("A shot's name is one line: take out the line break.");
+  if (text.length > SHOT_NAME_MAX) {
+    throw new Error(`A shot's name is up to ${SHOT_NAME_MAX} characters; that one is ${text.length}.`);
+  }
+  return text;
+}
+
+function checkShotFree(space: MockSpace, name: string, except: string | null) {
+  const taken = shotsOf(space).find((s) => s.id !== except && same(shotName(space, s), name));
+  if (taken) throw new Error(`${space.name} already has a shot called '${shotName(space, taken)}'.`);
+}
+
+/** Adds a shot to a space (`POST /api/environment/spaces/{id}/shots`). */
+export function mockAddShot(reference: string, name: string, exceptions: readonly MockException[] = []): SpacePhotoResult {
+  const space = liveSpaceForShots(reference);
+  const shots = shotsOf(space);
+  const title = checkShotName(name);
+  if (shots.length >= SHOTS_MAX) {
+    throw new Error(`'${space.name}' has ${SHOTS_MAX} shots, the most a space can have: remove one first.`);
+  }
+  checkShotFree(space, title, null);
+  space.shots = [...shots, { id: hex(0x5c000000 + store().nextId++, 8), name: title, baseline: null }];
+  return photoResult(space, null, exceptions);
+}
+
+/** Renames a shot (`POST /api/environment/spaces/{id}/shots/{shot}`). */
+export function mockRenameShot(
+  reference: string,
+  shot: string,
+  name: string,
+  exceptions: readonly MockException[] = [],
+): SpacePhotoResult {
+  const space = liveSpaceForShots(reference);
+  const target = resolveShot(space, shot);
+  const title = checkShotName(name);
+  checkShotFree(space, title, target.id);
+  space.shots = shotsOf(space).map((s) => (s.id === target.id ? { ...s, name: title } : s));
+  return photoResult(space, null, exceptions);
+}
+
+/** Removes a shot; its photos stay in the record (`POST …/shots/{shot}/delete`). */
+export function mockRemoveShot(reference: string, shot: string, exceptions: readonly MockException[] = []): SpacePhotoResult {
+  const space = liveSpaceForShots(reference);
+  const shots = shotsOf(space);
+  const target = resolveShot(space, shot);
+  if (shots.length === 1) {
+    throw new Error(`'${shotName(space, target)}' is ${space.name}'s only shot: a space keeps at least one. Rename it instead.`);
+  }
+  space.shots = shots.filter((s) => s.id !== target.id);
+  return photoResult(space, null, exceptions);
 }

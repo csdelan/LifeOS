@@ -54,6 +54,7 @@ import type {
   Wallet,
   EnvironmentRead,
   HomeDaysRead,
+  SpacePhotosRead,
   SpaceRatingsRead,
   SpaceRow,
 } from "@/lib/production-ui-types";
@@ -100,7 +101,14 @@ import {
   mockActivityWorkouts,
   mockOuraStatus,
 } from "@/lib/mock/activity-store";
-import { mockEnvironment, mockHomeDays, mockSpaceRatings, mockSpaces } from "@/lib/mock/environment-store";
+import {
+  mockEnvironment,
+  mockHomeDays,
+  mockSpacePhotoUrl,
+  mockSpacePhotos,
+  mockSpaceRatings,
+  mockSpaces,
+} from "@/lib/mock/environment-store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 
@@ -225,6 +233,11 @@ export interface LifeOsReads {
   spaces(): Promise<SpaceRow[]>;
   /** The ratings among the last `days` (90 by default), of one space (its id) when given, newest first. */
   spaceRatings(opts?: { space?: string; days?: number }): Promise<SpaceRatingsRead>;
+  /**
+   * A space's photos (HOME-4, `GET /api/environment/spaces/{id}/photos`), newest first, of one
+   * shot (its id or name) when given, each with the space's score on its day; its shots too.
+   */
+  spacePhotos(space: string, shot?: string): Promise<SpacePhotosRead>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /**
@@ -358,7 +371,7 @@ export const mockReads: LifeOsReads = {
   async artifactBytesUrl(id: string): Promise<string | null> {
     await wait();
     // TODO(api): stream from the kernel's bytes-fetch / export path.
-    return getArtifact(id)?.bytesUrl ?? null;
+    return getArtifact(id)?.bytesUrl ?? mockSpacePhotoUrl(id);
   },
 
   async subjectFiles(subjectId: string): Promise<ArtifactRecord[]> {
@@ -496,6 +509,11 @@ export const mockReads: LifeOsReads = {
   async spaceRatings(opts?: { space?: string; days?: number }): Promise<SpaceRatingsRead> {
     await wait();
     return mockSpaceRatings(opts);
+  },
+
+  async spacePhotos(space: string, shot?: string): Promise<SpacePhotosRead> {
+    await wait();
+    return mockSpacePhotos(space, shot, storeState().exceptionDays);
   },
 
   async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {

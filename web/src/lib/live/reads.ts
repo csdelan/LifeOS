@@ -68,10 +68,17 @@ import type {
   Wallet,
   EnvironmentRead,
   HomeDaysRead,
+  SpacePhotosRead,
   SpaceRatingsRead,
   SpaceRow,
 } from "@/lib/production-ui-types";
-import { normalizeEnvironment, normalizeHomeDays, normalizeSpace, normalizeSpaceRatings } from "@/lib/environment";
+import {
+  normalizeEnvironment,
+  normalizeHomeDays,
+  normalizeSpace,
+  normalizeSpacePhotos,
+  normalizeSpaceRatings,
+} from "@/lib/environment";
 
 function asType<T>(value: unknown): T {
   return value as T;
@@ -343,6 +350,13 @@ export const liveReads: LifeOsReads = {
       api().GET("/api/environment/ratings", { params: { query: { space: opts?.space, days: opts?.days } } }),
     );
     return normalizeSpaceRatings(asType<SpaceRatingsRead>(data));
+  },
+
+  async spacePhotos(space, shot) {
+    const data = await unwrap(
+      api().GET("/api/environment/spaces/{id}/photos", { params: { path: { id: space }, query: { shot } } }),
+    );
+    return normalizeSpacePhotos(asType<SpacePhotosRead>(data));
   },
 
   async activityDay(date) {

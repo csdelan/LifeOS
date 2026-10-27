@@ -34,7 +34,7 @@ import {
 } from "@/lib/diet-score";
 import { formatClock, fromLocalInput, mealTypeWord, toLocalInput } from "@/lib/food";
 import { useIsDesktop } from "@/lib/media-query";
-import { resizePhoto } from "@/lib/photo";
+import { jpegName, resizePhoto } from "@/lib/photo";
 import type { FastRow, FoodEntryRequest, FoodMealType, MealRow } from "@/lib/production-ui-types";
 import { useFoodRecent, useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -111,11 +111,6 @@ function capitalize(text: string): string {
 /** A `datetime-local` value `minutes` before now. */
 function minutesAgo(minutes: number): string {
   return toLocalInput(Date.now() - minutes * 60_000);
-}
-
-/** The name a photo is sent under: the picked file's, as a JPEG once resized. */
-function jpegName(filename: string): string {
-  return `${filename.replace(/\.[^.]*$/, "") || "photo"}.jpg`;
 }
 
 function wholeOrNull(raw: string): number | null | "bad" {

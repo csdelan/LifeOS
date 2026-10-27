@@ -5,14 +5,23 @@ import { homeOn, toUnits } from "@/lib/home-score";
 import {
   SEEDED_WALK_THROUGHS,
   clearMockEnvironment,
+  mockAddShot,
   mockAddSpace,
+  mockAddSpacePhoto,
   mockArchiveSpace,
+  mockChangeSpacePhoto,
   mockDeleteSpaceRating,
   mockEditSpaceRating,
   mockEnvironment,
   mockHomeDays,
   mockRateSpaces,
+  mockRemoveShot,
+  mockRemoveSpacePhoto,
+  mockRenameShot,
   mockSetSpace,
+  mockSetSpaceBaseline,
+  mockSpacePhotos,
+  mockSpacePhotoUrl,
   mockSpaceRatings,
   mockSpaces,
   resetEnvironmentStore,
@@ -223,5 +232,126 @@ describe("the spaces editor", () => {
 
     mockArchiveSpace(garage.urn, false);
     expect(mockEnvironment().spaces.some((s) => s.id === garage.id)).toBe(true);
+  });
+});
+
+const jpeg = () => new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])], { type: "image/jpeg" });
+
+function shotsOf(name: string) {
+  return mockEnvironment().spaces.find((s) => s.name === name)!.shots;
+}
+
+describe("photos of each space (HOME-4)", () => {
+  it("seeds Then and Now for the Office and the Kitchen, each with its score that day", () => {
+    const [office] = shotsOf("Office");
+    expect(office).toMatchObject({ id: "main", name: "Office", photos: 2 });
+    expect(office.baseline!.day < office.newest!.day).toBe(true);
+    expect(office.baseline!.baseline).toBe(true);
+    expect(office.newest!.baseline).toBe(false);
+    // The space got tidier, and the photos say so.
+    expect(office.newest!.score!).toBeGreaterThan(office.baseline!.score!);
+    expect(office.baseline!.parts.tidiness.rated).not.toBeNull();
+    expect(mockSpacePhotoUrl(office.baseline!.artifactId)).toMatch(/^data:image\/svg\+xml/);
+    expect(mockSpacePhotoUrl("not-a-photo")).toBeNull();
+
+    const kitchen = shotsOf("Kitchen");
+    expect(kitchen.map((s) => [s.name, s.photos])).toEqual([
+      ["Kitchen", 3],
+      ["Counters", 1],
+    ]);
+    // One photo is its own Then and Now.
+    expect(kitchen[1].baseline!.id).toBe(kitchen[1].newest!.id);
+    expect(shotsOf("Garage")).toEqual([{ id: "main", name: "Garage", photos: 0, baseline: null, newest: null }]);
+  });
+
+  it("adds a photo as Now, today unless backdated, and the first of a shot is its baseline", () => {
+    const office = spaceId("Office");
+    const added = mockAddSpacePhoto(office, jpeg());
+    expect(added.photo).toMatchObject({ day: today, shot: "Office", baseline: false });
+    expect(added.shots[0]).toMatchObject({ photos: 3, newest: { id: added.photo!.id } });
+
+    const garage = spaceId("Garage");
+    const first = mockAddSpacePhoto(garage, jpeg(), { day: addDays(today, -3) });
+    expect(first.photo).toMatchObject({ day: addDays(today, -3), baseline: true });
+    expect(first.shots[0].baseline!.id).toBe(first.photo!.id);
+    expect(mockSpacePhotos(garage).photos.map((p) => p.id)).toEqual([first.photo!.id]);
+  });
+
+  it("falls back to the first photo left when the picked baseline is removed or moved", () => {
+    const kitchen = spaceId("Kitchen");
+    const main = mockSpacePhotos(kitchen, "main").photos; // newest first
+    expect(main).toHaveLength(3);
+    const [newest, middle, oldest] = main;
+    expect(mockSetSpaceBaseline(middle.id).shots[0].baseline!.id).toBe(middle.id);
+    expect(mockSpacePhotos(kitchen, "main").photos.filter((p) => p.baseline).map((p) => p.id)).toEqual([middle.id]);
+
+    // Moved to the Counters, it leaves the main shot, whose first photo left is its baseline again.
+    const moved = mockChangeSpacePhoto(middle.id, { shot: "counters" });
+    // Older than the Counters' photo, it's that shot's first now, so its baseline.
+    expect(moved.photo).toMatchObject({ shot: "Counters", baseline: true });
+    expect(moved.shots[0].baseline!.id).toBe(oldest.id);
+    expect(moved.shots[1].photos).toBe(2);
+
+    mockSetSpaceBaseline(newest.id);
+    const removed = mockRemoveSpacePhoto(newest.id);
+    expect(removed.photo).toBeNull();
+    expect(removed.shots[0]).toMatchObject({ photos: 1, baseline: { id: oldest.id }, newest: { id: oldest.id } });
+  });
+
+  it("refuses in the kernel's words, writing nothing", () => {
+    const office = spaceId("Office");
+    const tomorrow = addDays(today, 1);
+    expect(() => mockAddSpacePhoto(office, jpeg(), { day: tomorrow })).toThrow(
+      `A photo is for today or earlier; ${tomorrow} hasn't happened yet (today is ${today}).`,
+    );
+    expect(() => mockAddSpacePhoto(office, new Blob(["hi"], { type: "text/plain" }))).toThrow(
+      "That isn't a photo: send a JPEG, PNG or WebP image.",
+    );
+    expect(() => mockAddSpacePhoto(office, new Blob([], { type: "image/jpeg" }))).toThrow("That photo is empty.");
+    expect(() => mockAddSpacePhoto(office, jpeg(), { shot: "Desk" })).toThrow(
+      "Office has no shot called 'Desk'. Its shots: Office.",
+    );
+    const photo = shotsOf("Office")[0].newest!.id;
+    expect(() => mockChangeSpacePhoto(photo, {})).toThrow("Say what to change: a day or a shot.");
+    expect(() => mockRemoveSpacePhoto("00000000-0000-0000-0000-000000000000")).toThrow(
+      "No photo has the id 00000000-0000-0000-0000-000000000000 (it may have been removed).",
+    );
+    expect(shotsOf("Office")[0].photos).toBe(2);
+
+    const garage = mockSpaces().find((s) => s.name === "Garage")!;
+    mockArchiveSpace(garage.urn, true);
+    expect(() => mockAddSpacePhoto(garage.id, jpeg())).toThrow(
+      "'Garage' is archived: bring it back before adding photos.",
+    );
+  });
+
+  it("adds, renames and removes shots, up to six and never the last", () => {
+    const office = spaceId("Office");
+    expect(mockAddShot(office, " Desk ").shots.map((s) => s.name)).toEqual(["Office", "Desk"]);
+    expect(() => mockAddShot(office, "desk")).toThrow("Office already has a shot called 'Desk'.");
+    expect(() => mockAddShot(office, " ")).toThrow("Give the shot a name, e.g. Desk.");
+    expect(() => mockAddShot(office, "x".repeat(41))).toThrow("A shot's name is up to 40 characters; that one is 41.");
+    for (const name of ["Window", "Shelves", "Door", "Closet"]) mockAddShot(office, name);
+    expect(() => mockAddShot(office, "Ceiling")).toThrow("'Office' has 6 shots, the most a space can have: remove one first.");
+
+    const desk = shotsOf("Office").find((s) => s.name === "Desk")!;
+    expect(mockRenameShot(office, desk.id, "Standing desk").shots[1].name).toBe("Standing desk");
+    expect(() => mockRenameShot(office, desk.id, "Window")).toThrow("Office already has a shot called 'Window'.");
+
+    // A removed shot's photos stay in the record but leave the page.
+    mockAddSpacePhoto(office, jpeg(), { shot: desk.id });
+    expect(mockSpacePhotos(office).photos).toHaveLength(3);
+    mockRemoveShot(office, "standing desk");
+    expect(mockSpacePhotos(office).photos).toHaveLength(2);
+    for (const name of ["Window", "Shelves", "Door", "Closet"]) mockRemoveShot(office, name);
+    expect(() => mockRemoveShot(office, "main")).toThrow(
+      "'Office' is Office's only shot: a space keeps at least one. Rename it instead.",
+    );
+  });
+
+  it("has no photos once cleared", () => {
+    clearMockEnvironment();
+    const added = mockAddSpace({ name: "Attic" });
+    expect(mockSpacePhotos(added.id).photos).toEqual([]);
   });
 });

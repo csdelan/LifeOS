@@ -3955,7 +3955,7 @@ Build:      built
 ### HOME-4 — Photos of each space, from a baseline, show my progress at a glance
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "I think rating photos are something I'll want to add. I think having a 'baseline' photo
@@ -3997,9 +3997,16 @@ Build:      building
   - shots, baselines and newest photos on `GET /api/environment`
 
   **E6 built (2026-10-27):** the kernel takes, moves, removes and lists photos, keeps each
-  shot's baseline, and adds, renames and removes shots, from `bsk` and the API. Nothing on
-  the web shows them yet. E7 of [environment-plan.md](environment-plan.md) brings Then and
-  Now, the compare dialog and the camera buttons. Build stays `building`.
+  shot's baseline, and adds, renames and removes shots, from `bsk` and the API.
+
+  **E7 built (2026-10-27):** the web shows and takes them.
+  - Each space card shows Then beside Now with the space's score each day, and when the
+    newest photo was taken. Tapping one opens the compare dialog: side by side, a filmstrip,
+    Make this the baseline, Change day and Remove photo.
+  - The walk-through and quick check take a photo per shot, beside its baseline. A card's
+    Photos adds several at once, each dated from when it was taken.
+  - The spaces editor adds, renames and removes shots.
+  - No migration. Details in [environment-plan.md](environment-plan.md) §8.3.
 - Implications:
   - The Home Score, the level and the ledger never read photos, so HOME-1 to HOME-3 and
     REWARD-9 are unchanged.
@@ -4403,8 +4410,9 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   `space_photo` payload, read by `v_space_photo` (migration 0045); shots and baselines as
   the space attribute `shots`; `SpacePhotoService` with the photo checks shared with the Food
   Log; `bsk space photo`, `baseline` and `shot`; the photo endpoints; Then and Now on the
-  space cards. — **Building** (E6, the kernel and migration 0045, built; E7, the web, next;
-  [environment-plan.md](environment-plan.md) §8).
+  space cards, the compare dialog, photos in the walk-through, Add photos and shots in the
+  spaces editor. — **Shipped** (E6–E7 in [environment-plan.md](environment-plan.md) §8,
+  migration 0045).
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;

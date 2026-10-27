@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { ShotsEditor } from "@/components/environment/shots-editor";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { formatDay } from "@/lib/dates";
 import { DEFAULT_PACE, DEFAULT_WEIGHT, NAME_MAX, PACE_MAX, PACE_MIN, WEIGHT_MAX, WEIGHT_MIN } from "@/lib/environment";
 import type { SpaceRequest, SpaceRow } from "@/lib/production-ui-types";
-import { useSpaces, useWrites } from "@/lib/queries";
+import { useEnvironment, useSpaces, useWrites } from "@/lib/queries";
 
 const PACES = Array.from({ length: PACE_MAX - PACE_MIN + 1 }, (_, i) => {
   const id = String(PACE_MIN + i);
@@ -46,7 +47,11 @@ function SpaceForm({
     setPending(true);
     setError(null);
     try {
-      await onSubmit({ name: fields.name, weight: Number(fields.weight), pace: Number(fields.pace) });
+      await onSubmit({
+        name: fields.name,
+        weight: Number(fields.weight),
+        pace: Number(fields.pace),
+      });
       if (!onCancel) setFields(initial);
       onCancel?.();
     } catch (e) {
@@ -122,20 +127,24 @@ function SpaceForm({
 }
 
 /**
- * The spaces editor (HOME-1): each space with its weight, pace and share of the Home Score;
- * add one, change one, or archive it (it leaves the score from today; Restore brings it back
- * for all of history). A weight or pace change re-reads every past day, as any retune does.
+ * The spaces editor (HOME-1, HOME-4): each space with its weight, pace and share of the Home
+ * Score; add one, change one, or archive it (it leaves the score from today; Restore brings it
+ * back for all of history), and its shots, the spots it's photographed from. A weight or pace
+ * change re-reads every past day, as any retune does.
  */
 export function SpacesEditor() {
   const titleId = useId();
   const spaces = useSpaces();
+  const environment = useEnvironment();
   const writes = useWrites();
   const [editing, setEditing] = useState<string | null>(null);
+  const [shooting, setShooting] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const live = (spaces.data ?? []).filter((s) => s.archivedAt == null);
   const archived = (spaces.data ?? []).filter((s) => s.archivedAt != null);
+  const shotsOf = (id: string) => environment.data?.spaces.find((s) => s.id === id)?.shots ?? [];
 
   async function archive(space: SpaceRow, restore: boolean) {
     setBusy(space.id);
@@ -175,67 +184,100 @@ export function SpacesEditor() {
 
       {live.length > 0 ? (
         <ul className="divide-y" aria-label="Spaces in the Home Score">
-          {live.map((space) => (
-            <li key={space.id} className="py-2.5" data-testid="space-row">
-              {editing === space.id ? (
-                <SpaceForm
-                  initial={{ name: space.name, weight: String(space.weight), pace: String(space.pace) }}
-                  submitLabel="Save"
-                  onSubmit={async (req) => {
-                    // Only what changed: changing nothing writes nothing.
-                    const patch: SpaceRequest = {};
-                    if (req.name !== space.name) patch.name = req.name;
-                    if (req.weight !== space.weight) patch.weight = req.weight;
-                    if (req.pace !== space.pace) patch.pace = req.pace;
-                    if (Object.keys(patch).length > 0) await writes.setSpace(space.id, patch);
-                  }}
-                  onCancel={() => setEditing(null)}
-                />
-              ) : (
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium">{space.name}</p>
-                    <p className="text-xs text-muted-foreground tabular-nums">
-                      weight {space.weight} · pace {space.pace}
-                      {space.share != null ? ` · ${space.share}% of the score` : ""}
-                    </p>
+          {live.map((space) => {
+            const shots = shotsOf(space.id);
+            return (
+              <li key={space.id} className="space-y-2 py-2.5" data-testid="space-row">
+                {editing === space.id ? (
+                  <SpaceForm
+                    initial={{
+                      name: space.name,
+                      weight: String(space.weight),
+                      pace: String(space.pace),
+                    }}
+                    submitLabel="Save"
+                    onSubmit={async (req) => {
+                      // Only what changed: changing nothing writes nothing.
+                      const patch: SpaceRequest = {};
+                      if (req.name !== space.name) patch.name = req.name;
+                      if (req.weight !== space.weight) patch.weight = req.weight;
+                      if (req.pace !== space.pace) patch.pace = req.pace;
+                      if (Object.keys(patch).length > 0) await writes.setSpace(space.id, patch);
+                    }}
+                    onCancel={() => setEditing(null)}
+                  />
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium">{space.name}</p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        weight {space.weight} · pace {space.pace}
+                        {space.share != null ? ` · ${space.share}% of the score` : ""}
+                        {shots.length > 1 ? ` · ${shots.length} shots` : ""}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-h-11 md:min-h-0"
+                        aria-label={`Shots of ${space.name}`}
+                        aria-expanded={shooting === space.id}
+                        disabled={shots.length === 0}
+                        onClick={() => setShooting(shooting === space.id ? null : space.id)}
+                      >
+                        Shots
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-h-11 md:min-h-0"
+                        aria-label={`Change ${space.name}`}
+                        onClick={() => setEditing(space.id)}
+                      >
+                        Change
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="min-h-11 md:min-h-0"
+                        aria-label={`Archive ${space.name}`}
+                        disabled={busy === space.id}
+                        onClick={() => void archive(space, false)}
+                      >
+                        Archive
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="min-h-11 md:min-h-0"
-                      aria-label={`Change ${space.name}`}
-                      onClick={() => setEditing(space.id)}
-                    >
-                      Change
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="min-h-11 md:min-h-0"
-                      aria-label={`Archive ${space.name}`}
-                      disabled={busy === space.id}
-                      onClick={() => void archive(space, false)}
-                    >
-                      Archive
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </li>
-          ))}
+                )}
+                {shooting === space.id && shots.length > 0 ? (
+                  <ShotsEditor spaceId={space.id} space={space.name} shots={shots} />
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
 
       <div className="space-y-2 rounded-lg bg-muted/60 p-3">
         <h3 className="text-sm font-medium">Add a space</h3>
         <SpaceForm
-          initial={{ name: "", weight: String(DEFAULT_WEIGHT), pace: String(DEFAULT_PACE) }}
+          initial={{
+            name: "",
+            weight: String(DEFAULT_WEIGHT),
+            pace: String(DEFAULT_PACE),
+          }}
           submitLabel="Add space"
-          onSubmit={(req) => writes.addSpace({ name: req.name ?? "", weight: req.weight, pace: req.pace })}
+          onSubmit={(req) =>
+            writes.addSpace({
+              name: req.name ?? "",
+              weight: req.weight,
+              pace: req.pace,
+            })
+          }
         />
       </div>
 

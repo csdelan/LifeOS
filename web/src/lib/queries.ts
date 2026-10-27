@@ -80,6 +80,7 @@ export const qk = {
   environmentDays: (days: number) => ["environment", "days", days] as const,
   spaces: ["environment", "spaces"] as const,
   spaceRatings: (space: string, days: number) => ["environment", "ratings", space, days] as const,
+  spacePhotos: (space: string, shot: string) => ["environment", "photos", space, shot] as const,
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
@@ -118,6 +119,15 @@ async function ratingWrite<T extends Earned>(qc: QueryClient, write: () => Promi
     return result;
   } finally {
     await invalidate(qc, [qk.environment, qk.domains, qk.wallet, qk.ledger]);
+  }
+}
+
+/** A photo or shot write (HOME-4): refresh the home's reads, where Then and Now live. */
+async function photoWrite<T>(qc: QueryClient, write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } finally {
+    await invalidate(qc, [qk.environment]);
   }
 }
 
@@ -426,6 +436,35 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
 
     async deleteSpaceRating(rating) {
       return ratingWrite(qc, () => client.deleteSpaceRating(rating));
+    },
+
+    // Photos and shots (HOME-4) never move a level or the ledger: only the home's reads refresh.
+    async addSpacePhoto(space, photo, req) {
+      return photoWrite(qc, () => client.addSpacePhoto(space, photo, req));
+    },
+
+    async changeSpacePhoto(photo, req) {
+      return photoWrite(qc, () => client.changeSpacePhoto(photo, req));
+    },
+
+    async removeSpacePhoto(photo) {
+      return photoWrite(qc, () => client.removeSpacePhoto(photo));
+    },
+
+    async setSpaceBaseline(photo) {
+      return photoWrite(qc, () => client.setSpaceBaseline(photo));
+    },
+
+    async addShot(space, name) {
+      return photoWrite(qc, () => client.addShot(space, name));
+    },
+
+    async renameShot(space, shot, name) {
+      return photoWrite(qc, () => client.renameShot(space, shot, name));
+    },
+
+    async removeShot(space, shot) {
+      return photoWrite(qc, () => client.removeShot(space, shot));
     },
 
     async recur(subject, spec, opts) {
@@ -1031,6 +1070,15 @@ export function useSpaceRatings(space: string | null, days = 90, enabled = true)
     queryKey: qk.spaceRatings(space ?? "", days),
     queryFn: () => reads().spaceRatings({ space: space ?? undefined, days }),
     enabled,
+  });
+}
+
+/** A space's photos, newest first, of one shot (its id) when given: the compare dialog's filmstrip. */
+export function useSpacePhotos(space: string | null, shot: string | null = null, enabled = true) {
+  return useQuery({
+    queryKey: qk.spacePhotos(space ?? "", shot ?? ""),
+    queryFn: () => reads().spacePhotos(space!, shot ?? undefined),
+    enabled: enabled && space != null,
   });
 }
 

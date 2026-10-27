@@ -632,20 +632,35 @@ Chris took all three (§8.1). The rest (§8.2) was chosen in planning and is eas
   `bsk space photo remove <photo>`, `bsk space baseline <photo>`, and
   `bsk space shot add <space> <name> / rename <space> <shot> <name> / remove <space> <shot>`.
   `bsk space list --json` shows each space's shots, with `pickedBaseline`.
-- **Web:**
-  - **The walk-through and quick check:** a camera button per shot, showing its baseline.
-    The photos are held and sent after the ratings save, as a new food entry's are.
-  - **Add photos** on a space card takes several files at once, for photos taken earlier
-    (§8.1, answer 2). Each is dated from its date taken, or the day picked, and goes to the
-    shot chosen.
+- **Web** (as built in E7):
+  - **The walk-through and quick check:** each space's panel has a Photos row per shot, its
+    baseline as a thumbnail ("Line the new photo up with Then, Oct 5") and Take photo (a
+    phone only) and Choose photo. The photo is shrunk at once and held, with Leave out to
+    drop it. A space with only a photo held is saved too. Save writes the ratings in one
+    POST, then adds the photos one by one, each on its date taken, else the sheet's day. If
+    a photo fails after the ratings saved, a toast says so and to add it from the card.
+  - **Add photos** (a card's Photos button, or its empty box) takes several files at once,
+    for photos taken earlier (§8.1, answer 2). Each row shows the photo, its day (its date
+    taken when the file says, else "Day for photos that don't say") and its shot, all
+    changeable. They upload one by one; one that fails stays listed with why.
+  - **The date taken** is read in the browser from the file's first 256 KB (EXIF
+    DateTimeOriginal, else DateTimeDigitized, `lib/exif.ts`), before the re-encode drops it.
+    A date after today is ignored.
   - **Space cards:** Then and Now side by side, each with its day and the space's score that
-    day ("Then · Oct 27 · 48", "Now · Jan 12 · 81"). With one photo it shows alone, with "Add
-    a photo to compare".
+    day ("Then · Oct 5 · 37.5"). With one photo it shows Then with "Add a photo to compare"
+    beside it; with none, "No photos of Garage yet". Under them: "photo 34 days ago · 2
+    photos". A space with more than one shot picks the shot shown, the first with photos to
+    start.
   - **The compare dialog** (tapping Then or Now): the two side by side (stacked on a
-    phone), and a filmstrip of the shot's photos to pick either side. It also offers Make
-    this the baseline, Change day and Remove photo.
-  - **The spaces editor:** each space's shots (add, rename, remove).
-  - **The mock store:** two seeded spaces get placeholder photos.
+    phone), each with the space's parts that day. Tapping a side picks it, and the
+    filmstrip (oldest first) puts any photo there. The picked side's photo has Make this the
+    baseline, Change day (or Change day or shot) and Remove photo, which asks first.
+  - **The spaces editor:** a space's Shots button opens its shots: add one (up to six),
+    rename one, remove one (never the last; one with photos asks first, as they leave the
+    page). A space with more than one shot says how many.
+  - **The mock store:** the Office and the Kitchen get placeholder photos drawn as SVGs,
+    their clutter thinning as Tidiness was rated, and the Kitchen a second shot, Counters.
+    Its photo and shot writes refuse in the kernel's words.
 - **Tests:**
   - E6 (`SpacePhotoTests`):
     - an upload round-trips byte for byte, through the service and over HTTP
@@ -656,9 +671,19 @@ Chris took all three (§8.1). The rest (§8.2) was chosen in planning and is eas
     - the views reading hand-written photos and shots tolerantly
     - the Food Log's refusals, now from `PhotoChecks`, still hold
   - E7:
-    - the date-taken reader on sample JPEGs (with and without EXIF)
-    - an e2e golden path adds a photo in the walk-through and opens the compare dialog
-    - a11y for the compare dialog, light and dark
+    - the date-taken reader on JPEGs built byte by byte: both byte orders, with and without
+      a JFIF header, DateTimeDigitized as the fallback, no EXIF, a PNG, and cut short
+      anywhere (`exif.test.ts`)
+    - the mock store's photos: the seeded Then and Now with their scores, adding (today,
+      backdated, a shot's first as its baseline), the baseline falling back when removed or
+      moved, the refusals, and shots
+    - the page: Then and Now, the empty box, picking a shot, and the compare dialog making
+      Now the baseline
+    - an e2e golden path: a photo chosen in the walk-through, saved as Now (shrunk to
+      1,200 px), opened in the compare dialog and made the baseline
+    - a11y in light and dark: the compare dialog with Change day open and Remove photo
+      asking, Add photos with a photo picked, the walk-through with a photo held, and a
+      space's shots with a remove asking
 
 ### 8.4 Later
 
@@ -679,4 +704,4 @@ Chris took all three (§8.1). The rest (§8.2) was chosen in planning and is eas
 - [ ] E5 — Chris's spaces, first walk-through, calibration
 - [x] E6–E7 planned (§8, HOME-4)
 - [x] E6 — Photos in the kernel (migration 0045)
-- [ ] E7 — Photos on the web (no migration)
+- [x] E7 — Photos on the web (no migration)

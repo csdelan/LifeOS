@@ -1813,7 +1813,10 @@ export interface HomePartRow {
   drag: number;
 }
 
-/** One space today: its score (null until all three parts are rated), when it was last rated, and each part. */
+/**
+ * One space today: its score (null until all three parts are rated), when it was last rated,
+ * each part, and its shots with Then and Now (HOME-4).
+ */
 export interface HomeSpaceRow {
   id: string;
   name: string;
@@ -1823,6 +1826,74 @@ export interface HomeSpaceRow {
   score: number | null;
   lastRatedOn: string | null;
   parts: Record<HomePart, HomePartRow>;
+  shots: SpaceShotRow[];
+}
+
+/**
+ * One photo of a space (HOME-4, environment plan §8): its space and shot, its day, the artifact
+ * whose bytes `GET /api/artifacts/{id}/content` serves, when it was added, whether it's its
+ * shot's baseline, and the space's score and parts on its day (null while not all three parts
+ * had been rated by then).
+ */
+export interface SpacePhotoRow {
+  id: string;
+  spaceId: string;
+  space: string;
+  shotId: string;
+  /** The shot's name; null when its shot was removed. */
+  shot: string | null;
+  day: string;
+  artifactId: string;
+  /** ISO instant the photo was first added. */
+  addedAt: string;
+  baseline: boolean;
+  score: number | null;
+  parts: Record<HomePart, HomePartRow>;
+}
+
+/**
+ * A spot a space is photographed from (HOME-4): every space starts with one, named after it.
+ * Then is its baseline (its first photo until another is picked) and Now its newest photo;
+ * both null while it has none.
+ */
+export interface SpaceShotRow {
+  id: string;
+  name: string;
+  photos: number;
+  baseline: SpacePhotoRow | null;
+  newest: SpacePhotoRow | null;
+}
+
+/** `GET /api/environment/spaces/{id}/photos`: the space's shots and its photos, newest first. */
+export interface SpacePhotosRead {
+  spaceId: string;
+  space: string;
+  shots: SpaceShotRow[];
+  photos: SpacePhotoRow[];
+}
+
+/**
+ * A photo or shot write's answer: the photo as it now reads (null once removed, or for a shot
+ * write) and the space's shots with Then and Now. Photos never move a level, so there's no
+ * `progress`.
+ */
+export interface SpacePhotoResult {
+  photo: SpacePhotoRow | null;
+  spaceId: string;
+  shots: SpaceShotRow[];
+}
+
+/** Adding a photo: its day (today when left out) and shot (its id or name; the first shot when left out). */
+export interface SpacePhotoRequest {
+  day?: string;
+  shot?: string;
+  filename?: string;
+}
+
+/** Moving a photo: a new day, a new shot (its id or name), or both. */
+export interface SpacePhotoChangeRequest {
+  day?: string;
+  shot?: string;
 }
 
 /** One part to fix next: the space, the part, and the Home Score points it costs. */
@@ -1946,6 +2017,25 @@ export interface LifeOsWriteClient {
   editSpaceRating(rating: string, req: SpaceRatingEditRequest): Promise<SpaceRatingResult>;
   /** Delete a rating (`POST /api/environment/ratings/{id}/delete`). */
   deleteSpaceRating(rating: string): Promise<SpaceRatingResult>;
+  /**
+   * Add a photo of a space (HOME-4, `POST /api/environment/spaces/{id}/photos`, multipart):
+   * today and the first shot unless said. Send it resized (`preparePhoto`). The same photo
+   * already on that shot answers the one there. Says nothing itself: a batch of photos is
+   * announced once, by the sheet that sends it.
+   */
+  addSpacePhoto(space: string, photo: Blob, req?: SpacePhotoRequest): Promise<SpacePhotoResult>;
+  /** Move a photo to another day or shot (`POST /api/environment/photos/{id}`). */
+  changeSpacePhoto(photo: string, req: SpacePhotoChangeRequest): Promise<SpacePhotoResult>;
+  /** Remove a photo; its bytes stay in the record (`POST /api/environment/photos/{id}/delete`). */
+  removeSpacePhoto(photo: string): Promise<SpacePhotoResult>;
+  /** Make a photo its shot's baseline, the Then its Now is compared with (`POST …/photos/{id}/baseline`). */
+  setSpaceBaseline(photo: string): Promise<SpacePhotoResult>;
+  /** Add a shot to a space (`POST /api/environment/spaces/{id}/shots`): at most 6, names unique in the space. */
+  addShot(space: string, name: string): Promise<SpacePhotoResult>;
+  /** Rename a shot (`POST /api/environment/spaces/{id}/shots/{shot}`). */
+  renameShot(space: string, shot: string, name: string): Promise<SpacePhotoResult>;
+  /** Remove a shot; its photos stay in the record (`POST …/shots/{shot}/delete`). A space keeps one. */
+  removeShot(space: string, shot: string): Promise<SpacePhotoResult>;
   /**
    * Set a subject's repeat pattern (D8, `POST /api/recur`); `null` clears it. A Task's `start`
    * is the first date it repeats from (TASKS-3); setting one makes its first repetition.

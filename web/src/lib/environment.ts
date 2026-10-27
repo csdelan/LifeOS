@@ -1,9 +1,10 @@
 /**
- * The Environment page's words and the API's shapes (HOME-1..3, D18, environment plan §4.8):
- * the parts' names, the HOME-2 rating examples, how a score, a drag and "rated 3 days ago"
- * read, the walk-through's order, and the live API's numbers (`number | string`) as numbers.
- * The score itself is `lib/home-score.ts`.
+ * The Environment page's words and the API's shapes (HOME-1..4, D18, environment plan §4.8,
+ * §8): the parts' names, the HOME-2 rating examples, how a score, a drag, "rated 3 days ago"
+ * and a photo's caption read, the walk-through's order, and the live API's numbers
+ * (`number | string`) as numbers. The score itself is `lib/home-score.ts`.
  */
+import { formatDay } from "@/lib/dates";
 import { normalizeEarned } from "@/lib/domains";
 import { HOME_PARTS, shownPoints } from "@/lib/home-score";
 import type {
@@ -14,10 +15,14 @@ import type {
   HomePart,
   HomePartRow,
   HomeSpaceRow,
+  SpacePhotoResult,
+  SpacePhotoRow,
+  SpacePhotosRead,
   SpaceRatingResult,
   SpaceRatingRow,
   SpaceRatingsRead,
   SpaceRow,
+  SpaceShotRow,
 } from "@/lib/production-ui-types";
 
 export { HOME_PARTS };
@@ -40,6 +45,11 @@ export const NOTE_MAX = 140;
 /** The days the ratings and Home Score reads cover when not asked, and the most they cover. */
 export const DEFAULT_DAYS = 90;
 export const MAX_DAYS = 731;
+/** A shot's name is up to 40 characters, and a space has at most 6 shots (`SpaceLimits`). */
+export const SHOT_NAME_MAX = 40;
+export const SHOTS_MAX = 6;
+/** The shot every space starts with, named after the space. */
+export const MAIN_SHOT = "main";
 
 /** Whether `value` is a rating: 1 to 5 in half points, as `SpaceLimits.CheckRating`. */
 export function isRating(value: number): boolean {
@@ -151,6 +161,42 @@ export function ratedAgo(day: string | null, today: string): string {
   return `rated ${days} days ago`;
 }
 
+/** "photo today", "photo yesterday", "photo 34 days ago": when a shot's newest photo was taken. */
+export function photoAgo(day: string, today: string): string {
+  const days = daysBetween(day, today);
+  if (days <= 0) return "photo today";
+  if (days === 1) return "photo yesterday";
+  return `photo ${days} days ago`;
+}
+
+/** A photo's caption: "Then · Oct 27 · 48.2"; without the score while the space wasn't scored that day. */
+export function photoCaption(label: string, photo: SpacePhotoRow): string {
+  const day = formatDay(photo.day);
+  return photo.score == null ? `${label} · ${day}` : `${label} · ${day} · ${shownScore(photo.score)}`;
+}
+
+/** A shot's full name: "Office" for the shot named after its space, else "Office · Desk". */
+export function shotTitle(space: string, shot: string): string {
+  return shot.localeCompare(space, undefined, { sensitivity: "base" }) === 0 ? space : `${space} · ${shot}`;
+}
+
+/** The newest photo day among a space's shots, or null when it has none. */
+export function newestPhotoDay(shots: readonly SpaceShotRow[]): string | null {
+  let newest: string | null = null;
+  for (const s of shots) if (s.newest && (newest == null || s.newest.day > newest)) newest = s.newest.day;
+  return newest;
+}
+
+/** The shot a space card shows first: the first with photos, else the first. */
+export function firstShot(space: HomeSpaceRow): SpaceShotRow | undefined {
+  return space.shots.find((s) => s.newest != null) ?? space.shots[0];
+}
+
+/** "Added 3 photos of Office", "Added a photo of Kitchen". */
+export function addedMessage(count: number, space: string): string {
+  return count === 1 ? `Added a photo of ${space}` : `Added ${count} photos of ${space}`;
+}
+
 /** The Home Score a space's parts cost together. */
 export function spaceDrag(space: HomeSpaceRow): number {
   return HOME_PARTS.reduce((sum, p) => sum + space.parts[p].drag, 0);
@@ -229,8 +275,60 @@ function normalizePart(raw: Partial<HomePartRow> | null | undefined): HomePartRo
   };
 }
 
+function normalizeParts(raw: unknown): Record<HomePart, HomePartRow> {
+  const parts = (raw ?? {}) as Partial<Record<HomePart, HomePartRow>>;
+  return {
+    tidiness: normalizePart(parts.tidiness),
+    cleanliness: normalizePart(parts.cleanliness),
+    aesthetics: normalizePart(parts.aesthetics),
+  };
+}
+
+export function normalizeSpacePhoto(raw: SpacePhotoRow): SpacePhotoRow {
+  return {
+    id: raw.id,
+    spaceId: raw.spaceId,
+    space: raw.space ?? "",
+    shotId: raw.shotId ?? MAIN_SHOT,
+    shot: raw.shot ?? null,
+    day: raw.day,
+    artifactId: raw.artifactId,
+    addedAt: raw.addedAt ?? "",
+    baseline: raw.baseline === true,
+    score: numOrNull(raw.score),
+    parts: normalizeParts(raw.parts),
+  };
+}
+
+export function normalizeShot(raw: SpaceShotRow): SpaceShotRow {
+  return {
+    id: raw.id,
+    name: raw.name ?? "",
+    photos: num(raw.photos),
+    baseline: raw.baseline ? normalizeSpacePhoto(raw.baseline) : null,
+    newest: raw.newest ? normalizeSpacePhoto(raw.newest) : null,
+  };
+}
+
+export function normalizeSpacePhotos(raw: SpacePhotosRead): SpacePhotosRead {
+  return {
+    spaceId: raw.spaceId,
+    space: raw.space ?? "",
+    shots: (raw.shots ?? []).map(normalizeShot),
+    photos: (raw.photos ?? []).map(normalizeSpacePhoto),
+  };
+}
+
+export function normalizeSpacePhotoResult(raw: unknown): SpacePhotoResult {
+  const r = (raw ?? {}) as Partial<SpacePhotoResult>;
+  return {
+    photo: r.photo ? normalizeSpacePhoto(r.photo) : null,
+    spaceId: r.spaceId ?? "",
+    shots: (r.shots ?? []).map(normalizeShot),
+  };
+}
+
 export function normalizeHomeSpace(raw: HomeSpaceRow): HomeSpaceRow {
-  const parts = (raw.parts ?? {}) as Partial<Record<HomePart, HomePartRow>>;
   return {
     id: raw.id,
     name: raw.name ?? "",
@@ -239,11 +337,8 @@ export function normalizeHomeSpace(raw: HomeSpaceRow): HomeSpaceRow {
     share: numOrNull(raw.share),
     score: numOrNull(raw.score),
     lastRatedOn: raw.lastRatedOn ?? null,
-    parts: {
-      tidiness: normalizePart(parts.tidiness),
-      cleanliness: normalizePart(parts.cleanliness),
-      aesthetics: normalizePart(parts.aesthetics),
-    },
+    parts: normalizeParts(raw.parts),
+    shots: (raw.shots ?? []).map(normalizeShot),
   };
 }
 

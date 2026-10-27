@@ -1,6 +1,10 @@
-import { useId } from "react";
+import { useId, useState } from "react";
+import { ImagePlusIcon } from "lucide-react";
+import { AddPhotosSheet } from "@/components/environment/add-photos-sheet";
+import { PhotoCompareDialog } from "@/components/environment/photo-compare-dialog";
+import { ThenAndNow, type CompareSide } from "@/components/environment/then-and-now";
 import { Button } from "@/components/ui/button";
-import { HOME_PARTS, PART_LABEL, ratedAgo, shownScore } from "@/lib/environment";
+import { firstShot, HOME_PARTS, PART_LABEL, ratedAgo, shownScore } from "@/lib/environment";
 import { SCORE_FILL } from "@/lib/food";
 import type { HomePartRow, HomeSpaceRow } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
@@ -46,9 +50,10 @@ function PartBar({ label, part, today }: { label: string; part: HomePartRow; tod
 }
 
 /**
- * One space today (HOME-3): its name and score, when it was last rated, and a bar for each part
- * — its points now, faded, with the rated value as a ghost behind it. Rate opens a quick check
- * of it.
+ * One space today (HOME-3, HOME-4): its name and score, when it was last rated, a shot's Then
+ * and Now photos, and a bar for each part — its points now, faded, with the rated value as a
+ * ghost behind it. Rate opens a quick check of it; Add photos, photos taken earlier; a photo,
+ * the compare dialog.
  */
 export function SpaceCard({
   space,
@@ -60,6 +65,18 @@ export function SpaceCard({
   onRate: () => void;
 }) {
   const titleId = useId();
+  const [shotId, setShotId] = useState<string | null>(null);
+  // The last photo tapped and the last shot added to stay set while their dialogs close, so
+  // focus goes back to what opened them.
+  const [compare, setCompare] = useState<{ shotId: string; side: CompareSide } | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const shown = space.shots.find((s) => s.id === shotId) ?? firstShot(space);
+  const add = (shot: string) => {
+    setAdding(shot);
+    setAddOpen(true);
+  };
   return (
     <article
       aria-labelledby={titleId}
@@ -85,21 +102,58 @@ export function SpaceCard({
           ) : null}
         </p>
       </div>
+      <ThenAndNow
+        space={space}
+        today={today}
+        shotId={shotId}
+        onShot={setShotId}
+        onCompare={(shot, side) => {
+          setCompare({ shotId: shot, side });
+          setCompareOpen(true);
+        }}
+        onAdd={add}
+      />
       <div className="space-y-1.5">
         {HOME_PARTS.map((p) => (
           <PartBar key={p} label={PART_LABEL[p]} part={space.parts[p]} today={today} />
         ))}
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="min-h-11 w-full md:min-h-0"
-        aria-label={`Rate ${space.name}`}
-        onClick={onRate}
-      >
-        Rate
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="min-h-11 md:min-h-0"
+          aria-label={`Rate ${space.name}`}
+          onClick={onRate}
+        >
+          Rate
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="min-h-11 md:min-h-0"
+          aria-label={`Add photos of ${space.name}`}
+          onClick={() => add(shown?.id ?? "main")}
+        >
+          <ImagePlusIcon />
+          Photos
+        </Button>
+      </div>
+      {compare ? (
+        <PhotoCompareDialog
+          open={compareOpen}
+          onOpenChange={setCompareOpen}
+          space={space}
+          shotId={compare.shotId}
+          start={compare.side}
+          today={today}
+        />
+      ) : null}
+      {adding ? (
+        <AddPhotosSheet open={addOpen} onOpenChange={setAddOpen} space={space} shotId={adding} today={today} />
+      ) : null}
     </article>
   );
 }

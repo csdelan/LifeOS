@@ -65,16 +65,26 @@ import {
   mockSyncActivity,
 } from "@/lib/mock/activity-store";
 import {
+  mockAddShot,
   mockAddSpace,
+  mockAddSpacePhoto,
   mockArchiveSpace,
+  mockChangeSpacePhoto,
   mockDeleteSpaceRating,
   mockEditSpaceRating,
   mockRateSpaces,
+  mockRemoveShot,
+  mockRemoveSpacePhoto,
+  mockRenameShot,
   mockSetSpace,
+  mockSetSpaceBaseline,
 } from "@/lib/mock/environment-store";
 import { ratedMessage } from "@/lib/environment";
 
 const wait = (ms = 90) => new Promise((r) => setTimeout(r, ms));
+
+/** The exception days a photo's score reads, from the main store. */
+const exceptions = () => getState().exceptionDays;
 
 function notify(message: string) {
   toast.success(message);
@@ -363,6 +373,62 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       await wait();
       const result = mockHomeWrite(() => mockDeleteSpaceRating(rating));
       notify("Rating deleted");
+      bump();
+      return result;
+    },
+
+    async addSpacePhoto(space, photo, req) {
+      await wait();
+      // No toast here: a batch of photos is announced once, by the sheet that sends it.
+      const result = mockAddSpacePhoto(space, photo, req, exceptions());
+      bump();
+      return result;
+    },
+
+    async changeSpacePhoto(photo, req) {
+      await wait();
+      const result = mockChangeSpacePhoto(photo, req, exceptions());
+      notify("Photo moved");
+      bump();
+      return result;
+    },
+
+    async removeSpacePhoto(photo) {
+      await wait();
+      const result = mockRemoveSpacePhoto(photo, exceptions());
+      notify("Photo removed");
+      bump();
+      return result;
+    },
+
+    async setSpaceBaseline(photo) {
+      await wait();
+      const result = mockSetSpaceBaseline(photo, exceptions());
+      notify("Made the baseline");
+      bump();
+      return result;
+    },
+
+    async addShot(space, name) {
+      await wait();
+      const result = mockAddShot(space, name, exceptions());
+      notify(`Added the shot ${name.trim()}`);
+      bump();
+      return result;
+    },
+
+    async renameShot(space, shot, name) {
+      await wait();
+      const result = mockRenameShot(space, shot, name, exceptions());
+      notify("Shot renamed");
+      bump();
+      return result;
+    },
+
+    async removeShot(space, shot) {
+      await wait();
+      const result = mockRemoveShot(space, shot, exceptions());
+      notify("Shot removed");
       bump();
       return result;
     },
