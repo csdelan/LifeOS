@@ -997,6 +997,35 @@ test.describe("golden paths", () => {
     await expect(office.getByRole("button", { name: "Add a photo of Office to compare" })).toBeVisible();
   });
 
+  test("Environment: photos from two spots added at once, the second starting its own shot", async ({ page }) => {
+    await page.goto("/environment");
+    await expect(page.getByTestId("home-score")).toHaveText(/^\d+\.\d$/, { timeout: 10_000 });
+    const png = await bigPng(page);
+    const garage = page.getByRole("article", { name: "Garage" });
+    await garage.getByRole("button", { name: "Add photos of Garage", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Add photos of Garage" });
+    const chooser = page.waitForEvent("filechooser");
+    await sheet.getByRole("button", { name: "Choose photos" }).click();
+    await (await chooser).setFiles([
+      { name: "IMG_8001.png", mimeType: "image/png", buffer: png },
+      { name: "IMG_8002.png", mimeType: "image/png", buffer: png },
+    ]);
+    const rows = sheet.getByTestId("pending-photo");
+    await expect(rows).toHaveCount(2);
+    await rows.nth(1).getByLabel("Shot").selectOption({ label: "New shot…" });
+    await rows.nth(1).getByLabel("New shot's name").fill("Workbench");
+    await sheet.getByRole("button", { name: "Add 2 photos" }).click();
+    await expect(sheet).toBeHidden({ timeout: 10_000 });
+    await expect(page.getByText("Added 2 photos of Garage and the shot Workbench")).toBeVisible();
+
+    // Each spot is its own shot with its own Then, picked on the card.
+    const shots = garage.getByRole("group", { name: "Shot" });
+    await expect(shots.getByRole("button")).toHaveText(["Garage", "Workbench"]);
+    await expect(garage.getByRole("button", { name: "Add a photo of Garage to compare" })).toBeVisible();
+    await shots.getByRole("button", { name: "Workbench" }).click();
+    await expect(garage.getByTestId("photo-then")).toHaveAccessibleName(/^Compare Garage · Workbench: Then · /);
+  });
+
   test("Environment: add a space, change its weight, and archive it out of the score", async ({ page }) => {
     await page.goto("/environment");
     const editor = page.getByRole("region", { name: "Manage spaces" });

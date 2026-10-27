@@ -334,11 +334,11 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       );
     },
 
-    async changeSpacePhoto(photo, req) {
+    async changeSpacePhoto(photo, req, opts) {
       const result = normalizeSpacePhotoResult(
         await unwrap(api().POST("/api/environment/photos/{id}", { params: { path: { id: photo } }, body: req })),
       );
-      notify("Photo moved");
+      if (!opts?.quiet) notify("Photo moved");
       return result;
     },
 
@@ -358,13 +358,13 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       return result;
     },
 
-    async addShot(space, name) {
+    async addShot(space, name, opts) {
       const result = normalizeSpacePhotoResult(
         await unwrap(
           api().POST("/api/environment/spaces/{id}/shots", { params: { path: { id: space } }, body: { name } }),
         ),
       );
-      notify(`Added the shot ${name.trim()}`);
+      if (!opts?.quiet) notify(`Added the shot ${name.trim()}`);
       return result;
     },
 

@@ -445,8 +445,8 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       return photoWrite(qc, () => client.addSpacePhoto(space, photo, req));
     },
 
-    async changeSpacePhoto(photo, req) {
-      return photoWrite(qc, () => client.changeSpacePhoto(photo, req));
+    async changeSpacePhoto(photo, req, opts) {
+      return photoWrite(qc, () => client.changeSpacePhoto(photo, req, opts));
     },
 
     async removeSpacePhoto(photo) {
@@ -457,8 +457,8 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       return photoWrite(qc, () => client.setSpaceBaseline(photo));
     },
 
-    async addShot(space, name) {
-      return photoWrite(qc, () => client.addShot(space, name));
+    async addShot(space, name, opts) {
+      return photoWrite(qc, () => client.addShot(space, name, opts));
     },
 
     async renameShot(space, shot, name) {

@@ -642,7 +642,10 @@ Chris took all three (§8.1). The rest (§8.2) was chosen in planning and is eas
   - **Add photos** (a card's Photos button, or its empty box) takes several files at once,
     for photos taken earlier (§8.1, answer 2). Each row shows the photo, its day (its date
     taken when the file says, else "Day for photos that don't say") and its shot, all
-    changeable. They upload one by one; one that fails stays listed with why.
+    changeable. The shot picker is always there, with New shot… at the end: a photo from
+    another spot names its shot, photos given the same name share it, and a name the space
+    already has goes to that shot. New shots are added first, then the photos one by one;
+    one that fails stays listed with why. ("Added 3 photos of Kitchen and the shot Sink".)
   - **The date taken** is read in the browser from the file's first 256 KB (EXIF
     DateTimeOriginal, else DateTimeDigitized, `lib/exif.ts`), before the re-encode drops it.
     A date after today is ignored.
@@ -654,7 +657,17 @@ Chris took all three (§8.1). The rest (§8.2) was chosen in planning and is eas
   - **The compare dialog** (tapping Then or Now): the two side by side (stacked on a
     phone), each with the space's parts that day. Tapping a side picks it, and the
     filmstrip (oldest first) puts any photo there. The picked side's photo has Make this the
-    baseline, Change day (or Change day or shot) and Remove photo, which asks first.
+    baseline, Change day (or Change day or shot), Make this its own shot and Remove photo,
+    which asks first.
+  - **Make this its own shot** (added 2026-10-27, after Chris's first photos): for a photo
+    from another spot that went into a shot with others. Name the new shot and the photo
+    moves there as its baseline: a shot added, then the photo moved, in one toast ("Moved to
+    its own shot, Kitchen · Sink"). Shown while the shot has more than one photo; with six
+    shots it says to remove one first.
+  - **Why both:** every space starts with one shot, so Chris's first upload, several angles
+    of each space at once, went into one shot and compared one angle with another as if
+    they were the same view over time. Shots stay the model (§8.1, answer 1); these make
+    sorting photos into them a tap.
   - **The spaces editor:** a space's Shots button opens its shots: add one (up to six),
     rename one, remove one (never the last; one with photos asks first, as they leave the
     page). A space with more than one shot says how many.

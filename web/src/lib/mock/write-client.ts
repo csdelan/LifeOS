@@ -385,10 +385,10 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       return result;
     },
 
-    async changeSpacePhoto(photo, req) {
+    async changeSpacePhoto(photo, req, opts) {
       await wait();
       const result = mockChangeSpacePhoto(photo, req, exceptions());
-      notify("Photo moved");
+      if (!opts?.quiet) notify("Photo moved");
       bump();
       return result;
     },
@@ -409,10 +409,10 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       return result;
     },
 
-    async addShot(space, name) {
+    async addShot(space, name, opts) {
       await wait();
       const result = mockAddShot(space, name, exceptions());
-      notify(`Added the shot ${name.trim()}`);
+      if (!opts?.quiet) notify(`Added the shot ${name.trim()}`);
       bump();
       return result;
     },

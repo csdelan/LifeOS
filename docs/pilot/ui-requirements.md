@@ -4045,6 +4045,11 @@ Build:      built
     Photos adds several at once, each dated from when it was taken.
   - The spaces editor adds, renames and removes shots.
   - No migration. Details in [environment-plan.md](environment-plan.md) §8.3.
+
+  **Shots made easy (2026-10-27):** Chris's first upload put several angles of each space
+  into its one shot, so Then and Now compared different angles. A photo in the compare
+  dialog can now be made its own shot, and Add photos picks each photo's shot, with New
+  shot… for another spot. No migration.
 - Implications:
   - The Home Score, the level and the ledger never read photos, so HOME-1 to HOME-3 and
     REWARD-9 are unchanged.

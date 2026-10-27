@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { MealPhoto } from "@/components/food/meal-photo";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -6,7 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CompareSide } from "@/components/environment/then-and-now";
 import { formatDay } from "@/lib/dates";
-import { HOME_PARTS, PART_LABEL, photoCaption, shotTitle, shownScore } from "@/lib/environment";
+import {
+  HOME_PARTS,
+  PART_LABEL,
+  photoCaption,
+  SHOT_NAME_MAX,
+  SHOTS_MAX,
+  shotTitle,
+  shownScore,
+} from "@/lib/environment";
 import type { HomeSpaceRow, SpacePhotoRow } from "@/lib/production-ui-types";
 import { useSpacePhotos, useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -28,7 +37,8 @@ function photoName(photo: SpacePhotoRow): string {
  * on a phone), Then on the left and Now on the right to start, each with its day and the
  * space's score and parts that day. Tapping a side picks it; the filmstrip below, oldest
  * first, puts any of the shot's photos there. The picked side's photo can be made the
- * baseline, moved to another day or shot, or removed.
+ * baseline, moved to another day or shot, made its own shot (a photo from another spot), or
+ * removed.
  */
 export function PhotoCompareDialog({
   open,
@@ -48,7 +58,9 @@ export function PhotoCompareDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[94dvh] gap-3 overflow-y-auto sm:max-w-[min(94vw,1100px)]">
-        {open ? <CompareBody key={`${shotId}-${start}`} space={space} shotId={shotId} start={start} today={today} /> : null}
+        {open ? (
+          <CompareBody key={`${shotId}-${start}`} space={space} shotId={shotId} start={start} today={today} />
+        ) : null}
       </DialogContent>
     </Dialog>
   );
@@ -75,6 +87,7 @@ function CompareBody({
   const [picked, setPicked] = useState<Record<Side, string | null>>({ left: null, right: null });
   const [active, setActive] = useState<Side>(start === "then" ? "left" : "right");
   const [changing, setChanging] = useState(false);
+  const [owning, setOwning] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,15 +102,46 @@ function CompareBody({
   };
   const focus = shown[active];
   const title = shotTitle(space.name, shot?.name ?? space.name);
+  const full = shots.length >= SHOTS_MAX;
 
   const label = (photo: SpacePhotoRow) =>
-    photo.id === then?.id ? photoCaption("Then", photo) : photo.id === now?.id ? photoCaption("Now", photo) : photoName(photo);
+    photo.id === then?.id
+      ? photoCaption("Then", photo)
+      : photo.id === now?.id
+        ? photoCaption("Now", photo)
+        : photoName(photo);
+
+  /** Only one of Change day, Make this its own shot and Remove photo is open at a time. */
+  function closeForms() {
+    setChanging(false);
+    setOwning(false);
+    setConfirmRemove(false);
+    setError(null);
+  }
 
   function pickSide(side: Side) {
     setActive(side);
-    setChanging(false);
-    setConfirmRemove(false);
-    setError(null);
+    closeForms();
+  }
+
+  /**
+   * A photo from another spot gets its own shot: a new shot, then the photo moved to it, where
+   * it's the first photo and so the baseline. Two writes, announced as one.
+   */
+  async function ownShot(photo: SpacePhotoRow, name: string) {
+    const before = new Set(shots.map((s) => s.id));
+    const added = await writes.addShot(space.id, name, { quiet: true });
+    const fresh = added.shots.find((s) => !before.has(s.id));
+    if (!fresh) throw new Error("The new shot didn't come back, so the photo wasn't moved.");
+    try {
+      await writes.changeSpacePhoto(photo.id, { shot: fresh.id }, { quiet: true });
+    } catch (e) {
+      const why = e instanceof Error ? e.message : "it didn't save.";
+      throw new Error(
+        `Added the shot ${fresh.name}, but the photo didn't move: ${why} Move it with Change day or shot.`,
+      );
+    }
+    toast.success(`Moved to its own shot, ${shotTitle(space.name, fresh.name)}`);
   }
 
   async function run(write: () => Promise<unknown>, after?: () => void) {
@@ -117,9 +161,7 @@ function CompareBody({
     <>
       <DialogHeader className="pr-8">
         <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>
-          Then and Now side by side. Pick a side, then a photo below to put there.
-        </DialogDescription>
+        <DialogDescription>Then and Now side by side. Pick a side, then a photo below to put there.</DialogDescription>
       </DialogHeader>
 
       {shown.left && shown.right ? (
@@ -160,7 +202,9 @@ function CompareBody({
           })}
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">{read.isLoading ? "Loading the photos…" : "No photos of this shot left."}</p>
+        <p className="text-sm text-muted-foreground">
+          {read.isLoading ? "Loading the photos…" : "No photos of this shot left."}
+        </p>
       )}
 
       {photos.length > 0 ? (
@@ -179,9 +223,7 @@ function CompareBody({
                     aria-label={photoName(p)}
                     onClick={() => {
                       setPicked((all) => ({ ...all, [active]: p.id }));
-                      setChanging(false);
-                      setConfirmRemove(false);
-                      setError(null);
+                      closeForms();
                     }}
                     className={cn(
                       "block w-20 overflow-hidden rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
@@ -222,12 +264,31 @@ function CompareBody({
               disabled={busy}
               aria-expanded={changing}
               onClick={() => {
-                setChanging((c) => !c);
-                setConfirmRemove(false);
+                const open = !changing;
+                closeForms();
+                setChanging(open);
               }}
             >
               {shots.length > 1 ? "Change day or shot" : "Change day"}
             </Button>
+            {photos.length > 1 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11 md:min-h-0"
+                disabled={busy || full}
+                aria-expanded={owning}
+                aria-describedby={full ? `${ids}-full` : undefined}
+                onClick={() => {
+                  const open = !owning;
+                  closeForms();
+                  setOwning(open);
+                }}
+              >
+                Make this its own shot
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="ghost"
@@ -235,13 +296,35 @@ function CompareBody({
               className="min-h-11 md:min-h-0"
               disabled={busy}
               onClick={() => {
+                closeForms();
                 setConfirmRemove(true);
-                setChanging(false);
               }}
             >
               Remove photo
             </Button>
           </div>
+
+          {full && photos.length > 1 ? (
+            <p id={`${ids}-full`} className="text-xs text-muted-foreground">
+              {space.name} has {SHOTS_MAX} shots, the most a space can have: remove one in Manage spaces to make
+              another.
+            </p>
+          ) : null}
+
+          {owning ? (
+            <OwnShotForm
+              key={focus.id}
+              from={title}
+              busy={busy}
+              onCancel={() => setOwning(false)}
+              onSave={(name) =>
+                void run(
+                  () => ownShot(focus, name),
+                  () => setOwning(false),
+                )
+              }
+            />
+          ) : null}
 
           {changing ? (
             <ChangeForm
@@ -251,7 +334,12 @@ function CompareBody({
               today={today}
               busy={busy}
               onCancel={() => setChanging(false)}
-              onSave={(req) => void run(() => writes.changeSpacePhoto(focus.id, req), () => setChanging(false))}
+              onSave={(req) =>
+                void run(
+                  () => writes.changeSpacePhoto(focus.id, req),
+                  () => setChanging(false),
+                )
+              }
             />
           ) : null}
 
@@ -264,7 +352,12 @@ function CompareBody({
                 size="sm"
                 className="min-h-11 md:min-h-0 dark:bg-destructive/10"
                 disabled={busy}
-                onClick={() => void run(() => writes.removeSpacePhoto(focus.id), () => setConfirmRemove(false))}
+                onClick={() =>
+                  void run(
+                    () => writes.removeSpacePhoto(focus.id),
+                    () => setConfirmRemove(false),
+                  )
+                }
               >
                 Remove
               </Button>
@@ -289,6 +382,57 @@ function CompareBody({
         </div>
       ) : null}
     </>
+  );
+}
+
+/** The new shot's name, for a photo from another spot. */
+function OwnShotForm({
+  from,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  /** The shot the photo leaves: "Kitchen". */
+  from: string;
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (name: string) => void;
+}) {
+  const ids = useId();
+  const [name, setName] = useState("");
+  return (
+    <form
+      className="flex flex-wrap items-end gap-3 rounded-lg bg-muted/60 p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (name.trim()) onSave(name);
+      }}
+    >
+      <div className="min-w-40 flex-1 space-y-1.5">
+        <Label htmlFor={`${ids}-name`}>Name the new shot</Label>
+        <Input
+          id={`${ids}-name`}
+          value={name}
+          maxLength={SHOT_NAME_MAX}
+          autoComplete="off"
+          placeholder="Sink"
+          disabled={busy}
+          aria-describedby={`${ids}-help`}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" className="min-h-11 md:min-h-0" disabled={busy || !name.trim()}>
+          {busy ? "Moving…" : "Make shot"}
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="min-h-11 md:min-h-0" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+      <p id={`${ids}-help`} className="w-full text-xs text-muted-foreground">
+        For a photo taken from a different spot. It leaves {from} for the new shot, as that shot's baseline.
+      </p>
+    </form>
   );
 }
 

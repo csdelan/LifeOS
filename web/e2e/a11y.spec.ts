@@ -828,9 +828,9 @@ test.describe("accessibility", () => {
     expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
   });
 
-  // Photos (HOME-4): the compare dialog with Change day open and Remove photo asking, the add
-  // photos sheet with a photo picked, a held photo in the walk-through beside the Kitchen's
-  // baseline, and the spaces editor's shots, in both themes.
+  // Photos (HOME-4): the compare dialog with Change day open, then Make this its own shot, then
+  // Remove photo asking; the add photos sheet with a photo picked for a new shot; a held photo in
+  // the walk-through beside the Kitchen's baseline; and the spaces editor's shots, in both themes.
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: /environment photos, ${theme} theme`, async ({ page }) => {
       const scan = async () => {
@@ -861,6 +861,12 @@ test.describe("accessibility", () => {
       await expect(compare.getByTestId("filmstrip")).toBeVisible();
       await compare.getByRole("button", { name: "Change day" }).click();
       await expect(compare.getByLabel("Day")).toBeVisible();
+      const changing = await scan();
+      expect(changing, JSON.stringify(changing, null, 2)).toEqual([]);
+      await compare.getByRole("button", { name: "Make this its own shot" }).click();
+      await expect(compare.getByLabel("Name the new shot")).toBeVisible();
+      const owning = await scan();
+      expect(owning, JSON.stringify(owning, null, 2)).toEqual([]);
       await compare.getByRole("button", { name: "Remove photo" }).click();
       await expect(compare.getByRole("button", { name: "Keep it" })).toBeVisible();
       const dialog = await scan();
@@ -874,6 +880,8 @@ test.describe("accessibility", () => {
       await add.getByRole("button", { name: "Choose photos" }).click();
       await (await chooser).setFiles({ name: "IMG_7001.png", mimeType: "image/png", buffer: png });
       await expect(add.getByTestId("pending-photo")).toHaveCount(1);
+      await add.getByLabel("Shot").selectOption({ label: "New shot…" });
+      await add.getByLabel("New shot's name").fill("Sink");
       const sheet = await scan();
       expect(sheet, JSON.stringify(sheet, null, 2)).toEqual([]);
       await page.keyboard.press("Escape");

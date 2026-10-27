@@ -1890,6 +1890,11 @@ export interface SpacePhotoRequest {
   filename?: string;
 }
 
+/** A write whose caller announces it, with a few others, in one toast. */
+export interface QuietWrite {
+  quiet?: boolean;
+}
+
 /** Moving a photo: a new day, a new shot (its id or name), or both. */
 export interface SpacePhotoChangeRequest {
   day?: string;
@@ -2024,14 +2029,20 @@ export interface LifeOsWriteClient {
    * announced once, by the sheet that sends it.
    */
   addSpacePhoto(space: string, photo: Blob, req?: SpacePhotoRequest): Promise<SpacePhotoResult>;
-  /** Move a photo to another day or shot (`POST /api/environment/photos/{id}`). */
-  changeSpacePhoto(photo: string, req: SpacePhotoChangeRequest): Promise<SpacePhotoResult>;
+  /**
+   * Move a photo to another day or shot (`POST /api/environment/photos/{id}`). `quiet` leaves
+   * the toast to the caller, which announces a few writes as one.
+   */
+  changeSpacePhoto(photo: string, req: SpacePhotoChangeRequest, opts?: QuietWrite): Promise<SpacePhotoResult>;
   /** Remove a photo; its bytes stay in the record (`POST /api/environment/photos/{id}/delete`). */
   removeSpacePhoto(photo: string): Promise<SpacePhotoResult>;
   /** Make a photo its shot's baseline, the Then its Now is compared with (`POST …/photos/{id}/baseline`). */
   setSpaceBaseline(photo: string): Promise<SpacePhotoResult>;
-  /** Add a shot to a space (`POST /api/environment/spaces/{id}/shots`): at most 6, names unique in the space. */
-  addShot(space: string, name: string): Promise<SpacePhotoResult>;
+  /**
+   * Add a shot to a space (`POST /api/environment/spaces/{id}/shots`): at most 6, names unique
+   * in the space. `quiet` leaves the toast to the caller.
+   */
+  addShot(space: string, name: string, opts?: QuietWrite): Promise<SpacePhotoResult>;
   /** Rename a shot (`POST /api/environment/spaces/{id}/shots/{shot}`). */
   renameShot(space: string, shot: string, name: string): Promise<SpacePhotoResult>;
   /** Remove a shot; its photos stay in the record (`POST …/shots/{shot}/delete`). A space keeps one. */
