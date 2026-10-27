@@ -24,6 +24,10 @@ gamification changes Chris's days. Everything in §6 has to earn its place throu
 Phases X8–X11. Until X10 lands the app runs §1–§3's rules. After that, §7 replaces what they
 say about ranks, the level cap, banked XP and the successful day.
 
+**Added on 2026-10-27:** Environment gets rules of its own. It uses §7's shown level, fall,
+ranks and Gems, but its level is held by a Home Score from rated spaces rather than by daily
+XP. See [environment-plan.md](environment-plan.md) (REWARD-9, HOME-1 to HOME-3, D18).
+
 ## 0. Read these first
 
 - [rewards-plan.md](rewards-plan.md): the ledger, award keys, reconcile, bounties. Everything

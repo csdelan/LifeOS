@@ -69,6 +69,7 @@ requirements cluster and the ID says where it lives:
 | `FOOD-` | Food Log: food entries, fasts, diet XP |
 | `ACTIVITY-` | Activity: Oura steps, exercise, sleep and readiness, activity XP, tags |
 | `COVER-` | Cover images: Unsplash photos on identity statements, goals and projects |
+| `HOME-` | Home environment: spaces, ratings, the Home Score |
 | `NAV-` | Navigation shell |
 | `GEN-` | Cross-cutting conventions **and** per-subject-type object specs (Goals, Projects, Tasks, Identity Statements, Commitments, Decisions, Problems, People, Vision, …) |
 
@@ -2761,6 +2762,11 @@ Horizon:    Pilot
 Definition: active
 Build:      built
 
+**Update (2026-10-27 — Environment planned):** Environment gets rules of its own (REWARD-9,
+D18). It keeps this requirement's shown level, 1% fall, ranks, best level and rank, Gems,
+multiplier and exception days. The difference is what holds it: the Home Score
+(HOME-3), not daily XP.
+
 **Update (2026-10-27 — low levels made harder):** Chris: "I can drink all day long, not
 exercise at all, have few steps, and my level still increases." He took the gentler of two
 options ("Let's try the gentler option first and see how it goes"): an active day takes at
@@ -2977,6 +2983,60 @@ X10 makes the fold skip marked days, and X11 adds the Character page's control.
   past day can move today's level and rank either way. Gems already paid stay. Days are
   today or earlier; marking ahead is later.
 - Open decisions: none blocking (2026-10-25, plan §7.6).
+
+
+### REWARD-9 — Environment's level follows how well my home is kept
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "I'm not 100% convinced I should keep environment as XP-based. The main reason I have it
+  this way is to reward myself with Environment XP (both task/project based as well as per
+  minute)." (2026-10-27)
+- "I envision my Environment 'rank' or 'level' should be largely influenced by how well my
+  actual home environment is maintained."
+- "as I get higher ranks, more weighting should be placed on good maintenance consistency,
+  in a similar fashion to how Grandmaster health is difficult to maintain without constant
+  work."
+- "I plan to reward myself with 1 XP per minute in cleaning/tidying progress, Plus additional
+  task/project rewards." That's about 25 a day once the home is clean, and more while
+  catching up.
+- Agreed in Q&A (2026-10-27):
+  - **XP sets the pace, the home sets the hold.** The level is the lower of the lifetime
+    level and the condition level.
+  - The lifetime level comes from Environment XP on Health's curve at a quarter of the
+    price: 63,922 XP to level 100.
+  - The condition level is what the last 90 days' Home Scores (HOME-3) support. Level L needs
+    the Home Score at or above a bar (30 at level 2, 85 at 100) on a share of the days (50%
+    to 90%).
+  - Everything else works as Health's does (REWARD-7): the 1% fall, best level and rank, Gems,
+    the multiplier (on kept-up days) and exception days. Exception days also pause fades.
+  - There's no daily XP cap.
+  - When effort runs ahead of the home, the Character page says so: "Your effort has earned
+    level 39. Your home holds you at 28."
+
+**Ontology fit (Claude):**
+- Maps to: a second configured domain in `LifeDomains`, read by the same fold (D17, D18). The
+  consistency test becomes a rule of its own, `IConsistencyRule`:
+  - Health's XP tests are unchanged.
+  - Environment's `HomeConditionRule` reads the daily Home Score.
+  - Nothing is stored.
+- Kernel delta:
+  - `IConsistencyRule`, `HomeConditionRule`, `KeptUpAtShownLevel`
+  - `LifeDomains.Environment` with `CubicCurve(15, 6, 0.2125)`
+  - the Home Score in Environment's daily credit, and rating writes answering `progress`
+  - `consistency.kind` on the domain reads
+  - the simulator's Environment patterns
+
+  Phase E3 of [environment-plan.md](environment-plan.md); E4 adds the Character card and
+  Reports. No migration.
+- Implications:
+  - Environment XP earned since 2026-10-20 counts toward the lifetime level as soon as E3
+    deploys. The level stays 1 until the first walk-through.
+  - A backdated or edited rating can move today's level either way. Gems already paid stay.
+  - The curve's price is rechecked once the home is clean, from the clean-home rate.
+- Open decisions: none blocking (plan §6).
 
 
 ### FOOD-1 — A Food Log records what I eat, how healthy it was and roughly how many calories
@@ -3758,6 +3818,140 @@ Build moves `mapped → building`. It becomes `built` once it's on staging (C5).
   banner and the Vision cards show it in full.
 - Open decisions: none.
 
+### HOME-1 — My home is split into spaces, each with a weight and a pace
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "I may look at 1 area of my home (kitchen), and rate it's environment based on 3
+  factors… I can do this for each area of my house to come up with an aggregate environment
+  rank. I could optionally weight each area as well. My office is where I spend a ton of
+  time during the day, so it could ideally have a higher weighting to my overall environment
+  to make it more important." (2026-10-27)
+- His spaces, as weight / pace, where pace is how fast a space gets messy:
+  - Office 5/5
+  - Kitchen 4/5
+  - Living Area 3/4
+  - Stairway/Foyer/Halls 3/4
+  - Garage 1/2
+  - Master Bath 4/3
+  - Other Baths 3/2
+  - Bedroom 2/1
+  - Exercise Room 2/1
+- Agreed in Q&A:
+  - Weight is 1–10 (how much a space counts). Pace is 1–5, with 3 normal.
+  - A grouped space is rated as one, and split out later if one part keeps dragging it
+    down.
+  - Spaces can be added, renamed, reweighted, re-paced and archived. The page shows each
+    space's share of the Home Score.
+
+**Ontology fit (Claude):**
+- Maps to: a new subject type, **`Space`** (the 16th).
+  - Its name is the title. `weight` and `pace` are attributes written only by
+    `SpaceService`.
+  - It has no status. It archives through D9's `archive_change`.
+  - It isn't an Area (D1): Areas are life areas, not rooms.
+- Kernel delta:
+  - migration 0044: `Space` in the type check, and `v_space`
+  - `SpaceService` and `bsk space add / list / set / archive`
+  - `POST /api/environment/spaces` and `/spaces/{id}`
+
+  Phase E1 of [environment-plan.md](environment-plan.md).
+- Implications:
+  - Weights and paces apply to all of history, as any retune does, so changing one re-reads
+    past Home Scores and levels.
+  - An archived space leaves the Home Score from the day it was archived.
+  - Chris's nine spaces are entered through the app (E5), not seeded.
+- Open decisions: none blocking (plan §6).
+
+### HOME-2 — I rate each space on Tidiness, Cleanliness and Aesthetics in a quick walk-through
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "Tidiness (de-cluttered), Cleanliness (washed), and Aesthetics (decor, colors, lighting,
+  etc) in a roughly 45/35/20 weighting." (2026-10-27)
+- "The downside of this system is it leans to subjective criteria that I must update
+  routinely."
+- Agreed in Q&A (2026-10-27):
+  - Each part is rated 1–5 in half points with the Food Log's picker, which shows what each
+    score means.
+  - A **walk-through** rates every space on one sheet with one Save. The Sunday review is
+    its natural day.
+  - A **quick check** rates one space, usually Tidiness and Cleanliness only.
+  - **Same as last time** confirms a space's last rating in one tap, once Chris has looked.
+  - A rating can carry a one-line note, be backdated, edited or deleted.
+
+  The examples on the picker (a first draft, edited in use):
+
+  | Score | Tidiness | Cleanliness | Aesthetics |
+  |---|---|---|---|
+  | 5 | Everything put away, surfaces clear | Freshly cleaned, spotless | Finished and inviting: decor, colour and light all intentional |
+  | 4 | A few things out | Clean, light dust or smudges | Pleasant, a couple of things unfinished |
+  | 3 | Clutter on some surfaces | Visible dust or crumbs, the sink needs doing | Functional and plain |
+  | 2 | Cluttered, surfaces hard to use | Dirty, floors or surfaces need washing | Bare or mismatched, poor lighting |
+  | 1 | Piles, the space can't be used | Grime or smells | Broken or ugly fixtures |
+
+**Ontology fit (Claude):**
+- Maps to: a declared `measurement` event per rating, with a `space_rating` payload and a
+  `concerns` edge to the space.
+  - The payload holds an id, the space, the day, any of the three parts, and a note.
+  - Versioned by id, as food entries are: an edit writes a newer version, and a delete
+    writes a voided one.
+  - "Same as last time" writes the parts' last rated values (not their faded ones), so the
+    history shows what was confirmed.
+  - No new event kind.
+- Kernel delta:
+  - migration 0044: `v_space_rating` and its index
+  - `SpaceRatingService` and `bsk rate`
+  - `POST /api/environment/ratings` (many spaces at once), `/ratings/{id}` and
+    `/ratings/{id}/delete`
+
+  Phase E1 of [environment-plan.md](environment-plan.md); E4 brings the walk-through
+  sheet.
+- Implications: a rating can move Environment's level (REWARD-9), so every rating write
+  answers `progress`, and a backdated one re-reads past days. Days are today or earlier.
+- Open decisions: none blocking (plan §6). Photos on ratings and per-space examples are
+  later (plan §7).
+
+### HOME-3 — Ratings fade, and a Home Score shows how well my home is kept and what to fix next
+Horizon:    Pilot
+Definition: active
+Build:      needs-kernel
+
+**Workflow (Chris):**
+- "Ratings fade sounds like a really good new mechanic." (2026-10-27)
+- Agreed in Q&A (2026-10-27):
+  - A rating is a snapshot, so each part slips from the second day after it's rated until
+    it's rated again. Tidiness loses half a point every 3 days, Cleanliness every 7,
+    Aesthetics every 90.
+  - Pace multiplies the Tidiness and Cleanliness fades by pace / 3.
+  - A fade never takes a part below a rating of 2.
+  - Exception days pause fades.
+  - A space's score is 45% Tidiness, 35% Cleanliness and 20% Aesthetics. The **Home Score**
+    is the weighted average across spaces, 0–100.
+  - The Environment page shows the Home Score against what keeps the current level on
+    track, and each space with its parts as rated and as they stand now.
+  - It also shows a 30 / 90 / 365-day chart, and **Fix next**: the three parts costing the
+    most Home Score points.
+
+**Ontology fit (Claude):**
+- Maps to: a reading, never stored (D12, D18). `HomeScore` is a pure function in Domain over
+  the spaces, their ratings and the exception days. It works in whole ten-thousandths of a
+  point, so the kernel and the web agree to the digit.
+- Kernel delta:
+  - `HomeScore` and `HomeRules` (Domain)
+  - `GET /api/environment` and `/api/environment/days`
+  - `bsk home`
+
+  Phase E2 of [environment-plan.md](environment-plan.md); E4 brings the `/environment` page.
+  No migration.
+- Implications: the Home Score is what holds Environment's level (REWARD-9). Retuning a fade
+  or a weight re-reads all of history.
+- Open decisions: none blocking (plan §6). Reminders for fading spaces are later (plan §7).
+
 
 
 
@@ -4020,6 +4214,22 @@ ledger, and nothing about progression is stored.
 
 Design and build order: [xp-domains-plan.md](xp-domains-plan.md) §7.
 
+**D18 — A domain's level can be held by a measured condition, not only by daily XP
+(REWARD-9 / HOME-1..3, 2026-10-27).** This extends D17. Environment's level is the lower of
+its lifetime level (from Environment XP) and a condition level: what the last 90 days' Home
+Scores support. Health keeps its XP tests.
+
+- **The consistency test is a rule per domain** (`IConsistencyRule`). Health's reads daily
+  XP. Environment's reads the daily Home Score.
+- **The shown level, fall, ranks, best level and rank, Gems, multiplier and exception days**
+  are D17's, shared by both.
+- **The Home Score is a reading too:** a pure function of the spaces, their ratings (fading
+  with time) and the exception days, recomputed on every read and never stored.
+- **Space is the 16th subject type,** and a rating is a versioned `measurement` event about
+  one, as a food entry is.
+
+Design and build order: [environment-plan.md](environment-plan.md).
+
 ### Method for the Habit ↔ Commitment discrepancy
 
 "Habit" (UI concept) and "Commitment" (storage type) are deliberately decoupled — Chris
@@ -4119,6 +4329,16 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   rank, the new lifetime curve, the multiplier's active-day success, Gems on a new best, the
   simulator, then the Character page and reports. — **Shipped** (X9–X11 in
   [xp-domains-plan.md](xp-domains-plan.md) §7, migration 0043). Calibration continues in use.
+- **Home spaces, ratings and Environment's level** (HOME-1..3 / REWARD-9 / D18):
+  - the `Space` subject type (the 16th)
+  - ratings as versioned `measurement` events, read by `v_space` and `v_space_rating`
+    (migration 0044)
+  - the Home Score with fading ratings
+  - `IConsistencyRule` and Environment's rules
+  - `bsk space`, `bsk rate` and `bsk home`
+  - the `/environment` page and its walk-through
+
+  — **Open** (planned in [environment-plan.md](environment-plan.md), E1–E5).
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;
