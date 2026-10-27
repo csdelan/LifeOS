@@ -16,8 +16,11 @@ public enum Cadence
 /// as the ledger pays it, and <paramref name="ActionXp"/>, the base XP less passive awards
 /// such as sleep (xp-domains plan §7.4.2). <paramref name="ShownLevel"/> is the shown level
 /// going into the period, which the walk supplies because it comes from the days before.
+/// <paramref name="HomeScore"/> is the period's Home Score in ten-thousandths of a point, for a
+/// domain held by the home (environment plan §4.5); null when it has none.
 /// </summary>
-public sealed record PeriodFacts(DateOnly Start, DateOnly End, long BaseXp, long PaidXp, long ActionXp, int ShownLevel);
+public sealed record PeriodFacts(
+    DateOnly Start, DateOnly End, long BaseXp, long PaidXp, long ActionXp, int ShownLevel, long? HomeScore = null);
 
 /// <summary>
 /// Decides whether a period was a success for a domain: the multiplier's successful day
@@ -52,6 +55,77 @@ public sealed record ActiveAtShownLevel(ConsistencyRule Consistency) : ISuccessR
 }
 
 /// <summary>
+/// A period succeeds when it's <b>kept up at the shown level</b> (environment plan §2.4): its Home
+/// Score reaches the bar of the shown level going into it (level 2's bar at level 1).
+/// </summary>
+public sealed record KeptUpAtShownLevel(HomeConditionRule Condition) : ISuccessRule
+{
+    public bool Succeeded(PeriodFacts facts)
+        => facts.HomeScore is { } score && score >= Condition.Threshold(facts.ShownLevel);
+
+    public string Describe(int level) => $"a Home Score of at least {HomeConditionRule.Text(Condition.Bar(level))}";
+}
+
+/// <summary>
+/// What the last counted days must show for a level to hold (xp-domains plan §7.2,
+/// environment plan §4.5): the consistency test of a domain, replaceable per domain. The walk
+/// keeps the days that count, and for each level reads three tests over the last
+/// <c>N = min(WindowDays, counted days)</c> of them:
+/// <list type="bullet">
+/// <item><b>age</b>: days so far whose <see cref="Measure"/> reached the level's
+/// <see cref="Threshold"/> ≥ <see cref="AgeNeeded"/>;</item>
+/// <item><b>base</b>: the window's base XP ≥ <see cref="BaseNeeded"/>;</item>
+/// <item><b>reached days</b>: the window's days that reached the threshold ≥
+/// <see cref="ReachedDaysNeeded"/>.</item>
+/// </list>
+/// Health reads action XP against an active minimum and a base XP average
+/// (<see cref="ConsistencyRule"/>); Environment reads the Home Score against a bar
+/// (<see cref="HomeConditionRule"/>).
+/// </summary>
+public interface IConsistencyRule
+{
+    /// <summary>What the rule reads, for the web and the CLI: <c>xp</c> or <c>home</c>.</summary>
+    string Kind { get; }
+
+    /// <summary>The most counted days the tests read.</summary>
+    int WindowDays { get; }
+
+    /// <summary>The highest level the rule can support.</summary>
+    int MaxLevel { get; }
+
+    /// <summary>Whether a settled, non-exception day counts: Health's all do; Environment's need a Home Score.</summary>
+    bool Counts(DomainPeriod period);
+
+    /// <summary>What a day's test reads: action XP, or the Home Score in ten-thousandths.</summary>
+    long Measure(DomainPeriod period);
+
+    /// <summary>The <see cref="Measure"/> a day needs to reach <paramref name="level"/>.</summary>
+    long Threshold(int level);
+
+    /// <summary>The day's test in whole units, for display: action XP, or the bar in whole points rounded up.</summary>
+    int DayMinimum(int level);
+
+    /// <summary>The window's base XP <paramref name="level"/> needs over <paramref name="days"/> counted days; 0 when the rule has no base test.</summary>
+    long BaseNeeded(int level, int days);
+
+    /// <summary>The window's days at the threshold <paramref name="level"/> needs over <paramref name="days"/> counted days.</summary>
+    int ReachedDaysNeeded(int level, int days);
+
+    /// <summary>The days at the threshold so far <paramref name="level"/> needs.</summary>
+    int AgeNeeded(int level);
+
+    /// <summary>
+    /// Whether <paramref name="level"/> passes all three tests, given its days at the threshold
+    /// so far, and the window's days, base XP and days at the threshold.
+    /// </summary>
+    bool Qualifies(int level, int reachedSoFar, int days, long windowBase, int windowReached)
+        => days > 0
+            && reachedSoFar >= AgeNeeded(level)
+            && windowBase >= BaseNeeded(level, days)
+            && windowReached >= ReachedDaysNeeded(level, days);
+}
+
+/// <summary>
 /// What the last days must show for a level to hold (xp-domains plan §7.2). Level L (2 and
 /// up) qualifies over a window of the last N counted days when all three pass:
 /// <list type="bullet">
@@ -72,9 +146,30 @@ public sealed record ConsistencyRule(
     int ActiveFloor,
     decimal ShareFrom,
     decimal ShareTo,
-    int MaxLevel = 100)
+    int MaxLevel = 100) : IConsistencyRule
 {
     private int Span => MaxLevel - 2;
+
+    /// <summary>Health's kind: base and action XP.</summary>
+    public string Kind => "xp";
+
+    /// <summary>Every settled, non-exception day counts.</summary>
+    public bool Counts(DomainPeriod period) => true;
+
+    /// <summary>A day's action XP: base XP less sleep.</summary>
+    public long Measure(DomainPeriod period) => period.Action;
+
+    /// <summary>The level's <see cref="ActiveMinimum"/>.</summary>
+    public long Threshold(int level) => ActiveMinimum(level);
+
+    /// <summary>The level's <see cref="ActiveMinimum"/>.</summary>
+    public int DayMinimum(int level) => ActiveMinimum(level);
+
+    /// <summary>The level's <see cref="Average"/> over <paramref name="days"/>.</summary>
+    public long BaseNeeded(int level, int days) => (long)Average(level) * days;
+
+    /// <summary>The level's <see cref="ActiveDaysNeeded"/>.</summary>
+    public int ReachedDaysNeeded(int level, int days) => ActiveDaysNeeded(level, days);
 
     /// <summary>The average base XP a day level <paramref name="level"/> needs: 30 at level 2, 80 at 100 for Health.</summary>
     public int Average(int level)
@@ -104,6 +199,76 @@ public sealed record ConsistencyRule(
             && activeSoFar >= AgeNeeded(level)
             && windowBase >= (long)Average(level) * days
             && windowActive >= ActiveDaysNeeded(level, days);
+}
+
+/// <summary>
+/// What the home must show for a level to hold (REWARD-9, D18, environment plan §2.3, §4.5):
+/// the condition level. Level L (2 and up) qualifies over the last N counted days — settled,
+/// non-exception days with a Home Score — when both pass:
+/// <list type="bullet">
+/// <item><b>kept up</b>: the window's days with a Home Score at or above the
+/// <see cref="Bar"/> ≥ <c>⌈P(L) · N⌉</c>, P running from <paramref name="ShareFrom"/> to
+/// <paramref name="ShareTo"/>;</item>
+/// <item><b>age</b>: such days so far ≥ <c>min(WindowDays, L + 1)</c>.</item>
+/// </list>
+/// The bar runs from <paramref name="BarFrom"/> points at level 2 to <paramref name="BarTo"/> at
+/// <paramref name="MaxLevel"/>, exactly: <c>Q(L) = BarFrom + (BarTo − BarFrom)(L − 2) / 98</c>.
+/// With the Home Score H in ten-thousandths, a day passes when
+/// <c>98 · H ≥ (98 · BarFrom + (BarTo − BarFrom)(L − 2)) · 10,000</c>, which is H at or above
+/// <see cref="Threshold"/>: that, rounded up to a whole ten-thousandth. There's no base test.
+/// </summary>
+public sealed record HomeConditionRule(
+    int WindowDays,
+    int BarFrom,
+    int BarTo,
+    decimal ShareFrom,
+    decimal ShareTo,
+    int MaxLevel = 100) : IConsistencyRule
+{
+    private int Span => MaxLevel - 2;
+
+    /// <summary>Environment's kind: the Home Score.</summary>
+    public string Kind => "home";
+
+    /// <summary>A settled, non-exception day counts when it has a Home Score.</summary>
+    public bool Counts(DomainPeriod period) => period.HomeScore is not null;
+
+    /// <summary>The day's Home Score, in ten-thousandths; 0 without one.</summary>
+    public long Measure(DomainPeriod period) => period.HomeScore ?? 0;
+
+    /// <summary>
+    /// The least Home Score (ten-thousandths) that keeps <paramref name="level"/> up:
+    /// <c>⌈(98 · BarFrom + (BarTo − BarFrom)(L − 2)) · 10,000 / 98⌉</c>. Level 1 takes level 2's bar.
+    /// </summary>
+    public long Threshold(int level)
+    {
+        var steps = Math.Max(level, 2) - 2;
+        var scaled = ((long)BarFrom * Span + (long)(BarTo - BarFrom) * steps) * HomeRules.Unit;
+        return (scaled + Span - 1) / Span;
+    }
+
+    /// <summary>The bar of <paramref name="level"/> in points, to four places, rounded up: what the Home Score must reach.</summary>
+    public decimal Bar(int level) => Threshold(level) / (decimal)HomeRules.Unit;
+
+    /// <summary>The bar in whole points, rounded up.</summary>
+    public int DayMinimum(int level) => (int)((Threshold(level) + HomeRules.Unit - 1) / HomeRules.Unit);
+
+    /// <summary>No base test: 0.</summary>
+    public long BaseNeeded(int level, int days) => 0;
+
+    /// <summary>
+    /// The kept-up days <paramref name="level"/> needs in a window of <paramref name="days"/>:
+    /// <c>⌈P(L) · N⌉</c>, worked in exact decimals.
+    /// </summary>
+    public int ReachedDaysNeeded(int level, int days)
+        => (int)Math.Ceiling(days * (ShareFrom * Span + (ShareTo - ShareFrom) * (Math.Max(level, 2) - 2)) / Span);
+
+    /// <summary>The kept-up days so far <paramref name="level"/> needs: <c>min(WindowDays, L + 1)</c>.</summary>
+    public int AgeNeeded(int level) => Math.Min(WindowDays, level + 1);
+
+    /// <summary>A bar as shown: rounded up to a tenth, e.g. "68.2".</summary>
+    public static string Text(decimal bar)
+        => (Math.Ceiling(bar * 10m) / 10m).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
 }
 
 /// <summary>
@@ -273,7 +438,7 @@ public sealed record DomainRules(
     string Currency,
     Cadence Cadence,
     ILevelCurve Curve,
-    ConsistencyRule Consistency,
+    IConsistencyRule Consistency,
     FallRule Fall,
     ISuccessRule Success,
     IReadOnlyList<RankRule> Ranks,
@@ -306,9 +471,9 @@ public sealed record DomainRules(
 }
 
 /// <summary>
-/// The life domains with rules (REWARD-6 / REWARD-7 / REWARD-8, D12, D17). Only Health is
-/// configured in the pilot. Social, Environment and Finance collect XP and nothing else until
-/// each gets rules of its own; because progression is folded from history, their whole history
+/// The life domains with rules (REWARD-6 / REWARD-7 / REWARD-8 / REWARD-9, D12, D17, D18):
+/// Health, held by its last 90 days of XP, and Environment, held by the Home Score. Social and
+/// Finance collect XP and nothing else until each gets rules of its own; because progression is folded from history, their whole history
 /// counts the day they do. The drift test keeps these consistent with <see cref="Currencies"/>.
 /// </summary>
 public static class LifeDomains
@@ -316,7 +481,8 @@ public static class LifeDomains
     /// <summary>The trigger of a rank-up award (xp-domains plan §3.7).</summary>
     public const string RankTrigger = "rank";
 
-    private static readonly ConsistencyRule HealthConsistency = new(
+    /// <summary>Health's consistency test (xp-domains plan §7.2): base XP averaging 30 to 80, with half to 90% of days active.</summary>
+    public static readonly ConsistencyRule HealthConsistency = new(
         WindowDays: 90,
         AverageFrom: 30,
         AverageTo: 80,
@@ -357,8 +523,37 @@ public static class LifeDomains
         PassiveTriggers = [ActivityAwards.SleepTrigger]
     };
 
+    /// <summary>
+    /// Environment's condition test (environment plan §2.3): a Home Score bar from 30 at level 2
+    /// to 85 at 100, kept up on half to 90% of the last 90 counted days.
+    /// </summary>
+    public static readonly HomeConditionRule EnvironmentCondition = new(
+        WindowDays: 90,
+        BarFrom: 30,
+        BarTo: 85,
+        ShareFrom: 0.50m,
+        ShareTo: 0.90m);
+
+    /// <summary>
+    /// Environment (REWARD-9, D18, environment plan §2.3–§2.4): its level is the lower of the
+    /// lifetime level, on Health's curve at a quarter of the price, and the condition level the
+    /// last 90 counted days' Home Scores support. The shown level, its 1% fall, the ranks, the
+    /// multiplier and the Gems are Health's; a successful day is one kept up at the shown level.
+    /// No XP is passive.
+    /// </summary>
+    public static readonly DomainRules Environment = new(
+        Currencies.EnvironmentXp,
+        Cadence.Daily,
+        new CubicCurve(Linear: 15, Quadratic: 6, Cubic: 0.2125m),
+        EnvironmentCondition,
+        Health.Fall,
+        new KeptUpAtShownLevel(EnvironmentCondition),
+        Health.Ranks,
+        Health.Multiplier,
+        Health.RankUpGems);
+
     /// <summary>Every configured domain.</summary>
-    public static readonly IReadOnlyList<DomainRules> Configured = [Health];
+    public static readonly IReadOnlyList<DomainRules> Configured = [Health, Environment];
 
     /// <summary>
     /// The hour a day settles (xp-domains plan §7.4.2): a day is over at 4 a.m. the next

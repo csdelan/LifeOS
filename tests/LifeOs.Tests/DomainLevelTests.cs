@@ -11,7 +11,7 @@ public sealed class DomainLevelTests
 {
     private static readonly DomainRules Health = LifeDomains.Health;
     private static readonly ILevelCurve Curve = Health.Curve;
-    private static readonly ConsistencyRule Consistency = Health.Consistency;
+    private static readonly ConsistencyRule Consistency = LifeDomains.HealthConsistency;
 
     [Theory]
     [InlineData(1, 0)]

@@ -54,19 +54,41 @@ public sealed class LifeDomainsTests
         var consistency = rules.Consistency;
 
         Assert.Equal(rules.Curve.MaxLevel, consistency.MaxLevel);
-        Assert.True(consistency.AverageFrom > 0 && consistency.AverageTo > consistency.AverageFrom, "the average runs upward");
-        Assert.True(consistency.ShareFrom > 0 && consistency.ShareTo > consistency.ShareFrom && consistency.ShareTo <= 1, "the active share runs upward");
-        Assert.InRange(consistency.ActiveShare, 0.01m, 1m);
         Assert.InRange(consistency.WindowDays, 7, 365);
-        Assert.Equal(consistency.AverageFrom, consistency.Average(2));
-        Assert.Equal(consistency.AverageTo, consistency.Average(consistency.MaxLevel));
+        switch (consistency)
+        {
+            case ConsistencyRule xp:
+                Assert.Equal("xp", xp.Kind);
+                Assert.True(xp.AverageFrom > 0 && xp.AverageTo > xp.AverageFrom, "the average runs upward");
+                Assert.True(xp.ShareFrom > 0 && xp.ShareTo > xp.ShareFrom && xp.ShareTo <= 1, "the active share runs upward");
+                Assert.InRange(xp.ActiveShare, 0.01m, 1m);
+                Assert.Equal(xp.AverageFrom, xp.Average(2));
+                Assert.Equal(xp.AverageTo, xp.Average(xp.MaxLevel));
+                break;
+            case HomeConditionRule home:
+                Assert.Equal("home", home.Kind);
+                Assert.True(home.BarFrom > 0 && home.BarTo > home.BarFrom && home.BarTo <= 100, "the bar runs upward within 0–100");
+                Assert.True(home.ShareFrom > 0 && home.ShareTo > home.ShareFrom && home.ShareTo <= 1, "the kept-up share runs upward");
+                Assert.Equal(home.BarFrom, home.Bar(2));
+                Assert.Equal(home.BarTo, home.Bar(home.MaxLevel));
+                Assert.Equal(0, home.BaseNeeded(home.MaxLevel, home.WindowDays));
+                break;
+            default:
+                Assert.Fail($"{currency} has a consistency rule the drift test doesn't know");
+                break;
+        }
+
         for (var level = 3; level <= consistency.MaxLevel; level++)
         {
-            Assert.True(consistency.Average(level) >= consistency.Average(level - 1), $"level {level} asks a lower average");
-            Assert.True(consistency.ActiveMinimum(level) >= consistency.ActiveMinimum(level - 1), $"level {level} asks less of an active day");
+            var window = consistency.WindowDays;
+            Assert.True(consistency.Threshold(level) >= consistency.Threshold(level - 1), $"level {level} asks less of a day");
+            Assert.True(consistency.DayMinimum(level) >= consistency.DayMinimum(level - 1), $"level {level} shows a lower day minimum");
             Assert.True(
-                consistency.ActiveDaysNeeded(level, consistency.WindowDays) >= consistency.ActiveDaysNeeded(level - 1, consistency.WindowDays),
-                $"level {level} asks fewer active days");
+                consistency.BaseNeeded(level, window) >= consistency.BaseNeeded(level - 1, window),
+                $"level {level} asks a lower average");
+            Assert.True(
+                consistency.ReachedDaysNeeded(level, window) >= consistency.ReachedDaysNeeded(level - 1, window),
+                $"level {level} asks fewer days at its threshold");
             Assert.True(consistency.AgeNeeded(level) >= consistency.AgeNeeded(level - 1), $"level {level} asks a younger domain");
         }
 
@@ -149,14 +171,15 @@ public sealed class LifeDomainsTests
     {
         var health = LifeDomains.Health;
 
-        Assert.Same(health, Assert.Single(LifeDomains.Configured));
+        Assert.Equal([health, LifeDomains.Environment], LifeDomains.Configured);
         Assert.Same(health, LifeDomains.For("HEALTH_XP"));
         Assert.Equal(Currencies.HealthXp, health.Currency);
         Assert.Equal(Cadence.Daily, health.Cadence);
         Assert.Equal(new CubicCurve(Linear: 60, Quadratic: 24, Cubic: 0.85m), health.Curve);
         Assert.Equal(new ConsistencyRule(90, 30, 80, 0.4m, 20, 0.50m, 0.90m), health.Consistency);
+        Assert.Same(LifeDomains.HealthConsistency, health.Consistency);
         Assert.Equal(new FallRule(PercentPerDay: 1, HoldDays: 0, BackOnTrackDays: 7), health.Fall);
-        Assert.Equal(new ActiveAtShownLevel(health.Consistency), health.Success);
+        Assert.Equal(new ActiveAtShownLevel(LifeDomains.HealthConsistency), health.Success);
         Assert.Equal("at least 24 action XP (base XP less sleep)", health.Success.Describe(60));
         Assert.Equal(["sleep"], health.PassiveTriggers);
         Assert.Equal(30, health.Multiplier.WindowDays);
@@ -166,10 +189,68 @@ public sealed class LifeDomainsTests
             health.Ranks.Select(r => r.Title));
         Assert.Equal(4, LifeDomains.SettleHour);
 
-        // The other domains collect XP and nothing else until they get rules.
+        // Social and Finance collect XP and nothing else until they get rules.
         Assert.Null(LifeDomains.For(Currencies.SocialXp));
-        Assert.Null(LifeDomains.For(Currencies.EnvironmentXp));
         Assert.Null(LifeDomains.For(Currencies.FinanceXp));
+    }
+
+    [Fact]
+    public void Environment_is_held_by_the_home_with_Healths_shown_level_ranks_and_multiplier()
+    {
+        // Environment plan §4.5 (REWARD-9, D18): the curve at a quarter of Health's price, the
+        // Home Score's bar for consistency, and the rest Health's.
+        var environment = LifeDomains.Environment;
+        var health = LifeDomains.Health;
+
+        Assert.Same(environment, LifeDomains.For(Currencies.EnvironmentXp));
+        Assert.Equal(Cadence.Daily, environment.Cadence);
+        Assert.Equal(new CubicCurve(Linear: 15, Quadratic: 6, Cubic: 0.2125m), environment.Curve);
+        Assert.Equal(new HomeConditionRule(90, 30, 85, 0.50m, 0.90m), environment.Consistency);
+        Assert.Same(LifeDomains.EnvironmentCondition, environment.Consistency);
+        Assert.Equal(new KeptUpAtShownLevel(LifeDomains.EnvironmentCondition), environment.Success);
+        Assert.Equal("a Home Score of at least 68.2", environment.Success.Describe(70));
+        Assert.Equal(health.Fall, environment.Fall);
+        Assert.Equal(health.Ranks, environment.Ranks);
+        Assert.Equal(health.Multiplier, environment.Multiplier);
+        Assert.Equal(health.RankUpGems, environment.RankUpGems);
+        Assert.Empty(environment.PassiveTriggers);
+
+        // A quarter of Health's price, level by level.
+        for (var level = 2; level <= 100; level++)
+        {
+            Assert.Equal((health.Curve.TotalFor(level) + 3) / 4, environment.Curve.TotalFor(level));
+        }
+    }
+
+    [Theory]
+    [InlineData(1, 300_000, 45)]
+    [InlineData(2, 300_000, 45)]
+    [InlineData(10, 344_898, 48)]
+    [InlineData(51, 575_000, 63)]
+    [InlineData(70, 681_633, 70)]
+    [InlineData(100, 850_000, 81)]
+    public void The_home_bar_and_kept_up_days_rise_from_30_on_half_the_days_to_85_on_nine_in_ten(
+        int level, long threshold, int keptUpDays)
+    {
+        // Q(L) = ⌈(30 · 98 + 55 · (L − 2)) · 10,000 / 98⌉; days = ⌈90 · (0.5 · 98 + 0.4 · (L − 2)) / 98⌉ (environment plan §2.3).
+        var condition = LifeDomains.EnvironmentCondition;
+
+        Assert.Equal(threshold, condition.Threshold(level));
+        Assert.Equal(keptUpDays, condition.ReachedDaysNeeded(level, 90));
+        Assert.Equal(Math.Min(90, level + 1), condition.AgeNeeded(level));
+        Assert.Equal(0, condition.BaseNeeded(level, 90));
+        Assert.Equal((int)Math.Ceiling(threshold / 10_000m), condition.DayMinimum(level));
+    }
+
+    [Fact]
+    public void A_bar_shows_rounded_up_to_a_tenth()
+    {
+        var condition = LifeDomains.EnvironmentCondition;
+
+        Assert.Equal("34.5", HomeConditionRule.Text(condition.Bar(10)));
+        Assert.Equal("68.2", HomeConditionRule.Text(condition.Bar(70)));
+        Assert.Equal("57.5", HomeConditionRule.Text(condition.Bar(51)));
+        Assert.Equal("85.0", HomeConditionRule.Text(condition.Bar(100)));
     }
 
     [Theory]

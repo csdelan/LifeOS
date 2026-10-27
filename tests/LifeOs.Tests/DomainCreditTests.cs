@@ -53,11 +53,11 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
 
     private static Dictionary<string, long> Environment(long amount) => new() { [Currencies.EnvironmentXp] = amount };
 
-    private async Task<SubjectRef> PricedTaskAsync(Kernel kernel, long environmentXp)
+    private async Task<SubjectRef> PricedTaskAsync(Kernel kernel, long xp, string currency = Currencies.EnvironmentXp)
     {
         var task = await kernel.Subjects.CreateAsync(
             SubjectTypes.Task, $"credit task {Guid.NewGuid():N}", "{}", cancellationToken: Ct);
-        await kernel.Bounties.SetAsync(task.Urn, null, Environment(environmentXp), cancellationToken: Ct);
+        await kernel.Bounties.SetAsync(task.Urn, null, new Dictionary<string, long> { [currency] = xp }, cancellationToken: Ct);
         return task;
     }
 
@@ -117,7 +117,7 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
         // still yesterday: the same award, earned on two different days.
         var ahead = Build(Kiritimati);
         var behind = Build(PagoPago);
-        var task = await PricedTaskAsync(ahead, environmentXp: 7);
+        var task = await PricedTaskAsync(ahead, xp: 7);
         var key = AwardKeys.Completed(task.Id);
         var before = await EnvironmentDaysAsync(ahead);
 
@@ -221,18 +221,18 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
     {
         var kernel = Build();
         var before = await kernel.Domains.GetAsync(Ct);
-        var task = await PricedTaskAsync(kernel, environmentXp: 12);
+        var task = await PricedTaskAsync(kernel, xp: 12, Currencies.SocialXp);
 
         await kernel.Status.ChangeStatusAsync(task.Urn, "Completed", Ct);
         var after = await kernel.Domains.GetAsync(Ct);
 
         Assert.Equal(TodayUtc, after.Today);
         Assert.Equal(Currencies.LifeDomains, after.Domains.Select(d => d.Currency));
-        var environment = after.Domains.Single(d => d.Currency.Key == Currencies.EnvironmentXp);
-        Assert.False(environment.Configured);
-        Assert.Null(environment.Progress);
-        Assert.Equal(before.Domains.Single(d => d.Currency.Key == Currencies.EnvironmentXp).TotalXp + 12, environment.TotalXp);
-        Assert.All(after.Domains.Where(d => d.Currency.Key != Currencies.HealthXp), d => Assert.Null(d.Progress));
+        var social = after.Domains.Single(d => d.Currency.Key == Currencies.SocialXp);
+        Assert.False(social.Configured);
+        Assert.Null(social.Progress);
+        Assert.Equal(before.Domains.Single(d => d.Currency.Key == Currencies.SocialXp).TotalXp + 12, social.TotalXp);
+        Assert.All(after.Domains.Where(d => LifeDomains.For(d.Currency.Key) is null), d => Assert.Null(d.Progress));
 
         var health = after.Domains.Single(d => d.Currency.Key == Currencies.HealthXp);
         Assert.True(health.Configured);
@@ -240,7 +240,7 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
         Assert.Equal(health.Progress.TotalXp, health.TotalXp);
 
         // Day by day: no success test, so no day is active or not.
-        var series = await kernel.Domains.GetDaysAsync("environment", 3, Ct);
+        var series = await kernel.Domains.GetDaysAsync("social", 3, Ct);
         Assert.Equal([TodayUtc.AddDays(-2), TodayUtc.AddDays(-1), TodayUtc], series.Days.Select(d => d.Day));
         Assert.All(series.Days, d => Assert.Null(d.Active));
         Assert.True(series.Days[^1].Paid >= 12);

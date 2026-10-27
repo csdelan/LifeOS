@@ -2988,7 +2988,7 @@ X10 makes the fold skip marked days, and X11 adds the Character page's control.
 ### REWARD-9 — Environment's level follows how well my home is kept
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
 
 **Workflow (Chris):**
 - "I'm not 100% convinced I should keep environment as XP-based. The main reason I have it

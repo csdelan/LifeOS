@@ -21,9 +21,10 @@ public sealed record DomainsReading(DateOnly Today, IReadOnlyList<DomainReading>
 /// One day of a domain's series (xp-domains plan §7.4.8): its credit — base, the passive part of
 /// it (sleep) and paid — and, for a configured domain, the exception comment if the day is
 /// marked and where the domain stood at the end of the day. A domain without rules has neither.
+/// <paramref name="HomeScore"/> is the day's Home Score (ten-thousandths) for a domain held by the home.
 /// </summary>
 public sealed record DomainSeriesDay(
-    DateOnly Day, long Base, long Passive, long Paid, string? Exception, DomainStanding? Standing)
+    DateOnly Day, long Base, long Passive, long Paid, string? Exception, DomainStanding? Standing, long? HomeScore = null)
 {
     /// <summary>The base XP from things done, not slept.</summary>
     public long Action => Base - Passive;
@@ -111,7 +112,7 @@ public sealed class DomainService(ILedgerRepository ledger)
                 var standing = progress.StandingOn(day);
                 var comment = comments.GetValueOrDefault(day);
                 return periods.TryGetValue(day, out var p)
-                    ? new DomainSeriesDay(day, p.Base, p.Passive, p.Paid, comment, standing)
+                    ? new DomainSeriesDay(day, p.Base, p.Passive, p.Paid, comment, standing, p.HomeScore)
                     : new DomainSeriesDay(day, 0, 0, 0, comment, standing);
             });
         }
@@ -173,14 +174,32 @@ public sealed class DomainService(ILedgerRepository ledger)
                    $"'{reference}' isn't a life domain. Expected one of: {string.Join(", ", Currencies.LifeDomains.Select(c => c.Key))}.");
     }
 
-    /// <summary>One configured domain's progression, folded from <paramref name="credit"/>: its days, the exception days and the last settled day.</summary>
+    /// <summary>
+    /// One configured domain's progression, folded from <paramref name="credit"/>: its days, the
+    /// exception days and the last settled day — and, for a domain held by the home, each day's
+    /// Home Score from the spaces and ratings read beside the credit (environment plan §4.6).
+    /// </summary>
     public static DomainProgress Fold(DomainRules rules, DomainCredit credit)
-        => DomainProgress.Fold(
+    {
+        var exceptions = credit.ExceptionDays.Select(d => d.Day).ToList();
+        return DomainProgress.Fold(
             rules,
             DaysOf(rules.Currency, credit),
             credit.Today,
-            credit.ExceptionDays.Select(d => d.Day),
-            credit.SettledThrough);
+            exceptions,
+            credit.SettledThrough,
+            HomeScoresFor(rules, credit.Home, exceptions, credit.Today));
+    }
+
+    /// <summary>
+    /// The Home Score on each day from the first rating to <paramref name="today"/>, for a domain
+    /// held by the home; null for any other domain, or before the first rating.
+    /// </summary>
+    public static IReadOnlyDictionary<DateOnly, long>? HomeScoresFor(
+        DomainRules rules, HomeInputs home, IReadOnlyCollection<DateOnly> exceptions, DateOnly today)
+        => rules.Consistency is HomeConditionRule && home.Ratings.Count > 0
+            ? HomeScore.Scores(home, exceptions, home.Ratings.Min(r => r.Day), today)
+            : null;
 
     private static DomainReading Read(Currency currency, DomainCredit credit)
     {

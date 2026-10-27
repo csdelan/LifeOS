@@ -136,7 +136,7 @@ public sealed class DomainSimulatorTests
         // A flat 38 base XP a day, 23 of it action: level 18 asks a 38 average, level 19 asks 39.
         var result = Simulate(new SimulationPattern(AverageXp: 38, SpreadXp: 0, OffShare: 0, HalfShare: 0));
 
-        Assert.Equal((38, 39), (Health.Consistency.Average(18), Health.Consistency.Average(19)));
+        Assert.Equal((38, 39), (LifeDomains.HealthConsistency.Average(18), LifeDomains.HealthConsistency.Average(19)));
         Assert.Equal(new Spread<int>(18, 18, 18), result.FinalLevel);
         Assert.Equal(new Spread<int>(18, 18, 18), result.LowestLevel);
         Assert.Equal(20, Rank(result, "Apprentice").RunsReached);

@@ -12,8 +12,12 @@ public sealed record DomainDay(DateOnly Day, long Base, long Paid, long Passive 
     public long Action => Base - Passive;
 }
 
-/// <summary>One period of a domain's walk (a calendar day, while only a daily cadence is built) and its credit.</summary>
-public sealed record DomainPeriod(DateOnly Start, DateOnly End, long Base, long Paid, long Passive = 0)
+/// <summary>
+/// One period of a domain's walk (a calendar day, while only a daily cadence is built) and its
+/// credit. <paramref name="HomeScore"/> is the day's Home Score in ten-thousandths, for a domain
+/// held by the home (environment plan §4.6); null when it has none.
+/// </summary>
+public sealed record DomainPeriod(DateOnly Start, DateOnly End, long Base, long Paid, long Passive = 0, long? HomeScore = null)
 {
     /// <summary>The base XP from things done, not slept.</summary>
     public long Action => Base - Passive;
@@ -47,12 +51,16 @@ public sealed record ConsistencyWindow(DateOnly From, DateOnly To, int Days, int
 /// <summary>
 /// The counted days the consistency level reads (xp-domains plan §7.2): the last
 /// <paramref name="Days"/> (at most 90), <paramref name="From"/> to <paramref name="To"/>, and
-/// their base XP. Null dates before any day has counted.
+/// their base XP. Null dates before any day has counted. <paramref name="HomeScore"/> is the sum
+/// of their Home Scores, in ten-thousandths, for a domain held by the home.
 /// </summary>
-public sealed record CountedWindow(int Days, DateOnly? From, DateOnly? To, long Base)
+public sealed record CountedWindow(int Days, DateOnly? From, DateOnly? To, long Base, long HomeScore = 0)
 {
     /// <summary>The window's base XP a day, on average; 0 before any day has counted.</summary>
     public decimal Average => Days == 0 ? 0m : (decimal)Base / Days;
+
+    /// <summary>The window's Home Score a day, on average, in points; 0 before any day has counted.</summary>
+    public decimal AverageHomeScore => Days == 0 ? 0m : (decimal)HomeScore / Days / HomeRules.Unit;
 }
 
 /// <summary>
@@ -140,6 +148,8 @@ public sealed record RankReached(int Rank, RankRule Rule, DateOnly QualifiedOn);
 /// at the end of the day before <paramref name="From"/>, <paramref name="End"/> at the end of
 /// <paramref name="To"/>; <paramref name="RanksReached"/> are the ranks the best rank first reached
 /// in the period, and <paramref name="Standings"/> every day of it, for the rank-over-time chart.
+/// <paramref name="CountedHomeScore"/> is the counted days' Home Scores summed, in ten-thousandths,
+/// for a domain held by the home.
 /// </summary>
 public sealed record DomainPeriodReport(
     int Days,
@@ -154,8 +164,12 @@ public sealed record DomainPeriodReport(
     DomainStanding Before,
     DomainStanding End,
     IReadOnlyList<RankReached> RanksReached,
-    IReadOnlyList<DomainStanding> Standings)
+    IReadOnlyList<DomainStanding> Standings,
+    long CountedHomeScore = 0)
 {
+    /// <summary>The Home Score a counted day had, on average, in points; 0 when none counted.</summary>
+    public decimal AverageHomeScore => DaysCounted == 0 ? 0m : (decimal)CountedHomeScore / DaysCounted / HomeRules.Unit;
+
     /// <summary>The active share of the days counted (0–1); 0 when none counted.</summary>
     public decimal ActiveShare => DaysCounted == 0 ? 0m : (decimal)ActiveDays / DaysCounted;
 
@@ -217,6 +231,7 @@ public sealed class DomainProgress
         NextConsistency = now.ConsistencyLevel < Math.Min(curve.MaxLevel, rules.Consistency.MaxLevel)
             ? walker.NeedFor(now.ConsistencyLevel + 1)
             : null;
+        HeldConsistency = now.ConsistencyLevel >= 2 ? walker.NeedFor(now.ConsistencyLevel) : null;
 
         LimitedBy = now.LifetimeLevel < now.ConsistencyLevel ? LevelLimit.Lifetime
             : now.ConsistencyLevel < now.LifetimeLevel ? LevelLimit.Consistency
@@ -301,6 +316,9 @@ public sealed class DomainProgress
     /// <summary>What the next consistency level needs, or null at the top.</summary>
     public ConsistencyNeed? NextConsistency { get; }
 
+    /// <summary>What holds the consistency level now, against where each test stands; null at level 1.</summary>
+    public ConsistencyNeed? HeldConsistency { get; }
+
     // Shown.
 
     /// <summary>The shown level: it follows <see cref="Target"/>, rising at once and falling slowly.</summary>
@@ -370,6 +388,9 @@ public sealed class DomainProgress
     /// <summary>Today's action XP, which the multiplier's successful day judges.</summary>
     public long TodayAction => TodayPeriod?.Action ?? 0;
 
+    /// <summary>Today's Home Score in ten-thousandths, for a domain held by the home; null without one.</summary>
+    public long? TodayHomeScore => TodayPeriod?.HomeScore;
+
     /// <summary>The action XP that makes today active: the minimum of the shown level going into today.</summary>
     public int ActiveMinimum => Now.ActiveMinimum;
 
@@ -393,14 +414,17 @@ public sealed class DomainProgress
     /// <paramref name="today"/> (in the home zone). Credit on days after today hasn't happened
     /// yet and is left out. <paramref name="exceptions"/> are the days marked as exceptions, and
     /// <paramref name="settledThrough"/> the last settled day (yesterday when not given); days
-    /// after it don't count yet.
+    /// after it don't count yet. <paramref name="homeScores"/> are the days' Home Scores, for a
+    /// domain held by the home (environment plan §4.5): its walk starts at the earlier of the first
+    /// paid XP and the first Home Score.
     /// </summary>
     public static DomainProgress Fold(
         DomainRules rules,
         IEnumerable<DomainDay> days,
         DateOnly today,
         IEnumerable<DateOnly>? exceptions = null,
-        DateOnly? settledThrough = null)
+        DateOnly? settledThrough = null,
+        IReadOnlyDictionary<DateOnly, long>? homeScores = null)
     {
         if (rules.Cadence != Cadence.Daily)
         {
@@ -424,18 +448,22 @@ public sealed class DomainProgress
             }
         }
 
-        var paidDays = credit.Where(kv => kv.Value.Paid > 0).Select(kv => kv.Key).ToList();
-        if (paidDays.Count == 0)
+        var scores = homeScores ?? new Dictionary<DateOnly, long>();
+        var startDays = credit.Where(kv => kv.Value.Paid > 0).Select(kv => kv.Key)
+            .Concat(scores.Keys.Where(d => d <= today))
+            .ToList();
+        if (startDays.Count == 0)
         {
             return new DomainProgress(rules, today, settled, start: null, periods: [], marked);
         }
 
-        var start = paidDays.Min();
+        var start = startDays.Min();
         var periods = new List<DomainPeriod>(today.DayNumber - start.DayNumber + 1);
         for (var day = start; day <= today; day = day.AddDays(1))
         {
             var (dayBase, dayPaid, dayPassive) = credit.GetValueOrDefault(day);
-            periods.Add(new DomainPeriod(day, day, dayBase, dayPaid, dayPassive));
+            periods.Add(new DomainPeriod(
+                day, day, dayBase, dayPaid, dayPassive, scores.TryGetValue(day, out var score) ? (long?)score : null));
         }
 
         return new DomainProgress(rules, today, settled, start, periods, marked);
@@ -452,7 +480,7 @@ public sealed class DomainProgress
     {
         if (Start is not { } start || day < start)
         {
-            var minimum = Rules.Consistency.ActiveMinimum(1);
+            var minimum = Rules.Consistency.DayMinimum(1);
             return new DomainStanding(
                 day, 0, 1, 1, 1, FallRule.Scale, 1, 0, 1, 0,
                 Counted: false, Exception: exceptions.Contains(day), Active: false, Falling: false, Paused: false, minimum);
@@ -507,7 +535,7 @@ public sealed class DomainProgress
         var to = SettledThrough;
         var from = to.AddDays(1 - days);
         int counted = 0, exceptionDays = 0, active = 0;
-        long countedBase = 0, dayBase = 0, paid = 0;
+        long countedBase = 0, dayBase = 0, paid = 0, countedHome = 0;
         var daily = new List<DomainStanding>(days);
         for (var day = from; day <= to; day = day.AddDays(1))
         {
@@ -526,6 +554,7 @@ public sealed class DomainProgress
             {
                 counted++;
                 countedBase += period.Base;
+                countedHome += period.HomeScore ?? 0;
                 active += standing.Active ? 1 : 0;
             }
         }
@@ -543,7 +572,8 @@ public sealed class DomainProgress
             StandingOn(from.AddDays(-1)),
             StandingOn(to),
             RanksReached.Where(r => r.QualifiedOn >= from && r.QualifiedOn <= to).ToList(),
-            daily);
+            daily,
+            countedHome);
     }
 
     /// <summary>The index of <paramref name="day"/>'s period, or null outside the start..today.</summary>

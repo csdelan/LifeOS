@@ -59,17 +59,25 @@ public sealed class DomainLifetime
 /// </summary>
 public sealed class DomainConsistency
 {
+    /// <summary>What the level is held by: <c>xp</c> (Health: base and action XP) or <c>home</c> (Environment: the Home Score).</summary>
+    public string Kind { get; set; } = "xp";
     public int Level { get; set; }
     public int WindowDays { get; set; }
     public string? From { get; set; }
     public string? To { get; set; }
     public decimal AverageBase { get; set; }
+    /// <summary>For <c>home</c>: the window's Home Score a day, on average, in points.</summary>
+    public decimal? AverageHomeScore { get; set; }
+    /// <summary>What holds the level now (null at level 1): its bar or active minimum, and the days at it.</summary>
+    public DomainConsistencyNeed? Held { get; set; }
     public DomainConsistencyNeed? Next { get; set; }
 }
 
 /// <summary>
 /// What a consistency level needs over the window, each test against where it stands: a base XP
 /// average, active days (action XP at the level's minimum) in the window, and active days so far.
+/// For <c>home</c>, the active days are kept-up days (a Home Score at <see cref="Bar"/> or above),
+/// <see cref="ActiveMinimum"/> is the bar in whole points rounded up, and there's no average (0).
 /// </summary>
 public sealed class DomainConsistencyNeed
 {
@@ -85,6 +93,8 @@ public sealed class DomainConsistencyNeed
     public int AgeNeeded { get; set; }
     public int Age { get; set; }
     public bool AgeMet { get; set; }
+    /// <summary>For <c>home</c>: the level's bar in points, to four places, rounded up.</summary>
+    public decimal? Bar { get; set; }
 }
 
 /// <summary>
@@ -131,6 +141,8 @@ public sealed class DomainBackOnTrack
     public int Average { get; set; }
     public int ActiveMinimum { get; set; }
     public int ActiveDays { get; set; }
+    /// <summary>For <c>home</c>: the shown level's bar in points; the days are kept-up days.</summary>
+    public decimal? Bar { get; set; }
 }
 
 /// <summary>The best level and best rank ever reached, and the first day each was.</summary>
@@ -154,6 +166,9 @@ public sealed class DomainCurrent
     public long TodayBase { get; set; }
     public long TodayAction { get; set; }
     public int ActiveMinimum { get; set; }
+    /// <summary>For <c>home</c>: today's Home Score in points (null before any space counts) and the bar it's judged against.</summary>
+    public decimal? TodayHomeScore { get; set; }
+    public decimal? Bar { get; set; }
     public bool TodayActive { get; set; }
     public bool TodayException { get; set; }
     /// <summary>The active day in words, e.g. "at least 17 action XP (base XP less sleep)".</summary>
@@ -188,6 +203,8 @@ public sealed class DomainRankRow
     public int? Average { get; set; }
     public int? ActiveMinimum { get; set; }
     public int? ActiveDays { get; set; }
+    /// <summary>For <c>home</c>: the rank's first level's bar in points; <see cref="ActiveDays"/> are kept-up days.</summary>
+    public decimal? Bar { get; set; }
     public int WindowDays { get; set; }
     public long TotalXp { get; set; }
     public int Gems { get; set; }
@@ -205,6 +222,8 @@ public sealed class DomainDaysRead
     public string Label { get; set; } = "";
     public string Name { get; set; } = "";
     public bool Configured { get; set; }
+    /// <summary>What a configured domain's level is held by: <c>xp</c> or <c>home</c>; null without rules.</summary>
+    public string? Kind { get; set; }
     public string Today { get; set; } = "";
     public string? SettledThrough { get; set; }
     public IReadOnlyList<DomainDayRow> Days { get; set; } = [];
@@ -231,6 +250,9 @@ public sealed class DomainDayRow
     public int? ConsistencyLevel { get; set; }
     public int? Level { get; set; }
     public int? Rank { get; set; }
+    /// <summary>For <c>home</c>: the day's Home Score in points, and the bar of the level going into it.</summary>
+    public decimal? HomeScore { get; set; }
+    public decimal? Bar { get; set; }
 }
 
 /// <summary>
@@ -268,6 +290,9 @@ public sealed class DomainReportRow
     public int? ActiveDays { get; set; }
     public decimal? ActiveShare { get; set; }
     public decimal? AverageBase { get; set; }
+    /// <summary>What a configured domain's level is held by: <c>xp</c> or <c>home</c>; and, for <c>home</c>, a counted day's Home Score on average.</summary>
+    public string? Kind { get; set; }
+    public decimal? AverageHomeScore { get; set; }
     public int? LevelFrom { get; set; }
     public int? LevelTo { get; set; }
     public int? RankFrom { get; set; }
@@ -366,12 +391,14 @@ public static class DomainRows
     public static DomainDaysRead From(DomainSeries series)
     {
         var domain = series.Domain;
+        var home = domain.Progress is { } progress ? Home(progress.Rules) : null;
         return new DomainDaysRead
         {
             Key = domain.Currency.Key,
             Label = domain.Currency.Label,
             Name = LifeDomains.Name(domain.Currency.Key),
             Configured = domain.Configured,
+            Kind = domain.Progress?.Rules.Consistency.Kind,
             Today = series.Days.Count > 0 ? Day(series.Days[^1].Day) : "",
             SettledThrough = domain.Progress is { } p ? Day(p.SettledThrough) : null,
             Days = series.Days.Select(d => new DomainDayRow
@@ -388,7 +415,11 @@ public static class DomainRows
                 LifetimeLevel = d.Standing?.LifetimeLevel,
                 ConsistencyLevel = d.Standing?.ConsistencyLevel,
                 Level = d.Standing?.Level,
-                Rank = d.Standing?.Rank
+                Rank = d.Standing?.Rank,
+                HomeScore = home is null ? null : Points(d.HomeScore),
+                Bar = home is not null && domain.Progress is { } p
+                    ? home.Bar(p.StandingOn(d.Day.AddDays(-1)).Level)
+                    : null
             }).ToList()
         };
     }
@@ -425,6 +456,10 @@ public static class DomainRows
         row.ActiveDays = period.ActiveDays;
         row.ActiveShare = Math.Round(period.ActiveShare, 4);
         row.AverageBase = Math.Round(period.AverageBase, 1, MidpointRounding.AwayFromZero);
+        row.Kind = progress.Rules.Consistency.Kind;
+        row.AverageHomeScore = Home(progress.Rules) is null
+            ? null
+            : Math.Round(period.AverageHomeScore, 1, MidpointRounding.ToZero);
         row.LevelFrom = period.Before.Level;
         row.LevelTo = period.End.Level;
         row.RankFrom = period.Before.Rank;
@@ -473,6 +508,8 @@ public static class DomainRows
 
         var rules = p.Rules;
         var consistency = rules.Consistency;
+        var xp = consistency as ConsistencyRule;
+        var home = Home(rules);
         row.Lifetime = new DomainLifetime
         {
             Start = p.Start is { } start ? Day(start) : null,
@@ -483,28 +520,15 @@ public static class DomainRows
         };
         row.Consistency = new DomainConsistency
         {
+            Kind = consistency.Kind,
             Level = p.ConsistencyLevel,
             WindowDays = p.Window.Days,
             From = p.Window.From is { } from ? Day(from) : null,
             To = p.Window.To is { } to ? Day(to) : null,
             AverageBase = Math.Round(p.Window.Average, 1, MidpointRounding.AwayFromZero),
-            Next = p.NextConsistency is { } next
-                ? new DomainConsistencyNeed
-                {
-                    Level = next.Level,
-                    WindowDays = next.WindowDays,
-                    Average = next.Average,
-                    AverageNow = Math.Round(next.AverageNow, 1, MidpointRounding.AwayFromZero),
-                    AverageMet = next.AverageMet,
-                    ActiveMinimum = next.ActiveMinimum,
-                    ActiveDaysNeeded = next.ActiveDaysNeeded,
-                    ActiveDays = next.ActiveDaysNow,
-                    ActiveDaysMet = next.ActiveDaysMet,
-                    AgeNeeded = next.AgeNeeded,
-                    Age = next.AgeNow,
-                    AgeMet = next.AgeMet
-                }
-                : null
+            AverageHomeScore = home is null ? null : Math.Round(p.Window.AverageHomeScore, 1, MidpointRounding.ToZero),
+            Held = p.HeldConsistency is { } held ? Need(held, home) : null,
+            Next = p.NextConsistency is { } next ? Need(next, home) : null
         };
         var backOnTrackDays = rules.Fall.BackOnTrackDays;
         row.Shown = new DomainShown
@@ -532,9 +556,10 @@ public static class DomainRows
                 ? new DomainBackOnTrack
                 {
                     Days = backOnTrackDays,
-                    Average = consistency.Average(p.Level),
-                    ActiveMinimum = consistency.ActiveMinimum(p.Level),
-                    ActiveDays = consistency.ActiveDaysNeeded(p.Level, backOnTrackDays)
+                    Average = xp?.Average(p.Level) ?? 0,
+                    ActiveMinimum = consistency.DayMinimum(p.Level),
+                    ActiveDays = consistency.ReachedDaysNeeded(p.Level, backOnTrackDays),
+                    Bar = home?.Bar(p.Level)
                 }
                 : null
         };
@@ -552,9 +577,11 @@ public static class DomainRows
             TodayBase = p.TodayBase,
             TodayAction = p.TodayAction,
             ActiveMinimum = p.ActiveMinimum,
+            TodayHomeScore = home is null ? null : Points(p.TodayHomeScore),
+            Bar = home?.Bar(p.StandingOn(p.Today.AddDays(-1)).Level),
             TodayActive = p.TodayActive,
             TodayException = p.TodayException,
-            Rule = rules.Success.Describe(p.Level),
+            Rule = rules.Success.Describe(home is null ? p.Level : p.StandingOn(p.Today.AddDays(-1)).Level),
             ActiveShare = Math.Round(p.Consistency.Share, 4),
             ActiveDays = p.Consistency.SuccessfulDays,
             WindowDays = p.Consistency.Days,
@@ -575,9 +602,10 @@ public static class DomainRows
             Title = rank.Title,
             Level = rank.StartLevel,
             LastLevel = i + 1 < rules.Ranks.Count ? rules.Ranks[i + 1].StartLevel - 1 : rules.Curve.MaxLevel,
-            Average = i == 0 ? null : consistency.Average(rank.StartLevel),
-            ActiveMinimum = i == 0 ? null : consistency.ActiveMinimum(rank.StartLevel),
-            ActiveDays = i == 0 ? null : consistency.ActiveDaysNeeded(rank.StartLevel, consistency.WindowDays),
+            Average = i == 0 ? null : xp?.Average(rank.StartLevel),
+            ActiveMinimum = i == 0 ? null : consistency.DayMinimum(rank.StartLevel),
+            ActiveDays = i == 0 ? null : consistency.ReachedDaysNeeded(rank.StartLevel, consistency.WindowDays),
+            Bar = i == 0 ? null : home?.Bar(rank.StartLevel),
             WindowDays = consistency.WindowDays,
             TotalXp = rules.Curve.TotalFor(rank.StartLevel),
             Gems = i == 0 ? 0 : rules.GemsFor(i),
@@ -585,6 +613,29 @@ public static class DomainRows
         }).ToList();
         return row;
     }
+
+    private static DomainConsistencyNeed Need(ConsistencyNeed need, HomeConditionRule? home) => new()
+    {
+        Level = need.Level,
+        WindowDays = need.WindowDays,
+        Average = need.Average,
+        AverageNow = Math.Round(need.AverageNow, 1, MidpointRounding.AwayFromZero),
+        AverageMet = need.AverageMet,
+        ActiveMinimum = need.ActiveMinimum,
+        ActiveDaysNeeded = need.ActiveDaysNeeded,
+        ActiveDays = need.ActiveDaysNow,
+        ActiveDaysMet = need.ActiveDaysMet,
+        AgeNeeded = need.AgeNeeded,
+        Age = need.AgeNow,
+        AgeMet = need.AgeMet,
+        Bar = home?.Bar(need.Level)
+    };
+
+    /// <summary>The rule holding a domain by its home, or null for one held by XP.</summary>
+    private static HomeConditionRule? Home(DomainRules rules) => rules.Consistency as HomeConditionRule;
+
+    /// <summary>Ten-thousandths of a point as points, exact.</summary>
+    private static decimal? Points(long? value) => value is { } v ? v / (decimal)HomeRules.Unit : null;
 
     private static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 }

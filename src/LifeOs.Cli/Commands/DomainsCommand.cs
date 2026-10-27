@@ -266,13 +266,19 @@ internal static class DomainsCommand
             return;
         }
 
+        if (p.Rules.Consistency is HomeConditionRule home)
+        {
+            WriteHomeReading(p, home);
+            return;
+        }
+
         if (p.Start is null)
         {
             Console.WriteLine($"    not started: level 1 ({p.RankRule.Title}); an active day is {p.Rules.Success.Describe(1)}");
             return;
         }
 
-        var consistency = p.Rules.Consistency;
+        var consistency = (ConsistencyRule)p.Rules.Consistency;
         var best = p.BestLevel > p.Level ? $" (best {p.BestLevel}, {p.BestRankRule.Title})" : "";
         Console.WriteLine($"    level       {p.Level}, {p.RankRule.Title}{best}");
         Console.WriteLine(p.LimitedBy switch
@@ -350,11 +356,23 @@ internal static class DomainsCommand
                 },
                 consistency = new
                 {
+                    kind = p.Rules.Consistency.Kind,
                     level = p.ConsistencyLevel,
                     windowDays = p.Window.Days,
                     from = p.Window.From,
                     to = p.Window.To,
                     averageBase = p.Window.Average,
+                    averageHomeScore = p.Rules.Consistency is HomeConditionRule ? p.Window.AverageHomeScore : (decimal?)null,
+                    held = p.HeldConsistency is not { } held
+                        ? null
+                        : new
+                        {
+                            level = held.Level,
+                            bar = (p.Rules.Consistency as HomeConditionRule)?.Bar(held.Level),
+                            activeMinimum = held.ActiveMinimum,
+                            activeDays = held.ActiveDaysNow,
+                            windowDays = held.WindowDays
+                        },
                     next = p.NextConsistency is not { } next
                         ? null
                         : new
@@ -370,7 +388,8 @@ internal static class DomainsCommand
                             activeDaysMet = next.ActiveDaysMet,
                             ageNeeded = next.AgeNeeded,
                             age = next.AgeNow,
-                            ageMet = next.AgeMet
+                            ageMet = next.AgeMet,
+                            bar = (p.Rules.Consistency as HomeConditionRule)?.Bar(next.Level)
                         }
                 },
                 shown = new
@@ -397,6 +416,7 @@ internal static class DomainsCommand
                 {
                     todayBase = p.TodayBase,
                     todayAction = p.TodayAction,
+                    todayHomeScore = p.TodayHomeScore is { } todayScore ? todayScore / (decimal)HomeRules.Unit : (decimal?)null,
                     activeMinimum = p.ActiveMinimum,
                     todayActive = p.TodayActive,
                     todayException = p.TodayException,
@@ -423,6 +443,84 @@ internal static class DomainsCommand
                 exceptionDays = p.ExceptionDays.Order()
             }
     };
+
+    /// <summary>
+    /// A domain held by the home (REWARD-9, environment plan §4.7): the level, what limits it,
+    /// the condition level in Home Score bars and kept-up days, today's Home Score against the
+    /// bar, and the multiplier in kept-up days.
+    /// </summary>
+    private static void WriteHomeReading(DomainProgress p, HomeConditionRule home)
+    {
+        if (p.Start is null)
+        {
+            Console.WriteLine($"    not started: level 1 ({p.RankRule.Title}); rate your spaces to start your level");
+            return;
+        }
+
+        var best = p.BestLevel > p.Level ? $" (best {p.BestLevel}, {p.BestRankRule.Title})" : "";
+        Console.WriteLine($"    level       {p.Level}, {p.RankRule.Title}{best}");
+        Console.WriteLine(p.LimitedBy switch
+        {
+            LevelLimit.Lifetime => $"    target      {p.Target}: lifetime XP limits it (your home supports {p.ConsistencyLevel})",
+            LevelLimit.Consistency => $"    target      {p.Target}: your home holds it (your effort has earned level {p.LifetimeLevel})",
+            _ => $"    target      {p.Target}: lifetime XP and your home agree"
+        });
+        if (p.Falling)
+        {
+            var days = p.Rules.Fall.BackOnTrackDays;
+            Console.WriteLine(
+                $"    falling     {Number(p.Rules.Fall.PercentPerDay)}% a day toward {p.Target}"
+                + (p.FallingSince is { } since ? $", since {Day(since)} (from {p.FallingFrom})" : "")
+                + $"; a Home Score of {Bar(home, p.Level)}+ on {home.ReachedDaysNeeded(p.Level, days)} of the last {Plural(days, "counted day")} pauses it");
+        }
+        else if (p.Paused)
+        {
+            Console.WriteLine(p.TodayException
+                ? "    paused      today is an exception day"
+                : $"    paused      the last {Plural(p.Rules.Fall.BackOnTrackDays, "counted day")} are kept up");
+        }
+
+        Console.WriteLine(p.XpToNext == 0
+            ? $"    lifetime    level {p.LifetimeLevel}, the top"
+            : $"    lifetime    level {p.LifetimeLevel} — {Xp(p.XpIntoLevel)} of {Xp(p.Rules.Curve.CostToNext(p.LifetimeLevel))} toward level {p.LifetimeLevel + 1}");
+        var window = p.Window;
+        Console.WriteLine(window.Days == 0
+            ? $"    condition   level {p.ConsistencyLevel}: no counted days yet — rate your spaces to start your level"
+            : $"    condition   level {p.ConsistencyLevel} over {Plural(window.Days, "counted day")} (Home Score {Score(window.AverageHomeScore)} a day)");
+        if (p.HeldConsistency is { } held)
+        {
+            Console.WriteLine($"    held by     a Home Score of {Bar(home, held.Level)}+ on {held.ActiveDaysNow} of the last {Plural(held.WindowDays, "counted day")}");
+        }
+
+        if (p.NextConsistency is { } next && window.Days > 0)
+        {
+            Console.WriteLine(
+                $"    next        level {next.Level} needs {Bar(home, next.Level)}+ on {next.ActiveDaysNeeded} of {next.WindowDays} days ({next.ActiveDaysNow}{Met(next.ActiveDaysMet)}),"
+                + $" {next.AgeNeeded} such days so far ({next.AgeNow}{Met(next.AgeMet)})");
+        }
+
+        var barToday = Bar(home, p.StandingOn(p.Today.AddDays(-1)).Level);
+        Console.WriteLine(p.TodayException
+            ? "    today       an exception day"
+            : p.TodayHomeScore is not { } score
+                ? "    today       no Home Score yet: rate all three parts of a space"
+                : p.TodayActive
+                    ? $"    today       Home Score {HomeCommand.Shown(score)} — kept up ({barToday}+ counts)"
+                    : $"    today       Home Score {HomeCommand.Shown(score)}, below the {barToday} bar");
+        var c = p.Consistency;
+        Console.WriteLine(p.NextTier is { } tier
+            ? $"    multiplier  ×{Multiplier(p.MultiplierNow)} — {c.SuccessfulDays} of the last {c.Days} days kept up; ×{Multiplier(tier.Multiplier)} at {Percent(tier.MinShare)} ({Plural(c.DaysNeededFor(tier.MinShare), "more kept-up day")})"
+            : $"    multiplier  ×{Multiplier(p.MultiplierNow)} — {c.SuccessfulDays} of the last {c.Days} days kept up, the top tier");
+        var recent = p.ExceptionDays.Where(x => x > p.Today.AddDays(-30)).Order().ToList();
+        if (recent.Count > 0)
+        {
+            Console.WriteLine($"    exceptions  {string.Join(", ", recent.Select(Day))} (the last 30 days)");
+        }
+    }
+
+    private static string Bar(HomeConditionRule home, int level) => HomeConditionRule.Text(home.Bar(level));
+
+    private static string Score(decimal points) => (Math.Floor(points * 10m) / 10m).ToString("0.0", CultureInfo.InvariantCulture);
 
     private static string Met(bool met) => met ? ", met" : "";
 

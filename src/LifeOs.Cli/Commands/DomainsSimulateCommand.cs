@@ -24,6 +24,14 @@ namespace LifeOs.Cli.Commands;
 /// unless <c>--off</c> says otherwise, and sleep is the real days' average unless <c>--sleep</c>
 /// says otherwise. Without <c>--replay</c> nothing is read, so no database is needed.
 /// </para>
+/// <para>
+/// Environment is held by the home (environment plan §4.9), so it simulates a routine instead:
+/// <c>--walk-every</c>, <c>--decor-every</c>, <c>--checks</c> and <c>--check</c> say when spaces
+/// are rated, <c>--standard</c> and <c>--start</c> how well (Tidiness/Cleanliness/Aesthetics),
+/// <c>--catch-up</c> and <c>--catch-up-xp</c> a messy start, and <c>--xp</c> and <c>--off</c> the
+/// XP. Its <c>--replay</c> starts from the real spaces, ratings, XP and exception days. Health's
+/// pattern options are refused for it, and its routine options for Health.
+/// </para>
 /// </summary>
 internal static partial class DomainsSimulateCommand
 {
@@ -55,13 +63,30 @@ internal static partial class DomainsSimulateCommand
         var noMultiplierOption = new Option<bool>("--no-multiplier") { Description = "Pay every day at 1.0×, to see what the multiplier adds." };
         var replayOption = new Option<bool>("--replay") { Description = "Start from the domain's real days and project from tomorrow." };
 
+        // Environment's routine (environment plan §4.9).
+        var walkEveryOption = new Option<int?>("--walk-every") { Description = $"Environment: days between walk-throughs, which rate every space (default {HomeDefaults.WalkEvery})." };
+        var decorEveryOption = new Option<int?>("--decor-every") { Description = "Environment: days between Aesthetics ratings (default 0: with each walk-through)." };
+        var checksOption = new Option<string?>("--checks") { Description = "Environment: quick checks of the check spaces between walk-throughs: none, midweek or daily (default midweek)." };
+        var checkOption = new Option<string[]>("--check")
+        {
+            Description = "Environment: a space the checks rate (default Office and Kitchen). Repeatable.",
+            AllowMultipleArgumentsPerToken = false
+        };
+        var standardOption = new Option<string?>("--standard") { Description = $"Environment: the settled Tidiness/Cleanliness/Aesthetics ratings (default {HomeDefaults.Tidiness}/{HomeDefaults.Cleanliness}/{HomeDefaults.Aesthetics})." };
+        var startOption = new Option<string?>("--start") { Description = $"Environment: the ratings a catch-up starts from (default {HomeDefaults.StartTidiness}/{HomeDefaults.StartCleanliness}/{HomeDefaults.StartAesthetics})." };
+        var catchUpOption = new Option<string?>("--catch-up") { Description = "Environment: how long catching up a messy home takes, e.g. 3m (d, w, m or y; default none)." };
+        var catchUpXpOption = new Option<decimal?>("--catch-up-xp") { Description = $"Environment: XP a day while catching up (default {HomeDefaults.CatchUpXp})." };
+        var xpOption = new Option<decimal?>("--xp") { Description = $"Environment: XP a day once settled, on average (default {HomeDefaults.SteadyXp})." };
+
         var command = new Command("simulate", "Simulate years of earning under a domain's rules: when each rank arrives.");
         command.Arguments.Add(domainArgument);
         foreach (var option in new Option[]
                  {
                      avgOption, sdOption, essentialsOption, offOption, halfOption, growthOption, lapseOption, exceptionOption,
                      sleepOption, yearsOption,
-                     runsOption, seedOption, noMultiplierOption, replayOption
+                     runsOption, seedOption, noMultiplierOption, replayOption,
+                     walkEveryOption, decorEveryOption, checksOption, checkOption, standardOption, startOption, catchUpOption,
+                     catchUpXpOption, xpOption
                  })
         {
             command.Options.Add(option);
@@ -75,6 +100,76 @@ internal static partial class DomainsSimulateCommand
                 var currency = DomainService.Resolve(parseResult.GetValue(domainArgument) ?? Currencies.HealthXp);
                 var rules = LifeDomains.For(currency.Key)
                             ?? throw new ArgumentException($"{currency.Label} collects XP only: it has no rules to simulate yet.");
+                var options = new SimulationOptions(
+                    parseResult.GetValue(yearsOption), parseResult.GetValue(runsOption), parseResult.GetValue(seedOption),
+                    Multiplier: !parseResult.GetValue(noMultiplierOption));
+                var homeOptions = new Option[]
+                {
+                    walkEveryOption, decorEveryOption, checksOption, checkOption, standardOption, startOption, catchUpOption,
+                    catchUpXpOption, xpOption
+                };
+                if (rules.Consistency is HomeConditionRule)
+                {
+                    Refuse(parseResult, [avgOption, sdOption, essentialsOption, halfOption, growthOption, sleepOption],
+                        $"{LifeDomains.Name(currency.Key)} is held by the home: set its routine with --walk-every, --checks, --standard, --catch-up and --xp");
+                    var (standardT, standardC, standardA) = Ratings(parseResult.GetValue(standardOption), "--standard")
+                                                             ?? (HomeDefaults.Tidiness, HomeDefaults.Cleanliness, HomeDefaults.Aesthetics);
+                    var (startT, startC, startA) = Ratings(parseResult.GetValue(startOption), "--start")
+                                                   ?? (HomeDefaults.StartTidiness, HomeDefaults.StartCleanliness, HomeDefaults.StartAesthetics);
+                    var checkSpaces = parseResult.GetValue(checkOption) is { Length: > 0 } named ? named.ToList() : null;
+                    var home = new HomeSimulationPattern(
+                        WalkEvery: parseResult.GetValue(walkEveryOption) ?? HomeDefaults.WalkEvery,
+                        DecorEvery: parseResult.GetValue(decorEveryOption) ?? HomeDefaults.DecorEvery,
+                        Checks: Checks(parseResult.GetValue(checksOption)) ?? HomeDefaults.Checks,
+                        CheckSpaces: checkSpaces,
+                        Tidiness: standardT,
+                        Cleanliness: standardC,
+                        Aesthetics: standardA,
+                        StartTidiness: startT,
+                        StartCleanliness: startC,
+                        StartAesthetics: startA,
+                        CatchUpDays: parseResult.GetValue(catchUpOption) is { } catchUp
+                            ? Days(catchUp) ?? throw new ArgumentException($"--catch-up is a number with d, w, m or y, e.g. 3m; got '{catchUp}'.")
+                            : 0,
+                        CatchUpXp: parseResult.GetValue(catchUpXpOption) ?? HomeDefaults.CatchUpXp,
+                        SteadyXp: parseResult.GetValue(xpOption) ?? HomeDefaults.SteadyXp,
+                        OffShare: Share(parseResult.GetValue(offOption), "--off") ?? HomeDefaults.OffShare,
+                        Lapse: Lapse(parseResult.GetValue(lapseOption)),
+                        Exceptions: (parseResult.GetValue(exceptionOption) ?? [])
+                            .Select(text => Lapse(text, "--exception")!)
+                            .ToList());
+
+                    SimulationResult homeResult;
+                    if (parseResult.GetValue(replayOption))
+                    {
+                        var connectionString = KernelConnectionString.Resolve(parseResult.GetValue(connectionOption));
+                        await using var provider = Cli.BuildServices(connectionString);
+                        var credit = await provider.GetRequiredService<ILedgerRepository>()
+                            .GetDomainDaysAsync([currency.Key], cancellationToken);
+                        var history = DomainService.Fold(rules, credit).Periods
+                            .Select(p => new DomainDay(p.Start, p.Base, p.Paid, p.Passive))
+                            .ToList();
+                        var marked = credit.ExceptionDays.Select(d => d.Day).ToHashSet();
+                        homeResult = HomeSimulator.Run(rules, home, options, credit.Today.AddDays(1), credit.Home, history, marked);
+                    }
+                    else
+                    {
+                        homeResult = HomeSimulator.Run(rules, home, options, DateOnly.FromDateTime(DateTime.Today));
+                    }
+
+                    if (asJson)
+                    {
+                        Cli.WriteJson(Json(currency, homeResult));
+                    }
+                    else
+                    {
+                        Write(currency, homeResult);
+                    }
+
+                    return 0;
+                }
+
+                Refuse(parseResult, homeOptions, $"{LifeDomains.Name(currency.Key)} isn't held by the home: set its pattern with --avg, --sd, --off and --sleep");
                 var avg = parseResult.GetValue(avgOption);
                 var sd = parseResult.GetValue(sdOption);
                 var off = Share(parseResult.GetValue(offOption), "--off");
@@ -92,9 +187,6 @@ internal static partial class DomainsSimulateCommand
                     Exceptions: (parseResult.GetValue(exceptionOption) ?? [])
                         .Select(text => Lapse(text, "--exception")!)
                         .ToList());
-                var options = new SimulationOptions(
-                    parseResult.GetValue(yearsOption), parseResult.GetValue(runsOption), parseResult.GetValue(seedOption),
-                    Multiplier: !parseResult.GetValue(noMultiplierOption));
 
                 SimulationResult result;
                 if (parseResult.GetValue(replayOption))
@@ -171,11 +263,22 @@ internal static partial class DomainsSimulateCommand
             Console.WriteLine($"  replaying {Plural(result.ReplayedDays, "real day")} first");
         }
 
-        Console.WriteLine($"  pattern: {result.Pattern.Describe()}");
-        var consistency = result.Rules.Consistency;
-        Console.WriteLine(
-            $"  rules: an active day is {consistency.ActiveMinimum(1)}–{consistency.ActiveMinimum(consistency.MaxLevel)} action XP by level;"
-            + $" the level follows the last {consistency.WindowDays} days; multiplier {(options.Multiplier ? "on" : "off")}");
+        var multiplier = options.Multiplier ? "on" : "off";
+        if (result.Home is { } home && result.Rules.Consistency is HomeConditionRule condition)
+        {
+            Console.WriteLine($"  routine: {home.Describe()}");
+            Console.WriteLine(
+                $"  rules: a kept-up day has a Home Score of {HomeConditionRule.Text(condition.Bar(2))}–{HomeConditionRule.Text(condition.Bar(condition.MaxLevel))} by level,"
+                + $" on {Percent(condition.ShareFrom)}–{Percent(condition.ShareTo)} of the last {condition.WindowDays} days; multiplier {multiplier}");
+        }
+        else
+        {
+            Console.WriteLine($"  pattern: {result.Pattern.Describe()}");
+            var consistency = (ConsistencyRule)result.Rules.Consistency;
+            Console.WriteLine(
+                $"  rules: an active day is {consistency.ActiveMinimum(1)}–{consistency.ActiveMinimum(consistency.MaxLevel)} action XP by level;"
+                + $" the level follows the last {consistency.WindowDays} days; multiplier {multiplier}");
+        }
         Console.WriteLine();
         Console.WriteLine($"  {"Best rank",-13}{"Reached",-10}{"p10",-9}{"p50",-9}{"p90",-9}median date");
         foreach (var rank in result.Ranks)
@@ -196,7 +299,8 @@ internal static partial class DomainsSimulateCommand
             $"  rank drops a year from {Day(result.DropsFrom)}: p10 {Rate(result.RankDropsPerYear.P10)} · p50 {Rate(result.RankDropsPerYear.P50)} · p90 {Rate(result.RankDropsPerYear.P90)}");
         Console.WriteLine(
             $"  lowest level in the last 2 years: p10 {result.LowestLevel.P10} · p50 {result.LowestLevel.P50} · p90 {result.LowestLevel.P90}");
-        Console.WriteLine($"  active days: {Percent(result.AverageActiveShare)} of the projected days, on average");
+        Console.WriteLine(
+            $"  {(result.Home is null ? "active" : "kept-up")} days: {Percent(result.AverageActiveShare)} of the projected days, on average");
     }
 
     private static object Json(Currency currency, SimulationResult result) => new
@@ -209,7 +313,26 @@ internal static partial class DomainsSimulateCommand
         seed = result.Options.Seed,
         multiplier = result.Options.Multiplier,
         replayedDays = result.ReplayedDays,
-        pattern = new
+        routine = result.Home is { } home
+            ? new
+            {
+                walkEvery = home.WalkEvery,
+                decorEvery = home.DecorEvery,
+                checks = home.Checks.ToString().ToLowerInvariant(),
+                checkSpaces = home.CheckSpacesOrDefault,
+                standard = new { tidiness = home.Tidiness, cleanliness = home.Cleanliness, aesthetics = home.Aesthetics },
+                start = new { tidiness = home.StartTidiness, cleanliness = home.StartCleanliness, aesthetics = home.StartAesthetics },
+                catchUpDays = home.CatchUpDays,
+                catchUpXp = home.CatchUpXp,
+                steadyXp = home.SteadyXp,
+                offShare = home.OffShare,
+                lapse = home.Lapse is { } homeLapse ? new { afterDays = homeLapse.AfterDays, lengthDays = homeLapse.LengthDays } : null,
+                exceptions = (home.Exceptions ?? []).Select(x => new { afterDays = x.AfterDays, lengthDays = x.LengthDays }),
+                spaces = home.SpacesOrDefault.Select(s => new { name = s.Name, weight = s.Weight, pace = s.Pace }),
+                description = home.Describe()
+            }
+            : null,
+        pattern = result.Home is not null ? null : new
         {
             averageXp = result.Pattern.Sample is null ? result.Pattern.AverageXp : (decimal?)null,
             spreadXp = result.Pattern.Sample is null ? result.Pattern.SpreadXp : (decimal?)null,
@@ -244,6 +367,45 @@ internal static partial class DomainsSimulateCommand
         },
         lowestLevelLastTwoYears = new { p10 = result.LowestLevel.P10, p50 = result.LowestLevel.P50, p90 = result.LowestLevel.P90 },
         averageActiveShare = Math.Round(result.AverageActiveShare, 4)
+    };
+
+    /// <summary>Environment's routine defaults (environment plan §4.9).</summary>
+    private static readonly HomeSimulationPattern HomeDefaults = new();
+
+    /// <summary>Refuses <paramref name="options"/> that don't apply to the domain, saying what does.</summary>
+    private static void Refuse(ParseResult parseResult, IEnumerable<Option> options, string instead)
+    {
+        var given = options.Where(o => parseResult.GetResult(o) is { Implicit: false }).Select(o => o.Name).ToList();
+        if (given.Count > 0)
+        {
+            throw new ArgumentException($"{string.Join(", ", given)} doesn't apply here. {instead}.");
+        }
+    }
+
+    /// <summary>Ratings given as Tidiness/Cleanliness/Aesthetics, e.g. "4.5/4/3.5"; null when not given.</summary>
+    internal static (decimal Tidiness, decimal Cleanliness, decimal Aesthetics)? Ratings(string? text, string option)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var values = text.Split('/')
+            .Select(p => decimal.TryParse(p.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : (decimal?)null)
+            .ToList();
+        return values.Count == 3 && values.All(v => v is >= 1 and <= 5)
+            ? (values[0]!.Value, values[1]!.Value, values[2]!.Value)
+            : throw new ArgumentException($"{option} is Tidiness/Cleanliness/Aesthetics, each 1 to 5, e.g. 4.5/4/3.5; got '{text}'.");
+    }
+
+    /// <summary>The checks named: none, midweek or daily; null when not given.</summary>
+    private static HomeChecks? Checks(string? text) => text?.Trim().ToLowerInvariant() switch
+    {
+        null or "" => null,
+        "none" => HomeChecks.None,
+        "midweek" or "wednesday" or "weekly" => HomeChecks.Midweek,
+        "daily" => HomeChecks.Daily,
+        _ => throw new ArgumentException($"--checks is none, midweek or daily; got '{text}'.")
     };
 
     /// <summary>A share given as a percentage, "8%" or "8"; null when not given.</summary>

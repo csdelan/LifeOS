@@ -172,7 +172,11 @@ public sealed record SimulationResult(
     Spread<double> RankDropsPerYear,
     Spread<int> LowestLevel,
     decimal AverageActiveShare,
-    IReadOnlyList<DomainProgress> Runs);
+    IReadOnlyList<DomainProgress> Runs)
+{
+    /// <summary>For a domain held by the home: the routine simulated (environment plan §4.9); null otherwise.</summary>
+    public HomeSimulationPattern? Home { get; init; }
+}
 
 /// <summary>
 /// The 10-year simulator (xp-domains plan §3.10, §7.4.11): it runs the v2 fold and the
@@ -271,6 +275,24 @@ public static class DomainSimulator
             }
         }
 
+        return Summarize(rules, pattern, options, from, end, real.Count, runs, activeShares);
+    }
+
+    /// <summary>
+    /// The outcome of <paramref name="runs"/> projected from <paramref name="from"/> to
+    /// <paramref name="end"/>: each rank's spread, the final and best levels, rank drops a year
+    /// in the second half, the lowest level in the last two years and the average active share.
+    /// </summary>
+    internal static SimulationResult Summarize(
+        DomainRules rules,
+        SimulationPattern pattern,
+        SimulationOptions options,
+        DateOnly from,
+        DateOnly end,
+        int replayedDays,
+        IReadOnlyList<DomainProgress> runs,
+        IReadOnlyList<decimal> activeShares)
+    {
         var dropsFrom = from.AddYears(options.Years / 2);
         var lowestFrom = options.Years > 2 ? end.AddYears(-2).AddDays(1) : from;
         var ranks = Enumerable.Range(1, rules.Ranks.Count - 1).Select(rank => Outcome(rules, rank, runs)).ToList();
@@ -286,7 +308,7 @@ public static class DomainSimulator
             options,
             from,
             end,
-            real.Count,
+            replayedDays,
             ranks,
             SpreadOf(runs.Select(r => r.Level).Order().ToList()),
             finalRanks,
@@ -384,7 +406,7 @@ public static class DomainSimulator
     }
 
     /// <summary>A standard normal draw (Box–Muller).</summary>
-    private static double Normal(Random random)
+    internal static double Normal(Random random)
     {
         var u1 = 1.0 - random.NextDouble();
         var u2 = random.NextDouble();

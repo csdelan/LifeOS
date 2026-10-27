@@ -416,7 +416,11 @@ fold:
 The regression bands come from §3, with the C# runs setting the exact edges:
 - **Already clean:** holds 72–76.
 - **Daily checks:** holds 89–94.
-- **Top standard:** level 100 in 4–5 years.
+- **Top standard:** level 100 in 4–5 years without the multiplier, and 3–4 years with it. The
+  §3 model left the multiplier off lifetime XP; the kernel pays it, so a home kept at the top
+  standard reaches level 100 about a year sooner (C# runs: 4.4 years without, 3.4 with). Only
+  this scenario is held back by lifetime XP, so the others are unchanged. E5's calibration can
+  slow it with the price if 3.4 years is too quick.
 - **Sunday only:** 65–70.
 - **Messy weekly:** 22–27.
 - **Monthly ratings:** 21–26.
@@ -508,6 +512,6 @@ level holds. That gave three rules:
 - [x] E0 — Plan + requirements (HOME-1 to HOME-3, REWARD-9, D18)
 - [x] E1 — Spaces and ratings in the kernel (migration 0044)
 - [x] E2 — The Home Score (no migration)
-- [ ] E3 — Environment's rules (no migration; push with E4)
+- [x] E3 — Environment's rules (no migration; push with E4)
 - [ ] E4 — Environment on the web (no migration)
 - [ ] E5 — Chris's spaces, first walk-through, calibration

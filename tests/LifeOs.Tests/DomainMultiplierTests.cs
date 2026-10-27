@@ -69,7 +69,7 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
             .Single(d => d.Currency.Key == Currencies.HealthXp).Progress!;
         Assert.Equal((50L, 50L, true), (health.TodayBase, health.TodayAction, health.TodayActive));
         Assert.Equal(65, health.Periods[^1].Paid);
-        Assert.Equal(health.Rules.Consistency.ActiveMinimum(health.Standings[^2].Level), health.ActiveMinimum);
+        Assert.Equal(LifeDomains.HealthConsistency.ActiveMinimum(health.Standings[^2].Level), health.ActiveMinimum);
 
         // The Character page's chart reads the same days: action against each day's minimum, paid beside it.
         var days = await host.Client.GetFromJsonAsync<JsonElement>("/api/domains/health/days?days=6", Ct);

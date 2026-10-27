@@ -86,7 +86,7 @@ public sealed class DomainShownLevelTests
         Assert.True(paused.Paused);
         Assert.False(paused.Falling);
         Assert.Equal(progress.StandingOn(D(134)).ShownExact, paused.ShownExact);
-        Assert.Equal(6, Health.Consistency.ActiveDaysNeeded(paused.Level, 7));
+        Assert.Equal(6, LifeDomains.HealthConsistency.ActiveDaysNeeded(paused.Level, 7));
         Assert.Equal(42, paused.Target);
         Assert.All(Enumerable.Range(135, 65), i =>
         {
