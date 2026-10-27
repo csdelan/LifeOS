@@ -148,7 +148,9 @@ into `LifeOs.Infrastructure` so the runner works from any working directory.
 
 The runner (`bsk migrate`, and `MigrationRunner` in code):
 
-- creates a `public.schema_migrations` history table if needed,
+- creates a `public.schema_migrations` history table if needed, with row level
+  security on so only its owner can see it (Supabase's REST API would otherwise
+  expose it to the public anon key),
 - applies each not-yet-recorded migration inside its own transaction,
 - is safe to re-run — already-applied migrations are skipped, and one whose SQL
   has changed since it was applied is rejected rather than silently re-run.

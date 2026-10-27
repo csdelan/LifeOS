@@ -62,6 +62,14 @@ public sealed class MigrationRunner
         return runNow;
     }
 
+    /// <summary>
+    /// Creates the history table if needed and keeps it closed to everyone but its owner.
+    /// Supabase serves the public schema through its REST API and grants the public anon key
+    /// full access to new tables there, so the history could otherwise be read or rewritten
+    /// from any browser. Row level security with no policies denies every other role; the
+    /// runner owns the table, so it is unaffected. Runs on every migrate, so existing
+    /// databases are closed on their next run.
+    /// </summary>
     private static async Task EnsureHistoryTableAsync(NpgsqlConnection connection, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -71,6 +79,19 @@ public sealed class MigrationRunner
                 checksum    text        NOT NULL,
                 applied_at  timestamptz NOT NULL DEFAULT now()
             );
+
+            ALTER TABLE public.schema_migrations ENABLE ROW LEVEL SECURITY;
+
+            -- Supabase's API roles; absent on plain Postgres.
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+                    REVOKE ALL ON public.schema_migrations FROM anon;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                    REVOKE ALL ON public.schema_migrations FROM authenticated;
+                END IF;
+            END $$;
             """;
         await connection.ExecuteAsync(new CommandDefinition(sql, cancellationToken: cancellationToken));
     }
