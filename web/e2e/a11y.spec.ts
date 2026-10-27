@@ -19,6 +19,7 @@ const routes = [
   "/",
   "/inbox",
   "/map",
+  "/browse",
   "/tasks",
   "/habits",
   "/rewards",
@@ -652,6 +653,48 @@ test.describe("accessibility", () => {
       expect(repetition, JSON.stringify(repetition, null, 2)).toEqual([]);
     });
   }
+
+  // Browse (BROWSE-2): every type as a grid with sortable headers, then Decisions filtered with
+  // one open that the filters hide, in both themes.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /browse with filters and an item open, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        await settled(page);
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.setViewportSize({ width: 1600, height: 900 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/browse?type=all");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      await expect(page.getByRole("button", { name: "Sort by Status" })).toBeVisible({ timeout: 10_000 });
+      const grid = await scan();
+      expect(grid, JSON.stringify(grid, null, 2)).toEqual([]);
+
+      await page.goto("/browse?type=Decision&selected=dec-blazor");
+      await page.getByRole("checkbox", { name: "Implementing" }).click();
+      await expect(page.getByRole("button", { name: "Show it" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Blazor for Production UI" })).toBeVisible();
+      const open = await scan();
+      expect(open, JSON.stringify(open, null, 2)).toEqual([]);
+    });
+  }
+
+  // Browse on a phone: the type menu and the filters sheet rising from the bottom.
+  test("axe serious/critical: /browse on a phone with the filters open", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/browse?type=Task");
+    await expect(page.getByRole("combobox", { name: "Type" })).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Filters" }).click();
+    const sheet = page.getByRole("dialog", { name: "Filters" });
+    await expect(sheet.getByRole("checkbox", { name: "Not started" })).toBeVisible();
+    await settled(page);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    const blocking = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
+  });
 
   // The Environment page (HOME-1..3): the Home Score, Fix next, the space cards, the chart with a
   // day read out, then its table, the walk-through sheet and a card's quick check, in both themes.

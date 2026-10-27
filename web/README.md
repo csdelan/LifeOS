@@ -118,7 +118,11 @@ are anonymous.
 
 - Design system (Hearth tokens) + `/gallery` kitchen sink
 - Streamlined shell: Focus · Inbox · Map · Vision · Reviews · People · Areas
-- Command palette (`⌘K` / `Ctrl+K`) and global **New** (`⌘N`)
+- Command palette (`⌘K` / `Ctrl+K`) and global **New** (`⌘N`); the palette searches every
+  subject (`searchSubjects` in `src/lib/browse.ts`)
+- Browse (`/browse`, BROWSE-2): every type with its count, filters (Status, Due date, Entered,
+  Area, Tags, Include archived), a list whose columns follow the type, and the detail peek;
+  the logic lives in `src/lib/browse.ts`
 - Map: alignment outline from `RelationEdge` data, expand/collapse, inline create-child,
   multi-parent (a node can appear under more than one parent), detail peek
 - `<SubjectDetail>` peek with Overview / Relationships / Tags / Journal / History

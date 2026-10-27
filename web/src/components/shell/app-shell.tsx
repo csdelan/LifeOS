@@ -17,6 +17,7 @@ import {
   HouseIcon,
   InboxIcon,
   LayoutDashboardIcon,
+  LibraryIcon,
   ListTodoIcon,
   LogOutIcon,
   MapIcon,
@@ -86,6 +87,7 @@ const NAV = [
   { to: "/", label: "Focus", icon: LayoutDashboardIcon },
   { to: "/inbox", label: "Inbox", icon: InboxIcon },
   { to: "/map", label: "Map", icon: MapIcon },
+  { to: "/browse", label: "Browse", icon: LibraryIcon },
   { to: "/tasks", label: "Tasks", icon: ListTodoIcon },
   { to: "/habits", label: "Habits", icon: RepeatIcon },
   { to: "/food", label: "Food Log", icon: UtensilsIcon },
@@ -287,6 +289,7 @@ export function AppShell() {
         initialType={createOpts?.type}
         initialParent={createOpts?.parent}
         initialTitle={createOpts?.title}
+        onCreated={createOpts?.onCreated}
       />
       <QuickCaptureDialog open={capturing} onOpenChange={setCapturing} />
       <VoiceCaptureDialog open={voice} onOpenChange={setVoice} />

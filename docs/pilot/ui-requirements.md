@@ -487,6 +487,26 @@ Build:      built
 - Kernel delta: none beyond Tags (GEN-1) and Area (GEN-2); the detail sections (Overview /
   Relationships / Tags / Journal / History) each read an existing edge / event source.
 - Open decisions: none blocking — this rides on GEN-1 and GEN-2 landing.
+- Web (2026-10-27): `/browse`, after Map in the side navigation. The filter pane lists every
+  type with its count (All types first; every type New can make even at zero), then Status,
+  Due date, Entered, Area and Tags (each offering only what the type's items hold, with
+  counts) and Include archived; on a phone the type is a menu and the filters a sheet. Picked
+  values combine OR within a category and AND across; one the current type doesn't offer is
+  ignored. The list's columns follow the type (Status when it has statuses; Due, Area and
+  Tags when its items carry them; Type across all types; Entered always), as a grid with
+  sortable headers when the list is wide and stacked rows when it's narrow. Sorts: Title,
+  Status (in the type's own order), Due date, Entered, Area. The type, the open item and the
+  filters are remembered across visits. The detail is the shared `SubjectDetail` (read-only
+  first, Edit / Save / Cancel, unsaved-edit prompt). New makes the type looked at and selects
+  the new item when the filters show it, else confirms it without changing them. An open item
+  the filters hide says so, with Show it. Opening an item from another (a series and its
+  repetitions) switches to its type, as the Pilot does. Events are not listed yet. Reads only
+  `GET /api/subjects`; no API or kernel change.
+- Search box (web, 2026-10-27): the command palette now searches every subject, archived ones
+  too (it used to look only at the first 20). Each word typed must appear in the title, type,
+  URN, Area or tags, in any order; titles starting with it come first, archived items last;
+  the best 50 show. Identity Statements, Goals, Projects and Tasks open on the Map as before;
+  every other type opens in Browse on its type.
 
 
 

@@ -39,12 +39,15 @@ function CommandDialog({
   children,
   className,
   showCloseButton = false,
+  filter,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string
   description?: string
   className?: string
   showCloseButton?: boolean
+  /** Scores each item against the search; cmdk's own when left out. */
+  filter?: React.ComponentProps<typeof CommandPrimitive>["filter"]
 }) {
   return (
     <Dialog {...props}>
@@ -59,7 +62,9 @@ function CommandDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <Command className="h-auto max-h-[min(28rem,70vh)] w-full">{children}</Command>
+        <Command className="h-auto max-h-[min(28rem,70vh)] w-full" filter={filter}>
+          {children}
+        </Command>
       </DialogContent>
     </Dialog>
   )

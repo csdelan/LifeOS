@@ -8,6 +8,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { FocusPage } from "@/pages/focus-page";
 import { InboxPage } from "@/pages/inbox-page";
 import { MapPage } from "@/pages/map-page";
+import { BrowsePage } from "@/pages/browse-page";
 import { TasksPage } from "@/pages/tasks-page";
 import { HabitsPage } from "@/pages/habits-page";
 import { RewardsPage } from "@/pages/rewards-page";
@@ -23,6 +24,7 @@ import { GalleryPage } from "@/pages/gallery-page";
 import type { MapLens } from "@/lib/derive";
 import type { GraphLayoutKind, MapViewMode, OrphanFilter } from "@/lib/graph-model";
 import { parseMapShow, type MapShow } from "@/lib/map-show";
+import { parseBrowseType, type BrowseType } from "@/lib/browse";
 import { Button } from "@/components/ui/button";
 
 export type MapSearch = {
@@ -45,6 +47,12 @@ export type InboxSearch = {
 };
 
 export type TasksSearch = {
+  selected?: string;
+};
+
+/** Browse (BROWSE-2): the type looked at, absent for the last one used, and the open item. */
+export type BrowseSearch = {
+  type?: BrowseType;
   selected?: string;
 };
 
@@ -144,6 +152,17 @@ const mapRoute = createRoute({
     show: parseMapShow(search.show),
   }),
   component: MapPage,
+});
+
+/** Every subject, by type and filters, with its detail (BROWSE-2). */
+const browseRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/browse",
+  validateSearch: (search: Record<string, unknown>): BrowseSearch => ({
+    type: parseBrowseType(search.type),
+    selected: typeof search.selected === "string" ? search.selected : undefined,
+  }),
+  component: BrowsePage,
 });
 
 const visionRoute = createRoute({
@@ -258,6 +277,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   inboxRoute,
   mapRoute,
+  browseRoute,
   tasksRoute,
   habitsRoute,
   foodRoute,

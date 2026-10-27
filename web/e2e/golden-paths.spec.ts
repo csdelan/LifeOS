@@ -1027,6 +1027,49 @@ test.describe("golden paths", () => {
     await expect(page.getByRole("article", { name: "Attic" })).toBeVisible();
   });
 
+  test("Browse: pick Decisions, filter by status, find one from the search box, and make a new one", async ({
+    page,
+  }) => {
+    await page.goto("/browse");
+    const filters = page.getByRole("complementary", { name: "Browse filters" });
+    await filters.getByRole("button", { name: /^Decision\s*2$/ }).click();
+    const list = page.getByRole("list", { name: "Decision list" });
+    await expect(list.getByRole("button")).toHaveCount(2);
+
+    await filters.getByRole("checkbox", { name: "Implementing" }).click();
+    await expect(list.getByRole("button")).toHaveCount(1);
+    await list.getByRole("button", { name: /React \+ Vite for Production UI/ }).click();
+    await expect(page.getByRole("heading", { name: "React + Vite for Production UI" })).toBeVisible();
+
+    // Coming back keeps the type, the open item and the filters.
+    await page.goto("/");
+    await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Browse" }).click();
+    await expect(filters.getByRole("checkbox", { name: "Implementing" })).toBeChecked();
+    await expect(page.getByRole("heading", { name: "React + Vite for Production UI" })).toBeVisible();
+
+    // The search box finds the other Decision, though it's past the first twenty items.
+    await page.keyboard.press("Control+k");
+    await page.getByRole("combobox").fill("blazor");
+    await page.getByRole("option", { name: /Blazor for Production UI/ }).click();
+    await expect(page).toHaveURL(/\/browse\?.*selected=dec-blazor/);
+    await expect(page.getByRole("heading", { name: "Blazor for Production UI" })).toBeVisible();
+    await expect(page.getByText("“Blazor for Production UI” is open, but the filters hide it in the list.")).toBeVisible();
+    await page.getByRole("button", { name: "Show it" }).click();
+    await expect(list.getByRole("button", { name: /Blazor for Production UI/ })).toHaveAttribute("aria-current", "true");
+
+    // A new Decision made from here is selected in the list.
+    await page.getByRole("button", { name: "New Decision" }).click();
+    const dialog = page.getByRole("dialog", { name: "New Decision" });
+    await dialog.getByRole("textbox", { name: "Title" }).fill("Use SQLite for local storage");
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
+    await expect(list.getByRole("button", { name: /Use SQLite for local storage/ })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    await expect(page.getByRole("heading", { name: "Use SQLite for local storage" })).toBeVisible();
+  });
+
   test("theme toggle switches the document class", async ({ page }) => {
     await page.goto("/");
     const html = page.locator("html");

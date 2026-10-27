@@ -55,12 +55,15 @@ export function NewSubjectDialog({
   initialType,
   initialParent,
   initialTitle,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialType?: SubjectType;
   initialParent?: CreateParent;
   initialTitle?: string;
+  /** Told once the subject exists, after its details are saved. */
+  onCreated?: (created: CreatedSubject) => void;
 }) {
   const create = useCreateSubject();
   const writes = useWrites();
@@ -139,6 +142,7 @@ export function NewSubjectDialog({
     } catch (err) {
       toast.error(`Created ${created.title}, but not every detail saved: ${errorMessage(err, "unknown error")}`);
     }
+    onCreated?.(created);
     onOpenChange(false);
   }
 
