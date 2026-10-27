@@ -205,9 +205,9 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
   });
 
   it("keeps Health's seeded history until the Food Log settles", () => {
-    expect(health().totalXp).toBe(1_439);
+    expect(health().totalXp).toBe(1_443);
     mockSettleFood();
-    expect(health().totalXp).toBeGreaterThan(1_439);
+    expect(health().totalXp).toBeGreaterThan(1_443);
   });
   it("keeps a photo as an artifact on a new version, through an edit, until it's removed (FOOD-5)", () => {
     const meal = mockLogFood({ name: "Ramen", score: 3, calories: 900 }).meal!;
@@ -263,7 +263,7 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
     expect(mockFoodRecent(1)[0]).toMatchObject({ name: "Kombucha", alcoholic: false });
   });
 
-  it("cuts a closed day's food and fast above two drinks, paying the fast in full until the close", () => {
+  it("cuts a closed day's food and fast from the first drink, paying the fast in full until the close", () => {
     const today = todayIso();
     mockFastAction({ action: "record", from: ago(23 * HOUR + 60_000), to: ago(60_000) });
     mockLogFood({ name: "Salmon salad", score: 5, calories: 1200 });
@@ -271,27 +271,27 @@ describe("mock Food Log (FoodLogService, FoodReads, FoodRewards)", () => {
     // Open: the fast's 7 stays paid, and nothing is taken back on the spot.
     expect(beers.flatMap((b) => b.awards)).toEqual([]);
     const open = mockFoodDay().summary;
-    expect(open).toMatchObject({ drinks: 4, drinkFactor: 0.8, foodAward: 18, fastAward: 6, total: 24 });
+    expect(open).toMatchObject({ drinks: 4, drinkFactor: 0.6, foodAward: 14, fastAward: 4, total: 18 });
     expect(open.paid.fast?.base).toBe(7);
 
     // Closing pays the cut food and re-scores the fast with the cut.
     const closed = mockCloseFoodDay();
     const base = (r: typeof closed, key: string) =>
       r.awards.filter((a) => a.awardKey === key).map((a) => [a.entry, a.base?.health_xp ?? a.amounts.health_xp]);
-    expect(base(closed, `diet:${today}`)).toEqual([["earn", 18]]);
+    expect(base(closed, `diet:${today}`)).toEqual([["earn", 14]]);
     expect(base(closed, `fast:${today}`).map(([entry]) => entry)).toEqual(["reversal", "earn"]);
-    expect(mockFoodDay().summary.paid).toMatchObject({ baseTotal: 24 });
+    expect(mockFoodDay().summary.paid).toMatchObject({ baseTotal: 18 });
     expect(mockSettleFood().awards).toEqual([]);
 
-    // Taking the fourth back restores the fast (6.6 rounds to 7) and lifts the food to 22.
+    // Taking the fourth back leaves three drinks' 70%: the fast 5 and the food 17.
     const fewer = mockDeleteFood(beers[3].meal!.id);
-    expect(base(fewer, `fast:${today}`).at(-1)).toEqual(["earn", 7]);
-    expect(base(fewer, `diet:${today}`).at(-1)).toEqual(["earn", 22]);
-    // The third: only the food moves.
+    expect(base(fewer, `fast:${today}`).at(-1)).toEqual(["earn", 5]);
+    expect(base(fewer, `diet:${today}`).at(-1)).toEqual(["earn", 17]);
+    // The third: two drinks' 80%, the fast 6 and the food 21.
     const back = mockDeleteFood(beers[2].meal!.id);
-    expect(base(back, `fast:${today}`)).toEqual([]);
-    expect(base(back, `diet:${today}`).at(-1)).toEqual(["earn", 26]);
-    expect(mockFoodDay().summary.paid.baseTotal).toBe(33);
+    expect(base(back, `fast:${today}`).at(-1)).toEqual(["earn", 6]);
+    expect(base(back, `diet:${today}`).at(-1)).toEqual(["earn", 21]);
+    expect(mockFoodDay().summary.paid.baseTotal).toBe(27);
   });
 
   it("reads the sobriety streak on a day and over a range, and lists a day oldest first", () => {

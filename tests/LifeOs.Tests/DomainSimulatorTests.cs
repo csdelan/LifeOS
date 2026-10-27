@@ -33,7 +33,7 @@ public sealed class DomainSimulatorTests
     private static RankOutcome Rank(SimulationResult result, string title) => result.Ranks.Single(r => r.Rule.Title == title);
 
     [Fact]
-    public void Steady_reaches_grandmaster_in_every_run_in_6_to_8_years_and_stays_in_the_90s()
+    public void Steady_reaches_grandmaster_in_every_run_in_6_to_8_years_and_stays_above_85()
     {
         var result = Simulate(Steady);
 
@@ -41,7 +41,7 @@ public sealed class DomainSimulatorTests
         Assert.Equal(20, grandmaster.RunsReached);
         Assert.InRange(grandmaster.Years!.P10, 6.0, 8.0);
         Assert.InRange(grandmaster.Years.P90, 6.0, 8.0);
-        Assert.InRange(result.LowestLevel.P10, 89, 100);
+        Assert.InRange(result.LowestLevel.P10, 85, 100);
         Assert.InRange(result.FinalLevel.P10, 90, 100);
         Assert.Equal(100, result.BestLevel.P10);
 
@@ -133,15 +133,15 @@ public sealed class DomainSimulatorTests
     [Fact]
     public void Below_the_bar_settles_at_the_level_its_average_supports_and_stays()
     {
-        // A flat 30 base XP a day: level 19 asks a 30 average, level 20 asks 31.
-        var result = Simulate(new SimulationPattern(AverageXp: 30, SpreadXp: 0, OffShare: 0, HalfShare: 0));
+        // A flat 38 base XP a day, 23 of it action: level 18 asks a 38 average, level 19 asks 39.
+        var result = Simulate(new SimulationPattern(AverageXp: 38, SpreadXp: 0, OffShare: 0, HalfShare: 0));
 
-        Assert.Equal((30, 31), (Health.Consistency.Average(19), Health.Consistency.Average(20)));
-        Assert.Equal(new Spread<int>(19, 19, 19), result.FinalLevel);
-        Assert.Equal(new Spread<int>(19, 19, 19), result.LowestLevel);
+        Assert.Equal((38, 39), (Health.Consistency.Average(18), Health.Consistency.Average(19)));
+        Assert.Equal(new Spread<int>(18, 18, 18), result.FinalLevel);
+        Assert.Equal(new Spread<int>(18, 18, 18), result.LowestLevel);
         Assert.Equal(20, Rank(result, "Apprentice").RunsReached);
         Assert.Equal(0, Rank(result, "Journeyman").RunsReached);
-        Assert.All(result.Runs, run => Assert.Equal((19, 19), (run.ConsistencyLevel, run.BestLevel)));
+        Assert.All(result.Runs, run => Assert.Equal((18, 18), (run.ConsistencyLevel, run.BestLevel)));
     }
 
     [Fact]

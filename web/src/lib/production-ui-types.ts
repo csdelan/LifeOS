@@ -1349,7 +1349,7 @@ export interface FoodDaySummary {
   cap: number;
   /** The day's alcoholic drinks (FOOD-6). */
   drinks: number;
-  /** What's left of the diet XP after the drinks cut: 1 with two drinks or fewer, 0 at twelve. */
+  /** What's left of the diet XP after the drinks cut: 1 with none, 0.9 for one, 0 at ten. */
   drinkFactor: number;
   paid: FoodPaid;
 }

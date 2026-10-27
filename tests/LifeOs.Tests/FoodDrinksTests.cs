@@ -12,7 +12,7 @@ namespace LifeOs.Tests;
 
 /// <summary>
 /// FOOD-6 / FOOD-7 (food-log plan F7, §7, migration 0038): alcoholic drinks in the Food Log. A
-/// drink is an entry flagged alcoholic, always scored 1; more than two on a day cut its diet XP,
+/// drink is an entry flagged alcoholic, always scored 1; each one on a day cuts its diet XP,
 /// the food award at the close and the fast award once the day is closed; the sobriety streak
 /// and the drinks count read them back; a day's entries come oldest first. Each test has a
 /// database of its own (UTC), since a food write settles every food day in it.
@@ -105,7 +105,7 @@ public sealed class FoodDrinksTests(PostgresFixture postgres)
         Assert.Equal(["Salmon salad", "Beer", "Beer"], day.Meals.Select(m => m.Name));
         Assert.Equal((2, 2), (day.Facts.Drinks, day.Score.Drinks));
         Assert.Equal(2, day.Facts.DrinkVersions.Count);
-        Assert.False(day.Score.Cut);
+        Assert.Equal((true, 0.8m), (day.Score.Cut, day.Score.DrinkFactor));
 
         // The streak: 0 on the drinking day (best 5, the days before it), and 1 today, since
         // only yesterday is over.
@@ -152,7 +152,7 @@ public sealed class FoodDrinksTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task More_than_two_drinks_cut_both_awards_of_a_closed_day_and_removing_them_restores_it()
+    public async Task Each_drink_cuts_both_awards_of_a_closed_day_and_removing_them_restores_it()
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
         var food = db.Get<FoodLogService>();
@@ -165,23 +165,27 @@ public sealed class FoodDrinksTests(PostgresFixture postgres)
         await food.LogAsync(new FoodEntryInput("Salmon salad", 5, 1200, At(day, 12, 30)), cancellationToken: Ct);
         Assert.Equal((39L, 39L), await CreditAsync(db, day));
 
-        // Two beers cost a little as 1s in the average (32 → 29 → 26); the fast is untouched.
+        // The first beer cuts 10% and costs a little as a 1 in the average: the food 32 → 26;
+        // the fast's 7.33 × 0.9 = 6.6 still rounds to 7.
         var first = await food.LogAsync(Beer(At(day, 19)), cancellationToken: Ct);
-        Assert.Equal([("reversal", -32L), ("earn", 29L)], On(first, dietKey));
+        Assert.Equal([("reversal", -32L), ("earn", 26L)], On(first, dietKey));
+        Assert.Empty(On(first, fastKey));
+
+        // The second cuts 20%: the food 26 → 21 and the fast 7 → 6.
         var second = await food.LogAsync(Beer(At(day, 19, 30)), cancellationToken: Ct);
-        Assert.Equal([("reversal", -29L), ("earn", 26L)], On(second, dietKey));
-        Assert.Empty(On(second, fastKey));
+        Assert.Equal([("reversal", -26L), ("earn", 21L)], On(second, dietKey));
+        Assert.Equal([("reversal", -7L), ("earn", 6L)], On(second, fastKey));
 
-        // A third cuts 10%: the food 26 → 22; the fast's 7.33 × 0.9 = 6.6 still rounds to 7.
+        // A third cuts 30%: the food 21 → 17 and the fast 6 → 5.
         var third = await food.LogAsync(Beer(At(day, 20)), cancellationToken: Ct);
-        Assert.Equal([("reversal", -26L), ("earn", 22L)], On(third, dietKey));
-        Assert.Empty(On(third, fastKey));
+        Assert.Equal([("reversal", -21L), ("earn", 17L)], On(third, dietKey));
+        Assert.Equal([("reversal", -6L), ("earn", 5L)], On(third, fastKey));
 
-        // A fourth cuts 20%: the food 22 → 18 and the fast 7 → 6.
+        // A fourth cuts 40%: the food 17 → 14 and the fast 5 → 4.
         var fourth = await food.LogAsync(Beer(At(day, 21)), cancellationToken: Ct);
-        Assert.Equal([("reversal", -22L), ("earn", 18L)], On(fourth, dietKey));
-        Assert.Equal([("reversal", -7L), ("earn", 6L)], On(fourth, fastKey));
-        Assert.Equal((24L, 24L), await CreditAsync(db, day));
+        Assert.Equal([("reversal", -17L), ("earn", 14L)], On(fourth, dietKey));
+        Assert.Equal([("reversal", -5L), ("earn", 4L)], On(fourth, fastKey));
+        Assert.Equal((18L, 18L), await CreditAsync(db, day));
         Assert.Empty((await food.SettleAsync(Ct)).Awards);
 
         // The re-scored fast cites what it read: the fast and the four beers (the day closed
@@ -189,24 +193,24 @@ public sealed class FoodDrinksTests(PostgresFixture postgres)
         var fastEarn = fourth.Earned.Awards.Single(a => a.AwardKey == fastKey && a.Entry == LedgerEntries.Earn);
         Assert.Equal(5, await CitedAsync(db, fastEarn.EventId));
 
-        // Taking the fourth back restores the fast (6.6 rounds to 7); the third, the food.
+        // Taking the fourth back restores three drinks' awards; the third, two drinks'.
         var drinks = (await food.GetDayAsync(day, Ct)).Meals.Where(m => m.Alcoholic).ToList();
         var fewer = await food.DeleteAsync(drinks[3].Id.ToString(), Ct);
-        Assert.Equal([("reversal", -6L), ("earn", 7L)], On(fewer, fastKey));
-        Assert.Equal([("reversal", -18L), ("earn", 22L)], On(fewer, dietKey));
+        Assert.Equal([("reversal", -4L), ("earn", 5L)], On(fewer, fastKey));
+        Assert.Equal([("reversal", -14L), ("earn", 17L)], On(fewer, dietKey));
         var back = await food.DeleteAsync(drinks[2].Id.ToString(), Ct);
-        Assert.Empty(On(back, fastKey));
-        Assert.Equal((33L, 33L), await CreditAsync(db, day));
+        Assert.Equal([("reversal", -5L), ("earn", 6L)], On(back, fastKey));
+        Assert.Equal((27L, 27L), await CreditAsync(db, day));
 
-        // Twelve drinks leave the day nothing: both awards are given back.
+        // Ten drinks leave the day nothing: both awards are given back.
         FoodWriteResult last = back;
-        for (var i = 0; i < 10; i++)
+        for (var i = 0; i < 8; i++)
         {
             last = await food.LogAsync(Beer(At(day, 22, i)), cancellationToken: Ct);
         }
 
-        // At eleven, 10% was left of each (1 and 1); the twelfth gives both back.
-        Assert.Equal(12, (await food.GetDayAsync(day, Ct)).Facts.Drinks);
+        // At nine, 10% was left of each (1 and 1); the tenth gives both back.
+        Assert.Equal(10, (await food.GetDayAsync(day, Ct)).Facts.Drinks);
         Assert.Equal([("reversal", -1L)], On(last, fastKey));
         Assert.Equal([("reversal", -1L)], On(last, dietKey));
         Assert.Equal((0L, 0L), await CreditAsync(db, day));
@@ -237,16 +241,16 @@ public sealed class FoodDrinksTests(PostgresFixture postgres)
             Assert.Empty(beer.Earned.Awards);
         }
 
-        // ... though the day shows what the close will pay: the fast cut to 4, the food to 3.
+        // ... though the day shows what the close will pay: the fast cut to 3, the food to 2.
         var open = await food.GetDayAsync(today, Ct);
-        Assert.Equal((4L, 5L, 3L, 0.8m), (open.Score.FastAward, open.Score.FastAwardUncut, open.Score.FoodAward, open.Score.DrinkFactor));
+        Assert.Equal((3L, 5L, 2L, 0.6m), (open.Score.FastAward, open.Score.FastAwardUncut, open.Score.FoodAward, open.Score.DrinkFactor));
         Assert.Equal(5L, open.Paid.Fast!.Paid);
 
-        // Closing pays the food (600 calories at 1: 4 for calories, cut to 3) and re-scores the fast.
+        // Closing pays the food (600 calories at 1: 4 for calories, cut to 2) and re-scores the fast.
         var closed = await food.CloseDayAsync(cancellationToken: Ct);
-        Assert.Equal([("earn", 3L)], On(closed, FoodAwards.DietKey(today)));
-        Assert.Equal([("reversal", -5L), ("earn", 4L)], On(closed, FoodAwards.FastKey(today)));
-        Assert.Equal((7L, 7L), await CreditAsync(db, today));
+        Assert.Equal([("earn", 2L)], On(closed, FoodAwards.DietKey(today)));
+        Assert.Equal([("reversal", -5L), ("earn", 3L)], On(closed, FoodAwards.FastKey(today)));
+        Assert.Equal((5L, 5L), await CreditAsync(db, today));
     }
 
     [Fact]
@@ -265,10 +269,10 @@ public sealed class FoodDrinksTests(PostgresFixture postgres)
         var refused = await host.Client.PostAsJsonAsync("/api/food/meals", new { name = "Toast", calories = 200 }, Ct);
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
 
-        // The day: its drinks, the cut (none yet) and the streak (0, a drink that day).
+        // The day: its drinks, the cut (10% for the one) and the streak (0, a drink that day).
         var read = await host.Client.GetFromJsonAsync<JsonElement>($"/api/food/day?date={day:yyyy-MM-dd}", Ct);
         var summary = read.GetProperty("summary");
-        Assert.Equal((1, 1m), (summary.GetProperty("drinks").GetInt32(), summary.GetProperty("drinkFactor").GetDecimal()));
+        Assert.Equal((1, 0.9m), (summary.GetProperty("drinks").GetInt32(), summary.GetProperty("drinkFactor").GetDecimal()));
         Assert.True(Assert.Single(read.GetProperty("meals").EnumerateArray()).GetProperty("alcoholic").GetBoolean());
         var streak = read.GetProperty("sobriety");
         Assert.Equal((0, $"{day:yyyy-MM-dd}", $"{day:yyyy-MM-dd}"),

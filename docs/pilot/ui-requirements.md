@@ -2761,6 +2761,13 @@ Horizon:    Pilot
 Definition: active
 Build:      built
 
+**Update (2026-10-27 — low levels made harder):** Chris: "I can drink all day long, not
+exercise at all, have few steps, and my level still increases." He took the gentler of two
+options ("Let's try the gentler option first and see how it goes"): an active day takes at
+least 20 action XP, not 10, and level 2 needs an average of 30 base XP a day, not 20, rising
+to 80 at level 100 as before. Levels are re-read from history, so the change is retroactive;
+Gems already paid stay ([xp-domains-plan.md](xp-domains-plan.md) §2.4).
+
 **Update (2026-10-25 — X11 landed):** the web runs levels v2. The Character page shows each
 configured domain's shown level with its best, one line saying what sets it now (falling
 toward a target with what pauses it, paused, lifetime XP or the last 90 days), the lifetime
@@ -3201,6 +3208,11 @@ photos. Build moves `mapped → built`.
 Horizon:    Pilot
 Definition: active
 Build:      built
+
+**Update (2026-10-27 — the cut starts at the first drink):** Chris: "And the drink penalty
+let's tighten it to first drink instead of 3rd." Each drink now cuts 10% of the day's diet XP,
+food and fasting, so ten leave nothing (twelve before). It applies forward: a paid day
+re-prices only when its entries change ([food-log-plan.md](food-log-plan.md) §7.6).
 
 **Update (2026-10-24 — the streak counts completed days):** Chris: "The sobriety streak should
 represent COMPLETED, consecutive alcohol free days. So if I don't drink anything today,

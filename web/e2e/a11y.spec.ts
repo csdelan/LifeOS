@@ -204,7 +204,7 @@ test.describe("accessibility", () => {
         await sheet.getByRole("button", { name: "Log", exact: true }).click();
         await expect(sheet).toBeHidden();
       }
-      await expect(page.getByText("3 drinks · 10% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("3 drinks · 30% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
       const dayScan = await scan();
       expect(dayScan, JSON.stringify(dayScan, null, 2)).toEqual([]);
 

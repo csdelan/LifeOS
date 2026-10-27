@@ -211,7 +211,7 @@ function WeekChart({
         {days.map((d) => {
           const standing = dayStanding(d, today);
           const figure = dayFigure(d, today);
-          // More than two drinks shorten each part by the cut, as they do the day's XP.
+          // Drinks shorten each part by the cut, as they do the day's XP.
           const filled = PARTS.map((p) => ({ ...p, value: d[p.key] * d.drinkFactor })).filter((p) => p.value > 0);
           const used = filled.reduce((s, p) => s + p.value, 0);
           const isToday = d.day === today;

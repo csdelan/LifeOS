@@ -194,12 +194,12 @@ public sealed class DietRulesTests
     }
 
     [Fact]
-    public void The_drinks_cut_starts_after_two_and_leaves_nothing_at_twelve()
+    public void The_drinks_cut_starts_at_the_first_and_leaves_nothing_at_ten()
     {
-        Assert.Equal((2, 10), (Rules.DrinksFree, Rules.DrinkCutPercent));
+        Assert.Equal((0, 10), (Rules.DrinksFree, Rules.DrinkCutPercent));
         Assert.True(Rules.DrinksFree >= 0 && Rules.DrinkCutPercent is > 0 and <= 100);
         Assert.Equal(FoodEntries.ScoreMin, FoodEntries.DrinkScore);
-        Assert.Equal(12, Rules.DrinksToNothing);
+        Assert.Equal(10, Rules.DrinksToNothing);
         Assert.Equal(1m, Rules.DrinkFactorFor(0));
         Assert.Equal(1m, Rules.DrinkFactorFor(Rules.DrinksFree));
         Assert.Equal(0.9m, Rules.DrinkFactorFor(Rules.DrinksFree + 1));
@@ -208,13 +208,14 @@ public sealed class DietRulesTests
         Assert.Equal(0m, Rules.DrinkFactorFor(40));
     }
 
-    /// <summary>The plan's drinks table (§7.2): the salmon day with 0, 2, 3, 4 and 12 beers.</summary>
+    /// <summary>The plan's drinks table (§7.2): the salmon day with 0, 1, 2, 3, 4 and 10 beers.</summary>
     [Theory]
     [InlineData(0, 28.0, 4.0, 32, 7, 39)]
-    [InlineData(2, 22.4, 4.0, 26, 7, 33)]
-    [InlineData(3, 20.4, 4.0, 22, 7, 29)]
-    [InlineData(4, 18.7, 4.0, 18, 6, 24)]
-    [InlineData(12, 11.2, 0.0, 0, 0, 0)]
+    [InlineData(1, 24.9, 4.0, 26, 7, 33)]
+    [InlineData(2, 22.4, 4.0, 21, 6, 27)]
+    [InlineData(3, 20.4, 4.0, 17, 5, 22)]
+    [InlineData(4, 18.7, 4.0, 14, 4, 18)]
+    [InlineData(10, 12.4, 0.0, 0, 0, 0)]
     public void The_drinks_table_holds(int beers, double quality, double calories, long food, long fast, long total)
     {
         var score = Rules.Score(SalmonDayWithBeers(beers));
@@ -232,13 +233,13 @@ public sealed class DietRulesTests
     [Fact]
     public void Each_award_is_cut_before_it_is_rounded()
     {
-        // A 23-hour fast is 7.33; three drinks leave 90% of it, 6.6, which rounds to 7. Cutting
+        // A 23-hour fast is 7.33; one drink leaves 90% of it, 6.6, which rounds to 7. Cutting
         // the rounded 7 instead would give 6.3, so 6.
-        var three = Rules.Score(Day(23) with { Drinks = 3 });
-        Assert.Equal((7L, 7L), (three.FastAward, three.FastAwardUncut));
+        var one = Rules.Score(Day(23) with { Drinks = 1 });
+        Assert.Equal((7L, 7L), (one.FastAward, one.FastAwardUncut));
 
-        // Four leave 80%: 5.87 → 6.
-        Assert.Equal(6L, Rules.Score(Day(23) with { Drinks = 4 }).FastAward);
+        // Two leave 80%: 5.87 → 6.
+        Assert.Equal(6L, Rules.Score(Day(23) with { Drinks = 2 }).FastAward);
     }
 
     [Fact]

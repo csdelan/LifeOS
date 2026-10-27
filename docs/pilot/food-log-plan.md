@@ -16,7 +16,8 @@ diet score, changes what Chris eats. Everything in §6 has to earn its place thr
 
 **Added on 2026-10-22 (§7):** drinks flagged as alcoholic, a cut to the day's diet XP above
 two drinks, a sobriety streak, a count of drinks over any range, identical entries combined
-on the day's page, and the day's entries listed oldest first.
+on the day's page, and the day's entries listed oldest first. **Since 2026-10-27 the cut
+starts at the first drink (§7.6).**
 
 **Added on 2026-10-22 (§8):** health scores in half points, so an entry can be a 3.5.
 
@@ -568,9 +569,9 @@ oldest to newest instead of newest to oldest."
 | Its meal type | **Drink** when none is given, instead of the guess from the time. The page switches to Drink when the flag goes on; it can still be changed. |
 | Its calories | Count like any entry's: toward the day's calories, and a drink with calories ends a running fast. |
 | In the quality score | A 1 in the calorie-weighted average (§7.1), so even one drink costs a little. |
-| The cut | With `n` drinks on a day, its diet XP is multiplied by `max(0, 1 − 10% × max(0, n − 2))`: 3 drinks −10%, 4 −20%, 12 or more leave nothing. |
+| The cut | With `n` drinks on a day, its diet XP is multiplied by `max(0, 1 − 10% × n)`: 1 drink −10%, 2 −20%, 10 or more leave nothing. Until 2026-10-27 the first two were free, `max(0, 1 − 10% × max(0, n − 2))`, and 12 left nothing (§7.6). |
 | Which awards | Both. The food award is `round((Quality + Calories part) × cut)` and the fasting award `round(Fasting × cut)`, each rounded halves up as before. |
-| When | The food award already pays at the close, so it carries the cut then. **The fasting award pays in full when the fast ends**; once the day is closed (by hand, or because it's over) with more than two drinks, it's re-scored with the cut. Before the close, no drink takes back fasting XP. "On track for" shows the cut on both. |
+| When | The food award already pays at the close, so it carries the cut then. **The fasting award pays in full when the fast ends**; once the day is closed (by hand, or because it's over) with any drinks, it's re-scored with the cut. Before the close, no drink takes back fasting XP. "On track for" shows the cut on both. |
 | Days | A drink counts on the home-zone day it was drunk, midnight to midnight, like every entry. A night out across midnight splits across two days. |
 | Past days | Nothing logged before 2026-10-22 has the flag, so no paid day changes. Flagging an old entry re-scores its day, as any edit does. |
 
@@ -580,10 +581,13 @@ fast, 39 of 40) plus beers of 150 calories each.
 | Beers | Quality | Calories | Fasting | Cut | Food + fast |
 |---|---|---|---|---|---|
 | 0 | 28 | 4 | 7.3 | none | 32 + 7 = **39** |
-| 2 | 22.4 | 4 | 7.3 | none | 26 + 7 = **33** |
-| 3 | 20.4 | 4 | 7.3 | −10% | 22 + 7 = **29** |
-| 4 | 18.7 | 4 | 7.3 | −20% | 18 + 6 = **24** |
-| 12 | 11.2 | 0 | 7.3 | −100% | 0 + 0 = **0** |
+| 1 | 24.9 | 4 | 7.3 | −10% | 26 + 7 = **33** |
+| 2 | 22.4 | 4 | 7.3 | −20% | 21 + 6 = **27** |
+| 3 | 20.4 | 4 | 7.3 | −30% | 17 + 5 = **22** |
+| 4 | 18.7 | 4 | 7.3 | −40% | 14 + 4 = **18** |
+| 10 | 12.4 | 0 | 7.3 | −100% | 0 + 0 = **0** |
+
+Until 2026-10-27 (two drinks free): 2 beers 33, 3 beers 29, 4 beers 24, 12 beers 0.
 
 ### 7.3 The sobriety streak and the drinks count
 
@@ -656,6 +660,21 @@ fast, 39 of 40) plus beers of 150 calories each.
   a drink; `lib/sobriety.ts` ports it, tested on the same table.
 - **Oldest first:** `FoodReads.GetDayAsync` returns the day's entries by the time they were
   eaten, so the page and `bsk food` agree.
+
+### 7.6 From the first drink (2026-10-27)
+
+Chris, after a few days of levels v2: "And the drink penalty let's tighten it to first drink
+instead of 3rd."
+
+- **`DietRules.DrinksFree` goes 2 → 0** (`drinksFree` in `lib/diet-score.ts`). Each drink cuts
+  10% of the day's diet XP, food and fasting, so ten leave nothing. `DrinkCutPercent` stays 10.
+- **Forward only.** A paid day re-prices only when its entries change, as any retune
+  (§2.3). A closed day already cited its drinks whatever their number (§7.5), so a past day
+  with one or two drinks keeps what it was paid until one of its entries is edited, added or
+  deleted.
+- **On the page:** the summary reads "1 drink · 10% off the day's diet XP", and the Alcoholic
+  drink switch says each one cuts the day's diet XP by 10%. `bsk food` drops the "over 2"
+  part of its drinks line when nothing is free.
 
 ## 8. Half-point scores (2026-10-22)
 

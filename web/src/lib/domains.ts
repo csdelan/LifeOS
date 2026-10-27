@@ -394,7 +394,7 @@ export function multiplierChipText(current: DomainCurrent): string {
   return `${multiplierLabel(current.multiplier)} · ${current.activeDays} of the last ${current.windowDays} days active`;
 }
 
-/** What holding a rank's first level takes: "a 90-day average of 25 base XP, 48 active days of 90 (10+ action XP)". */
+/** What holding a rank's first level takes: "a 90-day average of 34 base XP, 48 active days of 90 (20+ action XP)". */
 export function rankHoldText(rank: DomainRankRow): string {
   if (rank.average == null) return "where every domain starts";
   return `a ${rank.windowDays}-day average of ${rank.average} base XP, ${rank.activeDays} active days of ${rank.windowDays} (${rank.activeMinimum}+ action XP)`;

@@ -75,31 +75,32 @@ describe("Character page (xp-domains plan §7.4.9)", () => {
     expect(card.getByText("Level 9")).toBeInTheDocument();
     expect(card.getByText("Novice")).toBeInTheDocument();
     expect(card.getByText(`Best: level 9, Novice · ${formatDay(addDays(todayIso(), -3))}`)).toBeInTheDocument();
-    expect(card.getByText("Lifetime XP sets your level: 37 XP to level 10.")).toBeInTheDocument();
+    expect(card.getByText("Lifetime XP sets your level: 33 XP to level 10.")).toBeInTheDocument();
 
-    // Lifetime: 239 of the 276 XP level 9 costs.
+    // Lifetime: 243 of the 276 XP level 9 costs.
     expect(card.getByText("Lifetime level 9")).toBeInTheDocument();
     expect(card.getByRole("progressbar", { name: "Progress to Health lifetime level 10" })).toHaveAttribute(
       "aria-valuetext",
-      "239 of 276 XP",
+      "243 of 276 XP",
     );
-    expect(card.getByText(/· 37 to level 10/)).toBeInTheDocument();
+    expect(card.getByText(/· 33 to level 10/)).toBeInTheDocument();
 
-    // Consistency: the last 43 counted days support 17; 18 needs a higher average.
-    expect(card.getByText("Consistency level 17")).toBeInTheDocument();
-    expect(card.getByRole("progressbar", { name: "Health average toward consistency level 18" })).toBeInTheDocument();
-    const needs = within(card.getByRole("list", { name: "What consistency level 18 needs" }));
+    // Consistency: the last 30 counted days support 23; 24 needs one more active day so far.
+    expect(card.getByText("Consistency level 23")).toBeInTheDocument();
+    expect(card.getByRole("progressbar", { name: "Health average toward consistency level 24" })).toBeInTheDocument();
+    const needs = within(card.getByRole("list", { name: "What consistency level 24 needs" }));
     expect(needs.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
-      "a 43-day average of 30 base XP (you're at 29.1): not yet",
-      "25 active days of 43 (you have 34): met",
+      "a 30-day average of 41 base XP (you're at 44.5): met",
+      "18 active days of 30 (you have 24): met",
+      "25 active days so far (you have 24): not yet",
     ]);
-    expect(card.getByText(/1,439 Health XP in all · since .+ · 29\.1 base XP a day over the last 43 days/)).toBeInTheDocument();
+    expect(card.getByText(/1,443 Health XP in all · since .+ · 44\.5 base XP a day over the last 30 days/)).toBeInTheDocument();
 
-    expect(card.getByRole("img", { name: "Today: 0 of 10 action XP to count as active" })).toBeInTheDocument();
+    expect(card.getByRole("img", { name: "Today: 0 of 20 action XP to count as active" })).toBeInTheDocument();
     expect(card.getByText("×1.2 · 24 of the last 30 days active")).toBeInTheDocument();
     expect(card.getByText("2 more active days in the window for ×1.3")).toBeInTheDocument();
     expect(
-      card.getByText("An active day is at least 10 action XP (base XP less sleep). Days count once they settle at 4 a.m."),
+      card.getByText("An active day is at least 20 action XP (base XP less sleep). Days count once they settle at 4 a.m."),
     ).toBeInTheDocument();
 
     expect(settle).toHaveBeenCalledTimes(1);
@@ -135,7 +136,7 @@ describe("Character page (xp-domains plan §7.4.9)", () => {
     expect(ranks[0]).toHaveTextContent("Lv 1–9Novice(you)where every domain starts");
     expect(ranks[1]).not.toHaveAttribute("aria-current");
     expect(ranks[1]).toHaveTextContent(
-      "Lv 10–19Apprenticea 90-day average of 25 base XP, 48 active days of 90 (10+ action XP) · 1,476 XP to reach💎 1 Gem",
+      "Lv 10–19Apprenticea 90-day average of 34 base XP, 48 active days of 90 (20+ action XP) · 1,476 XP to reach💎 1 Gem",
     );
     expect(ranks[10]).toHaveTextContent("Lv 100Grandmaster");
     expect(ranks[10]).toHaveTextContent("5 Gems");
@@ -172,16 +173,16 @@ describe("Character page (xp-domains plan §7.4.9)", () => {
     const plot = chart.getByRole("group", { name: /Health XP by day, last 30 days/ });
     // Focus reads today; the left arrow steps back to yesterday, a followed day at ×1.2.
     plot.focus();
-    await waitFor(() => expect(plot).toHaveAccessibleDescription(/: 0 action XP · not active \(10 needed\)$/));
+    await waitFor(() => expect(plot).toHaveAccessibleDescription(/: 0 action XP · not active \(20 needed\)$/));
     await user.keyboard("{ArrowLeft}");
-    await waitFor(() => expect(plot).toHaveAccessibleDescription(/: 90 action XP \(108 paid\) · active \(10\+ needed\)$/));
+    await waitFor(() => expect(plot).toHaveAccessibleDescription(/: 90 action XP \(108 paid\) · active \(20\+ needed\)$/));
 
     await user.click(chart.getByRole("button", { name: "Table" }));
     const table = chart.getByRole("table", { name: /newest first/ });
     const rows = within(table).getAllByRole("row");
     expect(rows).toHaveLength(31);
     const cellsOf = (row: HTMLElement) => within(row).getAllByRole("cell").map((c) => c.textContent);
-    expect(cellsOf(rows[1])).toEqual(["0", "0", "0", "No (10 needed)", ""]);
+    expect(cellsOf(rows[1])).toEqual(["0", "0", "0", "No (20 needed)", ""]);
     expect(cellsOf(rows[2])).toEqual(["90", "0", "108", "Yes", ""]);
     // Sick 14 days ago, marked as an exception.
     expect(cellsOf(rows[15])).toEqual(["0", "0", "0", "—", "Sick with a cold"]);

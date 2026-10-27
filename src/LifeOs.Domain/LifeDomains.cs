@@ -76,11 +76,11 @@ public sealed record ConsistencyRule(
 {
     private int Span => MaxLevel - 2;
 
-    /// <summary>The average base XP a day level <paramref name="level"/> needs: 20 at level 2, 80 at 100 for Health.</summary>
+    /// <summary>The average base XP a day level <paramref name="level"/> needs: 30 at level 2, 80 at 100 for Health.</summary>
     public int Average(int level)
         => AverageFrom + (int)Math.Round((decimal)(AverageTo - AverageFrom) * (level - 2) / Span, MidpointRounding.AwayFromZero);
 
-    /// <summary>The action XP that makes a day active at <paramref name="level"/>: 10 to 32 for Health.</summary>
+    /// <summary>The action XP that makes a day active at <paramref name="level"/>: 20 to 32 for Health.</summary>
     public int ActiveMinimum(int level)
         => Math.Max(ActiveFloor, (int)Math.Round(ActiveShare * Average(level), MidpointRounding.AwayFromZero));
 
@@ -318,10 +318,10 @@ public static class LifeDomains
 
     private static readonly ConsistencyRule HealthConsistency = new(
         WindowDays: 90,
-        AverageFrom: 20,
+        AverageFrom: 30,
         AverageTo: 80,
         ActiveShare: 0.4m,
-        ActiveFloor: 10,
+        ActiveFloor: 20,
         ShareFrom: 0.50m,
         ShareTo: 0.90m);
 

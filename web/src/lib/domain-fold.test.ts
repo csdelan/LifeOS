@@ -108,15 +108,15 @@ describe("Health's curve and consistency formulas (§7.2, DomainLevelTests)", ()
   });
 
   it.each([
-    [10, "Apprentice", 25, 10, 48, 1_476],
-    [20, "Journeyman", 31, 12, 52, 6_068],
-    [30, "Adept", 37, 15, 56, 14_590],
-    [40, "Expert", 43, 17, 59, 27_893],
-    [50, "Veteran", 49, 20, 63, 46_825],
-    [60, "Elite", 56, 22, 67, 72_237],
-    [70, "Master", 62, 25, 70, 104_979],
-    [80, "Champion", 68, 27, 74, 145_902],
-    [90, "Legend", 74, 30, 78, 195_854],
+    [10, "Apprentice", 34, 20, 48, 1_476],
+    [20, "Journeyman", 39, 20, 52, 6_068],
+    [30, "Adept", 44, 20, 56, 14_590],
+    [40, "Expert", 49, 20, 59, 27_893],
+    [50, "Veteran", 54, 22, 63, 46_825],
+    [60, "Elite", 60, 24, 67, 72_237],
+    [70, "Master", 65, 26, 70, 104_979],
+    [80, "Champion", 70, 28, 74, 145_902],
+    [90, "Legend", 75, 30, 78, 195_854],
     [100, "Grandmaster", 80, 32, 81, 255_686],
   ])("holds level %i, %s, at the plan's figures", (level, title, average, activeMinimum, activeDaysOf90, total) => {
     const rank = rankFor(HEALTH, level);
@@ -128,14 +128,15 @@ describe("Health's curve and consistency formulas (§7.2, DomainLevelTests)", ()
     expect(rank).toBe(rankFor(HEALTH, level - 1) + 1);
   });
 
-  it("runs 20 to 80, 10 to 32 and half to nine tenths, exactly", () => {
-    expect([averageFor(rule, 2), averageFor(rule, 100)]).toEqual([20, 80]);
-    expect([activeMinimumFor(rule, 2), activeMinimumFor(rule, 100)]).toEqual([10, 32]);
+  it("runs 30 to 80, 20 to 32 and half to nine tenths, exactly", () => {
+    expect([averageFor(rule, 2), averageFor(rule, 100)]).toEqual([30, 80]);
+    expect([activeMinimumFor(rule, 2), activeMinimumFor(rule, 100)]).toEqual([20, 32]);
+    expect([activeMinimumFor(rule, 44), activeMinimumFor(rule, 45)]).toEqual([20, 21]);
     expect([activeDaysNeededFor(rule, 2, 90), activeDaysNeededFor(rule, 100, 90)]).toEqual([45, 81]);
     expect([activeDaysNeededFor(rule, 2, 7), activeDaysNeededFor(rule, 100, 7)]).toEqual([4, 7]);
     expect([ageNeededFor(rule, 2), ageNeededFor(rule, 89), ageNeededFor(rule, 100)]).toEqual([3, 90, 90]);
     for (let level = 2; level <= 100; level++) {
-      expect(averageFor(rule, level)).toBe(20 + Math.round((60 * (level - 2)) / 98));
+      expect(averageFor(rule, level)).toBe(30 + Math.round((50 * (level - 2)) / 98));
       for (const days of [1, 7, 30, 45, 89, 90]) {
         const numerator = days * (490 + 4 * (level - 2));
         expect(activeDaysNeededFor(rule, level, days)).toBe(Math.floor((numerator + 979) / 980));
@@ -265,26 +266,26 @@ describe("the shown level (§7.3, DomainShownLevelTests)", () => {
   });
 
   it("rises to the target at once, even on an unsettled day", () => {
-    // 90 days of 60 base XP (50 of it action): the last 90 days support 68, lifetime XP 18.
+    // 90 days of 60 base XP (50 of it action): the last 90 days support 61, lifetime XP 18.
     const steady = run(0, 90, 60, 10);
     const before = fold(steady, 90);
     expect([before.lifetimeLevel, before.consistencyLevel, before.level, before.limitedBy]).toEqual([
       18,
-      68,
+      61,
       18,
       "lifetime",
     ]);
 
-    // A huge day today lifts lifetime XP past level 70: the level goes straight to 68.
+    // A huge day today lifts lifetime XP past level 70: the level goes straight to 61.
     const after = fold([...steady, on(90, 100_000)], 90);
     expect([after.lifetimeLevel, after.consistencyLevel, after.target, after.level, after.limitedBy]).toEqual([
       70,
-      68,
-      68,
-      68,
+      61,
+      61,
+      61,
       "consistency",
     ]);
-    expect(after.lastChange).toEqual({ day: D(90), from: 18, to: 68 });
+    expect(after.lastChange).toEqual({ day: D(90), from: 18, to: 61 });
     expect(after.bestLevelOn).toBe(D(90));
     expect(after.ranksReached.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5, 6]);
     for (const r of after.ranksReached.slice(1)) expect(r.qualifiedOn).toBe(D(90));
@@ -324,14 +325,14 @@ describe("the walk (§7.4.4, DomainProgressTests)", () => {
     expect(progress.nextConsistency).toMatchObject({
       level: 2,
       windowDays: 0,
-      average: 20,
+      average: 30,
       ageNeeded: 3,
       ageNow: 0,
       averageMet: false,
       activeDaysMet: false,
       ageMet: false,
     });
-    expect([progress.activeMinimum, progress.todayActive, progress.falling]).toEqual([10, false, false]);
+    expect([progress.activeMinimum, progress.todayActive, progress.falling]).toEqual([20, false, false]);
     const w = progress.consistency;
     expect([w.days, w.coveredDays, w.successfulDays]).toEqual([30, 0, 0]);
     expect(progress.multiplierNow).toBe(1);
@@ -443,15 +444,15 @@ describe("the walk (§7.4.4, DomainProgressTests)", () => {
   });
 
   it("judges a day active on its action XP at the level going into it", () => {
-    // At level 1 an active day takes 10 action XP: sleep doesn't count toward it.
-    expect(fold([on(0, 40, 30)], 0).todayActive).toBe(true);
-    expect(fold([on(0, 40, 31)], 0).todayActive).toBe(false);
+    // At level 1 an active day takes 20 action XP: sleep doesn't count toward it.
+    expect(fold([on(0, 40, 20)], 0).todayActive).toBe(true);
+    expect(fold([on(0, 40, 21)], 0).todayActive).toBe(false);
 
-    // At Grandmaster it takes 32.
+    // At Grandmaster it takes 32: 25 isn't enough, though it is at level 1.
     const top = run(0, 100, 3_000);
-    const day = fold([...top, on(100, 15)], 100);
+    const day = fold([...top, on(100, 25)], 100);
     expect([day.activeMinimum, day.todayActive]).toEqual([32, false]);
-    expect(fold([on(0, 15)], 0).todayActive).toBe(true);
+    expect(fold([on(0, 25)], 0).todayActive).toBe(true);
     expect(fold([...top, on(100, 32)], 100).todayActive).toBe(true);
     expect(describeRule(HEALTH, day.level)).toBe("at least 32 action XP (base XP less sleep)");
   });
@@ -658,29 +659,29 @@ describe("a period report (§7.4.4, DomainReportTests)", () => {
 describe("reading it as the API does", () => {
   it("answers GET /api/domains' row", () => {
     // 90 days of 60 base XP, 10 of it sleep: lifetime XP holds the level at 18 though the
-    // last 90 days support 68.
+    // last 90 days support 61.
     const progress = fold(run(0, 90, 60, 10), 90);
     const row = toDomainRow(HEALTH_XP, progress.totalXp, progress);
 
     expect(row).toMatchObject({ name: "Health", configured: true, totalXp: 5_400 });
     expect(row.lifetime).toEqual({ start: D(0), level: 18, levelXp: 584, xpIntoLevel: 538, xpToNext: 46 });
     expect(row.consistency).toEqual({
-      level: 68,
+      level: 61,
       windowDays: 90,
       from: D(0),
       to: D(89),
       averageBase: 60,
       next: {
-        level: 69,
+        level: 62,
         windowDays: 90,
         average: 61,
         averageNow: 60,
         averageMet: false,
         activeMinimum: 24,
-        activeDaysNeeded: 70,
+        activeDaysNeeded: 68,
         activeDays: 90,
         activeDaysMet: true,
-        ageNeeded: 70,
+        ageNeeded: 63,
         age: 90,
         ageMet: true,
       },
@@ -704,10 +705,10 @@ describe("reading it as the API does", () => {
     expect(row.current).toEqual({
       todayBase: 0,
       todayAction: 0,
-      activeMinimum: 12,
+      activeMinimum: 20,
       todayActive: false,
       todayException: false,
-      rule: "at least 12 action XP (base XP less sleep)",
+      rule: "at least 20 action XP (base XP less sleep)",
       activeShare: 1,
       activeDays: 30,
       windowDays: 30,
@@ -717,7 +718,7 @@ describe("reading it as the API does", () => {
     });
     expect(row.ranks).toHaveLength(11);
     expect(row.ranks![0]).toMatchObject({ title: "Novice", level: 1, lastLevel: 9, average: null, gems: 0, reachedOn: null });
-    expect(row.ranks![1]).toMatchObject({ title: "Apprentice", average: 25, activeMinimum: 10, activeDays: 48, reachedOn: D(24) });
+    expect(row.ranks![1]).toMatchObject({ title: "Apprentice", average: 34, activeMinimum: 20, activeDays: 48, reachedOn: D(24) });
     expect(row.ranks![10]).toMatchObject({
       title: "Grandmaster",
       lastLevel: 100,
@@ -768,7 +769,7 @@ describe("reading it as the API does", () => {
       [0, 0, 0, 0, null, true, false],
       [50, 40, 10, 65, null, false, true],
     ]);
-    expect(read.days[0]).toMatchObject({ day: D(5), activeMinimum: 10, lifetimeLevel: 2, consistencyLevel: 1, level: 1, rank: 0 });
+    expect(read.days[0]).toMatchObject({ day: D(5), activeMinimum: 20, lifetimeLevel: 2, consistencyLevel: 1, level: 1, rank: 0 });
     expect(read.days[5]).toMatchObject({ day: D(10), lifetimeLevel: 2 });
 
     const social = toDomainDays({ key: "social_xp", label: "Social XP" }, [on(9, 25)], D(10), 2);
@@ -787,12 +788,12 @@ describe("reading it as the API does", () => {
       {
         domain: "health_xp",
         levelFrom: 18,
-        levelTo: 68,
+        levelTo: 61,
         rankFrom: 1,
         rankTo: 6,
         rankTitle: "Elite",
         bestLevelFrom: 18,
-        bestLevelTo: 68,
+        bestLevelTo: 61,
         bestRankFrom: 1,
         bestRankTo: 6,
       },

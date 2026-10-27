@@ -79,10 +79,10 @@ export const HEALTH: DomainRules = {
   curve: { linear: 60, quadratic: 24, cubic: 0.85, maxLevel: 100 },
   consistency: {
     windowDays: 90,
-    averageFrom: 20,
+    averageFrom: 30,
     averageTo: 80,
     activeShare: 0.4,
-    activeFloor: 10,
+    activeFloor: 20,
     shareFrom: 0.5,
     shareTo: 0.9,
     maxLevel: 100,
@@ -198,12 +198,12 @@ export function levelFor(curve: CubicCurve, totalXp: number): number {
 
 // --- Consistency and the fall ----------------------------------------------------
 
-/** The average base XP a day `level` needs: 20 at level 2, 80 at 100 for Health. */
+/** The average base XP a day `level` needs: 30 at level 2, 80 at 100 for Health. */
 export function averageFor(rule: ConsistencyRule, level: number): number {
   return rule.averageFrom + roundHalfAway((rule.averageTo - rule.averageFrom) * (level - 2), rule.maxLevel - 2);
 }
 
-/** The action XP that makes a day active at `level`: 10 to 32 for Health. */
+/** The action XP that makes a day active at `level`: 20 to 32 for Health. */
 export function activeMinimumFor(rule: ConsistencyRule, level: number): number {
   return Math.max(rule.activeFloor, roundHalfAway(bp(rule.activeShare) * averageFor(rule, level), 10_000));
 }

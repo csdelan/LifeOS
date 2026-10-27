@@ -172,15 +172,15 @@ describe("domain words (xp-domains plan §7.4.9)", () => {
       title: "Apprentice",
       level: 10,
       lastLevel: 19,
-      average: 25,
-      activeMinimum: 10,
+      average: 34,
+      activeMinimum: 20,
       activeDays: 48,
       windowDays: 90,
       totalXp: 1_476,
       gems: 1,
       reachedOn: null,
     };
-    expect(rankHoldText(apprentice)).toBe("a 90-day average of 25 base XP, 48 active days of 90 (10+ action XP)");
+    expect(rankHoldText(apprentice)).toBe("a 90-day average of 34 base XP, 48 active days of 90 (20+ action XP)");
     expect(rankHoldText({ ...apprentice, rank: 0, average: null, activeMinimum: null, activeDays: null })).toBe(
       "where every domain starts",
     );

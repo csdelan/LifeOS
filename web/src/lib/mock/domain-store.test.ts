@@ -36,7 +36,7 @@ describe("mock life domains (DomainService, RewardService's domain half)", () =>
     vi.useRealTimers();
   });
 
-  it("reads the seeded Health history: a level 9 Novice, 37 XP short of Apprentice", () => {
+  it("reads the seeded Health history: a level 9 Novice, 33 XP short of Apprentice", () => {
     const read = mockDomains();
     expect(read.today).toBe(today());
     expect(read.domains.map((d) => [d.key, d.configured])).toEqual([
@@ -46,13 +46,13 @@ describe("mock life domains (DomainService, RewardService's domain half)", () =>
       ["finance_xp", false],
     ]);
     const h = health();
-    expect(h.totalXp).toBe(1_439);
-    expect(h.lifetime).toMatchObject({ level: 9, xpToNext: 37 });
-    // The last 43 counted days (the sick day left out) support 17: lifetime XP holds the level.
-    expect(h.consistency).toMatchObject({ level: 17, windowDays: 43, to: addDays(today(), -1) });
+    expect(h.totalXp).toBe(1_443);
+    expect(h.lifetime).toMatchObject({ level: 9, xpToNext: 33 });
+    // The last 30 counted days (the sick day left out) support 23: lifetime XP holds the level.
+    expect(h.consistency).toMatchObject({ level: 23, windowDays: 30, to: addDays(today(), -1) });
     expect(h.shown).toMatchObject({ level: 9, rank: 0, rankTitle: "Novice", limitedBy: "lifetime", falling: false });
     expect(h.best).toMatchObject({ level: 9, rank: 0, rankTitle: "Novice", rankOn: null });
-    expect(h.current).toMatchObject({ todayBase: 0, activeMinimum: 10, activeDays: 24, windowDays: 30, multiplier: 1.2 });
+    expect(h.current).toMatchObject({ todayBase: 0, activeMinimum: 20, activeDays: 24, windowDays: 30, multiplier: 1.2 });
     expect(h.current!.nextTier).toEqual({ minShare: 0.85, multiplier: 1.3, daysNeeded: 2 });
     expect(h.current!.settledThrough).toBe(addDays(today(), -1));
     expect(read.domains[1]).toMatchObject({ name: "Social", totalXp: 0, lifetime: null, shown: null });
@@ -128,15 +128,15 @@ describe("mock life domains (DomainService, RewardService's domain half)", () =>
       exception: null,
       counted: false,
       active: true,
-      activeMinimum: 10,
+      activeMinimum: 20,
       lifetimeLevel: 10,
-      consistencyLevel: 17,
+      consistencyLevel: 23,
       level: 10,
       rank: 1,
     });
-    // Sick 14 days ago (marked), and partial 13 days ago: 8 action XP is short of 10.
+    // Sick 14 days ago (marked), and partial 13 days ago: 15 action XP is short of 20.
     expect(read.days.at(-15)).toMatchObject({ day: SICK(), base: 0, exception: "Sick with a cold", counted: false, active: false });
-    expect(read.days.at(-14)).toMatchObject({ base: 8, counted: true, active: false });
+    expect(read.days.at(-14)).toMatchObject({ base: 15, counted: true, active: false });
     expect(mockDomainDays("Health XP", 7).days).toHaveLength(7);
     expect(mockDomainDays("social_xp", 3).days.every((d) => d.active === null && d.counted === null)).toBe(true);
     expect(() => mockDomainDays("health", 0)).toThrow("Ask for at least 1 day; got 0.");
@@ -156,7 +156,7 @@ describe("mock life domains (DomainService, RewardService's domain half)", () =>
       exceptionDays: 1,
       activeDays: 24,
       activeShare: 0.8276,
-      averageBase: 37,
+      averageBase: 45.5,
       levelFrom: 1,
       levelTo: 9,
       rankTitle: "Novice",
@@ -165,8 +165,8 @@ describe("mock life domains (DomainService, RewardService's domain half)", () =>
     });
     expect(report.domains[0].ranks).toHaveLength(30);
     expect(report.domains[0].ranks!.filter((r) => r.exception).map((r) => r.day)).toEqual([SICK()]);
-    // Health's 44 days of history, inside a 90-day period.
-    expect(mockDomainReport(90).domains[0]).toMatchObject({ daysCounted: 43, activeDays: 34, levelFrom: 1 });
+    // Health's 31 days of history, inside a 90-day period.
+    expect(mockDomainReport(90).domains[0]).toMatchObject({ daysCounted: 30, activeDays: 24, levelFrom: 1 });
     expect(report.domains[1]).toMatchObject({ configured: false, paid: 0, daysCounted: null, activeShare: null });
     expect(() => mockDomainReport(0)).toThrow("Ask for at least 1 day; got 0.");
     expect(() => mockDomainReport(732)).toThrow("Ask for at most 731 days; got 732.");
@@ -258,9 +258,9 @@ describe("mock exception days (ExceptionDayService)", () => {
     expect(unmarked).toEqual({ exception: null, awards: [], progress: [] });
     expect(mockExceptionDays().exceptions).toEqual([]);
     expect(mockDomainDays("health").days.at(-15)).toMatchObject({ day: SICK(), exception: null, counted: true, active: false });
-    // The sick day now counts against the window: 44 days, a lower consistency level.
-    expect(health().consistency).toMatchObject({ windowDays: 44 });
-    expect(health().consistency!.level).toBeLessThan(17);
+    // The sick day now counts against the window: 31 days, a lower average.
+    expect(health().consistency).toMatchObject({ windowDays: 31 });
+    expect(health().consistency!.averageBase).toBeLessThan(44.5);
 
     expect(mockUnmarkException(SICK())).toEqual({ exception: null, awards: [], progress: [] });
   });

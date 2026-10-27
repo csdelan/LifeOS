@@ -59,7 +59,7 @@ describe("Character Reports (xp-domains plan §7.4.10)", () => {
 
     expect(screen.getByRole("heading", { name: "By domain, last 30 days" })).toBeInTheDocument();
     // 29 counted days (the sick day left out), 24 of them active; today hasn't settled.
-    expect(cells("Health")).toEqual(["29", "1", "24 (83%)", "37", "1,2631,074 base", "1 → 9", "Novice", "Novice", "Level 9 (from 1)"]);
+    expect(cells("Health")).toEqual(["29", "1", "24 (83%)", "45.5", "1,4281,320 base", "1 → 9", "Novice", "Novice", "Level 9 (from 1)"]);
     // Domains without rules: their XP, nothing else.
     expect(tableRow("Social")).toHaveTextContent("XP only");
     expect(cells("Social")).toEqual(["—", "—", "—", "—", "0", "—", "—", "—", "—"]);
@@ -89,8 +89,8 @@ describe("Character Reports (xp-domains plan §7.4.10)", () => {
     await user.click(screen.getByRole("button", { name: "3 months" }));
     await screen.findByRole("heading", { name: "By domain, last 3 months" });
     expect(screen.getByTestId("rank-chart")).toHaveAccessibleName(/^Rank over the last 3 months\./);
-    // Health's 44 days of history, inside a 90-day period.
-    expect(cells("Health").slice(0, 3)).toEqual(["43", "1", "34 (79%)"]);
+    // Health's 31 days of history, inside a 90-day period.
+    expect(cells("Health").slice(0, 3)).toEqual(["30", "1", "24 (80%)"]);
     expect(JSON.parse(localStorage.getItem("lifeos.view.character.reports")!)).toEqual({ period: "90" });
   });
 
@@ -119,10 +119,10 @@ describe("Character Reports (xp-domains plan §7.4.10)", () => {
     );
     const health = cells("Health");
     expect(health.slice(5)).toEqual([
-      "1 → 10",
+      "2 → 10",
       "Novice → Apprentice",
       "Apprentice",
-      `Level 10 (from 1) · Apprentice ${formatDay(yesterday)}`,
+      `Level 10 (from 2) · Apprentice ${formatDay(yesterday)}`,
     ]);
   });
 });

@@ -7,8 +7,8 @@
  *   half point (3.5, plan §8) pays halfway between its neighbours.
  * - Calories pay 4 from 500 to 2,000, fading evenly to 0 at 2,500.
  * - Fasting pays nothing up to 12 hours, then evenly up to 8 at 24 hours, by the second.
- * - Drinks (FOOD-6, plan §7.2): an alcoholic entry scores 1, and each drink above two cuts the
- *   day's diet XP by 10%, both awards, so twelve leave nothing.
+ * - Drinks (FOOD-6, plan §7.2): an alcoholic entry scores 1, and each drink cuts the day's diet
+ *   XP by 10%, both awards, so ten leave nothing (from the first drink since 2026-10-27).
  *
  * The food award (quality + calories) and the fast award are each cut, then rounded, halves up.
  */
@@ -25,7 +25,7 @@ export const DIET_RULES = {
   fastFromHours: 12,
   fastFullAtHours: 24,
   /** Drinks a day takes before the cut starts. */
-  drinksFree: 2,
+  drinksFree: 0,
   /** What each drink above `drinksFree` takes off the day's diet XP, in percent. */
   drinkCutPercent: 10,
 } as const;
@@ -67,7 +67,7 @@ export interface DietScore {
   /** The calorie-weighted average score, or null when the day has no calories. */
   averageScore: number | null;
   drinks: number;
-  /** What's left after the drinks cut: 1 up to two drinks, 0 from twelve. */
+  /** What's left after the drinks cut: 1 with none, 0.9 for one, 0 from ten. */
   drinkFactor: number;
   /** The fast award before the cut: what a fast pays while its day is open. */
   fastAwardUncut: number;
@@ -99,11 +99,11 @@ export function fastingFor(seconds: number): number {
   return (r.fastingMax * over) / span;
 }
 
-/** The drinks at which the cut leaves nothing (12). */
+/** The drinks at which the cut leaves nothing (10). */
 export const DRINKS_TO_NOTHING =
   DIET_RULES.drinksFree + Math.ceil(100 / DIET_RULES.drinkCutPercent);
 
-/** The percent of the day's diet XP `drinks` leave: 100 up to two, 10 less for each one more. */
+/** The percent of the day's diet XP `drinks` leave: 100 up to `drinksFree`, 10 less for each one more. */
 function percentLeft(drinks: number): number {
   return Math.max(0, 100 - DIET_RULES.drinkCutPercent * Math.max(0, drinks - DIET_RULES.drinksFree));
 }
@@ -151,8 +151,8 @@ export function drinksText(drinks: number): string {
 }
 
 /**
- * A day's drinks in words: "2 drinks · the cut starts above 2", "4 drinks · 20% off the day's
- * diet XP", or null with none.
+ * A day's drinks in words: "4 drinks · 40% off the day's diet XP", or null with none. While
+ * `drinksFree` is above 0, drinks up to it read "2 drinks · the cut starts above 2".
  */
 export function drinksLine(drinks: number): string | null {
   if (drinks <= 0) return null;

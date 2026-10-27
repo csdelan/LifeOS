@@ -163,18 +163,18 @@ public sealed class DomainShownLevelTests
     [Fact]
     public void The_level_rises_to_the_target_at_once_even_on_an_unsettled_day()
     {
-        // 90 days of 60 base XP (50 of it action): the last 90 days support level 68, but
+        // 90 days of 60 base XP (50 of it action): the last 90 days support level 61, but
         // lifetime XP only reaches 18.
         var steady = Run(0, 90, 60, passive: 10).ToList();
         var before = Fold(steady, today: 90);
-        Assert.Equal((18, 68, 18), (before.LifetimeLevel, before.ConsistencyLevel, before.Level));
+        Assert.Equal((18, 61, 18), (before.LifetimeLevel, before.ConsistencyLevel, before.Level));
         Assert.Equal(LevelLimit.Lifetime, before.LimitedBy);
 
-        // A huge day today lifts lifetime XP past level 70: the level goes straight to 68.
+        // A huge day today lifts lifetime XP past level 70: the level goes straight to 61.
         var after = Fold([.. steady, new DomainDay(D(90), 100_000, 100_000)], today: 90);
-        Assert.Equal((70, 68, 68, 68), (after.LifetimeLevel, after.ConsistencyLevel, after.Target, after.Level));
+        Assert.Equal((70, 61, 61, 61), (after.LifetimeLevel, after.ConsistencyLevel, after.Target, after.Level));
         Assert.Equal(LevelLimit.Consistency, after.LimitedBy);
-        Assert.Equal(new LevelChange(D(90), 18, 68), after.LastChange);
+        Assert.Equal(new LevelChange(D(90), 18, 61), after.LastChange);
         Assert.Equal(D(90), after.BestLevelOn);
         Assert.Equal([1, 2, 3, 4, 5, 6], after.RanksReached.Select(r => r.Rank));
         Assert.All(after.RanksReached.Skip(1), r => Assert.Equal(D(90), r.QualifiedOn));

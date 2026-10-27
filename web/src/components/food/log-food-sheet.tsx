@@ -517,8 +517,10 @@ function FoodForm({
               Alcoholic drink
             </Label>
             <p id={`${ids}-alcoholic-help`} className="text-xs text-muted-foreground">
-              A beer, a glass of wine or a shot: one entry is one drink. It always scores 1, and more than{" "}
-              {DIET_RULES.drinksFree} in a day cut the day's diet XP.
+              A beer, a glass of wine or a shot: one entry is one drink. It always scores 1, and{" "}
+              {DIET_RULES.drinksFree === 0
+                ? `each one cuts the day's diet XP by ${DIET_RULES.drinkCutPercent}%.`
+                : `more than ${DIET_RULES.drinksFree} in a day cut the day's diet XP.`}
             </p>
           </div>
         </div>

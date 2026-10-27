@@ -138,11 +138,21 @@ function mobilityState(ago: number): HabitOccurrenceRow["state"] {
 /** What a followed day of Morning mobility pays (its stored bounty); a partial day pays half. */
 const MOBILITY_DAY: Amounts = { coins: 1, freedom: 5, xp: 5, health_xp: 90 };
 
-/** What a followed day of Morning mobility paid in Health XP before its bounty went up, nine days ago. */
-const MOBILITY_EARLY_HEALTH_XP = 16;
+/**
+ * What a followed day of Morning mobility paid in Health XP before its bounty went up, nine
+ * days ago: enough to make a day active (20 action XP), while a partial day's half isn't.
+ */
+const MOBILITY_EARLY_HEALTH_XP = 31;
 
-/** How far back the seeded Health history goes; the wallet opened the day before. */
-const HEALTH_DAYS = 45;
+/** How far back the wallet goes: it opened the day before this many days back. */
+const WALLET_DAYS = 45;
+
+/**
+ * How far back the seeded Health history goes: short enough that its average supports
+ * Apprentice while lifetime XP still holds Health at level 9 (a longer history at that
+ * average would have earned level 10 already).
+ */
+const HEALTH_DAYS = 31;
 
 /** The seeded exception day (REWARD-8): a cold, 14 days ago, when Morning mobility was missed. */
 const SICK_DAY_AGO = 14;
@@ -1923,7 +1933,7 @@ function seedLedger(): MockLedgerEntry[] {
   const today = todayIso();
   const day: Amounts = { xp: 5, coins: 1, freedom: 5 };
   const entries: MockLedgerEntry[] = [
-    { id: "ledger-open", occurredAt: isoAgo(24 * (HEALTH_DAYS + 1)), entry: "open", provenance: "declared", amounts: {} },
+    { id: "ledger-open", occurredAt: isoAgo(24 * (WALLET_DAYS + 1)), entry: "open", provenance: "declared", amounts: {} },
   ];
   const journalDay = (ago: number) => {
     const date = addDays(today, -ago);
@@ -1969,7 +1979,7 @@ function seedLedger(): MockLedgerEntry[] {
   }
 
   // Each rank reached after the wallet opened paid its Gems a minute after the day that reached it.
-  const openedOn = addDays(today, -(HEALTH_DAYS + 1));
+  const openedOn = addDays(today, -(WALLET_DAYS + 1));
   for (const reached of DomainProgress.fold(HEALTH, health, today, sick).ranksReached) {
     if (reached.qualifiedOn < openedOn) continue;
     const reaching = entries.find((e) => e.subjectId === "habit-mobility" && e.creditedOn === reached.qualifiedOn);

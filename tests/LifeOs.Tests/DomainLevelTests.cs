@@ -81,15 +81,15 @@ public sealed class DomainLevelTests
     }
 
     [Theory]
-    [InlineData(10, "Apprentice", 25, 10, 48, 1_476)]
-    [InlineData(20, "Journeyman", 31, 12, 52, 6_068)]
-    [InlineData(30, "Adept", 37, 15, 56, 14_590)]
-    [InlineData(40, "Expert", 43, 17, 59, 27_893)]
-    [InlineData(50, "Veteran", 49, 20, 63, 46_825)]
-    [InlineData(60, "Elite", 56, 22, 67, 72_237)]
-    [InlineData(70, "Master", 62, 25, 70, 104_979)]
-    [InlineData(80, "Champion", 68, 27, 74, 145_902)]
-    [InlineData(90, "Legend", 74, 30, 78, 195_854)]
+    [InlineData(10, "Apprentice", 34, 20, 48, 1_476)]
+    [InlineData(20, "Journeyman", 39, 20, 52, 6_068)]
+    [InlineData(30, "Adept", 44, 20, 56, 14_590)]
+    [InlineData(40, "Expert", 49, 20, 59, 27_893)]
+    [InlineData(50, "Veteran", 54, 22, 63, 46_825)]
+    [InlineData(60, "Elite", 60, 24, 67, 72_237)]
+    [InlineData(70, "Master", 65, 26, 70, 104_979)]
+    [InlineData(80, "Champion", 70, 28, 74, 145_902)]
+    [InlineData(90, "Legend", 75, 30, 78, 195_854)]
     [InlineData(100, "Grandmaster", 80, 32, 81, 255_686)]
     public void Each_rank_holds_its_first_level_at_the_plans_figures(
         int level, string title, int average, int activeMinimum, int activeDaysOf90, long total)
@@ -105,20 +105,21 @@ public sealed class DomainLevelTests
     }
 
     [Fact]
-    public void The_formulas_run_20_to_80_10_to_32_and_half_to_nine_tenths_with_no_rounding_halves()
+    public void The_formulas_run_30_to_80_20_to_32_and_half_to_nine_tenths_with_no_rounding_halves()
     {
-        Assert.Equal((20, 80), (Consistency.Average(2), Consistency.Average(100)));
-        Assert.Equal((10, 32), (Consistency.ActiveMinimum(2), Consistency.ActiveMinimum(100)));
+        Assert.Equal((30, 80), (Consistency.Average(2), Consistency.Average(100)));
+        Assert.Equal((20, 32), (Consistency.ActiveMinimum(2), Consistency.ActiveMinimum(100)));
+        Assert.Equal((20, 21), (Consistency.ActiveMinimum(44), Consistency.ActiveMinimum(45)));
         Assert.Equal((45, 81), (Consistency.ActiveDaysNeeded(2, 90), Consistency.ActiveDaysNeeded(100, 90)));
         Assert.Equal((4, 7), (Consistency.ActiveDaysNeeded(2, 7), Consistency.ActiveDaysNeeded(100, 7)));
         Assert.Equal((3, 90, 90), (Consistency.AgeNeeded(2), Consistency.AgeNeeded(89), Consistency.AgeNeeded(100)));
 
         for (var level = 2; level <= 100; level++)
         {
-            // A(L) = 20 + round(60(L − 2) / 98): never a half, so the rounding rule can't matter.
-            Assert.NotEqual(49, 60 * (level - 2) % 98);
-            Assert.Equal(20 + (int)Math.Round(60.0 * (level - 2) / 98), Consistency.Average(level));
-            // M(L) = max(10, round(0.4·A)): 4A is even, so 4A / 10 never ends in a half either.
+            // A(L) = 30 + round(50(L − 2) / 98): never a half, so the rounding rule can't matter.
+            Assert.NotEqual(49, 50 * (level - 2) % 98);
+            Assert.Equal(30 + (int)Math.Round(50.0 * (level - 2) / 98), Consistency.Average(level));
+            // M(L) = max(20, round(0.4·A)): 4A is even, so 4A / 10 never ends in a half either.
             Assert.NotEqual(5, 4 * Consistency.Average(level) % 10);
 
             // ⌈P(L)·N⌉ = ⌈N(490 + 4(L − 2)) / 980⌉ in integers.
@@ -133,11 +134,11 @@ public sealed class DomainLevelTests
     [Fact]
     public void A_level_qualifies_only_when_all_three_tests_pass()
     {
-        // Level 40 over 90 days: 43 a day on average (3,870), 59 active days, 41 active so far.
-        Assert.True(Consistency.Qualifies(40, activeSoFar: 41, days: 90, windowBase: 3_870, windowActive: 59));
-        Assert.False(Consistency.Qualifies(40, activeSoFar: 40, days: 90, windowBase: 3_870, windowActive: 59));
-        Assert.False(Consistency.Qualifies(40, activeSoFar: 41, days: 90, windowBase: 3_869, windowActive: 59));
-        Assert.False(Consistency.Qualifies(40, activeSoFar: 41, days: 90, windowBase: 3_870, windowActive: 58));
+        // Level 40 over 90 days: 49 a day on average (4,410), 59 active days, 41 active so far.
+        Assert.True(Consistency.Qualifies(40, activeSoFar: 41, days: 90, windowBase: 4_410, windowActive: 59));
+        Assert.False(Consistency.Qualifies(40, activeSoFar: 40, days: 90, windowBase: 4_410, windowActive: 59));
+        Assert.False(Consistency.Qualifies(40, activeSoFar: 41, days: 90, windowBase: 4_409, windowActive: 59));
+        Assert.False(Consistency.Qualifies(40, activeSoFar: 41, days: 90, windowBase: 4_410, windowActive: 58));
         Assert.False(Consistency.Qualifies(2, activeSoFar: 10, days: 0, windowBase: 0, windowActive: 0));
     }
 

@@ -339,7 +339,7 @@ test.describe("golden paths", () => {
     await expect(health.getByText("Level 9", { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(health.getByText("Novice", { exact: true })).toBeVisible();
 
-    // In-app navigation keeps the mock's state. The seeded Health history is 37 XP short of
+    // In-app navigation keeps the mock's state. The seeded Health history is 33 XP short of
     // level 10, and its last 90 days already support more: today's 90 base XP (108 at ×1.2) reaches it.
     await page.getByRole("link", { name: "Habits" }).first().click();
     const mobility = page.getByRole("list", { name: "Building" }).getByRole("listitem").filter({ hasText: "Morning mobility" });
@@ -349,7 +349,7 @@ test.describe("golden paths", () => {
     await page.getByRole("link", { name: "Character" }).first().click();
     await expect(health.getByText("Level 10", { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(health.getByText("Apprentice", { exact: true })).toBeVisible();
-    await expect(health.getByRole("img", { name: "Today: 90 of 10 action XP, active" })).toBeVisible();
+    await expect(health.getByRole("img", { name: "Today: 90 of 20 action XP, active" })).toBeVisible();
     const ranks = page.getByRole("region", { name: "Health ranks" }).getByRole("listitem");
     await expect(ranks.nth(1)).toHaveAttribute("aria-current", "step");
   });
@@ -397,7 +397,7 @@ test.describe("golden paths", () => {
 
     await marks.first().getByRole("button", { name: /^Unmark / }).click();
     await expect(marks).toHaveCount(1);
-    await expect(health.getByRole("img", { name: /^Today: 0 of 10 action XP/ })).toBeVisible();
+    await expect(health.getByRole("img", { name: /^Today: 0 of 20 action XP/ })).toBeVisible();
   });
 
   test("record a fast, log food and close the day for diet XP", async ({ page }) => {
@@ -504,7 +504,7 @@ test.describe("golden paths", () => {
     await expect(entries.getByRole("button", { name: /^IPA \(alcoholic drink\), / })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("region", { name: "Sobriety streak" })).toContainText("A drink today");
 
-    // Three more with Log again: four drinks take 20% off the day.
+    // Three more with Log again: four drinks take 40% off the day.
     for (let i = 0; i < 3; i++) {
       await page.getByRole("button", { name: "Log food", exact: true }).click();
       await sheet.getByRole("button", { name: "Log again: IPA · drink · 200 cal" }).click();
@@ -512,7 +512,7 @@ test.describe("golden paths", () => {
       await sheet.getByRole("button", { name: "Log", exact: true }).click();
       await expect(sheet).toBeHidden();
     }
-    await expect(page.getByText("4 drinks · 20% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("4 drinks · 40% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
 
     // The four show as one card (FOOD-7). Have another adds a fifth; deleting a copy takes it back.
     const card = entries.getByRole("button", { name: /^IPA ×4 \(alcoholic drink\), .+: show the 4 entries$/ });
@@ -526,7 +526,7 @@ test.describe("golden paths", () => {
     await expect(sheet.getByLabel("Calories")).toHaveValue("200");
     await sheet.getByRole("button", { name: "Log", exact: true }).click();
     await expect(sheet).toBeHidden();
-    await expect(page.getByText("5 drinks · 30% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("5 drinks · 50% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
 
     await entries.getByRole("button", { name: /^IPA ×5 / }).click();
     await page.getByRole("dialog", { name: "IPA ×5" }).getByRole("list", { name: "Each IPA" }).getByRole("button").first().click();
@@ -535,7 +535,7 @@ test.describe("golden paths", () => {
     await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
     await expect(change).toBeHidden();
     await expect(entries.getByRole("button", { name: /^IPA ×4 / })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("4 drinks · 20% off the day's diet XP")).toBeVisible();
+    await expect(page.getByText("4 drinks · 40% off the day's diet XP")).toBeVisible();
 
     // The week counts them, and the streak as of today.
     await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Week" }).click();

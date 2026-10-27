@@ -31,7 +31,7 @@ describe("mock rewards (v_wallet / v_ledger / v_reward and RedeemAsync)", () => 
       ["karma", 3],
       ["xp", 115],
       ["resolve", 2],
-      ["health_xp", 1_439],
+      ["health_xp", 1_443],
       ["social_xp", 0],
       ["environment_xp", 0],
       ["finance_xp", 0],

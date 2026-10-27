@@ -36,7 +36,7 @@ function Part({ label, value, max, detail }: { label: string; value: number; max
  * The day's diet score (FOOD-3): before the close, what it's on track for, with its three
  * parts as meters, its calories and average score; Close day once it has an entry. After the
  * close, what it paid, at the day's multiplier. A day's drinks show under the parts, with the
- * cut more than two take (FOOD-6); a fast paid in full is re-scored when the day closes.
+ * cut drinks take (FOOD-6); a fast paid in full is re-scored when the day closes.
  */
 export function SummaryCard({ summary, isToday }: { summary: FoodDaySummary; isToday: boolean }) {
   const writes = useWrites();

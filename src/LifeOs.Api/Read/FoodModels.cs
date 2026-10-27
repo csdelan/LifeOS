@@ -130,7 +130,7 @@ public sealed class FastRow
 /// </para>
 /// <para>
 /// <see cref="Drinks"/> counts the day's alcoholic drinks (FOOD-6); <see cref="DrinkFactor"/>
-/// is what they leave of its diet XP (1 up to two drinks, 0.9 for three, … 0 from twelve). Both
+/// is what they leave of its diet XP (1 with none, 0.9 for one, … 0 from ten). Both
 /// awards are shown cut, as they pay once the day is closed; before the close a fast is paid
 /// in full.
 /// </para>

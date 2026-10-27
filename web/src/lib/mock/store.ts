@@ -2459,7 +2459,7 @@ export function mockClearCover(subject: string): CoverCleared {
 // Entries, fasts and closes are versioned events (`lib/mock/food-fold.ts`). Every write settles
 // every food day with the ledger: `fast:<day>` and `diet:<day>` pay base Health XP at the day's
 // multiplier, and a paid day whose events changed is re-priced (given back, then earned again).
-// More than two drinks cut both: the food award at the close, the fast once the day closes.
+// Drinks cut both: the food award at the close, the fast once the day closes.
 // The mock's domain settle leaves food alone, so the seeded Health history reads as the
 // Character page's tests expect; the live `POST /api/domains/settle` settles food first.
 // ---------------------------------------------------------------------------

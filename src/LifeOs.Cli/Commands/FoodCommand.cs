@@ -726,7 +726,7 @@ internal static class FoodOutput
             $"fasting {Part(score.Fasting)} / {rules.FastingMax}.");
         if (score.Drinks > 0)
         {
-            Console.WriteLine($"  {Drinks(score.Drinks)}{(score.Cut ? $", {score.Drinks - rules.DrinksFree} over {rules.DrinksFree}: {CutText(score.DrinkFactor)} off the day's diet XP" : "")}.");
+            Console.WriteLine($"  {Drinks(score.Drinks)}{(!score.Cut ? "" : rules.DrinksFree > 0 ? $", {score.Drinks - rules.DrinksFree} over {rules.DrinksFree}: {CutText(score.DrinkFactor)} off the day's diet XP" : $": {CutText(score.DrinkFactor)} off the day's diet XP")}.");
         }
 
         Console.WriteLine(

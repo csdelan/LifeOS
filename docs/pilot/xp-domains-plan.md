@@ -174,6 +174,28 @@ successful-day bar to 60 base XP."
 - Ranks and successful days are re-read from history, so past days are judged at 60 too.
   Multipliers already issued stay as they were paid.
 
+**Low levels made harder (2026-10-27).** Two days after levels v2 (§7) went live, Chris found
+the low levels too easy: "I can drink all day long, not exercise at all, have few steps, and
+my level still increases." Level 2 needed an average of 20 base XP a day, and a day counted
+as active from 10 action XP, which ordinary logged food alone could pay. Of the two options
+offered, he took the gentler one: "Let's try the gentler option first and see how it goes."
+
+- **An active day takes at least 20 action XP**, not 10: about 7,500 steps (20), or 5,000
+  steps (12) plus ordinary logged food. This holds through level 44, then rises to 32 at 100
+  as before.
+- **Level 2 needs an average of 30 base XP a day**, not 20. Level 100 still needs 80, so the
+  average now runs 30 → 80 (§7.2) and every level below 100 needs a little more.
+- **Nothing else moved:** the lifetime curve, the active shares, the window, the fall and the
+  multiplier.
+- **It's retroactive.** The level is re-read from history every time, so past days are judged
+  by the new bars too, and the best level and best rank are re-read with them. Gems already
+  paid for reaching a rank stay.
+- **The middle levels get a little harder too.** Every average between levels 2 and 99 rises
+  by up to 10. The Steady routine still reaches Grandmaster in every run at about the same
+  time, but its dips in the last two years go a few levels deeper (§7.4.11).
+- The firmer option, kept in case this isn't enough: an active day from 25 action XP and
+  level 2 from 40 base XP.
+
 ## 3. Design
 
 ### 3.1 Domains are tracked currencies
@@ -940,8 +962,8 @@ age:          #{counted days so far with B_d ≥ M(L)}  ≥  min(90, L + 1)
 average:      Σ_window H_d                             ≥  A(L) · N
 active days:  #{d in window : B_d ≥ M(L)}              ≥  ⌈P(L) · N⌉
 
-A(L) = 20 + round(60 · (L − 2) / 98)      average base XP a day: 20 at level 2, 80 at level 100
-M(L) = max(10, round(0.4 · A(L)))         action XP for an active day: 10 to 32
+A(L) = 30 + round(50 · (L − 2) / 98)      average base XP a day: 30 at level 2, 80 at level 100
+M(L) = max(20, round(0.4 · A(L)))         action XP for an active day: 20 to 32
 P(L) = 0.50 + 0.40 · (L − 2) / 98         share of days active: 50% to 90%
 ```
 
@@ -949,7 +971,8 @@ P(L) = 0.50 + 0.40 · (L − 2) / 98         share of days active: 50% to 90%
   passes, every level below it passes too, and the walk can stop at the first failure.
 - **Whole-number math:**
   - Neither rounding ever lands exactly on a half, so the rounding rule doesn't matter. A half
-    would need `60(L − 2)` to equal 49 times an odd number, or `4A` to be odd.
+    would need `50(L − 2)` to equal 49 times an odd number, or `4A` to be odd.
+  - Until 2026-10-27, A ran 20 → 80 and M's floor was 10 (§2.4).
   - `⌈P(L) · N⌉ = ⌈N · (490 + 4(L − 2)) / 980⌉`.
   - The average test is `Σ H ≥ A · N` in integers.
 - **Age counts active days**, not days of any kind. Counting any day let consistency climb
@@ -994,25 +1017,26 @@ What each rank takes to hold its first level over a full 90-day window:
 | Rank | Levels | Average base XP a day | Action XP for an active day | Active days of 90 | Total XP to reach |
 |---|---|---|---|---|---|
 | Novice | 1–9 | — | — | — | 0 |
-| Apprentice | 10–19 | 25 | 10 | 48 (53%) | 1,476 |
-| Journeyman | 20–29 | 31 | 12 | 52 (57%) | 6,068 |
-| Adept | 30–39 | 37 | 15 | 56 (61%) | 14,590 |
-| Expert | 40–49 | 43 | 17 | 59 (66%) | 27,893 |
-| Veteran | 50–59 | 49 | 20 | 63 (70%) | 46,825 |
-| Elite | 60–69 | 56 | 22 | 67 (74%) | 72,237 |
-| Master | 70–79 | 62 | 25 | 70 (78%) | 104,979 |
-| Champion | 80–89 | 68 | 27 | 74 (82%) | 145,902 |
-| Legend | 90–99 | 74 | 30 | 78 (86%) | 195,854 |
+| Apprentice | 10–19 | 34 | 20 | 48 (53%) | 1,476 |
+| Journeyman | 20–29 | 39 | 20 | 52 (57%) | 6,068 |
+| Adept | 30–39 | 44 | 20 | 56 (61%) | 14,590 |
+| Expert | 40–49 | 49 | 20 | 59 (66%) | 27,893 |
+| Veteran | 50–59 | 54 | 22 | 63 (70%) | 46,825 |
+| Elite | 60–69 | 60 | 24 | 67 (74%) | 72,237 |
+| Master | 70–79 | 65 | 26 | 70 (78%) | 104,979 |
+| Champion | 80–89 | 70 | 28 | 74 (82%) | 145,902 |
+| Legend | 90–99 | 75 | 30 | 78 (86%) | 195,854 |
 | Grandmaster | 100 | 80 | 32 | 81 (90%) | 255,686 |
 
-The tunable numbers are 20 and 80 (the average), 0.4 and 10 (the active day), 50% and 90%
+The tunable numbers are 30 and 80 (the average), 0.4 and 20 (the active day), 50% and 90%
 (the active share), 90 days (the window), 1% a day with no hold and 7 days back on track (the
 fall), and §2.3's multiplier tiers.
 
 ### 7.3 What it produces
 
 From the Python model (6 seeded runs of 10 years each, using the routines of activity plan
-§3.8). These are the targets X10's simulator bands are checked against:
+§3.8), under the first numbers (A from 20, M from 10). These are the targets X10's simulator
+bands are checked against; §7.4.11 has the C# runs under the 2026-10-27 numbers:
 
 | Routine (average base XP a day) | Year 1 | Year 5 | Level 100 | Lowest level, years 9–10 | Rank drops a year |
 |---|---|---|---|---|---|
@@ -1052,8 +1076,9 @@ with it:
   Cubic: 0.85)`**. `TotalFor` is the closed form in §7.2, in whole numbers. `CostToNext` is
   the difference of totals, and `LevelFor` is a binary search, as `RampCurve` does.
   `RampCurve` stays, unused, as another shape a domain can pick.
-- `Consistency`: new, **`ConsistencyRule(WindowDays: 90, AverageFrom: 20, AverageTo: 80,
-  ActiveShare: 0.4, ActiveFloor: 10, ShareFrom: 0.50, ShareTo: 0.90)`**.
+- `Consistency`: new, **`ConsistencyRule(WindowDays: 90, AverageFrom: 30, AverageTo: 80,
+  ActiveShare: 0.4, ActiveFloor: 20, ShareFrom: 0.50, ShareTo: 0.90)`** (from 20 and 10 until
+  2026-10-27, §2.4).
   - It answers `Average(level)`, `ActiveMinimum(level)` and `ActiveDaysNeeded(level, n)`,
     and the age test's `min(WindowDays, level + 1)`.
   - It uses the whole-number forms in §7.2.
@@ -1352,15 +1377,16 @@ Health's card:
     average active share
 - **Regression scenarios,** each set from C# runs and checked against §7.3:
   - **Steady** (the calibration routine's average): Grandmaster in every run in 6–8 years;
-    the lowest level in years 9–10 stays in the 90s.
+    the lowest level in years 9–10 stays above 85 (in the 90s before 2026-10-27).
   - **Human** (10% of days off): Champion by year 5 in every run; level 100 in about a
     third of runs.
   - **High activity** (100 a day): level 100 in about 5.3 years, with no rank drops after.
   - **Lapse** (6 months off in year 3): the level falls, then is back within about a year
     of returning.
   - **Marked lapse** (the same 6 months as exception days): level and rank don't move.
-  - **Below the bar** (a flat 30 base XP): settles at the level that average supports,
-    level 19 (A(19) = 30, A(20) = 31), and stays there.
+  - **Below the bar** (a flat 38 base XP): settles at the level that average supports,
+    level 18 (A(18) = 38, A(19) = 39), and stays there. Until 2026-10-27 it was a flat 30
+    and level 19.
   - **Level 100, then nothing:** Legend on day 10, Champion on day 21, Novice on day 249
     (§7.3).
 - `--replay` folds the real days, exception days and passive split included, and projects
@@ -1372,7 +1398,10 @@ Health's card:
   - High activity: level 100 at 5.3–5.4 years, and no drops after.
   - Lapse: back to the level it had within a year of returning; Grandmaster at 7.3–7.7 years.
   - Marked lapse: nothing moves during the span; the same final results as the lapse.
-  - Below the bar: level 19 (Apprentice) in every run.
+  - Below the bar: level 18 (Apprentice) in every run.
+  - **After the 2026-10-27 calibration (§2.4):** Steady: Grandmaster in every run at
+    6.7–7.2 years; the lowest level in the last 2 years 87–95; 3 to 6 rank drops a year.
+    Human: Champion at about 4.3 years in every run; Grandmaster in 7 of 20, as before.
 
 #### 7.4.12 Switching over
 
@@ -1483,3 +1512,5 @@ default:
 - [x] X9 — v2 inputs: exception days, action XP, settled days (migration 0043)
 - [x] X10 — Levels v2 in the kernel (no migration; push with X11)
 - [x] X11 — Levels v2 on the web (no migration). Next: calibrate (§2.4).
+- [x] Calibration, 2026-10-27: an active day from 20 action XP and level 2 from a 30 base XP
+  average (§2.4; no migration). Next: Chris lives with it.

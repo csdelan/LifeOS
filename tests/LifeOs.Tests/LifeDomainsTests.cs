@@ -154,10 +154,10 @@ public sealed class LifeDomainsTests
         Assert.Equal(Currencies.HealthXp, health.Currency);
         Assert.Equal(Cadence.Daily, health.Cadence);
         Assert.Equal(new CubicCurve(Linear: 60, Quadratic: 24, Cubic: 0.85m), health.Curve);
-        Assert.Equal(new ConsistencyRule(90, 20, 80, 0.4m, 10, 0.50m, 0.90m), health.Consistency);
+        Assert.Equal(new ConsistencyRule(90, 30, 80, 0.4m, 20, 0.50m, 0.90m), health.Consistency);
         Assert.Equal(new FallRule(PercentPerDay: 1, HoldDays: 0, BackOnTrackDays: 7), health.Fall);
         Assert.Equal(new ActiveAtShownLevel(health.Consistency), health.Success);
-        Assert.Equal("at least 17 action XP (base XP less sleep)", health.Success.Describe(40));
+        Assert.Equal("at least 24 action XP (base XP less sleep)", health.Success.Describe(60));
         Assert.Equal(["sleep"], health.PassiveTriggers);
         Assert.Equal(30, health.Multiplier.WindowDays);
         Assert.Equal(new RankUpGems(1, 5), health.RankUpGems);

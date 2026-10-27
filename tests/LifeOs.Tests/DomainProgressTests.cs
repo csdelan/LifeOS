@@ -43,9 +43,9 @@ public sealed class DomainProgressTests
         Assert.Equal((1, 0), (progress.BestLevel, progress.BestRank));
         Assert.Equal((0L, 0L, 60L), (progress.TotalXp, progress.XpIntoLevel, progress.XpToNext));
         Assert.Equal(new CountedWindow(0, null, null, 0), progress.Window);
-        Assert.Equal((2, 0, 20, 3, 0), (progress.NextConsistency!.Level, progress.NextConsistency.WindowDays, progress.NextConsistency.Average, progress.NextConsistency.AgeNeeded, progress.NextConsistency.AgeNow));
+        Assert.Equal((2, 0, 30, 3, 0), (progress.NextConsistency!.Level, progress.NextConsistency.WindowDays, progress.NextConsistency.Average, progress.NextConsistency.AgeNeeded, progress.NextConsistency.AgeNow));
         Assert.False(progress.NextConsistency.Met);
-        Assert.Equal((10, false, false), (progress.ActiveMinimum, progress.TodayActive, progress.Falling));
+        Assert.Equal((20, false, false), (progress.ActiveMinimum, progress.TodayActive, progress.Falling));
         Assert.Equal((30, 0, 0), (progress.Consistency.Days, progress.Consistency.CoveredDays, progress.Consistency.SuccessfulDays));
         Assert.Equal(1.0m, progress.MultiplierNow);
         Assert.Null(progress.LimitedBy);
@@ -166,15 +166,15 @@ public sealed class DomainProgressTests
     [Fact]
     public void A_day_is_active_on_its_action_xp_at_the_level_going_into_it()
     {
-        // At level 1 an active day takes 10 action XP: sleep doesn't count toward it.
-        Assert.True(Fold([On(0, 40, passive: 30)], today: 0).TodayActive);
-        Assert.False(Fold([On(0, 40, passive: 31)], today: 0).TodayActive);
+        // At level 1 an active day takes 20 action XP: sleep doesn't count toward it.
+        Assert.True(Fold([On(0, 40, passive: 20)], today: 0).TodayActive);
+        Assert.False(Fold([On(0, 40, passive: 21)], today: 0).TodayActive);
 
-        // At Grandmaster it takes 32: 15 action XP isn't enough, though it was at level 1.
+        // At Grandmaster it takes 32: 25 action XP isn't enough, though it is at level 1.
         var top = Run(0, 100, 3_000).ToList();
-        var day = Fold([.. top, On(100, 15)], today: 100);
+        var day = Fold([.. top, On(100, 25)], today: 100);
         Assert.Equal((32, false), (day.ActiveMinimum, day.TodayActive));
-        Assert.True(Fold([On(0, 15)], today: 0).TodayActive);
+        Assert.True(Fold([On(0, 25)], today: 0).TodayActive);
         Assert.True(Fold([.. top, On(100, 32)], today: 100).TodayActive);
         Assert.Equal("at least 32 action XP (base XP less sleep)", Health.Success.Describe(day.Level));
     }

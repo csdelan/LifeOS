@@ -121,19 +121,20 @@ describe("drinks (FOOD-6)", () => {
       drinks: beers,
     });
 
-  it("starts the cut after two and leaves nothing at twelve", () => {
-    expect([DIET_RULES.drinksFree, DIET_RULES.drinkCutPercent]).toEqual([2, 10]);
+  it("starts the cut at the first drink and leaves nothing at ten", () => {
+    expect([DIET_RULES.drinksFree, DIET_RULES.drinkCutPercent]).toEqual([0, 10]);
     expect(DRINK_SCORE).toBe(1);
-    expect(DRINKS_TO_NOTHING).toBe(12);
-    expect([0, 2, 3, 11, 12, 40].map(drinkFactorFor)).toEqual([1, 1, 0.9, 0.1, 0, 0]);
+    expect(DRINKS_TO_NOTHING).toBe(10);
+    expect([0, 1, 2, 9, 10, 40].map(drinkFactorFor)).toEqual([1, 0.9, 0.8, 0.1, 0, 0]);
   });
 
   it.each([
     [0, "28", 4, 32, 7, 39],
-    [2, "22.4", 4, 26, 7, 33],
-    [3, "20.4", 4, 22, 7, 29],
-    [4, "18.7", 4, 18, 6, 24],
-    [12, "11.2", 0, 0, 0, 0],
+    [1, "24.9", 4, 26, 7, 33],
+    [2, "22.4", 4, 21, 6, 27],
+    [3, "20.4", 4, 17, 5, 22],
+    [4, "18.7", 4, 14, 4, 18],
+    [10, "12.4", 0, 0, 0, 0],
   ])("pays the salmon day with %i beers as the plan's table says", (beers, quality, calories, food, fast, total) => {
     const s = salmonDayWithBeers(beers);
     expect(formatPart(s.quality)).toBe(quality);
@@ -146,18 +147,18 @@ describe("drinks (FOOD-6)", () => {
   });
 
   it("cuts each award before rounding it", () => {
-    // A 23-hour fast is 7.33: three drinks leave 6.6, which rounds to 7 (the rounded 7 cut would be 6.3, so 6).
-    const three = scoreDay({ calories: 0, scoreCalories: 0, longestFastSeconds: 23 * HOUR, drinks: 3 });
-    expect([three.fastAward, three.fastAwardUncut, three.drinkFactor]).toEqual([7, 7, 0.9]);
-    // Four leave 80%: 5.87, so 6.
-    expect(scoreDay({ calories: 0, scoreCalories: 0, longestFastSeconds: 23 * HOUR, drinks: 4 }).fastAward).toBe(6);
+    // A 23-hour fast is 7.33: one drink leaves 6.6, which rounds to 7 (the rounded 7 cut would be 6.3, so 6).
+    const one = scoreDay({ calories: 0, scoreCalories: 0, longestFastSeconds: 23 * HOUR, drinks: 1 });
+    expect([one.fastAward, one.fastAwardUncut, one.drinkFactor]).toEqual([7, 7, 0.9]);
+    // Two leave 80%: 5.87, so 6.
+    expect(scoreDay({ calories: 0, scoreCalories: 0, longestFastSeconds: 23 * HOUR, drinks: 2 }).fastAward).toBe(6);
   });
 
   it("says a day's drinks and their cut", () => {
     expect(drinksLine(0)).toBeNull();
-    expect(drinksLine(1)).toBe("1 drink · the cut starts above 2");
-    expect(drinksLine(4)).toBe("4 drinks · 20% off the day's diet XP");
-    expect(drinksLine(12)).toBe("12 drinks · 100% off the day's diet XP");
+    expect(drinksLine(1)).toBe("1 drink · 10% off the day's diet XP");
+    expect(drinksLine(4)).toBe("4 drinks · 40% off the day's diet XP");
+    expect(drinksLine(10)).toBe("10 drinks · 100% off the day's diet XP");
   });
 });
 

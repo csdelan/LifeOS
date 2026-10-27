@@ -119,7 +119,8 @@ public sealed record DietRules(
 {
     /// <summary>
     /// Chris's first pass (2026-10-20): 28 quality + 4 calories + 8 fasting = 40; and
-    /// (2026-10-22) 10% off the day for each drink above two.
+    /// (2026-10-22) 10% off the day for each drink above two; (2026-10-27) from the first drink,
+    /// so ten leave nothing.
     /// </summary>
     public static readonly DietRules Default = new(
         Currency: Currencies.HealthXp,
@@ -131,7 +132,7 @@ public sealed record DietRules(
         CalorieZeroAt: 2500,
         FastFromHours: 12,
         FastFullAtHours: 24,
-        DrinksFree: 2,
+        DrinksFree: 0,
         DrinkCutPercent: 10);
 
     /// <summary>The most base Health XP a day's diet can pay.</summary>
@@ -140,7 +141,7 @@ public sealed record DietRules(
     /// <summary>The most the food award (quality + calories) can pay.</summary>
     public int FoodMax => QualityMax + CaloriesMax;
 
-    /// <summary>The fewest drinks that leave a day's diet XP at nothing: 12.</summary>
+    /// <summary>The fewest drinks that leave a day's diet XP at nothing: 10.</summary>
     public int DrinksToNothing => DrinksFree + (100 + DrinkCutPercent - 1) / DrinkCutPercent;
 
     /// <summary>Scores one day (food-log plan §2.1, §7.2).</summary>
