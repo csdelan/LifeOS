@@ -13,7 +13,9 @@ namespace LifeOs.Cli.Commands;
 /// <item><c>bsk space add "Office" [--weight 5] [--pace 5]</c> adds one (weight 1–10 and pace 1–5, 3 by default);</item>
 /// <item><c>bsk space list [--archived]</c> lists them with each one's share of the Home Score;</item>
 /// <item><c>bsk space set &lt;space&gt; [--name …] [--weight N] [--pace N]</c> renames, reweights or re-paces one;</item>
-/// <item><c>bsk space archive &lt;space&gt;</c> and <c>bsk space restore &lt;space&gt;</c>.</item>
+/// <item><c>bsk space archive &lt;space&gt;</c> and <c>bsk space restore &lt;space&gt;</c>;</item>
+/// <item><c>bsk space photo</c>, <c>bsk space baseline</c> and <c>bsk space shot</c>: photos of
+/// each space from a baseline (HOME-4, <see cref="SpacePhotoCommand"/>).</item>
 /// </list>
 /// <c>&lt;space&gt;</c> is a name (unique among the spaces not archived), a urn, a short id or an id.
 /// </summary>
@@ -21,12 +23,16 @@ internal static class SpaceCommand
 {
     public static Command Create(Option<string?> connectionOption, Option<bool> jsonOption)
     {
-        var command = new Command("space", "The home's spaces, rated for the Home Score: add, list, set, archive, restore.");
+        var command = new Command(
+            "space", "The home's spaces, rated for the Home Score: add, list, set, archive, restore, and their photos and shots.");
         command.Subcommands.Add(CreateAdd(connectionOption, jsonOption));
         command.Subcommands.Add(CreateList(connectionOption, jsonOption));
         command.Subcommands.Add(CreateSet(connectionOption, jsonOption));
         command.Subcommands.Add(CreateArchive(connectionOption, jsonOption, archive: true));
         command.Subcommands.Add(CreateArchive(connectionOption, jsonOption, archive: false));
+        command.Subcommands.Add(SpacePhotoCommand.CreatePhoto(connectionOption, jsonOption));
+        command.Subcommands.Add(SpacePhotoCommand.CreateBaseline(connectionOption, jsonOption));
+        command.Subcommands.Add(SpacePhotoCommand.CreateShot(connectionOption, jsonOption));
         return command;
     }
 
@@ -178,7 +184,8 @@ internal static class SpaceCommand
         pace = space.Pace,
         share = space.Archived ? (decimal?)null : Math.Round(Share(space.Weight, totalWeight), 1),
         archivedAt = space.ArchivedAt,
-        archivedOn = space.ArchivedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+        archivedOn = space.ArchivedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        shots = SpacePhotoCommand.ShotsJson(space)
     };
 
     private static decimal Share(int weight, int total) => total == 0 ? 0m : 100m * weight / total;

@@ -171,7 +171,7 @@ public sealed class FoodLogService(
     private async Task CheckPhotoAsync(Guid photo, CancellationToken cancellationToken)
     {
         var stored = await blobs.GetMetadataAsync(photo, cancellationToken);
-        if (stored is null || !FoodPhotoService.PhotoTypes.Contains(stored.ContentType))
+        if (stored is null || !Photos.PhotoChecks.PhotoTypes.Contains(stored.ContentType))
         {
             throw new ArgumentException("That photo isn't stored here: pick the photo again, or log the entry without one.");
         }

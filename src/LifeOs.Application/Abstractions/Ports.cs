@@ -469,11 +469,16 @@ public interface IFoodLogRepository
 /// <summary>A rating event to append and the space its <c>concerns</c> edge points at (HOME-2).</summary>
 public sealed record SpaceRatingWrite(NewEvent Event, Guid SpaceId);
 
+/// <summary>A photo version to append and the space its <c>concerns</c> edge points at (HOME-4).</summary>
+public sealed record SpacePhotoWrite(NewEvent Event, Guid SpaceId);
+
 /// <summary>
-/// Reads the home's spaces and their ratings (HOME-1, HOME-2, environment plan §4.1–§4.3)
-/// through <c>bsk.v_space</c> and <c>bsk.v_space_rating</c>, and appends ratings. Spaces are
-/// written as subjects (<see cref="ISubjectRepository"/>); ratings are append-only
-/// <c>measurement</c> events, each with a <c>concerns</c> edge to its space.
+/// Reads the home's spaces, their ratings and their photos (HOME-1, HOME-2, HOME-4, environment
+/// plan §4.1–§4.3, §8) through <c>bsk.v_space</c>, <c>bsk.v_space_rating</c> and
+/// <c>bsk.v_space_photo</c>, and appends ratings and photo versions. Spaces are written as
+/// subjects (<see cref="ISubjectRepository"/>); ratings are append-only <c>measurement</c>
+/// events and photos <c>observation</c> events, each with a <c>concerns</c> edge to its space.
+/// A photo's first version is written with its bytes, through <see cref="IArtifactBlobStore"/>.
 /// </summary>
 public interface ISpaceRepository
 {
@@ -505,6 +510,25 @@ public interface ISpaceRepository
     /// </summary>
     Task<IReadOnlyList<Guid>> AppendRatingsAsync(
         IReadOnlyList<SpaceRatingWrite> writes, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The live photos (HOME-4, <c>bsk.v_space_photo</c>), oldest first by day then by when each
+    /// was added: of <paramref name="spaceId"/> only when given.
+    /// </summary>
+    Task<IReadOnlyList<SpacePhoto>> GetPhotosAsync(Guid? spaceId = null, CancellationToken cancellationToken = default);
+
+    /// <summary>The live photo with that id, or null (never added, or removed).</summary>
+    Task<SpacePhoto?> GetPhotoAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Live photos whose id starts with <paramref name="prefix"/> (hex), newest first.</summary>
+    Task<IReadOnlyList<SpacePhoto>> FindPhotosAsync(string prefix, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Appends photo versions (a new day or shot, a removal, or a first version for bytes stored
+    /// before) and their <c>concerns</c> edges as one transaction. Returns the new event ids.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> AppendPhotoVersionsAsync(
+        IReadOnlyList<SpacePhotoWrite> writes, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -7,7 +7,8 @@ namespace LifeOs.Domain;
 /// through <c>bsk.v_space</c>. <paramref name="Weight"/> (1–10) is how much it counts in the
 /// Home Score, <paramref name="Pace"/> (1–5, 3 normal) how fast it gets messy.
 /// <paramref name="ArchivedOn"/> is the home-zone day it was archived: it leaves the Home Score
-/// from that day on.
+/// from that day on. <paramref name="StoredShots"/> are the spots it's photographed from as its
+/// <c>shots</c> attribute holds them (HOME-4); <see cref="Shots"/> is what they mean.
 /// </summary>
 public sealed record Space(
     Guid Id,
@@ -17,10 +18,74 @@ public sealed record Space(
     int Pace,
     DateTimeOffset? ArchivedAt,
     DateOnly? ArchivedOn,
-    DateTimeOffset CreatedAt)
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<SpaceShot>? StoredShots = null)
 {
     /// <summary>Whether the space is archived now.</summary>
     public bool Archived => ArchivedAt is not null;
+
+    /// <summary>
+    /// The spots the space is photographed from, in order: the stored ones, or one shot,
+    /// <see cref="SpaceShot.MainId"/>, when none are stored.
+    /// </summary>
+    public IReadOnlyList<SpaceShot> Shots => StoredShots is { Count: > 0 } stored ? stored : [new SpaceShot(SpaceShot.MainId)];
+
+    /// <summary>A shot's name: its own, or the space's while it has none.</summary>
+    public string ShotName(SpaceShot shot) => shot.Name ?? Name;
+}
+
+/// <summary>
+/// A spot a space is photographed from (HOME-4, environment plan §8), like "Desk" or "Counters".
+/// <paramref name="Name"/> null reads as the space's name (an unnamed space's only shot).
+/// <paramref name="Baseline"/> is the photo Chris picked to compare against; null means the
+/// shot's first photo.
+/// </summary>
+public sealed record SpaceShot(string Id, string? Name = null, Guid? Baseline = null)
+{
+    /// <summary>The id of the shot every space starts with.</summary>
+    public const string MainId = "main";
+}
+
+/// <summary>
+/// One photo of a space (HOME-4, environment plan §8): the newest version of a
+/// <c>space_photo</c> event, read through <c>bsk.v_space_photo</c>. <paramref name="ArtifactId"/>
+/// is the photo's bytes; <paramref name="AddedAt"/> is when it was first stored, which orders the
+/// photos of one day (a before and an after).
+/// </summary>
+public sealed record SpacePhoto(
+    Guid Id,
+    Guid SpaceId,
+    string ShotId,
+    DateOnly Day,
+    Guid ArtifactId,
+    DateTimeOffset AddedAt,
+    DateTimeOffset ChangedAt,
+    Guid EventId);
+
+/// <summary>
+/// Which photos a shot compares (HOME-4): its baseline (Then) and its newest photo (Now).
+/// </summary>
+public static class ShotPhotos
+{
+    /// <summary>The photos of <paramref name="shot"/> among <paramref name="photos"/>, oldest first.</summary>
+    public static IReadOnlyList<SpacePhoto> Of(SpaceShot shot, IEnumerable<SpacePhoto> photos)
+        => photos.Where(p => string.Equals(p.ShotId, shot.Id, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(p => p.Day).ThenBy(p => p.AddedAt).ThenBy(p => p.Id)
+            .ToList();
+
+    /// <summary>
+    /// The shot's baseline: the photo Chris picked while it's still one of the shot's, else the
+    /// shot's first. Null when the shot has no photos.
+    /// </summary>
+    public static SpacePhoto? Baseline(SpaceShot shot, IEnumerable<SpacePhoto> photos)
+    {
+        var ofShot = Of(shot, photos);
+        return ofShot.FirstOrDefault(p => p.Id == shot.Baseline) ?? ofShot.FirstOrDefault();
+    }
+
+    /// <summary>The shot's newest photo, or null when it has none.</summary>
+    public static SpacePhoto? Newest(SpaceShot shot, IEnumerable<SpacePhoto> photos)
+        => Of(shot, photos).LastOrDefault();
 }
 
 /// <summary>
@@ -94,6 +159,18 @@ public static class SpaceLimits
     /// <summary>The attribute holding a space's pace.</summary>
     public const string PaceKey = "pace";
 
+    /// <summary>The attribute holding a space's shots and their baselines (HOME-4).</summary>
+    public const string ShotsKey = "shots";
+
+    /// <summary>The payload key a photo's events carry (HOME-4).</summary>
+    public const string PhotoKey = "space_photo";
+
+    /// <summary>The longest shot name, in characters.</summary>
+    public const int MaxShotName = 40;
+
+    /// <summary>The most shots a space can have.</summary>
+    public const int MaxShots = 6;
+
     public const int MinWeight = 1;
     public const int MaxWeight = 10;
     public const int DefaultWeight = 3;
@@ -161,6 +238,28 @@ public static class SpaceLimits
         }
 
         return rating;
+    }
+
+    /// <summary>A shot's name as kept: trimmed, one line, 1–40 characters.</summary>
+    public static string CheckShotName(string? name)
+    {
+        var text = name?.Trim() ?? "";
+        if (text.Length == 0)
+        {
+            throw new ArgumentException("Give the shot a name, e.g. Desk.");
+        }
+
+        if (text.Any(IsBreak))
+        {
+            throw new ArgumentException("A shot's name is one line: take out the line break.");
+        }
+
+        if (text.Length > MaxShotName)
+        {
+            throw new ArgumentException($"A shot's name is up to {MaxShotName} characters; that one is {text.Length}.");
+        }
+
+        return text;
     }
 
     /// <summary>A rating's note as kept: trimmed, one line, at most 140 characters; null when blank.</summary>

@@ -123,6 +123,81 @@ public sealed class HomeSpaceRow
     public decimal? Score { get; set; }
     public string? LastRatedOn { get; set; }
     public HomePartsRow Parts { get; set; } = new();
+    /// <summary>The spots it's photographed from (HOME-4), in order, each with Then and Now.</summary>
+    public IReadOnlyList<SpaceShotRow> Shots { get; set; } = [];
+}
+
+/// <summary>
+/// One shot of a space (HOME-4): a spot it's photographed from, its name (the space's own for an
+/// unnamed shot), how many photos it has, its baseline (Then: the photo Chris picked, else its
+/// first) and its newest photo (Now). With one photo, both are that photo; with none, both are
+/// null.
+/// </summary>
+public sealed class SpaceShotRow
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public int Photos { get; set; }
+    public SpacePhotoRow? Baseline { get; set; }
+    public SpacePhotoRow? Newest { get; set; }
+}
+
+/// <summary>
+/// One photo of a space (HOME-4): its space and shot, its day (<c>yyyy-MM-dd</c>, home zone), the
+/// artifact whose bytes <c>GET /api/artifacts/{id}/content</c> serves, when it was added, whether
+/// it's its shot's baseline, and the space's score and parts on its day (null while not all three
+/// parts were rated by then). <see cref="Shot"/> is null when its shot was removed.
+/// </summary>
+public sealed class SpacePhotoRow
+{
+    public Guid Id { get; set; }
+    public Guid SpaceId { get; set; }
+    public string Space { get; set; } = "";
+    public string ShotId { get; set; } = "";
+    public string? Shot { get; set; }
+    public string Day { get; set; } = "";
+    public Guid ArtifactId { get; set; }
+    public DateTimeOffset AddedAt { get; set; }
+    public bool Baseline { get; set; }
+    public decimal? Score { get; set; }
+    public HomePartsRow Parts { get; set; } = new();
+}
+
+/// <summary>
+/// <c>GET /api/environment/spaces/{id}/photos</c> (HOME-4): the space, its shots with Then and
+/// Now, and its photos, newest first (of one shot when asked; a removed shot's photos left out).
+/// </summary>
+public sealed class SpacePhotosRead
+{
+    public Guid SpaceId { get; set; }
+    public string Space { get; set; } = "";
+    public IReadOnlyList<SpaceShotRow> Shots { get; set; } = [];
+    public IReadOnlyList<SpacePhotoRow> Photos { get; set; } = [];
+}
+
+/// <summary>
+/// A photo or shot write's answer (HOME-4): the photo as it now reads (null after a removal or a
+/// shot change) and the space's shots with their Then and Now. Photos never move a level, so
+/// there's no <c>progress</c>.
+/// </summary>
+public sealed class SpacePhotoResult
+{
+    public SpacePhotoRow? Photo { get; set; }
+    public Guid SpaceId { get; set; }
+    public IReadOnlyList<SpaceShotRow> Shots { get; set; } = [];
+}
+
+/// <summary><c>POST /api/environment/photos/{id}</c>: a new day (<c>yyyy-MM-dd</c>) and a shot (its id or name); either can be left out.</summary>
+public sealed class SpacePhotoChangeBody
+{
+    public string? Day { get; set; }
+    public string? Shot { get; set; }
+}
+
+/// <summary><c>POST /api/environment/spaces/{id}/shots</c> and <c>…/shots/{shot}</c>: the shot's name.</summary>
+public sealed class SpaceShotBody
+{
+    public string? Name { get; set; }
 }
 
 /// <summary>A space's three parts.</summary>
@@ -193,10 +268,17 @@ public static class EnvironmentRows
 
     public static decimal? Points(long? value) => value is { } v ? Points(v) : null;
 
-    public static EnvironmentRead From(HomeReading home)
+    /// <summary>
+    /// The home today. <paramref name="spaces"/> carry the shots (the fold's read leaves them
+    /// out) and <paramref name="photos"/> are every live photo; without them each space reads
+    /// with its one unnamed shot and no photos.
+    /// </summary>
+    public static EnvironmentRead From(
+        HomeReading home, IReadOnlyList<Space>? spaces = null, IReadOnlyList<SpacePhoto>? photos = null)
     {
         var total = TotalWeight(home.Spaces);
         var names = home.Spaces.ToDictionary(s => s.Id, s => s.Name);
+        var on = Days(home);
         return new EnvironmentRead
         {
             Today = Day(home.Today),
@@ -214,12 +296,8 @@ public static class EnvironmentRows
                     Share = From(space, total).Share,
                     Score = Points(day?.Score),
                     LastRatedOn = day?.LastRatedOn is { } last ? Day(last) : null,
-                    Parts = new HomePartsRow
-                    {
-                        Tidiness = Part(day?.Part(HomeParts.Tidiness)),
-                        Cleanliness = Part(day?.Part(HomeParts.Cleanliness)),
-                        Aesthetics = Part(day?.Part(HomeParts.Aesthetics))
-                    }
+                    Parts = Parts(day),
+                    Shots = Shots(spaces?.FirstOrDefault(s => s.Id == space.Id) ?? space, photos ?? [], on)
                 };
             }).ToList(),
             FixNext = home.FixNext.Select(x => new FixNextRow
@@ -250,6 +328,67 @@ public static class EnvironmentRows
             }).ToList()
         };
     }
+
+    /// <summary>
+    /// <paramref name="space"/>'s shots, each with its photo count, baseline and newest photo,
+    /// read on their days through <paramref name="on"/>.
+    /// </summary>
+    public static IReadOnlyList<SpaceShotRow> Shots(
+        Space space, IReadOnlyList<SpacePhoto> photos, Func<DateOnly, HomeDay> on)
+    {
+        var mine = photos.Where(p => p.SpaceId == space.Id).ToList();
+        return space.Shots.Select(shot =>
+        {
+            var baseline = ShotPhotos.Baseline(shot, mine);
+            var newest = ShotPhotos.Newest(shot, mine);
+            return new SpaceShotRow
+            {
+                Id = shot.Id,
+                Name = space.ShotName(shot),
+                Photos = ShotPhotos.Of(shot, mine).Count,
+                Baseline = baseline is null ? null : Photo(baseline, space, baseline.Id, on),
+                Newest = newest is null ? null : Photo(newest, space, baseline?.Id, on)
+            };
+        }).ToList();
+    }
+
+    /// <summary>
+    /// One photo, with its shot's name, whether it's <paramref name="baseline"/>, and the space's
+    /// score and parts on its day.
+    /// </summary>
+    public static SpacePhotoRow Photo(SpacePhoto photo, Space space, Guid? baseline, Func<DateOnly, HomeDay> on)
+    {
+        var shot = space.Shots.FirstOrDefault(s => string.Equals(s.Id, photo.ShotId, StringComparison.OrdinalIgnoreCase));
+        var day = on(photo.Day).Spaces.FirstOrDefault(s => s.SpaceId == space.Id);
+        return new SpacePhotoRow
+        {
+            Id = photo.Id,
+            SpaceId = space.Id,
+            Space = space.Name,
+            ShotId = photo.ShotId,
+            Shot = shot is null ? null : space.ShotName(shot),
+            Day = Day(photo.Day),
+            ArtifactId = photo.ArtifactId,
+            AddedAt = photo.AddedAt,
+            Baseline = photo.Id == baseline,
+            Score = Points(day?.Score),
+            Parts = Parts(day)
+        };
+    }
+
+    /// <summary>The home on any day of <paramref name="home"/>'s inputs, each day worked out once.</summary>
+    public static Func<DateOnly, HomeDay> Days(HomeReading home)
+    {
+        var read = new Dictionary<DateOnly, HomeDay>();
+        return day => read.TryGetValue(day, out var known) ? known : read[day] = home.On(day);
+    }
+
+    private static HomePartsRow Parts(SpaceDay? day) => new()
+    {
+        Tidiness = Part(day?.Part(HomeParts.Tidiness)),
+        Cleanliness = Part(day?.Part(HomeParts.Cleanliness)),
+        Aesthetics = Part(day?.Part(HomeParts.Aesthetics))
+    };
 
     private static HomePartRow Part(PartValue? part) => part is null
         ? new HomePartRow()

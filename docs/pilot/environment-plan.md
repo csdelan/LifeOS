@@ -576,28 +576,45 @@ Chris took all three (§8.1). The rest (§8.2) was chosen in planning and is eas
 
 - **A photo is an `observation` event:** provenance `declared`, with the photo as its
   `artifact_id` and a `concerns` edge to the space. Payload:
-  `{"space_photo": {"id": "<uuid>", "space": "<space id>", "shot": "<shot id>", "day": "2026-10-27", "photo": "<artifact id>"}}`.
-  - A change of day or shot writes a newer version with the same `id`, carrying `photo` but
-    not setting `artifact_id`, as the Food Log's versions do (one event owns the artifact).
+  `{"space_photo": {"id": "<uuid>", "space": "<space id>", "shot": "<shot id>", "day": "2026-10-27"}}`.
+  - The first version is the event that stores the bytes, so its `artifact_id` is the photo.
+  - A change of day or shot writes a newer version with the same `id`, carrying
+    `"photo": "<artifact id>"` but not setting `artifact_id`, as the Food Log's versions do
+    (one event owns the artifact).
   - Remove writes `{"space_photo": {"id": "…", "voided": true}}`.
   - Newest `recorded_at, id` wins.
+  - The same bytes added again to the same shot return the photo already there. On another
+    shot, or after the first was removed, they're a new photo pointing at the bytes already
+    stored.
+  - A photo's event is filed at noon on its day when backdated, as ratings are.
 - **Shots and baselines** are a space attribute written only by `SpaceService`:
   `shots: [{"id": "…", "name": "Desk", "baseline": "<photo id>"}]`.
-  - With no `shots`, a space has one shot, `main`, named after the space.
-  - `baseline` is left out while it's the first photo. A baseline whose photo was removed is
-    ignored, so the earliest photo left takes over.
-  - A shot can be renamed or removed. A removed shot's photos stay in the record and drop
-    out of the page.
-  - `bsk set` refuses `shots`, as it does `weight` and `pace`.
+  - With no `shots`, a space has one shot, `main`, named after the space. Its `name` is left
+    out while it follows the space's name.
+  - A new shot's id is 8 hex characters. A space has at most 6 shots, each name at most 40
+    characters and unique in the space, in any case.
+  - `baseline` is left out while it's the first photo. A baseline whose photo was removed, or
+    moved to another shot, is ignored, so the earliest photo left takes over.
+  - A shot can be renamed or removed, but not the last one. A removed shot's photos stay in
+    the record and drop out of the page, and can't be a baseline until moved to a shot.
+  - An archived space takes no photos or shot changes.
+  - `bsk set` refuses `shots`, as it does `weight` and `pace`. The view and the reader skip
+    hand-written entries they can't use.
 - **Migration 0045:**
   - `bsk.v_space_photo`: the newest version per photo id that isn't voided, with `id`,
-    `space_id`, `shot_id`, `day`, `artifact_id`, `taken_at` and `event_id`
+    `space_id`, `shot_id` (`main` when missing), `day`, `artifact_id`, `added_at` (the first
+    version's), `changed_at` and `event_id`. A version naming a non-space, no valid day or
+    no stored bytes drops out.
   - an index like the ratings' (`event_space_photo_idx`)
-  - `bsk.v_space` recreated with `shots` (jsonb)
+  - `bsk.v_space` replaced with `shots` (jsonb, `[]` unless an array) as its last column
   - comments, grants and `ReaderRoleTests`
-- **`SpacePhotoService`** (Application): add, change, remove and set the baseline. The
-  checks move out of `FoodPhotoService` into a shared `PhotoChecks` (the sniff, the 5 MB
-  limit, file names, the "not set up" refusal). Both services use it.
+  - The domain fold reads spaces without `shots`, so Environment's level never depends on
+    this migration.
+- **`SpacePhotoService`** (Application): add, change, remove, set the baseline and list. A
+  photo is named by its id or a hex prefix of at least 4 characters. The checks move out of
+  `FoodPhotoService` into a shared `PhotoChecks` (the sniff, the 5 MB limit, file names, the
+  "not set up" refusal). Both services use it. Shots are added, renamed and removed through
+  `SpaceService`.
 - **API:**
   - `POST /api/environment/spaces/{id}/photos`: multipart, with `photo`, `day` and `shot`
   - `POST /api/environment/photos/{id}` (day, shot) and `/photos/{id}/delete`
@@ -605,10 +622,16 @@ Chris took all three (§8.1). The rest (§8.2) was chosen in planning and is eas
   - `GET /api/environment/spaces/{id}/photos`: every photo, newest first, each with the
     space's score and parts on its day
   - `GET /api/environment`: each space row gains its shots, each shot with its baseline,
-    its newest photo, a count and the newest photo's day
-- **CLI:** `bsk space photo <space> --file <path> [--day] [--shot]`,
-  `bsk space photo --remove <photo>`, `bsk space baseline <photo>`, and
-  `bsk space shot add / rename / remove`.
+    its newest photo (each with its day, the space's score and parts that day) and a count
+  - `POST /api/environment/spaces/{id}/shots` (name), `/shots/{shot}` (rename) and
+    `/shots/{shot}/delete`
+  - Every photo and shot write answers `{photo, spaceId, shots}`: the photo as it now reads
+    (null once removed) and the space's shots with Then and Now.
+- **CLI:** `bsk space photo add <space> --file <path> [--day] [--shot]`,
+  `bsk space photo list <space> [--shot]`, `bsk space photo move <photo> [--day] [--shot]`,
+  `bsk space photo remove <photo>`, `bsk space baseline <photo>`, and
+  `bsk space shot add <space> <name> / rename <space> <shot> <name> / remove <space> <shot>`.
+  `bsk space list --json` shows each space's shots, with `pickedBaseline`.
 - **Web:**
   - **The walk-through and quick check:** a camera button per shot, showing its baseline.
     The photos are held and sent after the ratings save, as a new food entry's are.
@@ -624,13 +647,18 @@ Chris took all three (§8.1). The rest (§8.2) was chosen in planning and is eas
   - **The spaces editor:** each space's shots (add, rename, remove).
   - **The mock store:** two seeded spaces get placeholder photos.
 - **Tests:**
-  - an upload round-trips byte for byte
-  - the baseline defaults to the first photo, moves when picked, and falls back when
-    removed
-  - the Food Log's refusals, now from `PhotoChecks`, still hold for both
-  - the date-taken reader on sample JPEGs (with and without EXIF)
-  - an e2e golden path adds a photo in the walk-through and opens the compare dialog
-  - a11y for the compare dialog, light and dark
+  - E6 (`SpacePhotoTests`):
+    - an upload round-trips byte for byte, through the service and over HTTP
+    - the baseline defaults to the first photo, moves when picked, and falls back when
+      removed or moved off its shot
+    - shots added, renamed and removed, and their refusals
+    - the refusals in words, the disabled host's included, with nothing stored
+    - the views reading hand-written photos and shots tolerantly
+    - the Food Log's refusals, now from `PhotoChecks`, still hold
+  - E7:
+    - the date-taken reader on sample JPEGs (with and without EXIF)
+    - an e2e golden path adds a photo in the walk-through and opens the compare dialog
+    - a11y for the compare dialog, light and dark
 
 ### 8.4 Later
 
@@ -650,5 +678,5 @@ Chris took all three (§8.1). The rest (§8.2) was chosen in planning and is eas
 - [x] E4 — Environment on the web (no migration)
 - [ ] E5 — Chris's spaces, first walk-through, calibration
 - [x] E6–E7 planned (§8, HOME-4)
-- [ ] E6 — Photos in the kernel (migration 0045)
+- [x] E6 — Photos in the kernel (migration 0045)
 - [ ] E7 — Photos on the web (no migration)

@@ -8,10 +8,11 @@ namespace LifeOs.Application.Home;
 /// <summary>
 /// The home's spaces (HOME-1, D18, environment plan §4.1), behind <c>bsk space</c> and
 /// <c>/api/environment/spaces</c>. A space is a <c>Space</c> subject: its title is its name, and
-/// <c>weight</c> (1–10) and <c>pace</c> (1–5) are attributes only this service writes, so
-/// <c>bsk set</c> refuses them. A space has no status; archiving it (D9) takes it out of the Home
-/// Score from that day. A name is unique among the spaces not archived. Refusals are in words,
-/// with nothing written.
+/// <c>weight</c> (1–10), <c>pace</c> (1–5) and <c>shots</c> (the spots it's photographed from,
+/// each with its baseline; HOME-4) are attributes only this service writes, so <c>bsk set</c>
+/// refuses them. A space has no status; archiving it (D9) takes it out of the Home Score from
+/// that day. A name is unique among the spaces not archived, and a shot's name among its space's
+/// shots. Refusals are in words, with nothing written.
 /// </summary>
 public sealed class SpaceService(
     SubjectService subjects, ISubjectRepository repository, ISpaceRepository spaces, ArchiveService archive)
@@ -113,6 +114,91 @@ public sealed class SpaceService(
     }
 
     /// <summary>
+    /// Adds a shot called <paramref name="name"/> to a space (HOME-4): a spot it's photographed
+    /// from. Refused for an archived space, a name another of its shots has, or a seventh shot.
+    /// </summary>
+    public async Task<Space> AddShotAsync(string reference, string name, CancellationToken cancellationToken = default)
+    {
+        var space = await ResolveLiveAsync(reference, cancellationToken);
+        var title = SpaceLimits.CheckShotName(name);
+        var shots = space.Shots.ToList();
+        if (shots.Count >= SpaceLimits.MaxShots)
+        {
+            throw new InvalidOperationException(
+                $"'{space.Name}' has {SpaceLimits.MaxShots} shots, the most a space can have: remove one first.");
+        }
+
+        CheckShotFree(space, title, except: null);
+        shots.Add(new SpaceShot(NewShotId(shots), title));
+        return await WriteShotsAsync(space, shots, cancellationToken);
+    }
+
+    /// <summary>Renames one of a space's shots (by its id or name).</summary>
+    public async Task<Space> RenameShotAsync(
+        string reference, string shot, string name, CancellationToken cancellationToken = default)
+    {
+        var space = await ResolveLiveAsync(reference, cancellationToken);
+        var target = ResolveShot(space, shot);
+        var title = SpaceLimits.CheckShotName(name);
+        CheckShotFree(space, title, except: target.Id);
+        return await WriteShotsAsync(
+            space, space.Shots.Select(s => s.Id == target.Id ? s with { Name = title } : s).ToList(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Removes one of a space's shots. Its photos stay in the record and drop out of the page;
+    /// moving one to another shot brings it back. A space keeps at least one shot.
+    /// </summary>
+    public async Task<Space> RemoveShotAsync(string reference, string shot, CancellationToken cancellationToken = default)
+    {
+        var space = await ResolveLiveAsync(reference, cancellationToken);
+        var target = ResolveShot(space, shot);
+        if (space.Shots.Count == 1)
+        {
+            throw new InvalidOperationException(
+                $"'{space.ShotName(target)}' is {space.Name}'s only shot: a space keeps at least one. Rename it instead.");
+        }
+
+        return await WriteShotsAsync(space, space.Shots.Where(s => s.Id != target.Id).ToList(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Makes <paramref name="photo"/> the baseline of the shot <paramref name="shotId"/>: the photo
+    /// its newest is compared against. <see cref="SpacePhotoService"/> checks the photo is the
+    /// shot's.
+    /// </summary>
+    public async Task<Space> SetBaselineAsync(
+        Space space, string shotId, Guid photo, CancellationToken cancellationToken = default)
+    {
+        var shots = space.Shots;
+        if (!shots.Any(s => s.Id == shotId))
+        {
+            throw new InvalidOperationException($"{space.Name} has no shot '{shotId}'.");
+        }
+
+        return await WriteShotsAsync(
+            space, shots.Select(s => s.Id == shotId ? s with { Baseline = photo } : s).ToList(), cancellationToken);
+    }
+
+    /// <summary>
+    /// The shot of <paramref name="space"/> that <paramref name="shot"/> names, by its id or its
+    /// name in any case; the space's first shot when <paramref name="shot"/> is blank.
+    /// </summary>
+    public static SpaceShot ResolveShot(Space space, string? shot)
+    {
+        var wanted = shot?.Trim() ?? "";
+        if (wanted.Length == 0)
+        {
+            return space.Shots[0];
+        }
+
+        return space.Shots.FirstOrDefault(s => string.Equals(s.Id, wanted, StringComparison.OrdinalIgnoreCase))
+               ?? space.Shots.FirstOrDefault(s => Same(space.ShotName(s), wanted))
+               ?? throw new ArgumentException(
+                   $"{space.Name} has no shot called '{wanted}'. Its shots: {string.Join(", ", space.Shots.Select(space.ShotName))}.");
+    }
+
+    /// <summary>
     /// The space <paramref name="reference"/> names: its id, its urn, its short id (the urn's
     /// hex tail) or its name in any case — a space not archived first, then an archived one.
     /// Throws <see cref="SubjectNotFoundException"/> when none matches.
@@ -158,6 +244,47 @@ public sealed class SpaceService(
 
     private async Task<Space> ReadAsync(Guid id, CancellationToken cancellationToken)
         => await spaces.GetSpaceAsync(id, cancellationToken) ?? throw new SubjectNotFoundException(id.ToString());
+
+    private async Task<Space> ResolveLiveAsync(string reference, CancellationToken cancellationToken)
+    {
+        var space = await ResolveAsync(reference, cancellationToken);
+        return space.Archived
+            ? throw new InvalidOperationException($"'{space.Name}' is archived: bring it back before changing its shots.")
+            : space;
+    }
+
+    private static void CheckShotFree(Space space, string name, string? except)
+    {
+        var taken = space.Shots.FirstOrDefault(s => s.Id != except && Same(space.ShotName(s), name));
+        if (taken is not null)
+        {
+            throw new InvalidOperationException($"{space.Name} already has a shot called '{space.ShotName(taken)}'.");
+        }
+    }
+
+    // A short id no other shot of the space has.
+    private static string NewShotId(IReadOnlyList<SpaceShot> shots)
+    {
+        while (true)
+        {
+            var id = Guid.NewGuid().ToString("N")[..8];
+            if (shots.All(s => !string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase)))
+            {
+                return id;
+            }
+        }
+    }
+
+    private async Task<Space> WriteShotsAsync(Space space, IReadOnlyList<SpaceShot> shots, CancellationToken cancellationToken)
+    {
+        var patch = new JsonObject { [SpaceLimits.ShotsKey] = SpaceShotsJson.ToJson(shots) };
+        if (!await repository.UpdateAttributesAsync(space.Id, patch.ToJsonString(), [], cancellationToken))
+        {
+            throw new SubjectNotFoundException(space.Urn);
+        }
+
+        return await ReadAsync(space.Id, cancellationToken);
+    }
 
     private static bool Same(string a, string b) => string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
 }

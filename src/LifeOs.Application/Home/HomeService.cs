@@ -6,20 +6,28 @@ namespace LifeOs.Application.Home;
 /// <summary>
 /// The home now (HOME-3): today in the home zone, the last settled day, today's
 /// <see cref="HomeDay"/> (the Home Score, each space and part), the spaces not archived, and the
-/// three parts that cost the score most (<see cref="FixNext"/>).
+/// three parts that cost the score most (<see cref="FixNext"/>). <paramref name="Inputs"/> and
+/// <paramref name="ExceptionDays"/> are what it was worked out from, so a past day can be read
+/// the same way (<see cref="On"/>): a photo's day, for Then and Now (HOME-4).
 /// </summary>
 public sealed record HomeReading(
     DateOnly Today,
     DateOnly SettledThrough,
     HomeDay Day,
     IReadOnlyList<Space> Spaces,
-    IReadOnlyList<(Guid SpaceId, PartValue Part)> FixNext)
+    IReadOnlyList<(Guid SpaceId, PartValue Part)> FixNext,
+    HomeInputs? Inputs = null,
+    IReadOnlyList<DateOnly>? ExceptionDays = null)
 {
     /// <summary>Today's Home Score in ten-thousandths of a point; null before any space counts.</summary>
     public long? Score => Day.Score;
 
     /// <summary>A space's day, or null when it isn't in today's (it's archived).</summary>
     public SpaceDay? Of(Guid spaceId) => Day.Spaces.FirstOrDefault(s => s.SpaceId == spaceId);
+
+    /// <summary>The home on <paramref name="day"/>, as it was then: today's reading for today.</summary>
+    public HomeDay On(DateOnly day)
+        => day == Today ? Day : HomeScore.On(Inputs ?? HomeInputs.None, ExceptionDays ?? [], day);
 }
 
 /// <summary>
@@ -49,13 +57,16 @@ public sealed class HomeService(ILedgerRepository ledger)
     public async Task<HomeReading> GetAsync(CancellationToken cancellationToken = default)
     {
         var credit = await ledger.GetDomainDaysAsync([], cancellationToken);
-        var day = HomeScore.On(credit.Home, credit.ExceptionDays.Select(d => d.Day), credit.Today);
+        var exceptions = credit.ExceptionDays.Select(d => d.Day).ToList();
+        var day = HomeScore.On(credit.Home, exceptions, credit.Today);
         return new HomeReading(
             credit.Today,
             credit.SettledThrough,
             day,
             credit.Home.Spaces.Where(s => !s.Archived).ToList(),
-            HomeScore.FixNext(day, FixNextCount));
+            HomeScore.FixNext(day, FixNextCount),
+            credit.Home,
+            exceptions);
     }
 
     /// <summary>

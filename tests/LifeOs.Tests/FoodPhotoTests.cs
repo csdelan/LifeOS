@@ -2,6 +2,7 @@ using System.Text.Json;
 using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Food;
+using LifeOs.Application.Photos;
 using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -173,7 +174,7 @@ public sealed class FoodPhotoTests(PostgresFixture postgres)
         var id = meal.Id.ToString();
 
         Assert.Contains("at most 5 MB", (await Assert.ThrowsAsync<ArgumentException>(
-            () => photos.AttachAsync(id, Jpeg(FoodPhotoService.MaxBytes + 1), cancellationToken: Ct))).Message);
+            () => photos.AttachAsync(id, Jpeg(PhotoChecks.MaxBytes + 1), cancellationToken: Ct))).Message);
         Assert.Contains("JPEG, PNG or WebP", (await Assert.ThrowsAsync<ArgumentException>(
             () => photos.AttachAsync(id, "%PDF-1.7 not a photo"u8.ToArray(), "menu.jpg", Ct))).Message);
         Assert.Contains("empty", (await Assert.ThrowsAsync<ArgumentException>(
@@ -191,13 +192,13 @@ public sealed class FoodPhotoTests(PostgresFixture postgres)
     [Fact]
     public void Only_jpeg_png_and_webp_are_photos()
     {
-        Assert.Equal("image/jpeg", FoodPhotoService.Sniff([0xFF, 0xD8, 0xFF, 0xE0]));
-        Assert.Equal("image/png", FoodPhotoService.Sniff([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0]));
-        Assert.Equal("image/webp", FoodPhotoService.Sniff("RIFF\0\0\0\0WEBPVP8 "u8));
-        Assert.Null(FoodPhotoService.Sniff("RIFF\0\0\0\0WAVEfmt "u8));
-        Assert.Null(FoodPhotoService.Sniff("GIF89a"u8));
-        Assert.Null(FoodPhotoService.Sniff("<svg xmlns="u8));
-        Assert.Null(FoodPhotoService.Sniff([0xFF, 0xD8]));
+        Assert.Equal("image/jpeg", PhotoChecks.Sniff([0xFF, 0xD8, 0xFF, 0xE0]));
+        Assert.Equal("image/png", PhotoChecks.Sniff([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0]));
+        Assert.Equal("image/webp", PhotoChecks.Sniff("RIFF\0\0\0\0WEBPVP8 "u8));
+        Assert.Null(PhotoChecks.Sniff("RIFF\0\0\0\0WAVEfmt "u8));
+        Assert.Null(PhotoChecks.Sniff("GIF89a"u8));
+        Assert.Null(PhotoChecks.Sniff("<svg xmlns="u8));
+        Assert.Null(PhotoChecks.Sniff([0xFF, 0xD8]));
     }
 
     [Fact]
@@ -224,7 +225,7 @@ public sealed class FoodPhotoTests(PostgresFixture postgres)
             .BuildServiceProvider();
         var photos = refusing.GetRequiredService<FoodPhotoService>();
         Assert.False(photos.Enabled);
-        Assert.Equal(FoodPhotoService.NotSetUp, (await Assert.ThrowsAsync<InvalidOperationException>(
+        Assert.Equal(PhotoChecks.NotSetUp, (await Assert.ThrowsAsync<InvalidOperationException>(
             () => photos.AttachAsync(meal.Id.ToString(), Jpeg(), cancellationToken: Ct))).Message);
         // Removing one still works.
         Assert.Null((await photos.RemoveAsync(meal.Id.ToString(), Ct)).Meal!.PhotoArtifactId);

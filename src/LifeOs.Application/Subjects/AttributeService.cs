@@ -100,6 +100,15 @@ public sealed class AttributeService(
                     nameof(assignments));
             }
 
+            // A space's shots and their baselines (HOME-4) are checked JSON with one writer.
+            if (subject.Type == SubjectTypes.Space
+                && string.Equals(key, SpaceLimits.ShotsKey, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException(
+                    "A space's shots are set with `bsk space shot` and `bsk space baseline`, not `bsk set`.",
+                    nameof(assignments));
+            }
+
             if (string.IsNullOrWhiteSpace(assignment.Value))
             {
                 removed.Add(key);

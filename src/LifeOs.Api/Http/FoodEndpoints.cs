@@ -1,6 +1,7 @@
 using LifeOs.Api.Auth;
 using LifeOs.Api.Read;
 using LifeOs.Application.Food;
+using LifeOs.Application.Photos;
 using LifeOs.Domain;
 using Microsoft.AspNetCore.Mvc;
 
@@ -49,7 +50,7 @@ public static class FoodEndpoints
             .Produces<FoodWriteResultRow>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/meals/{id}/photo", SetPhoto).WithName("SetFoodPhoto")
             .DisableAntiforgery()
-            .WithMetadata(new RequestSizeLimitAttribute(FoodPhotoService.MaxBytes + PhotoRequestOverhead))
+            .WithMetadata(new RequestSizeLimitAttribute(PhotoChecks.MaxBytes + PhotoRequestOverhead))
             .Produces<FoodWriteResultRow>()
             .Produces<ApiError>(StatusCodes.Status400BadRequest)
             .Produces<ApiError>(StatusCodes.Status502BadGateway);
@@ -137,10 +138,9 @@ public static class FoodEndpoints
             return Results.BadRequest(new ApiError("Send the photo as multipart/form-data, in a field named photo."));
         }
 
-        if (photo.Length > FoodPhotoService.MaxBytes)
+        if (photo.Length > PhotoChecks.MaxBytes)
         {
-            return Results.BadRequest(new ApiError(
-                $"That photo is {photo.Length / (1024.0 * 1024.0):0.0} MB; a photo can be at most {FoodPhotoService.MaxBytes / (1024 * 1024)} MB."));
+            return Results.BadRequest(new ApiError(PhotoChecks.TooBig(photo.Length)));
         }
 
         using var buffer = new MemoryStream((int)photo.Length);

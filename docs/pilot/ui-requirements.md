@@ -3955,7 +3955,7 @@ Build:      built
 ### HOME-4 — Photos of each space, from a baseline, show my progress at a glance
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
 
 **Workflow (Chris):**
 - "I think rating photos are something I'll want to add. I think having a 'baseline' photo
@@ -3993,10 +3993,13 @@ Build:      needs-kernel
   - `bsk space photo`, `bsk space baseline` and `bsk space shot`
   - `POST /api/environment/spaces/{id}/photos`, `/photos/{id}`, `/photos/{id}/delete` and
     `/photos/{id}/baseline`, and `GET /api/environment/spaces/{id}/photos`
+  - `POST /api/environment/spaces/{id}/shots`, `/shots/{shot}` and `/shots/{shot}/delete`
   - shots, baselines and newest photos on `GET /api/environment`
 
-  Phase E6 of [environment-plan.md](environment-plan.md); E7 brings Then and Now, the
-  compare dialog and the camera buttons.
+  **E6 built (2026-10-27):** the kernel takes, moves, removes and lists photos, keeps each
+  shot's baseline, and adds, renames and removes shots, from `bsk` and the API. Nothing on
+  the web shows them yet. E7 of [environment-plan.md](environment-plan.md) brings Then and
+  Now, the compare dialog and the camera buttons. Build stays `building`.
 - Implications:
   - The Home Score, the level and the ledger never read photos, so HOME-1 to HOME-3 and
     REWARD-9 are unchanged.
@@ -4400,7 +4403,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   `space_photo` payload, read by `v_space_photo` (migration 0045); shots and baselines as
   the space attribute `shots`; `SpacePhotoService` with the photo checks shared with the Food
   Log; `bsk space photo`, `baseline` and `shot`; the photo endpoints; Then and Now on the
-  space cards. — **Open** (planned in [environment-plan.md](environment-plan.md) §8, E6–E7).
+  space cards. — **Building** (E6, the kernel and migration 0045, built; E7, the web, next;
+  [environment-plan.md](environment-plan.md) §8).
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;

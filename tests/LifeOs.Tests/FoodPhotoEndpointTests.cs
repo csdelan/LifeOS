@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Food;
+using LifeOs.Application.Photos;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LifeOs.Tests;
@@ -127,7 +128,7 @@ public sealed class FoodPhotoEndpointTests(PostgresFixture postgres)
         await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
         var meal = await LogAsync(host);
 
-        Assert.Contains("at most 5 MB", await RefusedAsync(await UploadAsync(host, meal, FoodPhotoTests.Jpeg(FoodPhotoService.MaxBytes + 1))));
+        Assert.Contains("at most 5 MB", await RefusedAsync(await UploadAsync(host, meal, FoodPhotoTests.Jpeg(PhotoChecks.MaxBytes + 1))));
         // A PDF claiming to be a JPEG: the bytes decide.
         Assert.Contains("JPEG, PNG or WebP", await RefusedAsync(await UploadAsync(host, meal, "%PDF-1.7 menu"u8.ToArray())));
         Assert.Contains("field named photo", await RefusedAsync(await UploadAsync(host, meal, FoodPhotoTests.Jpeg(), field: "picture")));

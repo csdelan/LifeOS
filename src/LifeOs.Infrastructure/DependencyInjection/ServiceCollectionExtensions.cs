@@ -263,6 +263,18 @@ public static class ServiceCollectionExtensions
             sourceId));
         services.AddSingleton(sp => new HomeService(sp.GetRequiredService<ILedgerRepository>()));
 
+        // Photos of each space, from a baseline (HOME-4, environment plan §8): the Food Log's
+        // photo storage, so the same hosts take them.
+        services.AddSingleton(sp => new SpacePhotoService(
+            sp.GetRequiredService<IArtifactBlobStore>(),
+            sp.GetRequiredService<ISpaceRepository>(),
+            sp.GetRequiredService<SpaceService>(),
+            sp.GetRequiredService<ISubjectEventRepository>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId,
+            enabled: allowPhotosInDatabase || sp.GetService<IObjectStorage>() is not null));
+
         services.AddSingleton(sp => new RewardCatalogService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>(),

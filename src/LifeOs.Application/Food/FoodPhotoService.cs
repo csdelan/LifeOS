@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Photos;
 using LifeOs.Domain;
 
 namespace LifeOs.Application.Food;
@@ -11,29 +12,17 @@ namespace LifeOs.Application.Food;
 /// database), written by an <c>observation</c> event whose payload names the entry
 /// (<c>food_photo</c>: {meal}); the entry then gets a new version pointing at it
 /// (<see cref="FoodLogService.SetPhotoAsync"/>). The event has no subject and no triage flag,
-/// so it shows nowhere but on its entry.
-/// <list type="bullet">
-/// <item>Only JPEG, PNG and WebP, known by their first bytes, whatever the upload claims.</item>
-/// <item>At most <see cref="MaxBytes"/>. The web app sends a 1,200-pixel JPEG of about 150 KB.</item>
-/// <item>The same bytes again (from this source) reuse the artifact already stored.</item>
-/// </list>
-/// A host that must not keep photos in its database (staging and production on Supabase's free
-/// plan, without a Storage key) passes <paramref name="enabled"/> false: every upload is refused
-/// in words and nothing is stored. Removing a photo still works.
+/// so it shows nowhere but on its entry. What a photo can be is <see cref="PhotoChecks"/>'s,
+/// shared with the home's spaces; the same bytes again (from this source) reuse the artifact
+/// already stored.
+/// <para>
+/// A host that must not keep photos in its database passes <paramref name="enabled"/> false:
+/// every upload is refused in words and nothing is stored. Removing a photo still works.
+/// </para>
 /// </summary>
 public sealed class FoodPhotoService(
     IArtifactBlobStore blobs, FoodLogService food, IClock clock, string sourceId, bool enabled = true)
 {
-    /// <summary>The largest photo accepted: 5 MiB.</summary>
-    public const int MaxBytes = 5 * 1024 * 1024;
-
-    /// <summary>What a photo can be, known by its first bytes (<see cref="Sniff"/>).</summary>
-    public static readonly IReadOnlySet<string> PhotoTypes = new HashSet<string>(["image/jpeg", "image/png", "image/webp"]);
-
-    /// <summary>The refusal when photos aren't set up on this host.</summary>
-    public const string NotSetUp =
-        "Photos aren't set up on this server yet: it needs a Supabase Storage key (Storage__SupabaseSecretKey).";
-
     /// <summary>True when this host takes photos.</summary>
     public bool Enabled => enabled;
 
@@ -48,23 +37,11 @@ public sealed class FoodPhotoService(
         ArgumentNullException.ThrowIfNull(bytes);
         if (!enabled)
         {
-            throw new InvalidOperationException(NotSetUp);
+            throw new InvalidOperationException(PhotoChecks.NotSetUp);
         }
 
         var meal = await food.ResolveMealAsync(reference, cancellationToken);
-        if (bytes.Length == 0)
-        {
-            throw new ArgumentException("That photo is empty.");
-        }
-
-        if (bytes.Length > MaxBytes)
-        {
-            throw new ArgumentException(
-                $"That photo is {bytes.Length / (1024.0 * 1024.0):0.0} MB; a photo can be at most {MaxBytes / (1024 * 1024)} MB.");
-        }
-
-        var contentType = Sniff(bytes)
-            ?? throw new ArgumentException("That isn't a photo: send a JPEG, PNG or WebP image.");
+        var contentType = PhotoChecks.Check(bytes);
 
         var now = clock.UtcNow;
         var stored = await blobs.PutAsync(new NewBinaryCapture(
@@ -77,7 +54,7 @@ public sealed class FoodPhotoService(
             Bytes: bytes,
             ContentType: contentType,
             ByteSize: bytes.Length,
-            Filename: CleanName(filename),
+            Filename: PhotoChecks.CleanName(filename),
             PayloadJson: JsonSerializer.Serialize(new { food_photo = new { meal = meal.Id } })), cancellationToken);
 
         return await food.SetPhotoAsync(meal.Id.ToString(), stored.ArtifactId, cancellationToken);
@@ -86,38 +63,4 @@ public sealed class FoodPhotoService(
     /// <summary>Removes the photo of the entry named by <paramref name="reference"/>; the bytes stay in the record.</summary>
     public Task<FoodWriteResult> RemoveAsync(string reference, CancellationToken cancellationToken = default)
         => food.SetPhotoAsync(reference, null, cancellationToken);
-
-    /// <summary>The image type the bytes begin with: JPEG, PNG or WebP, else null.</summary>
-    public static string? Sniff(ReadOnlySpan<byte> bytes)
-    {
-        if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
-        {
-            return "image/jpeg";
-        }
-
-        if (bytes.Length >= 8 && bytes[..8].SequenceEqual((ReadOnlySpan<byte>)[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
-        {
-            return "image/png";
-        }
-
-        if (bytes.Length >= 12 && bytes[..4].SequenceEqual("RIFF"u8) && bytes[8..12].SequenceEqual("WEBP"u8))
-        {
-            return "image/webp";
-        }
-
-        return null;
-    }
-
-    // A file name is kept for export only: its last path part, printable, at most 200 characters.
-    private static string? CleanName(string? filename)
-    {
-        if (string.IsNullOrWhiteSpace(filename))
-        {
-            return null;
-        }
-
-        var name = filename.Replace('\\', '/').Split('/')[^1].Trim();
-        name = new string(name.Where(c => !char.IsControl(c)).ToArray());
-        return name.Length == 0 ? null : name.Length > 200 ? name[..200] : name;
-    }
 }
