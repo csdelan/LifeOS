@@ -23,6 +23,10 @@ public static class EnvironmentEndpoints
             .WithTags("Environment")
             .RequireAuthorization(AuthServiceCollectionExtensions.AllowlistedUserPolicy);
 
+        api.MapGet("", GetHome).WithName("GetHome")
+            .Produces<EnvironmentRead>();
+        api.MapGet("/days", GetHomeDays).WithName("GetHomeDays")
+            .Produces<HomeDaysRead>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapGet("/spaces", GetSpaces).WithName("GetSpaces")
             .Produces<IReadOnlyList<SpaceRow>>();
         api.MapPost("/spaces", AddSpace).WithName("AddSpace")
@@ -38,6 +42,14 @@ public static class EnvironmentEndpoints
         api.MapPost("/ratings/{id}/delete", DeleteRating).WithName("DeleteSpaceRating")
             .Produces<SpaceRatingResult>().Produces<ApiError>(StatusCodes.Status400BadRequest);
     }
+
+    /// <summary>The home today: the Home Score, each space not archived with its parts, and Fix next.</summary>
+    private static async Task<IResult> GetHome(EnvironmentReader environment, CancellationToken cancellationToken)
+        => Results.Ok(await environment.GetHomeAsync(cancellationToken));
+
+    /// <summary>The Home Score on each of the last <paramref name="days"/> days (90 by default), oldest first.</summary>
+    private static async Task<IResult> GetHomeDays(int? days, EnvironmentReader environment, CancellationToken cancellationToken)
+        => Results.Ok(await environment.GetHomeDaysAsync(days ?? SpaceRatingService.DefaultDays, cancellationToken));
 
     /// <summary>Every space, archived ones included, by name.</summary>
     private static async Task<IResult> GetSpaces(EnvironmentReader environment, CancellationToken cancellationToken)

@@ -260,6 +260,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IHomeCalendar>(),
             sp.GetRequiredService<IClock>(),
             sourceId));
+        services.AddSingleton(sp => new HomeService(sp.GetRequiredService<ILedgerRepository>()));
 
         services.AddSingleton(sp => new RewardCatalogService(
             sp.GetRequiredService<SubjectService>(),

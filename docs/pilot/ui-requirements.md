@@ -3919,7 +3919,7 @@ Build:      building
 ### HOME-3 — Ratings fade, and a Home Score shows how well my home is kept and what to fix next
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
 
 **Workflow (Chris):**
 - "Ratings fade sounds like a really good new mechanic." (2026-10-27)

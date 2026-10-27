@@ -257,6 +257,60 @@ public sealed class SpaceTests(PostgresFixture postgres)
         Assert.Equal(HttpStatusCode.BadRequest, (await host.Client.GetAsync("/api/environment/ratings?days=0", Ct)).StatusCode);
     }
 
+    [Fact]
+    public async Task The_home_endpoints_read_the_Home_Score_and_Fix_next()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var today = await db.TodayAsync();
+        var spaces = db.Get<SpaceService>();
+        var office = await spaces.AddAsync("Office", 5, 5, Ct);
+        var kitchen = await spaces.AddAsync("Kitchen", 4, 5, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
+
+        var empty = await host.Client.GetFromJsonAsync<JsonElement>("/api/environment", Ct);
+        Assert.Equal(JsonValueKind.Null, empty.GetProperty("homeScore").ValueKind);
+        Assert.Equal(0, empty.GetProperty("fixNext").GetArrayLength());
+
+        // HomeScoreTests' worked example, rated ten days ago.
+        await db.Get<SpaceRatingService>().RateAsync(today.AddDays(-10),
+        [
+            new RatingInput("Office", 4.5m, 4m, 3.5m),
+            new RatingInput("Kitchen", 3m, 2.5m, 3m)
+        ], Ct);
+        await spaces.AddAsync("Garage", 1, 2, Ct);
+
+        var home = await host.Client.GetFromJsonAsync<JsonElement>("/api/environment", Ct);
+        Assert.Equal(Day(today), home.GetProperty("today").GetString());
+        Assert.Equal(35.6527m, home.GetProperty("homeScore").GetDecimal());
+        Assert.Equal(["Garage", "Kitchen", "Office"], home.GetProperty("spaces").EnumerateArray().Select(s => s.GetProperty("name").GetString()));
+        var officeRow = home.GetProperty("spaces")[2];
+        Assert.Equal((40.375m, 50m, Day(today.AddDays(-10))), (officeRow.GetProperty("score").GetDecimal(),
+            officeRow.GetProperty("share").GetDecimal(), officeRow.GetProperty("lastRatedOn").GetString()));
+        var cleanliness = officeRow.GetProperty("parts").GetProperty("cleanliness");
+        Assert.Equal((4m, 48.2143m, 10.0694m), (cleanliness.GetProperty("rated").GetDecimal(),
+            cleanliness.GetProperty("now").GetDecimal(), cleanliness.GetProperty("drag").GetDecimal()));
+        var garage = home.GetProperty("spaces")[0];
+        Assert.Equal(JsonValueKind.Null, garage.GetProperty("score").ValueKind);
+        Assert.Equal(JsonValueKind.Null, garage.GetProperty("parts").GetProperty("tidiness").GetProperty("rated").ValueKind);
+        Assert.Equal(
+            [("Office", "tidiness", 18.75m), ("Kitchen", "tidiness", 15m), ("Kitchen", "cleanliness", 11.6666m)],
+            home.GetProperty("fixNext").EnumerateArray().Select(f =>
+                (f.GetProperty("space").GetString(), f.GetProperty("part").GetString(), f.GetProperty("drag").GetDecimal())));
+
+        var days = await host.Client.GetFromJsonAsync<JsonElement>("/api/environment/days?days=11", Ct);
+        Assert.Equal(Day(today.AddDays(-10)), days.GetProperty("from").GetString());
+        Assert.Equal(11, days.GetProperty("days").GetArrayLength());
+        Assert.Equal(63.6805m, days.GetProperty("days")[0].GetProperty("homeScore").GetDecimal());
+        Assert.Equal(35.6527m, days.GetProperty("days")[10].GetProperty("homeScore").GetDecimal());
+        Assert.Contains(days.GetProperty("days")[0].GetProperty("spaces").EnumerateArray(),
+            s => s.GetProperty("spaceId").GetString() == kitchen.Id.ToString() && s.GetProperty("score").GetDecimal() == 45.625m);
+        Assert.Equal(3, days.GetProperty("spaces").GetArrayLength());
+        Assert.Equal(office.Id.ToString(), days.GetProperty("spaces")[2].GetProperty("id").GetString());
+
+        var refused = await host.Client.GetAsync("/api/environment/days?days=732", Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+    }
+
     private async Task AppendAsync(NpgsqlConnection connection, object rating)
     {
         var payload = JsonSerializer.Serialize(new Dictionary<string, object> { [SpaceLimits.RatingKey] = rating });

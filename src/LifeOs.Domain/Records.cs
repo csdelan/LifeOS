@@ -127,7 +127,8 @@ public sealed record CreditDay(string Currency, DateOnly Day, long Base, long Pa
 /// It also carries what the fold reads beside the credit (xp-domains plan §7.4.2): the days
 /// Chris marked as exceptions (<see cref="ExceptionDays"/>, oldest first) and
 /// <see cref="SettledThrough"/>, the last day that has settled — yesterday from
-/// <see cref="LifeDomains.SettleHour"/> in the home zone, the day before until then.
+/// <see cref="LifeDomains.SettleHour"/> in the home zone, the day before until then — and the
+/// home's spaces and ratings (<see cref="Home"/>, environment plan §4.6).
 /// </para>
 /// </summary>
 public sealed record DomainCredit(DateOnly Today, IReadOnlyList<CreditDay> Days, DateOnly? OpenedOn = null)
@@ -137,6 +138,9 @@ public sealed record DomainCredit(DateOnly Today, IReadOnlyList<CreditDay> Days,
 
     /// <summary>The last settled day: yesterday from 4 a.m. in the home zone, the day before until then.</summary>
     public DateOnly SettledThrough { get; init; } = Today.AddDays(-1);
+
+    /// <summary>The home's spaces and ratings, read beside the credit, for the Home Score (HOME-3, environment plan §4.6).</summary>
+    public HomeInputs Home { get; init; } = HomeInputs.None;
 }
 
 /// <summary>

@@ -290,7 +290,8 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
                 dates.OpenedOn is { } openedOn ? ParseDay(openedOn) : null)
             {
                 ExceptionDays = exceptions.Select(ToExceptionDay).ToList(),
-                SettledThrough = ParseDay(dates.SettledThrough)
+                SettledThrough = ParseDay(dates.SettledThrough),
+                Home = await NpgsqlSpaceRepository.ReadHomeAsync(connection, cancellationToken)
             };
         }
         catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)

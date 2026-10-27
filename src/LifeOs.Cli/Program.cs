@@ -46,6 +46,7 @@ rootCommand.Subcommands.Add(TasksCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(FoodCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(SpaceCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(RateCommand.Create(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(HomeCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(OuraCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(WalletCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(LedgerCommand.Create(connectionOption, jsonOption));
