@@ -44,22 +44,36 @@ describe("Character Reports (xp-domains plan §7.4.10)", () => {
 
     const chart = await screen.findByTestId("rank-chart");
     expect(chart).toHaveAccessibleName(
-      "Rank over the last 30 days. Health: Novice throughout, best Novice. Use the arrow keys to read a day.",
+      "Rank over the last 30 days. Health: Novice throughout, best Novice. Environment: Novice throughout, best Novice. Use the arrow keys to read a day.",
     );
-    expect(screen.getAllByTestId("rank-line")).toHaveLength(1);
-    expect(screen.getAllByTestId("best-line")).toHaveLength(1);
+    // Health and Environment, one line each.
+    expect(screen.getAllByTestId("rank-line")).toHaveLength(2);
+    expect(screen.getAllByTestId("best-line")).toHaveLength(2);
     // The sick day 14 days ago is hatched.
     expect(screen.getAllByTestId("exception-band")).toHaveLength(1);
     expect(within(screen.getByRole("list", { name: "Legend" })).getByText("Exception day")).toBeInTheDocument();
 
     const levels = within(await screen.findByRole("list", { name: "Level since the start" }));
     expect(levels.getAllByRole("listitem")[0]).toHaveTextContent("HealthLevel 9 of 100 · Novice");
-    expect(screen.getByTestId("level-bar")).toHaveStyle({ width: "9%" });
+    expect(levels.getAllByRole("listitem")[1]).toHaveTextContent("EnvironmentLevel 1 of 100 · Novice");
+    expect(screen.getAllByTestId("level-bar")[0]).toHaveStyle({ width: "9%" });
     expect(screen.queryByTestId("best-tick")).not.toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "By domain, last 30 days" })).toBeInTheDocument();
     // 29 counted days (the sick day left out), 24 of them active; today hasn't settled.
-    expect(cells("Health")).toEqual(["29", "1", "24 (83%)", "45.5", "1,4281,320 base", "1 → 9", "Novice", "Novice", "Level 9 (from 1)"]);
+    expect(cells("Health")).toEqual([
+      "29",
+      "1",
+      "24 active (83%)",
+      "45.5 base XP",
+      "1,4281,320 base",
+      "1 → 9",
+      "Novice",
+      "Novice",
+      "Level 9 (from 1)",
+    ]);
+    // Environment counts from its first rated day: kept-up days and the average Home Score.
+    expect(cells("Environment")).toEqual(["27", "1", "27 kept up (100%)", "Home Score 48.8", "0", "1", "Novice", "Novice", "None"]);
     // Domains without rules: their XP, nothing else.
     expect(tableRow("Social")).toHaveTextContent("XP only");
     expect(cells("Social")).toEqual(["—", "—", "—", "—", "0", "—", "—", "—", "—"]);
@@ -74,11 +88,14 @@ describe("Character Reports (xp-domains plan §7.4.10)", () => {
     await user.click(screen.getByRole("button", { name: "Table" }));
     const table = within(screen.getByRole("region", { name: "Rank over the last 30 days, as a table" }));
     const rows = table.getAllByRole("row");
-    expect(rows).toHaveLength(31);
+    // A row per day for each of Health and Environment.
+    expect(rows).toHaveLength(61);
     const cellsOf = (row: HTMLElement) => within(row).getAllByRole("cell").map((c) => c.textContent);
     expect(within(rows[1]).getByRole("rowheader")).toHaveTextContent(formatDay(addDays(todayIso(), -1)));
-    expect(cellsOf(rows[1])).toEqual(["9", "Novice", "Novice", ""]);
-    expect(cellsOf(rows[14])).toEqual(["1", "Novice", "Novice", "Yes"]);
+    expect(cellsOf(rows[1])).toEqual(["Health", "9", "Novice", "Novice", ""]);
+    expect(cellsOf(rows[2])).toEqual(["Environment", "1", "Novice", "Novice", ""]);
+    expect(within(rows[27]).getByRole("rowheader")).toHaveTextContent(formatDay(addDays(todayIso(), -14)));
+    expect(cellsOf(rows[27])).toEqual(["Health", "1", "Novice", "Novice", "Yes"]);
   });
 
   it("switches the period and remembers the choice", async () => {
@@ -90,7 +107,7 @@ describe("Character Reports (xp-domains plan §7.4.10)", () => {
     await screen.findByRole("heading", { name: "By domain, last 3 months" });
     expect(screen.getByTestId("rank-chart")).toHaveAccessibleName(/^Rank over the last 3 months\./);
     // Health's 31 days of history, inside a 90-day period.
-    expect(cells("Health").slice(0, 3)).toEqual(["30", "1", "24 (80%)"]);
+    expect(cells("Health").slice(0, 3)).toEqual(["30", "1", "24 active (80%)"]);
     expect(JSON.parse(localStorage.getItem("lifeos.view.character.reports")!)).toEqual({ period: "90" });
   });
 
@@ -115,7 +132,7 @@ describe("Character Reports (xp-domains plan §7.4.10)", () => {
 
     await screen.findByRole("heading", { name: "By domain, last 7 days" });
     expect(screen.getByTestId("rank-chart")).toHaveAccessibleName(
-      "Rank over the last 7 days. Health: Novice at the start, Apprentice at the end, best Apprentice. Use the arrow keys to read a day.",
+      "Rank over the last 7 days. Health: Novice at the start, Apprentice at the end, best Apprentice. Environment: Novice throughout, best Novice. Use the arrow keys to read a day.",
     );
     const health = cells("Health");
     expect(health.slice(5)).toEqual([

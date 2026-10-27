@@ -121,6 +121,11 @@ public sealed class DomainShown
     public decimal PercentPerDay { get; set; }
     public DomainLevelChange? LastChange { get; set; }
     public DomainBackOnTrack? BackOnTrack { get; set; }
+    /// <summary>
+    /// For <c>home</c>: the shown level's bar in points, what a day's Home Score must reach to
+    /// keep that level on track ("68.2+ keeps level 70 on track"); null otherwise.
+    /// </summary>
+    public decimal? Bar { get; set; }
 }
 
 /// <summary>The last day the shown level moved, and from what to what.</summary>
@@ -561,7 +566,8 @@ public static class DomainRows
                     ActiveDays = consistency.ReachedDaysNeeded(p.Level, backOnTrackDays),
                     Bar = home?.Bar(p.Level)
                 }
-                : null
+                : null,
+            Bar = home?.Bar(p.Level)
         };
         var reached = p.RanksReached.ToDictionary(r => r.Rank, r => r.QualifiedOn);
         row.Best = new DomainBest

@@ -96,18 +96,16 @@ public sealed class SpaceService(
         return await ReadAsync(space.Id, cancellationToken);
     }
 
-    /// <summary>Brings an archived space back: it counts again for all of history.</summary>
+    /// <summary>
+    /// Brings an archived space back: it counts again for all of history. Refused while another
+    /// space uses its name; <see cref="ArchiveService"/> checks that, so <c>bsk restore</c> and
+    /// <c>/api/restore</c> refuse it too.
+    /// </summary>
     public async Task<Space> RestoreAsync(string reference, CancellationToken cancellationToken = default)
     {
         var space = await ResolveAsync(reference, cancellationToken, preferArchived: true);
         if (space.Archived)
         {
-            if ((await ListAsync(cancellationToken: cancellationToken)).Any(s => Same(s.Name, space.Name)))
-            {
-                throw new InvalidOperationException(
-                    $"You already have a space called '{space.Name}': rename one of them first.");
-            }
-
             await archive.RestoreAsync(space.Urn, cancellationToken);
         }
 

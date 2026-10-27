@@ -6,6 +6,7 @@ import { deriveTitle } from "@/lib/capture";
 import { ACTIVITY_RULES, exerciseSeconds, exerciseXp, sleepXp, stepsXp } from "@/lib/activity-score";
 import { ouraDayAt } from "@/lib/activity-xp";
 import { mockActivityRecords, resetActivityStore } from "@/lib/mock/activity-store";
+import { mockHomeScoreUnits, resetEnvironmentStore } from "@/lib/mock/environment-store";
 import { addDays, nowIso, slugify, todayIso, startOfWeekMonday, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
 import {
   CALORIES_MAX,
@@ -175,6 +176,7 @@ export function resetStore() {
   revokeArtifacts(state);
   state = createSeed();
   resetActivityStore();
+  resetEnvironmentStore();
   emit();
 }
 
@@ -1832,9 +1834,14 @@ function markedDays(): string[] {
   return state.exceptionDays.map((e) => e.day);
 }
 
-/** Every configured domain as the ledger and the marked days read now. */
+/** Each day's Home Score in ten-thousandths, as Environment's fold reads them. */
+function homeScores(): Map<string, number> {
+  return mockHomeScoreUnits(markedDays(), todayIso());
+}
+
+/** Every configured domain as the ledger, the marked days and the home's ratings read now. */
 function foldNow(ledger: readonly MockLedgerEntry[] = state.ledger): DomainProgress[] {
-  return foldDomains(ledger, todayIso(), markedDays(), settledThrough());
+  return foldDomains(ledger, todayIso(), markedDays(), settledThrough(), homeScores());
 }
 
 function foldsBefore(): DomainProgress[] {
@@ -1968,6 +1975,7 @@ export function mockDomainDays(reference: string, days = 30): DomainDaysRead {
     days,
     state.exceptionDays,
     settledThrough(),
+    homeScores(),
   );
 }
 
@@ -1978,12 +1986,30 @@ export function mockDomainReport(days = 30): DomainReportRead {
   const today = todayIso();
   const credit = creditDays(state.ledger);
   const settled = settledThrough();
+  const scores = homeScores();
   return {
     today,
     days,
     domains: CURRENCIES.filter((c) => c.group === "domain").map((c) =>
-      toDomainReportRow(c, credit.get(c.key) ?? [], today, days, markedDays(), settled),
+      toDomainReportRow(c, credit.get(c.key) ?? [], today, days, markedDays(), settled, scores),
     ),
+  };
+}
+
+/**
+ * A rating write (`SpaceRatingService`): the home's condition can move Environment's level and
+ * rank, so it answers each domain that moved and pays any rank-up its best rank reached, as
+ * the API's rating writes do (environment plan §4.6).
+ */
+export function mockHomeWrite<T extends Earned>(write: () => T): T {
+  const before = foldNow();
+  const result = write();
+  const { rankUps, folds } = payRankUps();
+  if (rankUps.length > 0) emit();
+  return {
+    ...result,
+    awards: [...result.awards, ...rankUps.map((r) => r.award)],
+    progress: [...result.progress, ...domainChanges(before, folds, rankUps)],
   };
 }
 

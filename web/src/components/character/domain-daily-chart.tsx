@@ -2,6 +2,8 @@ import { useId, useState } from "react";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { formatDay } from "@/lib/dates";
+import { barPlus } from "@/lib/domains";
+import { shownPoints } from "@/lib/home-score";
 import type { DomainDayRow } from "@/lib/production-ui-types";
 import { useDomainDays } from "@/lib/queries";
 import { loadView, saveView } from "@/lib/view-state";
@@ -27,14 +29,23 @@ function niceTop(n: number): number {
   return (steps.find((s) => s * scale >= n) ?? 10) * scale;
 }
 
-function verdict(d: DomainDayRow): string {
+function verdict(d: DomainDayRow, home = false): string {
   if (d.exception != null) return ` · exception: ${d.exception}`;
+  if (home) {
+    if (d.homeScore == null) return " · not rated yet";
+    if (d.active == null) return "";
+    return d.active ? ` · kept up (${barPlus(d.bar)} needed)` : ` · not kept up (${barPlus(d.bar)} needed)`;
+  }
   if (d.active == null) return "";
   if (d.active) return d.activeMinimum != null ? ` · active (${d.activeMinimum}+ needed)` : " · active";
   return d.activeMinimum != null ? ` · not active (${d.activeMinimum} needed)` : " · not active";
 }
 
-function describe(d: DomainDayRow): string {
+function describe(d: DomainDayRow, home = false): string {
+  if (home) {
+    const score = d.homeScore == null ? "no Home Score" : `a Home Score of ${shownPoints(d.homeScore)}`;
+    return `${formatDay(d.day)}: ${score}${verdict(d, true)}`;
+  }
   const sleep = d.passive > 0 ? ` + ${d.passive.toLocaleString()} sleep` : "";
   const paid = d.paid !== d.base ? ` (${d.paid.toLocaleString()} paid)` : "";
   return `${formatDay(d.day)}: ${d.action.toLocaleString()} action XP${sleep}${paid}${verdict(d)}`;
@@ -45,6 +56,8 @@ function describe(d: DomainDayRow): string {
  * active days and a lighter step otherwise, with sleep (passive XP) stacked on top in its own
  * tone. The active minimum is a dashed step line, since it moves with the level, and exception
  * days are hatched bands. Hover or arrow keys read any day; the table view lists them all.
+ * For a domain held by the home (environment plan §4.8), the bars are each day's Home Score
+ * out of 100 and the step line is the bar the day had to reach to be kept up.
  */
 export function DomainDailyChart({ domain, name }: { domain: string; name: string }) {
   const [range, setRangeState] = useState<Range>(() => loadView<{ range: Range }>(VIEW, { range: "30" }).range);
@@ -67,22 +80,30 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
   const data = days.data;
   const rows = data?.days ?? [];
   const configured = data?.configured ?? false;
-  const minimums = rows.map((d) => d.activeMinimum ?? 0);
-  // Headroom above the tallest bar keeps the readout clear of the marks.
-  const top = niceTop(Math.max(...minimums, ...rows.map((d) => d.base), 1) * 1.35);
+  const home = data?.kind === "home";
+  // What each bar shows and the line it has to reach: action XP against the active minimum,
+  // or the Home Score against the bar.
+  const valueOf = (d: DomainDayRow) => (home ? (d.homeScore ?? 0) : d.action);
+  const minimumOf = (d: DomainDayRow) => (home ? (d.bar ?? 0) : (d.activeMinimum ?? 0));
+  const minimums = rows.map(minimumOf);
+  // Headroom above the tallest bar keeps the readout clear of the marks; a score tops out at 100.
+  const top = home ? 100 : niceTop(Math.max(...minimums, ...rows.map((d) => d.base), 1) * 1.35);
   const active = rows.filter((d) => d.active).length;
   const exceptions = rows.filter((d) => d.exception != null).length;
   const label = RANGES.find((r) => r.id === range)!.label;
   const dense = rows.length > 90;
   const shown = hovered != null ? rows[hovered] : null;
   const hasSleep = rows.some((d) => d.passive > 0);
-  const lastMinimum = configured ? (rows.at(-1)?.activeMinimum ?? null) : null;
+  const lastRow = rows.at(-1);
+  const lastMinimum = configured && lastRow ? (home ? (lastRow.bar ?? null) : (lastRow.activeMinimum ?? null)) : null;
+  const what = home ? "Home Score" : "XP";
+  const word = home ? "kept up" : "active";
 
   // The active minimum as a step line, in a 0–N by 0–100 box (the plot stretches it).
   const steps = configured
     ? rows
         .map((d, i) => {
-          const y = 100 - ((d.activeMinimum ?? 0) / top) * 100;
+          const y = 100 - (minimumOf(d) / top) * 100;
           return `${i === 0 ? "M" : "L"}${i},${y} L${i + 1},${y}`;
         })
         .join(" ")
@@ -110,7 +131,7 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
     <section aria-labelledby={titleId} className="space-y-3 border-t px-4 py-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id={titleId} className="type-scale-section text-muted-foreground">
-          {name} XP by day
+          {name} {what} by day
         </h3>
         <div className="flex flex-wrap items-center gap-3">
           <ToggleGroup label="Range" value={range} onChange={setRange} options={[...RANGES]} />
@@ -138,7 +159,7 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
           {configured ? (
             <p className="text-sm">
               <span className="font-medium">
-                {active} of the last {rows.length} days active
+                {active} of the last {rows.length} days {word}
               </span>
               {exceptions > 0 ? (
                 <span className="text-muted-foreground">
@@ -162,14 +183,14 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                       className="absolute right-0 translate-y-1/2 font-semibold text-foreground"
                       style={{ bottom: `${(lastMinimum / top) * 100}%` }}
                     >
-                      {lastMinimum}
+                      {home ? barPlus(lastMinimum) : lastMinimum}
                     </span>
                   ) : null}
                   <span className="absolute bottom-0 right-0 translate-y-1/2">0</span>
                 </div>
                 <div
                   role="group"
-                  aria-label={`${name} XP by day, last ${label}. Use the arrow keys to read a day.`}
+                  aria-label={`${name} ${what} by day, last ${label}. Use the arrow keys to read a day.`}
                   aria-describedby={readoutId}
                   tabIndex={0}
                   onKeyDown={onKey}
@@ -192,7 +213,7 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                         className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
                         style={d.exception != null ? { backgroundImage: HATCH } : undefined}
                       >
-                        {d.passive > 0 ? (
+                        {!home && d.passive > 0 ? (
                           <div
                             data-testid="sleep-bar"
                             className={cn("w-full max-w-6 bg-chart-3/55", !dense && "rounded-t-[4px]")}
@@ -203,11 +224,11 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                           data-testid="day-bar"
                           className={cn(
                             "w-full max-w-6",
-                            !dense && d.passive === 0 && "rounded-t-[4px]",
+                            !dense && (home || d.passive === 0) && "rounded-t-[4px]",
                             d.active || !configured ? "bg-chart-earned" : "bg-chart-earned/35",
                             hovered === i && "brightness-110 ring-2 ring-foreground/40",
                           )}
-                          style={{ height: d.action > 0 ? `max(2px, ${(d.action / top) * 100}%)` : 0 }}
+                          style={{ height: valueOf(d) > 0 ? `max(2px, ${(valueOf(d) / top) * 100}%)` : 0 }}
                         />
                       </div>
                     ))}
@@ -238,16 +259,22 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                       }}
                       aria-hidden
                     >
-                      <span className="font-semibold">{shown.action.toLocaleString()} action XP</span>
-                      {shown.passive > 0 ? (
+                      {home ? (
+                        <span className="font-semibold">
+                          {shown.homeScore == null ? "No Home Score" : `Home Score ${shownPoints(shown.homeScore)}`}
+                        </span>
+                      ) : (
+                        <span className="font-semibold">{shown.action.toLocaleString()} action XP</span>
+                      )}
+                      {!home && shown.passive > 0 ? (
                         <span className="text-muted-foreground"> + {shown.passive.toLocaleString()} sleep</span>
                       ) : null}
-                      {shown.paid !== shown.base ? (
+                      {!home && shown.paid !== shown.base ? (
                         <span className="text-muted-foreground"> · {shown.paid.toLocaleString()} paid</span>
                       ) : null}
                       <span className="block text-muted-foreground">
                         {formatDay(shown.day)}
-                        {verdict(shown)}
+                        {verdict(shown, home)}
                       </span>
                     </div>
                   ) : null}
@@ -262,26 +289,28 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                 </div>
               </div>
               <p id={readoutId} className="sr-only" aria-live="polite">
-                {shown ? describe(shown) : ""}
+                {shown ? describe(shown, home) : ""}
               </p>
               <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] text-muted-foreground" aria-label="Legend">
                 <li className="flex items-center gap-1.5">
                   <span className="size-2.5 rounded-[2px] bg-chart-earned" aria-hidden />
-                  {configured ? "Action XP, an active day" : "XP"}
+                  {home ? "Home Score, a kept-up day" : configured ? "Action XP, an active day" : "XP"}
                 </li>
                 {configured ? (
                   <li className="flex items-center gap-1.5">
-                    <span className="size-2.5 rounded-[2px] bg-chart-earned/35" aria-hidden /> Action XP, not active
+                    <span className="size-2.5 rounded-[2px] bg-chart-earned/35" aria-hidden />{" "}
+                    {home ? "Home Score, not kept up" : "Action XP, not active"}
                   </li>
                 ) : null}
-                {hasSleep ? (
+                {!home && hasSleep ? (
                   <li className="flex items-center gap-1.5">
                     <span className="size-2.5 rounded-[2px] bg-chart-3/55" aria-hidden /> Sleep (passive)
                   </li>
                 ) : null}
                 {configured ? (
                   <li className="flex items-center gap-1.5">
-                    <span className="w-3 border-t-2 border-dashed border-foreground/60" aria-hidden /> Active minimum
+                    <span className="w-3 border-t-2 border-dashed border-foreground/60" aria-hidden />{" "}
+                    {home ? "The bar" : "Active minimum"}
                   </li>
                 ) : null}
                 {exceptions > 0 ? (
@@ -297,31 +326,44 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
             <div
               tabIndex={0}
               role="region"
-              aria-label={`${name} XP by day, as a table`}
+              aria-label={`${name} ${what} by day, as a table`}
               className="max-h-80 overflow-y-auto rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               <table className="w-full text-sm">
                 <caption className="sr-only">
-                  {name} XP by day, last {label}, newest first
+                  {name} {what} by day, last {label}, newest first
                 </caption>
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground">
                     <th scope="col" className="py-1 font-medium">
                       Day
                     </th>
-                    <th scope="col" className="py-1 text-right font-medium">
-                      Action XP
-                    </th>
-                    <th scope="col" className="py-1 text-right font-medium">
-                      Sleep
-                    </th>
-                    <th scope="col" className="py-1 text-right font-medium">
-                      Paid
-                    </th>
+                    {home ? (
+                      <>
+                        <th scope="col" className="py-1 text-right font-medium">
+                          Home Score
+                        </th>
+                        <th scope="col" className="py-1 text-right font-medium">
+                          XP paid
+                        </th>
+                      </>
+                    ) : (
+                      <>
+                        <th scope="col" className="py-1 text-right font-medium">
+                          Action XP
+                        </th>
+                        <th scope="col" className="py-1 text-right font-medium">
+                          Sleep
+                        </th>
+                        <th scope="col" className="py-1 text-right font-medium">
+                          Paid
+                        </th>
+                      </>
+                    )}
                     {configured ? (
                       <>
                         <th scope="col" className="py-1 text-right font-medium">
-                          Active
+                          {home ? "Kept up" : "Active"}
                         </th>
                         <th scope="col" className="py-1 pl-3 font-medium">
                           Exception
@@ -336,13 +378,30 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
                       <th scope="row" className="py-1.5 text-left font-normal">
                         {formatDay(d.day)}
                       </th>
-                      <td className="py-1.5 text-right tabular-nums">{d.action.toLocaleString()}</td>
-                      <td className="py-1.5 text-right tabular-nums">{d.passive.toLocaleString()}</td>
-                      <td className="py-1.5 text-right tabular-nums">{d.paid.toLocaleString()}</td>
+                      {home ? (
+                        <>
+                          <td className="py-1.5 text-right tabular-nums">
+                            {d.homeScore == null ? "—" : shownPoints(d.homeScore)}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums">{d.paid.toLocaleString()}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="py-1.5 text-right tabular-nums">{d.action.toLocaleString()}</td>
+                          <td className="py-1.5 text-right tabular-nums">{d.passive.toLocaleString()}</td>
+                          <td className="py-1.5 text-right tabular-nums">{d.paid.toLocaleString()}</td>
+                        </>
+                      )}
                       {configured ? (
                         <>
                           <td className="py-1.5 text-right">
-                            {d.exception != null ? "—" : d.active ? "Yes" : `No (${d.activeMinimum ?? 0} needed)`}
+                            {d.exception != null || (home && d.homeScore == null)
+                              ? "—"
+                              : d.active
+                                ? "Yes"
+                                : home
+                                  ? `No (${barPlus(d.bar)} needed)`
+                                  : `No (${d.activeMinimum ?? 0} needed)`}
                           </td>
                           <td className="py-1.5 pl-3 text-muted-foreground">{d.exception ?? ""}</td>
                         </>

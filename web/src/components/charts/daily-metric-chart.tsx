@@ -17,6 +17,8 @@ export interface MetricBar {
   tone: string;
   /** Still going (today, this week): drawn hatched, and the legend says what that means. */
   partial?: boolean;
+  /** A marked day (an exception day): its column is hatched behind the bar. */
+  marked?: boolean;
   /** The readout's first words: "Today", "Tue, Oct 21", "Week of Oct 6". */
   title: string;
   /** The readout: "6,240 steps, over the minimum, 1,260 short of the goal". */
@@ -36,9 +38,29 @@ export interface MetricReference {
 
 export interface MetricLegendItem {
   label: string;
-  kind: "bar" | "so-far" | "line" | "dashed" | "dotted";
+  kind: "bar" | "so-far" | "line" | "dashed" | "dotted" | "marked";
   /** For `bar` and `so-far`: the tone class. */
   tone?: string;
+}
+
+/** Hatching behind a marked day's column, as the Character page marks an exception day. */
+const MARKED_HATCH =
+  "repeating-linear-gradient(135deg, color-mix(in oklch, var(--muted-foreground) 22%, transparent) 0 2px, transparent 2px 6px)";
+
+/** An SVG path for a threshold that moves by day: a flat step across each bar, joined where it moves. */
+function stepPath(values: (number | null)[], top: number): string {
+  let path = "";
+  let last: number | null = null;
+  values.forEach((v, i) => {
+    if (v == null) {
+      last = null;
+      return;
+    }
+    path += last == null ? `M${i},${top - v}` : `V${top - v}`;
+    path += `H${i + 1}`;
+    last = v;
+  });
+  return path;
 }
 
 /** The SVG polyline points for each unbroken run of the average. */
@@ -69,6 +91,8 @@ function LegendSwatch({ item }: { item: MetricLegendItem }) {
       return <span className="w-3 border-t-2 border-dashed border-foreground/70" aria-hidden />;
     case "dotted":
       return <span className="w-3 border-t-2 border-dotted border-foreground/55" aria-hidden />;
+    case "marked":
+      return <span className="size-2.5 rounded-[2px] ring-1 ring-foreground/20" style={{ backgroundImage: MARKED_HATCH }} aria-hidden />;
   }
 }
 
@@ -84,6 +108,7 @@ export function DailyMetricChart({
   bars,
   average,
   references = [],
+  steps,
   legend,
   onSelect,
   top: fixedTop,
@@ -96,6 +121,8 @@ export function DailyMetricChart({
   /** The rolling average for each bar (null where there's none), drawn as a line. */
   average?: (number | null)[];
   references?: MetricReference[];
+  /** A threshold that moves by day, one value per bar (null where there's none): a dashed step line. */
+  steps?: (number | null)[];
   legend: MetricLegendItem[];
   onSelect?: (index: number) => void;
   /** A fixed axis top (a score's 100); otherwise a clean number above the tallest mark. */
@@ -108,12 +135,13 @@ export function DailyMetricChart({
   const readoutId = useId();
 
   const values = bars.map((b) => b.value ?? 0);
-  const averages = (average ?? []).filter((v): v is number => v != null);
+  const averages = [...(average ?? []), ...(steps ?? [])].filter((v): v is number => v != null);
   // A little headroom above the tallest mark, so it never touches the top line.
   const top = fixedTop ?? niceTop(Math.max(...references.map((r) => r.value), ...values, ...averages, 1) * 1.1);
   const dense = bars.length > 90;
   const shown = hovered != null ? bars[hovered] : null;
   const runs = average ? lineRuns(average, top) : [];
+  const step = steps ? stepPath(steps, top) : "";
 
   function pick(clientX: number, el: HTMLElement) {
     const box = el.getBoundingClientRect();
@@ -184,7 +212,12 @@ export function DailyMetricChart({
           <div className="absolute inset-x-0 top-0 border-t border-foreground/8" aria-hidden />
           <div className={cn("absolute inset-0 flex items-end", dense ? "gap-0" : "gap-[2px]")} aria-hidden>
             {bars.map((b, i) => (
-              <div key={b.key} className="flex h-full min-w-0 flex-1 items-end justify-center">
+              <div
+                key={b.key}
+                data-marked={b.marked ? "" : undefined}
+                className="flex h-full min-w-0 flex-1 items-end justify-center"
+                style={b.marked ? { backgroundImage: MARKED_HATCH } : undefined}
+              >
                 {b.value != null && b.value > 0 ? (
                   <div
                     data-metric-bar=""
@@ -214,6 +247,24 @@ export function DailyMetricChart({
               aria-hidden
             />
           ))}
+          {step ? (
+            <svg
+              className="pointer-events-none absolute inset-0 size-full overflow-visible"
+              viewBox={`0 0 ${bars.length} ${top}`}
+              preserveAspectRatio="none"
+              aria-hidden
+            >
+              <path
+                data-testid="metric-steps"
+                d={step}
+                fill="none"
+                className="stroke-foreground/70"
+                strokeWidth={2}
+                strokeDasharray="5 4"
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+          ) : null}
           {runs.length > 0 ? (
             <svg
               className="pointer-events-none absolute inset-0 size-full overflow-visible"

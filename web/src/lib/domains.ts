@@ -19,6 +19,8 @@ import type {
   ExceptionDaysRead,
 } from "@/lib/production-ui-types";
 import { formatDay } from "@/lib/dates";
+import { barText } from "@/lib/domain-fold";
+import { shownPoints } from "@/lib/home-score";
 import { currency, normalizeAward } from "@/lib/rewards";
 
 const num = (v: unknown) => Number(v ?? 0);
@@ -42,8 +44,12 @@ function normalizeNeed(n: DomainConsistencyNeed): DomainConsistencyNeed {
     ageNeeded: num(n.ageNeeded),
     age: num(n.age),
     ageMet: !!n.ageMet,
+    bar: numOrNull(n.bar),
   };
 }
+
+/** `"home"` for a domain held by the home; anything else (an older API sent none) is `"xp"`. */
+const kindOf = (kind: unknown): "xp" | "home" => (kind === "home" ? "home" : "xp");
 
 function normalizeCurrent(c: DomainCurrent): DomainCurrent {
   return {
@@ -51,6 +57,8 @@ function normalizeCurrent(c: DomainCurrent): DomainCurrent {
     todayBase: num(c.todayBase),
     todayAction: num(c.todayAction),
     activeMinimum: num(c.activeMinimum),
+    todayHomeScore: numOrNull(c.todayHomeScore),
+    bar: numOrNull(c.bar),
     todayActive: !!c.todayActive,
     todayException: !!c.todayException,
     activeShare: num(c.activeShare),
@@ -76,6 +84,7 @@ function normalizeRank(r: DomainRankRow): DomainRankRow {
     average: numOrNull(r.average),
     activeMinimum: numOrNull(r.activeMinimum),
     activeDays: numOrNull(r.activeDays),
+    bar: numOrNull(r.bar),
     windowDays: num(r.windowDays),
     totalXp: num(r.totalXp),
     gems: num(r.gems),
@@ -102,11 +111,14 @@ export function normalizeDomainRow(raw: DomainRow): DomainRow {
       : null,
     consistency: c
       ? {
+          kind: kindOf(c.kind),
           level: num(c.level),
           windowDays: num(c.windowDays),
           from: c.from ?? null,
           to: c.to ?? null,
           averageBase: num(c.averageBase),
+          averageHomeScore: numOrNull(c.averageHomeScore),
+          held: c.held ? normalizeNeed(c.held) : null,
           next: c.next ? normalizeNeed(c.next) : null,
         }
       : null,
@@ -132,8 +144,10 @@ export function normalizeDomainRow(raw: DomainRow): DomainRow {
                 average: num(s.backOnTrack.average),
                 activeMinimum: num(s.backOnTrack.activeMinimum),
                 activeDays: num(s.backOnTrack.activeDays),
+                bar: numOrNull(s.backOnTrack.bar),
               }
             : null,
+          bar: numOrNull(s.bar),
         }
       : null,
     best: b
@@ -152,6 +166,7 @@ export function normalizeDomainDays(raw: DomainDaysRead): DomainDaysRead {
   return {
     ...raw,
     settledThrough: raw.settledThrough ?? null,
+    kind: raw.kind == null ? null : kindOf(raw.kind),
     days: (raw.days ?? []).map((d) => ({
       day: d.day,
       base: num(d.base),
@@ -166,6 +181,8 @@ export function normalizeDomainDays(raw: DomainDaysRead): DomainDaysRead {
       consistencyLevel: numOrNull(d.consistencyLevel),
       level: numOrNull(d.level),
       rank: numOrNull(d.rank),
+      homeScore: numOrNull(d.homeScore),
+      bar: numOrNull(d.bar),
     })),
   };
 }
@@ -183,6 +200,8 @@ export function normalizeDomainReport(raw: DomainReportRead): DomainReportRead {
       activeDays: numOrNull(d.activeDays),
       activeShare: numOrNull(d.activeShare),
       averageBase: numOrNull(d.averageBase),
+      kind: d.kind == null ? null : kindOf(d.kind),
+      averageHomeScore: numOrNull(d.averageHomeScore),
       levelFrom: numOrNull(d.levelFrom),
       levelTo: numOrNull(d.levelTo),
       rankFrom: numOrNull(d.rankFrom),
@@ -300,13 +319,25 @@ export function fallSpeedText(exact: number, percentPerDay: number): string {
   return `about ${nearest[1]} a day`;
 }
 
+/** Whether the domain's level is held by the home (environment plan §4.8): its consistency is a Home Score against a bar. */
+export function isHomeHeld(row: Pick<DomainRow, "consistency">): boolean {
+  return row.consistency?.kind === "home";
+}
+
+/** A bar as a threshold to reach: "68.2+". */
+export function barPlus(bar: number | null | undefined): string {
+  return `${barText(bar ?? 0)}+`;
+}
+
 /**
  * The card's one state line (§7.4.9): falling with what pauses it, paused, or which level sets
- * the shown level now.
+ * the shown level now. For a domain held by the home, a lifetime level above the condition
+ * level reads as headroom: "Your effort has earned level 39. Your home holds you at 28."
  */
 export function stateLine(row: DomainRow): string {
   const shown = row.shown!;
   const lifetime = row.lifetime!;
+  const home = isHomeHeld(row);
   if (shown.paused) {
     return row.current?.todayException
       ? `Paused: today is an exception day, so the fall toward ${shown.target} waits.`
@@ -315,9 +346,10 @@ export function stateLine(row: DomainRow): string {
   if (shown.falling) {
     const fall = `Falling ${shown.percentPerDay}% a day toward ${shown.target} (${fallSpeedText(shown.exact, shown.percentPerDay)}).`;
     const b = shown.backOnTrack;
-    return b
-      ? `${fall} ${b.days} days back on track pauses it: ${b.average}+ base XP a day on average, with ${b.activeDays} active.`
-      : fall;
+    if (!b) return fall;
+    return home
+      ? `${fall} ${b.days} days back on track pauses it: a Home Score of ${barPlus(b.bar)} on ${b.activeDays} of them.`
+      : `${fall} ${b.days} days back on track pauses it: ${b.average}+ base XP a day on average, with ${b.activeDays} active.`;
   }
   if (shown.limitedBy === "lifetime") {
     return lifetime.xpToNext > 0
@@ -325,8 +357,30 @@ export function stateLine(row: DomainRow): string {
       : "Lifetime XP sets your level.";
   }
   const days = row.consistency?.windowDays ?? 0;
+  const level = row.consistency?.level ?? 1;
+  if (home) {
+    if (days === 0) return "Your level starts once you rate your spaces and a day settles.";
+    return lifetime.level > level
+      ? `Your effort has earned level ${lifetime.level}. Your home holds you at ${level}.`
+      : `Your home supports level ${level}.`;
+  }
   if (days === 0) return "Your level starts counting once a day settles.";
-  return `Your last ${days === 90 ? "90 days" : `${days} ${days === 1 ? "day" : "days"}`} support level ${row.consistency!.level}.`;
+  return `Your last ${days === 90 ? "90 days" : `${days} ${days === 1 ? "day" : "days"}`} support level ${level}.`;
+}
+
+/**
+ * What the home supports now, for a domain held by it (environment plan §4.8): "Your home
+ * supports level 67: a Home Score of 66.5+ on 69 of the last 90 days."
+ */
+export function conditionText(row: DomainRow): string {
+  const c = row.consistency!;
+  const held = c.held;
+  if (!held || held.windowDays === 0) {
+    return c.windowDays === 0
+      ? "Your home holds level 1 until you rate your spaces and a day settles."
+      : `Your home supports level ${c.level}.`;
+  }
+  return `Your home supports level ${c.level}: a Home Score of ${barPlus(held.bar)} on ${held.activeDays} of the last ${held.windowDays} days.`;
 }
 
 /** "Down from 96 on Oct 24 · falling 1% a day toward 90", or null while nothing has fallen. */
@@ -351,6 +405,20 @@ export interface NeedPart {
  */
 export function needParts(next: DomainConsistencyNeed): NeedPart[] {
   const days = next.windowDays;
+  if (next.bar != null) {
+    // Held by the home: kept-up days at the level's bar, and how many so far.
+    const home: NeedPart[] = [
+      {
+        key: "active",
+        text: `a Home Score of ${barPlus(next.bar)} on ${next.activeDaysNeeded} of the last ${days} days (you have ${next.activeDays})`,
+        met: next.activeDaysMet,
+      },
+    ];
+    if (!next.ageMet) {
+      home.push({ key: "age", text: `${next.ageNeeded} kept-up days so far (you have ${next.age})`, met: false });
+    }
+    return home;
+  }
   const parts: NeedPart[] = [
     {
       key: "average",
@@ -381,22 +449,41 @@ export function needText(next: DomainConsistencyNeed): string {
   return `Level ${next.level} needs ${list}.`;
 }
 
-/** Today against the active minimum, in words (§7.4.9). */
-export function todayText(current: DomainCurrent): string {
+/**
+ * Today against the active minimum, in words (§7.4.9); for a domain held by the home, today's
+ * Home Score against the bar of the level going into today.
+ */
+export function todayText(current: DomainCurrent, kind: "xp" | "home" = "xp"): string {
   if (current.todayException) return "Today is an exception day: it doesn't count for or against you.";
+  if (kind === "home") {
+    if (current.todayHomeScore == null) return "Today: no Home Score yet. A walk-through starts it.";
+    const score = shownPoints(current.todayHomeScore);
+    return current.todayActive
+      ? `Today: Home Score ${score}, kept up (${barPlus(current.bar)} counts)`
+      : `Today: Home Score ${score}, under the ${barPlus(current.bar)} that counts as kept up`;
+  }
   return current.todayActive
     ? `Today: ${current.todayAction} of ${current.activeMinimum} action XP, active`
     : `Today: ${current.todayAction} of ${current.activeMinimum} action XP to count as active`;
 }
 
-/** "×1.2 · 24 of the last 30 days active". */
-export function multiplierChipText(current: DomainCurrent): string {
-  return `${multiplierLabel(current.multiplier)} · ${current.activeDays} of the last ${current.windowDays} days active`;
+/** What a successful day is called: "active", or "kept up" for a domain held by the home. */
+export function successWord(kind: "xp" | "home" = "xp"): string {
+  return kind === "home" ? "kept up" : "active";
 }
 
-/** What holding a rank's first level takes: "a 90-day average of 34 base XP, 48 active days of 90 (20+ action XP)". */
+/** "×1.2 · 24 of the last 30 days active" (or "kept up"). */
+export function multiplierChipText(current: DomainCurrent, kind: "xp" | "home" = "xp"): string {
+  return `${multiplierLabel(current.multiplier)} · ${current.activeDays} of the last ${current.windowDays} days ${successWord(kind)}`;
+}
+
+/**
+ * What holding a rank's first level takes: "a 90-day average of 34 base XP, 48 active days of
+ * 90 (20+ action XP)", or for a domain held by the home "a Home Score of 34.5+ on 48 of 90 days".
+ */
 export function rankHoldText(rank: DomainRankRow): string {
-  if (rank.average == null) return "where every domain starts";
+  if (rank.rank === 0 || (rank.average == null && rank.bar == null)) return "where every domain starts";
+  if (rank.bar != null) return `a Home Score of ${barPlus(rank.bar)} on ${rank.activeDays} of ${rank.windowDays} days`;
   return `a ${rank.windowDays}-day average of ${rank.average} base XP, ${rank.activeDays} active days of ${rank.windowDays} (${rank.activeMinimum}+ action XP)`;
 }
 

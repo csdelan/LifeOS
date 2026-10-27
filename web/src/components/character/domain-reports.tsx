@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
 import { formatDay } from "@/lib/dates";
+import { shownPoints } from "@/lib/home-score";
 import { domainSymbol, newBestsText, percent, periodLabel, rankSummary, type RankSeries } from "@/lib/domains";
 import type { DomainReportRow, DomainRow } from "@/lib/production-ui-types";
 import { useDomainReport, useDomains } from "@/lib/queries";
@@ -706,6 +707,9 @@ function ReportTable({
   periodLabel: string;
 }) {
   const dash = <span className="text-muted-foreground">—</span>;
+  // Environment counts kept-up days and the average Home Score where Health counts active days
+  // and base XP (environment plan §4.8), so the shared columns say which is which.
+  const hasHome = rows.some((d) => d.kind === "home");
   const head = (text: string, right = true) => (
     <th scope="col" className={cn("px-3 py-2 font-medium", right && "text-right")}>
       {text}
@@ -725,8 +729,8 @@ function ReportTable({
             {head("Domain", false)}
             {head("Days counted")}
             {head("Exception days")}
-            {head("Active days")}
-            {head("Base XP a day")}
+            {head(hasHome ? "Active or kept-up days" : "Active days")}
+            {head(hasHome ? "A day's average" : "Base XP a day")}
             {head("XP")}
             {head("Level")}
             {head("Rank", false)}
@@ -749,10 +753,18 @@ function ReportTable({
                 <td className="px-3 py-2 text-right tabular-nums">{d.daysCounted ?? dash}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{d.exceptionDays ?? dash}</td>
                 <td className="px-3 py-2 text-right tabular-nums">
-                  {d.activeDays != null && d.daysCounted ? `${d.activeDays} (${percent(d.activeShare ?? 0)})` : dash}
+                  {d.activeDays != null && d.daysCounted
+                    ? `${d.activeDays}${hasHome ? (d.kind === "home" ? " kept up" : " active") : ""} (${percent(d.activeShare ?? 0)})`
+                    : dash}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">
-                  {d.averageBase != null && d.daysCounted ? d.averageBase.toLocaleString() : dash}
+                  {!d.daysCounted
+                    ? dash
+                    : d.kind === "home"
+                      ? `Home Score ${shownPoints(d.averageHomeScore ?? 0)}`
+                      : d.averageBase != null
+                        ? `${d.averageBase.toLocaleString()}${hasHome ? " base XP" : ""}`
+                        : dash}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {d.paid.toLocaleString()}

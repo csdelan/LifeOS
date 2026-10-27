@@ -34,6 +34,7 @@ export interface CubicCurve {
  * `shareTo`. Shares are 0–1, four places at most.
  */
 export interface ConsistencyRule {
+  kind?: "xp";
   windowDays: number;
   averageFrom: number;
   averageTo: number;
@@ -43,6 +44,26 @@ export interface ConsistencyRule {
   shareTo: number;
   maxLevel: number;
 }
+
+/**
+ * What holds a domain by its home (`HomeConditionRule`, environment plan §2.3, §4.5): a day is
+ * kept up at level L when its Home Score reaches the bar `barFrom + (barTo − barFrom)(L − 2)/98`
+ * (level 1 takes level 2's), and L holds when a share from `shareFrom` to `shareTo` of the
+ * window's days were kept up, and at least L + 1 so far. Only days with a Home Score count, and
+ * there's no average test. Bars are points (0–100); shares are 0–1, four places at most.
+ */
+export interface HomeConditionRule {
+  kind: "home";
+  windowDays: number;
+  barFrom: number;
+  barTo: number;
+  shareFrom: number;
+  shareTo: number;
+  maxLevel: number;
+}
+
+/** A domain's consistency rule: Health's XP rule or Environment's home rule. */
+export type DomainConsistencyRule = ConsistencyRule | HomeConditionRule;
 
 /** How the shown level falls: `percentPerDay` of itself a day, after `holdDays`, paused while back on track. */
 export interface FallRule {
@@ -61,10 +82,10 @@ export interface MultiplierTier {
   multiplier: number;
 }
 
-export interface DomainRules {
+export interface DomainRules<C extends DomainConsistencyRule = DomainConsistencyRule> {
   currency: string;
   curve: CubicCurve;
-  consistency: ConsistencyRule;
+  consistency: C;
   fall: FallRule;
   ranks: readonly RankRule[];
   multiplier: { windowDays: number; tiers: readonly MultiplierTier[] };
@@ -74,10 +95,11 @@ export interface DomainRules {
 }
 
 /** Health, the pilot domain (xp-domains plan §7.2), as `LifeDomains.Health` sets it. */
-export const HEALTH: DomainRules = {
+export const HEALTH: DomainRules<ConsistencyRule> = {
   currency: "health_xp",
   curve: { linear: 60, quadratic: 24, cubic: 0.85, maxLevel: 100 },
   consistency: {
+    kind: "xp",
     windowDays: 90,
     averageFrom: 30,
     averageTo: 80,
@@ -113,8 +135,24 @@ export const HEALTH: DomainRules = {
   passiveTriggers: ["sleep"],
 };
 
+/**
+ * Environment, held by the home (environment plan §4.5), as `LifeDomains.Environment` sets it:
+ * Health's curve at a quarter of the price, the Home Score's bar for consistency, and Health's
+ * fall, ranks, multiplier and Gems. No XP is passive.
+ */
+export const ENVIRONMENT: DomainRules<HomeConditionRule> = {
+  currency: "environment_xp",
+  curve: { linear: 15, quadratic: 6, cubic: 0.2125, maxLevel: 100 },
+  consistency: { kind: "home", windowDays: 90, barFrom: 30, barTo: 85, shareFrom: 0.5, shareTo: 0.9, maxLevel: 100 },
+  fall: HEALTH.fall,
+  ranks: HEALTH.ranks,
+  multiplier: HEALTH.multiplier,
+  rankUpGems: HEALTH.rankUpGems,
+  passiveTriggers: [],
+};
+
 /** Every configured domain. */
-export const CONFIGURED_DOMAINS: readonly DomainRules[] = [HEALTH];
+export const CONFIGURED_DOMAINS: readonly DomainRules[] = [HEALTH, ENVIRONMENT];
 
 /** Every configured domain's passive triggers, once each: what the credit read splits out. */
 export const PASSIVE_TRIGGERS: readonly string[] = [...new Set(CONFIGURED_DOMAINS.flatMap((r) => r.passiveTriggers))];
@@ -160,6 +198,8 @@ function roundRatio(num: number, den: number, places: number, toEven = false): n
 const round1 = (num: number, den: number) => roundRatio(num, den, 1);
 /** `Math.Round(x, 4)` (to even) of a ratio, as the API rounds shares. */
 const round4 = (num: number, den: number) => roundRatio(num, den, 4, true);
+/** An average Home Score in points from a sum of ten-thousandths over `days`, floored to a tenth (0 over no days). */
+const floorPoints = (sum: number, days: number) => (days === 0 ? 0 : Math.floor(sum / (days * 1_000)) / 10);
 
 // --- The level curve -----------------------------------------------------------
 
@@ -175,7 +215,7 @@ export function totalFor(curve: CubicCurve, level: number): number {
   const n = level - 1;
   const pairs = (n * (n - 1)) / 2;
   const triples = (n * (n - 1) * (n - 2)) / 6;
-  return curve.linear * n + curve.quadratic * pairs + ceilDiv(Math.round(curve.cubic * 100) * triples, 100);
+  return curve.linear * n + curve.quadratic * pairs + ceilDiv(Math.round(curve.cubic * 10_000) * triples, 10_000);
 }
 
 /** The XP to go from `level` to the next; 0 at the top. */
@@ -216,24 +256,80 @@ export function activeDaysNeededFor(rule: ConsistencyRule, level: number, days: 
   return ceilDiv(days * (from * span + (to - from) * (level - 2)), span * 10_000);
 }
 
-/** The active days so far `level` needs: `min(WindowDays, L + 1)`. */
-export function ageNeededFor(rule: ConsistencyRule, level: number): number {
+/** The active (or kept-up) days so far `level` needs: `min(WindowDays, L + 1)`. */
+export function ageNeededFor(rule: DomainConsistencyRule, level: number): number {
   return Math.min(rule.windowDays, level + 1);
 }
 
+/** Whether a domain is held by its home. */
+export function isHomeRule(rule: DomainConsistencyRule): rule is HomeConditionRule {
+  return rule.kind === "home";
+}
+
+/** A Home Score's whole-number scale: ten-thousandths of a point. */
+export const HOME_UNIT = 10_000;
+
+/**
+ * The least Home Score (ten-thousandths) that keeps `level` up:
+ * `⌈(98 · barFrom + (barTo − barFrom)(L − 2)) · 10,000 / 98⌉`; level 1 takes level 2's bar.
+ */
+export function homeThreshold(rule: HomeConditionRule, level: number): number {
+  const span = rule.maxLevel - 2;
+  const steps = Math.max(level, 2) - 2;
+  return ceilDiv((rule.barFrom * span + (rule.barTo - rule.barFrom) * steps) * HOME_UNIT, span);
+}
+
+/** The bar of `level` in points, exact to four places (57.5, 34.4898). */
+export function homeBar(rule: HomeConditionRule, level: number): number {
+  return homeThreshold(rule, level) / HOME_UNIT;
+}
+
+/** A bar as shown: rounded up to a tenth, "68.2" (`HomeConditionRule.Text`). */
+export function barText(bar: number): string {
+  return (ceilDiv(Math.round(bar * HOME_UNIT), 1_000) / 10).toFixed(1);
+}
+
+/** The kept-up days `level` needs in a window of `days`: `⌈P(L) · N⌉`, exactly. */
+function keptUpDaysNeededFor(rule: HomeConditionRule, level: number, days: number): number {
+  const span = rule.maxLevel - 2;
+  const from = bp(rule.shareFrom);
+  const to = bp(rule.shareTo);
+  return ceilDiv(days * (from * span + (to - from) * (Math.max(level, 2) - 2)), span * 10_000);
+}
+
+/** The measure a day must reach at `level`: action XP for Health, a Home Score (ten-thousandths) for Environment. */
+function thresholdFor(rule: DomainConsistencyRule, level: number): number {
+  return isHomeRule(rule) ? homeThreshold(rule, level) : activeMinimumFor(rule, level);
+}
+
+/** A day's minimum at `level` in whole units: action XP, or Home Score points rounded up. */
+export function dayMinimumFor(rule: DomainConsistencyRule, level: number): number {
+  return isHomeRule(rule) ? ceilDiv(homeThreshold(rule, level), HOME_UNIT) : activeMinimumFor(rule, level);
+}
+
+/** The base XP a window of `days` needs at `level`; a home rule has no average test. */
+function baseNeededFor(rule: DomainConsistencyRule, level: number, days: number): number {
+  return isHomeRule(rule) ? 0 : averageFor(rule, level) * days;
+}
+
+/** The days at the threshold `level` needs in a window of `days`. */
+export function reachedDaysNeededFor(rule: DomainConsistencyRule, level: number, days: number): number {
+  return isHomeRule(rule) ? keptUpDaysNeededFor(rule, level, days) : activeDaysNeededFor(rule, level, days);
+}
+
 function qualifies(
-  rule: ConsistencyRule,
+  rule: DomainConsistencyRule,
   level: number,
-  activeSoFar: number,
+  reachedSoFar: number,
   days: number,
   windowBase: number,
-  windowActive: number,
+  windowReached: number,
 ): boolean {
   return (
     days > 0 &&
-    activeSoFar >= ageNeededFor(rule, level) &&
-    windowBase >= averageFor(rule, level) * days &&
-    windowActive >= activeDaysNeededFor(rule, level, days)
+    reachedSoFar >= ageNeededFor(rule, level) &&
+    windowBase >= baseNeededFor(rule, level, days) &&
+    windowReached >= reachedDaysNeededFor(rule, level, days)
   );
 }
 
@@ -247,9 +343,12 @@ export function levelOf(exact: number): number {
   return Math.floor((exact + LEVEL_SCALE - 1) / LEVEL_SCALE);
 }
 
-/** The active day in words at `level`: "at least 17 action XP (base XP less sleep)". */
+/** The successful day in words at `level`: "at least 17 action XP (base XP less sleep)", or "a Home Score of at least 68.2". */
 export function describeRule(rules: DomainRules, level: number): string {
-  return `at least ${activeMinimumFor(rules.consistency, level)} action XP (base XP less sleep)`;
+  const rule = rules.consistency;
+  return isHomeRule(rule)
+    ? `a Home Score of at least ${barText(homeBar(rule, level))}`
+    : `at least ${activeMinimumFor(rule, level)} action XP (base XP less sleep)`;
 }
 
 // --- Rules helpers -------------------------------------------------------------
@@ -334,12 +433,17 @@ export interface DomainDay {
   passive?: number;
 }
 
-/** One calendar day of a domain's walk and its credit; its action XP is `base − passive`. */
+/**
+ * One calendar day of a domain's walk and its credit; its action XP is `base − passive`. For a
+ * domain held by the home, `homeScore` is the day's Home Score in ten-thousandths, or null
+ * before the first rating.
+ */
 export interface DomainPeriod {
   day: string;
   base: number;
   paid: number;
   passive: number;
+  homeScore?: number | null;
 }
 
 /** Where a domain stood at the end of a day (`DomainStanding`). */
@@ -370,12 +474,13 @@ export interface RankReached {
   qualifiedOn: string;
 }
 
-/** The counted days the consistency level reads: the last `days` (at most 90) and their base XP. */
+/** The counted days the consistency level reads: the last `days` (at most 90), their base XP and Home Scores (ten-thousandths). */
 export interface CountedWindow {
   days: number;
   from: string | null;
   to: string | null;
   base: number;
+  homeScore: number;
 }
 
 /** What `level` needs over the window, against where each test stands. */
@@ -404,10 +509,12 @@ export class DomainWalker {
   readonly rules: DomainRules;
   readonly ranksReached: RankReached[] = [];
   private readonly maxLevel: number;
+  // The distinct thresholds a day can reach, ascending, and each level's index into them.
   private readonly minimums: number[];
   private readonly minimumOf: number[];
   private readonly counted: string[] = [];
   private readonly baseSums: number[] = [0];
+  private readonly homeSums: number[] = [0];
   private readonly activeSums: number[][];
   private readonly successSums: number[] = [0];
   private total = 0;
@@ -421,7 +528,7 @@ export class DomainWalker {
     this.rules = rules;
     this.maxLevel = Math.min(rules.curve.maxLevel, rules.consistency.maxLevel);
     const all: number[] = [];
-    for (let level = 1; level <= this.maxLevel; level++) all.push(activeMinimumFor(rules.consistency, level));
+    for (let level = 1; level <= this.maxLevel; level++) all.push(thresholdFor(rules.consistency, level));
     this.minimums = [...new Set(all)].sort((a, b) => a - b);
     this.minimumOf = [0, ...all.map((m) => this.minimums.indexOf(m))];
     this.activeSums = this.minimums.map(() => [0]);
@@ -449,18 +556,26 @@ export class DomainWalker {
     this.total += period.paid;
     const lifetime = levelFor(rules.curve, this.total);
     const action = period.base - period.passive;
+    const rule = rules.consistency;
+    const home = isHomeRule(rule);
+    const score = period.homeScore ?? null;
 
-    const activeMinimum = activeMinimumFor(rules.consistency, levelBefore);
-    const active = !exception && action >= activeMinimum;
+    // The multiplier's successful day, at the level going into it: active, or kept up.
+    const activeMinimum = dayMinimumFor(rule, levelBefore);
+    const active =
+      !exception && (home ? score != null && score >= homeThreshold(rule, levelBefore) : action >= activeMinimum);
     if (!exception) this.successSums.push(this.successSums.at(-1)! + (active ? 1 : 0));
 
-    const isCounted = !exception && settled;
+    // A home rule counts only days with a Home Score.
+    const isCounted = !exception && settled && (!home || score != null);
     if (isCounted) {
+      const measure = home ? score! : action;
       this.counted.push(day);
       this.baseSums.push(this.baseSums.at(-1)! + period.base);
+      this.homeSums.push(this.homeSums.at(-1)! + (score ?? 0));
       this.minimums.forEach((minimum, i) => {
         const sums = this.activeSums[i];
-        sums.push(sums.at(-1)! + (action >= minimum ? 1 : 0));
+        sums.push(sums.at(-1)! + (measure >= minimum ? 1 : 0));
       });
       this.consistency = this.consistencyLevelNow();
     }
@@ -512,7 +627,10 @@ export class DomainWalker {
     };
   }
 
-  /** Whether the last 7 counted days pass `level`'s average and active-day tests (no age test). */
+  /**
+   * Whether the last 7 counted days pass `level`'s window tests (no age test): Health's average
+   * and active days, Environment's kept-up days.
+   */
   backOnTrack(level: number): boolean {
     const days = this.rules.fall.backOnTrackDays;
     const k = this.counted.length;
@@ -520,8 +638,8 @@ export class DomainWalker {
     const sums = this.activeSums[this.minimumOf[this.clamp(level)]];
     const rule = this.rules.consistency;
     return (
-      this.baseSums[k] - this.baseSums[k - days] >= averageFor(rule, level) * days &&
-      sums[k] - sums[k - days] >= activeDaysNeededFor(rule, level, days)
+      this.baseSums[k] - this.baseSums[k - days] >= baseNeededFor(rule, level, days) &&
+      sums[k] - sums[k - days] >= reachedDaysNeededFor(rule, level, days)
     );
   }
 
@@ -530,20 +648,30 @@ export class DomainWalker {
     const k = this.counted.length;
     const n = Math.min(this.rules.consistency.windowDays, k);
     return n === 0
-      ? { days: 0, from: null, to: null, base: 0 }
-      : { days: n, from: this.counted[k - n], to: this.counted[k - 1], base: this.baseSums[k] - this.baseSums[k - n] };
+      ? { days: 0, from: null, to: null, base: 0, homeScore: 0 }
+      : {
+          days: n,
+          from: this.counted[k - n],
+          to: this.counted[k - 1],
+          base: this.baseSums[k] - this.baseSums[k - n],
+          homeScore: this.homeSums[k] - this.homeSums[k - n],
+        };
   }
 
-  /** What `level` needs over the window now, against where each test stands. */
+  /**
+   * What `level` needs over the window now, against where each test stands. For a home rule
+   * the average and base needed are 0, the active minimum is the bar in whole points rounded
+   * up, and the active days are kept-up days.
+   */
   needFor(level: number): ConsistencyNeed {
     const rule = this.rules.consistency;
     const k = this.counted.length;
     const n = Math.min(rule.windowDays, k);
     const sums = this.activeSums[this.minimumOf[this.clamp(level)]];
-    const average = averageFor(rule, level);
-    const baseNeeded = average * n;
+    const average = isHomeRule(rule) ? 0 : averageFor(rule, level);
+    const baseNeeded = baseNeededFor(rule, level, n);
     const baseNow = this.baseSums[k] - this.baseSums[k - n];
-    const activeDaysNeeded = activeDaysNeededFor(rule, level, n);
+    const activeDaysNeeded = reachedDaysNeededFor(rule, level, n);
     const activeDaysNow = sums[k] - sums[k - n];
     const ageNeeded = ageNeededFor(rule, level);
     const ageNow = sums[k];
@@ -553,7 +681,7 @@ export class DomainWalker {
       average,
       baseNeeded,
       baseNow,
-      activeMinimum: activeMinimumFor(rule, level),
+      activeMinimum: dayMinimumFor(rule, level),
       activeDaysNeeded,
       activeDaysNow,
       ageNeeded,
@@ -642,6 +770,8 @@ export interface DomainPeriodReport {
   exceptionDays: number;
   activeDays: number;
   countedBase: number;
+  /** The counted days' Home Scores, summed in ten-thousandths (0 for a domain held by XP). */
+  countedHomeScore: number;
   base: number;
   paid: number;
   before: DomainStanding;
@@ -669,6 +799,8 @@ export class DomainProgress {
   readonly xpIntoLevel: number;
   readonly xpToNext: number;
   readonly window: CountedWindow;
+  /** What the consistency level now takes, against the window; null at level 1. */
+  readonly heldConsistency: ConsistencyNeed | null;
   readonly nextConsistency: ConsistencyNeed | null;
   readonly limitedBy: "lifetime" | "consistency" | null;
   readonly falling: boolean;
@@ -713,6 +845,7 @@ export class DomainProgress {
       now.consistencyLevel < Math.min(curve.maxLevel, rules.consistency.maxLevel)
         ? walker.needFor(now.consistencyLevel + 1)
         : null;
+    this.heldConsistency = now.consistencyLevel >= 2 ? walker.needFor(now.consistencyLevel) : null;
 
     this.limitedBy =
       now.lifetimeLevel < now.consistencyLevel
@@ -749,7 +882,9 @@ export class DomainProgress {
   /**
    * Folds one domain's credit up to `today` (home zone); credit after today is left out.
    * `exceptions` are the marked days, and `settledThrough` the last settled day (yesterday
-   * when not given); days after it don't count yet.
+   * when not given); days after it don't count yet. `homeScores` are the days' Home Scores in
+   * ten-thousandths, for a domain held by the home (environment plan §4.5): its walk starts at
+   * the earlier of the first paid XP and the first Home Score.
    */
   static fold(
     rules: DomainRules,
@@ -757,6 +892,7 @@ export class DomainProgress {
     today: string,
     exceptions: Iterable<string> = [],
     settledThrough?: string,
+    homeScores?: ReadonlyMap<string, number>,
   ): DomainProgress {
     let settled = settledThrough ?? shiftDay(today, -1);
     if (settled > today) settled = today;
@@ -768,15 +904,19 @@ export class DomainProgress {
       const sum = credit.get(d.day) ?? { base: 0, paid: 0, passive: 0 };
       credit.set(d.day, { base: sum.base + d.base, paid: sum.paid + d.paid, passive: sum.passive + (d.passive ?? 0) });
     }
-    const paidDays = [...credit].filter(([, c]) => c.paid > 0).map(([day]) => day).sort();
-    if (paidDays.length === 0) return new DomainProgress(rules, today, settled, null, [], marked);
+    const scores = homeScores ?? new Map<string, number>();
+    const startDays = [
+      ...[...credit].filter(([, c]) => c.paid > 0).map(([day]) => day),
+      ...[...scores.keys()].filter((day) => day <= today),
+    ].sort();
+    if (startDays.length === 0) return new DomainProgress(rules, today, settled, null, [], marked);
 
-    const start = paidDays[0];
+    const start = startDays[0];
     const periods: DomainPeriod[] = [];
     for (let n = dayNumber(start); n <= dayNumber(today); n++) {
       const day = dayFrom(n);
       const c = credit.get(day) ?? { base: 0, paid: 0, passive: 0 };
-      periods.push({ day, ...c });
+      periods.push({ day, ...c, homeScore: scores.get(day) ?? null });
     }
     return new DomainProgress(rules, today, settled, start, periods, marked);
   }
@@ -844,6 +984,11 @@ export class DomainProgress {
     return p ? p.base - p.passive : 0;
   }
 
+  /** Today's Home Score in ten-thousandths, or null before the first rating (and for a domain held by XP). */
+  get todayHomeScore(): number | null {
+    return this.todayPeriod?.homeScore ?? null;
+  }
+
   /** The action XP that makes today active: the minimum of the shown level going into today. */
   get activeMinimum(): number {
     return this.now.activeMinimum;
@@ -878,7 +1023,7 @@ export class DomainProgress {
         active: false,
         falling: false,
         paused: false,
-        activeMinimum: activeMinimumFor(this.rules.consistency, 1),
+        activeMinimum: dayMinimumFor(this.rules.consistency, 1),
       };
     }
     const i = Math.min(dayNumber(day) - this.startNumber, this.standings.length - 1);
@@ -922,6 +1067,7 @@ export class DomainProgress {
     let exceptionDays = 0;
     let active = 0;
     let countedBase = 0;
+    let countedHomeScore = 0;
     let base = 0;
     let paid = 0;
     const standings: DomainStanding[] = [];
@@ -938,6 +1084,7 @@ export class DomainProgress {
       if (standing.counted) {
         counted++;
         countedBase += period.base;
+        countedHomeScore += period.homeScore ?? 0;
         if (standing.active) active++;
       }
     }
@@ -949,6 +1096,7 @@ export class DomainProgress {
       exceptionDays,
       activeDays: active,
       countedBase,
+      countedHomeScore,
       base,
       paid,
       before: this.standingOn(shiftDay(from, -1)),
@@ -990,6 +1138,24 @@ export function toDomainRow(
   const p = progress;
   const rules = p.rules;
   const rule = rules.consistency;
+  const home = isHomeRule(rule) ? rule : null;
+  const xp = isHomeRule(rule) ? null : rule;
+  const bar = (level: number) => (home ? homeBar(home, level) : null);
+  const need = (n: ConsistencyNeed) => ({
+    level: n.level,
+    windowDays: n.windowDays,
+    average: n.average,
+    averageNow: round1(n.baseNow, n.windowDays),
+    averageMet: n.averageMet,
+    activeMinimum: n.activeMinimum,
+    activeDaysNeeded: n.activeDaysNeeded,
+    activeDays: n.activeDaysNow,
+    activeDaysMet: n.activeDaysMet,
+    ageNeeded: n.ageNeeded,
+    age: n.ageNow,
+    ageMet: n.ageMet,
+    bar: bar(n.level),
+  });
   row.lifetime = {
     start: p.start,
     level: p.lifetimeLevel,
@@ -997,29 +1163,16 @@ export function toDomainRow(
     xpIntoLevel: p.xpIntoLevel,
     xpToNext: p.xpToNext,
   };
-  const next = p.nextConsistency;
   row.consistency = {
+    kind: home ? "home" : "xp",
     level: p.consistencyLevel,
     windowDays: p.window.days,
     from: p.window.from,
     to: p.window.to,
     averageBase: round1(p.window.base, p.window.days),
-    next: next
-      ? {
-          level: next.level,
-          windowDays: next.windowDays,
-          average: next.average,
-          averageNow: round1(next.baseNow, next.windowDays),
-          averageMet: next.averageMet,
-          activeMinimum: next.activeMinimum,
-          activeDaysNeeded: next.activeDaysNeeded,
-          activeDays: next.activeDaysNow,
-          activeDaysMet: next.activeDaysMet,
-          ageNeeded: next.ageNeeded,
-          age: next.ageNow,
-          ageMet: next.ageMet,
-        }
-      : null,
+    averageHomeScore: home ? floorPoints(p.window.homeScore, p.window.days) : null,
+    held: p.heldConsistency ? need(p.heldConsistency) : null,
+    next: p.nextConsistency ? need(p.nextConsistency) : null,
   };
   const backOnTrackDays = rules.fall.backOnTrackDays;
   row.shown = {
@@ -1039,11 +1192,13 @@ export function toDomainRow(
       p.level > p.target
         ? {
             days: backOnTrackDays,
-            average: averageFor(rule, p.level),
-            activeMinimum: activeMinimumFor(rule, p.level),
-            activeDays: activeDaysNeededFor(rule, p.level, backOnTrackDays),
+            average: xp ? averageFor(xp, p.level) : 0,
+            activeMinimum: dayMinimumFor(rule, p.level),
+            activeDays: reachedDaysNeededFor(rule, p.level, backOnTrackDays),
+            bar: bar(p.level),
           }
         : null,
+    bar: bar(p.level),
   };
   const reached = new Map(p.ranksReached.map((r) => [r.rank, r.qualifiedOn]));
   row.best = {
@@ -1053,13 +1208,17 @@ export function toDomainRow(
     rankTitle: p.bestRankRule.title,
     rankOn: reached.get(p.bestRank) ?? null,
   };
+  // A kept-up day is judged at the level going into it: yesterday's.
+  const levelIntoToday = p.standingOn(shiftDay(p.today, -1)).level;
   row.current = {
     todayBase: p.todayBase,
     todayAction: p.todayAction,
     activeMinimum: p.activeMinimum,
+    todayHomeScore: home && p.todayHomeScore != null ? p.todayHomeScore / HOME_UNIT : null,
+    bar: bar(levelIntoToday),
     todayActive: p.todayActive,
     todayException: p.todayException,
-    rule: describeRule(rules, p.level),
+    rule: describeRule(rules, home ? levelIntoToday : p.level),
     activeShare: round4(p.consistency.successfulDays, p.consistency.days),
     activeDays: p.consistency.successfulDays,
     windowDays: p.consistency.days,
@@ -1079,9 +1238,10 @@ export function toDomainRow(
       title: rank.title,
       level: rank.startLevel,
       lastLevel: topLevelOf(rules, i),
-      average: i === 0 ? null : averageFor(rule, rank.startLevel),
-      activeMinimum: i === 0 ? null : activeMinimumFor(rule, rank.startLevel),
-      activeDays: i === 0 ? null : activeDaysNeededFor(rule, rank.startLevel, rule.windowDays),
+      average: i === 0 || !xp ? null : averageFor(xp, rank.startLevel),
+      activeMinimum: i === 0 ? null : dayMinimumFor(rule, rank.startLevel),
+      activeDays: i === 0 ? null : reachedDaysNeededFor(rule, rank.startLevel, rule.windowDays),
+      bar: i === 0 ? null : bar(rank.startLevel),
       windowDays: rule.windowDays,
       totalXp: totalFor(rules.curve, rank.startLevel),
       gems: i === 0 ? 0 : gemsFor(rules, i),
@@ -1105,11 +1265,13 @@ export function toDomainDays(
   count: number,
   exceptions: readonly MarkedDay[] = [],
   settledThrough?: string,
+  homeScores?: ReadonlyMap<string, number>,
 ): DomainDaysRead {
   const rules = rulesFor(currency.key);
   const progress = rules
-    ? DomainProgress.fold(rules, credit, today, exceptions.map((e) => e.day), settledThrough)
+    ? DomainProgress.fold(rules, credit, today, exceptions.map((e) => e.day), settledThrough, homeScores)
     : null;
+  const home = rules && isHomeRule(rules.consistency) ? rules.consistency : null;
   const comments = new Map(exceptions.map((e) => [e.day, e.comment]));
   const byDay = new Map<string, { base: number; paid: number; passive: number }>();
   for (const d of credit) {
@@ -1139,6 +1301,8 @@ export function toDomainDays(
         consistencyLevel: s.consistencyLevel,
         level: s.level,
         rank: s.rank,
+        homeScore: home && p?.homeScore != null ? p.homeScore / HOME_UNIT : null,
+        bar: home ? homeBar(home, progress.standingOn(shiftDay(day, -1)).level) : null,
       });
     } else {
       const c = byDay.get(day) ?? { base: 0, paid: 0, passive: 0 };
@@ -1156,6 +1320,8 @@ export function toDomainDays(
         consistencyLevel: null,
         level: null,
         rank: null,
+        homeScore: null,
+        bar: null,
       });
     }
   }
@@ -1166,6 +1332,7 @@ export function toDomainDays(
     configured: !!progress,
     today,
     settledThrough: progress?.settledThrough ?? null,
+    kind: rules ? (home ? "home" : "xp") : null,
     days,
   };
 }
@@ -1182,6 +1349,7 @@ export function toDomainReportRow(
   days: number,
   exceptions: readonly string[] = [],
   settledThrough?: string,
+  homeScores?: ReadonlyMap<string, number>,
 ): DomainReportRow {
   const rules = rulesFor(currency.key);
   const row: DomainReportRow = {
@@ -1198,6 +1366,8 @@ export function toDomainReportRow(
     activeDays: null,
     activeShare: null,
     averageBase: null,
+    kind: null,
+    averageHomeScore: null,
     levelFrom: null,
     levelTo: null,
     rankFrom: null,
@@ -1219,7 +1389,8 @@ export function toDomainReportRow(
     }
     return row;
   }
-  const r = DomainProgress.fold(rules, credit, today, exceptions, settledThrough).report(days);
+  const r = DomainProgress.fold(rules, credit, today, exceptions, settledThrough, homeScores).report(days);
+  const home = isHomeRule(rules.consistency);
   return {
     ...row,
     from: r.from,
@@ -1231,6 +1402,8 @@ export function toDomainReportRow(
     activeDays: r.activeDays,
     activeShare: round4(r.activeDays, r.daysCounted),
     averageBase: round1(r.countedBase, r.daysCounted),
+    kind: home ? "home" : "xp",
+    averageHomeScore: home ? floorPoints(r.countedHomeScore, r.daysCounted) : null,
     levelFrom: r.before.level,
     levelTo: r.end.level,
     rankFrom: r.before.rank,

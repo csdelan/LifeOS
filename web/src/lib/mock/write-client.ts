@@ -13,6 +13,7 @@ import {
   addEdge,
   earnDay,
   earnStatus,
+  mockHomeWrite,
   mockSettleDomains,
   mockMarkException,
   mockUnmarkException,
@@ -63,6 +64,15 @@ import {
   mockSetWorkoutNote,
   mockSyncActivity,
 } from "@/lib/mock/activity-store";
+import {
+  mockAddSpace,
+  mockArchiveSpace,
+  mockDeleteSpaceRating,
+  mockEditSpaceRating,
+  mockRateSpaces,
+  mockSetSpace,
+} from "@/lib/mock/environment-store";
+import { ratedMessage } from "@/lib/environment";
 
 const wait = (ms = 90) => new Promise((r) => setTimeout(r, ms));
 
@@ -124,14 +134,15 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
 
     async archive(subject) {
       await wait();
-      archiveSubject(subject, true);
+      // A space is archived in the home's half of the store (HOME-1).
+      if (!mockArchiveSpace(subject, true)) archiveSubject(subject, true);
       notify("Archived");
       bump();
     },
 
     async restore(subject) {
       await wait();
-      archiveSubject(subject, false);
+      if (!mockArchiveSpace(subject, false)) archiveSubject(subject, false);
       notify("Restored");
       bump();
     },
@@ -314,6 +325,46 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       const row = mockSetWorkoutNote(workout, text);
       bump();
       return row;
+    },
+
+    async addSpace(req) {
+      await wait();
+      const row = mockAddSpace(req);
+      notify(`Added ${row.name}`);
+      bump();
+      return row;
+    },
+
+    async setSpace(space, req) {
+      await wait();
+      const row = mockSetSpace(space, req);
+      notify(`Saved ${row.name}`);
+      bump();
+      return row;
+    },
+
+    async rateSpaces(ratings, day) {
+      await wait();
+      const result = mockHomeWrite(() => mockRateSpaces(ratings, day));
+      notify(ratedMessage(result));
+      bump();
+      return result;
+    },
+
+    async editSpaceRating(rating, req) {
+      await wait();
+      const result = mockHomeWrite(() => mockEditSpaceRating(rating, req));
+      notify("Rating saved");
+      bump();
+      return result;
+    },
+
+    async deleteSpaceRating(rating) {
+      await wait();
+      const result = mockHomeWrite(() => mockDeleteSpaceRating(rating));
+      notify("Rating deleted");
+      bump();
+      return result;
     },
 
     async recur(subject, spec, opts) {

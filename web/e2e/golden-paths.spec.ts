@@ -901,6 +901,88 @@ test.describe("golden paths", () => {
     });
   });
 
+  test("Environment: a walk-through rates two spaces in one save and lifts the Home Score, then a quick check", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: "Environment" }).first().click();
+    await expect(page.getByRole("heading", { name: "Your home", level: 1 })).toBeVisible();
+    const score = page.getByTestId("home-score");
+    await expect(score).toHaveText(/^\d+\.\d$/, { timeout: 10_000 });
+    const before = Number(await score.textContent());
+    await expect(page.getByTestId("space-card")).toHaveCount(9);
+    await expect(page.getByTestId("fix-next").getByRole("listitem")).toHaveCount(3);
+
+    // The garage was skipped last Sunday, so the walk-through starts there, open.
+    await page.getByRole("button", { name: "Walk-through" }).click();
+    const sheet = page.getByRole("dialog", { name: "Walk-through" });
+    const spaces = sheet.getByTestId("walk-through-space");
+    await expect(spaces).toHaveCount(9);
+    await expect(spaces.first().getByRole("button", { name: /^Garage/ })).toHaveAttribute("aria-expanded", "true");
+    await sheet.getByRole("radio", { name: "5 · put away" }).check();
+    await expect(sheet.getByText("Everything put away, surfaces clear.")).toBeVisible();
+    await sheet.getByRole("radio", { name: "4.5 · clean to spotless" }).check();
+    await expect(sheet.getByText("Between 4 (clean, light dust or smudges) and 5 (freshly cleaned, spotless).")).toBeVisible();
+    await sheet.getByRole("radio", { name: "3 · plain" }).check();
+
+    // Opening the kitchen closes the garage; its header says what it will save.
+    await sheet.getByRole("button", { name: /^Kitchen/ }).click();
+    await expect(sheet.getByRole("button", { name: /^Garage/ })).toContainText(
+      "New: tidiness 5, cleanliness 4.5, aesthetics 3",
+    );
+    await sheet.getByRole("radio", { name: "5 · put away" }).check();
+    await sheet.getByLabel("Note").fill("Counters clear");
+    await expect(sheet.getByText("2 of 9 spaces rated")).toBeVisible();
+    await sheet.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText("Rated 2 spaces")).toBeVisible();
+    await expect.poll(async () => Number(await score.textContent()), { timeout: 10_000 }).toBeGreaterThan(before);
+    const garage = page.getByRole("article", { name: "Garage" });
+    await expect(garage).toContainText("rated today");
+
+    // A card's Rate is a quick check of that space: Tidiness and Cleanliness, Aesthetics a tap away.
+    await page.getByRole("button", { name: "Rate Office", exact: true }).click();
+    const quick = page.getByRole("dialog", { name: "Rate Office" });
+    await expect(quick.getByRole("group", { name: /^Tidiness/ })).toBeVisible();
+    await expect(quick.getByRole("group", { name: /^Aesthetics/ })).toHaveCount(0);
+    await expect(quick.getByRole("button", { name: "Rate Aesthetics too" })).toBeVisible();
+    await quick.getByRole("group", { name: /^Cleanliness/ }).getByRole("radio", { name: "5 · spotless" }).check();
+    await quick.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(quick).toBeHidden();
+    await expect(page.getByText("Rated Office")).toBeVisible();
+    await expect(page.getByRole("article", { name: "Office" })).toContainText("rated today");
+  });
+
+  test("Environment: add a space, change its weight, and archive it out of the score", async ({ page }) => {
+    await page.goto("/environment");
+    const editor = page.getByRole("region", { name: "Manage spaces" });
+    await expect(editor.getByTestId("space-row")).toHaveCount(9, { timeout: 10_000 });
+    const add = editor.getByRole("heading", { name: "Add a space" }).locator("..");
+    await add.getByLabel("Name").fill("Office");
+    await add.getByRole("button", { name: "Add space" }).click();
+    await expect(add.getByRole("alert")).toHaveText("You already have a space called 'Office'.");
+    await add.getByLabel("Name").fill("Attic");
+    await add.getByLabel("Weight").fill("2");
+    await add.getByRole("group", { name: "Pace" }).getByRole("button", { name: "1", exact: true }).click();
+    await add.getByRole("button", { name: "Add space" }).click();
+    await expect(editor.getByTestId("space-row")).toHaveCount(10);
+    await expect(editor.getByTestId("space-row").filter({ hasText: "Attic" })).toContainText("weight 2 · pace 1");
+
+    await editor.getByRole("button", { name: "Change Attic" }).click();
+    // The row's form comes before Add a space's.
+    await editor.getByLabel("Weight").first().fill("4");
+    await editor.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(editor.getByTestId("space-row").filter({ hasText: "Attic" })).toContainText("weight 4 · pace 1");
+
+    // Not rated yet: its card says so, and it doesn't count.
+    await expect(page.getByRole("article", { name: "Attic" })).toContainText("not rated yet");
+    await editor.getByRole("button", { name: "Archive Attic" }).click();
+    await expect(page.getByRole("article", { name: "Attic" })).toHaveCount(0);
+    await expect(editor.getByRole("list", { name: "Archived spaces" })).toContainText("Attic");
+    await editor.getByRole("button", { name: "Restore Attic" }).click();
+    await expect(page.getByRole("article", { name: "Attic" })).toBeVisible();
+  });
+
   test("theme toggle switches the document class", async ({ page }) => {
     await page.goto("/");
     const html = page.locator("html");

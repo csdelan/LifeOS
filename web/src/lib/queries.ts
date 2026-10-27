@@ -75,6 +75,11 @@ export const qk = {
   activityTags: (from: string, to: string) => ["activity", "tags", from, to] as const,
   activityDay: (date: string) => ["activity", "day", date] as const,
   ouraStatus: ["activity", "oura"] as const,
+  // Every Environment read sits under ["environment"], so a rating or a space write refreshes them all.
+  environment: ["environment"] as const,
+  environmentDays: (days: number) => ["environment", "days", days] as const,
+  spaces: ["environment", "spaces"] as const,
+  spaceRatings: (space: string, days: number) => ["environment", "ratings", space, days] as const,
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
@@ -99,6 +104,20 @@ async function foodWrite<T extends Earned>(qc: QueryClient, write: () => Promise
     return result;
   } finally {
     await invalidate(qc, [qk.food, qk.wallet, qk.ledger, qk.domains]);
+  }
+}
+
+/**
+ * A rating write (HOME-2): announce any level or rank it moved, then refresh the home and what
+ * it moved. Ratings feed Environment's level, so the domains, wallet and ledger refresh too.
+ */
+async function ratingWrite<T extends Earned>(qc: QueryClient, write: () => Promise<T>): Promise<T> {
+  try {
+    const result = await write();
+    announceEarned(result);
+    return result;
+  } finally {
+    await invalidate(qc, [qk.environment, qk.domains, qk.wallet, qk.ledger]);
   }
 }
 
@@ -180,6 +199,9 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async archive(subject) {
       await client.archive(subject);
       await invalidate(qc, [
+        // A space leaves the Home Score (HOME-1).
+        qk.environment,
+        qk.domains,
         qk.timers,
         qk.rewards,
         qk.taskSeries,
@@ -196,6 +218,8 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async restore(subject) {
       await client.restore(subject);
       await invalidate(qc, [
+        qk.environment,
+        qk.domains,
         qk.timers,
         qk.rewards,
         qk.taskSeries,
@@ -289,8 +313,9 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         announceEarned(result, { lostBecause: "Without that day, your last 90 days support a lower level." });
         return result;
       } finally {
-        // The exception list sits under ["domains"], so this refreshes it too.
-        await invalidate(qc, [qk.domains, qk.wallet, qk.ledger]);
+        // The exception list sits under ["domains"], so this refreshes it too. An exception
+        // day also pauses the home's fades (HOME-3).
+        await invalidate(qc, [qk.domains, qk.wallet, qk.ledger, qk.environment]);
       }
     },
 
@@ -300,7 +325,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         announceEarned(result, { lostBecause: "The day counts again, and your last 90 days support a lower level." });
         return result;
       } finally {
-        await invalidate(qc, [qk.domains, qk.wallet, qk.ledger]);
+        await invalidate(qc, [qk.domains, qk.wallet, qk.ledger, qk.environment]);
       }
     },
 
@@ -372,6 +397,35 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       const row = await client.setWorkoutNote(workout, text);
       await invalidate(qc, [qk.activity]);
       return row;
+    },
+
+    async addSpace(req) {
+      try {
+        return await client.addSpace(req);
+      } finally {
+        await invalidate(qc, [qk.environment, qk.domains]);
+      }
+    },
+
+    async setSpace(space, req) {
+      try {
+        return await client.setSpace(space, req);
+      } finally {
+        // A weight or pace applies to all of history, so every day's score can move.
+        await invalidate(qc, [qk.environment, qk.domains]);
+      }
+    },
+
+    async rateSpaces(ratings, day) {
+      return ratingWrite(qc, () => client.rateSpaces(ratings, day));
+    },
+
+    async editSpaceRating(rating, req) {
+      return ratingWrite(qc, () => client.editSpaceRating(rating, req));
+    },
+
+    async deleteSpaceRating(rating) {
+      return ratingWrite(qc, () => client.deleteSpaceRating(rating));
     },
 
     async recur(subject, spec, opts) {
@@ -941,6 +995,42 @@ export function useActivityTags(from: string, to: string, enabled = true) {
     queryFn: () => reads().activityTags(from, to),
     enabled,
     placeholderData: keepPreviousData,
+  });
+}
+
+/** The home today (HOME-3): the Home Score, each space with its parts, and Fix next. */
+export function useEnvironment() {
+  return useQuery({
+    queryKey: qk.environment,
+    queryFn: () => reads().environment(),
+  });
+}
+
+/** The Home Score on each of the last `days` days: the chart; the last range stays up while the next loads. */
+export function useEnvironmentDays(days: number, enabled = true) {
+  return useQuery({
+    queryKey: qk.environmentDays(days),
+    queryFn: () => reads().environmentDays(days),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Every space, archived ones too: the spaces editor. */
+export function useSpaces(enabled = true) {
+  return useQuery({
+    queryKey: qk.spaces,
+    queryFn: () => reads().spaces(),
+    enabled,
+  });
+}
+
+/** The ratings among the last `days`, of one space (its id) when given, newest first. */
+export function useSpaceRatings(space: string | null, days = 90, enabled = true) {
+  return useQuery({
+    queryKey: qk.spaceRatings(space ?? "", days),
+    queryFn: () => reads().spaceRatings({ space: space ?? undefined, days }),
+    enabled,
   });
 }
 

@@ -60,13 +60,20 @@ test.describe("accessibility", () => {
       await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
       await page.goto("/character");
       await expect(page.locator("html")).toHaveClass(new RegExp(theme));
-      await page.getByRole("button", { name: "Show the daily chart" }).click();
-      await expect(page.getByTestId("day-bar")).toHaveCount(30, { timeout: 10_000 });
+      // Health's chart and Environment's (the Home Score against the bar). An opened chart's
+      // button reads "Hide", so the first "Show" left is the next card's.
+      const show = page.getByRole("button", { name: "Show the daily chart" });
+      await expect(show).toHaveCount(2, { timeout: 10_000 });
+      await show.first().click();
+      await show.first().click();
+      await expect(page.getByTestId("day-bar")).toHaveCount(60, { timeout: 10_000 });
       const chart = await scan();
       expect(chart, JSON.stringify(chart, null, 2)).toEqual([]);
 
-      await page.getByRole("button", { name: "Table", exact: true }).click();
-      await expect(page.getByRole("table", { name: /newest first/ })).toBeVisible();
+      const tables = page.getByRole("button", { name: "Table", exact: true });
+      await tables.nth(0).click();
+      await tables.nth(1).click();
+      await expect(page.getByRole("table", { name: /newest first/ })).toHaveCount(2);
       const table = await scan();
       expect(table, JSON.stringify(table, null, 2)).toEqual([]);
     });
@@ -645,6 +652,68 @@ test.describe("accessibility", () => {
       expect(repetition, JSON.stringify(repetition, null, 2)).toEqual([]);
     });
   }
+
+  // The Environment page (HOME-1..3): the Home Score, Fix next, the space cards, the chart with a
+  // day read out, then its table, the walk-through sheet and a card's quick check, in both themes.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /environment with the walk-through, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        await settled(page);
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/environment");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      await expect(page.getByTestId("home-score")).toHaveText(/^\d+\.\d$/, { timeout: 10_000 });
+      const chart = page.getByRole("group", { name: /^Home Score by day/ });
+      await expect(chart).toBeVisible();
+      await chart.focus();
+      const home = await scan();
+      expect(home, JSON.stringify(home, null, 2)).toEqual([]);
+
+      const byDay = page.getByRole("region", { name: "Home Score by day" });
+      await byDay.getByRole("button", { name: "Table" }).click();
+      await expect(byDay.getByRole("table")).toBeVisible();
+      const table = await scan();
+      expect(table, JSON.stringify(table, null, 2)).toEqual([]);
+
+      await page.getByRole("button", { name: "Walk-through" }).click();
+      const sheet = page.getByRole("dialog", { name: "Walk-through" });
+      await sheet.getByRole("radio", { name: "3.5 · some clutter to a few things" }).check();
+      await expect(sheet.getByText(/^Between 3/)).toBeVisible();
+      const walk = await scan();
+      expect(walk, JSON.stringify(walk, null, 2)).toEqual([]);
+
+      await page.keyboard.press("Escape");
+      await expect(sheet).toBeHidden();
+      await page.getByRole("button", { name: "Rate Kitchen", exact: true }).click();
+      const quick = page.getByRole("dialog", { name: "Rate Kitchen" });
+      await quick.getByRole("switch", { name: "Same as last time" }).click();
+      await quick.getByRole("button", { name: "Rate Aesthetics too" }).click();
+      await expect(quick.getByRole("group", { name: /^Aesthetics/ })).toBeVisible();
+      const check = await scan();
+      expect(check, JSON.stringify(check, null, 2)).toEqual([]);
+    });
+  }
+
+  // The Environment page on a phone: Walk-through sits at the bottom, and the sheet rises from there.
+  test("axe serious/critical: /environment on a phone with the walk-through open", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/environment");
+    await expect(page.getByTestId("home-score")).toHaveText(/^\d+\.\d$/, { timeout: 10_000 });
+    await page.getByRole("button", { name: "Walk-through" }).click();
+    const sheet = page.getByRole("dialog", { name: "Walk-through" });
+    await expect(sheet).toBeVisible();
+    const box = await sheet.boundingBox();
+    expect(box && box.y + box.height).toBeGreaterThan(800);
+    await settled(page);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    const blocking = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
+  });
 
   // States the routes above don't reach: an Established habit checked off on the Habits
   // page, and Today's Maintaining group open (REWARD-2 maintenance).

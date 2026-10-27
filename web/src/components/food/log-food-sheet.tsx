@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { CameraIcon, HistoryIcon, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { MealPhoto, PhotoViewer } from "@/components/food/meal-photo";
+import { HalfPointPicker } from "@/components/primitives/half-point-picker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +32,7 @@ import {
   scoreLabel,
   SCORES,
 } from "@/lib/diet-score";
-import { formatClock, fromLocalInput, mealTypeWord, SCORE_FILL, toLocalInput } from "@/lib/food";
+import { formatClock, fromLocalInput, mealTypeWord, toLocalInput } from "@/lib/food";
 import { useIsDesktop } from "@/lib/media-query";
 import { resizePhoto } from "@/lib/photo";
 import type { FastRow, FoodEntryRequest, FoodMealType, MealRow } from "@/lib/production-ui-types";
@@ -102,23 +103,6 @@ export function LogFoodSheet({
     </Sheet>
   );
 }
-
-/**
- * The score picker's buttons in score order, each with its place on the ten-column grid: the
- * whole scores in the top row, each half in the row under it, centred on the gap between its
- * neighbours (food-log plan §8). Written out so Tailwind sees every class.
- */
-const PICKER: readonly { score: number; half: boolean; place: string }[] = [
-  { score: 1, half: false, place: "col-start-1 row-start-1" },
-  { score: 1.5, half: true, place: "col-start-2 row-start-2" },
-  { score: 2, half: false, place: "col-start-3 row-start-1" },
-  { score: 2.5, half: true, place: "col-start-4 row-start-2" },
-  { score: 3, half: false, place: "col-start-5 row-start-1" },
-  { score: 3.5, half: true, place: "col-start-6 row-start-2" },
-  { score: 4, half: false, place: "col-start-7 row-start-1" },
-  { score: 4.5, half: true, place: "col-start-8 row-start-2" },
-  { score: 5, half: false, place: "col-start-9 row-start-1" },
-];
 
 function capitalize(text: string): string {
   return `${text[0].toUpperCase()}${text.slice(1)}`;
@@ -527,43 +511,14 @@ function FoodForm({
 
         <fieldset className="space-y-1.5" disabled={alcoholic || pending}>
           <legend className="text-sm font-medium">Health score</legend>
-          {/* Ten columns: each whole score spans two in the top row, and each half spans the two
-              under the gap between its neighbours, so 3.5 sits between 3 and 4. In score order, so
-              the arrow keys step 1, 1.5, 2 ... 5. */}
-          <div className={cn("grid grid-cols-10 gap-x-1.5 gap-y-1", alcoholic && "opacity-50")}>
-            {PICKER.map(({ score: value, half, place }) => {
-              const whole = SCORES.find((s) => s.score === value);
-              return (
-                <label
-                  key={value}
-                  className={cn(
-                    "relative col-span-2 flex cursor-pointer flex-col items-center justify-center rounded-lg text-center has-[:disabled]:cursor-not-allowed has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50",
-                    place,
-                    half ? "min-h-10 w-3/4 justify-self-center px-0.5 py-1" : "min-h-14 px-1 py-1.5",
-                    shownScore === value
-                      ? "bg-muted ring-2 ring-primary"
-                      : "bg-card ring-1 ring-foreground/10 hover:bg-muted has-[:disabled]:hover:bg-card",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name={`${ids}-score`}
-                    value={value}
-                    aria-label={scoreLabel(value)}
-                    checked={shownScore === value}
-                    onChange={() => setScore(value)}
-                    className="absolute inset-0 z-10 cursor-pointer appearance-none rounded-lg opacity-0 disabled:cursor-not-allowed"
-                  />
-                  <span
-                    aria-hidden
-                    className={cn("rounded-full", half ? "mb-0.5 h-1 w-4" : "mb-1 h-1.5 w-6", SCORE_FILL[value])}
-                  />
-                  <span className={cn("leading-none font-semibold", half ? "text-sm" : "text-lg")}>{value}</span>
-                  {whole && <span className="mt-0.5 text-[0.65rem] leading-tight">{whole.word}</span>}
-                </label>
-              );
-            })}
-          </div>
+          <HalfPointPicker
+            name={`${ids}-score`}
+            value={shownScore}
+            onChange={setScore}
+            labelFor={scoreLabel}
+            wordFor={(value) => SCORES.find((s) => s.score === value)?.word}
+            dimmed={alcoholic}
+          />
           <p className="text-xs text-muted-foreground" aria-live="polite">
             {alcoholic
               ? "A drink always scores 1."

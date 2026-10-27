@@ -167,7 +167,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IEventStore>(),
             sp.GetRequiredService<IClock>(),
             sourceId,
-            sp.GetRequiredService<TaskSeriesService>()));
+            sp.GetRequiredService<TaskSeriesService>(),
+            sp.GetRequiredService<ISpaceRepository>()));
 
         services.AddSingleton(sp => new PromotionService(
             sp.GetRequiredService<SubjectService>(),

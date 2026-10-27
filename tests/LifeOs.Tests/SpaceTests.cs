@@ -53,6 +53,11 @@ public sealed class SpaceTests(PostgresFixture postgres)
         // An archived space's name is free again; restoring it while it's taken is refused.
         var newOffice = await service.AddAsync("Office", 2, 2, Ct);
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.RestoreAsync(office.Id.ToString(), Ct));
+        // bsk restore and /api/restore, which the web's Restore uses, refuse it the same way.
+        var viaArchive = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => db.Get<ArchiveService>().RestoreAsync(office.Urn, Ct));
+        Assert.Contains("already have a space called 'Office': rename one of them first", viaArchive.Message);
+        Assert.True((await service.ResolveAsync(office.Id.ToString(), Ct)).Archived);
         await service.SetAsync(newOffice.Id.ToString(), name: "Study", cancellationToken: Ct);
         var restored = await service.RestoreAsync(office.Id.ToString(), Ct);
         Assert.False(restored.Archived);

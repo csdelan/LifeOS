@@ -2988,7 +2988,7 @@ X10 makes the fold skip marked days, and X11 adds the Character page's control.
 ### REWARD-9 — Environment's level follows how well my home is kept
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "I'm not 100% convinced I should keep environment as XP-based. The main reason I have it
@@ -3821,7 +3821,7 @@ Build moves `mapped → building`. It becomes `built` once it's on staging (C5).
 ### HOME-1 — My home is split into spaces, each with a weight and a pace
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "I may look at 1 area of my home (kitchen), and rate it's environment based on 3
@@ -3868,7 +3868,7 @@ Build:      building
 ### HOME-2 — I rate each space on Tidiness, Cleanliness and Aesthetics in a quick walk-through
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "Tidiness (de-cluttered), Cleanliness (washed), and Aesthetics (decor, colors, lighting,
@@ -3919,7 +3919,7 @@ Build:      building
 ### HOME-3 — Ratings fade, and a Home Score shows how well my home is kept and what to fix next
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "Ratings fade sounds like a really good new mechanic." (2026-10-27)
@@ -4338,7 +4338,8 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   - `bsk space`, `bsk rate` and `bsk home`
   - the `/environment` page and its walk-through
 
-  — **Open** (planned in [environment-plan.md](environment-plan.md), E1–E5).
+  — **Shipped** (E1–E4 in [environment-plan.md](environment-plan.md), migration 0044). E5,
+  Chris's spaces, first walk-through and calibration, continues in use.
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;

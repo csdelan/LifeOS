@@ -5,15 +5,21 @@ import {
   ageNeededFor,
   applyMultiplier,
   averageFor,
+  barText,
   costToNext,
+  dayMinimumFor,
   describeRule,
   domainChanges,
   DomainProgress,
   DomainWalker,
+  ENVIRONMENT,
   fallNext,
   gemsFor,
   HEALTH,
+  homeBar,
+  homeThreshold,
   levelFor,
+  reachedDaysNeededFor,
   levelOf,
   rankAwardKey,
   rankFor,
@@ -321,7 +327,7 @@ describe("the walk (§7.4.4, DomainProgressTests)", () => {
     ]);
     expect([progress.bestLevel, progress.bestRank]).toEqual([1, 0]);
     expect([progress.totalXp, progress.xpIntoLevel, progress.xpToNext]).toEqual([0, 0, 60]);
-    expect(progress.window).toEqual({ days: 0, from: null, to: null, base: 0 });
+    expect(progress.window).toEqual({ days: 0, from: null, to: null, base: 0, homeScore: 0 });
     expect(progress.nextConsistency).toMatchObject({
       level: 2,
       windowDays: 0,
@@ -357,7 +363,7 @@ describe("the walk (§7.4.4, DomainProgressTests)", () => {
     // Day 4 is an exception and day 7 (today) hasn't settled.
     expect(progress.standings.map((s) => s.counted)).toEqual([true, true, false, true, true, false]);
     expect(progress.standings.map((s) => s.exception)).toEqual([false, false, true, false, false, false]);
-    expect(progress.window).toEqual({ days: 4, from: D(2), to: D(6), base: 200 });
+    expect(progress.window).toEqual({ days: 4, from: D(2), to: D(6), base: 200, homeScore: 0 });
 
     // XP on the exception day and today still counts toward lifetime XP.
     expect(progress.totalXp).toBe(300);
@@ -666,11 +672,28 @@ describe("reading it as the API does", () => {
     expect(row).toMatchObject({ name: "Health", configured: true, totalXp: 5_400 });
     expect(row.lifetime).toEqual({ start: D(0), level: 18, levelXp: 584, xpIntoLevel: 538, xpToNext: 46 });
     expect(row.consistency).toEqual({
+      kind: "xp",
       level: 61,
       windowDays: 90,
       from: D(0),
       to: D(89),
       averageBase: 60,
+      averageHomeScore: null,
+      held: {
+        level: 61,
+        windowDays: 90,
+        average: 60,
+        averageNow: 60,
+        averageMet: true,
+        activeMinimum: 24,
+        activeDaysNeeded: 67,
+        activeDays: 90,
+        activeDaysMet: true,
+        ageNeeded: 62,
+        age: 90,
+        ageMet: true,
+        bar: null,
+      },
       next: {
         level: 62,
         windowDays: 90,
@@ -684,6 +707,7 @@ describe("reading it as the API does", () => {
         ageNeeded: 63,
         age: 90,
         ageMet: true,
+        bar: null,
       },
     });
     expect(row.shown).toEqual({
@@ -700,12 +724,15 @@ describe("reading it as the API does", () => {
       percentPerDay: 1,
       lastChange: { day: D(81), from: 17, to: 18 },
       backOnTrack: null,
+      bar: null,
     });
     expect(row.best).toEqual({ level: 18, levelOn: D(81), rank: 1, rankTitle: "Apprentice", rankOn: D(24) });
     expect(row.current).toEqual({
       todayBase: 0,
       todayAction: 0,
       activeMinimum: 20,
+      todayHomeScore: null,
+      bar: null,
       todayActive: false,
       todayException: false,
       rule: "at least 20 action XP (base XP less sleep)",
@@ -751,7 +778,7 @@ describe("reading it as the API does", () => {
       paused: false,
       fallingSince: D(109),
       fallingFrom: 100,
-      backOnTrack: { days: 7, average: averageFor(rule, 98), activeMinimum: activeMinimumFor(rule, 98), activeDays: 7 },
+      backOnTrack: { days: 7, average: averageFor(rule, 98), activeMinimum: activeMinimumFor(rule, 98), activeDays: 7, bar: null },
     });
     expect(row.best).toMatchObject({ level: 100, rank: 10, rankTitle: "Grandmaster", rankOn: D(89) });
   });
@@ -775,8 +802,8 @@ describe("reading it as the API does", () => {
     const social = toDomainDays({ key: "social_xp", label: "Social XP" }, [on(9, 25)], D(10), 2);
     expect(social.settledThrough).toBeNull();
     expect(social.days).toEqual([
-      { day: D(9), base: 25, action: 25, passive: 0, paid: 25, exception: null, counted: null, active: null, activeMinimum: null, lifetimeLevel: null, consistencyLevel: null, level: null, rank: null },
-      { day: D(10), base: 0, action: 0, passive: 0, paid: 0, exception: null, counted: null, active: null, activeMinimum: null, lifetimeLevel: null, consistencyLevel: null, level: null, rank: null },
+      { day: D(9), base: 25, action: 25, passive: 0, paid: 25, exception: null, counted: null, active: null, activeMinimum: null, lifetimeLevel: null, consistencyLevel: null, level: null, rank: null, homeScore: null, bar: null },
+      { day: D(10), base: 0, action: 0, passive: 0, paid: 0, exception: null, counted: null, active: null, activeMinimum: null, lifetimeLevel: null, consistencyLevel: null, level: null, rank: null, homeScore: null, bar: null },
     ]);
   });
 
@@ -833,5 +860,114 @@ describe("reading it as the API does", () => {
         bestRankTo: 10,
       },
     ]);
+  });
+});
+
+// Environment, held by the home (environment plan §2.3, §4.5): the C# LifeDomainsTests and
+// EnvironmentLevelTests examples, to the digit.
+describe("Environment (EnvironmentLevelTests)", () => {
+  const home = ENVIRONMENT.consistency;
+  const ENVIRONMENT_XP = { key: "environment_xp", label: "Environment XP" };
+  /** Level 51's bar, 57.5. */
+  const BAR_51 = 575_000;
+  /** A Home Score of `score` (ten-thousandths) on `count` days from day `from`. */
+  const scores = (from: number, count: number, score: number) => range(from, count).map((i): [string, number] => [D(i), score]);
+  const foldHome = (credit: DomainDay[], scored: [string, number][], today: number, exceptions: number[] = []) =>
+    DomainProgress.fold(ENVIRONMENT, credit, D(today), exceptions.map(D), undefined, new Map(scored));
+
+  it.each([
+    [1, 300_000, 45],
+    [2, 300_000, 45],
+    [10, 344_898, 48],
+    [51, 575_000, 63],
+    [70, 681_633, 70],
+    [100, 850_000, 81],
+  ])("level %i's bar is %i ten-thousandths, on %i of 90 days", (level, threshold, keptUp) => {
+    expect(homeThreshold(home, level)).toBe(threshold);
+    expect(reachedDaysNeededFor(home, level, 90)).toBe(keptUp);
+    expect(ageNeededFor(home, level)).toBe(Math.min(90, level + 1));
+    expect(dayMinimumFor(home, level)).toBe(Math.ceil(threshold / 10_000));
+  });
+
+  it("shows a bar rounded up to a tenth, and costs a quarter of Health's XP", () => {
+    expect([10, 70, 51, 100].map((l) => barText(homeBar(home, l)))).toEqual(["34.5", "68.2", "57.5", "85.0"]);
+    expect(describeRule(ENVIRONMENT, 70)).toBe("a Home Score of at least 68.2");
+    for (let level = 2; level <= 100; level++) {
+      expect(totalFor(ENVIRONMENT.curve, level)).toBe(Math.ceil(totalFor(HEALTH.curve, level) / 4));
+    }
+  });
+
+  it("holds level 1 on XP alone until the first rating", () => {
+    const progress = foldHome(run(0, 30, 200), [], 30);
+
+    expect([progress.lifetimeLevel, progress.consistencyLevel, progress.level]).toEqual([37, 1, 1]);
+    expect(progress.limitedBy).toBe("consistency");
+    expect(progress.standings.every((s) => !s.counted && !s.active)).toBe(true);
+  });
+
+  it("lifts the condition level to the highest bar the kept-up days clear", () => {
+    const progress = foldHome(run(0, 100, 200), scores(0, 100, BAR_51), 100);
+
+    expect(progress.standingOn(D(9)).consistencyLevel).toBe(9);
+    expect([progress.lifetimeLevel, progress.consistencyLevel, progress.level, progress.rank]).toEqual([62, 51, 51, 5]);
+    expect(progress.window).toMatchObject({ days: 90, homeScore: 90 * BAR_51 });
+    expect(progress.standings.filter((s) => s.day < D(100)).every((s) => s.active)).toBe(true);
+    expect(foldHome(run(0, 100, 200), scores(0, 100, BAR_51 - 1), 100).consistencyLevel).toBe(50);
+  });
+
+  it.each([
+    [37, 51],
+    [38, 48],
+  ])("with %i low days first, holds level %i", (low, level) => {
+    const scored = [...scores(0, low, 300_000), ...scores(low, 100 - low, BAR_51)];
+    expect(foldHome(run(0, 100, 200), scored, 100).consistencyLevel).toBe(level);
+  });
+
+  it("pauses on exception days and falls on unmarked low ones", () => {
+    const credit = run(0, 140, 200);
+    const scored = [...scores(0, 100, BAR_51), ...scores(100, 40, 300_000)];
+
+    const unmarked = foldHome(credit, scored, 140);
+    expect(unmarked.consistencyLevel).toBe(15);
+    expect(unmarked.level).toBeLessThan(51);
+    expect(unmarked.standingOn(D(120)).active).toBe(false);
+
+    const marked = foldHome(credit, scored, 140, range(100, 40));
+    expect([marked.consistencyLevel, marked.level]).toEqual([51, 51]);
+    expect(range(100, 40).every((i) => marked.standingOn(D(i)).level === 51 && !marked.standingOn(D(i)).counted)).toBe(true);
+  });
+
+  it("starts the walk at the first Home Score or paid XP, whichever is first", () => {
+    const ratedFirst = foldHome(run(5, 25, 200), scores(0, 30, BAR_51), 30);
+    expect(ratedFirst.start).toBe(D(0));
+    expect([ratedFirst.standingOn(D(4)).lifetimeLevel, ratedFirst.standingOn(D(4)).consistencyLevel]).toEqual([1, 4]);
+
+    const paidFirst = foldHome(run(0, 30, 200), scores(10, 20, BAR_51), 30);
+    expect(paidFirst.start).toBe(D(0));
+    expect(paidFirst.consistencyLevel).toBe(19);
+  });
+
+  it("answers GET /api/domains' Environment row with the home's side", () => {
+    const scored = [...scores(0, 100, BAR_51), [D(100), 612_345] as [string, number]];
+    const progress = foldHome(run(0, 100, 200), scored, 100);
+    const row = toDomainRow(ENVIRONMENT_XP, progress.totalXp, progress);
+
+    expect(row.consistency).toMatchObject({ kind: "home", level: 51, windowDays: 90, averageHomeScore: 57.5 });
+    expect(row.consistency!.held).toMatchObject({ level: 51, average: 0, activeMinimum: 58, activeDaysNeeded: 63, activeDays: 90, bar: 57.5 });
+    expect(row.consistency!.next).toMatchObject({ level: 52, activeDays: 0, bar: homeBar(home, 52) });
+    expect(row.current).toMatchObject({ todayHomeScore: 61.2345, bar: 57.5, rule: "a Home Score of at least 57.5" });
+    // The shown level's bar: what keeps that level on track.
+    expect(row.shown).toMatchObject({ level: 51, bar: 57.5 });
+    expect(row.ranks![1]).toMatchObject({ title: "Apprentice", average: null, bar: homeBar(home, 10), activeDays: 48 });
+
+    const days = toDomainDays(ENVIRONMENT_XP, run(0, 100, 200), D(100), 2, [], undefined, new Map(scored));
+    expect(days.kind).toBe("home");
+    expect(days.days.map((d) => [d.homeScore, d.bar])).toEqual([
+      [57.5, 57.5],
+      [61.2345, 57.5],
+    ]);
+
+    const report = toDomainReportRow(ENVIRONMENT_XP, run(0, 100, 200), D(100), 30, [], undefined, new Map(scored));
+    expect(report).toMatchObject({ kind: "home", averageHomeScore: 57.5, daysCounted: 30, activeDays: 30 });
   });
 });

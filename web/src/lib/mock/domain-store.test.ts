@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addDays, todayIso } from "@/lib/dates";
 import { clearMockActivity } from "@/lib/mock/activity-store";
+import { clearMockEnvironment, mockAddSpace, mockRateSpaces } from "@/lib/mock/environment-store";
 import {
   earnDay,
   earnStatus,
@@ -9,6 +10,7 @@ import {
   mockDomainReport,
   mockDomains,
   mockExceptionDays,
+  mockHomeWrite,
   mockLedger,
   mockMarkException,
   mockSetBounty,
@@ -42,7 +44,7 @@ describe("mock life domains (DomainService, RewardService's domain half)", () =>
     expect(read.domains.map((d) => [d.key, d.configured])).toEqual([
       ["health_xp", true],
       ["social_xp", false],
-      ["environment_xp", false],
+      ["environment_xp", true],
       ["finance_xp", false],
     ]);
     const h = health();
@@ -100,6 +102,40 @@ describe("mock life domains (DomainService, RewardService's domain half)", () =>
     expect(balanceOf(mockWallet(), "gems")).toBe(1);
   });
 
+  it("folds the home's ratings into Environment: a backdated walk-through answers the level it moves (environment plan §4.5)", () => {
+    // 6,000 Environment XP and a home with no ratings: the level waits at 1 for a Home Score.
+    getState().ledger.push({
+      id: "cleaned",
+      occurredAt: new Date().toISOString(),
+      entry: "earn",
+      provenance: "derived",
+      amounts: { environment_xp: 6_000 },
+      trigger: "completed",
+      awardKey: "completed:task-garage",
+      subjectId: "task-garage",
+      creditedOn: addDays(today(), -10),
+    });
+    clearMockEnvironment();
+    mockAddSpace({ name: "Office", weight: 5, pace: 5 });
+    const environment = () => mockDomains().domains.find((d) => d.key === "environment_xp")!;
+    expect(environment().shown).toMatchObject({ level: 1, limitedBy: "consistency" });
+
+    // Rated well five days ago: five settled days kept up hold level 4 (it needs 5 so far).
+    const rated = mockHomeWrite(() =>
+      mockRateSpaces([{ space: "Office", tidiness: 4.5, cleanliness: 4.5, aesthetics: 4.5 }], addDays(today(), -5)),
+    );
+    expect(rated.ratings).toHaveLength(1);
+    expect(rated.progress).toEqual([
+      { domain: "environment_xp", levelFrom: 1, levelTo: 4, rankFrom: 0, rankTo: 0, rankTitle: "Novice", bestLevelFrom: 1, bestLevelTo: 4, bestRankFrom: 0, bestRankTo: 0 },
+    ]);
+    expect(environment().consistency).toMatchObject({ kind: "home", level: 4, windowDays: 5 });
+    expect(mockDomainDays("environment").days.at(-1)).toMatchObject({ day: today(), bar: 31.1225 });
+
+    // Rating today moves nothing yet: today hasn't settled.
+    const again = mockHomeWrite(() => mockRateSpaces([{ space: "Office", same: true }]));
+    expect(again.progress).toEqual([]);
+  });
+
   it("answers no progress for a write that pays no domain XP", () => {
     expect(earnStatus("task-shoes", "Completed")).toEqual({ awards: [expect.objectContaining({ trigger: "completed" })], progress: [] });
   });
@@ -133,6 +169,8 @@ describe("mock life domains (DomainService, RewardService's domain half)", () =>
       consistencyLevel: 23,
       level: 10,
       rank: 1,
+      homeScore: null,
+      bar: null,
     });
     // Sick 14 days ago (marked), and partial 13 days ago: 15 action XP is short of 20.
     expect(read.days.at(-15)).toMatchObject({ day: SICK(), base: 0, exception: "Sick with a cold", counted: false, active: false });

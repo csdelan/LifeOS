@@ -14,9 +14,12 @@ import { celebrate } from "@/lib/celebrate";
 import { formatDay } from "@/lib/dates";
 import { newBest } from "@/lib/domain-best";
 import {
+  barPlus,
   bestText,
+  conditionText,
   domainSymbol,
   fallHistoryText,
+  isHomeHeld,
   multiplierChipText,
   multiplierLabel,
   needParts,
@@ -24,6 +27,7 @@ import {
   stateLine,
   todayText,
 } from "@/lib/domains";
+import { shownPoints } from "@/lib/home-score";
 import type { DomainConsistency, DomainCurrent, DomainLifetime, DomainRow } from "@/lib/production-ui-types";
 import { useDomains, useWrites } from "@/lib/queries";
 import { loadView, saveView } from "@/lib/view-state";
@@ -269,6 +273,7 @@ function LevelsHalf({
   const top = lifetime.xpToNext === 0;
   const next = consistency.next;
   const parts = next && next.windowDays > 0 ? needParts(next) : [];
+  const home = isHomeHeld(domain);
 
   return (
     <div className="space-y-4 p-4">
@@ -302,23 +307,35 @@ function LevelsHalf({
 
       <div className="space-y-1">
         <p className="flex items-baseline justify-between gap-2 text-sm">
-          <span className="font-medium">Consistency level {consistency.level}</span>
+          <span className="font-medium">
+            {home ? "Condition" : "Consistency"} level {consistency.level}
+          </span>
           {domain.shown?.limitedBy === "consistency" ? (
             <span className="text-xs text-muted-foreground">sets your level</span>
           ) : null}
         </p>
+        {home ? <p className="text-xs">{conditionText(domain)}</p> : null}
         {next ? (
           <>
-            <Bar
-              label={`${domain.name} average toward consistency level ${next.level}`}
-              value={next.averageNow}
-              max={next.average}
-              text={`${next.averageNow.toLocaleString()} of ${next.average} base XP a day`}
-            />
+            {home ? (
+              <Bar
+                label={`${domain.name} kept-up days toward condition level ${next.level}`}
+                value={next.activeDays}
+                max={next.activeDaysNeeded}
+                text={`${next.activeDays} of ${next.activeDaysNeeded} days at ${barPlus(next.bar)}`}
+              />
+            ) : (
+              <Bar
+                label={`${domain.name} average toward consistency level ${next.level}`}
+                value={next.averageNow}
+                max={next.average}
+                text={`${next.averageNow.toLocaleString()} of ${next.average} base XP a day`}
+              />
+            )}
             {parts.length > 0 ? (
               <>
                 <p className="text-xs">Level {next.level} needs:</p>
-                <ul aria-label={`What consistency level ${next.level} needs`} className="space-y-0.5 text-xs">
+                <ul aria-label={`What ${home ? "condition" : "consistency"} level ${next.level} needs`} className="space-y-0.5 text-xs">
                   {parts.map((p) => (
                     <li key={p.key} className="flex items-start gap-1.5">
                       {p.met ? (
@@ -335,7 +352,11 @@ function LevelsHalf({
                 </ul>
               </>
             ) : (
-              <p className="text-xs text-muted-foreground">Your consistency level starts once a day settles.</p>
+              <p className="text-xs text-muted-foreground">
+                {home
+                  ? "Your condition level starts once you rate your spaces and a day settles."
+                  : "Your consistency level starts once a day settles."}
+              </p>
             )}
           </>
         ) : (
@@ -346,55 +367,68 @@ function LevelsHalf({
       <p className="text-[0.6875rem] text-muted-foreground">
         {domain.totalXp.toLocaleString()} {domain.label} in all
         {lifetime.start ? ` · since ${formatDay(lifetime.start)}` : ""}
-        {consistency.windowDays > 0 ? ` · ${consistency.averageBase.toLocaleString()} base XP a day over the last ${consistency.windowDays} days` : ""}
+        {consistency.windowDays > 0
+          ? home
+            ? ` · an average Home Score of ${shownPoints(consistency.averageHomeScore ?? 0)} over the last ${consistency.windowDays} days`
+            : ` · ${consistency.averageBase.toLocaleString()} base XP a day over the last ${consistency.windowDays} days`
+          : ""}
       </p>
     </div>
   );
 }
 
 function CurrentHalf({ domain, current }: { domain: DomainRow; current: DomainCurrent }) {
-  const lapsed = current.activeDays === 0 && domain.totalXp > 0;
+  const kind = isHomeHeld(domain) ? "home" : "xp";
+  // "kept-up days", "active days": the word before a noun.
+  const word = kind === "home" ? "kept-up" : "active";
+  const lapsed = current.activeDays === 0 && (kind === "home" ? (domain.consistency?.windowDays ?? 0) > 0 : domain.totalXp > 0);
 
   return (
     <div className="space-y-3 border-t p-4 md:border-t-0 md:border-l">
       <p className="text-xs font-medium text-muted-foreground">Now</p>
       <div className="flex items-center gap-4">
-        <TodayRing current={current} />
+        <TodayRing current={current} kind={kind} />
         <div className="min-w-0 space-y-1.5">
-          <p className="text-sm">{todayText(current)}</p>
+          <p className="text-sm">{todayText(current, kind)}</p>
           <p>
             <span className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
-              {multiplierChipText(current)}
+              {multiplierChipText(current, kind)}
             </span>
           </p>
           <p className="text-xs text-muted-foreground">
             {current.nextTier
-              ? `${current.nextTier.daysNeeded} more active ${current.nextTier.daysNeeded === 1 ? "day" : "days"} in the window for ${multiplierLabel(current.nextTier.multiplier)}`
+              ? `${current.nextTier.daysNeeded} more ${word} ${current.nextTier.daysNeeded === 1 ? "day" : "days"} in the window for ${multiplierLabel(current.nextTier.multiplier)}`
               : "The top multiplier."}
           </p>
         </div>
       </div>
       {lapsed ? (
         <p className="text-xs text-muted-foreground">
-          No active days in the last {current.windowDays}: the multiplier is back to ×1.0, and your level falls slowly
+          No {word} days in the last {current.windowDays}: the multiplier is back to ×1.0, and your level falls slowly
           until you're back on track. Your best stays.
         </p>
       ) : null}
       <p className="text-[0.6875rem] text-muted-foreground">
-        An active day is {current.rule}. Days count once they settle at 4 a.m.
+        {kind === "home" ? `A kept-up day has ${current.rule}.` : `An active day is ${current.rule}.`} Days count once they
+        settle at 4 a.m.
       </p>
     </div>
   );
 }
 
-/** Today's action XP against the active minimum, as a ring. */
-function TodayRing({ current }: { current: DomainCurrent }) {
+/** Today's action XP against the active minimum, as a ring; for the home, today's Home Score against the bar. */
+function TodayRing({ current, kind }: { current: DomainCurrent; kind: "xp" | "home" }) {
   const r = 28;
   const circumference = 2 * Math.PI * r;
-  const { todayAction: action, activeMinimum: minimum, todayActive: active, todayException: exception } = current;
+  const { todayActive: active, todayException: exception } = current;
+  const home = kind === "home";
+  const action = home ? (current.todayHomeScore ?? 0) : current.todayAction;
+  const minimum = home ? (current.bar ?? 0) : current.activeMinimum;
   const share = exception ? 0 : minimum > 0 ? Math.min(Math.max(action, 0) / minimum, 1) : 0;
+  const shownAction = home ? (current.todayHomeScore == null ? "–" : shownPoints(action)) : String(action);
+  const shownMinimum = home ? barPlus(minimum) : String(minimum);
   return (
-    <svg viewBox="0 0 72 72" className="size-20 shrink-0" role="img" aria-label={todayText(current)}>
+    <svg viewBox="0 0 72 72" className="size-20 shrink-0" role="img" aria-label={todayText(current, kind)}>
       <circle cx="36" cy="36" r={r} fill="none" strokeWidth="8" className="stroke-muted" />
       {share > 0 ? (
         <circle
@@ -410,10 +444,11 @@ function TodayRing({ current }: { current: DomainCurrent }) {
         />
       ) : null}
       <text x="36" y="35" textAnchor="middle" className="fill-foreground text-[15px] font-semibold">
-        {exception ? "–" : active ? "✓" : action}
+        {exception ? "–" : active ? "✓" : shownAction}
       </text>
       <text x="36" y="49" textAnchor="middle" className="fill-muted-foreground text-[9px]">
-        {exception ? "exception" : active ? `${action}/${minimum}` : `/${minimum}`}
+        {/* A Home Score and its bar don't fit side by side: a kept-up day shows the score alone. */}
+        {exception ? "exception" : active ? (home ? shownAction : `${shownAction}/${shownMinimum}`) : `/${shownMinimum}`}
       </text>
     </svg>
   );

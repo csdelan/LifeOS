@@ -11,6 +11,7 @@
 import {
   CONFIGURED_DOMAINS,
   DomainProgress,
+  isHomeRule,
   PASSIVE_TRIGGERS,
   shiftDay,
   type DomainDay,
@@ -79,15 +80,26 @@ export function settledThrough(now: Date = new Date()): string {
 /** The hour a day settles: Oura's day start. */
 export const SETTLE_HOUR = 4;
 
-/** Every configured domain folded from `ledger` and the marked days, as of `today`. */
+/**
+ * Every configured domain folded from `ledger` and the marked days, as of `today`. A domain held
+ * by the home (Environment) also reads `homeScores`, each day's Home Score in ten-thousandths.
+ */
 export function foldDomains(
   ledger: readonly MockLedgerEntry[],
   today: string,
   exceptions: readonly string[] = [],
   settled: string = settledThrough(),
+  homeScores?: ReadonlyMap<string, number>,
 ): DomainProgress[] {
   const credit = creditDays(ledger);
   return CONFIGURED_DOMAINS.map((rules) =>
-    DomainProgress.fold(rules, credit.get(rules.currency) ?? [], today, exceptions, settled),
+    DomainProgress.fold(
+      rules,
+      credit.get(rules.currency) ?? [],
+      today,
+      exceptions,
+      settled,
+      isHomeRule(rules.consistency) ? homeScores : undefined,
+    ),
   );
 }

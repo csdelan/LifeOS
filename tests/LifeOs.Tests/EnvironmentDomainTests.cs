@@ -72,11 +72,15 @@ public sealed class EnvironmentDomainTests(PostgresFixture postgres)
         Assert.Equal(LifeDomains.EnvironmentCondition.Bar(keptUp), consistency.GetProperty("next").GetProperty("bar").GetDecimal());
         Assert.InRange(after.GetProperty("current").GetProperty("todayHomeScore").GetDecimal(), 80m, 100m);
         Assert.StartsWith("a Home Score of at least", after.GetProperty("current").GetProperty("rule").GetString());
+        // The shown level's bar: what keeps that level on track ("68.2+ keeps level 70 on track").
+        Assert.Equal(keptUp - 1, after.GetProperty("shown").GetProperty("level").GetInt32());
+        Assert.Equal(LifeDomains.EnvironmentCondition.Bar(keptUp - 1), after.GetProperty("shown").GetProperty("bar").GetDecimal());
 
-        // Health's row is unchanged in shape.
+        // Health's row is unchanged in shape, with no bar.
         var health = (await host.Client.GetFromJsonAsync<JsonElement>("/api/domains", Ct)).GetProperty("domains")
             .EnumerateArray().Single(d => d.GetProperty("key").GetString() == Currencies.HealthXp);
         Assert.Equal("xp", health.GetProperty("consistency").GetProperty("kind").GetString());
+        Assert.Equal(JsonValueKind.Null, health.GetProperty("shown").GetProperty("bar").ValueKind);
 
         // Deleting the walk-through takes the level back down; the Gem stays paid.
         var ratingId = walk.GetProperty("ratings")[0].GetProperty("id").GetString();

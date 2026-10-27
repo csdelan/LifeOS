@@ -127,6 +127,52 @@ describe("Character page (xp-domains plan §7.4.9)", () => {
     expect(sync).not.toHaveBeenCalled();
   });
 
+  it("shows Environment held by the home: the condition level, today's Home Score against the bar, and kept-up days (environment plan §4.8)", async () => {
+    // 6,000 Environment XP filed two days ago: effort has earned level 37, and the seeded month
+    // of ratings holds it at 19.
+    getState().ledger.push({
+      id: "cleaned",
+      occurredAt: new Date().toISOString(),
+      entry: "earn",
+      provenance: "derived",
+      amounts: { environment_xp: 6_000 },
+      trigger: "completed",
+      awardKey: "completed:task-garage",
+      subjectId: "task-garage",
+      creditedOn: addDays(todayIso(), -2),
+    });
+    renderPage();
+    const card = within(await screen.findByRole("region", { name: "Environment" }));
+
+    expect(card.getByText("Level 19")).toBeInTheDocument();
+    expect(card.getByText("Apprentice")).toBeInTheDocument();
+    expect(card.getByText("Your effort has earned level 37. Your home holds you at 19.")).toBeInTheDocument();
+    expect(card.getByText("Lifetime level 37")).toBeInTheDocument();
+
+    expect(card.getByText("Condition level 19")).toBeInTheDocument();
+    expect(
+      card.getByText("Your home supports level 19: a Home Score of 39.6+ on 20 of the last 27 days."),
+    ).toBeInTheDocument();
+    expect(card.getByRole("progressbar", { name: "Environment kept-up days toward condition level 20" })).toBeInTheDocument();
+    const needs = within(card.getByRole("list", { name: "What condition level 20 needs" }));
+    expect(needs.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "a Home Score of 40.2+ on 16 of the last 27 days (you have 19): met",
+      "21 kept-up days so far (you have 19): not yet",
+    ]);
+    expect(card.getByText(/6,000 Environment XP in all · since .+ · an average Home Score of 48\.8 over the last 27 days/)).toBeInTheDocument();
+
+    expect(card.getByRole("img", { name: "Today: Home Score 69.2, kept up (39.6+ counts)" })).toBeInTheDocument();
+    expect(card.getByText("×1.3 · 27 of the last 30 days kept up")).toBeInTheDocument();
+    expect(
+      card.getByText("A kept-up day has a Home Score of at least 39.6. Days count once they settle at 4 a.m."),
+    ).toBeInTheDocument();
+
+    const ladder = within(await screen.findByRole("region", { name: "Environment ranks" }));
+    expect(ladder.getAllByRole("listitem")[2]).toHaveTextContent(
+      "Lv 20–29Journeymana Home Score of 40.2+ on 52 of 90 days · 1,517 XP to reach💎 1 Gem",
+    );
+  });
+
   it("lists all 11 ranks with the one held marked and what holding each takes", async () => {
     renderPage();
     const ladder = within(await screen.findByRole("region", { name: "Health ranks" }));
@@ -146,12 +192,12 @@ describe("Character page (xp-domains plan §7.4.9)", () => {
     renderPage();
     const others = within(await screen.findByRole("region", { name: "Other domains" }));
     const cards = others.getAllByRole("listitem");
+    // Environment has rules of its own (E3), so it gets a full card.
     expect(cards.map((c) => c.textContent)).toEqual([
       expect.stringContaining("Social0 XP"),
-      expect.stringContaining("Environment0 XP"),
       expect.stringContaining("Finance0 XP"),
     ]);
-    expect(others.getAllByText("Levels start once this domain has its own rules.")).toHaveLength(3);
+    expect(others.getAllByText("Levels start once this domain has its own rules.")).toHaveLength(2);
   });
 
   it("opens the daily chart: 30 days of action and sleep, a keyboard readout and a table view", async () => {
@@ -252,7 +298,10 @@ describe("Character page (xp-domains plan §7.4.9)", () => {
     await act(async () => {
       await settle.mock.results[0].value;
     });
-    expect(JSON.parse(localStorage.getItem("lifeos.domains.best")!)).toEqual({ health_xp: { level: 9, rank: 0 } });
+    expect(JSON.parse(localStorage.getItem("lifeos.domains.best")!)).toEqual({
+      health_xp: { level: 9, rank: 0 },
+      environment_xp: { level: 1, rank: 0 },
+    });
     expect(toast).not.toHaveBeenCalled();
   });
 

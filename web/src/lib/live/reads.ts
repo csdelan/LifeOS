@@ -66,7 +66,12 @@ import type {
   TaskSeriesRow,
   TaskTimer,
   Wallet,
+  EnvironmentRead,
+  HomeDaysRead,
+  SpaceRatingsRead,
+  SpaceRow,
 } from "@/lib/production-ui-types";
+import { normalizeEnvironment, normalizeHomeDays, normalizeSpace, normalizeSpaceRatings } from "@/lib/environment";
 
 function asType<T>(value: unknown): T {
   return value as T;
@@ -318,6 +323,26 @@ export const liveReads: LifeOsReads = {
 
   async ouraStatus() {
     return normalizeOuraStatus(asType<OuraStatus>(await unwrap(api().GET("/api/oura/status"))));
+  },
+
+  async environment() {
+    return normalizeEnvironment(asType<EnvironmentRead>(await unwrap(api().GET("/api/environment"))));
+  },
+
+  async environmentDays(days) {
+    const data = await unwrap(api().GET("/api/environment/days", { params: { query: { days } } }));
+    return normalizeHomeDays(asType<HomeDaysRead>(data));
+  },
+
+  async spaces() {
+    return asType<SpaceRow[]>(await unwrap(api().GET("/api/environment/spaces"))).map(normalizeSpace);
+  },
+
+  async spaceRatings(opts) {
+    const data = await unwrap(
+      api().GET("/api/environment/ratings", { params: { query: { space: opts?.space, days: opts?.days } } }),
+    );
+    return normalizeSpaceRatings(asType<SpaceRatingsRead>(data));
   },
 
   async activityDay(date) {

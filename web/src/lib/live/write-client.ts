@@ -13,6 +13,7 @@ import type {
   RenamedSubject,
   RenamedTag,
   RewardRow,
+  SpaceRow,
   TimerActionResult,
   WorkoutRow,
 } from "@/lib/production-ui-types";
@@ -28,6 +29,7 @@ import {
   normalizeProgress,
 } from "@/lib/domains";
 import { foodWriteMessage, normalizeFoodWrite } from "@/lib/food";
+import { normalizeSpace, normalizeSpaceRatingResult, ratedMessage } from "@/lib/environment";
 import {
   normalizeBountyResult,
   normalizeHabitTarget,
@@ -265,6 +267,48 @@ export function createLiveWriteClient(): LifeOsWriteClient {
           api().POST("/api/activity/workouts/{id}/note", { params: { path: { id: workout } }, body: { text } }),
         )) as unknown as WorkoutRow,
       );
+    },
+
+    async addSpace(req) {
+      const row = normalizeSpace(
+        (await unwrap(api().POST("/api/environment/spaces", { body: req }))) as unknown as SpaceRow,
+      );
+      notify(`Added ${row.name}`);
+      return row;
+    },
+
+    async setSpace(space, req) {
+      const row = normalizeSpace(
+        (await unwrap(
+          api().POST("/api/environment/spaces/{id}", { params: { path: { id: space } }, body: req }),
+        )) as unknown as SpaceRow,
+      );
+      notify(`Saved ${row.name}`);
+      return row;
+    },
+
+    async rateSpaces(ratings, day) {
+      const result = normalizeSpaceRatingResult(
+        await unwrap(api().POST("/api/environment/ratings", { body: { day: day ?? null, ratings } })),
+      );
+      notify(ratedMessage(result));
+      return result;
+    },
+
+    async editSpaceRating(rating, req) {
+      const result = normalizeSpaceRatingResult(
+        await unwrap(api().POST("/api/environment/ratings/{id}", { params: { path: { id: rating } }, body: req })),
+      );
+      notify("Rating saved");
+      return result;
+    },
+
+    async deleteSpaceRating(rating) {
+      const result = normalizeSpaceRatingResult(
+        await unwrap(api().POST("/api/environment/ratings/{id}/delete", { params: { path: { id: rating } } })),
+      );
+      notify("Rating deleted");
+      return result;
     },
 
     async timer(task, action) {

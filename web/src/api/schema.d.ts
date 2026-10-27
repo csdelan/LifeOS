@@ -1076,6 +1076,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetHome"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetHomeDays"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/spaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetSpaces"];
+        put?: never;
+        post: operations["AddSpace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/spaces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SetSpace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/ratings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetSpaceRatings"];
+        put?: never;
+        post: operations["RateSpaces"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/ratings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EditSpaceRating"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/ratings/{id}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DeleteSpaceRating"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/artifacts/{id}/content": {
         parameters: {
             query?: never;
@@ -1681,6 +1793,8 @@ export interface components {
             activeMinimum?: number | string;
             /** Format: int32 */
             activeDays?: number | string;
+            /** Format: double */
+            bar?: null | number | string;
         };
         DomainBest: {
             /** Format: int32 */
@@ -1712,6 +1826,7 @@ export interface components {
             bestRankTo?: number | string;
         };
         DomainConsistency: {
+            kind?: string;
             /** Format: int32 */
             level?: number | string;
             /** Format: int32 */
@@ -1720,6 +1835,9 @@ export interface components {
             to?: null | string;
             /** Format: double */
             averageBase?: number | string;
+            /** Format: double */
+            averageHomeScore?: null | number | string;
+            held?: null | components["schemas"]["DomainConsistencyNeed"];
             next?: null | components["schemas"]["DomainConsistencyNeed"];
         };
         DomainConsistencyNeed: {
@@ -1744,6 +1862,8 @@ export interface components {
             /** Format: int32 */
             age?: number | string;
             ageMet?: boolean;
+            /** Format: double */
+            bar?: null | number | string;
         };
         DomainCurrent: {
             /** Format: int64 */
@@ -1752,6 +1872,10 @@ export interface components {
             todayAction?: number | string;
             /** Format: int32 */
             activeMinimum?: number | string;
+            /** Format: double */
+            todayHomeScore?: null | number | string;
+            /** Format: double */
+            bar?: null | number | string;
             todayActive?: boolean;
             todayException?: boolean;
             rule?: string;
@@ -1789,12 +1913,17 @@ export interface components {
             level?: null | number | string;
             /** Format: int32 */
             rank?: null | number | string;
+            /** Format: double */
+            homeScore?: null | number | string;
+            /** Format: double */
+            bar?: null | number | string;
         };
         DomainDaysRead: {
             key?: string;
             label?: string;
             name?: string;
             configured?: boolean;
+            kind?: null | string;
             today?: string;
             settledThrough?: null | string;
             days?: components["schemas"]["DomainDayRow"][];
@@ -1837,6 +1966,8 @@ export interface components {
             activeMinimum?: null | number | string;
             /** Format: int32 */
             activeDays?: null | number | string;
+            /** Format: double */
+            bar?: null | number | string;
             /** Format: int32 */
             windowDays?: number | string;
             /** Format: int64 */
@@ -1882,6 +2013,9 @@ export interface components {
             activeShare?: null | number | string;
             /** Format: double */
             averageBase?: null | number | string;
+            kind?: null | string;
+            /** Format: double */
+            averageHomeScore?: null | number | string;
             /** Format: int32 */
             levelFrom?: null | number | string;
             /** Format: int32 */
@@ -1935,6 +2069,8 @@ export interface components {
             percentPerDay?: number | string;
             lastChange?: null | components["schemas"]["DomainLevelChange"];
             backOnTrack?: null | components["schemas"]["DomainBackOnTrack"];
+            /** Format: double */
+            bar?: null | number | string;
         };
         DomainTierRow: {
             /** Format: double */
@@ -1951,6 +2087,14 @@ export interface components {
         EarnResult: {
             awards?: components["schemas"]["AwardRow"][];
             progress?: components["schemas"]["DomainChangeRow"][];
+        };
+        EnvironmentRead: {
+            today?: string;
+            settledThrough?: string;
+            /** Format: double */
+            homeScore?: null | number | string;
+            spaces?: components["schemas"]["HomeSpaceRow"][];
+            fixNext?: components["schemas"]["FixNextRow"][];
         };
         ExceptionDayBody: {
             day?: null | string;
@@ -1986,6 +2130,14 @@ export interface components {
             seconds?: null | number | string;
             /** Format: int32 */
             mealsDuring?: number | string;
+        };
+        FixNextRow: {
+            /** Format: uuid */
+            spaceId?: string;
+            space?: string;
+            part?: string;
+            /** Format: double */
+            drag?: number | string;
         };
         FoodAwardPaidRow: {
             /** Format: int64 */
@@ -2180,6 +2332,55 @@ export interface components {
             windowDays?: number | string;
             adherenceIsCustom?: boolean;
             windowIsCustom?: boolean;
+        };
+        HomeDayRow: {
+            day?: string;
+            /** Format: double */
+            homeScore?: null | number | string;
+            exception?: null | string;
+            spaces?: components["schemas"]["HomeDaySpaceRow"][];
+        };
+        HomeDaySpaceRow: {
+            /** Format: uuid */
+            spaceId?: string;
+            /** Format: double */
+            score?: null | number | string;
+        };
+        HomeDaysRead: {
+            today?: string;
+            settledThrough?: string;
+            from?: string;
+            spaces?: components["schemas"]["SpaceRow"][];
+            days?: components["schemas"]["HomeDayRow"][];
+        };
+        HomePartRow: {
+            /** Format: double */
+            rated?: null | number | string;
+            ratedOn?: null | string;
+            /** Format: double */
+            now?: null | number | string;
+            /** Format: double */
+            drag?: number | string;
+        };
+        HomePartsRow: {
+            tidiness?: components["schemas"]["HomePartRow"];
+            cleanliness?: components["schemas"]["HomePartRow"];
+            aesthetics?: components["schemas"]["HomePartRow"];
+        };
+        HomeSpaceRow: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            /** Format: int32 */
+            weight?: number | string;
+            /** Format: int32 */
+            pace?: number | string;
+            /** Format: double */
+            share?: null | number | string;
+            /** Format: double */
+            score?: null | number | string;
+            lastRatedOn?: null | string;
+            parts?: components["schemas"]["HomePartsRow"];
         };
         /** Format: binary */
         IFormFile: string;
@@ -2524,6 +2725,80 @@ export interface components {
             since?: string;
             lastDrinkOn?: null | string;
             firstDay?: string;
+        };
+        SpaceBody: {
+            name?: null | string;
+            /** Format: int32 */
+            weight?: null | number | string;
+            /** Format: int32 */
+            pace?: null | number | string;
+        };
+        SpaceRatingBody: {
+            space?: null | string;
+            /** Format: double */
+            tidiness?: null | number | string;
+            /** Format: double */
+            cleanliness?: null | number | string;
+            /** Format: double */
+            aesthetics?: null | number | string;
+            note?: null | string;
+            same?: null | boolean;
+        };
+        SpaceRatingEditBody: {
+            day?: null | string;
+            /** Format: double */
+            tidiness?: null | number | string;
+            /** Format: double */
+            cleanliness?: null | number | string;
+            /** Format: double */
+            aesthetics?: null | number | string;
+            note?: null | string;
+        };
+        SpaceRatingResult: {
+            ratings?: components["schemas"]["SpaceRatingRow"][];
+            awards?: components["schemas"]["AwardRow"][];
+            progress?: components["schemas"]["DomainChangeRow"][];
+        };
+        SpaceRatingRow: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            spaceId?: string;
+            space?: string;
+            day?: string;
+            /** Format: double */
+            tidiness?: null | number | string;
+            /** Format: double */
+            cleanliness?: null | number | string;
+            /** Format: double */
+            aesthetics?: null | number | string;
+            note?: null | string;
+            /** Format: date-time */
+            ratedAt?: string;
+        };
+        SpaceRatingsBody: {
+            day?: null | string;
+            ratings?: components["schemas"]["SpaceRatingBody"][];
+        };
+        SpaceRatingsRead: {
+            today?: string;
+            from?: string;
+            ratings?: components["schemas"]["SpaceRatingRow"][];
+        };
+        SpaceRow: {
+            /** Format: uuid */
+            id?: string;
+            urn?: string;
+            name?: string;
+            /** Format: int32 */
+            weight?: number | string;
+            /** Format: int32 */
+            pace?: number | string;
+            /** Format: double */
+            share?: null | number | string;
+            /** Format: date-time */
+            archivedAt?: null | string;
+            archivedOn?: null | string;
         };
         StatusBody: {
             subject?: string;
@@ -4742,6 +5017,276 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EarnResult"];
+                };
+            };
+        };
+    };
+    GetHome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentRead"];
+                };
+            };
+        };
+    };
+    GetHomeDays: {
+        parameters: {
+            query?: {
+                days?: number | string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeDaysRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetSpaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceRow"][];
+                };
+            };
+        };
+    };
+    AddSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpaceBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SetSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpaceBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetSpaceRatings: {
+        parameters: {
+            query?: {
+                space?: string;
+                days?: number | string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceRatingsRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    RateSpaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpaceRatingsBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceRatingResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    EditSpaceRating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpaceRatingEditBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceRatingResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    DeleteSpaceRating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceRatingResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };

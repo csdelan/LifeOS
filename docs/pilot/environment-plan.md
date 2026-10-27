@@ -339,7 +339,7 @@ ways: a backdated one changes past days.
 | `GET /api/environment/days?days=N` | Default 90, 1–731. Per day: the Home Score, each space's score, and exception days. |
 | `GET /api/environment/ratings?space=&days=N` | The ratings, newest first. |
 | `POST /api/environment/spaces` | Body `{ name, weight?, pace? }`. Answers the space. |
-| `POST /api/environment/spaces/{id}` | Body `{ name?, weight?, pace? }`. Archiving uses the existing archive endpoint. |
+| `POST /api/environment/spaces/{id}` | Body `{ name?, weight?, pace? }`. Archiving and restoring use the existing `/api/archive` and `/api/restore`; a restore is refused while another space uses the name, whichever route restores it. |
 | `POST /api/environment/ratings` | Body `{ day?, ratings: [{ space, tidiness?, cleanliness?, aesthetics?, note?, same? }] }`. One walk-through saves many spaces. Answers `{ ratings, awards, progress }`. A future day, a part outside 1–5 or not in halves, or an empty rating is a 400 in words. |
 | `POST /api/environment/ratings/{id}` | Edit. Answers as above. |
 | `POST /api/environment/ratings/{id}/delete` | Delete. Answers as above. |
@@ -350,8 +350,10 @@ configured. Its `consistency` block gains a **`kind`**:
 - `"home"` for Environment: the window's days and dates, the kept-up days, the average Home
   Score, and what the next level needs (bar, kept-up days needed against days held, age).
 
-`current` carries today's Home Score against the shown level's bar. The web branches on
-`kind`.
+`current` carries today's Home Score against the bar of the level going into today (what
+counts the day as kept up), and `shown.bar` is the shown level's bar (what keeps that level on
+track: "68.2+ keeps level 70 on track"). Each day of `days` carries its Home Score and the bar
+of its level going in. The web branches on `kind`.
 
 **CLI:**
 - `bsk space add "Office" --weight 5 --pace 5`, `bsk space list`,
@@ -513,5 +515,5 @@ level holds. That gave three rules:
 - [x] E1 — Spaces and ratings in the kernel (migration 0044)
 - [x] E2 — The Home Score (no migration)
 - [x] E3 — Environment's rules (no migration; push with E4)
-- [ ] E4 — Environment on the web (no migration)
+- [x] E4 — Environment on the web (no migration)
 - [ ] E5 — Chris's spaces, first walk-through, calibration

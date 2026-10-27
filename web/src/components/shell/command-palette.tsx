@@ -15,6 +15,7 @@ import {
   ActivityIcon,
   CompassIcon,
   GiftIcon,
+  HouseIcon,
   MedalIcon,
   InboxIcon,
   LayoutDashboardIcon,
@@ -81,6 +82,9 @@ export function CommandPalette({
           </CommandItem>
           <CommandItem onSelect={() => go("/activity")}>
             <ActivityIcon /> Activity
+          </CommandItem>
+          <CommandItem onSelect={() => go("/environment")}>
+            <HouseIcon /> Environment
           </CommandItem>
           <CommandItem onSelect={() => go("/rewards")}>
             <GiftIcon /> Rewards

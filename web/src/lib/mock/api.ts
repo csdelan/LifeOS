@@ -52,6 +52,10 @@ import type {
   TaskSeriesRow,
   TaskTimer,
   Wallet,
+  EnvironmentRead,
+  HomeDaysRead,
+  SpaceRatingsRead,
+  SpaceRow,
 } from "@/lib/production-ui-types";
 import { isTerminal } from "@/lib/production-ui-types";
 import { composeRecap, type RecapSection } from "@/lib/review-recap";
@@ -96,6 +100,7 @@ import {
   mockActivityWorkouts,
   mockOuraStatus,
 } from "@/lib/mock/activity-store";
+import { mockEnvironment, mockHomeDays, mockSpaceRatings, mockSpaces } from "@/lib/mock/environment-store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 
@@ -212,6 +217,14 @@ export interface LifeOsReads {
   activityDay(date?: string): Promise<ActivityDayDetailRead>;
   /** The Oura connection (`GET /api/oura/status`): other pages ask for the throttled sync when it's connected. */
   ouraStatus(): Promise<OuraStatus>;
+  /** The home today (HOME-3): the Home Score, each space with its parts, and Fix next. */
+  environment(): Promise<EnvironmentRead>;
+  /** The Home Score on each of the last `days` days (90 by default), oldest first, with exception days. */
+  environmentDays(days?: number): Promise<HomeDaysRead>;
+  /** Every space (HOME-1), archived ones included, by name. */
+  spaces(): Promise<SpaceRow[]>;
+  /** The ratings among the last `days` (90 by default), of one space (its id) when given, newest first. */
+  spaceRatings(opts?: { space?: string; days?: number }): Promise<SpaceRatingsRead>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /**
@@ -463,6 +476,26 @@ export const mockReads: LifeOsReads = {
     await wait();
     const detail = mockActivityDay(date);
     return { ...detail, summary: withActivityPaid([detail.summary])[0] };
+  },
+
+  async environment(): Promise<EnvironmentRead> {
+    await wait();
+    return mockEnvironment(storeState().exceptionDays);
+  },
+
+  async environmentDays(days?: number): Promise<HomeDaysRead> {
+    await wait();
+    return mockHomeDays(days, storeState().exceptionDays);
+  },
+
+  async spaces(): Promise<SpaceRow[]> {
+    await wait();
+    return mockSpaces();
+  },
+
+  async spaceRatings(opts?: { space?: string; days?: number }): Promise<SpaceRatingsRead> {
+    await wait();
+    return mockSpaceRatings(opts);
   },
 
   async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {

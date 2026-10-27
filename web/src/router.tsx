@@ -14,6 +14,7 @@ import { RewardsPage } from "@/pages/rewards-page";
 import { CharacterPage } from "@/pages/character-page";
 import { FoodPage } from "@/pages/food-page";
 import { ActivityConnectedPage, ActivityPage } from "@/pages/activity-page";
+import { EnvironmentPage } from "@/pages/environment-page";
 import { VisionPage } from "@/pages/vision-page";
 import { ReviewsPage } from "@/pages/reviews-page";
 import { PeoplePage } from "@/pages/people-page";
@@ -195,6 +196,13 @@ const activityRoute = createRoute({
   component: ActivityPage,
 });
 
+/** The home's spaces, ratings and Home Score (HOME-1..3). */
+const environmentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/environment",
+  component: EnvironmentPage,
+});
+
 const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : undefined);
 
 const activityConnectedRoute = createRoute({
@@ -255,6 +263,7 @@ const routeTree = rootRoute.addChildren([
   foodRoute,
   activityRoute,
   activityConnectedRoute,
+  environmentRoute,
   rewardsRoute,
   characterRoute,
   visionRoute,

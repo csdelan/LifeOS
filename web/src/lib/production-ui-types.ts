@@ -767,11 +767,21 @@ export interface DomainLifetime {
 
 /** The highest level the last `windowDays` counted days (at most 90) support, and what the next needs. */
 export interface DomainConsistency {
+  /**
+   * What holds the level (environment plan §4.7): `"xp"` for Health (average base XP and active
+   * days), `"home"` for Environment (the Home Score against each level's bar). An older API sent
+   * none: read it as `"xp"`.
+   */
+  kind?: "xp" | "home";
   level: number;
   windowDays: number;
   from: string | null;
   to: string | null;
   averageBase: number;
+  /** For `home`: the window's average Home Score, floored to a tenth; null otherwise. */
+  averageHomeScore?: number | null;
+  /** What the consistency level now takes, against the window; null at level 1. */
+  held?: DomainConsistencyNeed | null;
   /** Null at the top. */
   next: DomainConsistencyNeed | null;
 }
@@ -791,6 +801,8 @@ export interface DomainConsistencyNeed {
   ageNeeded: number;
   age: number;
   ageMet: boolean;
+  /** For `home`: the Home Score the level's kept-up day needs, exact to four places (57.5); null otherwise. */
+  bar?: number | null;
 }
 
 /**
@@ -814,6 +826,8 @@ export interface DomainShown {
   percentPerDay: number;
   lastChange: DomainLevelChange | null;
   backOnTrack: DomainBackOnTrack | null;
+  /** For a domain held by the home: the shown level's bar in points, what keeps that level on track. */
+  bar?: number | null;
 }
 
 /** The last day the shown level moved. */
@@ -829,6 +843,8 @@ export interface DomainBackOnTrack {
   average: number;
   activeMinimum: number;
   activeDays: number;
+  /** For `home`: the shown level's bar, which kept-up days must reach. */
+  bar?: number | null;
 }
 
 /** The best level and rank ever reached, and the first day each was. */
@@ -849,6 +865,9 @@ export interface DomainCurrent {
   todayBase: number;
   todayAction: number;
   activeMinimum: number;
+  /** For `home`: today's Home Score (null before the first rating) and the bar of the level going into today. */
+  todayHomeScore?: number | null;
+  bar?: number | null;
   todayActive: boolean;
   todayException: boolean;
   /** "at least 17 action XP (base XP less sleep)". */
@@ -879,6 +898,8 @@ export interface DomainRankRow {
   average: number | null;
   activeMinimum: number | null;
   activeDays: number | null;
+  /** For `home`: the rank's first level's bar; null otherwise and for the first rank. */
+  bar?: number | null;
   windowDays: number;
   totalXp: number;
   gems: number;
@@ -894,6 +915,8 @@ export interface DomainDaysRead {
   today: string;
   /** The last settled day; null without rules. */
   settledThrough: string | null;
+  /** `"xp"` or `"home"` (see `DomainConsistency.kind`); null without rules. */
+  kind?: "xp" | "home" | null;
   days: DomainDayRow[];
 }
 
@@ -916,6 +939,9 @@ export interface DomainDayRow {
   consistencyLevel: number | null;
   level: number | null;
   rank: number | null;
+  /** For `home`: the day's Home Score (null before the first rating) and the bar of the level going into it. */
+  homeScore?: number | null;
+  bar?: number | null;
 }
 
 /** `GET /api/domains/report?days=N`: every life domain over its last `days` days. */
@@ -946,6 +972,10 @@ export interface DomainReportRow {
   activeDays: number | null;
   activeShare: number | null;
   averageBase: number | null;
+  /** `"xp"` or `"home"`; null without rules. For `home`, active days are kept-up days. */
+  kind?: "xp" | "home" | null;
+  /** For `home`: the counted days' average Home Score, floored to a tenth. */
+  averageHomeScore?: number | null;
   levelFrom: number | null;
   levelTo: number | null;
   rankFrom: number | null;
@@ -1693,6 +1723,143 @@ export interface ActivitySyncResult extends Earned {
   lastSyncedAt: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Environment (HOME-1..3, D18, environment plan §4): `/api/environment`. Days are home-zone
+// days (`yyyy-MM-dd`). A part is rated 1–5 in half points; scores and drags are points 0–100,
+// exact to four places (whole ten-thousandths: see `lib/home-score.ts`).
+// ---------------------------------------------------------------------------
+
+/** The three parts a space is rated on, in the order they're shown. */
+export type HomePart = "tidiness" | "cleanliness" | "aesthetics";
+
+/** One space (HOME-1). Archiving one (`archive(urn)`) takes it out of the Home Score from that day. */
+export interface SpaceRow {
+  id: string;
+  urn: string;
+  name: string;
+  /** 1–10: how much it counts in the Home Score. */
+  weight: number;
+  /** 1 (slow to get messy) to 5 (fast): how fast Tidiness and Cleanliness fade. */
+  pace: number;
+  /** Its weight's share of the spaces not archived, in percent to one place; null once archived. */
+  share: number | null;
+  archivedAt: string | null;
+  /** The day it was archived: it leaves the Home Score from then. */
+  archivedOn: string | null;
+}
+
+/** One rating (HOME-2): each part 1–5 in halves, or null when left out. */
+export interface SpaceRatingRow {
+  id: string;
+  spaceId: string;
+  space: string;
+  day: string;
+  tidiness: number | null;
+  cleanliness: number | null;
+  aesthetics: number | null;
+  note: string | null;
+  /** ISO instant it was written. */
+  ratedAt: string;
+}
+
+/** `GET /api/environment/ratings`: the ratings from `from` to `today`, newest first. */
+export interface SpaceRatingsRead {
+  today: string;
+  from: string;
+  ratings: SpaceRatingRow[];
+}
+
+/** A rating write's answer: the ratings as they now read (none after a delete), and what it moved. */
+export interface SpaceRatingResult extends Earned {
+  ratings: SpaceRatingRow[];
+}
+
+/** Adding or changing a space: weight and pace are 3 when left out of a new one. */
+export interface SpaceRequest {
+  name?: string;
+  weight?: number;
+  pace?: number;
+}
+
+/** One space's rating in a walk-through or quick check: any parts, a note, or `same` to repeat its last rating. */
+export interface SpaceRatingRequest {
+  /** The space's id or name. */
+  space: string;
+  tidiness?: number;
+  cleanliness?: number;
+  aesthetics?: number;
+  note?: string;
+  same?: boolean;
+}
+
+/** Changing a rating: a new day, any parts to replace, and a note (blank removes it; left out keeps it). */
+export interface SpaceRatingEditRequest {
+  day?: string;
+  tidiness?: number;
+  cleanliness?: number;
+  aesthetics?: number;
+  note?: string;
+}
+
+/**
+ * One part of a space today: the rating it was last given and when (null when never), its
+ * points now after fading (null when never rated), and the Home Score points it costs (0 while
+ * the space doesn't count).
+ */
+export interface HomePartRow {
+  rated: number | null;
+  ratedOn: string | null;
+  now: number | null;
+  drag: number;
+}
+
+/** One space today: its score (null until all three parts are rated), when it was last rated, and each part. */
+export interface HomeSpaceRow {
+  id: string;
+  name: string;
+  weight: number;
+  pace: number;
+  share: number | null;
+  score: number | null;
+  lastRatedOn: string | null;
+  parts: Record<HomePart, HomePartRow>;
+}
+
+/** One part to fix next: the space, the part, and the Home Score points it costs. */
+export interface FixNextRow {
+  spaceId: string;
+  space: string;
+  part: HomePart;
+  drag: number;
+}
+
+/** `GET /api/environment` (HOME-3): today's Home Score (null before any space counts), each space, and Fix next. */
+export interface EnvironmentRead {
+  today: string;
+  settledThrough: string;
+  homeScore: number | null;
+  spaces: HomeSpaceRow[];
+  fixNext: FixNextRow[];
+}
+
+/** One day: the Home Score (null before any space counts), the exception comment when marked, and each space's score. */
+export interface HomeDayRow {
+  day: string;
+  homeScore: number | null;
+  exception: string | null;
+  spaces: { spaceId: string; score: number | null }[];
+}
+
+/** `GET /api/environment/days?days=N`: the Home Score on each day from `from` to `today`, oldest first. */
+export interface HomeDaysRead {
+  today: string;
+  settledThrough: string;
+  from: string;
+  /** Every space, archived ones too, to name the days' spaces. */
+  spaces: SpaceRow[];
+  days: HomeDayRow[];
+}
+
 /**
  * The write client the UI calls. Every method maps to a bsk verb / API endpoint.
  * Mock all of these for the first pass; return shapes match the real API.
@@ -1764,6 +1931,21 @@ export interface LifeOsWriteClient {
   syncActivity(force?: boolean): Promise<ActivitySyncResult>;
   /** Set a workout's one-line note (at most 140 characters); `""` clears it. */
   setWorkoutNote(workout: string, text: string): Promise<WorkoutRow>;
+  /** Add a space to the home (HOME-1, `POST /api/environment/spaces`); weight and pace are 3 when left out. */
+  addSpace(req: SpaceRequest & { name: string }): Promise<SpaceRow>;
+  /** Rename, reweight or re-pace a space (`POST /api/environment/spaces/{id}`). Archive one with `archive(urn)`. */
+  setSpace(space: string, req: SpaceRequest): Promise<SpaceRow>;
+  /**
+   * Rate one or more spaces on one day (HOME-2, `POST /api/environment/ratings`): a
+   * walk-through or a quick check, today when `day` is left out. Refused as a whole, with
+   * nothing written, for a future day, a part outside 1–5 or not in halves, a space rated
+   * twice, archived or with no parts, or "same as last time" for a space never rated.
+   */
+  rateSpaces(ratings: SpaceRatingRequest[], day?: string): Promise<SpaceRatingResult>;
+  /** Change a rating's day, parts or note (`POST /api/environment/ratings/{id}`). */
+  editSpaceRating(rating: string, req: SpaceRatingEditRequest): Promise<SpaceRatingResult>;
+  /** Delete a rating (`POST /api/environment/ratings/{id}/delete`). */
+  deleteSpaceRating(rating: string): Promise<SpaceRatingResult>;
   /**
    * Set a subject's repeat pattern (D8, `POST /api/recur`); `null` clears it. A Task's `start`
    * is the first date it repeats from (TASKS-3); setting one makes its first repetition.
