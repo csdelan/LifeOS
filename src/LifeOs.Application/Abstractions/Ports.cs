@@ -466,6 +466,47 @@ public interface IFoodLogRepository
         IReadOnlyList<NewEvent> events, FoodGuard guard, CancellationToken cancellationToken = default);
 }
 
+/// <summary>A rating event to append and the space its <c>concerns</c> edge points at (HOME-2).</summary>
+public sealed record SpaceRatingWrite(NewEvent Event, Guid SpaceId);
+
+/// <summary>
+/// Reads the home's spaces and their ratings (HOME-1, HOME-2, environment plan §4.1–§4.3)
+/// through <c>bsk.v_space</c> and <c>bsk.v_space_rating</c>, and appends ratings. Spaces are
+/// written as subjects (<see cref="ISubjectRepository"/>); ratings are append-only
+/// <c>measurement</c> events, each with a <c>concerns</c> edge to its space.
+/// </summary>
+public interface ISpaceRepository
+{
+    /// <summary>Every space, archived ones included, by name.</summary>
+    Task<IReadOnlyList<Space>> GetSpacesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The space with that id, or null.</summary>
+    Task<Space?> GetSpaceAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The live ratings, oldest first by day then by when they were written: of
+    /// <paramref name="spaceId"/> only when given, and on or after <paramref name="from"/> when given.
+    /// </summary>
+    Task<IReadOnlyList<SpaceRating>> GetRatingsAsync(
+        Guid? spaceId = null, DateOnly? from = null, CancellationToken cancellationToken = default);
+
+    /// <summary>The live rating with that id, or null (never written, or deleted).</summary>
+    Task<SpaceRating?> GetRatingAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Live ratings whose id starts with <paramref name="prefix"/> (hex), newest first.</summary>
+    Task<IReadOnlyList<SpaceRating>> FindRatingsAsync(string prefix, CancellationToken cancellationToken = default);
+
+    /// <summary>Noon on <paramref name="day"/> in the database's home zone: when a backdated rating is filed.</summary>
+    Task<DateTimeOffset> NoonAsync(DateOnly day, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Appends rating events and their <c>concerns</c> edges as one transaction. Returns the
+    /// new event ids, in order.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> AppendRatingsAsync(
+        IReadOnlyList<SpaceRatingWrite> writes, CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// Creates <c>event → subject</c> edges (concerns/evidences/violates) for events that
 /// already exist — the write path behind <c>bsk relate</c>. Distinct from

@@ -76,6 +76,7 @@ public static class ApiHost
         builder.Services.AddSingleton(sp => new RewardReader(
             reader, sp.GetRequiredService<RewardService>().CoinValueUsd, homeZone));
         builder.Services.AddSingleton(new FoodReader(reader, homeZone));
+        builder.Services.AddSingleton(sp => new EnvironmentReader(reader, sp.GetRequiredService<IClock>(), homeZone));
         builder.Services.AddSingleton(sp => new ActivityReader(reader, homeZone, sp.GetRequiredService<IClock>()));
         builder.Services.AddSingleton(sp => new ArtifactReader(
             new NpgsqlArtifactBlobStore(reader, sp.GetService<IObjectStorage>())));
@@ -158,6 +159,7 @@ public static class ApiHost
         app.MapRewardEndpoints();
         app.MapDomainEndpoints();
         app.MapFoodEndpoints();
+        app.MapEnvironmentEndpoints();
         app.MapArtifactEndpoints();
         app.MapOuraEndpoints();
         app.MapActivityEndpoints();

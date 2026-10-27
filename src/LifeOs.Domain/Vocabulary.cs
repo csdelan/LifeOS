@@ -82,6 +82,13 @@ public static class SubjectTypes
     /// against. Status-less; archive it to retire it (REWARD-3, migration 0028).
     /// </summary>
     public const string Reward = "Reward";
+
+    /// <summary>
+    /// A space in the home (the office, the kitchen…), rated on Tidiness, Cleanliness and
+    /// Aesthetics for the Home Score. Status-less; archive it to retire it (HOME-1, D18,
+    /// migration 0044).
+    /// </summary>
+    public const string Space = "Space";
 }
 
 /// <summary>

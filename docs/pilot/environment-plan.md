@@ -506,7 +506,7 @@ level holds. That gave three rules:
 ## Status
 
 - [x] E0 — Plan + requirements (HOME-1 to HOME-3, REWARD-9, D18)
-- [ ] E1 — Spaces and ratings in the kernel (migration 0044)
+- [x] E1 — Spaces and ratings in the kernel (migration 0044)
 - [ ] E2 — The Home Score (no migration)
 - [ ] E3 — Environment's rules (no migration; push with E4)
 - [ ] E4 — Environment on the web (no migration)

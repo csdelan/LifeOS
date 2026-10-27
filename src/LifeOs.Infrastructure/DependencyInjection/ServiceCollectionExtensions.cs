@@ -4,6 +4,7 @@ using LifeOs.Application.Activity;
 using LifeOs.Application.Capture;
 using LifeOs.Application.Covers;
 using LifeOs.Application.Food;
+using LifeOs.Application.Home;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
@@ -89,6 +90,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ILedgerRepository>(_ => new NpgsqlLedgerRepository(connectionString, homeZone));
         services.AddSingleton<IHomeCalendar>(_ => new NpgsqlHomeCalendar(connectionString, homeZone));
         services.AddSingleton<IFoodLogRepository>(_ => new NpgsqlFoodLogRepository(connectionString));
+        services.AddSingleton<ISpaceRepository>(_ => new NpgsqlSpaceRepository(connectionString));
         services.AddSingleton<IIntegrationRepository>(_ =>
             new NpgsqlIntegrationRepository(connectionString, integrations?.TokenCipher));
         services.AddSingleton<IActivityRepository>(_ => new NpgsqlActivityRepository(connectionString));
@@ -240,6 +242,20 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new ExceptionDayService(
             sp.GetRequiredService<ILedgerRepository>(),
             sp.GetRequiredService<IEventStore>(),
+            sp.GetRequiredService<RewardService>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
+
+        // The home's spaces and their ratings (HOME-1, HOME-2, environment plan §4.1–§4.2).
+        services.AddSingleton(sp => new SpaceService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<ISpaceRepository>(),
+            sp.GetRequiredService<ArchiveService>()));
+        services.AddSingleton(sp => new SpaceRatingService(
+            sp.GetRequiredService<ISpaceRepository>(),
+            sp.GetRequiredService<SpaceService>(),
             sp.GetRequiredService<RewardService>(),
             sp.GetRequiredService<IHomeCalendar>(),
             sp.GetRequiredService<IClock>(),

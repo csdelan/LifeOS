@@ -3821,7 +3821,7 @@ Build moves `mapped → building`. It becomes `built` once it's on staging (C5).
 ### HOME-1 — My home is split into spaces, each with a weight and a pace
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
 
 **Workflow (Chris):**
 - "I may look at 1 area of my home (kitchen), and rate it's environment based on 3
@@ -3868,7 +3868,7 @@ Build:      needs-kernel
 ### HOME-2 — I rate each space on Tidiness, Cleanliness and Aesthetics in a quick walk-through
 Horizon:    Pilot
 Definition: active
-Build:      needs-kernel
+Build:      building
 
 **Workflow (Chris):**
 - "Tidiness (de-cluttered), Cleanliness (washed), and Aesthetics (decor, colors, lighting,

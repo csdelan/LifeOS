@@ -89,6 +89,17 @@ public sealed class AttributeService(
                     nameof(assignments));
             }
 
+            // A space's weight and pace are checked whole numbers the Home Score reads (HOME-1),
+            // with one writer; written here they'd be text the score ignores.
+            if (subject.Type == SubjectTypes.Space
+                && (string.Equals(key, SpaceLimits.WeightKey, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(key, SpaceLimits.PaceKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new ArgumentException(
+                    "A space's weight and pace are set with `bsk space set`, not `bsk set`.",
+                    nameof(assignments));
+            }
+
             if (string.IsNullOrWhiteSpace(assignment.Value))
             {
                 removed.Add(key);
