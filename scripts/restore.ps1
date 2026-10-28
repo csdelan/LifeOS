@@ -15,8 +15,8 @@
       3. Creates any role the dump grants to (bsk_reader, bsk_backup, …) without a login, and puts
          back the database's bsk.* settings (the home time zone).
       4. Checks every table's row count against the manifest, brings the schema up to date with
-         `bsk migrate` (nothing to do when the backup is recent), and runs
-         `bsk rebuild --verify`.
+         `bsk migrate` (nothing to do when the backup is recent), and refreshes the derived
+         tables with `bsk rebuild` (they're usually behind in a backup: only rebuild writes them).
       5. With -ArtifactsFolder, decrypts the photos into that folder, each checked against its
          sha256. With -UploadArtifacts, uploads them to the Supabase project named in -EnvFile
          (Storage__SupabaseUrl or VITE_SUPABASE_URL, and Storage__SupabaseSecretKey).
@@ -150,9 +150,11 @@ try {
     $applied = @($migrate.Json.applied)
     if ($applied.Count) { Write-Host "bsk migrate applied $($applied.Count) migration(s) newer than the copy: $(@($applied | ForEach-Object { $_.version }) -join ', ')." -ForegroundColor Yellow }
     else { Write-Host 'bsk migrate: the schema is up to date, nothing to apply.' -ForegroundColor Green }
+    $rebuild = Invoke-Bsk $ConnectionString @('rebuild')
+    if ($rebuild.ExitCode -ne 0) { throw "bsk rebuild failed: $($rebuild.Text)" }
     $verify = Invoke-Bsk $ConnectionString @('rebuild', '--verify')
-    if ($verify.ExitCode -ne 0) { throw "bsk rebuild --verify found the derived tables don't match the source: $($verify.Text)" }
-    Write-Host 'bsk rebuild --verify: the derived tables match the source.' -ForegroundColor Green
+    if ($verify.ExitCode -ne 0) { throw "bsk rebuild --verify found the derived tables don't match the source after a rebuild: $($verify.Text)" }
+    Write-Host "bsk rebuild: $($rebuild.Json.rows) derived rows, matching the source." -ForegroundColor Green
 
     # --- 5. Photos -----------------------------------------------------------------------------------
     if ($ArtifactsFolder -or $UploadArtifacts) {

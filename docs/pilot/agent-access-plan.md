@@ -250,17 +250,19 @@ starts itself:
 2. `pg_restore --no-owner --exit-on-error` both files. Triggers and foreign keys are
    restored after the data, so loading doesn't trip the append-only triggers.
 3. Compare every table's row count with the manifest. They must be equal.
-4. Run `bsk rebuild --verify` against it. This checks the derived tables agree with the
-   source, and exits 1 if they've drifted.
+4. Run `bsk rebuild --verify`, then `bsk rebuild`, against it. The rebuild must write exactly
+   what the source folds to (the checksum `--verify` reported). Whether the live derived
+   table was current goes in the manifest as `derivedWasCurrent`. It's normally behind:
+   only `bsk rebuild` writes it, and the app reads status straight from the source.
 5. Run `bsk check --json`. It must finish without error, since the diagnostics read every
    major view.
 
 **What fails a run, and what's saved:**
 - A dump that can't be restored, or whose counts don't match, fails the run and isn't
   saved. Chris hears about it the next morning, not on the day he needs it.
-- Steps 4 and 5 use the CLI built from the working copy. If those fail (drift, or a CLI that
-  doesn't build), the copy is saved and the run still fails. A faithful copy of a drifted
-  database is worth keeping, and `bsk rebuild` fixes the drift.
+- Steps 4 and 5 use the CLI built from the working copy. If those fail (a rebuild that
+  doesn't match, or a CLI that doesn't build), the copy is saved and the run still fails. The
+  copy restored and its counts matched, so it's worth keeping.
 
 The plaintext stays in a temporary folder that's deleted at the end of the run.
 
@@ -328,7 +330,8 @@ scheduled task never sees.
    - every row count matches the manifest;
    - `bsk migrate --json` applies nothing when the copy is current, or brings an older copy
      up to date;
-   - `bsk rebuild --verify` reports no drift.
+   - `bsk rebuild` brings the derived table up to date, and `bsk rebuild --verify` then
+     reports no drift.
 5. Photos: `-ArtifactsFolder` decrypts them to a folder, each checked against its sha256.
    `-UploadArtifacts` uploads them to the new project's bucket, which it creates if missing.
 6. Then point the app at it:
@@ -348,11 +351,15 @@ through the app. The drill is the only check that the private key still works.
   - a backup and a restore, photos included, with matching row counts and the home zone
     carried over;
   - writes during the dump (retried, then failed after three tries);
-  - a wrong password, drifted derived tables, and a photo missing from the bucket;
+  - a wrong password, a derived table behind its source, and a photo missing from the bucket;
   - pruning, two runs at once, and a run started by Task Scheduler.
-- [ ] Staging: migration 0046 applied, setup run, and the first backup green.
-- [ ] The drill restores staging's copy into local Docker, the row counts match, and the
-  app reads it.
+- [x] Staging: migration 0046 applied, setup run, and the first backup green (2026-10-28:
+  11 tables, 5,805 rows, 39 photos, from a Task Scheduler run). The first run showed that the
+  live derived table is normally behind its source, which isn't a fault, so the check became
+  the rebuild test in §3.5.
+- [x] The drill restores staging's copy into local Docker, the row counts match, and the
+  app reads it (2026-10-28: `bsk check` gives the same 12 findings, and the photos decrypt).
+  Next drill: 2027-01.
 - [ ] The nightly run is green for a week. Optional: the dead-man's switch is set, and a
   skipped night trips it.
 - [x] deploy.md and the README link the runbook.

@@ -50,7 +50,10 @@ PC was off or asleep, it runs as soon as it's back. A run takes about 15 seconds
    (migration 0046). Every table's rows are counted before and after the dump. If a row
    changed in between, the dump is taken again (up to three times).
 2. **Restore test.** The dump is restored into a scratch Postgres in Docker. Every table's
-   row count must match. Then `bsk rebuild --verify` and `bsk check` run against the copy.
+   row count must match. Then `bsk rebuild` runs on the copy and must write exactly what its
+   source folds to, and `bsk check` must finish. The live derived table is normally behind
+   its source, because only `bsk rebuild` writes it and the app reads status straight from
+   the source. That's noted in the manifest (`derivedWasCurrent`), not treated as a failure.
 3. **Save.** The dumps are encrypted to the public key with [age](https://age-encryption.org)
    and saved with the manifest. The month's first copy is also kept as its monthly copy.
 4. **Photos.** Each photo not yet backed up is downloaded, checked against its sha256 and
@@ -62,7 +65,7 @@ The plaintext dumps never leave a temporary folder, which is deleted at the end 
 **When something fails:**
 - If a copy fails the restore or the row counts, it **isn't saved**.
 - If it restores but a later check fails, it **is saved** and the run still fails. That
-  covers drifted derived tables and a photo that couldn't be copied.
+  covers a failed rebuild or `bsk check` on the copy, and a photo that couldn't be copied.
 - A failed run shows a Windows notification ("LifeOS backup failed"), writes the reason to the
   log, and pings the dead-man's switch's `/fail` URL if one is set.
 - The log is `%USERPROFILE%\.lifeos\backup\logs\<target>-<date>.log`. Logs are kept for 60
@@ -77,7 +80,7 @@ switch. Create a free check at [healthchecks.io](https://healthchecks.io) with a
 and a few hours' grace, then pass its ping URL to setup (`-HealthcheckUrl`). It emails Chris
 when a day passes with no successful ping.
 
-The app's own checks (`bsk rebuild --verify`, `bsk check`) are built from this working copy. If
+The app's own checks (`bsk rebuild`, `bsk check`) are built from this working copy. If
 it doesn't build at 3 am, the copy is still saved and the run reports why.
 
 ## Setting it up
@@ -144,7 +147,8 @@ natural reminder.
    It checks each file against the manifest and decrypts it, then restores into the empty
    database. It recreates the roles the dump grants to (without logins) and puts back the
    home time zone. Then it checks every row count against the manifest, runs `bsk migrate`
-   (which should have nothing to apply) and `bsk rebuild --verify`. Add
+   (which should have nothing to apply) and `bsk rebuild` to bring the derived table up to
+   date. Add
    `-ArtifactsFolder C:\temp\photos` to decrypt the photos too, each checked against its
    sha256.
 4. Look at it through the app. Run `bsk check` against

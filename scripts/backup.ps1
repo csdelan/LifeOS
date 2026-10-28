@@ -12,7 +12,8 @@
          role, counting every table's rows before and after. If a row changed during the dump,
          it's taken again (up to three times).
       2. Restores the dumps into a scratch Postgres in Docker and checks every table's row count
-         matches, then runs `bsk rebuild --verify` and `bsk check` against the copy.
+         matches, then runs `bsk rebuild` (which must write exactly what the source folds to) and
+         `bsk check` against the copy.
       3. Encrypts the dumps to the age public key and saves them with a manifest in
          <Destination>\db\daily\<stamp>. The month's first copy also goes to db\monthly\<yyyy-mm>.
       4. Copies each photo not yet backed up, checked against its sha256 and encrypted, to
@@ -21,8 +22,9 @@
 
     The plaintext dumps stay in a temporary folder that's deleted at the end. A copy that fails
     the restore or the row counts isn't saved. If the copy restores but a later check fails (the
-    derived tables drifted, a photo couldn't be copied), the copy is saved and the run still
-    fails. A failed run exits 1, shows a Windows notification, and pings the dead-man's switch's
+    rebuild or bsk check fails, a photo couldn't be copied), the copy is saved and the run still
+    fails. A live derived table that's behind its source is normal (only `bsk rebuild` writes it)
+    and is only noted in the manifest. A failed run exits 1, shows a Windows notification, and pings the dead-man's switch's
     /fail URL when one is set. Logs: %USERPROFILE%\.lifeos\backup\logs.
 
 .EXAMPLE
@@ -147,15 +149,26 @@ SELECT DISTINCT store, bucket, object_key, sha256 FROM bsk.artifact_object ORDER
 
     # The app's own checks, from this working copy's CLI. They can't make the copy unusable, so
     # a failure here is reported after the copy is saved.
-    $restoreTest = [ordered]@{ rowCountsMatch = $true; derivedDrift = $null; checkFindings = $null }
+    $restoreTest = [ordered]@{ rowCountsMatch = $true; derivedWasCurrent = $null; rebuildMatches = $null; checkFindings = $null }
     try {
         Build-Cli
         $connection = Get-ScratchConnectionString $scratch
+        # Only `bsk rebuild` writes bsk_derived, and the app reads status live from the source, so
+        # on a database in use the derived table is normally behind. That's recorded, not a
+        # failure. The test is that the copy's source rebuilds into exactly what it folds to.
         $verify = Invoke-Bsk $connection @('rebuild', '--verify')
-        if ($verify.ExitCode -eq 0) { $restoreTest.derivedDrift = $false }
-        elseif ($verify.Json -and $verify.Json.PSObject.Properties['drift']) {
-            $restoreTest.derivedDrift = $true
-            $problems.Add('The derived tables have drifted from the source (bsk rebuild --verify). Run `bsk rebuild` on the live database.')
+        if ($verify.Json -and $verify.Json.PSObject.Properties['freshChecksum']) {
+            $restoreTest.derivedWasCurrent = -not $verify.Json.drift
+            $rebuild = Invoke-Bsk $connection @('rebuild')
+            if ($rebuild.ExitCode -ne 0 -or -not $rebuild.Json) { $problems.Add("bsk rebuild failed on the copy: $($rebuild.Text)") }
+            else {
+                $restoreTest.rebuildMatches = $rebuild.Json.checksum -eq $verify.Json.freshChecksum
+                if (-not $restoreTest.rebuildMatches) { $problems.Add('bsk rebuild on the copy wrote something other than what its source folds to.') }
+                else {
+                    $behind = if ($restoreTest.derivedWasCurrent) { '' } else { ' (the live derived table is behind its source, as usual between rebuilds)' }
+                    Write-BackupLog "bsk rebuild on the copy wrote $($rebuild.Json.rows) rows, matching its source$behind."
+                }
+            }
         }
         else { $problems.Add("bsk rebuild --verify failed on the copy: $($verify.Text)") }
 
