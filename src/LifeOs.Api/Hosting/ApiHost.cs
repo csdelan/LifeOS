@@ -82,6 +82,10 @@ public static class ApiHost
         builder.Services.AddSingleton(sp => new ArtifactReader(
             new NpgsqlArtifactBlobStore(reader, sp.GetService<IObjectStorage>())));
 
+        // The agents Chris allowed and what each called (agent-access plan §4.5), on the owner
+        // connection: bsk_ops is never granted to bsk_reader. /mcp checks the list on every call.
+        builder.Services.AddSingleton(new AgentAccessStore(owner, homeZone));
+
         // Fail closed: missing issuer/audience/JWKS-or-secret/ALLOWED_EMAILS throws.
         builder.Services.AddLifeOsAuth(builder.Configuration);
 
@@ -169,6 +173,7 @@ public static class ApiHost
         app.MapOuraEndpoints();
         app.MapActivityEndpoints();
         app.MapCoverEndpoints();
+        app.MapAgentEndpoints();
         app.MapLifeOsMcp();
         app.MapSpaFallback();
     }

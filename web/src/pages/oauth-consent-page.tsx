@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AuthChrome, AuthConfigError, AuthReachError, AuthSplash, Mark } from "@/components/auth/auth-screens";
 import { Button } from "@/components/ui/button";
+import { getAgentsClient } from "@/lib/agents";
 import { isLiveApi } from "@/lib/api-base";
 import { ApiRequestError } from "@/lib/live/http";
 import { fetchMe, meQueryKey } from "@/lib/me";
@@ -31,6 +32,7 @@ export function OAuthConsentPage() {
   const id = useMemo(() => authorizationIdFrom(window.location.search), []);
   const { session, ready, signInWithGoogle, signOut } = useAuth();
   const client = useMemo(() => getConsentClient(), []);
+  const agents = useMemo(() => getAgentsClient(), []);
   const [busy, setBusy] = useState<"approve" | "deny" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [leavingTo, setLeavingTo] = useState<string | null>(null);
@@ -86,6 +88,28 @@ export function OAuthConsentPage() {
     if (!id) return;
     setBusy(decision);
     setError(null);
+    // Approving adds the agent to LifeOS's own list first (agent-access plan §4.4, fix 3): /mcp
+    // answers only agents on it, and only Chris's web session can add one. If that fails, the
+    // request isn't approved at Supabase either.
+    const request = lookup.data?.kind === "ask" ? lookup.data.request : null;
+    if (decision === "approve") {
+      if (!request) {
+        setError("The request hasn't loaded yet.");
+        setBusy(null);
+        return;
+      }
+      try {
+        await agents.allow(request.clientId, request.clientName, request.clientUri ?? null);
+      } catch (e) {
+        setError(
+          `LifeOS couldn't add ${request.clientName} to its agents, so it wasn't approved: ${
+            e instanceof Error ? e.message : "the API didn't answer."
+          }`,
+        );
+        setBusy(null);
+        return;
+      }
+    }
     try {
       follow(decision === "approve" ? await client.approve(id) : await client.deny(id));
     } catch (e) {
@@ -224,7 +248,8 @@ function ConsentCard({
           ) : null}
         </dl>
         <p className="mt-5 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
-          Only approve an agent you started connecting yourself, just now.
+          Only approve an agent you started connecting yourself, just now. Approving adds it to
+          Connected agents on the People page, where you can see what it reads and revoke it.
         </p>
         {error ? <ErrorLine message={error} /> : null}
         <div className="mt-6 flex flex-wrap justify-end gap-2">

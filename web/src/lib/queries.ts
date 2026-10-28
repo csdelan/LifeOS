@@ -11,6 +11,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { getAgentsClient } from "@/lib/agents";
 import { isLiveApi } from "@/lib/api-base";
 import { createWriteClient, getReads } from "@/lib/client";
 import { mapForestStatus, type DashboardRead, type MapLens } from "@/lib/derive";
@@ -51,6 +52,11 @@ export const qk = {
   files: (id: string) => ["files", id] as const,
   areas: ["areas"] as const,
   people: ["people"] as const,
+  // Every Connected agents read sits under ["agents"], so one invalidation refreshes them all.
+  agents: ["agents"] as const,
+  agentsOverview: ["agents", "overview"] as const,
+  agentGrants: ["agents", "grants"] as const,
+  agentCalls: (clientId: string) => ["agents", "calls", clientId] as const,
   habits: ["habits"] as const,
   occurrences: ["occurrences"] as const,
   timers: ["timers"] as const,
@@ -862,6 +868,75 @@ export function usePeople() {
   return useQuery({
     queryKey: qk.people,
     queryFn: () => reads().people(),
+  });
+}
+
+/** LifeOS's allow list and log summary for Connected agents (`GET /api/agents`). */
+export function useAgentsOverview() {
+  return useQuery({
+    queryKey: qk.agentsOverview,
+    queryFn: () => getAgentsClient().overview(),
+  });
+}
+
+/** The agents approved at Supabase (supabase-js `listGrants`). */
+export function useAgentGrants() {
+  return useQuery({
+    queryKey: qk.agentGrants,
+    queryFn: () => getAgentsClient().grants(),
+    retry: false,
+  });
+}
+
+/** An agent's latest calls, read when its list is opened. */
+export function useAgentCalls(clientId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: qk.agentCalls(clientId),
+    queryFn: () => getAgentsClient().calls(clientId, 20),
+    enabled,
+  });
+}
+
+export type AgentAction =
+  | { kind: "allow"; clientId: string; name: string; uri: string | null }
+  | { kind: "revoke"; clientId: string; removeGrant: boolean }
+  | { kind: "remove-grant"; clientId: string }
+  | { kind: "link"; clientId: string; personId: string | null };
+
+/**
+ * Allow, revoke, remove or link an agent. Revoking takes it off LifeOS's list first, so `/mcp`
+ * refuses its next call even if Supabase then fails to remove its grant.
+ */
+export function useAgentAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (action: AgentAction) => {
+      const agents = getAgentsClient();
+      switch (action.kind) {
+        case "allow":
+          await agents.allow(action.clientId, action.name, action.uri);
+          return;
+        case "revoke":
+          await agents.revoke(action.clientId);
+          if (action.removeGrant) {
+            try {
+              await agents.removeGrant(action.clientId);
+            } catch (e) {
+              throw new Error(
+                `LifeOS refuses it now, but Supabase still lists it: ${e instanceof Error ? e.message : "no answer"}`,
+              );
+            }
+          }
+          return;
+        case "remove-grant":
+          await agents.removeGrant(action.clientId);
+          return;
+        case "link":
+          await agents.linkPerson(action.clientId, action.personId);
+          return;
+      }
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.agents }),
   });
 }
 

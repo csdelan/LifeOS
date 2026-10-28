@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { UsersIcon } from "lucide-react";
+import { ConnectedAgents } from "@/components/people/connected-agents";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { usePeople } from "@/lib/queries";
@@ -46,6 +47,7 @@ export function PeoplePage() {
         {data?.length === 0 ? (
           <EmptyState icon={UsersIcon} title="No people yet" />
         ) : null}
+        <ConnectedAgents />
       </div>
     </div>
   );

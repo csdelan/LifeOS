@@ -59,12 +59,16 @@ public static class McpHost
                 var tool = context.Params?.Name ?? "?";
                 var client = context.User is { } user ? AgentClaims.ClientId(user) : null;
                 var logger = context.Services?.GetService<ILoggerFactory>()?.CreateLogger("LifeOs.Api.Mcp");
+                var outcome = AgentAccessStore.Error;
+                int? items = null;
                 try
                 {
                     var result = await next(context, cancellationToken);
+                    outcome = result.IsError == true ? AgentAccessStore.Error : AgentAccessStore.Ok;
+                    items = result.IsError == true ? null : McpCallLog.CountItems(result);
                     logger?.LogInformation(
                         "MCP {Tool} for {ClientId}: {Outcome} in {Milliseconds} ms",
-                        tool, client, result.IsError == true ? "error" : "ok", Elapsed(started));
+                        tool, client, outcome, Elapsed(started));
                     return result;
                 }
                 catch (ArgumentException e)
@@ -77,6 +81,17 @@ public static class McpHost
                 {
                     logger?.LogError(e, "MCP {Tool} for {ClientId}: failed in {Milliseconds} ms", tool, client, Elapsed(started));
                     throw;
+                }
+                finally
+                {
+                    // The access log (§4.5). Writing it never fails the call.
+                    if (client is not null && context.Services?.GetService<AgentAccessStore>() is { } access)
+                    {
+                        await McpCallLog.RecordAsync(
+                            access,
+                            new AgentCallRecord(client, tool, McpCallLog.Arguments(context.Params?.Arguments), outcome, items, Elapsed(started)),
+                            logger);
+                    }
                 }
             }));
 

@@ -132,6 +132,8 @@ public sealed class McpServerTests(PostgresFixture postgres)
     {
         var settings = new Dictionary<string, string?>(On) { [McpOptions.BlockedClientsKey] = "blocked-client, other" };
         await using var host = await ApiTestHost.StartAsync(postgres.ConnectionString, Ct, settings);
+        // On LifeOS's list, so only the rule under test refuses it.
+        await AllowAsync(host, clientId);
 
         using var response = await host.Client.SendAsync(Initialize(ApiTestHost.TokenFor(email, clientId, google, signIn)), Ct);
 
@@ -321,6 +323,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
         var settings = new Dictionary<string, string?>(On) { [McpOptions.DomainsKey] = "none" };
         await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, settings);
+        await AllowAsync(host);
         var ns = Guid.NewGuid().ToString("N")[..8];
 
         // A made-up Oura reading, not real data: agents building LifeOS use fixtures only.
@@ -491,15 +494,29 @@ public sealed class McpServerTests(PostgresFixture postgres)
             .AddInMemoryCollection(values.Select(v => new KeyValuePair<string, string?>(v.Key, v.Value)))
             .Build();
 
-    private static Task<ApiTestHost> StartAsync(string connectionString)
-        => ApiTestHost.StartAsync(connectionString, Ct, new Dictionary<string, string?>(On)
+    /// <summary>A host with <c>/mcp</c> on and <see cref="Agent"/> allowed in LifeOS (fix 3).</summary>
+    private static async Task<ApiTestHost> StartAsync(string connectionString)
+    {
+        var host = await ApiTestHost.StartAsync(connectionString, Ct, new Dictionary<string, string?>(On)
         {
             [HomeZone.ConfigurationKey] = DomainTestDatabase.Zone,
         });
+        await AllowAsync(host);
+        return host;
+    }
+
+    /// <summary>Allows an agent as the consent page does, with Chris's web session.</summary>
+    internal static async Task AllowAsync(ApiTestHost host, string clientId = Agent)
+    {
+        using var response = await host.Client.PutAsJsonAsync(
+            $"api/agents/{clientId}", new { name = "Test agent", clientUri = "https://agent.example.com" }, Ct);
+        var text = await response.Content.ReadAsStringAsync(Ct);
+        Assert.True(response.IsSuccessStatusCode, $"PUT /api/agents/{clientId} → {(int)response.StatusCode}: {text}");
+    }
 
     private static HttpClient Anonymous(ApiTestHost host) => new() { BaseAddress = host.Client.BaseAddress };
 
-    private static HttpRequestMessage Initialize(string? token)
+    internal static HttpRequestMessage Initialize(string? token)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "mcp")
         {
@@ -517,7 +534,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
         return request;
     }
 
-    private static async Task<McpClient> ConnectAsync(ApiTestHost host, string token)
+    internal static async Task<McpClient> ConnectAsync(ApiTestHost host, string token)
     {
         var http = new HttpClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);

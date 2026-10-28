@@ -404,13 +404,16 @@ machines.
 - `McpGuide.cs`: the server instructions and `lifeos://guide`
 - `AlignmentForest.cs`: the Map's forest, ported from `web/src/lib/derive.ts`
 - `Tools/*.cs`: one class per area
-- `AgentCallLog.cs`: the access log in §4.5 (step 1.4)
+- `AgentAccessStore.cs`: the allow list and the access log in §4.5 (step 1.4), on the owner
+  connection
+- `McpCallLog.cs`: what the log keeps of a call (its arguments, how many items it returned)
 
 The agent rules live with the other policies, in `Auth/McpAgentHandler.cs` and
 `Auth/AuthServiceCollectionExtensions.cs`.
 
 Tools read through the existing readers on the **`bsk_reader`** connection. In Phase 1,
-only the access log touches the owner connection, and it writes only to `bsk_ops`.
+only the allow list and the access log touch the owner connection, and they write only to
+`bsk_ops`. The tools never see them.
 
 ### 4.2 Settings
 
@@ -590,13 +593,13 @@ through the consent page. Its client id is `2c63d7f7-0ab1-47a2-9dbd-b765f66b7763
     - **Approve other agents' requests as Chris**
       (`POST /oauth/authorizations/{id}/consent` takes any of his tokens). An agent could
       register a new client and approve it itself, so `Mcp__BlockedClients` can't keep a
-      determined agent out. `Mcp__Enabled=false` still can.
+      determined agent out. `Mcp__Enabled=false` still can, and fix 3 now does too.
     - Sign him out everywhere (`POST /logout?scope=global`).
     - Add MFA factors.
     - List or revoke his agent grants.
     - Read his user record (email, Google identity) and change its `user_metadata`.
   - Changing his email still needs the confirmation emails, so a token alone can't.
-- **Fixes.** Chris chose 1 and 2 on 2026-10-28; 3 waits for the access log.
+- **Fixes.** Chris chose 1 and 2 on 2026-10-28, and 3 with the access log the same day.
   1. **Turn off the Email provider** in Supabase (Authentication → Sign In / Providers →
      Email), in staging and production.
      - **Done in staging (2026-10-28).** Supabase's settings list only Google, and a
@@ -631,10 +634,26 @@ through the consent page. Its client id is `2c63d7f7-0ab1-47a2-9dbd-b765f66b7763
        refusals.
      - Chris's web session on staging also loaded fine after a reload, so a Google
        sign-in's token passes too.
-  3. **An allow list instead of a block list** (`Mcp__AllowedClients`): only client ids Chris
-     lists may call `/mcp`, so a client an agent approved for itself is refused.
-     - It costs one setting per new agent.
-     - Decide with the access log (1.4).
+  3. **LifeOS keeps its own allow list of agents** (`bsk_ops.agent_client`, migration 0047).
+     `/mcp` answers only a client on it and not revoked, so a client an agent approved for
+     itself at Supabase is refused (403), even with a valid token.
+     - Chris chose this over a setting (`Mcp__AllowedClients`) and over relying on
+       Supabase's grants. A setting would cost a `fly secrets set` and a restart per agent;
+       Supabase's grants are exactly what an agent's token can add to.
+     - **Approve** on LifeOS's consent page adds the agent first (`PUT /api/agents/{id}`),
+       then approves at Supabase. If LifeOS can't add it, the request isn't approved.
+     - Only `/api` changes the list, and only Chris's Google web session reaches `/api`
+       (fix 2), so no agent can add itself or another.
+     - The list is read on every `/mcp` request, not cached, so **Revoke** in Connected
+       agents takes effect on the agent's next call, not when its token expires.
+     - If the list can't be read, every agent is refused, and the error is logged.
+     - A refused call from a client not on the list is logged (at most once a minute per
+       client), so an agent approved behind Chris's back shows up in Connected agents.
+     - One-time cost: Claude was approved before the list existed, so after the deploy
+       Chris clicks **Allow** for it in Connected agents. A request approved before skips
+       the consent page and goes straight back to the agent, so reconnecting alone won't
+       add it; Allow will.
+     - `Mcp__BlockedClients` stays, as an emergency override that needs no database.
 
 **Known limits:**
 - Supabase's OAuth server is in beta.
@@ -646,29 +665,52 @@ through the consent page. Its client id is `2c63d7f7-0ab1-47a2-9dbd-b765f66b7763
 
 ### 4.5 Access log and Connected agents
 
-**The log.** A migration adds `bsk_ops.agent_call`, one row per tool call:
-- when, `client_id` and client name
-- the tool, and its arguments trimmed to 1 KB
-- ok or error, row count, milliseconds
+**The tables** (migration 0047, both in `bsk_ops`: operational, owner-only, never granted
+to `bsk_reader`; `bsk_backup` reads them through 0046's default privileges):
+- `bsk_ops.agent_client`, the allow list (§4.4 fix 3): client id, the name and website the
+  consent page showed, when Chris allowed it, when he revoked it (allowed while that's
+  empty), and the AI-agent Person it acts as.
+- `bsk_ops.agent_call`, the log, one row per tool call: when, `client_id`, the tool and its
+  arguments as JSON trimmed to 1 KB, ok or error, how many items its lists returned, and
+  milliseconds. A call refused because the client isn't allowed is a row too, with no tool,
+  logged at most once a minute per client.
 
-`bsk_ops` is operational, owner-only and outside the life record, so rows older than 90
-days are deleted. An MCP filter around every tool call writes the row (owner connection)
-and also writes a JSON log line.
+The call-tool filter in `McpHost.cs` writes the row on the owner connection, beside the JSON
+log line it already wrote. A failed write is logged and never fails the call. Rows older than
+90 days are deleted, at most once an hour, when a row is written.
 
-**"Connected agents" in the web,** next to the People / Agents directory (GEN-15). For
-each agent Chris has approved:
-- when he approved it, its last call, its calls this week, and its recent calls;
-- **Revoke**, which calls `supabase.auth.oauth.revokeGrant(client_id)`;
-- **Link to Person**, which ties it to an AI-agent Person. Phase 2 requires this before
-  the agent can write.
+**`/api/agents`** (`src/LifeOs.Api/Http/AgentEndpoints.cs`), which agent tokens can't reach:
+- `GET /api/agents`: every client on the list plus any client refused in the last 90 days,
+  each with its last call, its calls this week (Monday to Sunday in the home zone) and the
+  same for refusals; whether `/mcp` is on; and the writes level (`off`, read-only).
+- `GET /api/agents/calls?clientId=&limit=`: the latest calls, newest first (20 by default,
+  at most 200).
+- `PUT /api/agents/{clientId}` with `{name, clientUri}`: allow, or allow again after a
+  revoke. Allowing one already allowed keeps when it was first allowed.
+- `POST /api/agents/{clientId}/revoke`: `/mcp` refuses its next call.
+- `PUT /api/agents/{clientId}/person` with `{personId}` (or null): link it to an AI-agent
+  Person. A human Person, or an archived one, is refused in words.
 
-The list of approved agents comes from supabase-js (the user's OAuth grants), and the
-calls come from a new `GET /api/agents/calls`, which agent tokens can't reach. The section
-also shows the current `Mcp__Writes` level, read-only.
+**"Connected agents" on the People page** (`web/src/components/people/connected-agents.tsx`,
+seam in `web/src/lib/agents.ts`). It joins Supabase's grants (supabase-js `listGrants`)
+with LifeOS's list, so each agent is in one of four states:
+- **Connected** (approved at Supabase, allowed here): when Chris allowed it, its last call,
+  its calls this week, its recent calls with their arguments, **Acts as** (link to an AI
+  Person; Phase 2 requires it before the agent can write), and **Revoke**.
+- **Not allowed** (approved at Supabase, not here): shown first, with a warning to allow it
+  only if Chris connected it himself, and how often LifeOS refused it. **Allow** (asks
+  first) or **Remove** (removes Supabase's grant).
+- **Disconnected** (allowed here, but Supabase no longer lists it): **Revoke**.
+- **Revoked**, or **Refused** for a client LifeOS never allowed and knows only by its
+  refused calls.
 
-Revoking stops new tokens, but a token already issued works until it expires (Supabase's
-default is an hour). To stop an agent immediately, use `Mcp__BlockedClients` or
-`Mcp__Enabled=false`.
+**Revoke** takes the agent off LifeOS's list first, so `/mcp` refuses its next call, and
+then removes Supabase's grant so it can't get new tokens. If Supabase fails, the section
+says LifeOS refuses it anyway. The section also says when `/mcp` is off and that agents
+only read.
+
+If Supabase can't list the grants, the section shows LifeOS's list alone and says so. In
+mock mode a stand-in plays both, seeded with Claude connected and a helper LifeOS refuses.
 
 ### 4.6 Hosting
 
@@ -748,6 +790,27 @@ using it.
     `triaged_at`, which is when an item came into the inbox, but an agent reads it as
     "already triaged". It's now `flagged_at`, and the tool says it lists newest first, as
     it always has.
+- **1.4 built (2026-10-28):** the allow list (fix 3), the access log and Connected agents,
+  as §4.4 and §4.5 describe. Migration 0047.
+  - .NET: `tests/LifeOs.Tests/AgentAccessTests.cs` covers these cases:
+    - a client not on the list gets 403, with its refusal logged once a minute;
+    - allowing and revoking take effect on the next call, and allowing again works;
+    - agent tokens are refused on every `/api/agents` route;
+    - bad input, and linking to an AI Person only;
+    - every agent is refused when the list is missing or can't be read;
+    - call rows carry arguments, outcome, items and time, with arguments trimmed to 1 KB;
+    - the Monday week, and the 90-day cleanup.
+
+    `McpServerTests` now allows its agent first.
+  - Web:
+    - unit tests for the seam (the four states, the mock);
+    - unit tests for the section (allow, revoke, remove, recent calls, MCP off, Supabase
+      down);
+    - unit tests for the consent page (it allows before approving, and doesn't approve when
+      LifeOS can't add the agent);
+    - a golden path, and a11y in both themes, with a dialog open, and on a phone.
+  - Left for Chris after the deploy: **Allow** Claude in Connected agents. Until then its
+    calls are refused (403), and Connected agents shows it as Not allowed.
 
 To connect, add `https://lifeos-mz55-staging.fly.dev/mcp` as a custom connector in Claude
 or ChatGPT. In Claude Code:

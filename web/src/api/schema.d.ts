@@ -1556,6 +1556,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetAgents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetAgentCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{clientId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AllowAgent"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{clientId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RevokeAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{clientId}/person": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["LinkAgentPerson"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1749,12 +1829,59 @@ export interface components {
             on?: null | string;
             note?: null | string;
         };
+        AgentCall: {
+            /** Format: int64 */
+            id?: number | string;
+            /** Format: date-time */
+            calledAt?: string;
+            clientId?: string;
+            tool?: null | string;
+            arguments?: null | string;
+            outcome?: string;
+            /** Format: int32 */
+            items?: null | number | string;
+            /** Format: int32 */
+            durationMs?: number | string;
+        };
+        AgentCallsRead: {
+            calls?: components["schemas"]["AgentCall"][];
+        };
+        AgentClient: {
+            clientId?: string;
+            name?: null | string;
+            clientUri?: null | string;
+            allowed?: boolean;
+            /** Format: date-time */
+            allowedAt?: null | string;
+            /** Format: date-time */
+            revokedAt?: null | string;
+            /** Format: uuid */
+            personId?: null | string;
+            personName?: null | string;
+            /** Format: date-time */
+            lastCallAt?: null | string;
+            /** Format: int32 */
+            callsThisWeek?: number | string;
+            /** Format: date-time */
+            lastRefusedAt?: null | string;
+            /** Format: int32 */
+            refusedThisWeek?: number | string;
+        };
+        AgentsRead: {
+            mcpEnabled?: boolean;
+            writes?: string;
+            agents?: components["schemas"]["AgentClient"][];
+        };
         AlignmentEdge: {
             /** Format: uuid */
             fromId?: string;
             /** Format: uuid */
             toId?: string;
             relation?: string;
+        };
+        AllowAgentBody: {
+            name?: null | string;
+            clientUri?: null | string;
         };
         ApiError: {
             error: string;
@@ -2563,6 +2690,10 @@ export interface components {
             dollars?: null | number | string;
             /** Format: double */
             coinRate?: null | number | string;
+        };
+        LinkAgentPersonBody: {
+            /** Format: uuid */
+            personId?: null | string;
         };
         LinkBody: {
             from?: string;
@@ -6366,6 +6497,177 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CoverClearedRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentsRead"];
+                };
+            };
+        };
+    };
+    GetAgentCalls: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number | string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCallsRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    AllowAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["AllowAgentBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentClient"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    RevokeAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentClient"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    LinkAgentPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["LinkAgentPersonBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentClient"];
                 };
             };
             /** @description Bad Request */

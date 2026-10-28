@@ -23,26 +23,37 @@ public sealed class McpAgentRequirement : IAuthorizationRequirement;
 /// <summary>
 /// The <c>McpAgent</c> policy that <c>/mcp</c> requires: an allowlisted email on a Google
 /// account, a <c>client_id</c>, a session Supabase's OAuth server started for an agent (its
-/// <c>amr</c>), and a client that isn't in <c>Mcp:BlockedClients</c>. Everyone else is 403.
+/// <c>amr</c>), a client that isn't in <c>Mcp:BlockedClients</c>, and a client Chris allowed in
+/// LifeOS (fix 3, the allow list in <c>bsk_ops.agent_client</c>). Everyone else is 403.
 /// </summary>
-public sealed class McpAgentHandler(SupabaseAuthOptions auth, McpOptions mcp, ILogger<McpAgentHandler>? logger = null)
+/// <remarks>
+/// Supabase alone can't be trusted with which clients may connect: any of Chris's tokens, an
+/// agent's included, can approve a new client at Supabase. LifeOS's list is changed only through
+/// <c>/api/agents</c>, which agents' tokens can't reach. Without the list (a host that didn't
+/// register <see cref="AgentAccessStore"/>), or when it can't be read, every agent is refused.
+/// </remarks>
+public sealed class McpAgentHandler(
+    SupabaseAuthOptions auth,
+    McpOptions mcp,
+    AgentAccessStore? access = null,
+    ILogger<McpAgentHandler>? logger = null)
     : AuthorizationHandler<McpAgentRequirement>
 {
-    protected override Task HandleRequirementAsync(
+    protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
         McpAgentRequirement requirement)
     {
         if (context.User.Identity?.IsAuthenticated != true)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         var email = SupabaseClaims.ReadEmail(context.User);
         var clientId = AgentClaims.ClientId(context.User);
-        if (email is null || !auth.IsAllowed(email) || clientId is null || mcp.IsBlocked(clientId))
+        if (email is null || !auth.IsAllowed(email) || clientId is null)
         {
             context.Fail();
-            return Task.CompletedTask;
+            return;
         }
 
         if (!SupabaseClaims.IssuedToAgent(context.User))
@@ -53,10 +64,56 @@ public sealed class McpAgentHandler(SupabaseAuthOptions auth, McpOptions mcp, IL
                 string.Join(", ", SupabaseClaims.SignInMethods(context.User)),
                 SupabaseClaims.IsGoogleAccount(context.User));
             context.Fail();
-            return Task.CompletedTask;
+            return;
+        }
+
+        var cancellationToken = (context.Resource as HttpContext)?.RequestAborted ?? CancellationToken.None;
+        if (mcp.IsBlocked(clientId) || !await IsAllowedAsync(clientId, cancellationToken))
+        {
+            logger?.LogWarning(
+                "Refused agent {ClientId}: {Reason}",
+                clientId,
+                mcp.IsBlocked(clientId) ? "in Mcp:BlockedClients" : "not allowed in LifeOS");
+            await RecordRefusedAsync(clientId, cancellationToken);
+            context.Fail();
+            return;
         }
 
         context.Succeed(requirement);
-        return Task.CompletedTask;
+    }
+
+    private async Task<bool> IsAllowedAsync(string clientId, CancellationToken cancellationToken)
+    {
+        if (access is null || !AgentAccessStore.IsClientId(clientId))
+        {
+            return false;
+        }
+
+        try
+        {
+            return await access.IsAllowedAsync(clientId, cancellationToken);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger?.LogError(e, "Couldn't read the agent allow list; refusing {ClientId}", clientId);
+            return false;
+        }
+    }
+
+    private async Task RecordRefusedAsync(string clientId, CancellationToken cancellationToken)
+    {
+        if (access is null || !AgentAccessStore.IsClientId(clientId))
+        {
+            return;
+        }
+
+        try
+        {
+            await access.RecordRefusedAsync(clientId, cancellationToken);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger?.LogError(e, "Couldn't log the refused call from {ClientId}", clientId);
+        }
     }
 }

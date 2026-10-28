@@ -25,7 +25,7 @@ vi.mock("@/lib/supabase", () => ({
   },
 }));
 
-const { signInWithGoogle, signOut, authState, client, browser } = vi.hoisted(() => ({
+const { signInWithGoogle, signOut, authState, client, browser, agents } = vi.hoisted(() => ({
   signInWithGoogle: vi.fn(async () => {}),
   signOut: vi.fn(async () => {}),
   authState: {
@@ -38,6 +38,11 @@ const { signInWithGoogle, signOut, authState, client, browser } = vi.hoisted(() 
     deny: vi.fn<ConsentClient["deny"]>(),
   },
   browser: { go: vi.fn<(url: string) => void>(), replace: vi.fn<(url: string) => void>() },
+  agents: { allow: vi.fn<(clientId: string, name: string, clientUri?: string | null) => Promise<unknown>>() },
+}));
+
+vi.mock("@/lib/agents", () => ({
+  getAgentsClient: () => agents,
 }));
 
 vi.mock("@/components/auth/auth-provider", () => ({
@@ -107,6 +112,7 @@ describe("OAuthConsentPage", () => {
     client.deny.mockReset().mockResolvedValue(`${CALLBACK}?error=access_denied&state=s`);
     browser.go.mockReset();
     browser.replace.mockReset();
+    agents.allow.mockReset().mockResolvedValue({});
   });
 
   afterEach(() => window.history.replaceState({}, "", "/"));
@@ -141,12 +147,35 @@ describe("OAuthConsentPage", () => {
     expect(takePendingConsent()).toBeNull();
   });
 
+  it("adds the agent to LifeOS's list before approving it at Supabase", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Approve" }));
+    await waitFor(() => expect(client.approve).toHaveBeenCalledWith("auth-1"));
+    expect(agents.allow).toHaveBeenCalledWith("client-1", "Claude", "https://claude.ai");
+    expect(agents.allow.mock.invocationCallOrder[0]).toBeLessThan(client.approve.mock.invocationCallOrder[0]);
+  });
+
+  it("doesn't approve when LifeOS can't add the agent", async () => {
+    agents.allow.mockRejectedValueOnce(new Error("API 500"));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Approve" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "LifeOS couldn't add Claude to its agents, so it wasn't approved: API 500",
+    );
+    expect(client.approve).not.toHaveBeenCalled();
+    expect(browser.go).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+  });
+
   it("denies and tells the agent so", async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(await screen.findByRole("button", { name: "Deny" }));
     await waitFor(() => expect(browser.go).toHaveBeenCalledWith(`${CALLBACK}?error=access_denied&state=s`));
     expect(client.approve).not.toHaveBeenCalled();
+    expect(agents.allow).not.toHaveBeenCalled();
   });
 
   it("shows why approving failed and lets Chris try again", async () => {

@@ -1196,6 +1196,24 @@ test.describe("golden paths", () => {
     await expect(page).toHaveURL(/auth_callback\?error=access_denied/);
   });
 
+  // Connected agents (agent-access plan §4.5), with the mock's Claude (allowed) and a helper
+  // Supabase lists but LifeOS doesn't allow (fix 3).
+  test("allow an agent, read its calls, and revoke it", async ({ page }) => {
+    await page.goto("/people");
+    const helper = page.getByRole("article", { name: "Research helper" });
+    await expect(helper.getByText("Not allowed")).toBeVisible();
+    await helper.getByRole("button", { name: "Allow" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Allow" }).click();
+    await expect(helper.getByText("Connected")).toBeVisible();
+
+    const claude = page.getByRole("article", { name: "Claude" });
+    await claude.getByRole("button", { name: "Recent calls" }).click();
+    await expect(claude.getByRole("list", { name: "Recent calls, newest first" }).getByText("life_snapshot")).toBeVisible();
+    await claude.getByRole("button", { name: "Revoke" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Revoke" }).click();
+    await expect(claude.getByText("Revoked", { exact: true })).toBeVisible();
+  });
+
   test("an expired consent request says to start again", async ({ page }) => {
     await page.goto("/oauth/consent?authorization_id=mock-expired");
     await expect(page.getByRole("heading", { name: "This request can't be found" })).toBeVisible();
