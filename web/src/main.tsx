@@ -8,6 +8,8 @@ import { AuthProvider } from "@/components/auth/auth-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { ApiRequestError } from "@/lib/live/http";
+import { isConsentPath } from "@/lib/oauth-consent";
+import { OAuthConsentPage } from "@/pages/oauth-consent-page";
 import { router } from "@/router";
 import "./index.css";
 
@@ -32,9 +34,14 @@ createRoot(document.getElementById("root")!).render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider delayDuration={200}>
-            <AuthGate>
-              <RouterProvider router={router} />
-            </AuthGate>
+            {/* An agent's sign-in request stands outside the app and its gate (agent-access plan §4.4). */}
+            {isConsentPath(window.location.pathname) ? (
+              <OAuthConsentPage />
+            ) : (
+              <AuthGate>
+                <RouterProvider router={router} />
+              </AuthGate>
+            )}
             <Toaster position="bottom-right" />
           </TooltipProvider>
         </AuthProvider>

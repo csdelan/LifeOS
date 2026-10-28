@@ -511,7 +511,7 @@ many agents he connects.
   Google. Sign-in returns to the origin today (`auth-provider.tsx`), so the app then sends
   him back to the consent page.
 - It checks `GET /api/me`. A non-allowlisted account sees "This account can't connect
-  agents to LifeOS", and the request is denied.
+  agents to LifeOS", and can turn the request down or sign out; it can't approve.
 - It shows the client's name, the host it will send Chris back to, and what it asks for.
 - Approve and Deny use `supabase.auth.oauth.getAuthorizationDetails`,
   `approveAuthorization` and `denyAuthorization`, then follow the returned redirect.
@@ -619,6 +619,29 @@ using it.
     Check in 1.3 that Claude's connector is happy without scopes.
   - Every tool call writes a log line (tool, client id, outcome, milliseconds), never its
     arguments. The access log table is step 1.4.
+- **1.3 under way (2026-10-28).** Staging Supabase has the OAuth server on: Site URL
+  `https://lifeos-mz55-staging.fly.dev`, authorization path `/oauth/consent`, dynamic
+  registration allowed. Its metadata
+  (`https://zvhxctrffbrmhbvujhzw.supabase.co/.well-known/oauth-authorization-server/auth/v1`)
+  lists the registration endpoint and the scopes `openid email profile phone offline_access`.
+- **The consent page is built:** `web/src/pages/oauth-consent-page.tsx`, with its seam in
+  `web/src/lib/oauth-consent.ts`. It renders on its own, outside the app shell and its
+  sign-in gate (`main.tsx`). Choices made while building:
+  - Signed out, it keeps the request in `sessionStorage` for 15 minutes and signs in with
+    Google. The sign-in gate, once a session exists, sends the browser back to it.
+  - An account LifeOS doesn't allow sees "This account can't connect agents to LifeOS" with
+    **Turn the request down** and **Sign out**, rather than an automatic deny, so signing in
+    with the wrong account doesn't throw the request away.
+  - It shows the agent's name, the account, the host it sends Chris back to, the agent's
+    website, and the scopes in words, and warns to approve only an agent he just started
+    connecting.
+  - It follows only `http` and `https` addresses back to the agent.
+  - A request approved before goes straight back to the agent.
+  - In mock mode a pretend request from Claude stands in (`mock-expired` shows the expired
+    state). Tests: unit tests against a mocked supabase-js and each page state, golden paths
+    for approve, deny and expired, and a11y in both themes and on a phone.
+- Still to do for 1.3: set `Mcp__Enabled=true` on staging, connect Claude, then decode a real
+  agent token and check what it can do at Supabase's own APIs (above).
 
 To connect, add `https://lifeos-mz55-staging.fly.dev/mcp` as a custom connector in Claude
 or ChatGPT. In Claude Code:

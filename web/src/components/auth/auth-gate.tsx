@@ -11,6 +11,7 @@ import {
 import { isLiveApi } from "@/lib/api-base";
 import { ApiRequestError } from "@/lib/live/http";
 import { fetchMe, meQueryKey } from "@/lib/me";
+import { browser, consentUrl, takePendingConsent } from "@/lib/oauth-consent";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -23,6 +24,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
     enabled: live && ready && !!session && isSupabaseConfigured(),
     retry: false,
   });
+
+  // Signing in from an agent's consent request comes back here, to the site's root; carry on
+  // with the request.
+  useEffect(() => {
+    if (!live || !ready || !session) return;
+    const pending = takePendingConsent();
+    if (pending) browser.replace(consentUrl(pending));
+  }, [live, ready, session]);
 
   useEffect(() => {
     if (me.error instanceof ApiRequestError && me.error.status === 401) {

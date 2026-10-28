@@ -6,6 +6,7 @@ import { AuthGate } from "@/components/auth/auth-gate";
 import { ApiRequestError } from "@/lib/live/http";
 import { fetchMe } from "@/lib/me";
 import { isLiveApi } from "@/lib/api-base";
+import { rememberPendingConsent } from "@/lib/oauth-consent";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
 vi.mock("next-themes", () => ({
@@ -24,7 +25,8 @@ vi.mock("@/lib/supabase", () => ({
   },
 }));
 
-const { signInWithGoogle, signOut, authState } = vi.hoisted(() => ({
+const { signInWithGoogle, signOut, authState, browser } = vi.hoisted(() => ({
+  browser: { go: vi.fn<(url: string) => void>(), replace: vi.fn<(url: string) => void>() },
   signInWithGoogle: vi.fn(async () => {}),
   signOut: vi.fn(async () => {}),
   authState: {
@@ -46,6 +48,11 @@ vi.mock("@/components/auth/auth-provider", () => ({
 vi.mock("@/lib/me", () => ({
   meQueryKey: ["me"],
   fetchMe: vi.fn(),
+}));
+
+vi.mock("@/lib/oauth-consent", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/oauth-consent")>()),
+  browser,
 }));
 
 function renderGate() {
@@ -70,6 +77,8 @@ describe("AuthGate", () => {
     vi.mocked(isLiveApi).mockReturnValue(false);
     vi.mocked(isSupabaseConfigured).mockReturnValue(true);
     vi.mocked(fetchMe).mockReset();
+    browser.replace.mockReset();
+    sessionStorage.clear();
   });
 
   it("skips the guard in mock mode", () => {
@@ -105,5 +114,24 @@ describe("AuthGate", () => {
     expect(screen.queryByText("App shell")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /sign out/i }));
     await waitFor(() => expect(signOut).toHaveBeenCalled());
+  });
+
+  it("carries on with an agent's consent request once sign-in comes back", async () => {
+    rememberPendingConsent("auth-1");
+    vi.mocked(isLiveApi).mockReturnValue(true);
+    authState.session = { access_token: "tok", user: { email: "owner@example.com" } };
+    vi.mocked(fetchMe).mockResolvedValue({ email: "owner@example.com" });
+    renderGate();
+    await waitFor(() =>
+      expect(browser.replace).toHaveBeenCalledWith("/oauth/consent?authorization_id=auth-1"),
+    );
+  });
+
+  it("leaves a consent request alone until there's a session", () => {
+    rememberPendingConsent("auth-1");
+    vi.mocked(isLiveApi).mockReturnValue(true);
+    renderGate();
+    expect(browser.replace).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem("lifeos.oauth.pendingAuthorization")).not.toBeNull();
   });
 });

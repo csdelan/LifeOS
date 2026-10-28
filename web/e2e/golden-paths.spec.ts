@@ -1177,4 +1177,29 @@ test.describe("golden paths", () => {
     await expect(page).toHaveURL(/inbox/);
     await expect(page.getByRole("dialog", { name: "Navigation" })).toBeHidden();
   });
+
+  // An agent's sign-in request (agent-access plan §4.4), with the mock's pretend request from
+  // Claude. Claude's callback is answered here, so the paths never leave the test.
+  test("approve an agent's consent request", async ({ page }) => {
+    await page.route("https://claude.ai/**", (route) => route.fulfill({ body: "back at the agent" }));
+    await page.goto("/oauth/consent?authorization_id=mock-1");
+    await expect(page.getByRole("heading", { name: "Connect Claude to LifeOS?" })).toBeVisible();
+    await expect(page.getByRole("navigation")).toHaveCount(0);
+    await page.getByRole("button", { name: "Approve" }).click();
+    await expect(page).toHaveURL(/^https:\/\/claude\.ai\/api\/mcp\/auth_callback\?code=mock-code/);
+  });
+
+  test("deny an agent's consent request", async ({ page }) => {
+    await page.route("https://claude.ai/**", (route) => route.fulfill({ body: "back at the agent" }));
+    await page.goto("/oauth/consent?authorization_id=mock-1");
+    await page.getByRole("button", { name: "Deny" }).click();
+    await expect(page).toHaveURL(/auth_callback\?error=access_denied/);
+  });
+
+  test("an expired consent request says to start again", async ({ page }) => {
+    await page.goto("/oauth/consent?authorization_id=mock-expired");
+    await expect(page.getByRole("heading", { name: "This request can't be found" })).toBeVisible();
+    await page.goto("/oauth/consent");
+    await expect(page.getByRole("heading", { name: "This link has no request in it" })).toBeVisible();
+  });
 });

@@ -2,7 +2,8 @@ import { useTheme } from "next-themes";
 import { MoonIcon, ShieldXIcon, SunIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-function AuthChrome({ children }: { children: React.ReactNode }) {
+/** The signed-out screens' frame: a theme toggle and a centred column. */
+export function AuthChrome({ children }: { children: React.ReactNode }) {
   const { resolvedTheme, setTheme } = useTheme();
   return (
     <div className="flex min-h-svh flex-col bg-background text-foreground">
@@ -23,7 +24,7 @@ function AuthChrome({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Mark() {
+export function Mark() {
   return (
     <span className="flex size-12 items-center justify-center rounded-xl bg-primary font-heading text-2xl text-primary-foreground">
       ⌘
