@@ -1,4 +1,5 @@
 using System.Text;
+using LifeOs.Api.Mcp;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Protocols;
@@ -11,6 +12,9 @@ public static class AuthServiceCollectionExtensions
 {
     public const string AllowlistedUserPolicy = "AllowlistedUser";
 
+    /// <summary>What <c>/mcp</c> requires: Chris, through an agent he approved (agent-access plan §4.4).</summary>
+    public const string McpAgentPolicy = "McpAgent";
+
     public static IServiceCollection AddLifeOsAuth(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -18,7 +22,9 @@ public static class AuthServiceCollectionExtensions
         var auth = SupabaseAuthOptions.From(configuration);
         auth.Validate();
         services.AddSingleton(auth);
+        services.AddSingleton(McpOptions.From(configuration));
         services.AddSingleton<IAuthorizationHandler, AllowlistedUserHandler>();
+        services.AddSingleton<IAuthorizationHandler, McpAgentHandler>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options => ConfigureJwtBearer(options, auth));
@@ -29,6 +35,11 @@ public static class AuthServiceCollectionExtensions
             {
                 policy.RequireAuthenticatedUser();
                 policy.AddRequirements(new AllowlistedUserRequirement());
+            });
+            options.AddPolicy(McpAgentPolicy, policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.AddRequirements(new McpAgentRequirement());
             });
             options.FallbackPolicy = options.GetPolicy(AllowlistedUserPolicy);
         });

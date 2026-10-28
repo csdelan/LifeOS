@@ -1,5 +1,6 @@
 using LifeOs.Api.Auth;
 using LifeOs.Api.Http;
+using LifeOs.Api.Mcp;
 using LifeOs.Api.Read;
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
@@ -84,6 +85,10 @@ public static class ApiHost
         // Fail closed: missing issuer/audience/JWKS-or-secret/ALLOWED_EMAILS throws.
         builder.Services.AddLifeOsAuth(builder.Configuration);
 
+        // The read-only MCP server for Chris's agents (agent-access plan §4), off unless
+        // Mcp:Enabled is true. Its tools read on the reader connection only.
+        builder.AddLifeOsMcp(reader, homeZone);
+
         builder.Services.Configure<ForwardedHeadersOptions>(options =>
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor
@@ -164,6 +169,7 @@ public static class ApiHost
         app.MapOuraEndpoints();
         app.MapActivityEndpoints();
         app.MapCoverEndpoints();
+        app.MapLifeOsMcp();
         app.MapSpaFallback();
     }
 }

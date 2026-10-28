@@ -398,8 +398,16 @@ machines.
 **Code:** `src/LifeOs.Api/Mcp/`:
 - `McpHost.cs`: registration, `MapMcp`, the auth wiring
 - `McpOptions.cs`: the settings in §4.2
+- `McpSupport.cs`: the answer's shape (`as_of`, `today`, summary plus JSON), the argument
+  parsing, and `McpReads` (the clock, the change reader and a diagnostics runner, all on the
+  reader connection)
+- `McpGuide.cs`: the server instructions and `lifeos://guide`
+- `AlignmentForest.cs`: the Map's forest, ported from `web/src/lib/derive.ts`
 - `Tools/*.cs`: one class per area
-- `AgentCallLog.cs`: the access log in §4.5
+- `AgentCallLog.cs`: the access log in §4.5 (step 1.4)
+
+The agent rules live with the other policies, in `Auth/McpAgentHandler.cs` and
+`Auth/AuthServiceCollectionExtensions.cs`.
 
 Tools read through the existing readers on the **`bsk_reader`** connection. In Phase 1,
 only the access log touches the owner connection, and it writes only to `bsk_ops`.
@@ -585,6 +593,32 @@ using it.
 | 1.4 | Access log and Connected agents | Every call shows up, and Revoke works |
 | 1.5 | Deploy staging with `Mcp__Enabled=true` | Chris asks Claude for a review of his week, and the log shows the calls it made |
 | 1.6 | Use it for a week or two | Chris decides when to start Phase 2 |
+
+**Progress.**
+- **1.1 and 1.2 done (2026-10-28),** and deployed with `Mcp__Enabled` unset, so off: `/mcp`
+  and its metadata answer 404. `tests/LifeOs.Tests/McpServerTests.cs` covers both steps:
+  - A seeded life in a database of its own, read through the SDK's real HTTP client with an
+    agent token: every tool's shape, the instructions, the guide, and errors an agent can
+    read (an unknown id, a bad type, a `since` it can't parse, a range too long).
+  - The sign-in table in 1.2, plus: `/api`'s 401s keep their plain challenge, and an
+    unverified account is refused too.
+  - Areas switched off lose their tools, the snapshot's domain XP, and their events in
+    `recent_changes` (checked with a made-up Oura reading, never real data).
+  - The tools are built from the readers alone (checked by reflection), the readers are
+    built on the reader connection, and `bsk_reader` runs every diagnostic. So no tool can
+    open the owner connection.
+- Choices made while building, for 1.3 onward to keep in mind:
+  - A Reward is in the rewards area and a Space in the home area: with the area off, those
+    items drop out of every tool, not only the area's own tool.
+  - `recent_changes` takes `since` as an ISO instant, a home-zone day, or a span back from
+    now (`24h`, `3d`, `2w`, `P3D`), defaulting to 7 days and reaching back at most a year.
+  - `life_snapshot`'s lists stop at 25 rows each; the other lists take `limit` (default 50,
+    at most 200). `alignment` stops at 400 nodes.
+  - A 401 from `/mcp` names the metadata in `WWW-Authenticate`; the metadata names the
+    Supabase issuer (`Auth__Issuer`) as the authorization server and leaves scopes out.
+    Check in 1.3 that Claude's connector is happy without scopes.
+  - Every tool call writes a log line (tool, client id, outcome, milliseconds), never its
+    arguments. The access log table is step 1.4.
 
 To connect, add `https://lifeos-mz55-staging.fly.dev/mcp` as a custom connector in Claude
 or ChatGPT. In Claude Code:

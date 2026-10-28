@@ -97,6 +97,39 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             splitOn: "bounty_json,cover_json").AsList();
     }
 
+    /// <summary>
+    /// Subjects whose title or one of whose tags contains <paramref name="query"/>, ignoring case
+    /// (agent-access plan §4.3, <c>find_items</c>): titles that start with it first, then by
+    /// title. Archived ones only when asked; a repeating Task's series is included, since an
+    /// agent may be asking about the series itself. At most <paramref name="limit"/> rows.
+    /// </summary>
+    public IReadOnlyList<SubjectListItem> SearchSubjects(
+        string query, string? type = null, bool includeArchived = false, int limit = 50)
+    {
+        var pattern = "%" + EscapeLike(query.Trim()) + "%";
+        var prefix = EscapeLike(query.Trim()) + "%";
+        using var db = Open();
+        return db.Query<SubjectListItem, BountyText, CoverText, SubjectListItem>(
+            ListSelect + """
+            WHERE (@type IS NULL OR s.type = @type)
+              AND (@includeArchived OR NOT s.archived)
+              AND (s.title ILIKE @pattern
+                   OR EXISTS (SELECT 1 FROM bsk.v_item_tag t
+                              WHERE t.item_kind = 'subject' AND t.item_id = s.id AND t.tag ILIKE @pattern))
+            ORDER BY (s.title ILIKE @prefix) DESC, s.archived, s.title
+            LIMIT @limit
+            """,
+            WithHeadline,
+            new { type, includeArchived, pattern, prefix, limit },
+            splitOn: "bounty_json,cover_json").AsList();
+    }
+
+    // ILIKE's own wildcards and its escape character, matched literally.
+    private static string EscapeLike(string text)
+        => text.Replace(@"\", @"\\", StringComparison.Ordinal)
+            .Replace("%", @"\%", StringComparison.Ordinal)
+            .Replace("_", @"\_", StringComparison.Ordinal);
+
     public SubjectListItem? GetListItem(Guid id)
     {
         using var db = Open();

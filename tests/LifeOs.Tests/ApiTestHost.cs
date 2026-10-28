@@ -84,18 +84,32 @@ internal sealed class ApiTestHost(WebApplication app, HttpClient client) : IAsyn
         await app.DisposeAsync();
     }
 
-    private static string Token()
-        => new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+    private static string Token() => TokenFor();
+
+    /// <summary>
+    /// A token the host accepts: the allowlisted owner's by default. With
+    /// <paramref name="clientId"/>, an agent's token, as Supabase's OAuth server issues one
+    /// (agent-access plan §4.4).
+    /// </summary>
+    public static string TokenFor(string email = Allowed, string? clientId = null, bool verified = true)
+    {
+        var claims = new Dictionary<string, object>
+        {
+            ["sub"] = "user-1",
+            ["email"] = email,
+            ["email_verified"] = verified,
+            ["role"] = "authenticated",
+        };
+        if (clientId is not null)
+        {
+            claims["client_id"] = clientId;
+        }
+
+        return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
         {
             Issuer = Issuer,
             Audience = Audience,
-            Claims = new Dictionary<string, object>
-            {
-                ["sub"] = "user-1",
-                ["email"] = Allowed,
-                ["email_verified"] = true,
-                ["role"] = "authenticated",
-            },
+            Claims = claims,
             NotBefore = DateTime.UtcNow.AddMinutes(-1),
             Expires = DateTime.UtcNow.AddMinutes(10),
             IssuedAt = DateTime.UtcNow,
@@ -103,4 +117,8 @@ internal sealed class ApiTestHost(WebApplication app, HttpClient client) : IAsyn
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret)),
                 SecurityAlgorithms.HmacSha256),
         });
+    }
+
+    /// <summary>The issuer the host trusts, which the MCP metadata names as the authorization server.</summary>
+    public const string TrustedIssuer = Issuer;
 }

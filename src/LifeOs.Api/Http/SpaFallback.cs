@@ -58,6 +58,8 @@ public static class SpaFallback
 
     public static bool IsReserved(PathString path)
         => path.StartsWithSegments("/api")
+            || path.StartsWithSegments("/mcp")
+            || path.StartsWithSegments("/.well-known")
             || path.StartsWithSegments("/health")
             || path.StartsWithSegments("/openapi")
             || path.StartsWithSegments("/swagger");
