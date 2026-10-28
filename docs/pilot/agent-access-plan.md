@@ -542,6 +542,67 @@ many agents he connects.
   - Storage: the bucket is private and has no policies;
   - Auth's user endpoints.
 
+**Checked on staging (2026-10-28).** Claude, as a claude.ai custom connector, connected
+through the consent page. Its client id is `2c63d7f7-0ab1-47a2-9dbd-b765f66b7763`, and an
+`inbox` call through it was logged ok in 1.2 s.
+
+- **The claims.** The token itself wasn't decoded: Claude keeps it on Anthropic's servers,
+  so nobody here sees it.
+  - The API accepted it, so it has issuer `https://zvhxctrffbrmhbvujhzw.supabase.co/auth/v1`,
+    audience `authenticated`, the project's signature, an unexpired lifetime, a `client_id`,
+    and Chris's allowlisted email.
+  - It was also accepted as verified, through one of three things the API takes: an
+    `email_verified` claim, `user_metadata.email_verified`, or a Google sign-in in
+    `app_metadata`.
+  - So allowlisting agents by email works, and `ALLOWED_USER_IDS` isn't needed.
+  - Supabase's docs list the claims: `sub`, `role`, `aud` (`authenticated`), `user_id`, `email`,
+    `client_id`, `aal`, `amr`, `session_id`, `iss`, `iat` and `exp`. Their example has an hour
+    between `iat` and `exp`.
+  - There's no `scope` claim. Scopes shape only OIDC's user info, not what a token can reach.
+  - Still open: which of the three made it verified. That matters before the API stops
+    trusting `user_metadata` (fix 2 below).
+- **What it can do at Supabase itself.** Checked from outside with the public key, and in
+  Supabase Auth's source (`supabase/auth` main, read 2026-10-28):
+  - REST exposes only `public` and `graphql_public`. `bsk`, `bsk_derived` and `bsk_ops`
+    answer `PGRST106`, `public.schema_migrations` refuses anon, and GraphQL isn't enabled
+    (`pg_graphql` is off). Nothing of the life record is reachable.
+  - Storage shows no buckets. The bucket is private with no policies, so a user's token
+    reads nothing.
+  - **Auth treats an agent's token as Chris signed in.** No user endpoint checks
+    `client_id`. With an agent's token, anyone can:
+    - **Set a password on Chris's account** (`PUT /user`). He has none, so no current
+      password is asked for. Within 24 hours of the approval no reauthentication is asked
+      either, even with secure password change on. Signing in with his email and that
+      password then gives an ordinary session, and `/api` accepts that in full, writes
+      included. This needs the Email provider, which **is on in staging**, with sign-ups
+      open.
+    - **Approve other agents' requests as Chris**
+      (`POST /oauth/authorizations/{id}/consent` takes any of his tokens). An agent could
+      register a new client and approve it itself, so `Mcp__BlockedClients` can't keep a
+      determined agent out. `Mcp__Enabled=false` still can.
+    - Sign him out everywhere (`POST /logout?scope=global`).
+    - Add MFA factors.
+    - List or revoke his agent grants.
+    - Read his user record (email, Google identity) and change its `user_metadata`.
+  - Changing his email still needs the confirmation emails, so a token alone can't.
+- **Proposed fixes** (for Chris to decide; all of these come before Phase 2's writes):
+  1. **Turn off the Email provider** in Supabase (Authentication → Sign In / Providers →
+     Email), in staging and production.
+     - Supabase then refuses password and magic-link sign-in (checked in its source), so a
+       password set by an agent opens nothing.
+     - Nothing in LifeOS signs in by email.
+     - Turning off sign-ups as well keeps strangers' Google accounts out of the user list.
+  2. **The API accepts a web session only if it was signed in with Google**, and stops reading
+     `email` or `email_verified` from `user_metadata`, which the user (so any agent token)
+     can write.
+     - Today that fallback is used only when a token has no top-level email. That never
+       happens while anonymous and phone sign-in stay off, so there's no hole now.
+     - This is a second wall should Email ever come back on.
+  3. **An allow list instead of a block list** (`Mcp__AllowedClients`): only client ids Chris
+     lists may call `/mcp`, so a client an agent approved for itself is refused.
+     - It costs one setting per new agent.
+     - Decide with the access log (1.4).
+
 **Known limits:**
 - Supabase's OAuth server is in beta.
 - Dynamic registration reportedly rejects custom redirect schemes like `cursor://`
@@ -640,8 +701,17 @@ using it.
   - In mock mode a pretend request from Claude stands in (`mock-expired` shows the expired
     state). Tests: unit tests against a mocked supabase-js and each page state, golden paths
     for approve, deny and expired, and a11y in both themes and on a phone.
-- Still to do for 1.3: set `Mcp__Enabled=true` on staging, connect Claude, then decode a real
-  agent token and check what it can do at Supabase's own APIs (above).
+- **Connected (2026-10-28).** `Mcp__Enabled=true` is set on staging, and Claude connected
+  through the consent page.
+  - What the token proves, and what it can do at Supabase, are recorded in §4.4 under
+    "Checked on staging".
+  - The biggest finding: with Supabase's Email provider on, an agent's token can set a
+    password on Chris's account and sign in as him, around the read-only rule. Fixes are
+    proposed there.
+  - The first real call turned up a naming problem. `inbox` returned the view's
+    `triaged_at`, which is when an item came into the inbox, but an agent reads it as
+    "already triaged". It's now `flagged_at`, and the tool says it lists newest first, as
+    it always has.
 
 To connect, add `https://lifeos-mz55-staging.fly.dev/mcp` as a custom connector in Claude
 or ChatGPT. In Claude Code:

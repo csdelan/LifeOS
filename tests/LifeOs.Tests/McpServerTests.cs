@@ -278,6 +278,9 @@ public sealed class McpServerTests(PostgresFixture postgres)
         Assert.Equal(new[] { later.Id, task.Id }.Order(), Ids(calendar.GetProperty("tasks")).Order());
         var inbox = await CallAsync(client, "inbox");
         Assert.Contains(ns, inbox.GetProperty("items")[0].GetProperty("text").GetString(), StringComparison.Ordinal);
+        // An item in the inbox is still waiting, so it says when it was flagged, not "triaged".
+        Assert.True(inbox.GetProperty("items")[0].TryGetProperty("flagged_at", out _));
+        Assert.False(inbox.GetProperty("items")[0].TryGetProperty("triaged_at", out _));
         Assert.Equal(JsonValueKind.Array, (await CallAsync(client, "habits")).GetProperty("habits").ValueKind);
         Assert.Equal(JsonValueKind.Array, (await CallAsync(client, "people")).GetProperty("people").ValueKind);
         Assert.Equal(JsonValueKind.Array, (await CallAsync(client, "diagnostics")).GetProperty("checks").ValueKind);

@@ -102,7 +102,7 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
     }
 
     [McpServerTool(Name = "inbox", Title = "Inbox", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("Captures and flagged items waiting for Chris to triage, oldest first.")]
+    [Description("Captures and flagged items waiting for Chris to triage, newest first. flagged_at is when each one came into the inbox.")]
     public async Task<CallToolResult> Inbox(
         [Description("At most this many items (default 50, at most 200).")] int? limit = null,
         CancellationToken cancellationToken = default)
@@ -112,7 +112,10 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
             .Where(i => i.SubjectType is null || options.AllowsType(i.SubjectType))
             .Select(i => new
             {
-                i.ItemId, i.ItemKind, i.TriagedAt,
+                i.ItemId, i.ItemKind,
+                // The view names it triaged_at (its newest triage marker), but an item here is still
+                // waiting: say when it was flagged.
+                FlaggedAt = i.TriagedAt,
                 Item = i.SubjectUrn is null ? null : new { Urn = i.SubjectUrn, Type = i.SubjectType, Title = i.SubjectTitle },
                 i.EventKind,
                 Text = i.EventContent is { Length: > MaxCaptureLength } c ? c[..MaxCaptureLength] : i.EventContent,
