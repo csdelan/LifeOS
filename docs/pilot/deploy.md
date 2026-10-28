@@ -208,6 +208,12 @@ staging project instead. Decide then.) Once per production setup:
    `https://<prod-ref>.supabase.co/auth/v1/callback` to that client's
    authorized redirect URIs in Google Cloud Console. Turn off open sign-ups
    (the API allowlist is the real gate; this is defense in depth).
+   Turn **off** the Email provider. An agent's token can set a password on the
+   account, and with Email on that password would sign in as you (agent-access
+   plan §4.4). The API refuses non-Google sessions anyway; this is the first wall.
+   If agents will connect to production, also turn on Authentication → OAuth
+   Server there, as in staging: authorization path `/oauth/consent`, dynamic
+   registration on.
 4. GitHub → Settings → Environments → `production`: add yourself as a
    **required reviewer**. Without it, a merge promotes schema and an image to
    production unattended.

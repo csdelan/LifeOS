@@ -598,7 +598,11 @@ through the consent page. Its client id is `2c63d7f7-0ab1-47a2-9dbd-b765f66b7763
   - Changing his email still needs the confirmation emails, so a token alone can't.
 - **Fixes.** Chris chose 1 and 2 on 2026-10-28; 3 waits for the access log.
   1. **Turn off the Email provider** in Supabase (Authentication → Sign In / Providers →
-     Email), in staging and production. Chris is doing this himself.
+     Email), in staging and production.
+     - **Done in staging (2026-10-28).** Supabase's settings list only Google, and a
+       password sign-in answers `email_provider_disabled`.
+     - There's no production project yet. Its setup steps in `deploy.md` now include
+       this switch.
      - Supabase then refuses password and magic-link sign-in (checked in its source), so a
        password set by an agent opens nothing.
      - Nothing in LifeOS signs in by email.
@@ -625,6 +629,8 @@ through the consent page. Its client id is `2c63d7f7-0ab1-47a2-9dbd-b765f66b7763
        passed (`inbox` ok at 16:29 UTC, after the new release started), so it carries the
        Google provider in `app_metadata` and the OAuth server's `amr`. The logs show no
        refusals.
+     - Chris's web session on staging also loaded fine after a reload, so a Google
+       sign-in's token passes too.
   3. **An allow list instead of a block list** (`Mcp__AllowedClients`): only client ids Chris
      lists may call `/mcp`, so a client an agent approved for itself is refused.
      - It costs one setting per new agent.
@@ -733,8 +739,11 @@ using it.
   - What the token proves, and what it can do at Supabase, are recorded in §4.4 under
     "Checked on staging".
   - The biggest finding: with Supabase's Email provider on, an agent's token can set a
-    password on Chris's account and sign in as him, around the read-only rule. Fixes are
-    proposed there.
+    password on Chris's account and sign in as him, around the read-only rule.
+  - Fixes 1 (Email provider off) and 2 (the API takes only Google sign-ins and ignores
+    `user_metadata`) are done and checked on staging. Fix 3 (an allow list of clients)
+    waits for 1.4.
+  - That finishes step 1.3.
   - The first real call turned up a naming problem. `inbox` returned the view's
     `triaged_at`, which is when an item came into the inbox, but an agent reads it as
     "already triaged". It's now `flagged_at`, and the tool says it lists newest first, as
