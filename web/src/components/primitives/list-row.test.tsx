@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ListRow } from "@/components/primitives/list-row";
+import { formatDay } from "@/lib/dates";
 import type { CoverRead, SubjectListItem } from "@/lib/production-ui-types";
 
 const cover: CoverRead = {
@@ -29,6 +30,44 @@ const goal: SubjectListItem = {
   createdAt: "2026-01-01T00:00:00.000Z",
   cover,
 };
+
+describe("ListRow dates", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 28, 12, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const trash: SubjectListItem = {
+    id: "t",
+    urn: "urn:bsk:task:t",
+    type: "Task",
+    title: "Take out trash",
+    status: "Not started",
+    due: "2026-09-16",
+    scheduled: null,
+    archived: false,
+    createdAt: "2026-09-16T00:00:00.000Z",
+  };
+
+  it("says an open Task is overdue", () => {
+    render(<ListRow item={trash} />);
+    expect(screen.getByText("42 days overdue")).toBeInTheDocument();
+  });
+
+  it("shows a finished Task's dates as plain days, not overdue", () => {
+    const { rerender } = render(<ListRow item={{ ...trash, status: "Completed" }} />);
+    expect(screen.queryByText(/overdue/)).not.toBeInTheDocument();
+    expect(screen.getByText(formatDay("2026-09-16"))).toBeInTheDocument();
+
+    rerender(<ListRow item={{ ...trash, status: "Missed", scheduled: "2026-09-14" }} />);
+    expect(screen.queryByText(/overdue/)).not.toBeInTheDocument();
+    expect(screen.getByText(`Do ${formatDay("2026-09-14")}`)).toBeInTheDocument();
+  });
+});
 
 describe("ListRow covers (COVER-3)", () => {
   it("leads with a 36 px thumbnail, credited in its tooltip, when asked", () => {

@@ -4,24 +4,28 @@ import { formatDay, relativeDayLabel, todayIso } from "@/lib/dates";
 export function DateChip({
   date,
   kind = "due",
+  closed = false,
   className,
 }: {
   date?: string | null;
   kind?: "due" | "scheduled" | "target" | "plain";
+  /** The item is finished (Completed, Missed, Cancelled…): its date isn't overdue or today, just a day. */
+  closed?: boolean;
   className?: string;
 }) {
   if (!date) return null;
   const today = todayIso();
-  const overdue = kind === "due" && date < today;
-  const isToday = date === today;
+  const overdue = !closed && kind === "due" && date < today;
+  const isToday = !closed && date === today;
+  const when = closed ? formatDay(date) : relativeDayLabel(date, today);
   const label =
     kind === "scheduled"
-      ? `Do ${relativeDayLabel(date, today)}`
+      ? `Do ${when}`
       : kind === "target"
-        ? `Target ${relativeDayLabel(date, today)}`
+        ? `Target ${when}`
         : kind === "plain"
           ? formatDay(date)
-          : relativeDayLabel(date, today);
+          : when;
 
   return (
     <span
