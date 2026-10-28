@@ -733,8 +733,8 @@ specific time which adds metadata that can correlate to the automatic health dat
 - **Not GEN-1 tags.** GEN-1's tags label items in `bsk.item_tag`. Oura's are moments in a
   day, and they don't become LifeOS tags.
 - **Comments** are Chris's own words, kept as Oura has them. Like the rest of Oura's data,
-  they never go to an AI model, and the purge (§7) covers them, since they're `oura`
-  events.
+  they reach an AI model only through the MCP server's `health` area, by Chris's decision
+  (§7), and the purge (§7) covers them, since they're `oura` events.
 - **No XP.** Tags pay nothing, and the activity rules don't read them.
 
 **Reads, API and CLI:**
@@ -1002,11 +1002,14 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
   - **Consent:** revoking consent stops collection at once. Disconnect does that: it revokes
     the token and nothing calls Oura afterwards.
   - **AI:** data from the API may not be given to any AI model or AI platform, including as
-    a prompt; LLM use goes through Oura's own MCP server instead. LifeOS has no AI features.
-    Two consequences:
-    - Phase 2 and anything later must keep Oura data out of any LLM feature.
+    a prompt; LLM use goes through Oura's own MCP server instead (§4(d); that server wasn't
+    published as of 2026-10-28). LifeOS has no AI features of its own. **Chris's agents read
+    it anyway, by his decision on 2026-10-28:** the read-only MCP server's `health` area gives
+    Oura data to the agents he connects, and he accepts the risk that Oura suspends the app
+    ([agent-access-plan.md](agent-access-plan.md) §2, decision 3). What still holds:
     - Agents building LifeOS work against Oura's sandbox and recorded fixtures, not Chris's
       real data. In A6, Chris compares the page with the Oura app himself.
+    - Taking `health` out of `Mcp__Domains` keeps Oura data from agents again.
   - **Privacy policy:** an app must explain how it collects, keeps and deletes data. For a
     single-user app this is the plan and this section.
   - **Revocation:** Oura can suspend an app's access at its discretion.

@@ -3735,8 +3735,9 @@ Build:      building
     the reconnect. The reconnect reads the history again, so past tags come in too.
   - These aren't GEN-1 tags, which label items. Oura's tags are moments in a day and don't
     become LifeOS tags.
-  - A comment on a tag is Chris's own words. Like the rest of Oura's data it never goes to an
-    AI model, and the purge covers it.
+  - A comment on a tag is Chris's own words. Like the rest of Oura's data it reaches AI
+    agents only through the MCP server's health area, by Chris's decision
+    ([agent-access-plan.md](agent-access-plan.md) §2, decision 3), and the purge covers it.
   - Tags pay no XP.
 - Open decisions: none blocking. Reading a tag against the night after it ("sleep after
   Alcohol") is later work (activity plan §6).

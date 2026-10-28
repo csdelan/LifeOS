@@ -95,6 +95,16 @@ change later without redoing the design.
    alignment and diagnostics. Health (Oura), Food, Rewards and Home are on by default, and
    `Mcp__Domains` can turn any of them off. Chris's aim is advice from the whole picture,
    so the default is everything.
+   - **Oura data is included, and Chris accepts the risk** (decided 2026-10-28). Oura's API
+     agreement (§4(d)) lets a developer use Oura data with an AI model only through Oura's
+     own MCP server, which isn't published yet. It also forbids using the API to give an AI
+     model data or prompts. LifeOS reads Oura as Chris's registered app, so serving that
+     data to his agents breaks the clause. He accepts that for his own data in his own app,
+     as he accepted the retention risk in D14. The worst case is that Oura suspends
+     LifeOS's API access: the Activity page stops syncing and paying XP, and what's already
+     synced stays. Taking `health` out of `Mcp__Domains` removes Oura's records from every
+     tool at once. Agents building LifeOS still work against Oura's sandbox and fixtures
+     (activity-plan.md §7).
 4. **How agent writes are attributed (settles CAP-3's open decision):**
    - Every event an agent writes has `source_id = mcp:<client_id>` and provenance
      `declared`: Chris said it, through that agent.
@@ -695,6 +705,12 @@ step) and triages it in LifeOS.
 - **A beta sign-in.** If Supabase's OAuth server changes or breaks, `/mcp` stops working,
   and nothing else does. The API validates standard JWTs, so another OAuth provider could
   replace it.
+- **Oura's agreement.** Agents read Oura data, which Oura's API agreement forbids outside
+  Oura's own MCP server (§2, decision 3). Oura can suspend an app's access at its
+  discretion. The Activity page would stop syncing, and what's synced stays. Taking
+  `health` out of `Mcp__Domains` stops agents reading it at once. The backups' monthly copies
+  also keep Oura data for good, under the same risk Chris accepted for retention in D14; the
+  unbuilt Oura purge will have to deal with them.
 - **Backups hold everything.** Only Chris's private key can read them, and losing it loses
   them. That's what the drill is for.
 - **Missed nights.** The backup runs only while Chris's PC is on and he's signed in. A
@@ -750,3 +766,8 @@ step) and triages it in LifeOS.
   [Restore your OneDrive](https://support.microsoft.com/en-us/onedrive/restore-your-onedrive-files)
   lets Microsoft 365 subscribers roll everything back up to 30 days.
 - [age](https://age-encryption.org): public-key file encryption.
+- [Oura API and MCP Agreement](https://cloud.ouraring.com/legal/api-agreement) (checked
+  2026-10-28): §4(d), Oura data reaches a large language model only through Oura's MCP
+  server, and the API may not be used to give data or prompts to an AI model; §5(f),
+  deletion within 72 hours of a request; no exception for personal use. Oura's developer
+  portal doesn't publish its MCP server yet.
