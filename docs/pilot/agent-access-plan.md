@@ -809,8 +809,13 @@ using it.
     - unit tests for the consent page (it allows before approving, and doesn't approve when
       LifeOS can't add the agent);
     - a golden path, and a11y in both themes, with a dialog open, and on a phone.
-  - Left for Chris after the deploy: **Allow** Claude in Connected agents. Until then its
-    calls are refused (403), and Connected agents shows it as Not allowed.
+  - Deployed (3942e2b, 2026-10-28; migration 0047 applied). Chris allowed Claude in
+    Connected agents and reconnected it. Reconnecting registered a new client,
+    `f1ec147b-08d1-4cc3-93fd-1bed4aba6b93`, which the consent page added to the list. An
+    `inbox` call through it ran ok at 17:18 UTC, and the logs show no failure writing the
+    call row or reading the list.
+  - The first client (`2c63d7f7-…`) may still be listed. If Connected agents shows two
+    Claudes, revoke the one with no recent calls.
 
 To connect, add `https://lifeos-mz55-staging.fly.dev/mcp` as a custom connector in Claude
 or ChatGPT. In Claude Code:
