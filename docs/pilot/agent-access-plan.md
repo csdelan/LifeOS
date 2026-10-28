@@ -621,6 +621,10 @@ through the consent page. Its client id is `2c63d7f7-0ab1-47a2-9dbd-b765f66b7763
        methods, so a lockout is easy to spot.
      - Tests mint Supabase-shaped tokens (`tests/LifeOs.Tests/SupabaseTokens.cs`). A
        hand-made test token now needs `amr` and `app_metadata` as well as `email`.
+     - Checked on staging after the deploy (671641c, 2026-10-28): Claude's real token
+       passed (`inbox` ok at 16:29 UTC, after the new release started), so it carries the
+       Google provider in `app_metadata` and the OAuth server's `amr`. The logs show no
+       refusals.
   3. **An allow list instead of a block list** (`Mcp__AllowedClients`): only client ids Chris
      lists may call `/mcp`, so a client an agent approved for itself is refused.
      - It costs one setting per new agent.
