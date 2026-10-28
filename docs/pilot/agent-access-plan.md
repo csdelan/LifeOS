@@ -16,7 +16,7 @@ this order:
 
 | Phase | What ships | What it gives Chris |
 |---|---|---|
-| 0 | A nightly GitHub Actions job: database dump and new photos, restore-tested, encrypted to Chris's key, uploaded to a locked bucket | The life record survives a bad migration, a mistaken delete, a Supabase incident or a lost account |
+| 0 | A nightly scheduled task on Chris's PC: database dump and new photos, restore-tested, encrypted to his key, saved to his OneDrive | The life record survives a bad migration, a mistaken delete, a Supabase incident or a lost account |
 | 1 | `/mcp` on the existing API: read-only tools, sign-in through Supabase's OAuth server, a consent page, an access log | Any MCP-capable agent can see his life as it is now, and he can see what each one read |
 | 2 | Write tools, off until `Mcp__Writes` is switched on, in two levels, for listed agents only | Agents can capture, journal, check off and update, attributed and undoable |
 
@@ -74,24 +74,22 @@ These don't need backing up:
 The migrations create no extensions, so a dump restores into any Postgres of the same major
 version.
 
-Today nothing backs this up. Supabase's free plan takes no backups (§9), and the repo has
-no backup script.
+Until Phase 0, nothing backed this up: Supabase's free plan takes no backups (§9).
 
 ## 2. Decisions (Chris)
 
 These are the recommended choices. Chris confirms them before Phase 0 starts. Each can
 change later without redoing the design.
 
-1. **Backups go to Backblaze B2, in a bucket with Object Lock.** B2 is S3-compatible.
-   Object Lock means a locked file can't be deleted or overwritten by anyone until its lock
-   expires, including someone holding the upload key. At LifeOS's size it should cost
-   cents a month.
-   - Alternatives: DigitalOcean Spaces ($5 a month; it fits a later move to DigitalOcean,
-     but backups should then sit with a different provider than the data) or Cloudflare R2.
+1. **Backups go to Chris's OneDrive, from a scheduled task on his PC** (decided
+   2026-10-28). He already has plenty of OneDrive space, and the PC keeps OneDrive in sync.
+   This replaced the first draft's Backblaze B2 bucket with Object Lock, uploaded from
+   GitHub Actions. OneDrive can't lock a file the way Object Lock does. Its 30-day recycle
+   bin and Microsoft 365's Restore your OneDrive are the safety net instead (§3.1).
    - Not GitHub artifacts: they expire within 90 days, and they share an account with the
      code and the secrets.
-2. **Retention:** every night's copy for 35 days, plus the first copy of each month for a
-   year. Each copy is locked for as long as it's kept.
+2. **Retention:** every night's copy for 35 days, plus the first copy of each month kept for
+   good (the first draft kept them a year, to hold down B2's cost).
 3. **Agents read everything, and each area can be switched off.** The core is always on:
    identity, areas, goals, projects, tasks, habits, appointments, inbox, journals, people,
    alignment and diagnostics. Health (Oura), Food, Rewards and Home are on by default, and
@@ -109,48 +107,65 @@ change later without redoing the design.
 
 ## 3. Phase 0: backups
 
+**Built 2026-10-28.** The runbook is [backup-restore.md](backup-restore.md): setup, checking,
+the drill and a real restore. This section keeps the design and why.
+
 ### 3.1 Shape
 
-A scheduled GitHub Actions workflow, `.github/workflows/backup.yml`, runs nightly at
-10:17 UTC (about 3 am Pacific). The odd minute is on purpose, because GitHub delays jobs
-scheduled on the hour. It can also be run by hand (`workflow_dispatch`). Each run:
+**Changed from the first draft (Chris, 2026-10-28).** The first draft ran a GitHub Actions
+job that uploaded to a Backblaze B2 bucket with Object Lock. Chris already has plenty of
+OneDrive space, so the backups go there instead, and the job runs on his PC, which keeps
+OneDrive in sync. That drops B2, its keys and the GitHub Environment secrets. What it gives
+up:
+- **Object Lock.** OneDrive can't make a file undeletable. A deleted backup sits in the
+  recycle bin for 30 days, and Microsoft 365's Restore your OneDrive rolls everything back
+  up to 30 days (§9).
+- **Running whatever the PC is doing.** A night the PC is off or asleep is caught up when
+  it's back.
 
-1. Dumps the database to two files (§3.3).
-2. Restores them into a throwaway Postgres inside the job and checks the result (§3.5).
-3. Encrypts them to Chris's public key (§3.4).
-4. Uploads them to B2 with a manifest (§3.6).
-5. Copies any photos not yet backed up, each one encrypted (§3.6).
+Everything else in the first draft stands: the read-only role, the restore test, the
+encryption and the retention.
 
-If any step fails, the run fails and GitHub emails Chris. A run that *doesn't happen*
-sends no email, so the job also pings a dead-man's switch on success (for example
-healthchecks.io, which is free). It emails Chris when a night passes with no ping.
+`scripts/backup.ps1` runs nightly from Windows Task Scheduler. The task is
+`\LifeOS\Backup (staging)`, set for 3:17 am local time, while Chris is signed in.
+`StartWhenAvailable` runs a missed night as soon as the PC is back. Each run:
 
-The work lives in `scripts/backup.ps1`, PowerShell like `run.ps1` and `test.ps1`, so Chris
-can run the same script on his PC. GitHub's Ubuntu runners have PowerShell. The script
-needs Docker (for `pg_dump` and `pg_restore` in a `postgres:<major>` image), `age`, and an
-S3 client (the AWS CLI is on GitHub's runners).
+1. Dumps the database (§3.3).
+2. Restores the dump into a scratch Postgres in Docker and checks it (§3.5).
+3. Encrypts it to Chris's public key (§3.4) and saves it to OneDrive with a manifest (§3.6).
+4. Copies any photos not yet backed up, each one encrypted (§3.6).
+5. Deletes daily copies past their 35 days.
 
-**Why GitHub Actions:**
-- It already runs the deploy pipeline.
-- It runs whether or not Chris's PC is on.
-- Its free minutes cover the job.
-- It doesn't care where the API is hosted, so a move to DigitalOcean leaves it unchanged.
+**When it fails:**
+- A failed run shows a Windows notification, writes the reason to the log, and pings a
+  dead-man's switch's `/fail` URL if one is set.
+- A night with no run is caught only by the dead-man's switch (healthchecks.io is free). It
+  emails Chris when a day passes with no successful ping. It's optional; setup takes its URL.
+- Task Scheduler's Last Run Result can't be trusted. The task runs through
+  `conhost --headless` so no window pops up, and that always reports 0.
+
+**The scripts:**
+- `scripts/backup-setup.ps1` does the one-time setup for each database (§3.7);
+  `scripts/restore.ps1` restores (§3.8); `scripts/LifeOsBackup.psm1` holds what they share.
+- `pg_dump`, `pg_restore` and `psql` run in a `postgres:<major>-alpine` container, so the PC
+  needs Docker but no Postgres install.
+- A run takes about 15 seconds at today's size: 8 MB of tables and 39 photos (5.5 MB).
 
 ### 3.2 A read-only role for backups: `bsk_backup`
 
 Migration `0046__backup_role.sql` creates the role:
 
 - `CREATE ROLE bsk_backup NOLOGIN`, guarded like 0005's `bsk_reader`. The migration sets
-  no password, so there's no public default to reset. Chris enables login by hand on each
-  project: `ALTER ROLE bsk_backup WITH LOGIN PASSWORD '<strong random>';`.
+  no password, so there's no public default to reset. Setup turns on login for each project
+  with its own random password (§3.7).
 - `USAGE` on `bsk`, `bsk_derived` and `bsk_ops`, and `SELECT` on all their tables and
   sequences.
 - `ALTER DEFAULT PRIVILEGES` in all three schemas, so tables added later are covered. This
   works because migrations always run as the owner.
 - On `public.schema_migrations`: `GRANT SELECT` plus a policy
-  `FOR SELECT TO bsk_backup USING (true)`. The runner creates the table before any
-  migration runs, and its every-run step only enables RLS and revokes Supabase's API roles.
-  It never drops policies, so this policy stays.
+  `schema_migrations_backup_read FOR SELECT TO bsk_backup USING (true)`. The runner's
+  every-run step only enables RLS and revokes Supabase's API roles. It never drops policies,
+  so this one stays.
 - No write grants anywhere. A leaked backup password can read everything and change
   nothing. That's the same exposure as `bsk_reader`, plus `bsk_ops`, whose tokens are
   encrypted.
@@ -160,172 +175,187 @@ Migration `0046__backup_role.sql` creates the role:
   that runs unattended every night shouldn't hold that credential.
 - Not `bsk_reader`: by design it can't read `bsk_ops` or the migration history.
 
-**Tests:**
-- As `bsk_backup`, `SELECT` works on every table in the three schemas and on
-  `schema_migrations`.
-- `INSERT`, `UPDATE` and `DELETE` are refused everywhere.
-- A table created by a later migration is readable.
+**Tests** (`BackupRoleTests`):
+- As `bsk_backup`, every table and view in the three schemas can be read, and so can every
+  row of `schema_migrations`.
+- Inserts, updates, deletes and `CREATE TABLE` are refused everywhere.
+- A table and sequence created later by the owner can be read.
+- The role can't sign in until a project sets its password.
 
 Through the session pooler, the username is `bsk_backup.<project-ref>`, as with
-`bsk_reader`. If Supabase refuses any of these steps (it shouldn't, given `bsk_reader`),
-fall back to the owner string in the backup environment and record that here.
+`bsk_reader`.
 
 ### 3.3 The dump
 
-The script reads the server's version (`show server_version`) and runs `pg_dump` from the
-matching `postgres:<major>` image. If it can't match the version, it fails. It runs
-`pg_dump` twice, both times in custom format:
+The script reads the server's version (`server_version_num`) and runs `pg_dump` from the
+matching `postgres:<major>-alpine` image. It runs `pg_dump` twice, both times in custom
+format:
 
 1. `pg_dump -Fc -n bsk -n bsk_derived -n bsk_ops` → `lifeos-<stamp>.dump`
 2. `pg_dump -Fc --enable-row-security -t public.schema_migrations` →
    `schema-migrations-<stamp>.dump`
 
-The history table needs its own run because pg_dump's `-t` overrides `-n`: one run with
-both options would dump only that table. `--enable-row-security` lets a role without
-BYPASSRLS dump a table that has RLS on. The dumps keep their grants, so access for
-`bsk_reader` and `bsk_backup` comes back on restore.
+**Why two runs:**
+- The history table needs its own run because pg_dump's `-t` overrides `-n`: one run with
+  both options would dump only that table.
+- `--enable-row-security` lets a role without BYPASSRLS dump a table that has RLS on. The
+  first run leaves it off on purpose: if a `bsk` table ever had RLS, `pg_dump` fails rather
+  than quietly leaving rows out.
+- The dumps keep their grants, so access for `bsk_reader` and `bsk_backup` comes back on
+  restore.
+
+**Counting.** Every table's exact row count is taken just before and just after the dumps.
+If any count changed, the database was written during the dump, so the dump is taken again,
+up to three times. That makes the counts the dump's own. A row that's updated in place
+doesn't change a count, but the restore test (§3.5) still checks the copy is whole.
 
 The run also writes a **manifest**, `manifest-<stamp>.json`, containing:
-- the time, project ref, server version and `pg_dump` version
-- the git commit of the run
+- the time, host, user, server version and `pg_dump` version
+- the git commit of the scripts
 - the latest applied migration
+- the database's `bsk.*` settings (`bsk.home_zone`), which a per-schema dump doesn't carry
 - the row count of every table
 - the sha256 of each encrypted file
-- the number of photos
+- the number of photos, and how the restore test went
 
 The manifest holds no life data, so it's stored unencrypted. Its row counts let anyone
 check a copy is whole without the private key.
 
 ### 3.4 Encryption
 
-The job uses [age](https://age-encryption.org), with a key pair:
+The job uses [age](https://age-encryption.org) (`winget install --id FiloSottile.age`), with a
+key pair:
 
-- CI holds only the **public** key, `AGE_RECIPIENT`, in a GitHub variable. It doesn't
-  need to be secret.
-- Only Chris's **private** key can read a backup. A leaked GitHub account or B2 key
-  exposes nothing readable.
+- The PC holds only the **public** key, in the settings. The nightly job never needs the
+  private key.
+- Only Chris's **private** key can read a backup. Someone who gets into his Microsoft account
+  sees nothing readable.
 
-Chris makes the pair once, on his PC:
-
-```powershell
-age-keygen -o lifeos-backup.key
-```
-
-The private key goes into his password manager, plus one printed copy kept somewhere
-safe. **Losing it makes every backup unreadable.** The drill in §3.8 is how he knows it's
-still at hand. `Integrations__TokenKey` goes in the password manager beside it: without
-that key, a restore still works, but Oura has to be reconnected.
+Setup makes the pair (`age-keygen`) in `%USERPROFILE%\lifeos-backup.key` and refuses to make it
+inside OneDrive. The private key goes into his password manager, plus one printed copy kept
+somewhere safe, and the file is deleted. **Losing it makes every backup unreadable.** The
+drill in §3.8 is how he knows it's still at hand. `Integrations__TokenKey` goes in the
+password manager beside it: without that key, a restore still works, but Oura has to be
+reconnected.
 
 ### 3.5 A restore test every night
 
-Before encrypting, the job restores both dumps into a fresh `postgres:<major>` container
-that it starts itself:
+Before encrypting, the job restores both dumps into a scratch Postgres container that it
+starts itself:
 
-1. Create `bsk_reader` and `bsk_backup` (NOLOGIN) first, so their grants restore.
+1. **Roles first.** Create every role the dump's grants, default privileges and policies
+   name, without a login. That's `bsk_reader` and `bsk_backup`, plus Supabase's
+   `service_role`, which is granted the history table. Without them the restore fails.
+   Then set the manifest's `bsk.*` settings on the database.
 2. `pg_restore --no-owner --exit-on-error` both files. Triggers and foreign keys are
    restored after the data, so loading doesn't trip the append-only triggers.
 3. Compare every table's row count with the manifest. They must be equal.
 4. Run `bsk rebuild --verify` against it. This checks the derived tables agree with the
-   source, and exits 1 if they've drifted. If the live data has already drifted, fix that
-   first.
+   source, and exits 1 if they've drifted.
 5. Run `bsk check --json`. It must finish without error, since the diagnostics read every
    major view.
 
-A dump that can't be restored fails the run, so Chris hears about it the next morning,
-not on the day he needs it. The plaintext never leaves the job, and CI never needs the
-private key.
+**What fails a run, and what's saved:**
+- A dump that can't be restored, or whose counts don't match, fails the run and isn't
+  saved. Chris hears about it the next morning, not on the day he needs it.
+- Steps 4 and 5 use the CLI built from the working copy. If those fail (drift, or a CLI that
+  doesn't build), the copy is saved and the run still fails. A faithful copy of a drifted
+  database is worth keeping, and `bsk rebuild` fixes the drift.
 
-### 3.6 Upload
+The plaintext stays in a temporary folder that's deleted at the end of the run.
 
-**The bucket.** A private B2 bucket, for example `lifeos-backups-<random>`:
-- Object Lock is turned on when the bucket is created, which is when Backblaze advises
-  deciding it.
-- The default retention is 35 days in compliance mode.
-- Monthly copies are uploaded with a 400-day retention of their own.
+### 3.6 Saving to OneDrive
 
-**Layout:**
+**Layout,** under `OneDrive\Backups\LifeOS\<target>\`:
 
 ```
 db/daily/<stamp>/      lifeos-<stamp>.dump.age, schema-migrations-<stamp>.dump.age, manifest-<stamp>.json
 db/monthly/<yyyy-mm>/  the month's first successful run, the same three files
-photos/<sha256>.age    one per photo, never removed
+artifacts/<sha256>.age one per photo, never removed
 ```
 
-**Lifecycle rules.** Daily copies are deleted after 36 days and monthly copies after 400
-days, once their locks have expired. There's no rule on `photos/`, so a photo removed in
-LifeOS stays recoverable.
+A copy is written to `<stamp>.partial` and renamed when complete, so a half-written folder
+never looks like a copy. The artifacts folder mirrors the bucket's own keys
+(`artifacts/<sha256>`), so a restore puts each photo back where the database expects it.
 
-**The key.** A B2 application key restricted to this bucket, with `listFiles` and
-`writeFiles` and **no `deleteFiles`**. Object Lock is the real guarantee; the missing
-delete capability is a second one.
+**Retention:**
+- Daily copies are deleted after 35 days.
+- Monthly copies are kept for good. The first draft kept them a year to hold down B2's
+  cost; OneDrive space is already paid for.
+- There's no limit on photos, so a photo removed in LifeOS stays recoverable.
 
 **Photos.** Each night the job:
-1. lists `artifacts/` in the Supabase bucket, and `photos/` in B2;
-2. downloads each photo not yet copied, and checks its bytes hash to its name (a mismatch
-   fails the run: the store was changed outside `bsk`);
-3. encrypts it and uploads it.
+1. lists the photos the database refers to (`bsk.artifact_object`, read from the restored
+   copy, so the list matches the dump);
+2. downloads each one not yet in `artifacts/`, and checks its bytes hash to its name;
+3. encrypts it and saves it.
 
-Reading the Supabase bucket needs a Supabase secret key (`sb_secret_…`), because Supabase
-has no read-only key. It's the broadest secret the job holds. Object Lock means even that
-key can't destroy a backup.
+A photo that's missing from the bucket, or whose bytes have changed, fails the run (the
+store was changed outside `bsk`), and the rest are still copied. Reading the Supabase bucket
+needs the Supabase secret key (`sb_secret_…`), because Supabase has no read-only key. It's
+the broadest secret the job holds.
 
-### 3.7 Secrets: one GitHub Environment per project
+### 3.7 Settings and secrets
 
-Create `backup-staging` now and `backup-production` once production exists. Neither has a
-required reviewer, because the job runs unattended. Their deployment branches are limited
-to `main`.
+`scripts/backup-setup.ps1` sets up one database at a time (`-Target staging`; production
+later with `-EnvFile .env.prod`). It reads the owner connection (`BSK_CONNECTION_STRING`) and
+the Storage secret key (`Storage__SupabaseSecretKey`) from `.env`, then:
 
-| Name | Kind | Value |
-|---|---|---|
-| `BACKUP_DATABASE_URL` | secret | `bsk_backup` session-pooler connection string |
-| `SUPABASE_URL` | variable | `https://<project-ref>.supabase.co` |
-| `SUPABASE_SECRET_KEY` | secret | `sb_secret_…`, which reads the photo bucket |
-| `B2_KEY_ID`, `B2_APP_KEY` | secret | the bucket-restricted key with no delete |
-| `B2_ENDPOINT`, `B2_BUCKET` | variable | the bucket's S3 endpoint and name |
-| `AGE_RECIPIENT` | variable | `age1…`, the public key |
-| `HEALTHCHECK_URL` | secret | the dead-man's switch ping (optional) |
+1. Makes or reuses the age key (§3.4).
+2. Gives `bsk_backup` a login with a new random password, and checks it can sign in. The
+   password is sent as a SCRAM-SHA-256 hash, as psql's `\password` does, so the plaintext
+   never reaches the server or its statement log. Rerunning setup rotates it.
+3. Saves the settings to `%USERPROFILE%\.lifeos\backup\<target>.settings.xml`: the
+   `bsk_backup` connection string, the Supabase URL and secret key, the public key, the folder,
+   the retention and the optional dead-man's switch URL. The secrets are encrypted with
+   Windows DPAPI (`Export-Clixml`), so only Chris's Windows account on this PC can read them.
+4. Registers the scheduled task.
 
-The workflow runs once for each environment that exists, as a matrix. Setting these by
-hand once is fine; a setup script like `fly-setup.ps1` is optional.
+The settings and logs aren't under AppData on purpose. The Claude desktop app is a packaged
+app, so anything it or its terminals write to AppData goes to a private copy that the
+scheduled task never sees.
 
 ### 3.8 Restore runbook and drill
 
-This phase writes `docs/pilot/backup-restore.md` and `scripts/restore.ps1`. A restore goes:
+`scripts/restore.ps1` and [backup-restore.md](backup-restore.md). A restore:
 
-1. Download one stamp folder from B2 and decrypt it:
-   `age -d -i lifeos-backup.key <file>.age > <file>`.
-2. Pick a target:
-   - local Docker for a drill (`docker compose up -d`, with an empty database);
-   - a new Supabase project for a real disaster.
-3. Create `bsk_reader` and `bsk_backup` (NOLOGIN), then `pg_restore --no-owner` both files.
-4. Check the result:
-   - `bsk migrate --json` reports nothing to apply (history and checksums match);
+1. Checks the copy's files against the manifest and decrypts them with the private key.
+2. Restores into an empty database. By default that's a new `lifeos_restore` on the local
+   Docker Postgres, for the drill. Otherwise it's the owner connection passed in, such as a
+   new Supabase project for a real disaster. A database that already has `bsk` is refused.
+3. Creates the roles the dump names and sets the `bsk.*` settings, as in §3.5.
+4. Checks:
+   - every row count matches the manifest;
+   - `bsk migrate --json` applies nothing when the copy is current, or brings an older copy
+     up to date;
    - `bsk rebuild --verify` reports no drift.
-5. Real disaster only: decrypt `photos/*.age` and upload each to the target bucket at
-   `artifacts/<sha256>`.
-6. Point the app at the restored database:
+5. Photos: `-ArtifactsFolder` decrypts them to a folder, each checked against its sha256.
+   `-UploadArtifacts` uploads them to the new project's bucket, which it creates if missing.
+6. Then point the app at it:
    - set `bsk_reader`'s password;
    - update the Fly secrets (deploy.md);
    - sign in with Google;
    - reconnect Oura if `Integrations__TokenKey` is lost.
 
 **Drill:** once right after Phase 0 ships, then every three months. A repeating Task in
-LifeOS is the natural reminder. Restore last night's copy into local Docker and open the
-web app or the Pilot against it. The drill is the only check that the private key still
-works.
-
-**Optional third copy.** `scripts/backup-pull.ps1` copies new encrypted files from B2 to
-a folder on Chris's PC, and Windows Task Scheduler can run it weekly.
+LifeOS is the natural reminder. Restore last night's copy into local Docker and look at it
+through the app. The drill is the only check that the private key still works.
 
 ### 3.9 Done when
 
-- The nightly run is green on staging for a week.
-- A deliberately broken run (a wrong password) emails Chris, and a skipped night trips the
-  dead-man's switch.
-- The drill restores into local Docker, the row counts match, and the web app reads it.
-- Deleting a file with the job's B2 key fails, and so does deleting a locked file from
-  the B2 dashboard.
-- deploy.md and the README link the runbook.
+- [x] Tested end to end against a throwaway database standing in for staging, with a fake
+  Storage and a fake dead-man's switch, all on 2026-10-28. It covered:
+  - a backup and a restore, photos included, with matching row counts and the home zone
+    carried over;
+  - writes during the dump (retried, then failed after three tries);
+  - a wrong password, drifted derived tables, and a photo missing from the bucket;
+  - pruning, two runs at once, and a run started by Task Scheduler.
+- [ ] Staging: migration 0046 applied, setup run, and the first backup green.
+- [ ] The drill restores staging's copy into local Docker, the row counts match, and the
+  app reads it.
+- [ ] The nightly run is green for a week. Optional: the dead-man's switch is set, and a
+  skipped night trips it.
+- [x] deploy.md and the README link the runbook.
 
 ## 4. Phase 1: read-only MCP server
 
@@ -660,14 +690,16 @@ step) and triages it in LifeOS.
   replace it.
 - **Backups hold everything.** Only Chris's private key can read them, and losing it loses
   them. That's what the drill is for.
-- **Missed nights.** GitHub can delay scheduled runs, and it disables schedules in a
-  public repository after 60 days without activity. The dead-man's switch catches a night
-  with no backup.
+- **Missed nights.** The backup runs only while Chris's PC is on and he's signed in. A
+  missed night runs when the PC is back, and a long absence means no backups for that time.
+  The dead-man's switch catches a night with no backup.
+- **Deleted backups.** Unlike B2's Object Lock, nothing stops malware on the PC from deleting
+  or encrypting the OneDrive folder. OneDrive's recycle bin and Restore your OneDrive reach
+  back 30 days.
 
 ## 7. Cost
 
-- **Phase 0:** B2 should cost cents a month at this size. GitHub Actions minutes are
-  within the free allowance, at about 5 to 10 minutes a night.
+- **Phase 0:** nothing. It uses OneDrive space Chris already has and runs on his PC.
 - **Phases 1 and 2:** no Supabase plan change. The OAuth server is free during its beta,
   and Chris counts as one monthly active user. Fly is unchanged, unless an always-on
   machine is wanted (a few dollars a month).
@@ -706,8 +738,8 @@ step) and triages it in LifeOS.
   start on Pro (7 days); free projects should export their own.
 - [C# MCP SDK, `ModelContextProtocol.AspNetCore`](https://csharp.sdk.modelcontextprotocol.io/api/ModelContextProtocol.AspNetCore.html):
   `WithHttpTransport`, `MapMcp`, authorization on tools.
-- Backblaze [Object Lock](https://www.backblaze.com/docs/cloud-storage-object-lock),
-  [enabling it via the S3 API](https://backblaze.com/docs/cloud-storage-enable-object-lock-with-the-s3-compatible-api),
-  and [application key capabilities](https://backblaze.com/docs/cloud-storage-application-key-capabilities).
-  B2's current pricing and free allowance weren't checked; confirm them when signing up.
+- OneDrive (checked 2026-10-28): [the recycle bin](https://support.microsoft.com/en-us/office/restore-deleted-files-or-folders-in-onedrive-949ada80-0026-4db3-a953-c99083e6a84f)
+  keeps a personal account's deleted files for 30 days, and
+  [Restore your OneDrive](https://support.microsoft.com/en-us/onedrive/restore-your-onedrive-files)
+  lets Microsoft 365 subscribers roll everything back up to 30 days.
 - [age](https://age-encryption.org): public-key file encryption.

@@ -140,6 +140,12 @@ runtime secrets, and gives GitHub Actions the deploy token for it.
 Full database setup: [`docs/pilot/supabase-hosting.md`](docs/pilot/supabase-hosting.md).
 Production cutover (Fly, secrets, OAuth): [`docs/pilot/deploy.md`](docs/pilot/deploy.md).
 
+**Backups.** A scheduled task on Chris's PC backs staging up every night to OneDrive
+(`scripts/backup.ps1`). Each copy is the database and new photos, restore-tested in a scratch
+Postgres and encrypted with age to a key only Chris holds. It reads as `bsk_backup`, a role
+that reads everything and writes nothing (migration 0046). Setup, the quarterly restore
+drill and a real restore are in [`docs/pilot/backup-restore.md`](docs/pilot/backup-restore.md).
+
 ## Migrations
 
 Migrations are plain SQL under `db/migrations`, named `NNNN__name.sql` (e.g.

@@ -91,6 +91,13 @@ Production uses GitHub Environment `production` (required reviewer) and
 [`fly.toml`](../../fly.toml). Approving the production job runs migrate and
 then deploy in that same job, so a new image cannot go live ahead of schema.
 
+## Backups
+
+Staging is backed up every night to OneDrive from Chris's PC: the database and photos,
+restore-tested and encrypted. Setup, the restore drill and a real restore are in
+[backup-restore.md](backup-restore.md). A migration that goes wrong can be undone by restoring
+last night's copy.
+
 ## Rollback
 
 Redeploy the previous Fly image; do **not** reverse migrations.
@@ -215,6 +222,8 @@ staging project instead. Decide then.) Once per production setup:
 7. Turn the production job on: `gh variable set DEPLOY_PRODUCTION --body true`.
    The next merge waits for your approval after staging, then migrates and
    deploys production in one job. Run the same checks as staging step 5.
+8. Back it up: `./scripts/backup-setup.ps1 -Target production -EnvFile .env.prod -AgeRecipient age1…`
+   (the same public key as staging). See [backup-restore.md](backup-restore.md).
 
 Optional: `fly certs add your.domain` for a custom hostname.
 
