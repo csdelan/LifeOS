@@ -194,7 +194,7 @@ SELECT DISTINCT store, bucket, object_key, sha256 FROM bsk.artifact_object ORDER
     }
 
     $commit = (Invoke-Process git @('-C', $repo, 'rev-parse', '--short', 'HEAD') -AllowFailure).Out.Trim()
-    if ((Invoke-Process git @('-C', $repo, 'status', '--porcelain') -AllowFailure).Out.Trim()) { $commit += ' (with local changes)' }
+    if ((Invoke-Process git @('-C', $repo, 'status', '--porcelain', '--untracked-files=no') -AllowFailure).Out.Trim()) { $commit += ' (with local changes)' }
     $manifest = [ordered]@{
         format           = 1
         target           = $Target
