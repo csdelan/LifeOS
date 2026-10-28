@@ -196,7 +196,8 @@ export function mockConsentClient(): ConsentClient {
         kind: "ask",
         request: {
           authorizationId,
-          clientId: "mock-claude",
+          // Claude connecting again: the mock list already has its earlier client, "mock-claude".
+          clientId: "mock-claude-2",
           clientName: "Claude",
           clientUri: "https://claude.ai",
           redirectUri: MOCK_CALLBACK,

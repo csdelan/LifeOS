@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AgentRecord, AgentsClient } from "@/lib/agents";
 import { isLiveApi } from "@/lib/api-base";
 import { ApiRequestError } from "@/lib/live/http";
 import { fetchMe } from "@/lib/me";
@@ -38,10 +39,15 @@ const { signInWithGoogle, signOut, authState, client, browser, agents } = vi.hoi
     deny: vi.fn<ConsentClient["deny"]>(),
   },
   browser: { go: vi.fn<(url: string) => void>(), replace: vi.fn<(url: string) => void>() },
-  agents: { allow: vi.fn<(clientId: string, name: string, clientUri?: string | null) => Promise<unknown>>() },
+  agents: {
+    allow: vi.fn<AgentsClient["allow"]>(),
+    overview: vi.fn<AgentsClient["overview"]>(),
+    removeGrant: vi.fn<AgentsClient["removeGrant"]>(),
+  },
 }));
 
-vi.mock("@/lib/agents", () => ({
+vi.mock("@/lib/agents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/agents")>()),
   getAgentsClient: () => agents,
 }));
 
@@ -78,6 +84,30 @@ const request: ConsentRequest = {
   email: "chris@example.com",
 };
 
+function known(clientId: string, extra: Partial<AgentRecord> = {}): AgentRecord {
+  return {
+    clientId,
+    name: "Claude",
+    clientUri: "https://claude.ai",
+    redirectUri: CALLBACK,
+    allowed: true,
+    allowedAt: "2026-10-28T17:18:00Z",
+    revokedAt: null,
+    replacedBy: null,
+    personId: null,
+    personName: null,
+    lastCallAt: null,
+    callsThisWeek: 0,
+    lastRefusedAt: null,
+    refusedThisWeek: 0,
+    ...extra,
+  };
+}
+
+function knowing(...records: AgentRecord[]) {
+  agents.overview.mockResolvedValue({ mcpEnabled: true, writes: "off", agents: records });
+}
+
 function at(search: string) {
   window.history.replaceState({}, "", `/oauth/consent${search}`);
 }
@@ -112,7 +142,10 @@ describe("OAuthConsentPage", () => {
     client.deny.mockReset().mockResolvedValue(`${CALLBACK}?error=access_denied&state=s`);
     browser.go.mockReset();
     browser.replace.mockReset();
-    agents.allow.mockReset().mockResolvedValue({});
+    agents.allow.mockReset().mockResolvedValue(known("client-1"));
+    agents.overview.mockReset();
+    knowing();
+    agents.removeGrant.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => window.history.replaceState({}, "", "/"));
@@ -152,8 +185,73 @@ describe("OAuthConsentPage", () => {
     renderPage();
     await user.click(await screen.findByRole("button", { name: "Approve" }));
     await waitFor(() => expect(client.approve).toHaveBeenCalledWith("auth-1"));
-    expect(agents.allow).toHaveBeenCalledWith("client-1", "Claude", "https://claude.ai");
+    expect(agents.allow).toHaveBeenCalledWith("client-1", "Claude", "https://claude.ai", { redirectUri: CALLBACK, replaces: [] });
     expect(agents.allow.mock.invocationCallOrder[0]).toBeLessThan(client.approve.mock.invocationCallOrder[0]);
+  });
+
+  describe("connecting again", () => {
+    const earlier = known("old-1", { personId: "person-claude", personName: "Claude", allowedAt: "2026-10-28T15:59:00Z" });
+
+    it("offers to replace the agent's earlier client, and does it before approving", async () => {
+      knowing(earlier, known("code", { name: "Claude Code (lifeos)", redirectUri: "claude://claude.ai/mcp-auth-callback/sdk" }));
+      const user = userEvent.setup();
+      renderPage();
+      const box = await screen.findByRole("checkbox", { name: "Replace the earlier connection" });
+      expect(box).toBeChecked();
+      expect(screen.getByText(/This one acts as Claude too, and the earlier one is revoked\. Untick to keep both\./)).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Approve" }));
+      await waitFor(() => expect(client.approve).toHaveBeenCalledWith("auth-1"));
+      expect(agents.allow).toHaveBeenCalledWith("client-1", "Claude", "https://claude.ai", {
+        redirectUri: CALLBACK,
+        replaces: ["old-1"],
+      });
+      expect(agents.removeGrant).toHaveBeenCalledWith("old-1");
+      expect(agents.removeGrant).toHaveBeenCalledTimes(1);
+      expect(agents.removeGrant.mock.invocationCallOrder[0]).toBeLessThan(client.approve.mock.invocationCallOrder[0]);
+    });
+
+    it("keeps both when unticked", async () => {
+      knowing(earlier);
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole("checkbox", { name: "Replace the earlier connection" }));
+      await user.click(screen.getByRole("button", { name: "Approve" }));
+      await waitFor(() => expect(client.approve).toHaveBeenCalled());
+      expect(agents.allow).toHaveBeenCalledWith("client-1", "Claude", "https://claude.ai", { redirectUri: CALLBACK, replaces: [] });
+      expect(agents.removeGrant).not.toHaveBeenCalled();
+    });
+
+    it("names every earlier client, and approves even when Supabase won't drop their grants", async () => {
+      knowing(earlier, known("old-2", { allowedAt: "2026-10-28T17:00:00Z" }));
+      agents.removeGrant.mockRejectedValue(new Error("grant not found"));
+      const user = userEvent.setup();
+      renderPage();
+      expect(await screen.findByRole("checkbox", { name: "Replace the earlier connections" })).toBeChecked();
+      expect(screen.getByText(/the earlier ones are revoked\. Untick to keep them all\./)).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Approve" }));
+      await waitFor(() => expect(browser.go).toHaveBeenCalledWith(`${CALLBACK}?code=c&state=s`));
+      expect(agents.allow.mock.calls[0][3]).toEqual({ redirectUri: CALLBACK, replaces: ["old-2", "old-1"] });
+    });
+
+    it("approves as a new agent when LifeOS's agents can't be read", async () => {
+      agents.overview.mockRejectedValue(new Error("API 500"));
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole("button", { name: "Approve" }));
+      await waitFor(() => expect(client.approve).toHaveBeenCalled());
+      expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+      expect(agents.allow.mock.calls[0][3]).toEqual({ redirectUri: CALLBACK, replaces: [] });
+    });
+
+    it("waits for LifeOS's agents before Approve can be clicked", async () => {
+      let answer: (value: Awaited<ReturnType<AgentsClient["overview"]>>) => void = () => {};
+      agents.overview.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      renderPage();
+      expect(await screen.findByRole("button", { name: "Approve" })).toBeDisabled();
+      answer({ mcpEnabled: true, writes: "off", agents: [earlier] });
+      await waitFor(() => expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled());
+      expect(screen.getByRole("checkbox", { name: "Replace the earlier connection" })).toBeChecked();
+    });
   });
 
   it("doesn't approve when LifeOS can't add the agent", async () => {

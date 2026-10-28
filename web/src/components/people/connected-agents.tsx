@@ -289,9 +289,11 @@ function StatusText({ row }: { row: AgentRow }) {
     case "gone":
       return (
         <p className="mt-2 text-sm text-muted-foreground">
-          {record?.revokedAt
-            ? `Revoked ${formatTimestamp(record.revokedAt)}. Connect it again to use it.`
-            : `Never allowed in LifeOS.${refused}`}
+          {record?.revokedAt && record.replacedBy
+            ? `Replaced ${formatTimestamp(record.revokedAt)}, when ${row.name} connected again.`
+            : record?.revokedAt
+              ? `Revoked ${formatTimestamp(record.revokedAt)}. Connect it again to use it.`
+              : `Never allowed in LifeOS.${refused}`}
         </p>
       );
   }
@@ -337,22 +339,7 @@ function Actions({ row, busy, onAsk }: { row: AgentRow; busy: boolean; onAsk: (p
           >
             Allow
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() =>
-              onAsk({
-                action: { kind: "remove-grant", clientId: row.clientId },
-                title: `Remove ${row.name}?`,
-                description: "Supabase removes its access, and it leaves this list unless it's connected again.",
-                confirm: "Remove",
-                destructive: true,
-              })
-            }
-          >
-            Remove
-          </Button>
+          <RemoveGrant row={row} busy={busy} onAsk={onAsk} />
         </>
       );
     case "no-grant":
@@ -375,8 +362,30 @@ function Actions({ row, busy, onAsk }: { row: AgentRow; busy: boolean; onAsk: (p
         </Button>
       );
     case "gone":
-      return null;
+      // Supabase may still list a replaced client, if taking its grant away failed.
+      return row.grant ? <RemoveGrant row={row} busy={busy} onAsk={onAsk} /> : null;
   }
+}
+
+function RemoveGrant({ row, busy, onAsk }: { row: AgentRow; busy: boolean; onAsk: (pending: Pending) => void }) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={busy}
+      onClick={() =>
+        onAsk({
+          action: { kind: "remove-grant", clientId: row.clientId },
+          title: `Remove ${row.name}?`,
+          description: "Supabase removes its access, and it leaves this list unless it's connected again.",
+          confirm: "Remove",
+          destructive: true,
+        })
+      }
+    >
+      Remove
+    </Button>
+  );
 }
 
 function RecentCalls({ id, clientId }: { id: string; clientId: string }) {

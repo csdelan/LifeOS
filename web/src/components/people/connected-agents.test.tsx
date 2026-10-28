@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectedAgents } from "@/components/people/connected-agents";
-import { resetMockAgents } from "@/lib/agents";
+import { CLAUDE_CALLBACK, mockAgentsClient, resetMockAgents } from "@/lib/agents";
 
 const { overrides } = vi.hoisted(() => ({
   overrides: { mcpEnabled: true, grantsError: null as Error | null },
@@ -60,6 +60,25 @@ describe("ConnectedAgents", () => {
     // Waiting on Chris comes first.
     const names = screen.getAllByRole("article").map((a) => within(a).getByRole("heading").textContent);
     expect(names).toEqual(["Research helper", "Claude"]);
+  });
+
+  it("says a client was replaced when its agent connected again, and offers to remove its leftover grant", async () => {
+    // Claude connected again; the consent page replaced the earlier client but Supabase still lists it.
+    await mockAgentsClient().allow("mock-claude-2", "Claude", "https://claude.ai", {
+      redirectUri: CLAUDE_CALLBACK,
+      replaces: ["mock-claude"],
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await screen.findAllByRole("article", { name: "Claude" });
+    const [replaced] = screen
+      .getAllByRole("article", { name: "Claude" })
+      .filter((a) => within(a).queryByText(/when Claude connected again/));
+    expect(within(replaced).getByText("Revoked")).toBeInTheDocument();
+    expect(within(replaced).queryByRole("button", { name: "Allow" })).not.toBeInTheDocument();
+    await user.click(within(replaced).getByRole("button", { name: "Remove" }));
+    await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(within(replaced).queryByRole("button", { name: "Remove" })).not.toBeInTheDocument());
   });
 
   it("allows an agent Supabase lists only after asking", async () => {

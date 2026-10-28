@@ -16,10 +16,17 @@ export type AgentRecord = {
   /** Its name as the consent page showed it; null for a client LifeOS never allowed. */
   name: string | null;
   clientUri: string | null;
+  /**
+   * Where the consent page sent the browser back to (migration 0048). With the name, it says which
+   * agent this is: a client with both the same replaces this one.
+   */
+  redirectUri: string | null;
   /** On the list and not revoked: `/mcp` answers it. */
   allowed: boolean;
   allowedAt: string | null;
   revokedAt: string | null;
+  /** The client that replaced this one when the agent connected again. */
+  replacedBy: string | null;
   /** The AI-agent Person it acts as (GEN-15). */
   personId: string | null;
   personName: string | null;
@@ -61,13 +68,24 @@ export type AgentGrant = {
   grantedAt: string;
 };
 
+/** What the consent page adds when it allows an agent. */
+export type AllowOptions = {
+  /** Where approving sends the browser back to. */
+  redirectUri?: string | null;
+  /**
+   * Clients this one replaces (see `replaceable`): it acts as their Person, and they're revoked.
+   * LifeOS refuses the lot unless each has the same name and return address.
+   */
+  replaces?: string[];
+};
+
 export interface AgentsClient {
   overview(): Promise<AgentsOverview>;
   /** The agents approved at Supabase. */
   grants(): Promise<AgentGrant[]>;
   calls(clientId: string, limit?: number): Promise<AgentCallRow[]>;
   /** Adds an agent to LifeOS's list, or allows it again. */
-  allow(clientId: string, name: string, clientUri?: string | null): Promise<AgentRecord>;
+  allow(clientId: string, name: string, clientUri?: string | null, options?: AllowOptions): Promise<AgentRecord>;
   /** Takes an agent off LifeOS's list: `/mcp` refuses its next call. */
   revoke(clientId: string): Promise<AgentRecord>;
   /** Removes Supabase's grant, so the agent can't get new tokens. */
@@ -83,7 +101,7 @@ export type AgentStatus =
   | "not-allowed"
   /** Allowed in LifeOS, but Supabase no longer lists it: it can't get new tokens. */
   | "no-grant"
-  /** Neither: revoked, or a client LifeOS only ever refused. */
+  /** Revoked (or replaced when its agent connected again), or a client LifeOS only ever refused. */
   | "gone";
 
 export type AgentRow = {
@@ -110,7 +128,9 @@ export function agentRows(grants: AgentGrant[], records: AgentRecord[]): AgentRo
       clientId: grant.clientId,
       name: grant.name || record?.name || "An unnamed agent",
       uri: grant.uri ?? record?.clientUri ?? null,
-      status: record?.allowed ? "connected" : "not-allowed",
+      // A client replaced when its agent connected again isn't waiting on Chris, even while
+      // Supabase still lists it.
+      status: record?.allowed ? "connected" : record?.replacedBy ? "gone" : "not-allowed",
       grant,
       record,
     };
@@ -130,6 +150,38 @@ export function agentRows(grants: AgentGrant[], records: AgentRecord[]): AgentRo
   );
 }
 
+/**
+ * The clients a connecting agent replaces (migration 0048): Claude registers a new client each
+ * time it connects again, so the one it used before stays on the list acting as its Person. These
+ * are the ones with the same name and the same return address, not already replaced, that are
+ * still allowed or act as someone, most recently allowed first. Only claude.ai receives a sign-in
+ * sent to claude.ai's address, so a client can't pass itself off as Claude by its name alone.
+ */
+export function replaceable(
+  records: AgentRecord[],
+  request: { clientId: string; clientName: string; redirectUri: string },
+): AgentRecord[] {
+  return records
+    .filter(
+      (r) =>
+        r.clientId !== request.clientId &&
+        r.name === request.clientName &&
+        r.redirectUri !== null &&
+        r.redirectUri === request.redirectUri &&
+        r.replacedBy === null &&
+        (r.allowed || r.personId !== null),
+    )
+    .sort((a, b) => (b.allowedAt ?? "").localeCompare(a.allowedAt ?? ""));
+}
+
+/** The Person a replacing client takes on: the one the most recently allowed of them acts as. */
+export function carriedPerson(replaced: AgentRecord[]): { id: string; name: string } | null {
+  const from = [...replaced]
+    .sort((a, b) => (b.allowedAt ?? "").localeCompare(a.allowedAt ?? ""))
+    .find((r) => r.personId !== null);
+  return from?.personId ? { id: from.personId, name: from.personName ?? "an AI agent" } : null;
+}
+
 function num(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -145,9 +197,11 @@ export function normalizeAgent(raw: unknown): AgentRecord {
     clientId: String(r.clientId ?? ""),
     name: str(r.name),
     clientUri: str(r.clientUri),
+    redirectUri: str(r.redirectUri),
     allowed: r.allowed === true,
     allowedAt: str(r.allowedAt),
     revokedAt: str(r.revokedAt),
+    replacedBy: str(r.replacedBy),
     personId: str(r.personId),
     personName: str(r.personName),
     lastCallAt: str(r.lastCallAt),
@@ -209,12 +263,17 @@ export function liveAgentsClient(): AgentsClient {
       )) as Record<string, unknown>;
       return Array.isArray(data.calls) ? data.calls.map(normalizeCall) : [];
     },
-    async allow(clientId, name, clientUri) {
+    async allow(clientId, name, clientUri, options) {
       return normalizeAgent(
         await unwrap(
           api().PUT("/api/agents/{clientId}", {
             params: { path: { clientId } },
-            body: { name, clientUri: webAddress(clientUri) },
+            body: {
+              name,
+              clientUri: webAddress(clientUri),
+              redirectUri: options?.redirectUri ?? null,
+              replaces: options?.replaces ?? [],
+            },
           }),
         ),
       );
@@ -245,6 +304,8 @@ export function liveAgentsClient(): AgentsClient {
 
 const MOCK_CLAUDE = "mock-claude";
 const MOCK_HELPER = "mock-helper";
+/** Where Claude's sign-ins come back to; the mock consent request uses it too. */
+export const CLAUDE_CALLBACK = "https://claude.ai/api/mcp/auth_callback";
 
 type MockState = { records: Map<string, AgentRecord>; grants: Map<string, AgentGrant>; calls: AgentCallRow[] };
 
@@ -257,9 +318,11 @@ function seedState(): MockState {
     clientId: MOCK_CLAUDE,
     name: "Claude",
     clientUri: "https://claude.ai",
+    redirectUri: CLAUDE_CALLBACK,
     allowed: true,
     allowedAt: hoursAgo(72),
     revokedAt: null,
+    replacedBy: null,
     personId: null,
     personName: null,
     lastCallAt: null,
@@ -298,9 +361,11 @@ function mockRecords(): AgentRecord[] {
       clientId,
       name: null,
       clientUri: null,
+      redirectUri: null,
       allowed: false,
       allowedAt: null,
       revokedAt: null,
+      replacedBy: null,
       personId: null,
       personName: null,
       lastCallAt: null,
@@ -352,17 +417,35 @@ export function mockAgentsClient(): AgentsClient {
         .sort((a, b) => b.calledAt.localeCompare(a.calledAt) || b.id - a.id)
         .slice(0, limit);
     },
-    async allow(clientId, name, clientUri) {
+    async allow(clientId, name, clientUri, options) {
       const now = new Date().toISOString();
       const previous = mock.records.get(clientId);
+      const redirectUri = options?.redirectUri ?? null;
+      // As LifeOS does: each replaced client must be on the list with the same name and address.
+      const replaced = [...new Set(options?.replaces ?? [])].map((id) => {
+        const old = mock.records.get(id);
+        if (id === clientId) throw new Error("A client can't replace itself.");
+        if (!old) throw new Error(`${id} isn't on LifeOS's list, so there's nothing to replace.`);
+        if (old.name !== name || !redirectUri || old.redirectUri !== redirectUri) {
+          throw new Error(`${id} is ${old.name}. A client replaces only one with the same name and return address.`);
+        }
+        return old;
+      });
+      const carried = previous?.personId ? null : carriedPerson(replaced);
       mock.records.set(clientId, {
         ...(previous ?? mockRecordShell(clientId)),
         name,
         clientUri: webAddress(clientUri),
+        redirectUri: redirectUri ?? previous?.redirectUri ?? null,
         allowed: true,
         allowedAt: previous?.allowed ? previous.allowedAt : now,
         revokedAt: null,
+        replacedBy: null,
+        ...(carried ? { personId: carried.id, personName: carried.name } : {}),
       });
+      for (const old of replaced) {
+        mock.records.set(old.clientId, { ...old, allowed: false, revokedAt: old.revokedAt ?? now, replacedBy: clientId });
+      }
       // The consent page's approve, in the mock: Supabase lists it too.
       if (!mock.grants.has(clientId)) {
         mock.grants.set(clientId, { clientId, name, uri: clientUri ?? null, scopes: ["openid"], grantedAt: now });
@@ -397,9 +480,11 @@ function mockRecordShell(clientId: string): AgentRecord {
     clientId,
     name: null,
     clientUri: null,
+    redirectUri: null,
     allowed: false,
     allowedAt: null,
     revokedAt: null,
+    replacedBy: null,
     personId: null,
     personName: null,
     lastCallAt: null,

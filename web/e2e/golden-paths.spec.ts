@@ -1185,6 +1185,8 @@ test.describe("golden paths", () => {
     await page.goto("/oauth/consent?authorization_id=mock-1");
     await expect(page.getByRole("heading", { name: "Connect Claude to LifeOS?" })).toBeVisible();
     await expect(page.getByRole("navigation")).toHaveCount(0);
+    // The mock's Claude is connecting again, so the page offers to replace its earlier client.
+    await expect(page.getByRole("checkbox", { name: "Replace the earlier connection" })).toBeChecked();
     await page.getByRole("button", { name: "Approve" }).click();
     await expect(page).toHaveURL(/^https:\/\/claude\.ai\/api\/mcp\/auth_callback\?code=mock-code/);
   });

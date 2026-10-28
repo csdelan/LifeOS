@@ -1850,11 +1850,13 @@ export interface components {
             clientId?: string;
             name?: null | string;
             clientUri?: null | string;
+            redirectUri?: null | string;
             allowed?: boolean;
             /** Format: date-time */
             allowedAt?: null | string;
             /** Format: date-time */
             revokedAt?: null | string;
+            replacedBy?: null | string;
             /** Format: uuid */
             personId?: null | string;
             personName?: null | string;
@@ -1882,6 +1884,8 @@ export interface components {
         AllowAgentBody: {
             name?: null | string;
             clientUri?: null | string;
+            redirectUri?: null | string;
+            replaces?: null | string[];
         };
         ApiError: {
             error: string;

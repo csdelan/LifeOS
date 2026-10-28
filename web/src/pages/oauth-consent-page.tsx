@@ -4,8 +4,11 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AuthChrome, AuthConfigError, AuthReachError, AuthSplash, Mark } from "@/components/auth/auth-screens";
 import { Button } from "@/components/ui/button";
-import { getAgentsClient } from "@/lib/agents";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { carriedPerson, getAgentsClient, replaceable, type AgentRecord } from "@/lib/agents";
 import { isLiveApi } from "@/lib/api-base";
+import { formatTimestamp } from "@/lib/dates";
 import { ApiRequestError } from "@/lib/live/http";
 import { fetchMe, meQueryKey } from "@/lib/me";
 import {
@@ -26,6 +29,10 @@ import { isSupabaseConfigured } from "@/lib/supabase";
  * asks to read his life, and he approves or denies it here. It stands outside the app's sign-in
  * gate because it has its own: signed out, it keeps the request and signs in; signed in with an
  * account LifeOS doesn't allow, it says so and lets the request be turned down.
+ *
+ * An agent that connects again registers a new client. When LifeOS's list already has one with the
+ * same name and return address, the page offers to replace it (ticked): the new client acts as the
+ * same Person, and the earlier one is revoked and loses its grant at Supabase.
  */
 export function OAuthConsentPage() {
   const live = isLiveApi();
@@ -36,6 +43,7 @@ export function OAuthConsentPage() {
   const [busy, setBusy] = useState<"approve" | "deny" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [leavingTo, setLeavingTo] = useState<string | null>(null);
+  const [replace, setReplace] = useState(true);
 
   const me = useQuery({
     queryKey: meQueryKey,
@@ -53,6 +61,21 @@ export function OAuthConsentPage() {
     retry: false,
     staleTime: Infinity,
   });
+
+  // The agents LifeOS already knows, to spot the client this one replaces. If they can't be read,
+  // the request is approved as a new agent, as before.
+  const asking = lookup.data?.kind === "ask" ? lookup.data.request : null;
+  const known = useQuery({
+    queryKey: ["oauth-consent", "agents"],
+    queryFn: () => agents.overview(),
+    enabled: asking !== null,
+    retry: false,
+    staleTime: Infinity,
+  });
+  const earlier = useMemo(
+    () => (asking && known.data ? replaceable(known.data.agents, asking) : []),
+    [asking, known.data],
+  );
 
   // Signing in leaves for Google and comes back to the site's root; the sign-in gate there
   // sends the browser back here with the request.
@@ -91,15 +114,19 @@ export function OAuthConsentPage() {
     // Approving adds the agent to LifeOS's own list first (agent-access plan §4.4, fix 3): /mcp
     // answers only agents on it, and only Chris's web session can add one. If that fails, the
     // request isn't approved at Supabase either.
-    const request = lookup.data?.kind === "ask" ? lookup.data.request : null;
+    const request = asking;
     if (decision === "approve") {
       if (!request) {
         setError("The request hasn't loaded yet.");
         setBusy(null);
         return;
       }
+      const replaces = replace ? earlier.map((r) => r.clientId) : [];
       try {
-        await agents.allow(request.clientId, request.clientName, request.clientUri ?? null);
+        await agents.allow(request.clientId, request.clientName, request.clientUri ?? null, {
+          redirectUri: request.redirectUri,
+          replaces,
+        });
       } catch (e) {
         setError(
           `LifeOS couldn't add ${request.clientName} to its agents, so it wasn't approved: ${
@@ -109,6 +136,9 @@ export function OAuthConsentPage() {
         setBusy(null);
         return;
       }
+      // Supabase still holds the replaced clients' grants. LifeOS already refuses them, so taking
+      // the grants away only tidies Connected agents, and a failure doesn't stop the approval.
+      await Promise.allSettled(replaces.map((clientId) => agents.removeGrant(clientId)));
     }
     try {
       follow(decision === "approve" ? await client.approve(id) : await client.deny(id));
@@ -193,18 +223,39 @@ export function OAuthConsentPage() {
   }
   if (!lookup.data || lookup.data.kind !== "ask") return <Waiting label="Loading the request…" />;
 
-  return <ConsentCard request={lookup.data.request} busy={busy} error={error} onDecide={(d) => void decide(d)} />;
+  return (
+    <ConsentCard
+      request={lookup.data.request}
+      busy={busy}
+      error={error}
+      checking={known.isLoading}
+      earlier={earlier}
+      replace={replace}
+      onReplace={setReplace}
+      onDecide={(d) => void decide(d)}
+    />
+  );
 }
 
 function ConsentCard({
   request,
   busy,
   error,
+  checking,
+  earlier,
+  replace,
+  onReplace,
   onDecide,
 }: {
   request: ConsentRequest;
   busy: "approve" | "deny" | null;
   error: string | null;
+  /** Still reading LifeOS's agents, to spot an earlier client; Approve waits for it. */
+  checking: boolean;
+  /** Earlier clients of the same agent, most recently allowed first. */
+  earlier: AgentRecord[];
+  replace: boolean;
+  onReplace: (replace: boolean) => void;
   onDecide: (decision: "approve" | "deny") => void;
 }) {
   const asks = scopeWords(request.scopes);
@@ -247,6 +298,15 @@ function ConsentCard({
             </Detail>
           ) : null}
         </dl>
+        {earlier.length > 0 ? (
+          <Replacing
+            name={request.clientName}
+            earlier={earlier}
+            replace={replace}
+            disabled={busy !== null}
+            onReplace={onReplace}
+          />
+        ) : null}
         <p className="mt-5 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
           Only approve an agent you started connecting yourself, just now. Approving adds it to
           Connected agents on the People page, where you can see what it reads and revoke it.
@@ -256,12 +316,59 @@ function ConsentCard({
           <Button variant="outline" disabled={busy !== null} onClick={() => onDecide("deny")}>
             {busy === "deny" ? "Denying…" : "Deny"}
           </Button>
-          <Button disabled={busy !== null} onClick={() => onDecide("approve")}>
+          <Button disabled={busy !== null || checking} onClick={() => onDecide("approve")}>
             {busy === "approve" ? "Approving…" : "Approve"}
           </Button>
         </div>
       </section>
     </AuthChrome>
+  );
+}
+
+/**
+ * The agent connected before under another client: ticked, approving makes this client act as the
+ * same Person and revokes the earlier one, so Connected agents keeps one entry per agent.
+ */
+function Replacing({
+  name,
+  earlier,
+  replace,
+  disabled,
+  onReplace,
+}: {
+  name: string;
+  earlier: AgentRecord[];
+  replace: boolean;
+  disabled: boolean;
+  onReplace: (replace: boolean) => void;
+}) {
+  const many = earlier.length > 1;
+  const when = earlier.map((r) => (r.allowedAt ? formatTimestamp(r.allowedAt) : "before"));
+  const carried = carriedPerson(earlier);
+  const revoked = many ? "the earlier ones are revoked" : "the earlier one is revoked";
+  return (
+    <div className="mt-5 rounded-lg border border-border px-3 py-3 text-sm">
+      <div className="flex items-start gap-3">
+        <Checkbox
+          id="consent-replace"
+          className="mt-0.5"
+          checked={replace}
+          disabled={disabled}
+          aria-describedby="consent-replace-detail"
+          onCheckedChange={(checked) => onReplace(checked === true)}
+        />
+        <div className="min-w-0">
+          <Label htmlFor="consent-replace" className="leading-snug font-medium">
+            {many ? "Replace the earlier connections" : "Replace the earlier connection"}
+          </Label>
+          <p id="consent-replace-detail" className="mt-1 text-muted-foreground">
+            {name} connected before ({when.join(", ")}).{" "}
+            {carried ? `This one acts as ${carried.name} too, and ${revoked}.` : `${revoked[0].toUpperCase()}${revoked.slice(1)}.`}{" "}
+            {many ? "Untick to keep them all." : "Untick to keep both."}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 

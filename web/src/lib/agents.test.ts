@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   agentRows,
+  CLAUDE_CALLBACK,
+  carriedPerson,
   mockAgentsClient,
   normalizeAgent,
   normalizeCall,
+  replaceable,
   resetMockAgents,
   startOfWeek,
   webAddress,
@@ -17,9 +20,11 @@ function record(clientId: string, extra: Partial<AgentRecord> = {}): AgentRecord
     clientId,
     name: clientId,
     clientUri: null,
+    redirectUri: null,
     allowed: true,
     allowedAt: "2026-10-27T10:00:00Z",
     revokedAt: null,
+    replacedBy: null,
     personId: null,
     personName: null,
     lastCallAt: null,
@@ -101,6 +106,47 @@ describe("startOfWeek", () => {
   });
 });
 
+describe("agentRows and replaced clients", () => {
+  it("shows a replaced client Supabase still lists as gone, not as waiting on Chris", () => {
+    const rows = agentRows([grant("old", "Claude")], [record("old", { allowed: false, revokedAt: "2026-10-28T18:00:00Z", replacedBy: "new" })]);
+    expect(rows.map((r) => [r.clientId, r.status, r.grant !== null])).toEqual([["old", "gone", true]]);
+  });
+});
+
+describe("replaceable", () => {
+  const request = { clientId: "new", clientName: "Claude", redirectUri: CLAUDE_CALLBACK };
+
+  it("finds the same agent's earlier clients by name and return address, newest first", () => {
+    const found = replaceable(
+      [
+        record("first", { name: "Claude", redirectUri: CLAUDE_CALLBACK, allowedAt: "2026-10-28T15:59:00Z" }),
+        record("second", { name: "Claude", redirectUri: CLAUDE_CALLBACK, allowedAt: "2026-10-28T17:18:00Z" }),
+        record("new", { name: "Claude", redirectUri: CLAUDE_CALLBACK }),
+        record("code", { name: "Claude", redirectUri: "claude://claude.ai/mcp-auth-callback/sdk" }),
+        record("impostor", { name: "Claude", redirectUri: "https://evil.example.com/callback" }),
+        record("helper", { name: "Research helper", redirectUri: CLAUDE_CALLBACK }),
+        record("unknown", { name: "Claude", redirectUri: null }),
+        record("done", { name: "Claude", redirectUri: CLAUDE_CALLBACK, allowed: false, replacedBy: "second" }),
+        record("revoked", { name: "Claude", redirectUri: CLAUDE_CALLBACK, allowed: false }),
+        record("revoked-linked", { name: "Claude", redirectUri: CLAUDE_CALLBACK, allowed: false, personId: "p", allowedAt: "2026-10-01T00:00:00Z" }),
+      ],
+      request,
+    );
+    expect(found.map((r) => r.clientId)).toEqual(["second", "first", "revoked-linked"]);
+  });
+
+  it("carries the Person the most recently allowed of them acts as", () => {
+    expect(
+      carriedPerson([
+        record("old", { personId: "p-old", personName: "Old", allowedAt: "2026-10-01T00:00:00Z" }),
+        record("newer", { personId: "p-new", personName: "Claude", allowedAt: "2026-10-28T00:00:00Z" }),
+        record("newest", { allowedAt: "2026-10-29T00:00:00Z" }),
+      ]),
+    ).toEqual({ id: "p-new", name: "Claude" });
+    expect(carriedPerson([record("plain")])).toBeNull();
+  });
+});
+
 describe("mockAgentsClient", () => {
   beforeEach(() => resetMockAgents());
 
@@ -133,6 +179,22 @@ describe("mockAgentsClient", () => {
     await expect(agents.linkPerson("mock-claude", human.id)).rejects.toThrow(/not an AI agent/);
     expect(await agents.linkPerson("mock-claude", ai.id)).toMatchObject({ personId: ai.id, personName: ai.title });
     expect(await agents.linkPerson("mock-claude", null)).toMatchObject({ personId: null, personName: null });
+  });
+
+  it("replaces the earlier client: same Person, earlier one revoked", async () => {
+    const agents = mockAgentsClient();
+    const ai = getState().people.find((p) => p.personKind === "ai")!;
+    await agents.linkPerson("mock-claude", ai.id);
+    await expect(
+      agents.allow("mock-claude-2", "Claude", "https://claude.ai", { redirectUri: "https://elsewhere.example.com", replaces: ["mock-claude"] }),
+    ).rejects.toThrow(/same name and return address/);
+    const renewed = await agents.allow("mock-claude-2", "Claude", "https://claude.ai", {
+      redirectUri: CLAUDE_CALLBACK,
+      replaces: ["mock-claude"],
+    });
+    expect(renewed).toMatchObject({ allowed: true, personId: ai.id, personName: ai.title, redirectUri: CLAUDE_CALLBACK });
+    const old = (await agents.overview()).agents.find((r) => r.clientId === "mock-claude");
+    expect(old).toMatchObject({ allowed: false, replacedBy: "mock-claude-2", personId: ai.id });
   });
 
   it("removing a grant leaves LifeOS's list alone", async () => {

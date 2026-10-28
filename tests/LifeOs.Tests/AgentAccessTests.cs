@@ -169,6 +169,106 @@ public sealed class AgentAccessTests(PostgresFixture postgres)
         Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
     }
 
+    // ---- Connecting again (migration 0048) ----
+
+    private const string Callback = "https://claude.ai/api/mcp/auth_callback";
+
+    [Fact]
+    public async Task Connecting_again_replaces_the_old_clients_carrying_the_Person_over_and_revoking_them()
+    {
+        await using var host = await StartAsync();
+        var ns = Guid.NewGuid().ToString("N")[..8];
+        var name = $"Claude {ns}";
+        var (older, old, renewed) = (NewClient("older"), NewClient("old"), NewClient("new"));
+        var ai = await PostPersonAsync(host, $"Claude {ns}", "ai");
+        await PutAgentAsync(host, older, new { name, redirectUri = Callback });
+        var first = await ReadAsync<AgentClient>(await PutAgentAsync(host, old, new { name, clientUri = "https://claude.ai", redirectUri = Callback }));
+        using var link = await host.Client.PutAsJsonAsync($"api/agents/{old}/person", new { personId = ai }, Ct);
+        await ReadAsync<AgentClient>(link);
+
+        var replacing = await ReadAsync<AgentClient>(await PutAgentAsync(
+            host, renewed, new { name, clientUri = "https://claude.ai", redirectUri = Callback, replaces = new[] { old, older } }));
+        var agents = (await AgentsAsync(host)).Agents;
+        using var oldCall = await host.Client.SendAsync(McpServerTests.Initialize(ApiTestHost.TokenFor(clientId: old)), Ct);
+        using var newCall = await host.Client.SendAsync(McpServerTests.Initialize(ApiTestHost.TokenFor(clientId: renewed)), Ct);
+
+        Assert.Equal(Callback, first.RedirectUri);
+        Assert.True(replacing.Allowed);
+        Assert.Equal(Callback, replacing.RedirectUri);
+        Assert.Equal(ai, replacing.PersonId);
+        Assert.Equal(name, replacing.PersonName);
+        Assert.All(agents.Where(a => a.ClientId == old || a.ClientId == older), a =>
+        {
+            Assert.False(a.Allowed);
+            Assert.NotNull(a.RevokedAt);
+            Assert.Equal(renewed, a.ReplacedBy);
+        });
+        Assert.Equal(ai, Assert.Single(agents, a => a.ClientId == old).PersonId);
+        Assert.Equal(HttpStatusCode.Forbidden, oldCall.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, newCall.StatusCode);
+
+        // Allowed again by hand, a replaced client is just allowed again.
+        var back = await ReadAsync<AgentClient>(await PutAgentAsync(host, old, new { name }));
+        Assert.True(back.Allowed);
+        Assert.Null(back.ReplacedBy);
+        Assert.Equal(Callback, back.RedirectUri);
+    }
+
+    [Fact]
+    public async Task A_client_replaces_only_one_with_the_same_name_and_return_address_or_nothing_changes()
+    {
+        await using var host = await StartAsync();
+        var ns = Guid.NewGuid().ToString("N")[..8];
+        var name = $"Claude {ns}";
+        var kept = NewClient("kept");
+        await ReadAsync<AgentClient>(await PutAgentAsync(host, kept, new { name, redirectUri = Callback }));
+        var (otherName, otherAddress, noAddress, fresh) = (NewClient("n"), NewClient("a"), NewClient("x"), NewClient("f"));
+
+        using var byName = await PutAgentAsync(host, otherName, new { name = $"Helper {ns}", redirectUri = Callback, replaces = new[] { kept } });
+        using var byAddress = await PutAgentAsync(host, otherAddress, new { name, redirectUri = "claude://claude.ai/mcp-auth-callback/sdk", replaces = new[] { kept } });
+        using var withoutAddress = await PutAgentAsync(host, noAddress, new { name, replaces = new[] { kept } });
+        using var itself = await PutAgentAsync(host, kept, new { name, redirectUri = Callback, replaces = new[] { kept } });
+        using var ghost = await PutAgentAsync(host, fresh, new { name, redirectUri = Callback, replaces = new[] { NewClient("ghost") } });
+        using var badId = await PutAgentAsync(host, fresh, new { name, redirectUri = Callback, replaces = new[] { "bad id!" } });
+        using var badAddress = await PutAgentAsync(host, fresh, new { name, redirectUri = "not an address" });
+        var agents = (await AgentsAsync(host)).Agents;
+
+        Assert.All(new[] { byName, byAddress, withoutAddress, itself, ghost, badId, badAddress },
+            r => Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode));
+        Assert.Contains("same name and return address", await byAddress.Content.ReadAsStringAsync(Ct), StringComparison.Ordinal);
+        Assert.Contains("can't replace itself", await itself.Content.ReadAsStringAsync(Ct), StringComparison.Ordinal);
+        Assert.True(Assert.Single(agents, a => a.ClientId == kept).Allowed);
+        Assert.DoesNotContain(agents, a => a.ClientId == otherName || a.ClientId == otherAddress || a.ClientId == fresh);
+    }
+
+    [Fact]
+    public async Task A_replacing_client_keeps_a_Person_of_its_own_and_an_archived_one_isnt_carried()
+    {
+        await using var host = await StartAsync();
+        var ns = Guid.NewGuid().ToString("N")[..8];
+        var name = $"Claude {ns}";
+        var (old, own, plain) = (NewClient("old"), NewClient("own"), NewClient("plain"));
+        var oldPerson = await PostPersonAsync(host, $"Old {ns}", "ai");
+        var ownPerson = await PostPersonAsync(host, $"Own {ns}", "ai");
+        foreach (var client in new[] { old, own })
+        {
+            await ReadAsync<AgentClient>(await PutAgentAsync(host, client, new { name, redirectUri = Callback }));
+        }
+
+        await ReadAsync<AgentClient>(await host.Client.PutAsJsonAsync($"api/agents/{old}/person", new { personId = oldPerson }, Ct));
+        await ReadAsync<AgentClient>(await host.Client.PutAsJsonAsync($"api/agents/{own}/person", new { personId = ownPerson }, Ct));
+
+        var keepsOwn = await ReadAsync<AgentClient>(await PutAgentAsync(host, own, new { name, redirectUri = Callback, replaces = new[] { old } }));
+        Assert.Equal(ownPerson, keepsOwn.PersonId);
+
+        // Once its Person is archived, there's no one to carry over.
+        using var archive = await host.Client.PostAsJsonAsync("api/archive", new { subject = ownPerson.ToString() }, Ct);
+        Assert.True(archive.IsSuccessStatusCode, await archive.Content.ReadAsStringAsync(Ct));
+        var nobody = await ReadAsync<AgentClient>(await PutAgentAsync(host, plain, new { name, redirectUri = Callback, replaces = new[] { own } }));
+        Assert.Null(nobody.PersonId);
+        Assert.Equal(plain, Assert.Single((await AgentsAsync(host)).Agents, a => a.ClientId == own).ReplacedBy);
+    }
+
     [Fact]
     public async Task Without_the_list_or_when_it_cant_be_read_every_agent_is_refused()
     {
@@ -303,7 +403,7 @@ public sealed class AgentAccessTests(PostgresFixture postgres)
         var client = NewClient("unit");
         if (allowFirst)
         {
-            await new AgentAccessStore(postgres.ConnectionString, "UTC").AllowAsync(client, "Unit", null, Ct);
+            await new AgentAccessStore(postgres.ConnectionString, "UTC").AllowAsync(client, "Unit", null, cancellationToken: Ct);
         }
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(
@@ -324,6 +424,9 @@ public sealed class AgentAccessTests(PostgresFixture postgres)
         using var response = await host.Client.PutAsJsonAsync($"api/agents/{client}", new { name = "Agent" }, Ct);
         return await ReadAsync<AgentClient>(response);
     }
+
+    private static Task<HttpResponseMessage> PutAgentAsync(ApiTestHost host, string client, object body)
+        => host.Client.PutAsJsonAsync($"api/agents/{Uri.EscapeDataString(client)}", body, Ct);
 
     private static async Task<AgentsRead> AgentsAsync(ApiTestHost host)
     {

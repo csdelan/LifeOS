@@ -685,8 +685,9 @@ log line it already wrote. A failed write is logged and never fails the call. Ro
   same for refusals; whether `/mcp` is on; and the writes level (`off`, read-only).
 - `GET /api/agents/calls?clientId=&limit=`: the latest calls, newest first (20 by default,
   at most 200).
-- `PUT /api/agents/{clientId}` with `{name, clientUri}`: allow, or allow again after a
-  revoke. Allowing one already allowed keeps when it was first allowed.
+- `PUT /api/agents/{clientId}` with `{name, clientUri, redirectUri, replaces}`: allow, or
+  allow again after a revoke. Allowing one already allowed keeps when it was first allowed.
+  `replaces` names earlier clients of the same agent (see "Connecting again" below).
 - `POST /api/agents/{clientId}/revoke`: `/mcp` refuses its next call.
 - `PUT /api/agents/{clientId}/person` with `{personId}` (or null): link it to an AI-agent
   Person. A human Person, or an archived one, is refused in words.
@@ -711,6 +712,33 @@ only read.
 
 If Supabase can't list the grants, the section shows LifeOS's list alone and says so. In
 mock mode a stand-in plays both, seeded with Claude connected and a helper LifeOS refuses.
+
+**Connecting again** (migration 0048, 2026-10-28). Claude registers a new client with
+Supabase each time it goes through Connect again: removing and re-adding the connector,
+connecting again, or after its sign-in stops working. Everyday use renews its tokens under
+the same client. Before this, each reconnect left a new entry that acted as no one and an old
+one still allowed. Now:
+- `agent_client` keeps `redirect_uri`, the address the consent page sent the browser back to,
+  and `replaced_by`. The migration fills in `redirect_uri` for clients allowed before it, from
+  Supabase's `auth.oauth_clients` where the owner can read it.
+- The consent page looks for clients on the list with the **same name and the same return
+  address** that aren't already replaced and are still allowed or act as someone. The name is
+  the client's own say, but only claude.ai receives a sign-in sent to claude.ai's address, so
+  the two together identify the agent. Claude Code is a separate client (`claude://…`).
+- When it finds one, it shows **Replace the earlier connection**, ticked, saying when the
+  agent connected before and which Person it acts as. Approving then, in one transaction:
+  - allows the new client;
+  - links it to the Person the most recently allowed of them acts as, if the new client acts
+    as no one yet and that Person is still an AI agent in use;
+  - revokes the earlier ones and records `replaced_by`.
+
+  It then removes their grants at Supabase. That's best effort, since LifeOS already refuses
+  them. Unticked, both are kept, as before.
+- The API refuses to replace a client with a different name or return address, itself, or
+  one not on the list, and then changes nothing.
+- The earlier clients keep their own Person link, so whatever they did stays "via" that
+  Person. Connected agents shows them as **Revoked** with "Replaced …, when Claude connected
+  again", and offers **Remove** if Supabase still lists one.
 
 ### 4.6 Hosting
 
@@ -816,6 +844,24 @@ using it.
     call row or reading the list.
   - The first client (`2c63d7f7-…`) may still be listed. If Connected agents shows two
     Claudes, revoke the one with no recent calls.
+- **Connecting again keeps the agent (2026-10-28).** Staging showed three Claude entries in
+  Connected agents:
+  - the first claude.ai client, no longer used;
+  - Claude Code, a separate client with its own return address;
+  - the live claude.ai client.
+
+  Claude.ai had also registered two more clients that were never approved, and those don't
+  show. So each reconnect added an entry that acted as no one. Migration 0048 and the
+  consent page now replace the earlier client and carry its Person over (§4.5, "Connecting
+  again"). Tests:
+  - .NET: the replacement carries the newest Person and revokes the earlier ones, which
+    `/mcp` then refuses; a different name, a different return address, itself, an unknown
+    client or a bad id is refused and changes nothing; a Person of its own is kept, and an
+    archived one isn't carried.
+  - Web: unit tests for `replaceable`, the mock, the replaced row, and the consent page
+    (ticked, unticked, several earlier clients, Supabase failing to drop a grant, the list
+    unreadable, Approve waiting for the list); the golden path; and a11y in both themes and
+    on a phone.
 - **First feedback from a real week review (2026-10-28).** An agent reading a week through
   the tools hit four problems, all fixed in the tool layer, with no migration:
   - **Oura versions drowned `recent_changes`.** Oura re-sends a day as it changes, and each

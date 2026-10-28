@@ -6,7 +6,7 @@ using Npgsql;
 namespace LifeOs.Api.Mcp;
 
 /// <summary>
-/// The agents Chris allowed in LifeOS and what each one called (migration 0047, agent-access plan
+/// The agents Chris allowed in LifeOS and what each one called (migrations 0047 and 0048, agent-access plan
 /// §4.5). It's on the owner connection: <c>bsk_ops</c> is never granted to <c>bsk_reader</c>, and
 /// the MCP tools never see this class.
 /// </summary>
@@ -52,25 +52,101 @@ public sealed partial class AgentAccessStore(string ownerConnectionString, strin
 
     /// <summary>
     /// Allows a client, or allows it again after a revoke. Its name and website are what the consent
-    /// page showed. Allowing one that's already allowed keeps when it was first allowed.
+    /// page showed, and <paramref name="redirectUri"/> is where it sent the browser back to (kept
+    /// when not given). Allowing one that's already allowed keeps when it was first allowed.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="replaces"/> are clients this one takes over from (migration 0048): Claude
+    /// registers a new client each time it connects again. Each must be on the list with the same
+    /// name and return address, or nothing changes and an <see cref="ArgumentException"/> says
+    /// why. The new client acts as the Person the most recently allowed of them acted as, when it
+    /// acts as no one yet and that Person is still an AI agent in use. They're revoked, with
+    /// <see cref="AgentClient.ReplacedBy"/> naming this one, and keep their own link, so what
+    /// they did stays theirs. All of it happens together or not at all.
+    /// </remarks>
     public async Task<AgentClient> AllowAsync(
-        string clientId, string name, string? clientUri, CancellationToken cancellationToken = default)
+        string clientId, string name, string? clientUri, string? redirectUri = null,
+        IReadOnlyCollection<string>? replaces = null, CancellationToken cancellationToken = default)
     {
+        var replaced = replaces?.Distinct(StringComparer.Ordinal).ToArray() ?? [];
         await using var connection = await OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        if (replaced.Length > 0)
+        {
+            var old = (await connection.QueryAsync<ReplacedRow>(new CommandDefinition(
+                """
+                SELECT client_id AS clientid, name, redirect_uri AS redirecturi
+                FROM bsk_ops.agent_client
+                WHERE client_id = ANY(@replaced)
+                FOR UPDATE;
+                """,
+                new { replaced },
+                transaction,
+                cancellationToken: cancellationToken))).ToDictionary(r => r.ClientId, StringComparer.Ordinal);
+            foreach (var id in replaced)
+            {
+                if (id == clientId)
+                {
+                    throw new ArgumentException("A client can't replace itself.");
+                }
+
+                if (!old.TryGetValue(id, out var row))
+                {
+                    throw new ArgumentException($"{id} isn't on LifeOS's list, so there's nothing to replace.");
+                }
+
+                if (row.Name != name || redirectUri is null || row.RedirectUri != redirectUri)
+                {
+                    throw new ArgumentException(
+                        $"{id} is {row.Name}, returning to {row.RedirectUri ?? "an address LifeOS doesn't know"}. "
+                        + "A client replaces only one with the same name and return address.");
+                }
+            }
+        }
+
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO bsk_ops.agent_client (client_id, name, client_uri)
-            VALUES (@clientId, @name, @clientUri)
+            INSERT INTO bsk_ops.agent_client (client_id, name, client_uri, redirect_uri)
+            VALUES (@clientId, @name, @clientUri, @redirectUri)
             ON CONFLICT (client_id) DO UPDATE SET
                 name = EXCLUDED.name,
                 client_uri = EXCLUDED.client_uri,
+                redirect_uri = coalesce(EXCLUDED.redirect_uri, agent_client.redirect_uri),
                 allowed_at = CASE WHEN agent_client.revoked_at IS NULL THEN agent_client.allowed_at ELSE now() END,
                 revoked_at = NULL,
+                replaced_by = NULL,
                 updated_at = now();
             """,
-            new { clientId, name, clientUri },
+            new { clientId, name, clientUri, redirectUri },
+            transaction,
             cancellationToken: cancellationToken));
+        if (replaced.Length > 0)
+        {
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                UPDATE bsk_ops.agent_client n
+                SET person_id = carried.person_id, updated_at = now()
+                FROM (
+                    SELECT a.person_id
+                    FROM bsk_ops.agent_client a
+                    JOIN bsk.v_subject p ON p.id = a.person_id AND p.type = 'Person' AND NOT p.archived
+                                        AND lower(coalesce(p.attributes->>'person_kind', 'human')) = 'ai'
+                    WHERE a.client_id = ANY(@replaced)
+                    ORDER BY a.allowed_at DESC
+                    LIMIT 1
+                ) carried
+                WHERE n.client_id = @clientId AND n.person_id IS NULL;
+
+                UPDATE bsk_ops.agent_client
+                SET revoked_at = coalesce(revoked_at, now()), replaced_by = @clientId, updated_at = now()
+                WHERE client_id = ANY(@replaced);
+                """,
+                new { clientId, replaced },
+                transaction,
+                cancellationToken: cancellationToken));
+        }
+
+        await transaction.CommitAsync(cancellationToken);
         return (await ListAsync(clientId, cancellationToken)).Single();
     }
 
@@ -238,18 +314,19 @@ public sealed partial class AgentAccessStore(string ownerConnectionString, strin
                 GROUP BY client_id
             ),
             clients AS (
-                SELECT c.client_id, c.name, c.client_uri, c.allowed_at, c.revoked_at, c.person_id
+                SELECT c.client_id, c.name, c.client_uri, c.redirect_uri, c.allowed_at, c.revoked_at,
+                       c.replaced_by, c.person_id
                 FROM bsk_ops.agent_client c
                 WHERE @clientId::text IS NULL OR c.client_id = @clientId
                 UNION ALL
-                SELECT k.client_id, NULL, NULL, NULL, NULL, NULL
+                SELECT k.client_id, NULL, NULL, NULL, NULL, NULL, NULL, NULL
                 FROM calls k
                 WHERE k.last_refused_at IS NOT NULL
                   AND NOT EXISTS (SELECT 1 FROM bsk_ops.agent_client c WHERE c.client_id = k.client_id)
             )
-            SELECT c.client_id AS clientid, c.name, c.client_uri AS clienturi,
+            SELECT c.client_id AS clientid, c.name, c.client_uri AS clienturi, c.redirect_uri AS redirecturi,
                    c.allowed_at IS NOT NULL AND c.revoked_at IS NULL AS allowed,
-                   c.allowed_at AS allowedat, c.revoked_at AS revokedat,
+                   c.allowed_at AS allowedat, c.revoked_at AS revokedat, c.replaced_by AS replacedby,
                    c.person_id AS personid, p.title AS personname,
                    k.last_call_at AS lastcallat, coalesce(k.calls_this_week, 0)::int AS callsthisweek,
                    k.last_refused_at AS lastrefusedat, coalesce(k.refused_this_week, 0)::int AS refusedthisweek
@@ -287,6 +364,13 @@ public sealed partial class AgentAccessStore(string ownerConnectionString, strin
     [GeneratedRegex("^[A-Za-z0-9._:-]{1,200}$")]
     private static partial Regex ClientIdShape();
 
+    private sealed class ReplacedRow
+    {
+        public string ClientId { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? RedirectUri { get; set; }
+    }
+
     private sealed class PersonRow
     {
         public string Title { get; set; } = "";
@@ -305,11 +389,20 @@ public sealed class AgentClient
 
     public string? ClientUri { get; set; }
 
+    /// <summary>
+    /// Where the consent page sent the browser back to when it was allowed (migration 0048). With
+    /// the name, it says which agent this is: a client with both the same replaces this one.
+    /// </summary>
+    public string? RedirectUri { get; set; }
+
     /// <summary>On the allow list and not revoked: <c>/mcp</c> answers it.</summary>
     public bool Allowed { get; set; }
 
     public DateTime? AllowedAt { get; set; }
     public DateTime? RevokedAt { get; set; }
+
+    /// <summary>The client that replaced this one, when it was revoked that way.</summary>
+    public string? ReplacedBy { get; set; }
 
     /// <summary>The AI-agent Person it acts as (GEN-15).</summary>
     public Guid? PersonId { get; set; }

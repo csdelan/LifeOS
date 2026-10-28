@@ -7,10 +7,14 @@ namespace LifeOs.Api.Http;
 /// Connected agents (agent-access plan §4.5): the agents Chris allowed in LifeOS and what each one
 /// called. Only his Google web session reaches these (<c>AllowlistedUser</c>); an agent's token is
 /// 403, so no agent can allow itself or another, or read the log. The consent page allows an agent
-/// here before it approves the request at Supabase.
+/// here before it approves the request at Supabase, and replaces the client an agent used before it
+/// connected again, carrying its Person over.
 /// </summary>
 public static class AgentEndpoints
 {
+    /// <summary>The most clients one approval replaces.</summary>
+    public const int MaxReplaces = 20;
+
     public static void MapAgentEndpoints(this WebApplication app)
     {
         var api = app.MapGroup("/api/agents")
@@ -83,7 +87,38 @@ public static class AgentEndpoints
             return Results.BadRequest(new ApiError("clientUri must be an http or https address, up to 500 characters."));
         }
 
-        return Results.Ok(await access.AllowAsync(clientId, name, uri, cancellationToken));
+        // Where the consent page sent the browser back to. It's only compared, never followed, so
+        // an app's own scheme (claude://…) is kept as well as a web address.
+        var redirect = string.IsNullOrWhiteSpace(body?.RedirectUri) ? null : body.RedirectUri.Trim();
+        if (redirect is not null && (redirect.Length > 500 || !Uri.TryCreate(redirect, UriKind.Absolute, out _)))
+        {
+            return Results.BadRequest(new ApiError("redirectUri must be an absolute address, up to 500 characters."));
+        }
+
+        var replaces = body?.Replaces?.Select(r => r?.Trim() ?? "").Distinct(StringComparer.Ordinal).ToList() ?? [];
+        if (replaces.Count > MaxReplaces)
+        {
+            return Results.BadRequest(new ApiError($"A client replaces at most {MaxReplaces} others at once."));
+        }
+
+        if (replaces.FirstOrDefault(r => !AgentAccessStore.IsClientId(r)) is { } bad)
+        {
+            return BadClientId(bad);
+        }
+
+        if (replaces.Count > 0 && redirect is null)
+        {
+            return Results.BadRequest(new ApiError("Replacing a client takes the redirectUri both share."));
+        }
+
+        try
+        {
+            return Results.Ok(await access.AllowAsync(clientId, name, uri, redirect, replaces, cancellationToken));
+        }
+        catch (ArgumentException e)
+        {
+            return Results.BadRequest(new ApiError(e.Message));
+        }
     }
 
     private static async Task<IResult> Revoke(
@@ -149,6 +184,15 @@ public sealed class AllowAgentBody
 {
     public string? Name { get; set; }
     public string? ClientUri { get; set; }
+
+    /// <summary>Where the consent page sends the browser back to; with the name, it says which agent this is.</summary>
+    public string? RedirectUri { get; set; }
+
+    /// <summary>
+    /// Clients this one takes over from: on the list with the same name and redirect address.
+    /// This one acts as their Person and they're revoked (migration 0048).
+    /// </summary>
+    public IReadOnlyList<string>? Replaces { get; set; }
 }
 
 /// <summary><c>PUT /api/agents/{clientId}/person</c>: the AI-agent Person, or null to unlink.</summary>
