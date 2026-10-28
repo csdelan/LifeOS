@@ -30,14 +30,27 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
     [Description("""
         What was recorded since a time, newest first: status changes, captures, notes and journal
         entries, habit check-offs, meals, Oura days and so on, each with the item it's about and
-        its text. Use it to catch up since the last conversation.
+        its text. Use it to catch up since the last conversation (the default, by: "recorded").
+        For what happened in a period, such as a week review, use by: "occurred": an Oura backfill
+        or a late entry is then placed on the day it happened, not the day it was recorded.
+        Oura re-sends a day as it changes; only the newest copy of each Oura record comes back,
+        with 'versions' saying how many there were. Reward ledger entries (earns and reversals)
+        are left out unless types includes ledger; for coins and XP per day use the rewards tool's
+        daily net instead.
         """)]
     public async Task<CallToolResult> RecentChanges(
         [Description("Since when: an ISO instant (2026-10-27T18:00:00Z), a day (2026-10-27, from its start in Chris's time zone), or a span back from now (24h, 3d, 2w, or ISO P3D). Default 7d.")] string? since = null,
-        [Description("Only these event kinds: journal, note, voice, idea_session, observation, activity, measurement, interaction, state_change, archive_change, triage, ledger.")] string[]? types = null,
+        [Description("Only these event kinds: journal, note, voice, idea_session, observation, activity, measurement, interaction, state_change, archive_change, triage, ledger. Leave out for every kind but ledger.")] string[]? types = null,
         [Description("At most this many events (default 50, at most 200).")] int? limit = null,
+        [Description("Which time 'since' and the order go by: recorded (when LifeOS recorded it, the default) or occurred (when it happened; use it for a week review).")] string? by = null,
         CancellationToken cancellationToken = default)
     {
+        var byOccurred = (by?.Trim().ToLowerInvariant()) switch
+        {
+            null or "" or "recorded" => false,
+            "occurred" => true,
+            _ => throw new McpException($"by '{by}' isn't recorded or occurred."),
+        };
         var stamp = await reads.NowAsync(cancellationToken);
         var from = await SinceAsync(since, stamp.AsOf, cancellationToken);
         var kinds = types?.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim().ToLowerInvariant()).Distinct().ToList();
@@ -48,7 +61,7 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
         }
 
         var take = McpResults.Limit(limit);
-        var rows = reads.Changes.GetChanges(from, kinds, options.Excluded, take);
+        var rows = reads.Changes.GetChanges(from, kinds, options.Excluded, take, byOccurred);
         var (kept, truncated) = McpResults.Cap(rows, take);
         var events = kept.Select(e => new
         {
@@ -58,10 +71,12 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
             Item = e.SubjectId is { } id ? new { Id = id, Urn = e.SubjectUrn, Type = e.SubjectType, Title = e.SubjectTitle } : null,
             e.Status, e.Text,
             Payload = McpResults.ParseJson(e.Payload),
+            Versions = e.Versions > 1 ? e.Versions : (long?)null,
         }).ToList();
+        var verb = byOccurred ? "that happened" : "recorded";
         return McpResults.Ok(stamp,
-            $"{McpResults.Plural(events.Count, "event")} since {Utc(from.UtcDateTime)}{(truncated ? " (more not shown: narrow since or types)" : "")}.",
-            new { Since = Utc(from.UtcDateTime), Events = events, Truncated = truncated });
+            $"{McpResults.Plural(events.Count, "event")} {verb} since {Utc(from.UtcDateTime)}{(truncated ? " (more not shown: narrow since or types)" : "")}.",
+            new { Since = Utc(from.UtcDateTime), By = byOccurred ? "occurred" : "recorded", Events = events, Truncated = truncated });
     }
 
     [McpServerTool(Name = "diagnostics", Title = "Diagnostics", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]

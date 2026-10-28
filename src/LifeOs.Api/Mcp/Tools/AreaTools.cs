@@ -98,8 +98,10 @@ public sealed class RewardsTools(RewardReader rewards, McpReads reads)
 {
     [McpServerTool(Name = "rewards", Title = "Rewards", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
     [Description("""
-        Chris's rewards: wallet balances, what he earned and spent each day, the reward catalog,
-        each life domain's level and rank (XP), and the domain report over the days given.
+        Chris's rewards: wallet balances, what he earned, had reversed and spent each day with
+        the day's net per currency (read this rather than ledger entries in recent_changes), the
+        reward catalog, each life domain's level and rank (XP), and the domain report over the
+        days given.
         """)]
     public async Task<CallToolResult> Rewards(
         [Description("How many days back the daily ledger and the report cover, with today. Default 7, at most 92.")] int? days = null,
@@ -122,7 +124,12 @@ public sealed class RewardsTools(RewardReader rewards, McpReads reads)
 public sealed class HomeTools(EnvironmentReader environment, McpReads reads)
 {
     [McpServerTool(Name = "home", Title = "Home", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("Chris's home: each space's latest ratings (Tidiness, Cleanliness, Aesthetics) and how they've faded, the Home Score, what to fix next, and the score by day.")]
+    [Description("""
+        Chris's home: each space's latest ratings (Tidiness, Cleanliness, Aesthetics) and how
+        they've faded, the Home Score, what to fix next, and the score by day. Each space lists
+        the spots it's photographed from (shots): how many photos, and the day and space score of
+        Then (the baseline photo) and Now (the newest, when it isn't the baseline).
+        """)]
     public async Task<CallToolResult> Home(
         [Description("How many days back the score by day goes, with today. Default 14, at most 92.")] int? days = null,
         CancellationToken cancellationToken = default)
@@ -133,6 +140,36 @@ public sealed class HomeTools(EnvironmentReader environment, McpReads reads)
         var history = await environment.GetHomeDaysAsync(span, cancellationToken);
         return McpResults.Ok(stamp,
             $"Home Score {(home.HomeScore is { } score ? score.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) : "not set yet")}, {McpResults.Plural(home.Spaces.Count, "space")}.",
-            new { home.HomeScore, home.SettledThrough, home.Spaces, home.FixNext, ByDay = history.Days });
+            new { home.HomeScore, home.SettledThrough, Spaces = Brief(home.Spaces), home.FixNext, ByDay = history.Days });
     }
+
+    /// <summary>
+    /// The spaces as an agent reads them: the web's shape, but each shot only by its name, its
+    /// photo count, and the day and score of Then and Now. The photos' ids, artifacts, space and
+    /// parts would repeat what the space already says.
+    /// </summary>
+    public static IReadOnlyList<HomeSpaceBrief> Brief(IReadOnlyList<HomeSpaceRow> spaces)
+        => spaces.Select(space => new HomeSpaceBrief(
+            space.Id, space.Name, space.Weight, space.Pace, space.Share, space.Score, space.LastRatedOn, space.Parts,
+            space.Shots.Select(shot => new HomeShotBrief(
+                shot.Name,
+                shot.Photos,
+                Moment(shot.Baseline),
+                shot.Newest is { } newest && newest.Id != shot.Baseline?.Id ? Moment(newest) : null)).ToList())).ToList();
+
+    private static HomeShotMoment? Moment(SpacePhotoRow? photo) => photo is null ? null : new(photo.Day, photo.Score);
 }
+
+/// <summary>One space in the <c>home</c> tool, with its shots in brief.</summary>
+public sealed record HomeSpaceBrief(
+    Guid Id, string Name, int Weight, int Pace, decimal? Share, decimal? Score, string? LastRatedOn,
+    HomePartsRow Parts, IReadOnlyList<HomeShotBrief> Shots);
+
+/// <summary>
+/// One shot of a space: its name, how many photos it has, Then (its baseline) and Now (its
+/// newest photo, null while that's the baseline). Both are null with no photos.
+/// </summary>
+public sealed record HomeShotBrief(string Name, int Photos, HomeShotMoment? Then, HomeShotMoment? Now);
+
+/// <summary>A photo's day and the space's score that day (null while not all three parts were rated).</summary>
+public sealed record HomeShotMoment(string Day, decimal? Score);

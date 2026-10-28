@@ -452,7 +452,7 @@ Results are structured JSON plus a one-line text summary. Every tool is annotate
 | `list_items(type?, status?, area?, tag?, due_before?, due_after?, include_archived?)` | A filtered list, with Browse's filter rules (BROWSE-2) | `QuerySubjects`, plus filters |
 | `get_item(id or urn)` | Full detail: relations both ways, people, tags, the last 20 journal entries, status history, timer, repeating series | `GetSubject` / `GetSubjectByUrn`, `GetServes`, `GetServedBy`, `GetPeopleOn`, `GetTags`, `GetJournal`, `GetStatusHistory`, `GetTimer`, `GetTaskSeriesHistory` |
 | `alignment(id?)` | For a goal, everything serving it down to tasks. For any item, its chain up to identity statements and areas. With no id, the whole tree, compact | `GetAlignmentEdges` plus a C# port of the forest in `web/src/lib/derive.ts` |
-| `recent_changes(since, types?)` | Events recorded since a time (status changes, captures, journal entries, check-offs, meals, Oura days), so an agent can catch up | New reader over `bsk.v_event` by `recorded_at` |
+| `recent_changes(since, types?, by?)` | Events since a time (status changes, captures, journal entries, check-offs, meals, Oura days), so an agent can catch up. `by` is `recorded` (the default) or `occurred`, for what happened in a period. Each Oura record shows once, as its newest version, with how many versions there were. Ledger entries only when `types` names `ledger` | New reader over `bsk.v_event` by `recorded_at` or `occurred_at` |
 | `habits(on?)` | Habits with the day's occurrences, streaks and establishment | `GetHabits`, `GetHabitOccurrences` |
 | `calendar(from, to)` | Appointments and due tasks in a range | `GetAppointments`, `QuerySubjects` |
 | `inbox()` | Untriaged captures | `GetInbox` |
@@ -466,7 +466,7 @@ Results are structured JSON plus a one-line text summary. Every tool is annotate
 | `health(from, to)` | Sleep, readiness, steps, workouts and Oura tags by day | `ActivityReader` |
 | `food(from, to)` | Meals, fasts, drinks and diet XP by day | `FoodReader` |
 | `rewards()` | Wallet, ledger by day, domain levels and report | `RewardReader` |
-| `home()` | Spaces, ratings and home XP | `EnvironmentReader` |
+| `home()` | Spaces, ratings and home XP; each space's shots in brief (name, photo count, Then and Now as a day and score) | `EnvironmentReader` |
 
 **Also part of Phase 1:**
 - **Server instructions,** sent when an agent connects. They cover:
@@ -816,6 +816,27 @@ using it.
     call row or reading the list.
   - The first client (`2c63d7f7-…`) may still be listed. If Connected agents shows two
     Claudes, revoke the one with no recent calls.
+- **First feedback from a real week review (2026-10-28).** An agent reading a week through
+  the tools hit four problems, all fixed in the tool layer, with no migration:
+  - **Oura versions drowned `recent_changes`.** Oura re-sends a day as it changes, and each
+    change is a new version of the same record. Now each record shows once, as its newest
+    version in the window, with `versions` saying how many there were. The record is the
+    `external_id` without its last two parts (the hash and what it replaces).
+  - **A backfill counted as recent.** `since` went by when LifeOS recorded an event, so a
+    month of Oura days synced today read as today. `by: "occurred"` goes by when it happened
+    instead, and the description tells agents to use it for a week review. `recorded` stays
+    the default, for catching up.
+  - **Ledger churn.** A day of meals writes many earns and reversals. `recent_changes` now
+    leaves ledger entries out unless `types` names `ledger`, and points to `rewards`, whose
+    daily ledger already gives the net per currency per day.
+  - **`home` repeated itself.** Each shot carried two whole photos, each with ids, an
+    artifact id, the space's name and all three parts again. Each shot is now its name, its
+    photo count, and Then and Now as a day and the space's score (Now left out while it's
+    the baseline).
+
+  Tests: a made-up Oura record with three versions, a month back and recorded within the
+  hour, plus a ledger earn and a capture, read by either time and with and without
+  `ledger`; and the brief `home` shape.
 
 To connect, add `https://lifeos-mz55-staging.fly.dev/mcp` as a custom connector in Claude
 or ChatGPT. In Claude Code:

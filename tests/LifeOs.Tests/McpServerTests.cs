@@ -360,6 +360,132 @@ public sealed class McpServerTests(PostgresFixture postgres)
         Assert.Contains(all.GetProperty("events").EnumerateArray(), e => e.GetProperty("source").GetString() == "oura");
     }
 
+    [Fact]
+    public async Task Recent_changes_shows_an_oura_records_newest_version_goes_by_either_time_and_leaves_the_ledger_out()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await StartAsync(db.ConnectionString);
+        var ns = Guid.NewGuid().ToString("N")[..8];
+
+        // Made-up Oura versions of one record, not real data: a day a month back, recorded within
+        // the hour and re-sent twice since, as a backfill would be. And a reward earn.
+        var record = $"daily_activity:fixture-{ns}";
+        var award = $"test:{ns}";
+        await using (var owner = new NpgsqlConnection(db.ConnectionString))
+        {
+            await owner.OpenAsync(Ct);
+            foreach (var version in new[] { 1, 2, 3 })
+            {
+                await owner.ExecuteAsync(new CommandDefinition(
+                    """
+                    INSERT INTO bsk.event (kind, provenance, occurred_at, recorded_at, source_id, external_id, payload)
+                    VALUES ('measurement', 'observed', now() - interval '30 days',
+                            clock_timestamp() - make_interval(mins => 40 - 10 * @version), 'oura', @ext,
+                            jsonb_build_object('fixture', @ns::text, 'version', @version));
+                    """,
+                    new
+                    {
+                        version,
+                        ns,
+                        ext = $"{record}:{version:x16}:{(version == 1 ? "first" : Guid.NewGuid().ToString("D"))}",
+                    },
+                    cancellationToken: Ct));
+            }
+
+            await owner.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO bsk.event (kind, provenance, occurred_at, recorded_at, source_id, payload)
+                VALUES ('ledger', 'declared', now(), now(), @source, @payload::jsonb);
+                """,
+                new
+                {
+                    source = KernelSources.Cli,
+                    payload = JsonSerializer.Serialize(new
+                    {
+                        entry = "earn", award_key = award, credited_on = "2003-04-01",
+                        amounts = new Dictionary<string, long> { [Currencies.Xp] = 5 },
+                    }),
+                },
+                cancellationToken: Ct));
+        }
+
+        await PostOkAsync(host, "api/capture", new { text = $"A capture {ns}" });
+        await using var client = await ConnectAsync(host, ApiTestHost.TokenFor(clientId: Agent));
+        static bool IsCapture(JsonElement e, string ns)
+            => e.TryGetProperty("text", out var text) && (text.GetString() ?? "").Contains(ns, StringComparison.Ordinal);
+        static bool IsAward(JsonElement e, string award)
+            => e.TryGetProperty("payload", out var p) && p.TryGetProperty("award_key", out var key) && key.GetString() == award;
+
+        // By when it was recorded (the default): the record once, as its newest version, and no ledger.
+        var recorded = await CallAsync(client, "recent_changes", new() { ["since"] = "1h" });
+        Assert.Equal("recorded", recorded.GetProperty("by").GetString());
+        var events = recorded.GetProperty("events").EnumerateArray().ToList();
+        var oura = Assert.Single(events, e => e.GetProperty("source").GetString() == "oura");
+        Assert.Equal(3, oura.GetProperty("versions").GetInt32());
+        Assert.Equal(3, oura.GetProperty("payload").GetProperty("version").GetInt32());
+        Assert.Contains(events, e => IsCapture(e, ns));
+        Assert.DoesNotContain(events, e => e.GetProperty("kind").GetString() == "ledger");
+        Assert.All(events.Where(e => e.GetProperty("source").GetString() != "oura"), e => Assert.False(e.TryGetProperty("versions", out _)));
+
+        // By when it happened: the backfilled day is a month back, the capture is now.
+        var occurred = await CallAsync(client, "recent_changes", new() { ["since"] = "1h", ["by"] = "occurred" });
+        Assert.Equal("occurred", occurred.GetProperty("by").GetString());
+        Assert.DoesNotContain(occurred.GetProperty("events").EnumerateArray(), e => e.GetProperty("source").GetString() == "oura");
+        Assert.Contains(occurred.GetProperty("events").EnumerateArray(), e => IsCapture(e, ns));
+        var month = await CallAsync(client, "recent_changes", new() { ["since"] = "31d", ["by"] = "occurred" });
+        var monthEvents = month.GetProperty("events").EnumerateArray().ToList();
+        Assert.Equal(3, Assert.Single(monthEvents, e => e.GetProperty("source").GetString() == "oura").GetProperty("versions").GetInt32());
+        Assert.True(
+            monthEvents.FindIndex(e => IsCapture(e, ns)) < monthEvents.FindIndex(e => e.GetProperty("source").GetString() == "oura"),
+            "Newest first by when it happened: today's capture before the month-old day.");
+
+        // The ledger only when asked for by name.
+        var ledger = await CallAsync(client, "recent_changes", new() { ["since"] = "1h", ["types"] = new[] { "ledger" } });
+        Assert.Contains(ledger.GetProperty("events").EnumerateArray(), e => IsAward(e, award));
+        Assert.All(ledger.GetProperty("events").EnumerateArray(), e => Assert.Equal("ledger", e.GetProperty("kind").GetString()));
+
+        var sideways = await client.CallToolAsync("recent_changes", new Dictionary<string, object?> { ["by"] = "sideways" }, cancellationToken: Ct);
+        Assert.True(sideways.IsError);
+        Assert.Contains("recorded or occurred", Text(sideways), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Home_lists_each_shot_by_its_name_photo_count_then_and_now()
+    {
+        SpacePhotoRow Photo(string day, decimal? score) => new()
+        {
+            Id = Guid.NewGuid(), SpaceId = Guid.NewGuid(), Space = "Kitchen", ShotId = "s", Shot = "Counter",
+            Day = day, ArtifactId = Guid.NewGuid(), Score = score, Parts = new HomePartsRow(),
+        };
+        var only = Photo("2026-10-20", null);
+        var space = new HomeSpaceRow
+        {
+            Id = Guid.NewGuid(), Name = "Kitchen", Weight = 3, Pace = 7, Share = 0.5m, Score = 72.5m, LastRatedOn = "2026-10-27",
+            Shots =
+            [
+                new SpaceShotRow { Id = "a", Name = "Counter", Photos = 3, Baseline = Photo("2026-10-01", 40m), Newest = Photo("2026-10-27", 72.5m) },
+                new SpaceShotRow { Id = "b", Name = "Sink", Photos = 1, Baseline = only, Newest = only },
+                new SpaceShotRow { Id = "c", Name = "Window", Photos = 0 },
+            ],
+        };
+
+        var brief = Assert.Single(HomeTools.Brief([space]));
+
+        Assert.Equal((space.Id, "Kitchen", 72.5m), (brief.Id, brief.Name, brief.Score));
+        Assert.Equal(
+            new[]
+            {
+                new HomeShotBrief("Counter", 3, new("2026-10-01", 40m), new("2026-10-27", 72.5m)),
+                new HomeShotBrief("Sink", 1, new("2026-10-20", null), null),
+                new HomeShotBrief("Window", 0, null, null),
+            },
+            brief.Shots);
+        var json = JsonSerializer.Serialize(brief, McpResults.Json);
+        Assert.DoesNotContain("artifact_id", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("added_at", json, StringComparison.Ordinal);
+        Assert.Contains("\"shots\":[{\"name\":\"Counter\",\"photos\":3,\"then\":{\"day\":\"2026-10-01\",\"score\":40}", json, StringComparison.Ordinal);
+    }
+
     // ---- The tools read only (§4.1) ----
 
     [Fact]
