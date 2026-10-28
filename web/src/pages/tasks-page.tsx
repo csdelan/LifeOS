@@ -31,7 +31,13 @@ import {
 import { STATUS_BY_TYPE, defaultStatus } from "@/lib/production-ui-types";
 import { todayIso } from "@/lib/dates";
 import { NONE } from "@/lib/subject-forms";
-import { TASK_GROUP_LABEL, TASK_GROUPS, groupTasks, isHiddenTaskStatus } from "@/lib/task-groups";
+import {
+  TASK_GROUP_LABEL,
+  TASK_GROUPS,
+  groupTasks,
+  isHiddenTaskStatus,
+  isOverdueTask,
+} from "@/lib/task-groups";
 import { loadView, saveView } from "@/lib/view-state";
 
 type TasksView = {
@@ -120,7 +126,7 @@ export function TasksPage() {
     if (filters.parent) {
       rows = rows.filter((t) => (parentOf.get(t.id) ?? []).includes(filters.parent));
     }
-    if (filters.due === "overdue") rows = rows.filter((t) => t.due && t.due < today);
+    if (filters.due === "overdue") rows = rows.filter((t) => isOverdueTask(t, today));
     if (filters.due === "today") rows = rows.filter((t) => t.due === today);
     if (filters.due === "upcoming") rows = rows.filter((t) => t.due && t.due > today);
     if (filters.due === "none") rows = rows.filter((t) => !t.due);

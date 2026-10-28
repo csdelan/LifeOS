@@ -985,6 +985,14 @@ The rule covers every Task, not only repetitions. TASKS-3's once-each-week chore
 `lib/derive.ts`) with no kernel change, built in RT1b the same day. The frozen Pilot's
 Tasks view keeps the old rule.
 
+**Fix (2026-10-28):** the web grouped by dates alone, so a finished Task shown through a
+Status filter (All, Completed, Missed, Cancelled) with a past due date showed under Overdue.
+Chris saw a "Take out trash" done in September read "42 days overdue" beside this week's
+repetition, due today. Finished Tasks now show under a fifth section, **Closed**, after
+Unscheduled. A finished item's dates show as plain days, never "overdue" or "Today", wherever
+a row or the detail shows them (as Browse already did). The Due filter's Overdue skips them
+too. Web only, no kernel change.
+
 **Workflow (Chris):**
 - Provide the dedicated **Tasks** destination defined by NAV-1 as a focused working view,
   not merely a generic list with a Task filter applied visibly.
@@ -998,7 +1006,8 @@ Tasks view keeps the old rule.
 - Unscheduled contains incomplete Tasks with neither date.
 - Show each Task only once in the first applicable group, using the group order above as
   precedence. Completed and Cancelled Tasks are hidden from the default active view but
-  remain available through Status filters.
+  remain available through Status filters, under a **Closed** section after Unscheduled,
+  never under Overdue.
 - Provide an always-visible title-only quick-entry row at the top of the Tasks tab. Focused
   entry should allow me to type a Title and press Enter to create a standalone Task with the
   defaults from GEN-10.

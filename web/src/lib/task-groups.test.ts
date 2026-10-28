@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupTasks, isHiddenTaskStatus, taskGroup } from "@/lib/task-groups";
+import { groupTasks, isHiddenTaskStatus, isOverdueTask, taskGroup } from "@/lib/task-groups";
 import type { SubjectListItem } from "@/lib/production-ui-types";
 
 function task(
@@ -63,6 +63,34 @@ describe("task grouping", () => {
     expect(grouped.today.map((t) => t.id)).toEqual(["b"]);
     expect(grouped.upcoming.map((t) => t.id)).toEqual(["c"]);
     expect(grouped.unscheduled.map((t) => t.id)).toEqual(["d"]);
+  });
+
+  it("puts a finished Task under Closed, never Overdue, whatever its dates", () => {
+    // A trash run done weeks ago shows (Status: All) beside this week's open repetition.
+    const doneLongAgo = task("t1", "Take out trash", {
+      due: "2026-08-09",
+      scheduled: "2026-08-09",
+      status: "Completed",
+    });
+    const thisWeek = task("t2", "Take out trash", { due: today });
+    expect(taskGroup(doneLongAgo, today)).toBe("closed");
+    expect(isOverdueTask(doneLongAgo, today)).toBe(false);
+    expect(taskGroup(thisWeek, today)).toBe("today");
+    for (const status of ["Missed", "Cancelled"]) {
+      expect(taskGroup(task("m", "late", { due: "2026-09-18", status }), today)).toBe("closed");
+    }
+    expect(taskGroup(task("u", "done, never dated", { status: "Completed" }), today)).toBe("closed");
+    // Still open and late: Overdue.
+    expect(isOverdueTask(task("o", "late", { due: "2026-09-18", status: "In progress" }), today)).toBe(
+      true,
+    );
+
+    const lastWeek = task("t0", "Take out trash", { due: "2026-09-16", status: "Completed" });
+    const grouped = groupTasks([doneLongAgo, thisWeek, lastWeek], today);
+    expect(grouped.overdue).toEqual([]);
+    expect(grouped.today.map((t) => t.id)).toEqual(["t2"]);
+    // The latest finished first.
+    expect(grouped.closed.map((t) => t.id)).toEqual(["t0", "t1"]);
   });
 
   it("folds terminal statuses out of the active working view", () => {

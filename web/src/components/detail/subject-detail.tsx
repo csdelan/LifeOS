@@ -395,6 +395,8 @@ export function SubjectDetail({
                       : subject.due
                 }
                 kind={subject.type === "Goal" || subject.type === "Project" ? "target" : "due"}
+                // A series' date is its open repetition's, which a stopped series can still owe.
+                closed={!series && isTerminal(subject.status)}
               />
               {repeats ? (
                 <span className="inline-flex items-center gap-1 text-[0.75rem] text-muted-foreground">

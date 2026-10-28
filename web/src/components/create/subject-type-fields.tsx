@@ -14,7 +14,7 @@ import { RecurrenceEditor } from "@/components/create/recurrence-editor";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { DateChip } from "@/components/primitives/date-chip";
 import { useAreas, usePeople, useSubjects } from "@/lib/queries";
-import { defaultStatus, typeLabel } from "@/lib/production-ui-types";
+import { defaultStatus, isTerminal, typeLabel } from "@/lib/production-ui-types";
 import type { SubjectType, TaskRepeat } from "@/lib/production-ui-types";
 import {
   NONE,
@@ -415,6 +415,7 @@ function FieldBlock({
                     ? "due"
                     : "plain"
             }
+            closed={isTerminal(form.watch("status"))}
           />
         ) : (
           <span className="text-sm text-muted-foreground">None</span>

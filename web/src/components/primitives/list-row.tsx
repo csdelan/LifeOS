@@ -26,6 +26,7 @@ export function ListRow({
   className?: string;
 }) {
   const status = item.status || defaultStatus(item.type) || null;
+  const closed = isTerminal(status);
   // One repetition of a repeating Task (TASKS-3) says how it repeats.
   const repeats = repeatLabel(item.repeat);
   return (
@@ -63,10 +64,11 @@ export function ListRow({
       <div className="flex shrink-0 flex-wrap items-center gap-1.5">
         {trailing}
         {/* What finishing it pays; once it's done, it has paid. */}
-        {isTerminal(status) ? null : <BountyChip amounts={item.bounty} />}
-        <DateChip date={item.due} kind="due" />
+        {closed ? null : <BountyChip amounts={item.bounty} />}
+        {/* A finished item isn't overdue: its dates show plain. */}
+        <DateChip date={item.due} kind="due" closed={closed} />
         {item.scheduled && item.scheduled !== item.due ? (
-          <DateChip date={item.scheduled} kind="scheduled" />
+          <DateChip date={item.scheduled} kind="scheduled" closed={closed} />
         ) : null}
         <StatusPill status={status} />
       </div>

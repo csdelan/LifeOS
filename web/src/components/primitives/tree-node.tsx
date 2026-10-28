@@ -9,6 +9,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { SubjectListItem } from "@/lib/production-ui-types";
+import { isTerminal } from "@/lib/production-ui-types";
 import { repeatLabel, shownStatus } from "@/lib/task-series";
 
 export function TreeNode({
@@ -127,7 +128,7 @@ export function TreeNode({
               {repeats}
             </span>
           ) : null}
-          <DateChip date={subject.due} />
+          <DateChip date={subject.due} closed={isTerminal(subject.status)} />
           <StatusPill status={status} />
         </div>
       </div>
