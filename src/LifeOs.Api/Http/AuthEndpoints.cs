@@ -16,7 +16,7 @@ public static class AuthEndpoints
 
     private static IResult GetMe(ClaimsPrincipal user)
     {
-        var email = EmailClaims.ReadEmail(user);
+        var email = SupabaseClaims.ReadEmail(user);
         if (string.IsNullOrWhiteSpace(email))
         {
             return Results.Forbid();

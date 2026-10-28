@@ -120,15 +120,20 @@ public sealed class McpServerTests(PostgresFixture postgres)
     }
 
     [Theory]
-    [InlineData("owner@example.com", "blocked-client", true)]
-    [InlineData("intruder@example.com", Agent, true)]
-    [InlineData("owner@example.com", Agent, false)]
-    public async Task A_blocked_client_or_another_account_is_403(string email, string clientId, bool verified)
+    [InlineData("owner@example.com", "blocked-client", true, null)]
+    [InlineData("intruder@example.com", Agent, true, null)]
+    // Not a Google account.
+    [InlineData("owner@example.com", Agent, false, null)]
+    // A client_id on a session the OAuth server didn't start: a browser's, or a password sign-in.
+    [InlineData("owner@example.com", Agent, true, "oauth")]
+    [InlineData("owner@example.com", Agent, true, "password")]
+    public async Task A_blocked_client_another_account_or_a_session_not_from_the_OAuth_server_is_403(
+        string email, string clientId, bool google, string? signIn)
     {
         var settings = new Dictionary<string, string?>(On) { [McpOptions.BlockedClientsKey] = "blocked-client, other" };
         await using var host = await ApiTestHost.StartAsync(postgres.ConnectionString, Ct, settings);
 
-        using var response = await host.Client.SendAsync(Initialize(ApiTestHost.TokenFor(email, clientId, verified)), Ct);
+        using var response = await host.Client.SendAsync(Initialize(ApiTestHost.TokenFor(email, clientId, google, signIn)), Ct);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }

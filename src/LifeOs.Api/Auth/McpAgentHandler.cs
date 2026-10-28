@@ -21,11 +21,11 @@ public static class AgentClaims
 public sealed class McpAgentRequirement : IAuthorizationRequirement;
 
 /// <summary>
-/// The <c>McpAgent</c> policy that <c>/mcp</c> requires: an allowlisted, verified email (as the
-/// web needs), a <c>client_id</c> (an agent's token, not a browser's), and a client that isn't
-/// in <c>Mcp:BlockedClients</c>. Everyone else is 403.
+/// The <c>McpAgent</c> policy that <c>/mcp</c> requires: an allowlisted email on a Google
+/// account, a <c>client_id</c>, a session Supabase's OAuth server started for an agent (its
+/// <c>amr</c>), and a client that isn't in <c>Mcp:BlockedClients</c>. Everyone else is 403.
 /// </summary>
-public sealed class McpAgentHandler(SupabaseAuthOptions auth, McpOptions mcp)
+public sealed class McpAgentHandler(SupabaseAuthOptions auth, McpOptions mcp, ILogger<McpAgentHandler>? logger = null)
     : AuthorizationHandler<McpAgentRequirement>
 {
     protected override Task HandleRequirementAsync(
@@ -37,14 +37,21 @@ public sealed class McpAgentHandler(SupabaseAuthOptions auth, McpOptions mcp)
             return Task.CompletedTask;
         }
 
-        var email = EmailClaims.ReadEmail(context.User);
+        var email = SupabaseClaims.ReadEmail(context.User);
         var clientId = AgentClaims.ClientId(context.User);
-        if (string.IsNullOrWhiteSpace(email)
-            || !EmailClaims.IsEmailVerified(context.User)
-            || !auth.IsAllowed(email)
-            || clientId is null
-            || mcp.IsBlocked(clientId))
+        if (email is null || !auth.IsAllowed(email) || clientId is null || mcp.IsBlocked(clientId))
         {
+            context.Fail();
+            return Task.CompletedTask;
+        }
+
+        if (!SupabaseClaims.IssuedToAgent(context.User))
+        {
+            logger?.LogWarning(
+                "Refused an agent token for an allowed account: not issued by the OAuth server for a Google account (client {ClientId}; sign-in methods: {Methods}; Google account: {GoogleAccount})",
+                clientId,
+                string.Join(", ", SupabaseClaims.SignInMethods(context.User)),
+                SupabaseClaims.IsGoogleAccount(context.User));
             context.Fail();
             return Task.CompletedTask;
         }

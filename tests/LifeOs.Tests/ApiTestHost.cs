@@ -87,23 +87,13 @@ internal sealed class ApiTestHost(WebApplication app, HttpClient client) : IAsyn
     private static string Token() => TokenFor();
 
     /// <summary>
-    /// A token the host accepts: the allowlisted owner's by default. With
-    /// <paramref name="clientId"/>, an agent's token, as Supabase's OAuth server issues one
-    /// (agent-access plan §4.4).
+    /// A token shaped like Supabase's (see <see cref="SupabaseTokens"/>): by default the
+    /// allowlisted owner's web session, signed in with Google. With <paramref name="clientId"/>,
+    /// an agent's token, as Supabase's OAuth server issues one (agent-access plan §4.4).
     /// </summary>
-    public static string TokenFor(string email = Allowed, string? clientId = null, bool verified = true)
+    public static string TokenFor(string email = Allowed, string? clientId = null, bool google = true, string? signIn = null)
     {
-        var claims = new Dictionary<string, object>
-        {
-            ["sub"] = "user-1",
-            ["email"] = email,
-            ["email_verified"] = verified,
-            ["role"] = "authenticated",
-        };
-        if (clientId is not null)
-        {
-            claims["client_id"] = clientId;
-        }
+        var claims = SupabaseTokens.Claims(email, clientId, signIn, google);
 
         return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
         {

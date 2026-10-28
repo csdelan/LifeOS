@@ -519,8 +519,9 @@ many agents he connects.
   and a11y in light and dark, like the other pages.
 
 **API:**
-- A new policy, `McpAgent`, which `/mcp` requires: an allowlisted, verified email (as
-  now), a `client_id` claim, and a client that isn't in `Mcp__BlockedClients`.
+- A new policy, `McpAgent`, which `/mcp` requires: an allowlisted email on a Google
+  account, a `client_id` claim on a session the OAuth server started (its `amr`; see
+  "Fixes" below), and a client that isn't in `Mcp__BlockedClients`.
 - **The existing `AllowlistedUser` policy refuses any token with a `client_id`.** So an
   agent's token can't call `/api/*`, which includes every write. Test both directions.
 - Protected resource metadata, anonymous, published through the SDK's MCP auth handler:
@@ -559,8 +560,18 @@ through the consent page. Its client id is `2c63d7f7-0ab1-47a2-9dbd-b765f66b7763
     `client_id`, `aal`, `amr`, `session_id`, `iss`, `iat` and `exp`. Their example has an hour
     between `iat` and `exp`.
   - There's no `scope` claim. Scopes shape only OIDC's user info, not what a token can reach.
-  - Still open: which of the three made it verified. That matters before the API stops
-    trusting `user_metadata` (fix 2 below).
+  - Which of the three made it verified: Supabase Auth's source settles it. Every access
+    token it issues, an agent's included, carries the user's `app_metadata` and
+    `user_metadata`, an `amr` (how its session signed in) and no top-level
+    `email_verified`. So Chris's tokens passed through `user_metadata` or the Google provider
+    in `app_metadata`, and fix 2 below keeps only the second.
+  - The `amr` method shows how a session signed in:
+    - a Google sign-in is `oauth`;
+    - a password is `password`, a magic link `otp` or `magiclink`;
+    - an agent's token is `oauth_provider/authorization_code`, a session of its own that the
+      OAuth server starts when the agent trades its code.
+  - Refreshing keeps a session's `amr`. It names no provider (only SSO entries carry one),
+    which is why the account's provider comes from `app_metadata`.
 - **What it can do at Supabase itself.** Checked from outside with the public key, and in
   Supabase Auth's source (`supabase/auth` main, read 2026-10-28):
   - REST exposes only `public` and `graphql_public`. `bsk`, `bsk_derived` and `bsk_ops`
@@ -585,9 +596,9 @@ through the consent page. Its client id is `2c63d7f7-0ab1-47a2-9dbd-b765f66b7763
     - List or revoke his agent grants.
     - Read his user record (email, Google identity) and change its `user_metadata`.
   - Changing his email still needs the confirmation emails, so a token alone can't.
-- **Proposed fixes** (for Chris to decide; all of these come before Phase 2's writes):
+- **Fixes.** Chris chose 1 and 2 on 2026-10-28; 3 waits for the access log.
   1. **Turn off the Email provider** in Supabase (Authentication → Sign In / Providers →
-     Email), in staging and production.
+     Email), in staging and production. Chris is doing this himself.
      - Supabase then refuses password and magic-link sign-in (checked in its source), so a
        password set by an agent opens nothing.
      - Nothing in LifeOS signs in by email.
@@ -595,9 +606,21 @@ through the consent page. Its client id is `2c63d7f7-0ab1-47a2-9dbd-b765f66b7763
   2. **The API accepts a web session only if it was signed in with Google**, and stops reading
      `email` or `email_verified` from `user_metadata`, which the user (so any agent token)
      can write.
-     - Today that fallback is used only when a token has no top-level email. That never
-       happens while anonymous and phone sign-in stay off, so there's no hole now.
+     - Before, that fallback was used only when a token had no top-level email. That never
+       happened while anonymous and phone sign-in stayed off, so there was no hole yet.
      - This is a second wall should Email ever come back on.
+     - **Done.** `src/LifeOs.Api/Auth/SupabaseClaims.cs` reads only the top-level `email`,
+       `amr` and `app_metadata`.
+     - `AllowlistedUser` (the web and `/api`) needs a Google account (`app_metadata`) whose
+       session's `amr` has `oauth`. A password or magic-link session for the same account
+       is 403.
+     - `McpAgent` needs a Google account whose session's `amr` has
+       `oauth_provider/authorization_code`, plus the `client_id`. So a `client_id` on any
+       other session is refused.
+     - Refusing the allowed account for how it signed in logs a warning with the `amr`
+       methods, so a lockout is easy to spot.
+     - Tests mint Supabase-shaped tokens (`tests/LifeOs.Tests/SupabaseTokens.cs`). A
+       hand-made test token now needs `amr` and `app_metadata` as well as `email`.
   3. **An allow list instead of a block list** (`Mcp__AllowedClients`): only client ids Chris
      lists may call `/mcp`, so a client an agent approved for itself is refused.
      - It costs one setting per new agent.

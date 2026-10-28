@@ -198,13 +198,7 @@ public sealed class ApiHostTests
         {
             Issuer = Issuer,
             Audience = Audience,
-            Claims = new Dictionary<string, object>
-            {
-                ["sub"] = "user-1",
-                ["email"] = email,
-                ["email_verified"] = true,
-                ["role"] = "authenticated",
-            },
+            Claims = SupabaseTokens.Claims(email),
             NotBefore = DateTime.UtcNow.AddMinutes(-1),
             Expires = DateTime.UtcNow.AddMinutes(10),
             IssuedAt = DateTime.UtcNow,

@@ -29,12 +29,12 @@ public sealed class AuthPipelineTests
     }
 
     [Fact]
-    public async Task Allowlisted_verified_token_returns_email()
+    public async Task Allowlisted_Google_sign_in_returns_email()
     {
         await using var host = await AuthTestHost.StartAsync(Ct);
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/me");
         request.Headers.Authorization = new AuthenticationHeaderValue(
-            "Bearer", Token(email: Allowed, verified: true));
+            "Bearer", Token(SupabaseTokens.Claims(Allowed)));
         var response = await host.Client.SendAsync(request, Ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync(Ct);
@@ -42,23 +42,70 @@ public sealed class AuthPipelineTests
     }
 
     [Fact]
-    public async Task Non_allowlisted_verified_token_is_403()
+    public async Task Non_allowlisted_Google_sign_in_is_403()
     {
         await using var host = await AuthTestHost.StartAsync(Ct);
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/me");
         request.Headers.Authorization = new AuthenticationHeaderValue(
-            "Bearer", Token(email: "intruder@example.com", verified: true));
+            "Bearer", Token(SupabaseTokens.Claims("intruder@example.com")));
+        var response = await host.Client.SendAsync(request, Ct);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(SupabaseTokens.Password)]
+    [InlineData(SupabaseTokens.MagicLink)]
+    public async Task Allowlisted_account_signed_in_without_Google_is_403(string signIn)
+    {
+        // agent-access plan §4.4: a password an agent set on the account opens nothing here.
+        await using var host = await AuthTestHost.StartAsync(Ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/me");
+        request.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer", Token(SupabaseTokens.Claims(Allowed, signIn: signIn)));
         var response = await host.Client.SendAsync(request, Ct);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task Unverified_allowlisted_token_is_403()
+    public async Task Email_only_in_user_metadata_is_403()
     {
         await using var host = await AuthTestHost.StartAsync(Ct);
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/me");
         request.Headers.Authorization = new AuthenticationHeaderValue(
-            "Bearer", Token(email: Allowed, verified: false));
+            "Bearer", Token(SupabaseTokens.Claims(email: null, userMetadata: new()
+            {
+                ["email"] = Allowed,
+                ["email_verified"] = true,
+            })));
+        var response = await host.Client.SendAsync(request, Ct);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Token_without_how_it_signed_in_is_403()
+    {
+        // The old test shape: an email and email_verified, no amr or app_metadata.
+        await using var host = await AuthTestHost.StartAsync(Ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/me");
+        request.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer", Token(new Dictionary<string, object>
+            {
+                ["sub"] = "user-1",
+                ["email"] = Allowed,
+                ["email_verified"] = true,
+                ["role"] = "authenticated",
+            }));
+        var response = await host.Client.SendAsync(request, Ct);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Agent_token_is_403()
+    {
+        await using var host = await AuthTestHost.StartAsync(Ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/me");
+        request.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer", Token(SupabaseTokens.Claims(Allowed, clientId: "client-1")));
         var response = await host.Client.SendAsync(request, Ct);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -70,13 +117,13 @@ public sealed class AuthPipelineTests
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/me");
         request.Headers.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            Token(email: Allowed, verified: true, expires: DateTime.UtcNow.AddMinutes(-10)));
+            Token(SupabaseTokens.Claims(Allowed), expires: DateTime.UtcNow.AddMinutes(-10)));
         var response = await host.Client.SendAsync(request, Ct);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
-    public async Task Google_token_with_nested_supabase_claims_is_200()
+    public async Task Supabase_shaped_Google_token_is_200()
     {
         await using var host = await AuthTestHost.StartAsync(Ct);
         var handler = new JsonWebTokenHandler();
@@ -94,6 +141,13 @@ public sealed class AuthPipelineTests
                     ["provider"] = "google",
                     ["providers"] = new[] { "google" },
                 },
+                ["amr"] = new object[]
+                {
+                    new Dictionary<string, object> { ["method"] = "oauth", ["timestamp"] = 1793200000L },
+                },
+                ["aal"] = "aal1",
+                ["session_id"] = "session-1",
+                ["is_anonymous"] = false,
                 ["user_metadata"] = new Dictionary<string, object>
                 {
                     ["email"] = Allowed,
@@ -120,7 +174,7 @@ public sealed class AuthPipelineTests
         await using var host = await AuthTestHost.StartAsync(Ct);
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/me");
         request.Headers.Authorization = new AuthenticationHeaderValue(
-            "Bearer", Token(email: Allowed, verified: true, audience: "anon"));
+            "Bearer", Token(SupabaseTokens.Claims(Allowed), audience: "anon"));
         var response = await host.Client.SendAsync(request, Ct);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -128,8 +182,7 @@ public sealed class AuthPipelineTests
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private static string Token(
-        string email,
-        bool verified,
+        Dictionary<string, object> claims,
         DateTime? expires = null,
         string audience = Audience)
     {
@@ -138,13 +191,7 @@ public sealed class AuthPipelineTests
         {
             Issuer = Issuer,
             Audience = audience,
-            Claims = new Dictionary<string, object>
-            {
-                ["sub"] = "user-1",
-                ["email"] = email,
-                ["email_verified"] = verified,
-                ["role"] = "authenticated",
-            },
+            Claims = claims,
             NotBefore = DateTime.UtcNow.AddMinutes(-1),
             Expires = expires ?? DateTime.UtcNow.AddMinutes(10),
             IssuedAt = DateTime.UtcNow,
