@@ -101,7 +101,9 @@ export function liveSeconds(
 }
 
 /** Which actions fit the timer's state (the kernel refuses the rest). */
-export function availableActions(state: TimerState): TimerAction[] {
+export function availableActions(state: TimerState, closed = false): TimerAction[] {
+  // A closed Task isn't timed: a timer left on one can only be stopped.
+  if (closed) return state === "stopped" ? [] : ["stop"];
   switch (state) {
     case "running":
       return ["pause", "stop", "complete"];

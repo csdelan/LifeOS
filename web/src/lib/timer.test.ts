@@ -62,6 +62,10 @@ describe("availableActions", () => {
     expect(availableActions("stopped")).toEqual(["start"]);
     expect(availableActions("running")).toEqual(["pause", "stop", "complete"]);
     expect(availableActions("paused")).toEqual(["resume", "stop", "complete"]);
+    // A closed task: nothing to start, and a timer left on it can only be stopped.
+    expect(availableActions("stopped", true)).toEqual([]);
+    expect(availableActions("running", true)).toEqual(["stop"]);
+    expect(availableActions("paused", true)).toEqual(["stop"]);
   });
 });
 

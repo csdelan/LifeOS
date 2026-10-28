@@ -461,6 +461,8 @@ export function SubjectDetail({
         {subject.type === "Task" && !series ? (
           <TaskTimerPanel
             taskId={subject.id}
+            title={subject.title}
+            status={subject.status}
             estimate={parseAttrBag(subject.attributes).estimated_duration}
             className="mt-3"
           />

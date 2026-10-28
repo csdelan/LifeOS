@@ -15,8 +15,9 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
 
     [McpServerTool(Name = "life_snapshot", Title = "Life snapshot", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
     [Description("""
-        Start here. Chris's life as it stands today: his identity statements, areas, active goals
-        and projects with what each serves, tasks due today or overdue, tasks in progress, habits
+        Start here. Chris's life as it stands today: his identity statements, areas, open goals
+        and projects (not Completed or Abandoned; Active first, each with its status, which may
+        not be set) with what each serves, tasks due today or overdue, tasks in progress, habits
         due today with streaks, appointments in the next 7 days, the inbox count, running timers,
         today's domain XP, and the top findings from LifeOS's own checks. Every list is capped;
         "truncated" names any that were cut. Follow up with get_item, list_items or alignment.
@@ -50,6 +51,15 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
             Area = s.AreaName ?? s.Area,
             Serves = serves[s.Id].Select(e => new { byId[e.ToId].Id, byId[e.ToId].Type, byId[e.ToId].Title }).ToList(),
         };
+
+        // Open as list_items status=open counts it: anything not Completed or Abandoned, a goal or
+        // project with no status set included. Active ones first.
+        IEnumerable<SubjectListItem> Open(string type) => all
+            .Where(s => s.Type == type && !StatusVocabulary.IsTerminal(s.Status))
+            .OrderBy(s => Is(s.Status, "Active") ? 0 : 1)
+            .ThenBy(s => s.TargetDate ?? "9999", StringComparer.Ordinal)
+            .ThenBy(s => s.Title, StringComparer.OrdinalIgnoreCase);
+        var openGoals = Open(SubjectTypes.Goal).ToList();
 
         var openTasks = all.Where(s => s.Type == SubjectTypes.Task && !StatusVocabulary.IsTerminal(s.Status)).ToList();
         var due = openTasks
@@ -106,10 +116,8 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
             IdentityStatements = Section("identity_statements",
                 all.Where(s => s.Type == SubjectTypes.Value).Select(s => new { s.Id, s.Urn, s.Title })),
             Areas = Section("areas", subjects.GetAreas().Select(a => new { a.Id, a.Urn, a.Name })),
-            ActiveGoals = Section("active_goals",
-                all.Where(s => s.Type == SubjectTypes.Goal && Is(s.Status, "Active")).Select(WithServes)),
-            ActiveProjects = Section("active_projects",
-                all.Where(s => s.Type == SubjectTypes.Project && Is(s.Status, "Active")).Select(WithServes)),
+            OpenGoals = Section("open_goals", openGoals.Select(WithServes)),
+            OpenProjects = Section("open_projects", Open(SubjectTypes.Project).Select(WithServes)),
             DueAndOverdue = Section("due_and_overdue", due.Select(s => ItemRef.From(s) with
             {
                 Overdue = string.CompareOrdinal(s.Due ?? s.Scheduled, today) < 0 ? true : null,
@@ -138,7 +146,8 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
             Truncated = truncated.Count > 0 ? truncated : null,
         };
 
-        var summary = $"Snapshot for {today}: {McpResults.Plural(body.ActiveGoals.Count, "active goal")}, "
+        var summary = $"Snapshot for {today}: {McpResults.Plural(openGoals.Count, "open goal")} "
+                      + $"({openGoals.Count(s => Is(s.Status, "Active"))} Active), "
                       + $"{McpResults.Plural(due.Count, "task")} due or overdue, "
                       + $"{McpResults.Plural(todayStates.Count, "habit")} scheduled today, "
                       + $"{McpResults.Plural(body.InboxCount, "inbox item")}.";

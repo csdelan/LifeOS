@@ -174,6 +174,32 @@ test.describe("golden paths", () => {
     await expect(detail.getByRole("region", { name: "Timer" })).toHaveCount(0);
   });
 
+  test("time a task, stop for now and start again, then Complete only after it asks", async ({ page }) => {
+    await page.goto("/browse?type=Task&selected=task-shoes");
+    await expect(page.getByRole("heading", { name: "Buy race shoes" })).toBeVisible({ timeout: 10_000 });
+    const timer = page.getByRole("region", { name: "Timer", exact: true });
+    await timer.getByRole("button", { name: "Start" }).click();
+    await expect(timer.getByText("Running", { exact: true })).toBeVisible();
+
+    // Stop ends the session and leaves the task open.
+    await timer.getByRole("button", { name: "Stop" }).click();
+    await timer.getByRole("button", { name: "Start" }).click();
+    await expect(timer.getByText("Running", { exact: true })).toBeVisible();
+
+    // Complete closes it, so it asks first; Cancel changes nothing.
+    await timer.getByRole("button", { name: "Complete" }).click();
+    const ask = page.getByRole("alertdialog", { name: "Complete Buy race shoes?" });
+    await expect(ask).toContainText("use Stop instead");
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(timer.getByText("Running", { exact: true })).toBeVisible();
+    await timer.getByRole("button", { name: "Complete" }).click();
+    await ask.getByRole("button", { name: "Complete" }).click();
+
+    // A closed task isn't timed until it's reopened.
+    await expect(timer.getByText("Reopen the task to time it.")).toBeVisible({ timeout: 10_000 });
+    await expect(timer.getByRole("button", { name: "Start" })).toHaveCount(0);
+  });
+
   test("a repeating task is one node on the Map, and a review counts its weeks", async ({ page }) => {
     await page.clock.install({ time: new Date("2026-10-21T12:00:00") });
     await page.goto("/map");

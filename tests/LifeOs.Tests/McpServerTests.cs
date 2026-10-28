@@ -234,8 +234,14 @@ public sealed class McpServerTests(PostgresFixture postgres)
         var snapshot = await CallAsync(client, "life_snapshot");
         Assert.Equal(day, snapshot.GetProperty("today").GetString());
         Assert.True(snapshot.TryGetProperty("as_of", out _));
-        var activeGoal = Single(snapshot.GetProperty("active_goals"), goal.Id);
+        var activeGoal = Single(snapshot.GetProperty("open_goals"), goal.Id);
+        Assert.Equal("Active", activeGoal.GetProperty("status").GetString());
         Assert.Equal(value.Id, activeGoal.GetProperty("serves")[0].GetProperty("id").GetGuid());
+        // A project that isn't Active (New, or no status set) is open too, as list_items status=open counts it.
+        var unset = Single(snapshot.GetProperty("open_projects"), project.Id);
+        Assert.NotEqual("Active", unset.TryGetProperty("status", out var status) ? status.GetString() : null);
+        var raw = await client.CallToolAsync("life_snapshot", cancellationToken: Ct);
+        Assert.Contains("1 open goal (1 Active)", Text(raw), StringComparison.Ordinal);
         Single(snapshot.GetProperty("due_and_overdue"), task.Id);
         Assert.DoesNotContain(Ids(snapshot.GetProperty("due_and_overdue")), id => id == later.Id);
         Assert.Equal(1, snapshot.GetProperty("inbox_count").GetInt32());
@@ -447,6 +453,103 @@ public sealed class McpServerTests(PostgresFixture postgres)
         var sideways = await client.CallToolAsync("recent_changes", new Dictionary<string, object?> { ["by"] = "sideways" }, cancellationToken: Ct);
         Assert.True(sideways.IsError);
         Assert.Contains("recorded or occurred", Text(sideways), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Recent_changes_shows_an_edited_meal_or_photo_once_and_pages_past_the_limit()
+    {
+        // Made-up records, not real data. A meal logged three days back and then moved to two
+        // days back; a meal moved from two days back to ten; a space photo moved from shot
+        // "main" to a shot of its own. Each is written again under the same id, as editing does.
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await StartAsync(db.ConnectionString);
+        var ns = Guid.NewGuid().ToString("N")[..8];
+        var moved = Guid.NewGuid();
+        var away = Guid.NewGuid();
+        var photo = Guid.NewGuid();
+        await using (var owner = new NpgsqlConnection(db.ConnectionString))
+        {
+            await owner.OpenAsync(Ct);
+            async Task WriteAsync(string kind, int daysBack, int minutesAgo, object payload)
+                => await owner.ExecuteAsync(new CommandDefinition(
+                    """
+                    INSERT INTO bsk.event (kind, provenance, occurred_at, recorded_at, source_id, payload)
+                    VALUES (@kind, 'declared', now() - make_interval(days => @daysBack),
+                            clock_timestamp() - make_interval(mins => @minutesAgo), @source, @payload::jsonb);
+                    """,
+                    new { kind, daysBack, minutesAgo, source = KernelSources.Cli, payload = JsonSerializer.Serialize(payload) },
+                    cancellationToken: Ct));
+
+            await WriteAsync("measurement", 3, 40, new { meal = new { id = moved, name = $"First {ns}", score = 3, calories = 400 } });
+            await WriteAsync("measurement", 2, 30, new { meal = new { id = moved, name = $"Fixed {ns}", score = 3, calories = 450 } });
+            await WriteAsync("measurement", 2, 40, new { meal = new { id = away, name = $"Away {ns}", score = 2 } });
+            await WriteAsync("measurement", 10, 30, new { meal = new { id = away, name = $"Away {ns}", score = 2 } });
+            var space = Guid.NewGuid();
+            await WriteAsync("observation", 1, 40, new { space_photo = new { id = photo, space, shot = "main", day = "2026-10-27" } });
+            await WriteAsync("observation", 1, 30, new { space_photo = new { id = photo, space, shot = $"shot-{ns}", day = "2026-10-27" } });
+        }
+
+        await using var client = await ConnectAsync(host, ApiTestHost.TokenFor(clientId: Agent));
+        static bool Of(JsonElement e, string key, Guid id)
+            => e.TryGetProperty("payload", out var p) && p.TryGetProperty(key, out var record)
+               && record.TryGetProperty("id", out var found) && found.GetString() == id.ToString();
+
+        // By when it was recorded: each once, as its newest version.
+        var recorded = (await CallAsync(client, "recent_changes", new() { ["since"] = "1h" })).GetProperty("events").EnumerateArray().ToList();
+        var meal = Assert.Single(recorded, e => Of(e, "meal", moved));
+        Assert.Equal($"Fixed {ns}", meal.GetProperty("payload").GetProperty("meal").GetProperty("name").GetString());
+        Assert.Equal(2, meal.GetProperty("versions").GetInt32());
+        var shot = Assert.Single(recorded, e => Of(e, "space_photo", photo));
+        Assert.Equal($"shot-{ns}", shot.GetProperty("payload").GetProperty("space_photo").GetProperty("shot").GetString());
+        Assert.Equal(2, shot.GetProperty("versions").GetInt32());
+
+        // By when it happened, over the last five days: the meal once, on its new day; the meal
+        // moved ten days back isn't in this window, so its old version doesn't stand in for it.
+        var week = (await CallAsync(client, "recent_changes", new() { ["since"] = "5d", ["by"] = "occurred" })).GetProperty("events").EnumerateArray().ToList();
+        Assert.Equal($"Fixed {ns}", Assert.Single(week, e => Of(e, "meal", moved)).GetProperty("payload").GetProperty("meal").GetProperty("name").GetString());
+        Assert.DoesNotContain(week, e => Of(e, "meal", away));
+        var older = (await CallAsync(client, "recent_changes", new() { ["since"] = "11d", ["by"] = "occurred" })).GetProperty("events").EnumerateArray();
+        Assert.Single(older, e => Of(e, "meal", away));
+
+        // Paging: two at a time, following next, gives the same events in the same order as one answer.
+        var whole = await CallAsync(client, "recent_changes", new() { ["since"] = "11d", ["by"] = "occurred", ["limit"] = 200 });
+        Assert.False(whole.GetProperty("truncated").GetBoolean());
+        Assert.False(whole.TryGetProperty("next", out _));
+        var expected = whole.GetProperty("events").EnumerateArray().Select(e => e.GetProperty("id").GetString()).ToList();
+        Assert.True(expected.Count > 2, "The window holds more than one page.");
+        var paged = new List<string?>();
+        string? cursor = null;
+        for (var page = 0; page < expected.Count; page++)
+        {
+            var args = new Dictionary<string, object?> { ["since"] = "11d", ["by"] = "occurred", ["limit"] = 2 };
+            if (cursor is not null)
+            {
+                args["cursor"] = cursor;
+            }
+
+            var answer = await CallAsync(client, "recent_changes", args);
+            paged.AddRange(answer.GetProperty("events").EnumerateArray().Select(e => e.GetProperty("id").GetString()));
+            if (!answer.GetProperty("truncated").GetBoolean())
+            {
+                cursor = null;
+                break;
+            }
+
+            cursor = answer.GetProperty("next").GetString();
+        }
+
+        Assert.Null(cursor);
+        Assert.Equal(expected, paged);
+
+        // A cursor is checked: made up, or for the other time, it's refused in words.
+        var first = await CallAsync(client, "recent_changes", new() { ["since"] = "11d", ["by"] = "occurred", ["limit"] = 1 });
+        var next = first.GetProperty("next").GetString();
+        var madeUp = await client.CallToolAsync("recent_changes", new Dictionary<string, object?> { ["cursor"] = "page-2" }, cancellationToken: Ct);
+        Assert.True(madeUp.IsError);
+        Assert.Contains("isn't one this tool gave", Text(madeUp), StringComparison.Ordinal);
+        var otherTime = await client.CallToolAsync("recent_changes", new Dictionary<string, object?> { ["since"] = "11d", ["cursor"] = next }, cancellationToken: Ct);
+        Assert.True(otherTime.IsError);
+        Assert.Contains("same by", Text(otherTime), StringComparison.Ordinal);
     }
 
     [Fact]

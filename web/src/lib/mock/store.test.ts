@@ -279,6 +279,26 @@ describe("mock task timer", () => {
     expect(byId("task-shoes")?.status).toBe("Completed");
   });
 
+  it("won't start or resume a closed task until it's reopened", () => {
+    applyTimer("task-shoes", "start");
+    applyTimer("task-shoes", "complete");
+    expect(() => applyTimer("task-shoes", "start")).toThrow(/it's Completed\. Reopen it to time it/);
+    expect(timerFor("task-shoes")?.state).toBe("stopped");
+
+    setStatus("task-shoes", "In progress");
+    expect(applyTimer("task-shoes", "start").timer.state).toBe("running");
+    applyTimer("task-shoes", "stop");
+  });
+
+  it("stops the timer when its task closes through Change status", () => {
+    applyTimer("task-shoes", "start");
+    applyTimer("task-shoes", "pause");
+    setStatus("task-shoes", "Cancelled");
+    expect(timerFor("task-shoes")?.state).toBe("stopped");
+    expect(getState().timerEvents.filter((e) => e.subjectId === "task-shoes").at(-1)?.action).toBe("stop");
+    expect(() => applyTimer("task-shoes", "resume")).toThrow(/start it instead/);
+  });
+
   it("keeps the timer on Tasks only", () => {
     expect(() => applyTimer("goal-lifeos", "start")).toThrow(/not a Task/);
   });

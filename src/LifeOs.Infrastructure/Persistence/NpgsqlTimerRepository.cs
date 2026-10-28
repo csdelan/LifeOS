@@ -63,6 +63,16 @@ public sealed class NpgsqlTimerRepository(string connectionString) : ITimerRepos
         return rows.Select(r => r.ToSnapshot()).ToList();
     }
 
+    public async Task<string?> GetTaskStatusAsync(Guid subjectId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT status FROM bsk_derived.subject_current_source WHERE subject_id = @subjectId",
+            new { subjectId },
+            cancellationToken: cancellationToken));
+    }
+
     public async Task AppendAsync(IReadOnlyList<TimerWrite> writes, CancellationToken cancellationToken = default)
     {
         if (writes.Count == 0)

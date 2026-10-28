@@ -1,8 +1,19 @@
+import { useState } from "react";
 import { CheckIcon, PauseIcon, PlayIcon, SquareIcon, TimerIcon } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useTimerControl } from "@/components/timer/use-timer-control";
 import { useTimer } from "@/lib/queries";
-import type { TaskTimer, TimerAction, TimerState } from "@/lib/production-ui-types";
+import { isTerminal, type TaskTimer, type TimerAction, type TimerState } from "@/lib/production-ui-types";
 import {
   availableActions,
   formatClock,
@@ -32,26 +43,38 @@ const ACTION_ICON: Record<TimerAction, typeof PlayIcon> = {
 /**
  * TASKS-2: the optional, Toggl-style timer on a Task. Unused, it is one quiet row with
  * a Start button; once running it shows the session clock, Pause / Resume, Stop, and
- * Complete (stop, then mark the Task Completed). Recorded time sums every session and
- * is compared with the Task's estimate when one parses.
+ * Complete (stop, then mark the Task Completed). Complete asks first, since it closes the
+ * Task and pays its reward while Stop beside it only ends the session. A closed Task
+ * isn't timed: no Start, and a timer left running on one offers only Stop. Recorded time
+ * sums every session and is compared with the Task's estimate when one parses.
  */
 export function TaskTimerPanel({
   taskId,
+  title,
+  status,
   estimate,
   className,
 }: {
   taskId: string;
+  /** The Task's title, for Complete's question. */
+  title?: string;
+  /** The Task's status; a terminal one closes the timer. */
+  status?: string | null;
   /** The Task's free-text `estimated_duration`, e.g. "90m". */
   estimate?: string | null;
   className?: string;
 }) {
   const { data: timer, isLoading } = useTimer(taskId);
   const { run, pending } = useTimerControl(taskId);
+  const [confirming, setConfirming] = useState(false);
   const state: TimerState = timer?.state ?? "stopped";
   const now = useNow(state === "running");
   const { total, session } = liveSeconds(timer, now);
   const estimateSeconds = parseEstimateSeconds(estimate);
   const active = state !== "stopped";
+  const closed = isTerminal(status);
+  const actions = availableActions(state, closed);
+  const name = title ?? timer?.subjectTitle ?? "this task";
 
   return (
     <section
@@ -76,8 +99,11 @@ export function TaskTimerPanel({
             Timer
           </span>
         )}
-        <div className="ml-auto flex flex-wrap gap-1.5">
-          {availableActions(state).map((action) => {
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          {closed && !active ? (
+            <span className="text-xs text-muted-foreground">Reopen the task to time it.</span>
+          ) : null}
+          {actions.map((action) => {
             const Icon = ACTION_ICON[action];
             const primary = action === "start" || action === "resume";
             return (
@@ -86,7 +112,7 @@ export function TaskTimerPanel({
                 size="sm"
                 variant={primary ? "default" : "outline"}
                 disabled={pending !== null || isLoading}
-                onClick={() => void run(action)}
+                onClick={() => (action === "complete" ? setConfirming(true) : void run(action))}
               >
                 <Icon aria-hidden />
                 {pending === action ? `${ACTION_LABEL[action]}…` : ACTION_LABEL[action]}
@@ -95,6 +121,11 @@ export function TaskTimerPanel({
           })}
         </div>
       </div>
+      {closed && active ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          This task is {status}. Stop the timer to record its time.
+        </p>
+      ) : null}
       <TimerSummary
         timer={timer}
         total={total}
@@ -104,6 +135,28 @@ export function TaskTimerPanel({
       <p className="sr-only" aria-live="polite">
         {state === "running" ? "Timer running" : state === "paused" ? "Timer paused" : ""}
       </p>
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Complete {name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This stops the timer and marks the task Completed. To stop for now and come back
+              to it later, use Stop instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirming(false);
+                void run("complete");
+              }}
+            >
+              Complete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

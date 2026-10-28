@@ -1046,6 +1046,15 @@ Build:      built
 - Every Task offers the timer, but it stays quiet until used: one row with **Start**.
 - **Start** begins a session. **Pause** keeps the session open and **Resume** continues it.
   **Stop** closes the session. **Complete** stops the timer and marks the Task Completed.
+- **Complete** asks first ("Complete <task>? … To stop for now and come back to it later,
+  use Stop instead."), since it closes the Task and pays its reward, while **Stop** beside it
+  only ends the session (2026-10-28: a Complete clicked for a Stop closed a task Chris meant
+  to come back to).
+- A closed Task (Completed, Cancelled, Missed, …) isn't timed. Its panel has no **Start**
+  and says "Reopen the task to time it."; the kernel refuses Start and Resume until it's
+  reopened. Closing a Task through Change status stops its timer first, so its time is
+  recorded up to then. A timer left running on a task closed before this rule offers only
+  **Stop**.
 - Recorded time is the sum of every session. The Task's existing Estimated duration stays and
   is compared with it (time left, or time over).
 - One timer runs at a time: starting or resuming one pauses whichever was running, and says so.

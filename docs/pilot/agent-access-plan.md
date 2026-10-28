@@ -438,7 +438,8 @@ result carries:
 - `as_of` (UTC) and `today` (in the home time zone, `Rewards:HomeTimeZone`), so "today"
   and "overdue" mean what Chris means;
 - ids and URNs, so follow-up calls work;
-- lists capped by `limit` (default 50), with `truncated: true` when cut.
+- lists capped by `limit` (default 50), with `truncated: true` when cut. `recent_changes`
+  then gives `next`, to pass back as `cursor` for the following page.
 
 Results are structured JSON plus a one-line text summary. Every tool is annotated
 `readOnlyHint: true`.
@@ -447,12 +448,12 @@ Results are structured JSON plus a one-line text summary. Every tool is annotate
 
 | Tool | Returns | Built from |
 |---|---|---|
-| `life_snapshot` | The call to start with: identity statements, areas, active goals and projects with what each serves, today's and overdue tasks, habits due today with streaks, appointments in the next 7 days, inbox count, running timers, today's domain XP, top diagnostic findings | `SubjectReader` (`QuerySubjects`, `GetHabits`, `GetHabitOccurrences`, `GetAppointments`, `GetInboxCount`, `GetTimers`, `GetAlignmentEdges`), `RewardReader.GetDomainsAsync`, `DiagnosticRunner` |
+| `life_snapshot` | The call to start with: identity statements, areas, open goals and projects (Active first, each with its status) with what each serves, today's and overdue tasks, habits due today with streaks, appointments in the next 7 days, inbox count, running timers, today's domain XP, top diagnostic findings | `SubjectReader` (`QuerySubjects`, `GetHabits`, `GetHabitOccurrences`, `GetAppointments`, `GetInboxCount`, `GetTimers`, `GetAlignmentEdges`), `RewardReader.GetDomainsAsync`, `DiagnosticRunner` |
 | `find_items(query, type?)` | Items whose title or tags match | New `SubjectReader.SearchSubjects` (`ILIKE` over `v_subject` titles and tags) |
 | `list_items(type?, status?, area?, tag?, due_before?, due_after?, include_archived?)` | A filtered list, with Browse's filter rules (BROWSE-2) | `QuerySubjects`, plus filters |
 | `get_item(id or urn)` | Full detail: relations both ways, people, tags, the last 20 journal entries, status history, timer, repeating series | `GetSubject` / `GetSubjectByUrn`, `GetServes`, `GetServedBy`, `GetPeopleOn`, `GetTags`, `GetJournal`, `GetStatusHistory`, `GetTimer`, `GetTaskSeriesHistory` |
 | `alignment(id?)` | For a goal, everything serving it down to tasks. For any item, its chain up to identity statements and areas. With no id, the whole tree, compact | `GetAlignmentEdges` plus a C# port of the forest in `web/src/lib/derive.ts` |
-| `recent_changes(since, types?, by?)` | Events since a time (status changes, captures, journal entries, check-offs, meals, Oura days), so an agent can catch up. `by` is `recorded` (the default) or `occurred`, for what happened in a period. Each Oura record shows once, as its newest version, with how many versions there were. Ledger entries only when `types` names `ledger` | New reader over `bsk.v_event` by `recorded_at` or `occurred_at` |
+| `recent_changes(since, types?, by?, limit?, cursor?)` | Events since a time (status changes, captures, journal entries, check-offs, meals, Oura days), so an agent can catch up. `by` is `recorded` (the default) or `occurred`, for what happened in a period. Each Oura record, and each edited meal, fast, space photo or rating, shows once, as its newest version, with how many versions there were. Ledger entries only when `types` names `ledger`. A cut answer gives `next`, passed back as `cursor` for the older events | New reader over `bsk.v_event` by `recorded_at` or `occurred_at` |
 | `habits(on?)` | Habits with the day's occurrences, streaks and establishment | `GetHabits`, `GetHabitOccurrences` |
 | `calendar(from, to)` | Appointments and due tasks in a range | `GetAppointments`, `QuerySubjects` |
 | `inbox()` | Untriaged captures | `GetInbox` |
@@ -883,6 +884,46 @@ using it.
   Tests: a made-up Oura record with three versions, a month back and recorded within the
   hour, plus a ledger earn and a capture, read by either time and with and without
   `ledger`; and the brief `home` shape.
+- **1.5 done (2026-10-28).** Chris had Claude check the API against his week through
+  `/mcp`, and Connected agents logged the calls. It passed, with four issues:
+  - **Edited meals and space photos showed twice.** Editing a meal writes it again under
+    the same id, so a meal moved to another time showed at both; a photo moved to a shot of
+    its own showed under shot "main" and again under its new shot. `recent_changes` now
+    keeps the newest version of a meal, fast, space photo or rating as well as an Oura
+    record, by the id in the payload, as their views do. It looks for the newest version
+    outside the window too, so with `by: "occurred"` a meal moved out of the window no
+    longer leaves its old version in it. On staging, Chris's week by when it happened went
+    from 252 events to 157.
+  - **`life_snapshot` showed only goals and projects marked Active** (2 projects, no goals),
+    while `list_items status=open` and the diagnostics counted 5 and 2: three projects and
+    two goals have no status set. The snapshot now lists every open one, `open_goals` and
+    `open_projects` (renamed from `active_*`), Active first and each with its status, and its
+    summary says how many are Active. The web's dashboard still picks its focus from Active
+    goals only.
+  - **A week came back 194 events against a 200 cap.** `recent_changes` now pages: a cut
+    answer gives `next` (the last event's time and id, as `o:<ticks>:<id>`), and passing it
+    back as `cursor` with the same `since`, `types` and `by` gives the older events. A
+    cursor for the other `by`, or one it didn't give, is refused in words. The cap stays
+    200.
+  - **A timer ran 12 minutes on a completed task** (TASKS-2, a kernel and web bug, not the
+    tool layer). On staging the dishwasher task shows start, stop, Completed (with its XP)
+    and then a new 12-minute session. Complete sits next to Stop and looks the same, and it
+    closed the task with nothing asked; the panel then still offered Start on the completed
+    task, and the kernel accepted it. Now Complete asks first, a closed task's panel has no
+    Start, the kernel refuses Start and Resume on a closed task, and closing a task through
+    Change status stops its timer first (ui-requirements.md, task timer).
+
+  The check also noted that "New Wardrobe" keeps the URN of an earlier title. That's by
+  design: a URN is made once, at creation, and stays so links and agents' references keep
+  working; the title is what changes.
+
+  Tests: .NET for the closed-task rules (refused and reopened, closing stops a running or
+  paused timer, a timer left on a closed task can still be stopped), the snapshot's open
+  lists, and a fixture with an edited meal, a meal moved out of the window and a photo moved
+  to its own shot, read by either time and paged two at a time (1,247 pass); web unit tests
+  for the mock's rules, the panel (Complete asks, Cancel changes nothing, no Start once
+  closed, only Stop for a timer left running), and `availableActions`; a golden path; and
+  a11y with the Complete dialog open.
 
 To connect, add `https://lifeos-mz55-staging.fly.dev/mcp` as a custom connector in Claude
 or ChatGPT. In Claude Code:

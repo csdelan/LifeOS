@@ -22,10 +22,14 @@ namespace LifeOs.Application.Subjects;
 /// Repeating Tasks (D16): a series only repeats (Not started) or stops (Cancelled), and a
 /// repetition that closes makes the next one (<see cref="TaskSeriesService"/>).
 /// </para>
+/// <para>
+/// Closing a Task (a terminal status) stops its timer first when it's running or paused, so
+/// its time is recorded up to then and no timer runs on a closed task (TASKS-2).
+/// </para>
 /// </summary>
 public sealed class StatusService(
     SubjectService subjects, IEventStore events, RewardService rewards, IClock clock, string sourceId,
-    TaskSeriesService? taskSeries = null)
+    TaskSeriesService? taskSeries = null, ITimerRepository? timers = null)
 {
     public async Task<StatusResult> ChangeStatusAsync(
         string reference, string newStatus, CancellationToken cancellationToken = default)
@@ -45,6 +49,21 @@ public sealed class StatusService(
         var payload = JsonSerializer.Serialize(new { subject_id = subject.Id.ToString(), status });
 
         var now = clock.UtcNow;
+        if (timers is not null && subject.Type == SubjectTypes.Task && StatusVocabulary.IsTerminal(status)
+            && await timers.GetAsync(subject.Id, cancellationToken) is { State: TimerStates.Running or TimerStates.Paused } timer)
+        {
+            var stop = JsonSerializer.Serialize(new { subject_id = subject.Id.ToString(), timer = TimerActions.Stop });
+            await timers.AppendAsync(
+                [new TimerWrite(subject.Id, timer.State, new NewEvent(
+                    Kind: EventKinds.Activity,
+                    Provenance: Provenances.Declared,
+                    OccurredAt: now,
+                    RecordedAt: now,
+                    SourceId: sourceId,
+                    PayloadJson: stop))],
+                cancellationToken);
+        }
+
         var newEvent = new NewEvent(
             Kind: EventKinds.StateChange,
             Provenance: Provenances.Declared,

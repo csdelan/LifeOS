@@ -973,6 +973,20 @@ test.describe("accessibility", () => {
     });
   }
 
+  test("axe serious/critical: a task's timer, and Complete asking first", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/browse?type=Task&selected=task-shoes");
+    const timer = page.getByRole("region", { name: "Timer", exact: true });
+    await timer.getByRole("button", { name: "Start" }).click();
+    await expect(timer.getByText("Running", { exact: true })).toBeVisible();
+    await timer.getByRole("button", { name: "Complete" }).click();
+    await expect(page.getByRole("alertdialog")).toBeVisible();
+    await settled(page);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    const serious = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
+  });
+
   test("axe serious/critical: Connected agents on a phone", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.emulateMedia({ reducedMotion: "reduce" });

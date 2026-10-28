@@ -195,8 +195,9 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         return earned;
       } finally {
         // A status change can earn or give back (REWARD-1), so the wallet moves too; a
-        // habit's graduates it off the daily list.
+        // habit's graduates it off the daily list; closing a Task stops its timer.
         await invalidate(qc, [
+          qk.timers,
           qk.subject(subject),
           qk.listItem(subject),
           qk.history(subject),

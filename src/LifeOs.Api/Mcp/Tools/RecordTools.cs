@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Xml;
+using LifeOs.Api.Read;
 using LifeOs.Domain;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
@@ -33,16 +34,20 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
         its text. Use it to catch up since the last conversation (the default, by: "recorded").
         For what happened in a period, such as a week review, use by: "occurred": an Oura backfill
         or a late entry is then placed on the day it happened, not the day it was recorded.
-        Oura re-sends a day as it changes; only the newest copy of each Oura record comes back,
-        with 'versions' saying how many there were. Reward ledger entries (earns and reversals)
-        are left out unless types includes ledger; for coins and XP per day use the rewards tool's
-        daily net instead.
+        Some records are written again when they change: Oura re-sends a day, and editing a meal,
+        a fast, a space photo or a rating writes it again. Each comes back once, as its newest
+        copy, with 'versions' saying how many there were. Reward ledger entries (earns and
+        reversals) are left out unless types includes ledger; for coins and XP per day use the
+        rewards tool's daily net instead. When there are more events than the limit, the answer
+        is cut and gives 'next': call again with cursor set to it, and the same since, types and
+        by, for the older ones.
         """)]
     public async Task<CallToolResult> RecentChanges(
         [Description("Since when: an ISO instant (2026-10-27T18:00:00Z), a day (2026-10-27, from its start in Chris's time zone), or a span back from now (24h, 3d, 2w, or ISO P3D). Default 7d.")] string? since = null,
         [Description("Only these event kinds: journal, note, voice, idea_session, observation, activity, measurement, interaction, state_change, archive_change, triage, ledger. Leave out for every kind but ledger.")] string[]? types = null,
         [Description("At most this many events (default 50, at most 200).")] int? limit = null,
         [Description("Which time 'since' and the order go by: recorded (when LifeOS recorded it, the default) or occurred (when it happened; use it for a week review).")] string? by = null,
+        [Description("To continue a cut answer: the 'next' it gave. Leave out for the newest events.")] string? cursor = null,
         CancellationToken cancellationToken = default)
     {
         var byOccurred = (by?.Trim().ToLowerInvariant()) switch
@@ -61,7 +66,8 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
         }
 
         var take = McpResults.Limit(limit);
-        var rows = reads.Changes.GetChanges(from, kinds, options.Excluded, take, byOccurred);
+        var before = cursor is null ? null : ReadCursor(cursor, byOccurred);
+        var rows = reads.Changes.GetChanges(from, kinds, options.Excluded, take, byOccurred, before);
         var (kept, truncated) = McpResults.Cap(rows, take);
         var events = kept.Select(e => new
         {
@@ -74,9 +80,41 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
             Versions = e.Versions > 1 ? e.Versions : (long?)null,
         }).ToList();
         var verb = byOccurred ? "that happened" : "recorded";
+        var next = truncated ? WriteCursor(kept[^1], byOccurred) : null;
+        var more = before is null ? "" : " older than the cursor";
         return McpResults.Ok(stamp,
-            $"{McpResults.Plural(events.Count, "event")} {verb} since {Utc(from.UtcDateTime)}{(truncated ? " (more not shown: narrow since or types)" : "")}.",
-            new { Since = Utc(from.UtcDateTime), By = byOccurred ? "occurred" : "recorded", Events = events, Truncated = truncated });
+            $"{McpResults.Plural(events.Count, "event")} {verb} since {Utc(from.UtcDateTime)}{more}{(truncated ? " (more not shown: call again with cursor set to next)" : "")}.",
+            new { Since = Utc(from.UtcDateTime), By = byOccurred ? "occurred" : "recorded", Events = events, Truncated = truncated, Next = next });
+    }
+
+    /// <summary>
+    /// Where a cut answer stopped, for <c>cursor</c>: which time it went by, that time in ticks and
+    /// the last event's id, as <c>o:638977…:3f2a…</c>.
+    /// </summary>
+    private static string WriteCursor(ChangeRow last, bool byOccurred)
+    {
+        var at = DateTime.SpecifyKind(byOccurred ? last.OccurredAt : last.RecordedAt, DateTimeKind.Utc);
+        return string.Create(CultureInfo.InvariantCulture, $"{(byOccurred ? 'o' : 'r')}:{at.Ticks}:{last.Id:N}");
+    }
+
+    private static ChangeCursor ReadCursor(string cursor, bool byOccurred)
+    {
+        var parts = cursor.Trim().Split(':');
+        if (parts.Length != 3
+            || parts[0] is not ("o" or "r")
+            || !long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks)
+            || ticks < DateTime.MinValue.Ticks || ticks > DateTime.MaxValue.Ticks
+            || !Guid.TryParseExact(parts[2], "N", out var id))
+        {
+            throw new McpException($"cursor '{cursor}' isn't one this tool gave; pass the 'next' of a cut answer as it is.");
+        }
+
+        if ((parts[0] == "o") != byOccurred)
+        {
+            throw new McpException($"That cursor is for by: {(parts[0] == "o" ? "occurred" : "recorded")}; call again with the same by as the answer that gave it.");
+        }
+
+        return new ChangeCursor(new DateTimeOffset(ticks, TimeSpan.Zero), id);
     }
 
     [McpServerTool(Name = "diagnostics", Title = "Diagnostics", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]

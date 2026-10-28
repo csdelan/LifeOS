@@ -247,6 +247,9 @@ public interface ITimerRepository
     /// <summary>Every timer that is running right now — normally none or one.</summary>
     Task<IReadOnlyList<TimerSnapshot>> GetRunningAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The task's status now, folded from its events; null when it has none.</summary>
+    Task<string?> GetTaskStatusAsync(Guid subjectId, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Appends timer actions, each an event plus a <c>concerns</c> edge to its task, as
     /// one transaction serialized against every other timer write. Each task's state is

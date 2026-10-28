@@ -131,11 +131,46 @@ describe("SubjectDetail task timer", () => {
     expect(await within(panel).findByText("Paused", {}, { timeout: 4000 })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Resume" })).toBeInTheDocument();
 
+    // Complete asks first: it closes the task, where Stop beside it only ends the session.
     await user.click(within(panel).getByRole("button", { name: "Complete" }));
+    const ask = await screen.findByRole("alertdialog", { name: /Complete .*\?/ });
+    expect(within(ask).getByText(/use Stop instead/)).toBeInTheDocument();
+    await user.click(within(ask).getByRole("button", { name: "Cancel" }));
+    expect(getState().details["task-shoes"]?.status).not.toBe("Completed");
+    expect(within(panel).getByText("Paused")).toBeInTheDocument();
+
+    await user.click(within(panel).getByRole("button", { name: "Complete" }));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Complete" }),
+    );
     await waitFor(() => expect(getState().details["task-shoes"]?.status).toBe("Completed"), {
       timeout: 4000,
     });
-    expect(await within(panel).findByRole("button", { name: "Start" }, { timeout: 4000 })).toBeInTheDocument();
+    // A closed task isn't timed: no Start until it's reopened (staging, 2026-10-28).
+    expect(
+      await within(panel).findByText("Reopen the task to time it.", {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
+  });
+
+  it("offers only Stop for a timer left running on a closed task", async () => {
+    const state = getState();
+    const at = new Date().toISOString();
+    state.timerEvents = [...state.timerEvents, { subjectId: "task-shoes", action: "start", occurredAt: at }];
+    state.subjects = state.subjects.map((s) => (s.id === "task-shoes" ? { ...s, status: "Completed" } : s));
+    state.details["task-shoes"] = { ...state.details["task-shoes"]!, status: "Completed" };
+    const user = userEvent.setup();
+    renderDetail("task-shoes");
+    const panel = await screen.findByRole("region", { name: "Timer" }, { timeout: 4000 });
+    await within(panel).findByText("Running", {}, { timeout: 4000 });
+    expect(within(panel).getByText(/This task is Completed\. Stop the timer/)).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Complete" })).not.toBeInTheDocument();
+
+    await user.click(within(panel).getByRole("button", { name: "Stop" }));
+    expect(
+      await within(panel).findByText("Reopen the task to time it.", {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
   });
 
   it("shows no timer on other types", async () => {

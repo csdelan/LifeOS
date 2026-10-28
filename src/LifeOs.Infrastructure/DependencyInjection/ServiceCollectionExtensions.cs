@@ -160,7 +160,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<RewardService>(),
             sp.GetRequiredService<IClock>(),
             sourceId,
-            sp.GetRequiredService<TaskSeriesService>()));
+            sp.GetRequiredService<TaskSeriesService>(),
+            sp.GetRequiredService<ITimerRepository>()));
 
         services.AddSingleton(sp => new ArchiveService(
             sp.GetRequiredService<SubjectService>(),

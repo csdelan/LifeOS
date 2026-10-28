@@ -21,6 +21,12 @@ namespace LifeOs.Application.Subjects;
 /// timer touches Status. Starting a timer does not move a Task to In progress; Status
 /// otherwise changes only through Change status (TASKS-1).
 /// </para>
+/// <para>
+/// A closed Task (Completed, Cancelled or any other terminal status) isn't timed: Start and
+/// Resume are refused until it's reopened, and closing it through Change status stops a
+/// running or paused timer (<see cref="StatusService"/>). Pause and Stop still work, so a
+/// timer left running on a task closed before this rule can be stopped.
+/// </para>
 /// </summary>
 public sealed class TimerService(
     SubjectService subjects, ITimerRepository timers, StatusService status, IClock clock, string sourceId,
@@ -55,6 +61,13 @@ public sealed class TimerService(
         var task = await ResolveTaskAsync(reference, cancellationToken);
         var current = (await timers.GetAsync(task.Id, cancellationToken))?.State ?? TimerStates.Stopped;
         EnsureAllowed(task, normalized, current);
+        if (normalized is TimerActions.Start or TimerActions.Resume
+            && await timers.GetTaskStatusAsync(task.Id, cancellationToken) is { } closed
+            && StatusVocabulary.IsTerminal(closed))
+        {
+            throw new InvalidOperationException(
+                $"Can't {normalized} the timer on '{task.Title}': it's {closed}. Reopen it to time it.");
+        }
 
         var now = clock.UtcNow;
         var writes = new List<TimerWrite>();

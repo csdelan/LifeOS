@@ -27,14 +27,18 @@ public sealed class ChangeReader(string readerConnectionString)
     /// default) when LifeOS recorded it. An Oura backfill is recent by the second, not the first.</item>
     /// <item>Null <paramref name="kinds"/> is every kind but <c>ledger</c>: a day of meals writes
     /// many earns and reversals, which would drown the rest; ask for <c>ledger</c> by name.</item>
-    /// <item>Oura re-sends a day as it changes, and each change is a new version of the same
-    /// record. Only the newest version in the window comes back, with how many there were in
-    /// <see cref="ChangeRow.Versions"/>.</item>
+    /// <item>Some records are kept as versions: Oura re-sends a day as it changes, and editing a
+    /// meal, a fast, a space photo or a rating writes it again under the same id. Only the newest
+    /// version comes back, with how many it saw in <see cref="ChangeRow.Versions"/>. An older
+    /// version in the window whose newest one is outside it (a meal moved to another day) is
+    /// left out too.</item>
+    /// <item><paramref name="before"/> continues a cut answer: only events older than that one,
+    /// in the same order.</item>
     /// </list>
     /// </summary>
     public IReadOnlyList<ChangeRow> GetChanges(
         DateTimeOffset since, IReadOnlyCollection<string>? kinds, IReadOnlySet<string> excluded, int limit,
-        bool byOccurred = false)
+        bool byOccurred = false, ChangeCursor? before = null)
     {
         // A column name from a bool, never input.
         var at = byOccurred ? "occurred_at" : "recorded_at";
@@ -46,10 +50,7 @@ public sealed class ChangeReader(string readerConnectionString)
                 SELECT e.id, e.kind, e.source_id, e.provenance, e.occurred_at, e.recorded_at,
                        e.status, e.artifact_id, e.payload,
                        s.id AS subject_id, s.urn AS subject_urn, s.type AS subject_type, s.title AS subject_title,
-                       -- An Oura version's external_id is <collection>:<key>:<hash>:<what it replaces>,
-                       -- and the key may hold a colon, so the record is all but the last two parts.
-                       row_number() OVER (record ORDER BY e.recorded_at DESC, e.id DESC) AS newest,
-                       count(*) OVER record AS versions
+                       {RecordKey("e")} AS record
                 FROM bsk.v_event e
                 LEFT JOIN LATERAL (
                     SELECT se.subject_id
@@ -67,10 +68,21 @@ public sealed class ChangeReader(string readerConnectionString)
                                            OR s.type IS NOT DISTINCT FROM 'Reward'))
                   AND NOT (@noHome AND (jsonb_exists_any(e.payload, ARRAY['space_rating', 'space_photo'])
                                         OR s.type IS NOT DISTINCT FROM 'Space'))
-                WINDOW record AS (
-                    PARTITION BY CASE WHEN e.source_id = 'oura' AND e.external_id IS NOT NULL
-                                      THEN regexp_replace(e.external_id, ':[^:]*:[^:]*$', '')
-                                      ELSE e.id::text END)
+            ),
+            -- The newest version of each versioned record in the window, wherever its time falls.
+            -- A newer version is never recorded before an older one, so looking from the earliest
+            -- one in the window finds it.
+            latest AS (
+                SELECT v.record,
+                       (array_agg(v.id ORDER BY v.recorded_at DESC, v.id DESC))[1] AS id,
+                       count(*) AS versions
+                FROM (
+                    SELECT {RecordKey("e")} AS record, e.id, e.recorded_at
+                    FROM bsk.v_event e
+                    WHERE e.recorded_at >= (SELECT min(recorded_at) FROM matched WHERE record IS NOT NULL)
+                ) v
+                WHERE v.record IN (SELECT record FROM matched WHERE record IS NOT NULL)
+                GROUP BY v.record
             )
             SELECT m.id, m.kind, m.source_id AS source, m.provenance,
                    m.occurred_at, m.recorded_at,
@@ -78,11 +90,13 @@ public sealed class ChangeReader(string readerConnectionString)
                    m.status,
                    left(a.content, @maxText) AS text,
                    CASE WHEN length(m.payload::text) <= @maxPayload THEN m.payload::text END AS payload,
-                   m.versions
+                   coalesce(l.versions, 1) AS versions
             FROM matched m
+            LEFT JOIN latest l ON l.record = m.record
             LEFT JOIN bsk.artifact a ON a.id = m.artifact_id
-            WHERE m.newest = 1
-            ORDER BY m.{at} DESC, m.id
+            WHERE (m.record IS NULL OR l.id = m.id)
+              AND (@beforeAt::timestamptz IS NULL OR (m.{at}, m.id) < (@beforeAt::timestamptz, @beforeId::uuid))
+            ORDER BY m.{at} DESC, m.id DESC
             LIMIT @take
             """,
             new
@@ -95,9 +109,29 @@ public sealed class ChangeReader(string readerConnectionString)
                 noHome = excluded.Contains("home"),
                 maxText = MaxTextLength,
                 maxPayload = MaxPayloadLength,
+                beforeAt = before?.At,
+                beforeId = before?.Id,
                 take = limit + 1,
             }).AsList();
     }
+
+    /// <summary>
+    /// Which record an event is a version of, or null when it stands alone. An Oura version's
+    /// external_id is <c>&lt;collection&gt;:&lt;key&gt;:&lt;hash&gt;:&lt;what it replaces&gt;</c>,
+    /// and the key may hold a colon, so the record is all but the last two parts. A meal, a fast,
+    /// a space photo and a space rating keep their id in the payload, as their views fold them.
+    /// </summary>
+    private static string RecordKey(string e) => $"""
+        CASE WHEN {e}.source_id = 'oura' AND {e}.external_id IS NOT NULL
+                  THEN 'oura:' || regexp_replace({e}.external_id, ':[^:]*:[^:]*$', '')
+             WHEN {e}.payload->'meal'->>'id' IS NOT NULL THEN 'meal:' || ({e}.payload->'meal'->>'id')
+             WHEN {e}.payload->'fast'->>'id' IS NOT NULL THEN 'fast:' || ({e}.payload->'fast'->>'id')
+             WHEN {e}.payload->'space_photo'->>'id' IS NOT NULL
+                  THEN 'space_photo:' || ({e}.payload->'space_photo'->>'id')
+             WHEN {e}.payload->'space_rating'->>'id' IS NOT NULL
+                  THEN 'space_rating:' || ({e}.payload->'space_rating'->>'id')
+        END
+        """;
 }
 
 /// <summary>One recorded event, with the subject it's about when it's about one.</summary>
@@ -129,8 +163,11 @@ public sealed class ChangeRow
     public string? Payload { get; set; }
 
     /// <summary>
-    /// How many versions of this record the window held: above 1 only for an Oura record Oura
-    /// re-sent as it changed. This row is the newest.
+    /// How many versions of this record it saw: above 1 for an Oura record Oura re-sent as it
+    /// changed, and a meal, fast, space photo or rating that was edited. This row is the newest.
     /// </summary>
     public long Versions { get; set; } = 1;
 }
+
+/// <summary>Where a cut answer stopped: its last event's time (the one the order goes by) and id.</summary>
+public sealed record ChangeCursor(DateTimeOffset At, Guid Id);

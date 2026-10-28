@@ -180,6 +180,101 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task A_closed_task_cant_be_started_until_it_is_reopened()
+    {
+        // Staging, 2026-10-28: Complete closed a task, and its panel still offered Start, so a
+        // 12-minute session ran on a task that was already Completed.
+        var (timers, subjects, clock) = Build();
+        var status = Status(clock);
+        var task = await TaskAsync(subjects);
+        await timers.ApplyAsync(task.Urn, TimerActions.Start, Ct);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        await timers.CompleteAsync(task.Urn, Ct);
+
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => timers.ApplyAsync(task.Urn, TimerActions.Start, Ct));
+        Assert.Contains("it's Completed. Reopen it to time it", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(TimerStates.Stopped, (await timers.GetAsync(task.Urn, Ct)).State);
+
+        await status.ChangeStatusAsync(task.Urn, "In progress", Ct);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        Assert.Equal(TimerStates.Running, (await timers.ApplyAsync(task.Urn, TimerActions.Start, Ct)).Timer.State);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        await timers.ApplyAsync(task.Urn, TimerActions.Stop, Ct);
+    }
+
+    [Theory]
+    [InlineData(TimerActions.Start, "Completed")]
+    [InlineData(TimerActions.Pause, "Cancelled")]
+    public async Task Closing_a_task_through_change_status_stops_its_timer_first(string left, string closing)
+    {
+        var (timers, subjects, clock) = Build();
+        var task = await TaskAsync(subjects);
+        await timers.ApplyAsync(task.Urn, TimerActions.Start, Ct);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        if (left == TimerActions.Pause)
+        {
+            await timers.ApplyAsync(task.Urn, TimerActions.Pause, Ct);
+            clock.Advance(TimeSpan.FromSeconds(10));
+        }
+
+        await Status(clock).ChangeStatusAsync(task.Urn, closing, Ct);
+
+        Assert.Equal(TimerStates.Stopped, (await timers.GetAsync(task.Urn, Ct)).State);
+        await using var c = new NpgsqlConnection(postgres.ConnectionString);
+        await c.OpenAsync(Ct);
+        // The stop and the status are written at the same moment, so they're compared by time
+        // rather than read back in order.
+        var stoppedFirst = await c.ExecuteScalarAsync<bool>(new CommandDefinition(
+            """
+            SELECT (SELECT max(recorded_at) FROM bsk.event
+                    WHERE payload->>'subject_id' = @id AND payload->>'timer' = 'stop')
+                <= (SELECT max(recorded_at) FROM bsk.event
+                    WHERE payload->>'subject_id' = @id AND payload->>'status' = @closing)
+            """,
+            new { id = task.Id.ToString(), closing }, cancellationToken: Ct));
+        Assert.True(stoppedFirst);
+        Assert.Equal(closing, await c.ExecuteScalarAsync<string>(new CommandDefinition(
+            """
+            SELECT payload->>'status' FROM bsk.event
+            WHERE payload->>'subject_id' = @id AND payload->>'status' IS NOT NULL
+            ORDER BY recorded_at DESC LIMIT 1
+            """,
+            new { id = task.Id.ToString() }, cancellationToken: Ct)));
+    }
+
+    [Fact]
+    public async Task A_timer_left_running_on_a_closed_task_can_still_be_stopped_but_not_resumed()
+    {
+        // A status service without the timer, as the kernel was before closing stopped it.
+        var (timers, subjects, clock) = Build();
+        var provider = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        var unaware = new StatusService(
+            subjects,
+            provider.GetRequiredService<IEventStore>(),
+            provider.GetRequiredService<LifeOs.Application.Rewards.RewardService>(),
+            clock,
+            KernelSources.Cli);
+        var task = await TaskAsync(subjects);
+        await timers.ApplyAsync(task.Urn, TimerActions.Start, Ct);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        await timers.ApplyAsync(task.Urn, TimerActions.Pause, Ct);
+        await unaware.ChangeStatusAsync(task.Urn, "Cancelled", Ct);
+
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => timers.ApplyAsync(task.Urn, TimerActions.Resume, Ct));
+        Assert.Contains("it's Cancelled", refused.Message, StringComparison.Ordinal);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        Assert.Equal(TimerStates.Stopped, (await timers.ApplyAsync(task.Urn, TimerActions.Stop, Ct)).Timer.State);
+    }
+
+    /// <summary>
+    /// The kernel's own status service, which stops a timer when a task closes, on the test's
+    /// clock so its stop lands after the timer events the test wrote.
+    /// </summary>
+    private StatusService Status(IClock clock)
+        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).AddSingleton(clock).BuildServiceProvider()
+            .GetRequiredService<StatusService>();
+
+    [Fact]
     public async Task Actions_that_do_not_fit_the_current_state_are_refused_and_write_nothing()
     {
         var (timers, subjects, clock) = Build();

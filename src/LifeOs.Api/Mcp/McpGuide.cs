@@ -37,7 +37,7 @@ public sealed class McpGuide
 
         ## Start here
 
-        1. life_snapshot: identity statements, areas, active goals and projects, tasks due or
+        1. life_snapshot: identity statements, areas, open goals and projects, tasks due or
            overdue, habits today, the next 7 days, the inbox count, running timers, domain XP,
            and the top findings from LifeOS's checks.
         2. Follow up by id or URN: get_item for one item in full, alignment for how it

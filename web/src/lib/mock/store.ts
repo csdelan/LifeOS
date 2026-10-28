@@ -491,6 +491,10 @@ export function earnStatus(subject: string, status: string): Earned {
   const series = isSeries(state, item.id) ? item : seriesOf(state, item.id);
   const restarting = series?.id === item.id && isTerminal(item.status) && !isTerminal(status);
   const occurredAt = nowIso();
+  // Closing a Task stops its timer first, as StatusService does (TASKS-2).
+  if (item.type === "Task" && isTerminal(status) && (timerFor(item.id)?.state ?? "stopped") !== "stopped") {
+    state.timerEvents = [...state.timerEvents, { subjectId: item.id, action: "stop", occurredAt }];
+  }
   state.subjects = state.subjects.map((s) =>
     s.id === item.id ? { ...s, status } : s,
   );
@@ -528,8 +532,8 @@ export function listTimers(): TaskTimer[] {
 
 /**
  * Drive a Task's timer the way `TimerService` does: the same allowed transitions and
- * refusals, one running timer at a time (starting or resuming pauses the other), and
- * Complete = stop, then Status → Completed.
+ * refusals, one running timer at a time (starting or resuming pauses the other),
+ * Complete = stop, then Status → Completed, and no Start or Resume on a closed Task.
  */
 export function applyTimer(taskRef: string, action: TimerAction): TimerActionResult {
   const task = byRef(taskRef);
@@ -569,6 +573,10 @@ export function applyTimer(taskRef: string, action: TimerAction): TimerActionRes
               ? "it is not running"
               : `it is ${current}`;
     throw new Error(`Can't ${action} the timer on '${task.title}': ${reason}.`);
+  }
+  // A closed Task isn't timed until it's reopened; Pause and Stop still work.
+  if ((action === "start" || action === "resume") && isTerminal(task.status)) {
+    throw new Error(`Can't ${action} the timer on '${task.title}': it's ${task.status}. Reopen it to time it.`);
   }
 
   const events: TimerEvent[] = [];
