@@ -35,8 +35,10 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
         For what happened in a period, such as a week review, use by: "occurred": an Oura backfill
         or a late entry is then placed on the day it happened, not the day it was recorded.
         Some records are written again when they change: Oura re-sends a day, and editing a meal,
-        a fast, a space photo or a rating writes it again. Each comes back once, as its newest
-        copy, with 'versions' saying how many there were. Reward ledger entries (earns and
+        a fast, a space photo, a rating or a journal entry writes it again. Each comes back once,
+        as its newest copy, with 'versions' saying how many there were. A journal entry kept in
+        SuperJournal has an excerpt of at most 500 characters as its text; its payload's
+        superjournal object names the journal, entry and version, and source says who saved it. Reward ledger entries (earns and
         reversals) are left out unless types includes ledger; for coins and XP per day use the
         rewards tool's daily net instead. When there are more events than the limit, the answer
         is cut and gives 'next': call again with cursor set to it, and the same since, types and

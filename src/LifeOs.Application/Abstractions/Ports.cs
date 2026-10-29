@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LifeOs.Domain;
 
 namespace LifeOs.Application.Abstractions;
@@ -96,6 +97,197 @@ public interface IObjectStorage
     /// <see cref="ObjectStorageException"/> when the store refuses or can't be reached.
     /// </summary>
     Task<byte[]?> GetAsync(string bucket, string key, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Who a SuperJournal call is for (D19): <paramref name="Subject"/> is the signed-in person's
+/// Supabase user id, which SuperJournal sees as the token's <c>sub</c>; <paramref name="Source"/>
+/// is the <c>bsk</c> source that records what the call saved: <c>api</c> for the web, or
+/// <c>mcp:&lt;client_id&gt;</c> for an agent through <c>/mcp</c>, still as the person behind
+/// its token.
+/// </summary>
+public sealed record JournalCaller(string Subject, string Source);
+
+/// <summary>
+/// What an entry says (D19): <paramref name="Content"/> is the TipTap/ProseMirror JSON document,
+/// kept verbatim, and <paramref name="ContentText"/> its plain text, which SuperJournal searches
+/// and the <c>bsk</c> pointer takes its excerpt from. SuperJournal takes both on every save.
+/// </summary>
+public sealed record JournalText(JsonElement Content, string ContentText);
+
+/// <summary>
+/// SuperJournal, the journal service that keeps journal and review text (D19,
+/// csdelan/SuperJournal), called server to server: the browser never calls it. Each call carries
+/// a short-lived token signed for <see cref="JournalCaller.Subject"/>, so SuperJournal scopes
+/// everything to that person's journals in LifeOS's app. Nothing here writes to <c>bsk</c>;
+/// <see cref="Journals.SuperJournalService"/> writes the pointers.
+/// <para>
+/// Errors are <see cref="SuperJournalException"/>, in words. There is no delete: a pointer must
+/// never outlive its entry.
+/// </para>
+/// <para>
+/// The three creates (an entry, a draft, an attachment) take an optional idempotency key, sent as
+/// SuperJournal's <c>Idempotency-Key</c>: a retry of the same request with the same key gets what
+/// the first one made instead of a second copy. The same key with a different request is
+/// <see cref="SuperJournalFailure.Conflict"/>. Keys are scoped to the person, never shared.
+/// </para>
+/// </summary>
+public interface ISuperJournal
+{
+    /// <summary>The person's journal for this subject in LifeOS's app, made the first time it's asked for.</summary>
+    Task<SuperJournalJournal> OpenJournalAsync(
+        JournalCaller caller, string subjectType, string subjectKey, string? title,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The person's journal for this subject in LifeOS's app, or null when there isn't one.</summary>
+    Task<SuperJournalJournal?> FindJournalAsync(
+        JournalCaller caller, string subjectType, string subjectKey, CancellationToken cancellationToken = default);
+
+    /// <summary>A journal by id, or null when SuperJournal has none with it.</summary>
+    Task<SuperJournalJournal?> GetJournalAsync(JournalCaller caller, string journalId, CancellationToken cancellationToken = default);
+
+    /// <summary>The person's journals in LifeOS's app, a page at a time (1-based).</summary>
+    Task<SuperJournalPage<SuperJournalJournal>> ListJournalsAsync(
+        JournalCaller caller, int page, int pageSize, CancellationToken cancellationToken = default);
+
+    /// <summary>A journal's entries, newest first, a page at a time (1-based).</summary>
+    Task<SuperJournalPage<SuperJournalEntry>> GetEntriesAsync(
+        JournalCaller caller, string journalId, int page, int pageSize, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds an entry at version 1.</summary>
+    Task<SuperJournalEntry> AppendEntryAsync(
+        JournalCaller caller, string journalId, JournalText text, IReadOnlyList<string>? tags,
+        string? idempotencyKey = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds an empty entry, so pictures can be uploaded before there's text.</summary>
+    Task<SuperJournalEntry> CreateDraftAsync(
+        JournalCaller caller, string journalId, string? idempotencyKey = null, CancellationToken cancellationToken = default);
+
+    /// <summary>An entry by id, or null when SuperJournal has none with it.</summary>
+    Task<SuperJournalEntry?> GetEntryAsync(JournalCaller caller, string entryId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Saves a new version of the entry, keeping the one it replaces in its history. Refused with
+    /// <see cref="SuperJournalFailure.Conflict"/> when the entry is no longer at
+    /// <paramref name="expectedVersion"/>.
+    /// </summary>
+    Task<SuperJournalEntry> EditEntryAsync(
+        JournalCaller caller, string entryId, JournalText text, int expectedVersion,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The versions an entry's edits replaced, oldest first.</summary>
+    Task<IReadOnlyList<SuperJournalRevision>> GetHistoryAsync(
+        JournalCaller caller, string entryId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Attaches a file to an entry, streaming <paramref name="content"/> to SuperJournal as it's
+    /// read: it is never held whole here. SuperJournal takes images, PDFs, CSV and plain text.
+    /// </summary>
+    Task<SuperJournalAttachment> UploadAttachmentAsync(
+        JournalCaller caller, string entryId, Stream content, string fileName, string contentType,
+        string? idempotencyKey = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// An attachment's bytes (or, with <paramref name="thumbnail"/>, its thumbnail), streamed from
+    /// SuperJournal; null when there's no such attachment or thumbnail. Dispose it.
+    /// </summary>
+    Task<SuperJournalDownload?> DownloadAttachmentAsync(
+        JournalCaller caller, string attachmentId, bool thumbnail, CancellationToken cancellationToken = default);
+
+    /// <summary>The person's entries that match <paramref name="query"/>, across all their apps unless <paramref name="app"/> narrows it.</summary>
+    Task<SuperJournalPage<SuperJournalEntry>> SearchAsync(
+        JournalCaller caller, string query, string? app, int page, int pageSize, CancellationToken cancellationToken = default);
+}
+
+/// <summary>A journal: one person's, in one app, about one subject (<paramref name="SubjectType"/>, <paramref name="SubjectKey"/>).</summary>
+public sealed record SuperJournalJournal(
+    string Id, string App, string SubjectType, string SubjectKey, string? Title, DateTimeOffset CreatedAt, bool IsArchived);
+
+/// <summary>An entry at its current version, which starts at 1 and goes up by one with each edit.</summary>
+public sealed record SuperJournalEntry(
+    string Id,
+    string JournalId,
+    JsonElement Content,
+    string ContentText,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string> AttachmentIds,
+    int Version,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>A version an edit replaced: <paramref name="SupersededVersion"/>'s content, and when the edit came.</summary>
+public sealed record SuperJournalRevision(
+    string Id, string EntryId, int SupersededVersion, JsonElement PriorContent, string PriorContentText, DateTimeOffset EditedAt);
+
+/// <summary>A file attached to an entry.</summary>
+public sealed record SuperJournalAttachment(
+    string Id,
+    string EntryId,
+    string JournalId,
+    string FileName,
+    string ContentType,
+    long SizeBytes,
+    bool IsImage,
+    bool HasThumbnail,
+    DateTimeOffset UploadedAt);
+
+/// <summary>One page of a list, and how many there are in all.</summary>
+public sealed record SuperJournalPage<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount);
+
+/// <summary>An attachment's bytes as SuperJournal streams them. Disposing it closes the answer.</summary>
+public sealed class SuperJournalDownload(Stream content, string contentType, string? fileName, IDisposable? owner = null)
+    : IAsyncDisposable
+{
+    public Stream Content { get; } = content;
+
+    public string ContentType { get; } = contentType;
+
+    public string? FileName { get; } = fileName;
+
+    public async ValueTask DisposeAsync()
+    {
+        await Content.DisposeAsync();
+        owner?.Dispose();
+    }
+}
+
+/// <summary>
+/// A saved version's pointer (D19): where the text is in SuperJournal, an excerpt of it, when it
+/// was saved, and who saved it (<see cref="JournalCaller.Source"/>). <paramref name="Reconciled"/>
+/// marks one the reconcile step wrote after the save's own write didn't land, whose source is the
+/// door that ran the reconcile.
+/// </summary>
+public sealed record JournalPointer(
+    string JournalId,
+    string EntryId,
+    int Version,
+    string SubjectType,
+    string SubjectKey,
+    string Excerpt,
+    DateTimeOffset SavedAt,
+    string Source,
+    bool Reconciled = false);
+
+/// <summary>What writing a pointer did: the pointer's event, and whether this write made it.</summary>
+public sealed record JournalPointerWrite(Guid EventId, bool Written);
+
+/// <summary>
+/// The pointer events in <c>bsk</c> (D19, migration 0049). The only writer of pointers; it goes
+/// through no other path, so <c>bsk</c> stays the only write path (ontology inv. 9).
+/// </summary>
+public interface IJournalPointerStore
+{
+    /// <summary>
+    /// Appends <paramref name="pointer"/>'s <c>journal</c> event, once: when its entry version
+    /// already has a pointer, from any source, that one is kept and returned with
+    /// <see cref="JournalPointerWrite.Written"/> false.
+    /// </summary>
+    Task<JournalPointerWrite> AppendAsync(
+        JournalPointer pointer, DateTimeOffset recordedAt, CancellationToken cancellationToken = default);
+
+    /// <summary>The versions of each of <paramref name="entryIds"/> that have a pointer.</summary>
+    Task<IReadOnlyDictionary<string, IReadOnlySet<int>>> GetVersionsAsync(
+        IReadOnlyCollection<string> entryIds, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Reads source events. Read-only; the source stream is never mutated.</summary>

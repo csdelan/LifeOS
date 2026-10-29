@@ -28,7 +28,8 @@ public sealed class ChangeReader(string readerConnectionString)
     /// <item>Null <paramref name="kinds"/> is every kind but <c>ledger</c>: a day of meals writes
     /// many earns and reversals, which would drown the rest; ask for <c>ledger</c> by name.</item>
     /// <item>Some records are kept as versions: Oura re-sends a day as it changes, and editing a
-    /// meal, a fast, a space photo or a rating writes it again under the same id. Only the newest
+    /// meal, a fast, a space photo, a rating or a journal entry kept in SuperJournal writes it
+    /// again under the same id. Only the newest
     /// version comes back, with how many it saw in <see cref="ChangeRow.Versions"/>. An older
     /// version in the window whose newest one is outside it (a meal moved to another day) is
     /// left out too.</item>
@@ -71,15 +72,18 @@ public sealed class ChangeReader(string readerConnectionString)
             ),
             -- The newest version of each versioned record in the window, wherever its time falls.
             -- A newer version is never recorded before an older one, so looking from the earliest
-            -- one in the window finds it.
+            -- one in the window finds it. A SuperJournal pointer is the exception: the reconcile
+            -- step may write an older version's pointer after a newer one's, so pointers are all
+            -- looked at (one per save, so few) and go by their version number.
             latest AS (
                 SELECT v.record,
-                       (array_agg(v.id ORDER BY v.recorded_at DESC, v.id DESC))[1] AS id,
+                       (array_agg(v.id ORDER BY v.version DESC NULLS LAST, v.recorded_at DESC, v.id DESC))[1] AS id,
                        count(*) AS versions
                 FROM (
-                    SELECT {RecordKey("e")} AS record, e.id, e.recorded_at
+                    SELECT {RecordKey("e")} AS record, e.id, e.recorded_at, {PointerVersion("e")} AS version
                     FROM bsk.v_event e
                     WHERE e.recorded_at >= (SELECT min(recorded_at) FROM matched WHERE record IS NOT NULL)
+                       OR (e.kind = 'journal' AND e.payload->'superjournal'->>'entry_id' IS NOT NULL)
                 ) v
                 WHERE v.record IN (SELECT record FROM matched WHERE record IS NOT NULL)
                 GROUP BY v.record
@@ -88,8 +92,9 @@ public sealed class ChangeReader(string readerConnectionString)
                    m.occurred_at, m.recorded_at,
                    m.subject_id, m.subject_urn, m.subject_type, m.subject_title,
                    m.status,
-                   left(a.content, @maxText) AS text,
-                   CASE WHEN length(m.payload::text) <= @maxPayload THEN m.payload::text END AS payload,
+                   left(coalesce(a.content, m.payload->'superjournal'->>'excerpt'), @maxText) AS text,
+                   CASE WHEN length((m.payload #- ARRAY['superjournal', 'excerpt'])::text) <= @maxPayload
+                        THEN (m.payload #- ARRAY['superjournal', 'excerpt'])::text END AS payload,
                    coalesce(l.versions, 1) AS versions
             FROM matched m
             LEFT JOIN latest l ON l.record = m.record
@@ -115,11 +120,19 @@ public sealed class ChangeReader(string readerConnectionString)
             }).AsList();
     }
 
+    /// <summary>A SuperJournal pointer's version number (D19), or null for any other event.</summary>
+    private static string PointerVersion(string e) => $$"""
+        CASE WHEN {{e}}.kind = 'journal' AND {{e}}.payload->'superjournal'->>'version' ~ '^[0-9]{1,9}$'
+                  THEN ({{e}}.payload->'superjournal'->>'version')::int
+        END
+        """;
+
     /// <summary>
     /// Which record an event is a version of, or null when it stands alone. An Oura version's
     /// external_id is <c>&lt;collection&gt;:&lt;key&gt;:&lt;hash&gt;:&lt;what it replaces&gt;</c>,
     /// and the key may hold a colon, so the record is all but the last two parts. A meal, a fast,
-    /// a space photo and a space rating keep their id in the payload, as their views fold them.
+    /// a space photo and a space rating keep their id in the payload, as their views fold them,
+    /// and so does a journal entry kept in SuperJournal (D19), one pointer per saved version.
     /// </summary>
     private static string RecordKey(string e) => $"""
         CASE WHEN {e}.source_id = 'oura' AND {e}.external_id IS NOT NULL
@@ -130,6 +143,8 @@ public sealed class ChangeReader(string readerConnectionString)
                   THEN 'space_photo:' || ({e}.payload->'space_photo'->>'id')
              WHEN {e}.payload->'space_rating'->>'id' IS NOT NULL
                   THEN 'space_rating:' || ({e}.payload->'space_rating'->>'id')
+             WHEN {e}.kind = 'journal' AND {e}.payload->'superjournal'->>'entry_id' IS NOT NULL
+                  THEN 'superjournal:' || ({e}.payload->'superjournal'->>'entry_id')
         END
         """;
 }
@@ -156,7 +171,10 @@ public sealed class ChangeRow
     /// <summary>The new status, on a <c>state_change</c>.</summary>
     public string? Status { get; set; }
 
-    /// <summary>The event's text (a journal entry, a note, a capture), cut to 500 characters.</summary>
+    /// <summary>
+    /// The event's text (a journal entry, a note, a capture), cut to 500 characters. For a journal
+    /// entry kept in SuperJournal (D19) it's the pointer's excerpt, which the payload then leaves out.
+    /// </summary>
     public string? Text { get; set; }
 
     /// <summary>The event's payload as JSON text, when it's at most 1 KB.</summary>

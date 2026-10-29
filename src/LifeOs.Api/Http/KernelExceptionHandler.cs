@@ -36,6 +36,16 @@ public static class KernelExceptionHandler
             UnsplashFailure.NotFound => StatusCodes.Status404NotFound,
             _ => StatusCodes.Status502BadGateway,
         }, new ApiError(unsplash.Message)),
+        SuperJournalException journal => (journal.Failure switch
+        {
+            SuperJournalFailure.NotSetUp => StatusCodes.Status503ServiceUnavailable,
+            SuperJournalFailure.Invalid => StatusCodes.Status400BadRequest,
+            SuperJournalFailure.Forbidden => StatusCodes.Status403Forbidden,
+            SuperJournalFailure.NotFound => StatusCodes.Status404NotFound,
+            SuperJournalFailure.Conflict => StatusCodes.Status409Conflict,
+            SuperJournalFailure.TooLarge => StatusCodes.Status413PayloadTooLarge,
+            _ => StatusCodes.Status502BadGateway,
+        }, new ApiError(journal.Message)),
         BadHttpRequestException bad => (bad.StatusCode, new ApiError(bad.Message)),
         ArgumentException or InvalidOperationException => (
             StatusCodes.Status400BadRequest, new ApiError(ex.Message)),

@@ -203,4 +203,13 @@ public static class KernelSources
     /// the CLI and the API dedupe against each other.
     /// </summary>
     public const string Oura = "oura";
+
+    /// <summary>
+    /// The prefix of an agent's source (agent-access plan §5.3): what an agent saves through
+    /// <c>/mcp</c> is recorded as <c>mcp:&lt;client_id&gt;</c>.
+    /// </summary>
+    public const string Mcp = "mcp:";
+
+    /// <summary>The source for what the agent with <paramref name="clientId"/> saves: <c>mcp:&lt;client_id&gt;</c>.</summary>
+    public static string Agent(string clientId) => Mcp + clientId;
 }

@@ -5,6 +5,7 @@ using LifeOs.Application.Capture;
 using LifeOs.Application.Covers;
 using LifeOs.Application.Food;
 using LifeOs.Application.Home;
+using LifeOs.Application.Journals;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
@@ -15,6 +16,7 @@ using LifeOs.Infrastructure.Persistence;
 using LifeOs.Infrastructure.Rebuild;
 using LifeOs.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace LifeOs.Infrastructure.DependencyInjection;
 
@@ -94,6 +96,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIntegrationRepository>(_ =>
             new NpgsqlIntegrationRepository(connectionString, integrations?.TokenCipher));
         services.AddSingleton<IActivityRepository>(_ => new NpgsqlActivityRepository(connectionString));
+        services.AddSingleton<IJournalPointerStore>(_ => new NpgsqlJournalPointerStore(connectionString));
         if (integrations?.Unsplash is { } unsplash)
         {
             services.AddSingleton<IUnsplashClient>(_ =>
@@ -284,6 +287,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new BountyService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>()));
+
+        // Journal and review text in SuperJournal, with a pointer in bsk per saved version (D19).
+        // The API host registers ISuperJournal when SuperJournal:BaseUrl is set; without it the
+        // service says SuperJournal isn't set up.
+        services.AddSingleton(sp =>
+        {
+            var logger = sp.GetService<ILoggerFactory>()?.CreateLogger<SuperJournalService>();
+            return new SuperJournalService(
+                sp.GetService<ISuperJournal>(),
+                sp.GetRequiredService<IJournalPointerStore>(),
+                sp.GetRequiredService<IClock>(),
+                logger is null ? null : (message, e) => logger.LogWarning(e, "{Message}", message));
+        });
 
         services.AddSingleton(sp => new CoverService(
             sp.GetRequiredService<SubjectService>(),

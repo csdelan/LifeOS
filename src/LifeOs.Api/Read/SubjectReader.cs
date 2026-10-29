@@ -437,7 +437,8 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
         using var db = Open();
         return db.Query<ConcerningEvent>(
             """
-            SELECT se.event_kind AS kind, e.occurred_at, se.event_id, a.content
+            SELECT se.event_kind AS kind, e.occurred_at, se.event_id,
+                   coalesce(a.content, e.payload->'superjournal'->>'excerpt') AS content
             FROM bsk.v_subject_event se
             JOIN bsk.v_event e ON e.id = se.event_id
             LEFT JOIN bsk.artifact a ON a.id = e.artifact_id
@@ -452,7 +453,8 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
         using var db = Open();
         return db.Query<JournalEntry>(
             """
-            SELECT se.event_id, e.occurred_at, coalesce(a.content, '') AS content
+            SELECT se.event_id, e.occurred_at,
+                   coalesce(a.content, e.payload->'superjournal'->>'excerpt', '') AS content
             FROM bsk.v_subject_event se
             JOIN bsk.v_event e ON e.id = se.event_id
             LEFT JOIN bsk.artifact a ON a.id = e.artifact_id

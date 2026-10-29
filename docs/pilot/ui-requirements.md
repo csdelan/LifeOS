@@ -4358,6 +4358,38 @@ Scores support. Health keeps its XP tests.
 
 Design and build order: [environment-plan.md](environment-plan.md).
 
+**D19 — Journal and review text lives in SuperJournal; `bsk` keeps a pointer event for every
+save (csdelan/LifeOS#27, #28, 2026-10-28).** This is a deliberate exception to `bsk` holding
+all content: rich journals, reviews and their pictures live in SuperJournal, a journal service
+of their own. `bsk` stays the only write path for everything it does hold (ontology inv. 9).
+
+- **A pointer per saved version:** each save appends a `journal` event whose payload's
+  `superjournal` object names the journal, the entry and its version, the subject the journal
+  is about, and a plain-text excerpt of at most 500 characters. Its source is who saved it:
+  `api` for the web, `mcp:<client_id>` for an agent. Its `external_id` is
+  `<entry id>:<version>`.
+- **One pointer per version, from any door:** the `(source_id, external_id)` key (inv. 7)
+  collapses a repeat from the same source; migration 0049 adds a key on the entry and version
+  alone, so a reconcile from another door can't write a second one.
+- **SuperJournal first, then the pointer.** A pointer never points at nothing. A pointer whose
+  write failed waits in the API and is written by the next save or the retry every minute, with
+  who saved it. A version that has no pointer at all (the server stopped between the two
+  writes) gets one from the reconcile step (after each save, or `POST
+  /api/journals/reconcile`), marked `reconciled`, since who saved it is lost. An empty draft
+  has no pointer until its first edit.
+- **Server to server:** the browser talks only to LifeOS. LifeOS signs a 5-minute ES256 token
+  per call: `iss` `lifeos`, `aud` `superjournal`, `sub` the person's Supabase user id, `roles`
+  `["owner"]`. An agent through `/mcp` goes the same way, as the person behind its token.
+  Files stream through LifeOS both ways, never held whole (SuperJournal's limit is 25 MB).
+- **No deletes through LifeOS:** a pointer must never outlive its entry.
+- **Who reads the full text:** readers through `bsk_reader` see the excerpt. `recent_changes`
+  shows it as the entry's text, one row per entry at its newest version. `life_snapshot` and
+  the diagnostics don't read text. A subject's journal (`GET /api/subjects/{id}/journal` and
+  `get_item`) will need the full text once pointers are tied to subjects (#30), which
+  `LifeOs.Api` would fetch from SuperJournal. Reviews (#29) read SuperJournal directly.
+- **Settings:** `SuperJournal__BaseUrl`, `SuperJournal__SigningKey` (a Fly secret) and
+  `SuperJournal__TimeoutSeconds`. Without a base URL the journal endpoints answer 503.
+
 ### Method for the Habit ↔ Commitment discrepancy
 
 "Habit" (UI concept) and "Commitment" (storage type) are deliberately decoupled — Chris
@@ -4504,6 +4536,10 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   from the series, migrations 0041 (the text repair) and 0042, `bsk tasks settle`, `POST /api/recur` and
   `POST /api/tasks/settle`. — **Shipped** (RT1–RT5 in
   [recurring-tasks-plan.md](recurring-tasks-plan.md), 2026-10-24).
+- **SuperJournal connection** (#28 / D19): the SuperJournal port, its HTTP adapter and
+  in-memory fake, the ES256 signer, pointer events and their reconcile (migration 0049),
+  `/api/journals` with streamed uploads. — **Open** (the code is in; the key pair, the Fly
+  secret and the check against SuperJournal staging remain).
 
 **Still open:** the **Review** subject type + mutable-body edit trail and review
 scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **Oura

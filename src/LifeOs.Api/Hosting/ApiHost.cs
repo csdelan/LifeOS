@@ -82,6 +82,21 @@ public static class ApiHost
         builder.Services.AddSingleton(sp => new ArtifactReader(
             new NpgsqlArtifactBlobStore(reader, sp.GetService<IObjectStorage>())));
 
+        // SuperJournal (D19) keeps journal and review text; it's optional: without
+        // SuperJournal:BaseUrl the journal endpoints answer that it isn't set up. A base URL without
+        // SuperJournal:SigningKey, or a malformed one, fails startup. LifeOS signs a short-lived
+        // ES256 token per call for the signed-in person; the browser never calls SuperJournal.
+        var superJournal = SuperJournalOptions.Resolve(key => builder.Configuration[key]);
+        if (superJournal is not null)
+        {
+            var signingKey = SuperJournalTokenSigner.ParseKey(builder.Configuration[SuperJournalOptions.SigningKeyKey]);
+            builder.Services.AddSingleton<ISuperJournalTokens>(sp =>
+                new SuperJournalTokenSigner(signingKey, sp.GetRequiredService<IClock>()));
+            builder.Services.AddSingleton<ISuperJournal>(sp => new SuperJournalHttpClient(
+                SuperJournalHttpClient.CreateHttpClient(), superJournal, sp.GetRequiredService<ISuperJournalTokens>()));
+            builder.Services.AddHostedService<JournalPointerRetry>();
+        }
+
         // The agents Chris allowed and what each called (agent-access plan §4.5), on the owner
         // connection: bsk_ops is never granted to bsk_reader. /mcp checks the list on every call.
         builder.Services.AddSingleton(new AgentAccessStore(owner, homeZone));
@@ -173,6 +188,7 @@ public static class ApiHost
         app.MapOuraEndpoints();
         app.MapActivityEndpoints();
         app.MapCoverEndpoints();
+        app.MapJournalEndpoints();
         app.MapAgentEndpoints();
         app.MapLifeOsMcp();
         app.MapSpaFallback();
