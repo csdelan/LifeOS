@@ -4,6 +4,7 @@ import {
   SERIES_STATUSES,
   STATUS_BY_TYPE,
   defaultStatus,
+  initialStatus,
   pickApplicableAttrs,
   type SubjectType,
 } from "@/lib/production-ui-types";
@@ -401,7 +402,8 @@ const CONFIG: Partial<Record<SubjectType, TypeFormConfig>> = {
         hint: "A Habit needs at least one parent.",
       },
       areaField(),
-      // New habits start Building; Established graduates one (REWARD-2).
+      // New habits start Planned (not tracked yet); Building starts tracking one and
+      // Established graduates it (REWARD-2).
       { ...statusField(), editOnly: true },
     ],
   },
@@ -487,7 +489,7 @@ export function emptyFormValues(type: SubjectType, mode: FormMode = "create"): S
     mode,
     type,
     title: "",
-    status: defaultStatus(type),
+    status: initialStatus(type),
     area: "",
     parent: "",
     parents: [],

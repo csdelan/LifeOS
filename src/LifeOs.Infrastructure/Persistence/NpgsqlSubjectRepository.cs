@@ -84,26 +84,13 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
     {
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
-
-        const string sql = """
-            INSERT INTO bsk.subject (urn, type, title, attributes, origin_event_id)
-            VALUES (@Urn, @Type, @Title, @Attributes::jsonb, @OriginEventId)
-            RETURNING id;
-            """;
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         try
         {
-            return await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
-                sql,
-                new
-                {
-                    newSubject.Urn,
-                    newSubject.Type,
-                    newSubject.Title,
-                    Attributes = newSubject.AttributesJson,
-                    newSubject.OriginEventId
-                },
-                cancellationToken: cancellationToken));
+            var id = await InsertAsync(connection, transaction, newSubject, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return id;
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
@@ -111,6 +98,53 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
             // callers (e.g. SubjectService) don't depend on Npgsql error codes.
             throw new DuplicateSubjectException(newSubject.Type, newSubject.Title, ex);
         }
+    }
+
+    /// <summary>
+    /// Inserts the subject and, when it's born with a status (a new Habit is Planned), that
+    /// status as its first <c>state_change</c> event, inside the caller's transaction.
+    /// </summary>
+    private static async Task<Guid> InsertAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction, NewSubject newSubject,
+        CancellationToken cancellationToken)
+    {
+        var id = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
+            """
+            INSERT INTO bsk.subject (urn, type, title, attributes, origin_event_id)
+            VALUES (@Urn, @Type, @Title, @Attributes::jsonb, @OriginEventId)
+            RETURNING id;
+            """,
+            new
+            {
+                newSubject.Urn,
+                newSubject.Type,
+                newSubject.Title,
+                Attributes = newSubject.AttributesJson,
+                newSubject.OriginEventId
+            },
+            transaction: transaction, cancellationToken: cancellationToken));
+
+        if (newSubject.Status is { } initial)
+        {
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO bsk.event (kind, provenance, occurred_at, recorded_at, source_id, payload)
+                VALUES (@Kind, @Provenance, @At, @At, @SourceId,
+                        jsonb_build_object('subject_id', @Id::text, 'status', @Status));
+                """,
+                new
+                {
+                    Kind = EventKinds.StateChange,
+                    Provenance = Provenances.Declared,
+                    initial.At,
+                    initial.SourceId,
+                    Id = id,
+                    initial.Status
+                },
+                transaction: transaction, cancellationToken: cancellationToken));
+        }
+
+        return id;
     }
 
     public async Task<(Guid ChildId, Guid EdgeId)> CreateWithParentEdgeAsync(
@@ -123,21 +157,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
 
         try
         {
-            var childId = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
-                """
-                INSERT INTO bsk.subject (urn, type, title, attributes, origin_event_id)
-                VALUES (@Urn, @Type, @Title, @Attributes::jsonb, @OriginEventId)
-                RETURNING id;
-                """,
-                new
-                {
-                    child.Urn,
-                    child.Type,
-                    child.Title,
-                    Attributes = child.AttributesJson,
-                    child.OriginEventId
-                },
-                transaction: transaction, cancellationToken: cancellationToken));
+            var childId = await InsertAsync(connection, transaction, child, cancellationToken);
 
             // The child is the edge's `from`, the parent the `to`. A bad parent id
             // fails the FK here and rolls the whole thing back — no orphan child.
@@ -200,6 +220,16 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
             new { id, key }, cancellationToken: cancellationToken));
     }
 
+    public async Task<string?> GetStatusAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT status FROM bsk_derived.subject_current_source WHERE subject_id = @id;",
+            new { id }, cancellationToken: cancellationToken));
+    }
+
     public async Task<(Guid NewId, Guid EdgeId)> CreateWithIncomingEdgeAsync(
         NewSubject newSubject, string relation, Guid fromId, string provenance,
         CancellationToken cancellationToken = default)
@@ -210,21 +240,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
 
         try
         {
-            var newId = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
-                """
-                INSERT INTO bsk.subject (urn, type, title, attributes, origin_event_id)
-                VALUES (@Urn, @Type, @Title, @Attributes::jsonb, @OriginEventId)
-                RETURNING id;
-                """,
-                new
-                {
-                    newSubject.Urn,
-                    newSubject.Type,
-                    newSubject.Title,
-                    Attributes = newSubject.AttributesJson,
-                    newSubject.OriginEventId
-                },
-                transaction: transaction, cancellationToken: cancellationToken));
+            var newId = await InsertAsync(connection, transaction, newSubject, cancellationToken);
 
             // Edge points into the new subject: existing `from` -> new `to`. A bad
             // `from` id fails the FK here and rolls the whole thing back — no orphan.

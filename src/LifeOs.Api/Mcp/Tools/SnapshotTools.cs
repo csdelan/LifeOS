@@ -72,7 +72,8 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
         var habits = subjects.GetHabits().ToList();
         var todayStates = subjects.GetHabitOccurrences(on: stamp.Today).ToDictionary(o => o.HabitId, o => o.State);
         var building = habits
-            .Where(h => !StatusVocabulary.IsTerminal(h.Status) && todayStates.ContainsKey(h.Id))
+            .Where(h => !StatusVocabulary.IsTerminal(h.Status) && !StatusVocabulary.IsPlanned(h.Status)
+                        && todayStates.ContainsKey(h.Id))
             .Select(h => new { h.Id, h.Urn, h.Name, Today = todayStates[h.Id], h.CurrentStreak });
         var maintained = habits
             .Where(h => Is(h.Status, "Established"))

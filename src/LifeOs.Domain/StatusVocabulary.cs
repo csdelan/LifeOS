@@ -14,10 +14,17 @@ namespace LifeOs.Domain;
 /// status (it archives instead, D9); Area / Person / Constraint / Season / Reward are
 /// status-less. Habit's lifecycle (Building → Established | Abandoned)
 /// arrived with habit earning (migration 0027): a terminal habit graduates and leaves
-/// daily tracking. Review gains its vocabulary when its type lands.</para>
+/// daily tracking. Planned came before it (migration 0049): a new habit starts Planned and
+/// isn't tracked until it moves to Building. Review gains its vocabulary when its type lands.</para>
 /// </summary>
 public static class StatusVocabulary
 {
+    /// <summary>
+    /// A habit that isn't tracked yet (migration 0049): no day is scheduled, so none is
+    /// missed, and no day can be recorded. Moving it to Building starts tracking that day.
+    /// </summary>
+    public const string Planned = "Planned";
+
     /// <summary>Goal / Project share one shape: New → Active → done/dead.</summary>
     private static readonly string[] GoalProject = ["New", "Active", "Completed", "Abandoned"];
 
@@ -31,7 +38,19 @@ public static class StatusVocabulary
         [SubjectTypes.Problem] = ["Open", "Working", "Resolved", "Cancelled"],
         [SubjectTypes.Appointment] = ["Scheduled", "Completed", "Cancelled", "Missed"],
         [SubjectTypes.Idea] = ["New", "Promoted", "Rejected"],
-        [SubjectTypes.Habit] = ["Building", "Established", "Abandoned"],
+        [SubjectTypes.Habit] = [Planned, "Building", "Established", "Abandoned"],
+    };
+
+    /// <summary>
+    /// The status a new subject is born with, written as its first <c>state_change</c> when
+    /// it's created. Only Habit has one: a new habit is Planned. Every other type starts with
+    /// no status, which reads as the first word of its vocabulary. A habit with no status
+    /// reads as Building instead: habits made before Planned existed have none and are
+    /// tracked, so they stay that way, and a new one has to be told it's Planned.
+    /// </summary>
+    private static readonly Dictionary<string, string> InitialStatusByType = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [SubjectTypes.Habit] = Planned,
     };
 
     /// <summary>
@@ -87,6 +106,20 @@ public static class StatusVocabulary
     /// </summary>
     public static string DismissStatusFor(string type)
         => DismissStatusByType.TryGetValue(type, out var status) ? status : "";
+
+    /// <summary>
+    /// The status a new subject of <paramref name="type"/> is created with, or null when it
+    /// starts with none. A Habit starts <see cref="Planned"/>.
+    /// </summary>
+    public static string? InitialStatusFor(string type)
+        => InitialStatusByType.TryGetValue(type, out var status) ? status : null;
+
+    /// <summary>
+    /// True when <paramref name="status"/> is <see cref="Planned"/>: a habit that isn't
+    /// tracked yet. Case- and whitespace-insensitive.
+    /// </summary>
+    public static bool IsPlanned(string? status)
+        => string.Equals(status?.Trim(), Planned, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// True when <paramref name="status"/> is a terminal status (finished/dead).

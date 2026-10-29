@@ -55,7 +55,14 @@ internal static class PilotVocab
         [Problem] = ["Open", "Working", "Resolved", "Cancelled"],
         [Appointment] = ["Scheduled", "Completed", "Cancelled", "Missed"],
         [Idea] = ["New", "Promoted", "Rejected"],
-        [Habit] = ["Building", "Established", "Abandoned"],
+        [Habit] = ["Planned", "Building", "Established", "Abandoned"],
+    };
+
+    // What no status reads as, where it isn't the first word: a habit made before Planned
+    // existed has none and is tracked (StatusVocabulary.InitialStatusFor).
+    private static readonly Dictionary<string, string> NoStatusByType = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [Habit] = "Building",
     };
 
     private static readonly HashSet<string> Terminal = new(StringComparer.OrdinalIgnoreCase)
@@ -108,11 +115,13 @@ internal static class PilotVocab
     }
 
     /// <summary>
-    /// The default status for a type — the first status in its vocabulary (D7). A
-    /// status-less type has no default and returns "".
+    /// The default status for a type — what no status reads as: the first status in its
+    /// vocabulary (D7), except a Habit's, which is Building (new habits are written Planned
+    /// when they're made). A status-less type has no default and returns "".
     /// </summary>
     public static string DefaultStatusFor(string type)
-        => StatusesFor(type) is [var first, ..] ? first : "";
+        => NoStatusByType.TryGetValue(type, out var status) ? status
+            : StatusesFor(type) is [var first, ..] ? first : "";
 
     /// <summary>Folded status, or the type's default when the projection is still null (D7).</summary>
     public static string EffectiveStatus(string type, string? status)

@@ -55,7 +55,7 @@ public sealed class McpGuide
         | Goal | An outcome that serves an identity statement | New, Active, Completed, Abandoned |
         | Project | A body of work that results in a goal | New, Active, Completed, Abandoned |
         | Task | A unit of work; a leaf. May repeat (a series with one Task per repetition) | Not started, In progress, Waiting, Completed, Missed, Cancelled |
-        | Habit | A routine he's building | Building, Established, Abandoned |
+        | Habit | A routine he's building. A Planned one isn't tracked yet: no day is scheduled or missed | Planned, Building, Established, Abandoned |
         | Commitment | Something he committed to; events evidence or violate it | Open, Fulfilled, Missed, Cancelled |
         | Appointment | A calendar entry | Scheduled, Completed, Cancelled, Missed |
         | Decision | A choice, with its reasoning | Open, Implementing, Cancelled, Closed |

@@ -223,22 +223,22 @@ public sealed class BountyEndpointsTests(PostgresFixture postgres)
         await using var host = await StartAsync();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         await using var kernel = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
-        var habit = await kernel.GetRequiredService<SubjectService>().CreateAsync(
-            SubjectTypes.Habit, Unique("ready habit"),
+        var habit = await kernel.CreateTrackedHabitAsync(
+            Unique("ready habit"),
             JsonSerializer.Serialize(new
             {
                 start = today.AddDays(-3).ToString("yyyy-MM-dd"),
                 recurrence = new { freq = "daily" },
                 establish_target = new { min_adherence = 0.5, window_days = 2 }
             }),
-            cancellationToken: Ct);
+            Ct);
         await PostAsync(host.Client, "/api/adhere", new
         {
             habit = habit.Id.ToString(), state = "followed", on = today.AddDays(-1).ToString("yyyy-MM-dd")
         });
 
         var row = await HabitAsync(host.Client, habit.Id);
-        Assert.Equal(JsonValueKind.Null, row.GetProperty("status").ValueKind);
+        Assert.Equal("Building", row.GetProperty("status").GetString());
         Assert.Equal(5, Amounts(row.GetProperty("bounty"))[Currencies.Xp]);
         var progress = row.GetProperty("establishment");
         Assert.True(progress.GetProperty("targetMet").GetBoolean());

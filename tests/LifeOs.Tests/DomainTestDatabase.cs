@@ -88,6 +88,8 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
                 recurrence = new { freq = "daily" }
             }),
             cancellationToken: ct);
+        // A new habit is Planned; tracking it lets its days be recorded.
+        await Get<StatusService>().ChangeStatusAsync(habit.Urn, "Building", ct);
         await Get<BountyService>().SetAsync(habit.Urn, BountyTriggers.Followed, price, cancellationToken: ct);
         return habit;
     }

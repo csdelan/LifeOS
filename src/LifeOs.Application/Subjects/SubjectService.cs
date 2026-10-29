@@ -8,8 +8,14 @@ namespace LifeOs.Application.Subjects;
 /// existing subject's URN or a title; an existing subject is reused, otherwise a
 /// new one is created with a fresh URN. Shared by <c>bsk ideas</c> (Problem) and
 /// the M3 subject commands.
+/// <para>
+/// Every way of creating a subject goes through here, so a type born with a status
+/// (<see cref="StatusVocabulary.InitialStatusFor"/>: a new Habit is Planned) gets it from
+/// every door, stamped with <paramref name="clock"/> and <paramref name="sourceId"/> as a
+/// status change would be.
+/// </para>
 /// </summary>
-public sealed class SubjectService(ISubjectRepository subjects)
+public sealed class SubjectService(ISubjectRepository subjects, IClock clock, string sourceId)
 {
     /// <summary>
     /// Resolves an <em>existing</em> subject named by a URN, a short id, or a fuzzy
@@ -91,7 +97,7 @@ public sealed class SubjectService(ISubjectRepository subjects)
         var cleanTitle = NormalizeTitle(title);
         var urn = Urns.Build(type, cleanTitle);
         var id = await subjects.CreateAsync(
-            new NewSubject(urn, type, cleanTitle, Recurrence.NormalizeAttributes(attributesJson), originEventId), cancellationToken);
+            Insertable(urn, type, cleanTitle, attributesJson, originEventId), cancellationToken);
         return new SubjectRef(id, urn, type, cleanTitle);
     }
 
@@ -114,7 +120,7 @@ public sealed class SubjectService(ISubjectRepository subjects)
         var cleanTitle = NormalizeTitle(title);
         var urn = Urns.Build(type, cleanTitle);
         var (childId, edgeId) = await subjects.CreateWithParentEdgeAsync(
-            new NewSubject(urn, type, cleanTitle, Recurrence.NormalizeAttributes(attributesJson), OriginEventId: null),
+            Insertable(urn, type, cleanTitle, attributesJson),
             relation, parentId, Provenances.Declared, cancellationToken);
         return (new SubjectRef(childId, urn, type, cleanTitle), edgeId);
     }
@@ -136,7 +142,7 @@ public sealed class SubjectService(ISubjectRepository subjects)
         var cleanTitle = NormalizeTitle(title);
         var urn = Urns.Build(type, cleanTitle);
         var (newId, edgeId) = await subjects.CreateWithIncomingEdgeAsync(
-            new NewSubject(urn, type, cleanTitle, Recurrence.NormalizeAttributes(attributesJson), OriginEventId: null),
+            Insertable(urn, type, cleanTitle, attributesJson),
             relation, fromId, Provenances.Declared, cancellationToken);
         return (new SubjectRef(newId, urn, type, cleanTitle), edgeId);
     }
@@ -180,7 +186,7 @@ public sealed class SubjectService(ISubjectRepository subjects)
         var urn = Urns.Build(type, title);
         try
         {
-            var id = await subjects.CreateAsync(new NewSubject(urn, type, title, Recurrence.NormalizeAttributes(attributesJson)), cancellationToken);
+            var id = await subjects.CreateAsync(Insertable(urn, type, title, attributesJson), cancellationToken);
             return new ResolvedSubject(new SubjectRef(id, urn, type, title), Created: true);
         }
         catch (DuplicateSubjectException)
@@ -196,6 +202,16 @@ public sealed class SubjectService(ISubjectRepository subjects)
             return new ResolvedSubject(raced, Created: false);
         }
     }
+
+    /// <summary>The subject to insert, with the status its type is born with, if any.</summary>
+    private NewSubject Insertable(
+        string urn, string type, string title, string attributesJson, Guid? originEventId = null)
+        => new(urn, type, title, Recurrence.NormalizeAttributes(attributesJson), originEventId)
+        {
+            Status = StatusVocabulary.InitialStatusFor(type) is { } status
+                ? new InitialStatus(status, clock.UtcNow, sourceId)
+                : null
+        };
 
     // Trim and collapse internal whitespace runs to a single space.
     private static string NormalizeTitle(string title)

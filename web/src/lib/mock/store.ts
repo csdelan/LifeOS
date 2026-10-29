@@ -98,7 +98,7 @@ import type {
   TimerActionResult,
   Wallet,
 } from "@/lib/production-ui-types";
-import { defaultStatus, isTerminal } from "@/lib/production-ui-types";
+import { initialStatus, isTerminal } from "@/lib/production-ui-types";
 import { canHaveCover, DEFAULT_POSITION_Y } from "@/lib/cover";
 import { readStoredCover, sceneById, storedCoverOf } from "@/lib/mock/covers";
 import {
@@ -214,7 +214,8 @@ export function createSubject(req: NewSubjectRequest): CreatedSubject {
   const id = newId();
   const urn = makeUrn(req.type, req.title);
   const area = req.area ? state.areas.find((a) => a.urn === req.area || a.id === req.area) : undefined;
-  const status = defaultStatus(req.type) || null;
+  // A new Habit is Planned, as the kernel writes it; the rest start at their default.
+  const status = initialStatus(req.type) || null;
   const createdAt = nowIso();
   const list: SubjectListItem = {
     id,
@@ -312,17 +313,7 @@ export function createSubject(req: NewSubjectRequest): CreatedSubject {
       },
       ...state.habits,
     ];
-    state.occurrences = [
-      ...state.occurrences,
-      {
-        habitId: id,
-        habitUrn: urn,
-        habitName: req.title,
-        occurrenceDate: todayIso(),
-        state: "unrecorded",
-        allowsPartial,
-      },
-    ];
+    // Planned: nothing is scheduled until it starts being tracked (see earnStatus).
   }
   if (req.type === "Idea" || req.type === "Problem") {
     state.inbox = [
@@ -490,6 +481,8 @@ export function earnStatus(subject: string, status: string): Earned {
   checkSeriesStatus(state, item.id, status);
   const series = isSeries(state, item.id) ? item : seriesOf(state, item.id);
   const restarting = series?.id === item.id && isTerminal(item.status) && !isTerminal(status);
+  // A habit leaving Planned starts being tracked today (migration 0049).
+  if (item.type === "Habit" && isPlanned(item.status) && !isPlanned(status)) scheduleToday(item.id);
   const occurredAt = nowIso();
   // Closing a Task stops its timer first, as StatusService does (TASKS-2).
   if (item.type === "Task" && isTerminal(status) && (timerFor(item.id)?.state ?? "stopped") !== "stopped") {
@@ -1161,6 +1154,11 @@ export function earnDay(
 ): Earned {
   const habit = state.habits.find((h) => h.id === habitRef || h.urn === habitRef);
   if (!habit) return { awards: [], progress: [] };
+  if (isPlanned(byId(habit.id)?.status)) {
+    throw new Error(
+      `Habit '${habit.name}' is Planned, so it isn't tracked yet. Move it to Building to start tracking it, then record its days.`,
+    );
+  }
   const date = on ?? todayIso();
   const mapped = adherence === "missed" ? "not_followed" : adherence;
   state.occurrences = state.occurrences.map((o) =>
@@ -2244,8 +2242,50 @@ const DEFAULT_MIN_ADHERENCE = 0.8;
 const DEFAULT_WINDOW_DAYS = 60;
 const MAX_WINDOW_DAYS = 3650;
 
+/** A habit that isn't tracked yet (migration 0049). */
+function isPlanned(status: string | null | undefined): boolean {
+  return (status ?? "").trim().toLowerCase() === "planned";
+}
+
+/** Today's open occurrence for a habit that starts being tracked, as the kernel's schedule would show it. */
+function scheduleToday(habitId: string): void {
+  const habit = state.habits.find((h) => h.id === habitId);
+  const today = todayIso();
+  if (!habit || state.occurrences.some((o) => o.habitId === habitId && o.occurrenceDate === today)) return;
+  state.occurrences = [
+    ...state.occurrences,
+    {
+      habitId,
+      habitUrn: habit.urn,
+      habitName: habit.name,
+      occurrenceDate: today,
+      state: "unrecorded",
+      allowsPartial: habit.allowsPartial,
+    },
+  ];
+}
+
+/**
+ * The days from `start` up to `today` a habit spent Planned, from its status history (newest
+ * first), counting only spells it has left. They don't count toward its age for the
+ * establish window, as in `v_habit_establishment`.
+ */
+function plannedDays(habitId: string, start: string, today: string): number {
+  const history = state.history[habitId] ?? [];
+  let days = 0;
+  history.forEach((h, i) => {
+    const until = history[i - 1]?.occurredAt.slice(0, 10);
+    if (!isPlanned(h.status) || !until) return;
+    const from = h.occurredAt.slice(0, 10);
+    const overlap = (Date.parse(until < today ? until : today) - Date.parse(from > start ? from : start)) / 86_400_000;
+    days += Math.max(0, Math.round(overlap));
+  });
+  return days;
+}
+
 function establishment(habit: HabitRow, status: string | null | undefined): HabitEstablishment | null {
-  if (habit.archived || isTerminal(status)) return null;
+  // A Planned habit has no progress; a graduated or abandoned one is past it.
+  if (habit.archived || isTerminal(status) || isPlanned(status)) return null;
   const stored = storedTarget(habit.id);
   const minAdherence = stored.minAdherence ?? DEFAULT_MIN_ADHERENCE;
   const windowDays = stored.windowDays ?? DEFAULT_WINDOW_DAYS;
@@ -2264,7 +2304,8 @@ function establishment(habit: HabitRow, status: string | null | undefined): Habi
   const concluded = followed + partial + missed;
   const adherence = concluded > 0 ? Math.round(((followed + 0.5 * partial) / concluded) * 10000) / 10000 : null;
   const start = habit.startDate ?? habit.createdAt.slice(0, 10);
-  const ageDays = Math.round((Date.parse(today) - Date.parse(start)) / 86_400_000);
+  const ageDays =
+    Math.round((Date.parse(today) - Date.parse(start)) / 86_400_000) - plannedDays(habit.id, start, today);
   return {
     minAdherence,
     windowDays,

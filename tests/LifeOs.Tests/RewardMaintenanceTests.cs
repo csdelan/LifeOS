@@ -66,9 +66,9 @@ public sealed class RewardMaintenanceTests(PostgresFixture postgres)
             attributes["allows_partial"] = "true";
         }
 
-        var habit = await kernel.Subjects.CreateAsync(
-            SubjectTypes.Habit, $"maintained habit {Guid.NewGuid():N}", JsonSerializer.Serialize(attributes),
-            cancellationToken: Ct);
+        // With no status, so the status change written days back is its newest.
+        var habit = await kernel.Provider.CreateHabitWithoutStatusAsync(
+            $"maintained habit {Guid.NewGuid():N}", JsonSerializer.Serialize(attributes), Ct);
         // Midday UTC, so the graduation date is the same whichever zone reads it.
         var graduatedAt = new DateTimeOffset(Today.AddDays(-graduatedDaysAgo).ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero);
         await kernel.Events.AppendAsync(

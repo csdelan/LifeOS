@@ -223,9 +223,10 @@ export function todayHabitRows(
   occurrences: HabitOccurrenceRow[],
   today: string,
 ): HabitOccurrenceRow[] {
-  // A graduated (or abandoned) habit has left daily tracking; Established ones are maintained.
+  // A Planned habit isn't tracked yet; a graduated (or abandoned) one has left daily
+  // tracking, and Established ones are maintained.
   return rowsFor(
-    habits.filter((h) => !h.archived && !isTerminal(h.status)),
+    habits.filter((h) => !h.archived && habitStage(h) === "building"),
     occurrences,
     today,
   );

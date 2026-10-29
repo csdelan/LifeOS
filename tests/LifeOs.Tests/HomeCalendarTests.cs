@@ -36,10 +36,10 @@ public sealed class HomeCalendarTests(PostgresFixture postgres)
     private Task<SubjectRef> HabitAsync(ServiceProvider kernel)
     {
         var start = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-5);
-        return kernel.GetRequiredService<SubjectService>().CreateAsync(
-            SubjectTypes.Habit, $"calendar habit {Guid.NewGuid():N}",
+        return kernel.CreateTrackedHabitAsync(
+            $"calendar habit {Guid.NewGuid():N}",
             JsonSerializer.Serialize(new { start = start.ToString("yyyy-MM-dd"), recurrence = new { freq = "daily" } }),
-            cancellationToken: Ct);
+            Ct);
     }
 
     /// <summary>Today in <paramref name="kernel"/>'s home zone, read before and after <paramref name="act"/>.</summary>

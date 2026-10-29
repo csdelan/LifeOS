@@ -202,7 +202,10 @@ public sealed class HabitRow
     public int CurrentStreak { get; set; }
     public string? LastState { get; set; }
 
-    /// <summary>Building, Established (graduated) or Abandoned; null reads as Building.</summary>
+    /// <summary>
+    /// Planned (not tracked yet), Building, Established (graduated) or Abandoned. New habits
+    /// start Planned; null, on habits made before Planned existed, reads as Building.
+    /// </summary>
     public string? Status { get; set; }
 
     /// <summary>What a followed day pays, currency → amount (REWARD-2).</summary>

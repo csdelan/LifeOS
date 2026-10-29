@@ -29,11 +29,10 @@ public sealed class AdherenceServiceTests(PostgresFixture postgres)
         return connection;
     }
 
-    private async Task<SubjectRef> MakeHabitAsync(SubjectService subjects, bool allowsPartial = false)
+    private async Task<SubjectRef> MakeHabitAsync(IServiceProvider provider, bool allowsPartial = false)
     {
         var attrs = allowsPartial ? """{"allows_partial":"true"}""" : "{}";
-        return await subjects.CreateAsync(
-            SubjectTypes.Habit, $"habit {Guid.NewGuid():N}", attributesJson: attrs, cancellationToken: Ct);
+        return await provider.CreateTrackedHabitAsync($"habit {Guid.NewGuid():N}", attrs, Ct);
     }
 
     private async Task<(string Result, string Relation)> ReadAdherenceAsync(NpgsqlConnection c, Guid eventId)
@@ -49,7 +48,7 @@ public sealed class AdherenceServiceTests(PostgresFixture postgres)
     public async Task Followed_records_an_activity_event_that_evidences_the_habit()
     {
         var provider = Provider();
-        var habit = await MakeHabitAsync(provider.GetRequiredService<SubjectService>());
+        var habit = await MakeHabitAsync(provider);
         var adherence = provider.GetRequiredService<AdherenceService>();
 
         var result = await adherence.RecordAsync(habit.Urn, "followed", new DateOnly(2026, 1, 5), null, Ct);
@@ -64,7 +63,7 @@ public sealed class AdherenceServiceTests(PostgresFixture postgres)
     public async Task Missed_records_a_violation()
     {
         var provider = Provider();
-        var habit = await MakeHabitAsync(provider.GetRequiredService<SubjectService>());
+        var habit = await MakeHabitAsync(provider);
         var adherence = provider.GetRequiredService<AdherenceService>();
 
         var result = await adherence.RecordAsync(habit.Urn, "missed", new DateOnly(2026, 1, 5), null, Ct);
@@ -79,14 +78,13 @@ public sealed class AdherenceServiceTests(PostgresFixture postgres)
     public async Task Partial_is_rejected_unless_the_habit_allows_it()
     {
         var provider = Provider();
-        var subjects = provider.GetRequiredService<SubjectService>();
         var adherence = provider.GetRequiredService<AdherenceService>();
 
-        var binary = await MakeHabitAsync(subjects, allowsPartial: false);
+        var binary = await MakeHabitAsync(provider, allowsPartial: false);
         await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await adherence.RecordAsync(binary.Urn, "partial", new DateOnly(2026, 1, 5), null, Ct));
 
-        var malleable = await MakeHabitAsync(subjects, allowsPartial: true);
+        var malleable = await MakeHabitAsync(provider, allowsPartial: true);
         var ok = await adherence.RecordAsync(malleable.Urn, "partial", new DateOnly(2026, 1, 5), null, Ct);
         await using var c = await OpenAsync();
         var (storedResult, relation) = await ReadAdherenceAsync(c, ok.EventId);
@@ -110,7 +108,7 @@ public sealed class AdherenceServiceTests(PostgresFixture postgres)
     public async Task A_correction_is_a_second_append_only_recording_for_the_same_date()
     {
         var provider = Provider();
-        var habit = await MakeHabitAsync(provider.GetRequiredService<SubjectService>());
+        var habit = await MakeHabitAsync(provider);
         var adherence = provider.GetRequiredService<AdherenceService>();
         var date = new DateOnly(2026, 1, 5);
 

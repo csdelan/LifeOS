@@ -30,7 +30,7 @@ import { splitTags } from "@/lib/tag-suggest";
 import {
   CREATABLE_TYPES,
   childTypesFor,
-  defaultStatus,
+  initialStatus,
   inferChildRelation,
   typeLabel,
 } from "@/lib/production-ui-types";
@@ -190,9 +190,12 @@ export function NewSubjectDialog({
     for (const req of bountyWrites(created.id, bountyLines, bountyDraft)) {
       await writes.setBounty(req);
     }
-    const initialStatus = values.status || defaultStatus(t);
-    if (initialStatus && initialStatus !== defaultStatus(t)) {
-      await writes.setStatus(created.id, initialStatus);
+    // An item starts at its type's initial status (a Habit Planned, the kernel writing it), so
+    // only a different pick is its own write.
+    const startsAt = initialStatus(t);
+    const status = values.status || startsAt;
+    if (status && status !== startsAt) {
+      await writes.setStatus(created.id, status);
     }
     // The repeat pattern is its own write (D8, POST /api/recur), not a string attribute. A
     // Task's start, the first date it repeats from, goes with it and makes its first

@@ -15,13 +15,25 @@ public sealed record NewEvent(
     IReadOnlyList<Guid>? DerivedFrom = null,
     Guid? ArtifactId = null);
 
-/// <summary>A subject to create. Attributes are a JSON object.</summary>
+/// <summary>
+/// A subject to create. Attributes are a JSON object. <see cref="Status"/>, when set, is the
+/// status it's born with, written as its first <c>state_change</c> in the same transaction.
+/// </summary>
 public sealed record NewSubject(
     string Urn,
     string Type,
     string Title,
     string AttributesJson = "{}",
-    Guid? OriginEventId = null);
+    Guid? OriginEventId = null)
+{
+    public InitialStatus? Status { get; init; }
+}
+
+/// <summary>
+/// The status a new subject is born with (<c>StatusVocabulary.InitialStatusFor</c>): the
+/// word, when it was set and which source set it, as a status change would carry them.
+/// </summary>
+public sealed record InitialStatus(string Status, DateTimeOffset At, string SourceId);
 
 /// <summary>A lightweight read view of a subject, used for resolve-or-create.</summary>
 public sealed record SubjectRef(Guid Id, string Urn, string Type, string Title);

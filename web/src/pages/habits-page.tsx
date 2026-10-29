@@ -1,5 +1,6 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { RepeatIcon } from "lucide-react";
+import { PlayIcon, RepeatIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { SubjectDetail } from "@/components/detail/subject-detail";
@@ -29,8 +30,9 @@ export function HabitsPage() {
   const maintainedById = new Map((dash?.maintainingHabits ?? []).map((h) => [h.habitId, h]));
 
   const habits = (data ?? []).filter((h) => !h.archived);
-  // Graduated habits leave daily tracking (REWARD-2) but keep earning for logged days;
-  // abandoned ones stop.
+  // Planned habits aren't tracked yet. Graduated habits leave daily tracking (REWARD-2) but
+  // keep earning for logged days; abandoned ones stop.
+  const planned = habits.filter((h) => habitStage(h) === "planned");
   const building = habits.filter((h) => habitStage(h) === "building");
   const established = habits.filter((h) => habitStage(h) === "established");
   const abandoned = habits.filter((h) => habitStage(h) === "abandoned");
@@ -82,6 +84,12 @@ export function HabitsPage() {
               ))}
             </ul>
           ) : null}
+          <PlannedSection
+            habits={planned}
+            selected={selected}
+            onSelect={select}
+            onStart={(id) => void writes.setStatus(id, "Building")}
+          />
           <GraduatedSection
             title="Established"
             hint="Graduated: no daily schedule, so no day is ever missed. Check a day off when you keep it up; each logged day still pays."
@@ -166,6 +174,65 @@ function HabitItem({
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * Planned habits: made, not tracked yet, so nothing is scheduled or missed. Start tracking
+ * moves one to Building, and its days count from that day.
+ */
+function PlannedSection({
+  habits,
+  selected,
+  onSelect,
+  onStart,
+}: {
+  habits: HabitRow[];
+  selected?: string;
+  onSelect: (id: string) => void;
+  onStart: (id: string) => void;
+}) {
+  if (habits.length === 0) return null;
+  return (
+    <section aria-labelledby="habits-planned">
+      <h2 id="habits-planned" className="type-scale-section text-muted-foreground">
+        Planned
+      </h2>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Not tracked yet: no day is scheduled or missed. Start tracking one when you're ready;
+        its days count from then.
+      </p>
+      <ul className="mt-2 space-y-2">
+        {habits.map((h) => (
+          <li key={h.id}>
+            <div
+              className={cn(
+                "flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2.5 ring-1 ring-foreground/10 sm:flex-nowrap",
+                selected === h.id && "bg-primary/8 ring-primary/20",
+              )}
+            >
+              <button type="button" className="min-h-11 min-w-0 flex-1 text-left" onClick={() => onSelect(h.id)}>
+                <p className="truncate text-sm font-medium">{h.name}</p>
+                {h.cue ? <p className="text-[0.6875rem] text-muted-foreground">Cue: {h.cue}</p> : null}
+              </button>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <BountyChip amounts={h.bounty} suffix="a day" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11 md:min-h-7"
+                  aria-label={`Start tracking ${h.name}`}
+                  onClick={() => onStart(h.id)}
+                >
+                  <PlayIcon aria-hidden /> Start tracking
+                </Button>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

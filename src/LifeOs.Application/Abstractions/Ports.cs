@@ -178,6 +178,12 @@ public interface ISubjectRepository
     /// </summary>
     Task<string?> GetAttributeValueAsync(
         Guid id, string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The subject's current status, folded from its <c>state_change</c> events (the newest
+    /// wins), or <c>null</c> when it has none.
+    /// </summary>
+    Task<string?> GetStatusAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

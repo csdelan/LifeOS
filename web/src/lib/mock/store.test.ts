@@ -11,6 +11,7 @@ import {
   filesForSubject,
   flagItem,
   getState,
+  mockHabits,
   relateEvent,
   removeInbox,
   renameSubject,
@@ -20,6 +21,8 @@ import {
   setTags,
   timerFor,
 } from "@/lib/mock/store";
+import { todayHabitRows } from "@/lib/derive";
+import { todayIso } from "@/lib/dates";
 import { mockReads } from "@/lib/mock/api";
 import { createMockWriteClient } from "@/lib/mock/write-client";
 
@@ -54,6 +57,31 @@ describe("mock store reducers", () => {
     const habit = getState().habits.find((h) => h.id === "habit-mobility");
     expect(habit?.lastState).toBe("followed");
     expect(habit?.currentStreak).toBeGreaterThanOrEqual(1);
+  });
+
+  it("makes a new habit Planned: nothing scheduled, no progress, and no day recorded", () => {
+    const created = createSubject({ type: "Habit", title: "Cold shower" });
+    expect(byId(created.id)?.status).toBe("Planned");
+    expect(getState().history[created.id]?.[0]?.status).toBe("Planned");
+    expect(getState().occurrences.some((o) => o.habitId === created.id)).toBe(false);
+    expect(mockHabits().find((h) => h.id === created.id)?.establishment).toBeNull();
+    expect(() => adhereHabit(created.id, "followed")).toThrow(
+      "Habit 'Cold shower' is Planned, so it isn't tracked yet. Move it to Building to start tracking it, then record its days.",
+    );
+  });
+
+  it("starts tracking a Planned habit today when it moves to Building", () => {
+    const created = createSubject({ type: "Habit", title: "Cold shower" });
+    setStatus(created.id, "Building");
+
+    const today = todayIso();
+    expect(getState().occurrences.filter((o) => o.habitId === created.id)).toEqual([
+      expect.objectContaining({ occurrenceDate: today, state: "unrecorded" }),
+    ]);
+    expect(todayHabitRows(mockHabits(), getState().occurrences, today).map((h) => h.habitId)).toContain(created.id);
+    expect(mockHabits().find((h) => h.id === created.id)?.establishment).toMatchObject({ concluded: 0 });
+    adhereHabit(created.id, "followed");
+    expect(getState().occurrences.find((o) => o.habitId === created.id)?.state).toBe("followed");
   });
 
   it("drops a subject to a terminal status and clears Inbox", () => {
@@ -190,6 +218,8 @@ describe("mock rename parity", () => {
 
   it("renames a habit everywhere the mock copied its name, keeping the urn", () => {
     const habit = createSubject({ type: "Habit", title: "Stretch" });
+    // Tracked, so it has today's occurrence to carry the name too.
+    setStatus(habit.id, "Building");
     const result = renameSubject(habit.id, "  Morning   stretch ");
 
     expect(result).toMatchObject({ changed: true, previousTitle: "Stretch", title: "Morning stretch" });

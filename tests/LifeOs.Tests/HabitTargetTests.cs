@@ -25,9 +25,12 @@ public sealed class HabitTargetTests(PostgresFixture postgres)
     private ServiceProvider Kernel()
         => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
 
+    // A habit is tracked, so the establishment view reads it (a Planned one has no progress).
     private static Task<SubjectRef> NewAsync(ServiceProvider kernel, string type, string? attributesJson = null)
-        => kernel.GetRequiredService<SubjectService>().CreateAsync(
-            type, $"target {type} {Guid.NewGuid():N}", attributesJson ?? "{}", cancellationToken: Ct);
+        => type == SubjectTypes.Habit
+            ? kernel.CreateTrackedHabitAsync($"target {type} {Guid.NewGuid():N}", attributesJson ?? "{}", Ct)
+            : kernel.GetRequiredService<SubjectService>().CreateAsync(
+                type, $"target {type} {Guid.NewGuid():N}", attributesJson ?? "{}", cancellationToken: Ct);
 
     /// <summary>The target as the view reads it.</summary>
     private async Task<(decimal MinAdherence, int WindowDays)> ViewTargetAsync(SubjectRef habit)

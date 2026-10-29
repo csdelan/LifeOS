@@ -13,7 +13,8 @@ namespace LifeOs.Application.Subjects;
 /// to the habit. Occurrences and streaks are a projection over these events, so a
 /// correction is simply a newer recording for the same date (GEN-5, latest wins);
 /// nothing is mutated. Partial is fixed half-credit and is only allowed when the
-/// habit's <c>allows_partial</c> flag is set.
+/// habit's <c>allows_partial</c> flag is set. A Planned habit isn't tracked yet, so it
+/// takes no recording.
 /// <para>
 /// Every recording then reconciles the habit's rewards (REWARD-2, rewards plan §3.3): a
 /// followed day earns, a partial one earns half, a run reaching 7 / 30 / 100 earns its
@@ -46,6 +47,14 @@ public sealed class AdherenceService(
         {
             throw new InvalidOperationException(
                 $"'{habit.Urn}' is a {habit.Type}, not a Habit; adherence is recorded against Habits.");
+        }
+
+        // A Planned habit isn't tracked yet (migration 0049): nothing is scheduled, and no day
+        // is recorded until it moves to Building.
+        if (StatusVocabulary.IsPlanned(await repository.GetStatusAsync(habit.Id, cancellationToken)))
+        {
+            throw new InvalidOperationException(
+                $"Habit '{habit.Title}' is Planned, so it isn't tracked yet. Move it to Building to start tracking it, then record its days.");
         }
 
         if (normalizedResult == AdherenceResults.Partial && !await AllowsPartialAsync(habit.Id, cancellationToken))

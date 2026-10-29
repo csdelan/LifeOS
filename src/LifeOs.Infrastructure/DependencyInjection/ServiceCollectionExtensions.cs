@@ -121,7 +121,10 @@ public static class ServiceCollectionExtensions
             sourceId,
             maxArtifactBytes));
 
-        services.AddSingleton(sp => new SubjectService(sp.GetRequiredService<ISubjectRepository>()));
+        services.AddSingleton(sp => new SubjectService(
+            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
 
         // Repeating Tasks (D16): the series service the status, pattern, edit, tag, archive and
         // timer paths consult.

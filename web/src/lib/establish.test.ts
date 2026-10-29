@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { targetDirty, targetFields, targetProblem, targetWrite } from "@/lib/establish";
+import {
+  habitStage,
+  isReadyToEstablish,
+  targetDirty,
+  targetFields,
+  targetProblem,
+  targetWrite,
+} from "@/lib/establish";
 import type { HabitEstablishment } from "@/lib/production-ui-types";
 
 const progress = (minAdherence: number, windowDays: number): HabitEstablishment => ({
@@ -13,6 +20,23 @@ const progress = (minAdherence: number, windowDays: number): HabitEstablishment 
   adherence: null,
   ageDays: 10,
   targetMet: false,
+});
+
+describe("a habit's stage", () => {
+  it("reads Planned, Building (or no status), Established and the give-up terminals", () => {
+    expect(habitStage({ status: "Planned" })).toBe("planned");
+    expect(habitStage({ status: " planned " })).toBe("planned");
+    expect(habitStage({ status: "Building" })).toBe("building");
+    expect(habitStage({ status: null })).toBe("building");
+    expect(habitStage({ status: "Established" })).toBe("established");
+    expect(habitStage({ status: "Abandoned" })).toBe("abandoned");
+  });
+
+  it("never suggests establishing a Planned habit", () => {
+    const met = { ...progress(0.8, 60), targetMet: true };
+    expect(isReadyToEstablish({ status: "Planned", establishment: met })).toBe(false);
+    expect(isReadyToEstablish({ status: "Building", establishment: met })).toBe(true);
+  });
 });
 
 describe("establish target draft", () => {

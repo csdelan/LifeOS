@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  STATUS_BY_TYPE,
   defaultStatus,
   inferChildRelation,
+  initialStatus,
   isTerminal,
   shortIdOf,
 } from "@/lib/production-ui-types";
@@ -13,6 +15,14 @@ describe("status folding + defaultStatus", () => {
     expect(defaultStatus("Value")).toBe("");
     expect(defaultStatus("Habit")).toBe("Building");
     expect(defaultStatus("Area")).toBe("");
+  });
+
+  it("starts a new Habit Planned and every other type at its default", () => {
+    expect(STATUS_BY_TYPE.Habit?.[0]).toBe("Planned");
+    expect(initialStatus("Habit")).toBe("Planned");
+    expect(initialStatus("Task")).toBe("Not started");
+    expect(initialStatus("Value")).toBe("");
+    expect(isTerminal("Planned")).toBe(false);
   });
 
   it("treats completed / cancelled / abandoned as terminal", () => {

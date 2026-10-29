@@ -151,6 +151,8 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
             SubjectTypes.Habit, $"credit habit {Guid.NewGuid():N}",
             JsonSerializer.Serialize(new { start = TodayUtc.AddDays(-4).ToString("yyyy-MM-dd"), recurrence = new { freq = "daily" } }),
             cancellationToken: Ct);
+        // A new habit is Planned; tracking it lets its days be recorded.
+        await kernel.Status.ChangeStatusAsync(habit.Urn, "Building", Ct);
         await kernel.Bounties.SetAsync(habit.Urn, BountyTriggers.Followed, Environment(9), cancellationToken: Ct);
         var (threeAgo, twoAgo) = (TodayUtc.AddDays(-3), TodayUtc.AddDays(-2));
         var before = await EnvironmentDaysAsync(kernel);

@@ -94,8 +94,9 @@ export const STATUS_BY_TYPE: Partial<Record<SubjectType, string[]>> = {
   Problem:     ["Open", "Working", "Resolved", "Cancelled"],
   Appointment: ["Scheduled", "Completed", "Cancelled", "Missed"],
   Idea:        ["New", "Promoted", "Rejected"],
-  // Established graduates a Habit: it leaves daily tracking (REWARD-2).
-  Habit:       ["Building", "Established", "Abandoned"],
+  // A new Habit is Planned: not tracked until it moves to Building. Established graduates
+  // one: it leaves daily tracking (REWARD-2).
+  Habit:       ["Planned", "Building", "Established", "Abandoned"],
   // Value (Identity Statement), Area, Person: no status workflow.
 };
 
@@ -113,9 +114,22 @@ export function isTerminal(status?: string | null): boolean {
   return !!status && TERMINAL_STATUSES.has(status.trim().toLowerCase());
 }
 
-/** The default status for a type (first in its vocabulary), or "" if status-less. */
+/**
+ * What an item with no status reads as: the first status in its type's vocabulary, or "" if
+ * status-less. A Habit's is Building: habits made before Planned existed have no status and
+ * are tracked.
+ */
 export function defaultStatus(type: SubjectType): string {
+  if (type === "Habit") return "Building";
   return STATUS_BY_TYPE[type]?.[0] ?? "";
+}
+
+/**
+ * The status a new item starts with. A new Habit is Planned (the kernel writes it when the
+ * habit is made); every other type starts at its default.
+ */
+export function initialStatus(type: SubjectType): string {
+  return type === "Habit" ? "Planned" : defaultStatus(type);
 }
 
 /**
@@ -1193,7 +1207,10 @@ export interface HabitRow {
   createdAt: string;
   currentStreak: number;
   lastState?: string | null;
-  /** Building (null reads as Building), Established (graduated) or Abandoned. */
+  /**
+   * Planned (not tracked yet; a new habit starts here), Building (null reads as Building),
+   * Established (graduated) or Abandoned.
+   */
   status?: string | null;
   /** What a followed day pays. */
   bounty?: Amounts | null;

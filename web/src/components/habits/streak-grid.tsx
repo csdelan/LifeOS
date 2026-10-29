@@ -28,7 +28,8 @@ export function StreakGrid({
   startDate?: string | null;
   endDate?: string | null;
   allowsPartial: boolean;
-  onRecord: (date: string, state: "followed" | "partial" | "missed", note?: string) => void;
+  /** Records a day; left out, the grid only shows the days (a Planned habit takes none). */
+  onRecord?: (date: string, state: "followed" | "partial" | "missed", note?: string) => void;
 }) {
   const today = todayIso();
   const [month, setMonth] = useState(startOfMonth(today));
@@ -115,7 +116,7 @@ function DayCell({
   endDate?: string | null;
   row?: HabitOccurrenceRow;
   allowsPartial: boolean;
-  onRecord: (date: string, state: "followed" | "partial" | "missed", note?: string) => void;
+  onRecord?: (date: string, state: "followed" | "partial" | "missed", note?: string) => void;
 }) {
   const expected = isOccurrenceDate(spec, iso, startDate, endDate);
   const future = iso > today;
@@ -123,19 +124,28 @@ function DayCell({
   const [note, setNote] = useState(row?.note ?? "");
   const [open, setOpen] = useState(false);
   const dayNum = Number(iso.slice(-2));
+  const cell = cn(
+    "flex aspect-square min-h-11 min-w-11 items-center justify-center rounded-md text-[0.6875rem] font-medium tabular-nums",
+    HABIT_STATE_SURFACE[state],
+    !expected && "opacity-40",
+    future && "cursor-not-allowed opacity-30",
+    iso === today && "ring-2 ring-ring/50",
+  );
+
+  if (!onRecord) {
+    return (
+      <div role="img" aria-label={`${formatDay(iso)}: ${state.replace("_", " ")}`} className={cell}>
+        {dayNum}
+      </div>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         disabled={future}
         aria-label={`${formatDay(iso)}: ${state.replace("_", " ")}`}
-        className={cn(
-          "flex aspect-square min-h-11 min-w-11 items-center justify-center rounded-md text-[0.6875rem] font-medium tabular-nums",
-          HABIT_STATE_SURFACE[state],
-          !expected && "opacity-40",
-          future && "cursor-not-allowed opacity-30",
-          iso === today && "ring-2 ring-ring/50",
-        )}
+        className={cell}
       >
         {dayNum}
       </PopoverTrigger>

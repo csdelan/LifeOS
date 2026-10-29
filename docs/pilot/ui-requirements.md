@@ -2596,6 +2596,15 @@ page's Established section has one-tap check-offs: Followed, and Partial where t
 allows it. Tapping the lit button again undoes the day. An unlogged day reads "Not logged
 today", never missed, and no streak pays after graduation. Build returns `building → built`.
 
+**Update (2026-10-28 — Planned, migration 0049):** "I would like to add a new status for habits
+of 'Planned', and make this the default for new habits. When in 'Planned' status, it is not
+being actively tracked yet." (Chris, 2026-10-28.) The lifecycle is now Planned → Building →
+Established | Abandoned. Every door makes a new habit Planned. While Planned, no day is
+scheduled or missed, it has no establishment progress, and the kernel refuses to record its
+days. The Habits page lists it under Planned with Start tracking, which moves it to Building;
+it's tracked from that day, and the days it spent Planned don't count toward its age for the
+establish window. Habits with no status, made before Planned existed, still read as Building.
+
 **Workflow (Chris):**
 - "When I successfully complete 1 instance of a habit, I get a small reward of some type.
   And when I 'complete' a habit successfully (meaning it is established as a new habit), I
@@ -4433,7 +4442,7 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   `bsk bounty` / `bsk rewards reconcile`. — **Shipped** (R2, migration 0026, for Tasks,
   Projects and Goals; R3, migration 0027, for Habits; the bounty editor, chips and earn
   feedback, R6).
-- **Habit lifecycle** (REWARD-2) — Habit status vocab Building → Established | Abandoned,
+- **Habit lifecycle** (REWARD-2) — Habit status vocab (Planned →) Building → Established | Abandoned,
   `established` terminal, graduation ends occurrence expansion, establishment target +
   `v_habit_establishment`. — **Shipped** (R3, migration 0027; the "Ready to establish" badge,
   its confirm and the graduated sections, R6; the establish-target editor — `bsk habit

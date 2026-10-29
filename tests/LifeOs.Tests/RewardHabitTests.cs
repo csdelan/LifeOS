@@ -62,9 +62,8 @@ public sealed class RewardHabitTests(PostgresFixture postgres)
             attributes["establish_target"] = establishTarget;
         }
 
-        return kernel.Subjects.CreateAsync(
-            SubjectTypes.Habit, $"earning habit {Guid.NewGuid():N}", JsonSerializer.Serialize(attributes),
-            cancellationToken: Ct);
+        return kernel.Provider.CreateTrackedHabitAsync(
+            $"earning habit {Guid.NewGuid():N}", JsonSerializer.Serialize(attributes), Ct);
     }
 
     private Task<AdherenceResult> RecordAsync(Kernel kernel, SubjectRef habit, string result, int daysAgo = 0)

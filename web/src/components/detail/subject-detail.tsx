@@ -10,6 +10,7 @@ import {
   LayoutListIcon,
   Link2Icon,
   PaperclipIcon,
+  PlayIcon,
   PlusIcon,
   RepeatIcon,
   TagIcon,
@@ -549,8 +550,10 @@ export function SubjectDetail({
                   startDate={habit?.startDate}
                   endDate={habit?.endDate}
                   allowsPartial={habit?.allowsPartial ?? true}
-                  onRecord={(date, state, note) =>
-                    void writes.adhere(subject.id, state, { on: date, note })
+                  onRecord={
+                    habit && habitStage(habit) === "planned"
+                      ? undefined
+                      : (date, state, note) => void writes.adhere(subject.id, state, { on: date, note })
                   }
                 />
               ) : null}
@@ -1009,7 +1012,15 @@ function EstablishmentPanel({
   return (
     <section className="rounded-xl bg-muted/40 p-3">
       <p className="type-scale-section text-muted-foreground">Establishing</p>
-      {stage === "established" ? (
+      {stage === "planned" ? (
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm">
+            Planned — not tracked yet, so no day is scheduled or missed. Its days count from the
+            day you start tracking it.
+          </p>
+          {editing ? null : <StartTracking habit={habit} />}
+        </div>
+      ) : stage === "established" ? (
         <p className="mt-1 text-sm">
           Established — graduated from daily tracking. Each day you check it off under
           Maintaining still pays; move it back to Building to track it daily again.
@@ -1064,6 +1075,22 @@ function EstablishmentPanel({
         </div>
       ) : null}
     </section>
+  );
+}
+
+/** Moves a Planned habit to Building: tracking starts today. */
+function StartTracking({ habit }: { habit: HabitRow }) {
+  const writes = useWrites();
+  return (
+    <Button
+      type="button"
+      size="xs"
+      variant="outline"
+      aria-label={`Start tracking ${habit.name}`}
+      onClick={() => void writes.setStatus(habit.id, "Building")}
+    >
+      <PlayIcon aria-hidden /> Start tracking
+    </Button>
   );
 }
 

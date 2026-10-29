@@ -1,5 +1,7 @@
 /**
- * A habit's lifecycle (REWARD-2): Building → Established (graduated) | Abandoned. When a
+ * A habit's lifecycle (REWARD-2): Planned → Building → Established (graduated) | Abandoned.
+ * A new habit is Planned: it isn't tracked, so no day is scheduled or missed, until Chris
+ * starts tracking it (Building), and its days count from then. When a
  * Building habit meets its establish target, LifeOS suggests establishing it and Chris
  * confirms; confirming is an ordinary status change, which pays and graduates it. A
  * graduated habit leaves daily tracking but keeps earning for the days it's logged
@@ -13,10 +15,13 @@ import type {
 } from "@/lib/production-ui-types";
 import { isTerminal } from "@/lib/production-ui-types";
 
-export type HabitStage = "building" | "established" | "abandoned";
+export type HabitStage = "planned" | "building" | "established" | "abandoned";
 
 export function habitStage(habit: Pick<HabitRow, "status">): HabitStage {
   const status = (habit.status ?? "").trim().toLowerCase();
+  // Planned: made, not tracked yet. A habit with no status was made before Planned existed
+  // and reads as Building.
+  if (status === "planned") return "planned";
   if (status === "established") return "established";
   if (isTerminal(status)) return "abandoned";
   return "building";

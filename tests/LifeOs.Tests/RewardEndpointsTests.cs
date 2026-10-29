@@ -104,10 +104,10 @@ public sealed class RewardEndpointsTests(PostgresFixture postgres)
         await using var host = await StartAsync();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         await using var kernel = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
-        var habit = await kernel.GetRequiredService<SubjectService>().CreateAsync(
-            SubjectTypes.Habit, Unique("api habit"),
+        var habit = await kernel.CreateTrackedHabitAsync(
+            Unique("api habit"),
             JsonSerializer.Serialize(new { start = today.AddDays(-1).ToString("yyyy-MM-dd"), recurrence = new { freq = "daily" } }),
-            cancellationToken: Ct);
+            Ct);
 
         var followed = await PostAsync(host.Client, "/api/adhere", new
         {

@@ -101,6 +101,7 @@ describe("today's habit rows (REWARD-2 maintenance)", () => {
   });
   const habits = [
     habit("building", null),
+    habit("planned", "Planned"),
     habit("established", "Established", { allowsPartial: true }),
     habit("abandoned", "Abandoned"),
     habit("archived-established", "Established", { archived: true }),
@@ -115,7 +116,7 @@ describe("today's habit rows (REWARD-2 maintenance)", () => {
     allowsPartial: true,
   };
 
-  it("tracks Building habits daily and maintains Established ones, leaving Abandoned out", () => {
+  it("tracks Building habits daily and maintains Established ones, leaving Planned and Abandoned out", () => {
     expect(todayHabitRows(habits, [], today).map((h) => h.habitId)).toEqual(["building"]);
     expect(maintainingHabitRows(habits, [], today).map((h) => h.habitId)).toEqual(["established"]);
   });
