@@ -2267,16 +2267,16 @@ function scheduleToday(habitId: string): void {
 
 /**
  * The days from `start` up to `today` a habit spent Planned, from its status history (newest
- * first), counting only spells it has left. They don't count toward its age for the
- * establish window, as in `v_habit_establishment`.
+ * first), counting only spells it has left; a spell since it was made counts from its start.
+ * They don't count toward its age for the establish window, as in `v_habit_establishment`.
  */
-function plannedDays(habitId: string, start: string, today: string): number {
-  const history = state.history[habitId] ?? [];
+function plannedDays(habit: HabitRow, start: string, today: string): number {
+  const history = state.history[habit.id] ?? [];
   let days = 0;
   history.forEach((h, i) => {
     const until = history[i - 1]?.occurredAt.slice(0, 10);
     if (!isPlanned(h.status) || !until) return;
-    const from = h.occurredAt.slice(0, 10);
+    const from = h.occurredAt === habit.createdAt ? start : h.occurredAt.slice(0, 10);
     const overlap = (Date.parse(until < today ? until : today) - Date.parse(from > start ? from : start)) / 86_400_000;
     days += Math.max(0, Math.round(overlap));
   });
@@ -2305,7 +2305,7 @@ function establishment(habit: HabitRow, status: string | null | undefined): Habi
   const adherence = concluded > 0 ? Math.round(((followed + 0.5 * partial) / concluded) * 10000) / 10000 : null;
   const start = habit.startDate ?? habit.createdAt.slice(0, 10);
   const ageDays =
-    Math.round((Date.parse(today) - Date.parse(start)) / 86_400_000) - plannedDays(habit.id, start, today);
+    Math.round((Date.parse(today) - Date.parse(start)) / 86_400_000) - plannedDays(habit, start, today);
   return {
     minAdherence,
     windowDays,

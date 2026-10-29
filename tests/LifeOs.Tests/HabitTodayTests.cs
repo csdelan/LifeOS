@@ -89,11 +89,6 @@ public sealed class HabitTodayTests(PostgresFixture postgres)
         => kernel.CreateTrackedHabitAsync(
             $"home-today habit {Guid.NewGuid():N}", JsonSerializer.Serialize(attributes), Ct);
 
-    // With no status, so the status change written days back is its newest.
-    private Task<SubjectRef> HabitWithoutStatusAsync(ServiceProvider kernel, object attributes)
-        => kernel.CreateHabitWithoutStatusAsync(
-            $"home-today habit {Guid.NewGuid():N}", JsonSerializer.Serialize(attributes), Ct);
-
     [Fact]
     public async Task Today_is_the_date_in_the_home_zone_and_an_unset_zone_means_pacific()
     {
@@ -157,7 +152,7 @@ public sealed class HabitTodayTests(PostgresFixture postgres)
     public async Task A_habit_graduates_on_its_status_changes_date_in_the_home_zone()
     {
         await using var kernel = Kernel();
-        var habit = await HabitWithoutStatusAsync(kernel, new { start = "2003-02-01", recurrence = new { freq = "daily" } });
+        var habit = await HabitAsync(kernel, new { start = "2003-02-01", recurrence = new { freq = "daily" } });
         // 06:30 UTC on 15 February 2003 is 10:30 pm on the 14th in Pacific time. Long before
         // the wallet opened, so it pays nothing.
         await kernel.GetRequiredService<IEventStore>().AppendAsync(

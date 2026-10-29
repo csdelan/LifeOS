@@ -15,10 +15,11 @@ namespace LifeOs.Tests;
 /// Migration 0049: a habit can be Planned, made but not tracked yet, and a new habit starts
 /// there. While Planned nothing is scheduled, so no day is missed; it has no establishment
 /// progress; and the kernel refuses to record its days. Moving it to Building starts tracking
-/// that day. A habit with no status, made before Planned existed, still reads as Building.
+/// that day; a habit Planned since it was made isn't tracked before then either, whatever its
+/// start date. A habit with no status, made before Planned existed, still reads as Building.
 /// <para>
 /// A status change is always now, so the spells here are status events written days back on
-/// habits made with no status. The tests' database dates the views in UTC
+/// habits made with no status (<see cref="TestHabits"/>). The tests' database dates the views in UTC
 /// (<see cref="PostgresFixture.HabitViewZone"/>), and each event is at midday UTC, so its day
 /// is the same whichever zone reads it.
 /// </para>
@@ -175,14 +176,15 @@ public sealed class PlannedHabitTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Starting_to_track_a_habit_schedules_it_from_that_day()
+    public async Task Starting_to_track_a_new_habit_schedules_it_from_that_day_whatever_its_start()
     {
         await using var kernel = Kernel();
         var habit = await kernel.GetRequiredService<SubjectService>().CreateAsync(
-            SubjectTypes.Habit, Unique("starting habit"), """{"recurrence":{"freq":"daily"}}""", cancellationToken: Ct);
+            SubjectTypes.Habit, Unique("starting habit"), Daily(startOffset: 5), cancellationToken: Ct);
 
         await kernel.GetRequiredService<StatusService>().ChangeStatusAsync(habit.Urn, "Building", Ct);
 
+        // Planned since it was made, so nothing before today was tracked, start date or not.
         Assert.Equal([(0, "unrecorded")], await OccurrencesAsync(habit.Id));
         Assert.Equal((0, 0L), await EstablishmentAsync(habit.Id));
         var followed = await kernel.GetRequiredService<AdherenceService>()
@@ -194,7 +196,7 @@ public sealed class PlannedHabitTests(PostgresFixture postgres)
     public async Task The_days_a_habit_spent_planned_are_neither_scheduled_nor_counted_toward_its_age()
     {
         await using var kernel = Kernel();
-        var habit = await kernel.CreateHabitWithoutStatusAsync(Unique("paused habit"), Daily(startOffset: 10), Ct);
+        var habit = await kernel.CreateTrackedHabitAsync(Unique("paused habit"), Daily(startOffset: 10), Ct);
         await StatusDaysAgoAsync(kernel, habit, "Planned", daysAgo: 8);
         await StatusDaysAgoAsync(kernel, habit, "Building", daysAgo: 3);
 
@@ -210,7 +212,7 @@ public sealed class PlannedHabitTests(PostgresFixture postgres)
     public async Task Moving_a_tracked_habit_back_to_planned_stops_its_schedule_and_keeps_its_history()
     {
         await using var kernel = Kernel();
-        var habit = await kernel.CreateHabitWithoutStatusAsync(Unique("shelved habit"), Daily(startOffset: 4), Ct);
+        var habit = await kernel.CreateTrackedHabitAsync(Unique("shelved habit"), Daily(startOffset: 4), Ct);
         await kernel.GetRequiredService<AdherenceService>()
             .RecordAsync(habit.Urn, AdherenceResults.Followed, Today.AddDays(-3), cancellationToken: Ct);
         await StatusDaysAgoAsync(kernel, habit, "Planned", daysAgo: 1);
@@ -226,7 +228,7 @@ public sealed class PlannedHabitTests(PostgresFixture postgres)
     public async Task A_habit_with_no_status_was_made_before_planned_and_is_still_tracked()
     {
         await using var kernel = Kernel();
-        var habit = await kernel.CreateHabitWithoutStatusAsync(Unique("older habit"), Daily(startOffset: 2), Ct);
+        var habit = await kernel.CreateTrackedHabitAsync(Unique("older habit"), Daily(startOffset: 2), Ct);
 
         Assert.Null(await StatusAsync(habit.Id));
         Assert.Equal([(2, "missed"), (1, "missed"), (0, "unrecorded")], await OccurrencesAsync(habit.Id));

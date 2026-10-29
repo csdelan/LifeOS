@@ -238,7 +238,7 @@ public sealed class BountyEndpointsTests(PostgresFixture postgres)
         });
 
         var row = await HabitAsync(host.Client, habit.Id);
-        Assert.Equal("Building", row.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("status").ValueKind);
         Assert.Equal(5, Amounts(row.GetProperty("bounty"))[Currencies.Xp]);
         var progress = row.GetProperty("establishment");
         Assert.True(progress.GetProperty("targetMet").GetBoolean());

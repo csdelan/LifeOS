@@ -621,16 +621,20 @@ public sealed class TaskSeriesTests(PostgresFixture postgres)
     [Fact]
     public async Task Settle_catches_up_every_series_owed_by_today()
     {
-        // Set up ten days ago, and nothing has run since.
-        var past = Build(RealToday.AddDays(-10));
-        var (series, _) = await SeriesAsync(past, "Check mail", Recurrence.Daily(), RealToday.AddDays(-10));
-
+        // Today where the kernel counts days, the home zone: in a US evening that's a day behind
+        // UTC's date.
         var now = Build(realClock: true);
+        var today = await now.Provider.GetRequiredService<IHomeCalendar>().DateAtAsync(DateTimeOffset.UtcNow, Ct);
+
+        // Set up ten days ago, and nothing has run since.
+        var past = Build(today.AddDays(-10));
+        var (series, _) = await SeriesAsync(past, "Check mail", Recurrence.Daily(), today.AddDays(-10));
+
         var result = await now.Series.SettleAsync(Ct);
         Assert.True(result.Series >= 1);
         var mine = await RepetitionsAsync(now, series);
         Assert.Equal(11, mine.Count);
-        Assert.Equal(RealToday, mine[^1].Occurrence);
+        Assert.Equal(today, mine[^1].Occurrence);
         Assert.Superset(mine.Skip(1).Select(r => r.Id).ToHashSet(), result.Made.Select(m => m.Id).ToHashSet());
 
         await now.Status.ChangeStatusAsync(series.Urn, "Cancelled", Ct);

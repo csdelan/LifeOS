@@ -102,27 +102,46 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
 
     /// <summary>
     /// Inserts the subject and, when it's born with a status (a new Habit is Planned), that
-    /// status as its first <c>state_change</c> event, inside the caller's transaction.
+    /// status as its first <c>state_change</c> event, inside the caller's transaction. A subject
+    /// born with a status is made at that status's moment, so the two timestamps are equal:
+    /// that's how the habit views tell a habit Planned since it was made (migration 0049).
     /// </summary>
     private static async Task<Guid> InsertAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction, NewSubject newSubject,
         CancellationToken cancellationToken)
     {
-        var id = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
-            """
-            INSERT INTO bsk.subject (urn, type, title, attributes, origin_event_id)
-            VALUES (@Urn, @Type, @Title, @Attributes::jsonb, @OriginEventId)
-            RETURNING id;
-            """,
-            new
-            {
-                newSubject.Urn,
-                newSubject.Type,
-                newSubject.Title,
-                Attributes = newSubject.AttributesJson,
-                newSubject.OriginEventId
-            },
-            transaction: transaction, cancellationToken: cancellationToken));
+        var id = newSubject.Status is { } born
+            ? await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
+                """
+                INSERT INTO bsk.subject (urn, type, title, attributes, origin_event_id, created_at)
+                VALUES (@Urn, @Type, @Title, @Attributes::jsonb, @OriginEventId, @CreatedAt)
+                RETURNING id;
+                """,
+                new
+                {
+                    newSubject.Urn,
+                    newSubject.Type,
+                    newSubject.Title,
+                    Attributes = newSubject.AttributesJson,
+                    newSubject.OriginEventId,
+                    CreatedAt = born.At
+                },
+                transaction: transaction, cancellationToken: cancellationToken))
+            : await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
+                """
+                INSERT INTO bsk.subject (urn, type, title, attributes, origin_event_id)
+                VALUES (@Urn, @Type, @Title, @Attributes::jsonb, @OriginEventId)
+                RETURNING id;
+                """,
+                new
+                {
+                    newSubject.Urn,
+                    newSubject.Type,
+                    newSubject.Title,
+                    Attributes = newSubject.AttributesJson,
+                    newSubject.OriginEventId
+                },
+                transaction: transaction, cancellationToken: cancellationToken));
 
         if (newSubject.Status is { } initial)
         {

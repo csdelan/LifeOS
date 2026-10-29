@@ -67,7 +67,7 @@ public sealed class RewardMaintenanceTests(PostgresFixture postgres)
         }
 
         // With no status, so the status change written days back is its newest.
-        var habit = await kernel.Provider.CreateHabitWithoutStatusAsync(
+        var habit = await kernel.Provider.CreateTrackedHabitAsync(
             $"maintained habit {Guid.NewGuid():N}", JsonSerializer.Serialize(attributes), Ct);
         // Midday UTC, so the graduation date is the same whichever zone reads it.
         var graduatedAt = new DateTimeOffset(Today.AddDays(-graduatedDaysAgo).ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero);

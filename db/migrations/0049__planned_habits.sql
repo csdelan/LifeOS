@@ -14,6 +14,11 @@
 -- Moving it to Building starts tracking that day. Planned is not terminal, so it never
 -- graduates and earns nothing on its own.
 --
+-- A habit Planned since it was made isn't tracked before then either, even with a start
+-- date behind it: its days begin the day it moves to Building. It's told apart by time: a
+-- subject born with a status is made at that status's moment, so the Planned event's
+-- occurred_at equals the habit's created_at (NpgsqlSubjectRepository).
+--
 -- The days a habit spent Planned are left out of its schedule whenever they were, so a
 -- habit moved back to Planned and then on to Building again keeps the misses from its
 -- first spell of tracking. Those days hold no occurrence, so they don't break a run of
@@ -23,9 +28,10 @@
 -- 1. When each habit was Planned
 -- ---------------------------------------------------------------------------
 -- One row per spell: from the day the habit became Planned up to (not including) the day
--- its next status change took it out, or open while it's still Planned. Days are in the
--- home zone. Moving it in and out on the same day leaves an empty spell, so that day is
--- tracked.
+-- its next status change took it out, or open while it's still Planned. A spell that began
+-- when the habit was made has no first day (planned_from is NULL): it covers every day
+-- before it too. Days are in the home zone. Moving it in and out on the same day leaves an
+-- empty spell, so that day is tracked.
 CREATE OR REPLACE VIEW bsk_derived.habit_planned_source AS
 SELECT
     s.habit_id,
@@ -35,7 +41,8 @@ FROM (
     SELECT
         h.id AS habit_id,
         lower(btrim(e.payload->>'status')) AS status,
-        (e.occurred_at AT TIME ZONE bsk.home_zone())::date AS planned_from,
+        CASE WHEN e.occurred_at <> h.created_at
+             THEN (e.occurred_at AT TIME ZONE bsk.home_zone())::date END AS planned_from,
         ((lead(e.occurred_at) OVER (
             PARTITION BY h.id ORDER BY e.occurred_at, e.recorded_at, e.id))
             AT TIME ZONE bsk.home_zone())::date AS planned_until
@@ -48,7 +55,7 @@ FROM (
 WHERE s.status = 'planned';
 
 COMMENT ON VIEW bsk_derived.habit_planned_source IS
-    'Each spell a habit was Planned (not tracked yet, 0049): planned_from up to, not including, planned_until (NULL while still Planned), as dates in the home zone.';
+    'Each spell a habit was Planned (not tracked yet, 0049): planned_from (NULL when it was Planned since it was made: every day before) up to, not including, planned_until (NULL while still Planned), as dates in the home zone.';
 
 -- ---------------------------------------------------------------------------
 -- 2. Occurrences (0033's view, skipping the days a habit was Planned)
@@ -82,7 +89,7 @@ scheduled AS NOT MATERIALIZED (
         SELECT 1
         FROM bsk_derived.habit_planned_source p
         WHERE p.habit_id = hb.id
-          AND occ.d >= p.planned_from
+          AND (p.planned_from IS NULL OR occ.d >= p.planned_from)
           AND (p.planned_until IS NULL OR occ.d < p.planned_until)
     )
 ),
@@ -153,11 +160,12 @@ WITH habits AS (
     CROSS JOIN LATERAL (
         SELECT coalesce(bsk.try_to_date(h.attributes->>'start'), (h.created_at AT TIME ZONE bsk.home_zone())::date) AS start_date
     ) st
-    -- The days from its start up to today it spent Planned. Only finished spells: a habit
-    -- still Planned is left out below.
+    -- The days from its start up to today it spent Planned (a spell since it was made counts
+    -- from its start). Only finished spells: a habit still Planned is left out below.
     CROSS JOIN LATERAL (
         SELECT coalesce(sum(greatest(0,
-                   least(p.planned_until, bsk.home_today()) - greatest(p.planned_from, st.start_date))), 0)::int AS planned_days
+                   least(p.planned_until, bsk.home_today())
+                   - greatest(coalesce(p.planned_from, st.start_date), st.start_date))), 0)::int AS planned_days
         FROM bsk_derived.habit_planned_source p
         WHERE p.habit_id = h.id
           AND p.planned_until IS NOT NULL

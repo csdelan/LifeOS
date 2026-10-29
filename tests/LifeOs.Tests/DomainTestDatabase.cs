@@ -80,16 +80,15 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
     /// </summary>
     public async Task<SubjectRef> HabitAsync(DateOnly today, int startOffset, Dictionary<string, long> price)
     {
-        var habit = await Get<SubjectService>().CreateAsync(
-            SubjectTypes.Habit, $"domain habit {Guid.NewGuid():N}",
+        // Tracked from its start (TestHabits).
+        var habit = await Get<ISubjectRepository>().CreateTrackedHabitAsync(
+            $"domain habit {Guid.NewGuid():N}",
             JsonSerializer.Serialize(new
             {
                 start = today.AddDays(-startOffset).ToString("yyyy-MM-dd"),
                 recurrence = new { freq = "daily" }
             }),
-            cancellationToken: ct);
-        // A new habit is Planned; tracking it lets its days be recorded.
-        await Get<StatusService>().ChangeStatusAsync(habit.Urn, "Building", ct);
+            ct);
         await Get<BountyService>().SetAsync(habit.Urn, BountyTriggers.Followed, price, cancellationToken: ct);
         return habit;
     }
