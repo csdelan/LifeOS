@@ -373,7 +373,7 @@ test.describe("accessibility", () => {
     });
   }
 
-  // Covers on cards (COVER-3): Vision's statement cards and goal thumbnails, Today's focus
+  // Covers on cards (COVER-3): Vision's statement and goal tiles, Today's focus
   // strip and row thumbnails, and the Map graph's covered nodes, in both themes.
   for (const theme of ["dark", "light"] as const) {
     test(`axe serious/critical: covers on Vision, Today and the Map graph, ${theme} theme`, async ({ page }) => {
@@ -388,7 +388,7 @@ test.describe("accessibility", () => {
       await page.goto("/vision");
       await expect(page.locator("html")).toHaveClass(new RegExp(theme));
       await expect(page.getByText("Photo by Ines Vale on Unsplash")).toBeVisible({ timeout: 10_000 });
-      await expect(page.locator('[title="Photo by Mina Cho on Unsplash"]')).toBeVisible();
+      await expect(page.getByText("Photo by Mina Cho on Unsplash")).toBeVisible();
       const vision = await scan();
       expect(vision, JSON.stringify(vision, null, 2)).toEqual([]);
 
@@ -418,13 +418,13 @@ test.describe("accessibility", () => {
     await page.goto("/vision");
     const card = page.locator("article", { has: page.getByRole("heading", { name: "Steward of my health" }) });
     await expect(card.getByText("Photo by Ines Vale on Unsplash")).toBeVisible({ timeout: 10_000 });
-    // A 128 px square on the card's left edge on a phone, filling the card's height.
+    // One tile across on a phone, its photo across the top at 3:2.
     const photo = (await card.getByTestId("cover-image").boundingBox())!;
     const box = (await card.boundingBox())!;
-    expect(photo.width).toBe(128);
     expect(photo.x).toBe(box.x);
-    expect(photo.height).toBeGreaterThanOrEqual(photo.width);
-    expect(photo.height).toBe(box.height);
+    expect(photo.y).toBe(box.y);
+    expect(photo.width).toBe(box.width);
+    expect(Math.abs(photo.height - (photo.width * 2) / 3)).toBeLessThan(1);
     const vision = await scan();
     expect(vision, JSON.stringify(vision, null, 2)).toEqual([]);
 

@@ -60,41 +60,53 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
 }));
 
-describe("VisionPage covers (COVER-3)", () => {
-  it("shows a statement's cover as a square on its card's left edge, credited, and the card still opens it", async () => {
+describe("VisionPage gallery (COVER-3, Chris's \"Vision page convert to gallery view\")", () => {
+  it("lays identity statements out as a gallery: the photo across a tile's top, then the title, area and credit", async () => {
     render(<VisionPage />);
-    const card = screen.getByRole("heading", { name: "Steward of my health" }).closest("article")!;
-    const photo = within(card).getByTestId("cover-image");
-    // The photo leads the card, ahead of its words, and carries no credit of its own.
-    expect(card.firstElementChild).toBe(photo);
+    const gallery = screen.getByRole("region", { name: "Identity statements" });
+    expect(within(gallery).getByRole("list")).toHaveClass("sm:grid-cols-2", "lg:grid-cols-3");
+    const tile = within(gallery).getByRole("heading", { name: "Steward of my health" }).closest("article")!;
+    const photo = within(tile).getByTestId("cover-image");
+    // The photo leads the tile, across its top, and carries no credit of its own.
+    expect(tile.firstElementChild).toBe(photo);
+    expect(photo).toHaveClass("aspect-[3/2]", "w-full");
     expect(photo).toHaveTextContent("");
     expect(photo.querySelector("img")).toHaveAttribute("alt", "");
     expect(photo.querySelector("img")!.style.objectPosition).toBe("50% 60%");
-    // The credit is a line under the area name.
-    const credit = within(card).getByText((_, el) => el?.tagName === "P" && el.textContent === "Photo by Ines on Unsplash");
+    expect(tile).toHaveTextContent("Health");
+    // The credit is a line under the area name, its links beside the tile's button, never in it.
+    const credit = within(tile).getByText((_, el) => el?.tagName === "P" && el.textContent === "Photo by Ines on Unsplash");
     const links = within(credit).getAllByRole("link");
     expect(links.map((a) => a.textContent)).toEqual(["Ines", "Unsplash"]);
-    // The credit's links sit beside the card's button, never inside it.
     for (const link of links) expect(link.closest("button")).toBeNull();
 
-    await userEvent.click(within(card).getByRole("button", { name: "Steward of my health" }));
+    await userEvent.click(within(tile).getByRole("button", { name: "Steward of my health" }));
     expect(navigate).toHaveBeenCalledWith({ to: "/map", search: { selected: "v1" } });
   });
 
-  it("leaves a statement without a cover as it was", () => {
+  it("gives a statement without a cover a quiet panel in the photo's place, so the grid stays even", () => {
     render(<VisionPage />);
-    const card = screen.getByRole("heading", { name: "Present with my family" }).closest("article")!;
-    expect(within(card).queryByTestId("cover-image")).not.toBeInTheDocument();
-    expect(card).toHaveTextContent("Family");
+    const tile = screen.getByRole("heading", { name: "Present with my family" }).closest("article")!;
+    expect(within(tile).queryByTestId("cover-image")).not.toBeInTheDocument();
+    expect(tile.firstElementChild).toBe(within(tile).getByTestId("cover-placeholder"));
+    expect(tile).toHaveTextContent("Family");
+    expect(tile).not.toHaveTextContent("Photo by");
   });
 
-  it("puts a 40 px thumbnail before a long-term goal with a cover, credited in its tooltip", () => {
+  it("shows long-term goals as smaller tiles in the same style, credited, each opening its goal", async () => {
     render(<VisionPage />);
-    const ship = screen.getByRole("button", { name: /Ship LifeOS/ });
-    const thumb = within(ship).getByTestId("cover-image");
-    expect(thumb).toHaveAttribute("title", "Photo by Mina on Unsplash");
-    expect(thumb).toHaveStyle({ width: "40px", height: "40px" });
-    expect(within(screen.getByRole("button", { name: /Run a half-marathon/ })).queryByTestId("cover-image")).toBeNull();
+    const goalsGallery = screen.getByRole("region", { name: "Long-term goals" });
+    expect(within(goalsGallery).getByRole("list")).toHaveClass("grid-cols-2", "sm:grid-cols-3", "lg:grid-cols-4");
+    const ship = within(goalsGallery).getByRole("heading", { name: "Ship LifeOS" }).closest("article")!;
+    expect(ship.firstElementChild).toBe(within(ship).getByTestId("cover-image"));
+    expect(ship).toHaveTextContent("2026-12-02");
+    expect(ship).toHaveTextContent("Photo by Mina on Unsplash");
+    const run = within(goalsGallery).getByRole("heading", { name: "Run a half-marathon" }).closest("article")!;
+    expect(within(run).queryByTestId("cover-image")).toBeNull();
+    expect(within(run).getByTestId("cover-placeholder")).toBeInTheDocument();
+
+    await userEvent.click(within(ship).getByRole("button", { name: "Ship LifeOS" }));
+    expect(navigate).toHaveBeenCalledWith({ to: "/map", search: { selected: "g1" } });
   });
 
   it("no longer says it isn't a mood board", () => {

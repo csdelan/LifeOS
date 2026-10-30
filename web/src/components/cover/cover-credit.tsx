@@ -6,9 +6,8 @@ import { cn } from "@/lib/utils";
  * as Unsplash asks (cover-images plan §3.7).
  * - `overlay` (the default): a dark pill in a photo's corner, for the banner and Today's
  *   focus strip. White on `bg-black/60` meets 4.5:1 over any photo.
- * - `line`: a small muted line under a card's text, for a photo too narrow to carry the
- *   pill (the Vision cards' squares). It sits above a stretched card button, so its links
- *   still work.
+ * - `line`: a small muted line under a card's text (the Vision gallery's tiles). It sits
+ *   above a stretched card button, so its links still work.
  * A thumbnail is smaller still, and carries `creditText` as its tooltip instead.
  */
 export function CoverCredit({

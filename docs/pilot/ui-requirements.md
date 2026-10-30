@@ -3885,6 +3885,14 @@ from across the top to a square on the card's left edge (128 px on a phone, 144 
 screen space relative to the body. I'd rather have more square, smaller images along the
 left edge of the card."
 
+**Update (2026-10-29 — Vision is a gallery):** Chris's LifeOS task "Vision page convert to
+gallery view". The page widens (max-w-6xl) and shows identity statements as a gallery: tiles
+one, two or three across, each with its photo across the top at 3:2 (cropped at its
+position), then the title, the area and the credit line. Long-term goals follow as smaller
+tiles in the same style, two, three or four across, with the target date and a credit line
+(they had 40 px thumbnails). A statement or goal without a cover gets a quiet panel with its
+type's icon in the photo's place, so the grid stays even. Each tile opens its item on the Map.
+
 **Update (2026-10-29 — Habits page):** each habit row on the Habits page (Building,
 Established and Abandoned) shows a 36 px thumbnail before its name when the habit has a
 cover, its credit in the tooltip, like Today's rows. The habits read carries no cover, so the

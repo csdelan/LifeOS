@@ -909,18 +909,17 @@ test.describe("golden paths", () => {
       page.getByRole("button", { name: /Production web UI/ }).getByTestId("cover-image"),
     ).toHaveAttribute("title", "Photo by Sam Okafor on Unsplash");
 
-    // Vision: the statement's card keeps its photo and credit; the goals follow the panel.
+    // Vision: the statement's tile keeps its photo and credit; the goals' tiles follow the panel.
     await page.getByRole("link", { name: "Vision" }).click();
-    const steward = page.locator("article", { has: page.getByRole("heading", { name: "Steward of my health" }) });
+    const tile = (name: string | RegExp) => page.locator("article", { has: page.getByRole("heading", { name }) });
+    const steward = tile("Steward of my health");
     await expect(steward.getByTestId("cover-image")).toBeVisible();
     await expect(steward).toContainText("Photo by Ines Vale on Unsplash");
     await expect(steward.getByRole("link", { name: "Ines Vale" })).toHaveAttribute("target", "_blank");
-    await expect(
-      page.getByRole("button", { name: /Run a half-marathon/ }).getByTestId("cover-image"),
-    ).toHaveAttribute("title", "Photo by Lars Brandt on Unsplash");
-    await expect(
-      page.getByRole("button", { name: /Ship LifeOS production UI/ }).getByTestId("cover-image"),
-    ).toHaveCount(0);
+    await expect(tile(/Run a half-marathon/).getByTestId("cover-image")).toBeVisible();
+    await expect(tile(/Run a half-marathon/)).toContainText("Photo by Lars Brandt on Unsplash");
+    await expect(tile(/Ship LifeOS production UI/).getByTestId("cover-image")).toHaveCount(0);
+    await expect(tile(/Ship LifeOS production UI/).getByTestId("cover-placeholder")).toBeVisible();
     await steward.getByRole("button", { name: "Steward of my health" }).click();
     await expect(page.getByTestId("cover-banner")).toContainText("Photo by Ines Vale on Unsplash", {
       timeout: 10_000,
