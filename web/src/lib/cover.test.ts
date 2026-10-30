@@ -43,12 +43,13 @@ function page(over: Partial<CoverSearchRead> = {}): CoverSearchRead {
 }
 
 describe("which subjects have covers", () => {
-  it("is identity statements, goals and projects only", () => {
+  it("is identity statements, goals, projects and habits only", () => {
     expect(canHaveCover("Value")).toBe(true);
     expect(canHaveCover("Goal")).toBe(true);
     expect(canHaveCover("Project")).toBe(true);
     expect(canHaveCover("Task")).toBe(false);
-    expect(canHaveCover("Habit")).toBe(false);
+    expect(canHaveCover("Habit")).toBe(true);
+    expect(canHaveCover("Season")).toBe(false);
     expect(canHaveCover(undefined)).toBe(false);
   });
 });

@@ -2477,7 +2477,7 @@ function coverable(subject: string): SubjectListItem {
   const item = byRef(subject);
   if (!item) throw new Error(`No subject matches '${subject}'.`);
   if (!canHaveCover(item.type)) {
-    throw new Error(`'${item.title}' is a ${item.type}; only identity statements (Value), goals and projects have covers.`);
+    throw new Error(`'${item.title}' is a ${item.type}; only identity statements (Value), goals, projects and habits have covers.`);
   }
   return item;
 }

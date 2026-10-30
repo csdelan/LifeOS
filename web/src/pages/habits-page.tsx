@@ -1,5 +1,6 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { PlayIcon, RepeatIcon } from "lucide-react";
+import { CoverThumb } from "@/components/cover/cover-thumb";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
@@ -11,10 +12,10 @@ import { BountyChip } from "@/components/rewards/bounty-chip";
 import { useDirty } from "@/components/shell/app-shell";
 import { PeekPanel } from "@/components/shell/panels";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
-import { useDashboard, useHabits, useWrites } from "@/lib/queries";
+import { useDashboard, useHabits, useSubjects, useWrites } from "@/lib/queries";
 import { todayIso } from "@/lib/dates";
 import { habitStage, isMaintainedToday, isReadyToEstablish, maintainedDayLabel } from "@/lib/establish";
-import type { HabitOccurrenceRow, HabitRow } from "@/lib/production-ui-types";
+import type { CoverRead, HabitOccurrenceRow, HabitRow } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
 
 export function HabitsPage() {
@@ -28,6 +29,12 @@ export function HabitsPage() {
   const today = todayIso();
   const todayById = new Map((dash?.todayHabits ?? []).map((h) => [h.habitId, h]));
   const maintainedById = new Map((dash?.maintainingHabits ?? []).map((h) => [h.habitId, h]));
+  // The habits read has no covers; the subject list does (COVER-3), so each row takes its
+  // cover from there by id. A habit with no cover, or a list still loading, shows none.
+  const { data: habitSubjects } = useSubjects("Habit");
+  const coverById = new Map(
+    (habitSubjects ?? []).flatMap((s) => (s.cover ? [[s.id, s.cover] as const] : [])),
+  );
 
   const habits = (data ?? []).filter((h) => !h.archived);
   // Planned habits aren't tracked yet. Graduated habits leave daily tracking (REWARD-2) but
@@ -74,6 +81,7 @@ export function HabitsPage() {
                 <HabitItem
                   key={h.id}
                   habit={h}
+                  cover={coverById.get(h.id)}
                   today={todayById.get(h.id)}
                   selected={selected === h.id}
                   onSelect={() => select(h.id)}
@@ -86,6 +94,7 @@ export function HabitsPage() {
           ) : null}
           <PlannedSection
             habits={planned}
+            covers={coverById}
             selected={selected}
             onSelect={select}
             onStart={(id) => void writes.setStatus(id, "Building")}
@@ -94,6 +103,7 @@ export function HabitsPage() {
             title="Established"
             hint="Graduated: no daily schedule, so no day is ever missed. Check a day off when you keep it up; each logged day still pays."
             habits={established}
+            covers={coverById}
             selected={selected}
             onSelect={select}
             maintain={{
@@ -105,6 +115,7 @@ export function HabitsPage() {
             title="Abandoned"
             hint="No longer tracked. What their days earned stays earned."
             habits={abandoned}
+            covers={coverById}
             selected={selected}
             onSelect={select}
           />
@@ -135,14 +146,32 @@ export function HabitsPage() {
   );
 }
 
+/** A habit row's cover thumbnail: 36 px, as on Today's rows (COVER-3). */
+const HABIT_THUMB = 36;
+
+/** A habit's name, with its cover thumbnail first when it has one. */
+function HabitName({ habit: h, cover, children }: { habit: HabitRow; cover?: CoverRead; children?: React.ReactNode }) {
+  return (
+    <span className="flex min-w-0 items-center gap-3">
+      {cover ? <CoverThumb cover={cover} size={HABIT_THUMB} /> : null}
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium">{h.name}</span>
+        {children}
+      </span>
+    </span>
+  );
+}
+
 function HabitItem({
   habit: h,
+  cover,
   today,
   selected,
   onSelect,
   onPick,
 }: {
   habit: HabitRow;
+  cover?: CoverRead;
   today?: HabitOccurrenceRow;
   selected: boolean;
   onSelect: () => void;
@@ -158,12 +187,13 @@ function HabitItem({
         )}
       >
         <button type="button" className="min-h-11 min-w-0 flex-1 text-left" onClick={onSelect}>
-          <p className="truncate text-sm font-medium">{h.name}</p>
-          <p className="text-[0.6875rem] text-muted-foreground">
-            Streak {h.currentStreak}
-            {h.lastState ? ` · ${h.lastState.replace("_", " ")}` : ""}
-            {h.cue ? ` · Cue: ${h.cue}` : ""}
-          </p>
+          <HabitName habit={h} cover={cover}>
+            <span className="block text-[0.6875rem] text-muted-foreground">
+              Streak {h.currentStreak}
+              {h.lastState ? ` · ${h.lastState.replace("_", " ")}` : ""}
+              {h.cue ? ` · Cue: ${h.cue}` : ""}
+            </span>
+          </HabitName>
         </button>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {isReadyToEstablish(h) ? <ReadyToEstablish habit={h} /> : null}
@@ -183,11 +213,13 @@ function HabitItem({
  */
 function PlannedSection({
   habits,
+  covers,
   selected,
   onSelect,
   onStart,
 }: {
   habits: HabitRow[];
+  covers: Map<string, CoverRead>;
   selected?: string;
   onSelect: (id: string) => void;
   onStart: (id: string) => void;
@@ -212,8 +244,11 @@ function PlannedSection({
               )}
             >
               <button type="button" className="min-h-11 min-w-0 flex-1 text-left" onClick={() => onSelect(h.id)}>
-                <p className="truncate text-sm font-medium">{h.name}</p>
-                {h.cue ? <p className="text-[0.6875rem] text-muted-foreground">Cue: {h.cue}</p> : null}
+                <HabitName habit={h} cover={covers.get(h.id)}>
+                  {h.cue ? (
+                    <span className="block text-[0.6875rem] text-muted-foreground">Cue: {h.cue}</span>
+                  ) : null}
+                </HabitName>
               </button>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <BountyChip amounts={h.bounty} suffix="a day" />
@@ -240,6 +275,7 @@ function GraduatedSection({
   title,
   hint,
   habits,
+  covers,
   selected,
   onSelect,
   maintain,
@@ -247,6 +283,7 @@ function GraduatedSection({
   title: string;
   hint: string;
   habits: HabitRow[];
+  covers: Map<string, CoverRead>;
   selected?: string;
   onSelect: (id: string) => void;
   /** Established habits: today's logged state and the one-tap check-off. */
@@ -277,8 +314,11 @@ function GraduatedSection({
                     selected === h.id && "bg-primary/8 ring-primary/20",
                   )}
                 >
-                  <p className="truncate text-sm font-medium">{h.name}</p>
-                  {h.cue ? <p className="text-[0.6875rem] text-muted-foreground">Cue: {h.cue}</p> : null}
+                  <HabitName habit={h} cover={covers.get(h.id)}>
+                    {h.cue ? (
+                      <span className="block text-[0.6875rem] text-muted-foreground">Cue: {h.cue}</span>
+                    ) : null}
+                  </HabitName>
                 </button>
               </li>
             );
@@ -293,11 +333,12 @@ function GraduatedSection({
                 )}
               >
                 <button type="button" className="min-h-11 min-w-0 flex-1 text-left" onClick={() => onSelect(h.id)}>
-                  <p className="truncate text-sm font-medium">{h.name}</p>
-                  <p className="text-[0.6875rem] text-muted-foreground">
-                    {maintainedDayLabel(today.state)}
-                    {h.cue ? ` · Cue: ${h.cue}` : ""}
-                  </p>
+                  <HabitName habit={h} cover={covers.get(h.id)}>
+                    <span className="block text-[0.6875rem] text-muted-foreground">
+                      {maintainedDayLabel(today.state)}
+                      {h.cue ? ` · Cue: ${h.cue}` : ""}
+                    </span>
+                  </HabitName>
                 </button>
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <BountyChip amounts={h.bounty} suffix="a day" />

@@ -63,6 +63,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     [InlineData(SubjectTypes.Value)]
     [InlineData(SubjectTypes.Goal)]
     [InlineData(SubjectTypes.Project)]
+    [InlineData(SubjectTypes.Habit)]
     public async Task A_photo_becomes_the_cover_from_what_unsplash_says(string type)
     {
         var unsplash = new FakeUnsplashClient();
@@ -133,7 +134,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<CoverService>()
             .SetFromUnsplashAsync(subject.Urn, "Dwu85P9SOIk", cancellationToken: Ct));
 
-        Assert.Contains("only identity statements (Value), goals and projects have covers", ex.Message);
+        Assert.Contains("only identity statements (Value), goals, projects and habits have covers", ex.Message);
         Assert.Null(await StoredCover(subject.Id));
         Assert.Empty(unsplash.Looked);
     }

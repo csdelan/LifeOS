@@ -159,8 +159,9 @@ public sealed class CoverTests
     [InlineData(SubjectTypes.Project, true)]
     [InlineData(SubjectTypes.Task, false)]
     [InlineData(SubjectTypes.Area, false)]
-    [InlineData(SubjectTypes.Habit, false)]
-    public void Only_identity_statements_goals_and_projects_have_covers(string type, bool allowed)
+    [InlineData(SubjectTypes.Habit, true)]
+    [InlineData(SubjectTypes.Season, false)]
+    public void Only_identity_statements_goals_projects_and_habits_have_covers(string type, bool allowed)
         => Assert.Equal(allowed, Cover.Allowed(type));
 
     [Fact]

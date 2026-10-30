@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace LifeOs.Cli.Commands;
 
 /// <summary>
-/// <c>bsk cover</c> — a cover photo from Unsplash on an identity statement, goal or project
+/// <c>bsk cover</c> — a cover photo from Unsplash on an identity statement, goal, project or habit
 /// (COVER-1, D15; cover-images plan §3.4). Searching and setting need
 /// <c>Unsplash__AccessKey</c> in the environment; showing, moving and clearing don't.
 /// <list type="bullet">
@@ -211,7 +211,7 @@ internal static class CoverCommand
 
     private static Argument<string> SubjectArgument() => new("subject")
     {
-        Description = "The identity statement, goal or project (urn, short id, or title)."
+        Description = "The identity statement, goal, project or habit (urn, short id, or title)."
     };
 
     private static void WriteChange(CoverChange change, string appName, bool asJson, string done)

@@ -74,7 +74,9 @@ Checked against Unsplash's API documentation and guidelines on 2026-10-23 (§7).
   showing (§3.6 shows its colour instead).
 - **Both places:** a **banner** on the subject's own view, and **card images** wherever the
   subject shows as a card.
-- **Which subjects:** identity statements (`Value`), goals and projects.
+- **Which subjects:** identity statements (`Value`), goals and projects. Habits joined on
+  2026-10-29 at Chris's request: the detail banner and picker, and a thumbnail on each
+  Habits page row.
 
 ## 3. Design
 

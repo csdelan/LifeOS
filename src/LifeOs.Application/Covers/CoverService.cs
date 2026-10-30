@@ -169,7 +169,7 @@ public sealed class CoverService(
         if (!Cover.Allowed(subject.Type))
         {
             throw new InvalidOperationException(
-                $"'{subject.Title}' is a {subject.Type}; only identity statements (Value), goals and projects have covers.");
+                $"'{subject.Title}' is a {subject.Type}; only identity statements (Value), goals, projects and habits have covers.");
         }
 
         return subject;

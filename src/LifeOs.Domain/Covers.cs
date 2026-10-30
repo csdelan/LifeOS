@@ -59,8 +59,9 @@ public sealed partial record Cover(
     public const int MaxAlt = 500;
     public const int MaxUrl = 2000;
 
-    /// <summary>The subject types that may have a cover: identity statements, goals and projects.</summary>
-    public static readonly IReadOnlyList<string> Types = [SubjectTypes.Value, SubjectTypes.Goal, SubjectTypes.Project];
+    /// <summary>The subject types that may have a cover: identity statements, goals, projects and habits.</summary>
+    public static readonly IReadOnlyList<string> Types =
+        [SubjectTypes.Value, SubjectTypes.Goal, SubjectTypes.Project, SubjectTypes.Habit];
 
     /// <summary>Whether a subject of <paramref name="type"/> may have a cover.</summary>
     public static bool Allowed(string type) => Types.Contains(type, StringComparer.Ordinal);

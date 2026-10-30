@@ -3792,6 +3792,11 @@ with its credit links ready. The production security policy lets images load fro
 `images.unsplash.com` only, and `fly-setup.ps1` stages `Unsplash__AccessKey` from `.env`.
 Nothing shows on a page yet: the picker and banner are C3.
 
+**Update (2026-10-29 — habits too):** Chris asked for cover images on habits (his LifeOS
+task "Add cover images for habits"). `Cover.Allowed` and the web's `COVER_TYPES` now take
+`Habit`, so a habit's detail panel has Add cover and the banner, and the Habits page shows a
+thumbnail on each row (COVER-3). No migration: a cover is still `attributes.cover`.
+
 **Update (2026-10-23 — picker landed, C3):** Add cover, beside the type badge on an
 identity statement, goal or project, opens "Choose a cover". It searches Unsplash through
 the server, filled in with the title, and tapping a photo sets it. It works in the mock
@@ -3866,6 +3871,11 @@ from across the top to a square on the card's left edge (128 px on a phone, 144 
 `md`), with the credit as a small line under the area name. Chris: "it takes up too much
 screen space relative to the body. I'd rather have more square, smaller images along the
 left edge of the card."
+
+**Update (2026-10-29 — Habits page):** each habit row on the Habits page (Building,
+Established and Abandoned) shows a 36 px thumbnail before its name when the habit has a
+cover, its credit in the tooltip, like Today's rows. The habits read carries no cover, so the
+page takes each one from the Habit subject list by id.
 
 Build moves `mapped → building`. It becomes `built` once it's on staging (C5).
 

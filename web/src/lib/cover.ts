@@ -5,8 +5,8 @@
  */
 import type { CoverPhoto, CoverRead, CoverSearchRead, SubjectType } from "@/lib/production-ui-types";
 
-/** Identity statements, goals and projects have covers; nothing else does (D15). */
-export const COVER_TYPES: readonly SubjectType[] = ["Value", "Goal", "Project"];
+/** Identity statements, goals, projects and habits have covers; nothing else does (D15). */
+export const COVER_TYPES: readonly SubjectType[] = ["Value", "Goal", "Project", "Habit"];
 
 export const COVER_IMAGE_HOST = "images.unsplash.com";
 export const DEFAULT_COVER_COLOR = "#808080";
