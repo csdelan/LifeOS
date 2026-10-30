@@ -200,6 +200,24 @@ describe("Browse page (BROWSE-2)", () => {
     expect(router.get().selected).toBe(sqlite);
   });
 
+  it("offers New only where it makes something: the type looked at, or anything from All types", async () => {
+    const user = userEvent.setup();
+    const header = () => screen.getByRole("heading", { level: 1 }).closest("header")!;
+    renderPage({ type: "Constraint" });
+    await listOf("Constraint");
+    // New can't make a Constraint (nor a Season or Reward), so there's no plain New to mislead.
+    expect(within(header()).queryByRole("button", { name: /^New/ })).not.toBeInTheDocument();
+
+    await user.click(typeButton(/^Reward\s*\d+$/));
+    await listOf("Reward");
+    expect(within(header()).queryByRole("button", { name: /^New/ })).not.toBeInTheDocument();
+
+    await user.click(typeButton(/^All types/));
+    await listOf("Everything");
+    await user.click(within(header()).getByRole("button", { name: "New" }));
+    expect(openNew).toHaveBeenCalledWith(expect.objectContaining({ type: undefined }));
+  });
+
   it("remembers the type, the open item and the filters for next time", async () => {
     const user = userEvent.setup();
     const first = renderPage({ type: "Decision", selected: "dec-stack" });

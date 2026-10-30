@@ -205,6 +205,9 @@ export function BrowsePage() {
   }, [created, all, rows, navigate]);
 
   const creatable = type !== "all" && CREATABLE_TYPES.includes(type);
+  // New makes the type looked at, or anything from All types. A type New can't make (Season,
+  // Constraint, Reward) gets no button: a plain "New" there wouldn't make one.
+  const showNew = type === "all" || creatable;
   const heading = type === "all" ? "Everything" : typeLabel(type);
   const shown =
     rows.length === typed.length
@@ -242,15 +245,17 @@ export function BrowsePage() {
                 {isLoading ? "Loading…" : shown}
               </p>
             </div>
-            <Button
-              size="sm"
-              className="shrink-0"
-              onClick={() =>
-                openNew({ type: creatable ? type : undefined, onCreated: setCreated })
-              }
-            >
-              <PlusIcon /> {creatable ? `New ${typeLabel(type)}` : "New"}
-            </Button>
+            {showNew ? (
+              <Button
+                size="sm"
+                className="shrink-0"
+                onClick={() =>
+                  openNew({ type: creatable ? type : undefined, onCreated: setCreated })
+                }
+              >
+                <PlusIcon /> {creatable ? `New ${typeLabel(type)}` : "New"}
+              </Button>
+            ) : null}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {!isDesktop ? <TypeSelect counts={counts} type={type} onPick={pickType} /> : null}

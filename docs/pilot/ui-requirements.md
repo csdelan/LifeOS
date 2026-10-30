@@ -427,6 +427,12 @@ Horizon:    Pilot
 Definition: active
 Build:      built
 
+**Update (2026-10-29 — New only where it makes something):** Chris's LifeOS task "New
+button on some browse subpages (in upper right) is generic": "There is no point to have
+another 'New' button… if it does not specifically default to that specific subject type."
+The header's New now shows on a type New can make ("New Decision") and on All types (a
+plain New, any type). Seasons, Constraints and Rewards, which New doesn't make, get none.
+
 **Workflow (Chris):**
 - Use a three-pane Browse layout: a generalized filter pane, an item list, and a selected-
   item detail pane.
