@@ -14,6 +14,7 @@ import {
   parseBrowseType,
   searchSubjects,
   sortBrowse,
+  sortOptionsFor,
   statusOf,
   type BrowseFilters,
 } from "@/lib/browse";
@@ -219,6 +220,47 @@ describe("Browse sorting (BROWSE-2)", () => {
 
   it("sorts by when an item was entered", () => {
     expect(titles(sortBrowse(tasks, "entered", "desc"))[0]).toBe("Plan the week");
+  });
+
+  it("sorts by tags as the column shows them, untagged items last either way", () => {
+    const tagged = [
+      ...decisions.slice(0, 3),
+      item("d5", "Decision", "Pick a backup target", { tags: "home, backup" }),
+    ];
+    // "home backup" < "lifeos" < "lifeos storage"; Run in the mornings has no tags.
+    expect(titles(sortBrowse(tagged, "tags", "asc"))).toEqual([
+      "Pick a backup target",
+      "React + Vite for Production UI",
+      "Use SQLite for local storage",
+      "Run in the mornings",
+    ]);
+    expect(titles(sortBrowse(tagged, "tags", "desc"))).toEqual([
+      "Use SQLite for local storage",
+      "React + Vite for Production UI",
+      "Pick a backup target",
+      "Run in the mornings",
+    ]);
+  });
+
+  it("sorts by type in the type list's order, ties by title", () => {
+    const mixed = [people[0], tasks[3], decisions[2], tasks[0], item("v1", "Value", "Steward of my health")];
+    expect(titles(sortBrowse(mixed, "type", "asc"))).toEqual([
+      "Steward of my health",
+      "Buy race shoes",
+      "Read a chapter",
+      "Run in the mornings",
+      "Maya",
+    ]);
+    expect(titles(sortBrowse(mixed, "type", "desc"))[0]).toBe("Maya");
+  });
+
+  it("offers in the sort menu Title and the columns shown, and the sort in use", () => {
+    const values = (cols: Parameters<typeof sortOptionsFor>[0], current: Parameters<typeof sortOptionsFor>[1]) =>
+      sortOptionsFor(cols, current).map((o) => o.value);
+    expect(values(["status", "tags", "entered"], "title")).toEqual(["title", "status", "entered", "tags"]);
+    expect(values(["type", "status", "entered"], "title")).toEqual(["title", "type", "status", "entered"]);
+    // A sort kept from another type still shows, so the menu never reads blank.
+    expect(values(["entered"], "due")).toEqual(["title", "due", "entered"]);
   });
 });
 

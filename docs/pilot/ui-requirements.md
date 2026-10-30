@@ -433,6 +433,13 @@ another 'New' button… if it does not specifically default to that specific sub
 The header's New now shows on a type New can make ("New Decision") and on All types (a
 plain New, any type). Seasons, Constraints and Rewards, which New doesn't make, get none.
 
+**Update (2026-10-29 — every column sorts):** Chris's LifeOS task "Tag columns should be
+sortable too": "Other columns like status are sortable, so why not tags?" Tags now sorts
+from its header, by the tags as the column shows them, untagged items last either way. Type
+(on All types) sorts too, in the type list's order (Identity Statement, Goal, Project,
+Task…), as Status runs in the type's own order. The narrow list's sort menu offers Title and
+the columns shown.
+
 **Workflow (Chris):**
 - Use a three-pane Browse layout: a generalized filter pane, an item list, and a selected-
   item detail pane.

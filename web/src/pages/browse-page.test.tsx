@@ -138,6 +138,30 @@ describe("Browse page (BROWSE-2)", () => {
     expect(screen.getByRole("button", { name: "Sort by Due" })).toBeInTheDocument();
   });
 
+  it("sorts by Tags and, across all types, by Type from their headers", async () => {
+    const user = userEvent.setup();
+    renderPage({ type: "Value" });
+    const values = await listOf("Identity Statement");
+    await user.click(screen.getByRole("button", { name: "Sort by Tags" }));
+    expect(screen.getByRole("button", { name: "Tags, sorted ascending" })).toBeInTheDocument();
+    // By the tags as the column shows them: #craft…, #family…, #health…, #identity…, #trading…
+    expect(rowTitles(values).slice(0, 5)).toEqual([
+      "Craftsman of systems",
+      "Present with my family",
+      "Steward of my health",
+      "I tell myself the truth",
+      "I take only defined risk",
+    ]);
+
+    await user.click(typeButton(/^All types/));
+    const all = await listOf("Everything");
+    await user.click(screen.getByRole("button", { name: "Sort by Type" }));
+    // Identity Statements first, as in the type list; the last rows are a later type.
+    const rows = within(all).getAllByRole("button");
+    expect(rows[0]).toHaveTextContent("Identity Statement");
+    expect(rows.at(-1)).not.toHaveTextContent("Identity Statement");
+  });
+
   it("opens an item, and keeps it open only for a type it belongs to", async () => {
     const user = userEvent.setup();
     renderPage({ type: "Decision" });

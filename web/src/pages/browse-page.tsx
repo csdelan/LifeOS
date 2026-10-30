@@ -51,6 +51,7 @@ import {
   itemsOfType,
   localDay,
   parseBrowseType,
+  sortOptionsFor,
   statusOf,
   tagsOf,
   type BrowseColumn,
@@ -275,7 +276,7 @@ export function BrowsePage() {
                   : null}
               </Button>
             ) : null}
-            <SortControl filters={filters} onChange={setFilters} />
+            <SortControl filters={filters} columns={columns} onChange={setFilters} />
           </div>
         </header>
 
@@ -622,9 +623,11 @@ function nextSort(f: BrowseFilters, sort: BrowseSort): BrowseFilters {
 /** The sort as a menu, for a list too narrow for its column headers. */
 function SortControl({
   filters,
+  columns,
   onChange,
 }: {
   filters: BrowseFilters;
+  columns: BrowseColumn[];
   onChange: (update: (f: BrowseFilters) => BrowseFilters) => void;
 }) {
   const asc = filters.dir === "asc";
@@ -638,7 +641,7 @@ function SortControl({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {SORT_OPTIONS.map((o) => (
+          {sortOptionsFor(columns, filters.sort).map((o) => (
             <SelectItem key={o.value} value={o.value}>
               {o.label}
             </SelectItem>
@@ -675,10 +678,13 @@ const COLUMN_LABEL: Record<BrowseColumn, string> = {
   entered: "Entered",
 };
 
-const COLUMN_SORT: Partial<Record<BrowseColumn, BrowseSort>> = {
+/** Every column sorts from its header (Chris: "Other columns like status are sortable, so why not tags?"). */
+const COLUMN_SORT: Record<BrowseColumn, BrowseSort> = {
+  type: "type",
   status: "status",
   due: "due",
   area: "area",
+  tags: "tags",
   entered: "entered",
 };
 

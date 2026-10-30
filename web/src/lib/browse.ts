@@ -21,7 +21,7 @@ export type BrowseType = SubjectType | "all";
 export type DueFilter = "any" | "overdue" | "today" | "upcoming" | "none";
 /** Entered within the last N days, counting today. */
 export type EnteredFilter = "any" | "7" | "30" | "90" | "365";
-export type BrowseSort = "title" | "status" | "due" | "entered" | "area";
+export type BrowseSort = "title" | "type" | "status" | "due" | "entered" | "area" | "tags";
 export type SortDir = "asc" | "desc";
 export type BrowseColumn = "type" | "status" | "due" | "area" | "tags" | "entered";
 
@@ -104,11 +104,33 @@ export const ENTERED_OPTIONS: { value: EnteredFilter; label: string }[] = [
 
 export const SORT_OPTIONS: { value: BrowseSort; label: string }[] = [
   { value: "title", label: "Title" },
+  { value: "type", label: "Type" },
   { value: "status", label: "Status" },
   { value: "due", label: "Due date" },
   { value: "entered", label: "Entered" },
   { value: "area", label: "Area" },
+  { value: "tags", label: "Tags" },
 ];
+
+/** The column each sort belongs to; Title's is always there. */
+export const SORT_COLUMN: Record<Exclude<BrowseSort, "title">, BrowseColumn> = {
+  type: "type",
+  status: "status",
+  due: "due",
+  entered: "entered",
+  area: "area",
+  tags: "tags",
+};
+
+/**
+ * The sorts worth offering where the list is too narrow for its headers: Title and the
+ * columns shown, plus the sort in use so the menu never reads blank.
+ */
+export function sortOptionsFor(columns: BrowseColumn[], current: BrowseSort): { value: BrowseSort; label: string }[] {
+  return SORT_OPTIONS.filter(
+    (o) => o.value === "title" || o.value === current || columns.includes(SORT_COLUMN[o.value]),
+  );
+}
 
 /** The shown status: the folded one, else the type's default. Empty for a status-less type. */
 export function statusOf(item: SubjectListItem): string {
@@ -286,6 +308,17 @@ export function matchesBrowse(item: SubjectListItem, filters: BrowseFilters, tod
 
 const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
 
+/** An item's tags as its Tags column reads them, "" for none. */
+function tagsText(item: SubjectListItem): string {
+  return tagsOf(item).join(" ");
+}
+
+/** Where an item's type comes in Browse's type list: the alignment chain first. */
+function typeRank(item: SubjectListItem): number {
+  const i = BROWSE_TYPE_ORDER.indexOf(item.type);
+  return i === -1 ? BROWSE_TYPE_ORDER.length : i;
+}
+
 function statusRank(item: SubjectListItem): number {
   const vocabulary = STATUS_BY_TYPE[item.type] ?? [];
   const i = vocabulary.indexOf(statusOf(item));
@@ -293,8 +326,10 @@ function statusRank(item: SubjectListItem): number {
 }
 
 /**
- * Sorted by the chosen field, ties by title. Items without the field (no due date, no Area)
- * go last whichever way the sort runs.
+ * Sorted by the chosen field, ties by title. Items without the field (no due date, no Area, no
+ * tags) go last whichever way the sort runs. Type runs in the type list's order (Identity
+ * Statement, Goal, Project, Task…), as Status runs in the type's own order; Tags by the tags
+ * as the column shows them.
  */
 export function sortBrowse(rows: SubjectListItem[], sort: BrowseSort, dir: SortDir): SubjectListItem[] {
   const sign = dir === "asc" ? 1 : -1;
@@ -310,6 +345,9 @@ export function sortBrowse(rows: SubjectListItem[], sort: BrowseSort, dir: SortD
     switch (sort) {
       case "title":
         return sign * byTitle(a, b);
+      case "type":
+        c = sign * (typeRank(a) - typeRank(b));
+        break;
       case "status": {
         // In the type's own order (Open before Closed), status-less items last.
         const sa = statusOf(a);
@@ -326,6 +364,9 @@ export function sortBrowse(rows: SubjectListItem[], sort: BrowseSort, dir: SortD
         break;
       case "area":
         c = missingLast(a.areaName, b.areaName);
+        break;
+      case "tags":
+        c = missingLast(tagsText(a), tagsText(b));
         break;
     }
     return c || byTitle(a, b);
