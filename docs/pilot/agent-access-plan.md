@@ -1,4 +1,4 @@
-# Agent Access Plan: backups, then a read-only MCP server, then writes behind a switch
+# Agent Access Plan: backups, then a read-only MCP server, then writes behind a switch, then an assistant
 
 The design and build order for letting Chris's personal AI agents (Claude, ChatGPT and
 others) read LifeOS, and later write to it, through an **MCP server**. Before any of that,
@@ -19,8 +19,10 @@ this order:
 | 0 | A nightly scheduled task on Chris's PC: database dump and new photos, restore-tested, encrypted to his key, saved to his OneDrive | The life record survives a bad migration, a mistaken delete, a Supabase incident or a lost account |
 | 1 | `/mcp` on the existing API: read-only tools, sign-in through Supabase's OAuth server, a consent page, an access log | Any MCP-capable agent can see his life as it is now, and he can see what each one read |
 | 2 | Write tools, off until `Mcp__Writes` is switched on, in two levels, for listed agents only | Agents can capture, journal, check off and update, attributed and undoable |
+| 3 | An assistant: Chris assigns a Task to Claude, LifeOS wakes it, and it does the job on its own. A prototype on a desktop repo and a web repo comes first (§6) | Claude works his life and code jobs without him opening a chat, and asks in the Task when it needs him |
 
-Each phase deploys on its own. Phase 0 doesn't depend on anything else in this doc.
+Each phase deploys on its own. Phase 0 doesn't depend on anything else in this doc. Phase 3's
+prototype (step 3.1) runs on Phase 1; the rest of Phase 3 needs Phase 2.
 
 ## 0. Read these first
 
@@ -40,11 +42,11 @@ Each phase deploys on its own. Phase 0 doesn't depend on anything else in this d
   is settled in §2).
 - `ApiHost`, `AuthServiceCollectionExtensions`, `AllowlistedUserHandler` and `SpaFallback`
   in `src/LifeOs.Api`.
-- §9: the outside facts this plan relies on, with sources.
+- §10: the outside facts this plan relies on, with sources.
 
 No requirement entries exist for this work yet. Proposed IDs: **OPS-1** (backups),
-**AGENT-1** (agents read LifeOS), **AGENT-2** (agents write to LifeOS). Chris writes their
-Workflow sections; this plan is the how.
+**AGENT-1** (agents read LifeOS), **AGENT-2** (agents write to LifeOS), **AGENT-3** (Claude
+works the jobs Chris assigns it). Chris writes their Workflow sections; this plan is the how.
 
 ## 1. Where the data is today
 
@@ -74,7 +76,7 @@ These don't need backing up:
 The migrations create no extensions, so a dump restores into any Postgres of the same major
 version.
 
-Until Phase 0, nothing backed this up: Supabase's free plan takes no backups (§9).
+Until Phase 0, nothing backed this up: Supabase's free plan takes no backups (§10).
 
 ## 2. Decisions (Chris)
 
@@ -129,7 +131,7 @@ OneDrive in sync. That drops B2, its keys and the GitHub Environment secrets. Wh
 up:
 - **Object Lock.** OneDrive can't make a file undeletable. A deleted backup sits in the
   recycle bin for 30 days, and Microsoft 365's Restore your OneDrive rolls everything back
-  up to 30 days (§9).
+  up to 30 days (§10).
 - **Running whatever the PC is doing.** A night the PC is off or asleep is caught up when
   it's back.
 
@@ -384,7 +386,7 @@ Edge Functions, for three reasons:
 - Edge Functions are TypeScript on Deno. The readers would have to be rewritten there,
   and the Application layer would be bypassed.
 - Supabase's guide to MCP servers on Edge Functions doesn't support authentication yet:
-  such a server is public (§9).
+  such a server is public (§10).
 - In the API, the server reuses the readers, the JWT validation and the deploy pipeline.
   It moves with the API, to DigitalOcean or anywhere else.
 
@@ -1028,7 +1030,158 @@ Tests show:
 On staging: Chris captures to his Inbox by voice through Claude on his phone (CAP-3's first
 step) and triages it in LifeOS.
 
-## 6. Risks
+## 6. Phase 3: an assistant that works on its own
+
+**Asked by Chris on 2026-10-28 and 2026-10-29.** Once agents can write, he wants Claude to
+act as his assistant without him opening a chat. Ideally LifeOS tells Claude when something
+changes and Claude decides whether to act; at the least, Claude checks often. The jobs range
+from adding a task or commenting on an item to code fixes. On 2026-10-29 he gave it a shape:
+he **assigns** a LifeOS Task to Claude, and Claude does it on its own, including fixes from
+his `#lifeos` fix queue, with no separate Claude Code prompt.
+
+Phase 3 starts with a **prototype on two repos** (step 3.1 in §6.6): a desktop one,
+BlueSkies.Platform, and a web one, LifeOS. It proves the loop works before LifeOS builds
+anything for it. The rest needs Phase 2's writes.
+
+### 6.1 What can wake Claude (checked 2026-10-28)
+
+Nothing from outside can start a turn in a claude.ai chat. MCP's own change notices
+(`list_changed`, resource subscriptions) don't start one either: clients use them only to
+refresh a session that's already open. So something has to run Claude:
+
+| Runner | What starts it | How soon | Needs Chris's PC | Billing | Good for |
+|---|---|---|---|---|---|
+| **Cloud routine, fired** | LifeOS (or anyone holding its token) POSTs to the routine's own URL | A cloud run has to start up, so minutes rather than seconds (3.1 measures it) | No | Chris's subscription. At most 30 fires an hour per routine and 100 an hour per account | Life jobs, and code jobs in repos that build on Linux |
+| **Cloud routine, on a schedule** | Its schedule, at most once an hour | Up to the interval | No | Subscription | A backstop for a fire that went missing |
+| **Desktop app scheduled task** | Its cron, set through chat, as often as every minute | Up to the interval | Yes, with the Claude app open | Subscription | Code jobs that need the PC. The daily report already runs this way (`lifeos-daily-report`) |
+| `claude -p` from Task Scheduler | Windows Task Scheduler | Up to the interval | Yes | Subscription, unless `ANTHROPIC_API_KEY` is set, which silently bills the API instead | A fallback for the desktop task. claude.ai connectors may not load |
+| Channels | Events pushed into an interactive Claude Code session that's kept open | Seconds | Yes, with a session kept open | Subscription | Not chosen: a research preview that needs a development flag |
+| Managed Agents (API) | LifeOS sends events to an agent session that keeps running | Seconds | No | The API, separate from the subscription, plus $0.08 for each hour a session runs | Later, if minutes turn out too slow |
+
+About routines, which are a research preview:
+- A routine's API trigger is a URL and a bearer token of its own. A fire can carry up to
+  65,536 characters of `text`. The run treats it as untrusted, so the routine's prompt says
+  what to do with it.
+- A fire has no idempotency key, so a retried fire starts a second run.
+- Chris's claude.ai connectors, LifeOS included, attach to a routine by default. Servers added
+  with `claude mcp add` don't.
+- A routine can have GitHub repos attached, which each run clones.
+- The docs don't settle three things, which 3.1 does: whether the connector's sign-in renews
+  during a run nobody is watching, whether a routine can be fired with no repo attached, and
+  which branches a run may push to.
+
+### 6.2 Handing Claude a job
+
+**A job is a Task assigned to Claude.** The kernel already has the role: a People-association
+(`attributes.people`, `bsk involve`) with the role `assignee`, and each of Claude's clients
+acts as an AI-agent Person (§4.5). The web has `writes.involve(subject, person, role)`, but
+only Commitments use it today, so Tasks need an **Assign to** control (step 3.2).
+
+- **Only Chris's own words make a job.** The job is the assigned Task's title, its
+  description and the journal entries Chris wrote on it. The assignment counts only if Chris
+  made it himself, not through `mcp:*`. Everything else stays data, as the server
+  instructions say today: captured pages and links, other items, and anything an agent
+  wrote. The instructions gain this one exception, worded that narrowly.
+- **The Task's tags say what kind of job it is:**
+  - A repo tag makes it a **code job**, worked in that repo by the runner the repo needs
+    (§6.4): `lifeos` is `csdelan/LifeOS`, and `blueskies` is `csdelan/BlueSkies.Platform`.
+  - Without one, it's a **life job**, done through `/mcp` alone: add Tasks under a Project,
+    write a journal entry, set a status.
+  - The map from tag to repo lives in the runner's prompt for the prototype, and in a
+    setting after that.
+- **The Task's status carries the conversation:**
+
+  | Status | Means |
+  |---|---|
+  | Not started | Assigned, waiting for Claude |
+  | In progress | Claude has picked it up. Each runner works one job at a time |
+  | Waiting | Claude needs Chris: a question, or a change ready for him to approve. The journal says which |
+  | Completed | Done. Claude's last journal entry says what changed, with its commits, pull request and deploy |
+  | Cancelled | Chris changed his mind |
+
+  When Chris answers in the journal of a Waiting Task, the job goes back to Claude. Chris
+  closes a code job once he's checked it, unless decision 3 (§6.5) lets Claude close it.
+
+### 6.3 What LifeOS adds
+
+1. **The queue,** a read tool (name to settle, for example `my_jobs`). It lists Tasks
+   assigned to the calling agent's Person that are Not started, or Waiting with a journal
+   entry from Chris newer than the agent's last. They come oldest first, each in full detail.
+   - It leaves out the agent's own writes, so Claude never reacts to itself.
+   - It needs no bookmark: every run starts with no memory, and the Task's status and journal
+     already hold where the job stands.
+2. **Writes scoped to the job.** These are Phase 2's tools, narrowed: an assistant may set the
+   status of, and write journal entries on, only Tasks assigned to it. It may create Tasks
+   only under those, or under the Project they serve. An unattended run has nobody to click
+   Allow, so the client's ask-first (§5.4) can't be the safety. The server has to be.
+3. **The fire.** When Chris assigns a Task to an agent, or answers in the journal of one
+   that's Waiting, LifeOS fires that agent's routine:
+   - The body names only the Task ids that changed, never their text. Claude reads them
+     through `/mcp` with its own sign-in.
+   - Fires for one agent are held for a minute and sent as one, so a burst of edits starts
+     one run.
+   - A fire that fails is logged and left to the backstop schedule. LifeOS doesn't retry,
+     since a retry could start a second run.
+   - The fire URL and token are Fly secrets for each agent, for example
+     `Assistant__Agents__<person>__FireUrl` and `__FireToken`. The fire log goes in `bsk_ops`
+     beside `agent_call`.
+
+   This changes §9's "LifeOS itself never pushes". It pushes a wake-up, and nothing of
+   Chris's life.
+4. **The web:**
+   - **Assign to** on a Task's detail panel, with AI agents in the same selector as people
+     (GEN-15);
+   - on the Tasks page, what Claude is doing: working, asking Chris, or waiting for his
+     approval.
+
+### 6.4 The runners
+
+- **Cloud: a routine for each assistant,** for example `lifeos-assistant`. It has the LifeOS
+  connector and the repos of cloud code jobs attached. LifeOS fires it, and a schedule backs
+  that up (the interval is set after 3.1). Its prompt:
+  - read the queue and take the oldest job;
+  - mark it In progress and do it;
+  - write what happened in the journal, then set Waiting or Completed;
+  - when the job is unclear, ask in the journal rather than guess.
+- **PC: a desktop app scheduled task,** for repos that need the PC. BlueSkies.Platform does:
+  it has Windows-only projects (`net10.0-windows`), and it publishes to `\\bart\MyNuget` and
+  `\\bart\BuildShare`. Fly can't reach the PC, so this runner checks the queue on a timer,
+  every 15 or 30 minutes. Each check costs some usage even when the queue is empty, which 3.1
+  measures. It works in a git worktree of its own, never in Chris's checkout, since his own
+  sessions commit there.
+- **Code jobs follow each repo's own rules:** its AGENTS.md or CLAUDE.md, and its test
+  script. Approval before anything deploys or publishes is decision 3 (§6.5):
+  - in LifeOS, a push to `main` deploys staging, which holds Chris's real data;
+  - in BlueSkies.Platform, publishing a package follows the `nuget-publish` skill's rules on
+    when to ask.
+
+### 6.5 Decisions (Chris)
+
+1. **How Chris hands Claude a job.** Leaning: assign a Task (2026-10-29). The alternatives
+   are an "@claude" line in any item's journal, or Claude watching every change and deciding
+   for itself. Watching everything is noisier, costs more and is riskier.
+2. **How soon.** Recommended: within minutes, through the fire, for cloud jobs. The other
+   choices are within the hour (the schedule alone, with no fire to build) or by morning
+   (folded into the daily report).
+3. **What Claude may do without asking.** Recommended:
+   - Life jobs: add Tasks and journal entries, and set the status of its own Task. Completing
+     or cancelling anything else waits for Chris.
+   - Code jobs: push a branch, open a pull request, set the Task Waiting, and let Chris merge,
+     which deploys. The alternative is pushing small changes straight to `main`, as agents
+     working with Chris do today. Publishing a package stays with Chris.
+4. **Which repos.** The prototype uses LifeOS and BlueSkies.Platform. Others join one at a
+   time.
+
+### 6.6 Build order
+
+| Step | What | Done when |
+|---|---|---|
+| 3.1 | **Prototype on two repos.** No LifeOS code, so it runs on Phase 1. Chris makes two small real Tasks. Until Assign to exists, the tag `claude` stands for the assignment. One is tagged `lifeos` (web: a fix from his queue). The other is tagged `blueskies` (desktop: a small change in BlueSkies.Platform, for example from its `FOLLOWUP-ISSUES.md`). The LifeOS job runs in a cloud routine with `csdelan/LifeOS` attached, fired by hand at the URL and token the routine shows, the way LifeOS will fire it. The BlueSkies job runs from a desktop app scheduled task on the PC. It's also tried once in the cloud routine, to see how far Linux gets. Until Phase 2, Claude reports in the pull request and by email, as the daily report does, and Chris moves the statuses | Both jobs went from tagged to a result without Chris opening a chat, and one question was asked and answered along the way. This section records what was found: whether the connector stayed signed in unattended; whether a routine fires by URL; how long a job takes from fire to result; the usage of an empty check and of a real job; whether the cloud can build and test each repo (LifeOS's database tests need Docker, and BlueSkies has Windows-only projects and the `\\bart` shares); and which branches a cloud run may push to |
+| 3.2 | Assign to in the web, the queue tool, and writes scoped to the job | Tests: the queue lists only Chris's assignments, oldest first, without the agent's own writes. A write outside the agent's Tasks is refused. Assign to sets and clears the assignee |
+| 3.3 | The fire from LifeOS | Tests against a stand-in endpoint: an assignment fires once; a burst fires once; an answer on a Waiting Task fires; the body has ids only; a failed fire is logged and not retried. On staging, an assignment shows up as a run of the routine |
+| 3.4 | The runners for real: the routine with its backstop, and the PC task | Chris assigns real jobs of both kinds for a week. From what he saw, he settles the backstop interval and decision 3 |
+
+## 7. Risks
 
 - **Prompt injection and leaks.** An agent that can read LifeOS and also send email or
   browse the web could be tricked by a page or a message into sending Chris's data
@@ -1058,22 +1211,37 @@ step) and triages it in LifeOS.
 - **Deleted backups.** Unlike B2's Object Lock, nothing stops malware on the PC from deleting
   or encrypting the OneDrive folder. OneDrive's recycle bin and Restore your OneDrive reach
   back 30 days.
+- **An assistant that works alone** (Phase 3). It writes, and pushes code, with nobody
+  watching. Mitigations:
+  - only Chris's own assignments are jobs, and other text stays data;
+  - writes are scoped to its own Tasks;
+  - code goes through a pull request unless decision 3 (§6.5) says otherwise;
+  - one job at a time per runner, each in a worktree of its own;
+  - the access log, the fire log, and the routine's own runs at claude.ai show what it did.
+- **Fire tokens.** Whoever holds a routine's token can start a run. That run still works only
+  Chris's queue, and treats the fire's body as untrusted. The tokens are Fly secrets, and
+  making a new token in the routine replaces a leaked one.
+- **Research previews.** Routines and their limits may change. The PC task is the fallback,
+  and Managed Agents would replace both if they go away.
 
-## 7. Cost
+## 8. Cost
 
 - **Phase 0:** nothing. It uses OneDrive space Chris already has and runs on his PC.
 - **Phases 1 and 2:** no Supabase plan change. The OAuth server is free during its beta,
   and Chris counts as one monthly active user. Fly is unchanged, unless an always-on
   machine is wanted (a few dollars a month).
+- **Phase 3:** no new hosting. Runs use Chris's Claude subscription. A fired routine runs only
+  when there's a job, but a PC task that checks every 15 minutes is 96 runs a day even when
+  idle; 3.1 measures what that costs. Managed Agents, if ever used, bill the API on top.
 - **Supabase Pro ($25 a month)** isn't needed for anything here. It would add Supabase's
   own daily backups (7 days) as a second layer and stop free-plan pausing. Worth weighing
   when production is set up.
 
-## 8. Later (not planned here)
+## 9. Later (not planned here)
 
-- **Proactive coaching.** A scheduled agent, such as a daily Claude routine, calls
-  `life_snapshot` and `diagnostics` each morning and sends Chris a brief. LifeOS itself
-  never pushes.
+- **Proactive coaching.** Under way outside this plan: since 2026-10-28 a desktop app
+  scheduled task reads `/mcp` at 4 AM and emails Chris a daily report. Beyond Phase 3's
+  wake-ups (§6.3), LifeOS itself never pushes.
 - **More agent features:**
   - prompts for the reviews (REVIEW-1, REVIEW-2);
   - voice capture through an agent (CAP-3);
@@ -1082,7 +1250,7 @@ step) and triages it in LifeOS.
 - **A move to DigitalOcean.** The MCP server moves with the API, and the backups don't
   care where the API runs. Supabase stays the sign-in unless Auth moves too.
 
-## 9. Sources (checked 2026-10-27)
+## 10. Sources (checked 2026-10-27)
 
 - Supabase OAuth 2.1 Server, [overview](https://supabase.com/docs/guides/auth/oauth-server)
   and [getting started](https://supabase.com/docs/guides/auth/oauth-server/getting-started):
@@ -1110,3 +1278,25 @@ step) and triages it in LifeOS.
   server, and the API may not be used to give data or prompts to an AI model; §5(f),
   deletion within 72 hours of a request; no exception for personal use. Oura's developer
   portal doesn't publish its MCP server yet.
+- Claude (checked 2026-10-28, for Phase 3):
+  - [Routines](https://code.claude.com/docs/en/routines.md) and
+    [firing a routine](https://platform.claude.com/docs/en/api/claude-code/routines-fire): a
+    research preview; schedule (at most hourly), API and GitHub triggers; an API fire is a
+    POST with the routine's own bearer token and an optional `text` of up to 65,536
+    characters, treated as untrusted, with no idempotency key; claude.ai connectors attach by
+    default; subscription usage, with 30 fires an hour per routine and 100 API fires and 100
+    scheduled runs an hour per account.
+  - [Desktop scheduled tasks](https://code.claude.com/docs/en/desktop-scheduled-tasks.md): run
+    only while the app is open and the PC awake; a missed run catches up once; connectors
+    work, and a tool that needs a click stalls.
+  - [Channels](https://code.claude.com/docs/en/channels-reference.md): a research preview;
+    events reach only an interactive session started with a development flag.
+  - [Headless mode](https://code.claude.com/docs/en/headless.md) and
+    [authentication](https://code.claude.com/docs/en/authentication.md): `claude -p` uses the
+    subscription sign-in, but an `ANTHROPIC_API_KEY` in its environment always wins and bills
+    the API.
+  - [Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview): beta,
+    API-billed, $0.08 for each hour a session runs; remote MCP servers sign in through stored
+    credentials, not claude.ai connectors.
+  - [MCP in Claude Code](https://code.claude.com/docs/en/mcp.md): `list_changed` only
+    refreshes the tool list; nothing documents a change notice starting a turn.
