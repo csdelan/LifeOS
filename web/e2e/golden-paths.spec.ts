@@ -1061,17 +1061,24 @@ test.describe("golden paths", () => {
     await add.getByRole("button", { name: "Add space" }).click();
     await expect(add.getByRole("alert")).toHaveText("You already have a space called 'Office'.");
     await add.getByLabel("Name").fill("Attic");
-    await add.getByLabel("Weight").fill("2");
+    // With spaces already there, what weight and pace mean is in ⓘ tips, not words.
+    await expect(add.getByRole("button", { name: "About weight" })).toBeVisible();
+    await add.getByLabel("Weight", { exact: true }).fill("2");
     await add.getByRole("group", { name: "Pace" }).getByRole("button", { name: "1", exact: true }).click();
     await add.getByRole("button", { name: "Add space" }).click();
     await expect(editor.getByTestId("space-row")).toHaveCount(10);
-    await expect(editor.getByTestId("space-row").filter({ hasText: "Attic" })).toContainText("weight 2 · pace 1");
+    // One line per space: weight, pace and share in their own columns.
+    const attic = editor.getByTestId("space-row").filter({ hasText: "Attic" });
+    await expect(attic.getByTestId("space-weight")).toHaveText("2");
+    await expect(attic.getByTestId("space-pace")).toHaveText("1");
+    await expect(attic.getByTestId("space-share")).toHaveText(/%$/);
 
     await editor.getByRole("button", { name: "Change Attic" }).click();
     // The row's form comes before Add a space's.
-    await editor.getByLabel("Weight").first().fill("4");
+    await editor.getByLabel("Weight", { exact: true }).first().fill("4");
     await editor.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(editor.getByTestId("space-row").filter({ hasText: "Attic" })).toContainText("weight 4 · pace 1");
+    await expect(attic.getByTestId("space-weight")).toHaveText("4");
+    await expect(attic.getByTestId("space-pace")).toHaveText("1");
 
     // Not rated yet: its card says so, and it doesn't count.
     await expect(page.getByRole("article", { name: "Attic" })).toContainText("not rated yet");

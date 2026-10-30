@@ -3899,6 +3899,18 @@ Horizon:    Pilot
 Definition: active
 Build:      built
 
+**Update (2026-10-29 — Manage spaces is a table):** Chris's LifeOS task "Environment Page
+cleanup": "Manage spaces section should be more concise… Each space probably only needs to
+be 1 line… Instructions are not needed. They are fine for the first view, but from
+thereinafter they are no longer needed. Consider tooltips… What about a table or grid?"
+Manage spaces is now a table, one line per space: Space | Weight | Pace | % of score, then
+small icon buttons (Shots, Change, Archive) named in tooltips. It sits full width below the
+score, the space cards and the chart, since the left column was too narrow for it. What
+weight and pace mean is said in words only while there are no spaces; after that it's an ⓘ
+tip on the Weight and Pace headers and fields (the weight help is still read with the field
+by a screen reader). Change turns the row into the one-line form. On a phone, Weight and
+Pace sit under the name.
+
 **Workflow (Chris):**
 - "I may look at 1 area of my home (kitchen), and rate it's environment based on 3
   factors… I can do this for each area of my house to come up with an aggregate environment

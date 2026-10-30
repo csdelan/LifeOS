@@ -35,7 +35,8 @@ function barLine(read: DomainDaysRead | undefined): LevelBarLine | undefined {
  * - A card for each space: its score, a bar for each part (faded, with the rated value as a
  *   ghost), when it was last rated, and Rate, a quick check of that space alone.
  * - Walk-through opens a sheet with every space; one Save writes them all.
- * - The Home Score by day, with exception days hatched, and the spaces editor.
+ * - The Home Score by day, with exception days hatched.
+ * - The spaces editor, full width below: a table, one line per space.
  *
  * Environment's level is held by the home (E3), so the bar a day must reach to keep the level
  * on track is said beside the score and drawn as a dashed step line on the chart.
@@ -92,24 +93,26 @@ export function EnvironmentPage() {
         ) : null}
 
         {data && hasSpaces ? (
-          // On a desktop the score and the editor share the left column; on a phone the editor
-          // comes last, after the spaces and the chart.
-          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:grid-rows-[auto_1fr]">
-            <HomeScoreCard home={data} bar={bar} onRate={rate} />
-            <div className="min-w-0 space-y-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
-              <section aria-labelledby="spaces-title">
-                <h2 id="spaces-title" className="type-scale-section mb-3 text-muted-foreground">
-                  Spaces
-                </h2>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {data.spaces.map((space) => (
-                    <SpaceCard key={space.id} space={space} today={data.today} onRate={() => rate(space.id)} />
-                  ))}
-                </div>
-              </section>
-              <HomeScoreChart levelBar={line} />
+          // The score beside the spaces and the chart; the spaces editor below them both, full
+          // width so each space fits on one line of its table. On a phone it comes last.
+          <div className="space-y-4">
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+              <HomeScoreCard home={data} bar={bar} onRate={rate} />
+              <div className="min-w-0 space-y-4">
+                <section aria-labelledby="spaces-title">
+                  <h2 id="spaces-title" className="type-scale-section mb-3 text-muted-foreground">
+                    Spaces
+                  </h2>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {data.spaces.map((space) => (
+                      <SpaceCard key={space.id} space={space} today={data.today} onRate={() => rate(space.id)} />
+                    ))}
+                  </div>
+                </section>
+                <HomeScoreChart levelBar={line} />
+              </div>
             </div>
-            <div className="lg:col-start-1 lg:row-start-2">
+            <div className="max-w-4xl">
               <SpacesEditor />
             </div>
           </div>

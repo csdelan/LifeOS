@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { addDays, todayIso } from "@/lib/dates";
 import { getState, resetStore } from "@/lib/mock/store";
+import { clearMockEnvironment } from "@/lib/mock/environment-store";
 import { EnvironmentPage } from "@/pages/environment-page";
 
 vi.mock("sonner", () => ({
@@ -191,5 +192,61 @@ describe("Environment page: sorting photos into shots (HOME-4)", () => {
     expect(within(kitchen).getByTestId("then-and-now")).toHaveTextContent(/2 photos$/);
     await user.click(within(shots).getByRole("button", { name: "Counters" }));
     expect(within(kitchen).getByTestId("then-and-now")).toHaveTextContent(/2 photos$/);
+  });
+});
+
+describe("Environment page: Manage spaces (HOME-1, Chris's \"Environment Page cleanup\")", () => {
+  it("is a table, one line per space, with weight, pace and share in columns and small buttons", async () => {
+    renderPage();
+    const table = await screen.findByRole("table", { name: "Spaces in the Home Score" });
+    const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent?.trim());
+    expect(headers).toEqual(["Space", "Weight", "Pace", "% of score", "Actions"]);
+    const rows = within(table).getAllByTestId("space-row");
+    expect(rows).toHaveLength(9);
+
+    const bedroom = within(table).getByRole("rowheader", { name: /^Bedroom/ }).closest("tr")!;
+    expect(within(bedroom).getByTestId("space-weight")).toHaveTextContent("2");
+    expect(within(bedroom).getByTestId("space-pace")).toHaveTextContent("1");
+    expect(within(bedroom).getByTestId("space-share")).toHaveTextContent(/^\d+(\.\d)?%$/);
+    for (const name of ["Shots of Bedroom", "Change Bedroom", "Archive Bedroom"]) {
+      expect(within(bedroom).getByRole("button", { name })).toBeInTheDocument();
+    }
+  });
+
+  it("says what weight and pace mean in tips once there are spaces, not in words", async () => {
+    renderPage();
+    const editor = await screen.findByRole("region", { name: "Manage spaces" });
+    await within(editor).findByRole("table");
+    expect(within(editor).queryByText(/its pace, how fast it gets messy/)).not.toBeInTheDocument();
+    expect(within(editor).queryByText(/^Pace: how fast/)).not.toBeInTheDocument();
+    // The weight help is still read with the field, out of sight.
+    const weight = within(editor).getByLabelText("Weight", { selector: "input" });
+    expect(weight).toHaveAccessibleDescription(/how much the space counts/);
+    expect(within(editor).getAllByRole("button", { name: "About weight" }).length).toBeGreaterThan(0);
+
+    await userEvent.hover(within(editor).getAllByRole("button", { name: "About pace" })[0]);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/how fast Tidiness and Cleanliness fade/);
+  });
+
+  it("says what weight and pace mean in words on the first view, before any space", async () => {
+    clearMockEnvironment();
+    renderPage();
+    const editor = await screen.findByRole("region", { name: "Manage spaces" });
+    expect(await within(editor).findByText(/^Weight 1–10: how much the space counts/)).toBeVisible();
+    expect(within(editor).getByText(/^Pace: how fast Tidiness and Cleanliness fade/)).toBeVisible();
+    expect(within(editor).queryByRole("button", { name: "About weight" })).not.toBeInTheDocument();
+    expect(within(editor).queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("changes a space in place: its row becomes the form, and Save puts the line back", async () => {
+    renderPage();
+    const table = await screen.findByRole("table", { name: "Spaces in the Home Score" });
+    await userEvent.click(within(table).getByRole("button", { name: "Change Garage" }));
+    const weight = within(table).getByLabelText("Weight", { selector: "input" });
+    await userEvent.clear(weight);
+    await userEvent.type(weight, "3");
+    await userEvent.click(within(table).getByRole("button", { name: "Save" }));
+    const garage = (await within(table).findByRole("rowheader", { name: /^Garage/ })).closest("tr")!;
+    expect(within(garage).getByTestId("space-weight")).toHaveTextContent("3");
   });
 });
