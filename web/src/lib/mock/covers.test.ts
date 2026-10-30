@@ -73,7 +73,7 @@ describe("the mock's covers", () => {
 
   it("refuses in the server's words", () => {
     expect(() => mockSetCover({ subject: "task-longrun", photoId: "mock-meadow" })).toThrow(
-      /is a Task; only identity statements \(Value\), goals and projects have covers\./,
+      /is a Task; only identity statements \(Value\), goals, projects and habits have covers\./,
     );
     expect(() => mockSetCover({ subject: "goal-half", photoId: "nope" })).toThrow("That photo is no longer on Unsplash.");
     expect(() => mockSetCover({ subject: "goal-half", photoId: "mock-meadow", positionY: 101 })).toThrow(
