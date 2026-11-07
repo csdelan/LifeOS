@@ -1,0 +1,44 @@
+using LifeOs.Application.Abstractions;
+using LifeOs.Application.Measurements;
+using LifeOs.Domain;
+using LifeOs.Infrastructure.Persistence;
+
+namespace LifeOs.Api.Read;
+
+/// <summary>
+/// The measurements' reads (MEASURE-1, MEASURE-2, measurements plan §4.6) on the <c>bsk_reader</c>
+/// connection, like every other API read: the metrics and readings through <c>bsk.v_metric</c> and
+/// <c>bsk.v_metric_reading</c>, with the trend and goal from <see cref="MetricReads"/>, on the days
+/// of <paramref name="homeTimeZone"/>. No writes live here; they go through
+/// <see cref="MetricService"/> and <see cref="MetricReadingService"/>.
+/// </summary>
+public sealed class MeasurementReader(string readerConnectionString, IClock clock, string homeTimeZone = HomeZone.Default)
+{
+    private readonly NpgsqlMetricRepository metrics = new(readerConnectionString);
+    private readonly MetricReads reads = new(
+        new NpgsqlMetricRepository(readerConnectionString), new NpgsqlHomeCalendar(readerConnectionString, homeTimeZone), clock);
+
+    /// <summary>Every metric, archived ones included, by name (<c>GET /api/measurements/metrics</c>).</summary>
+    public async Task<IReadOnlyList<MetricRow>> GetMetricsAsync(CancellationToken cancellationToken = default)
+        => (await reads.ListAsync(includeArchived: true, cancellationToken)).Select(MeasurementRows.From).ToList();
+
+    /// <summary>One metric as a row, with its count and newest reading.</summary>
+    public async Task<MetricRow> GetMetricAsync(Guid id, CancellationToken cancellationToken = default)
+        => (await GetMetricsAsync(cancellationToken)).First(m => m.Id == id);
+
+    /// <summary>
+    /// A metric (by id or name) over the last <paramref name="days"/> days, or all its history
+    /// (<c>GET /api/measurements/metrics/{id}</c>).
+    /// </summary>
+    public async Task<MetricDetailRead> GetDetailAsync(
+        string metric, int? days, CancellationToken cancellationToken = default)
+    {
+        var read = await reads.ReadAsync(metric, days, cancellationToken);
+        var all = await metrics.GetReadingsAsync(read.Metric.Id, cancellationToken: cancellationToken);
+        return MeasurementRows.Detail(read, all.Count, all.Count == 0 ? null : all[^1]);
+    }
+
+    /// <summary>A reading as a row, or null when it's gone (deleted).</summary>
+    public async Task<MetricReadingRow?> GetReadingAsync(Guid id, CancellationToken cancellationToken = default)
+        => await metrics.GetReadingAsync(id, cancellationToken) is { } reading ? MeasurementRows.Reading(reading) : null;
+}

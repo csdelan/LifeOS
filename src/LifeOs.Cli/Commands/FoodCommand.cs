@@ -550,7 +550,19 @@ internal static class FoodCommand
     /// <c>yesterday 20:00</c>, a home-zone date and time, or an instant with an offset; null when
     /// none is given.
     /// </summary>
-    internal static async Task<DateTimeOffset?> ParseAtAsync(string? text, FoodLogService food, CancellationToken cancellationToken)
+    internal static Task<DateTimeOffset?> ParseAtAsync(string? text, FoodLogService food, CancellationToken cancellationToken)
+        => ParseAtAsync(text, food.InstantAtAsync, food.TodayAsync, cancellationToken);
+
+    /// <summary>
+    /// A time as <see cref="ParseAtAsync(string?, FoodLogService, CancellationToken)"/> reads it,
+    /// for any command: <paramref name="instantAt"/> turns a home-zone wall-clock time into an
+    /// instant and <paramref name="todayAt"/> gives today in the home zone.
+    /// </summary>
+    internal static async Task<DateTimeOffset?> ParseAtAsync(
+        string? text,
+        Func<DateTime, CancellationToken, Task<DateTimeOffset>> instantAt,
+        Func<CancellationToken, Task<DateOnly>> todayAt,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -567,7 +579,7 @@ internal static class FoodCommand
 
         if (DateTime.TryParseExact(value, LocalFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var local))
         {
-            return await food.InstantAtAsync(local, cancellationToken);
+            return await instantAt(local, cancellationToken);
         }
 
         var yesterday = value.StartsWith("yesterday ", StringComparison.OrdinalIgnoreCase);
@@ -577,11 +589,11 @@ internal static class FoodCommand
             throw BadTime(text);
         }
 
-        var today = await food.TodayAsync(cancellationToken);
-        var at = await food.InstantAtAsync((yesterday ? today.AddDays(-1) : today).ToDateTime(clock), cancellationToken);
+        var today = await todayAt(cancellationToken);
+        var at = await instantAt((yesterday ? today.AddDays(-1) : today).ToDateTime(clock), cancellationToken);
         if (!yesterday && at > DateTimeOffset.UtcNow.AddMinutes(1))
         {
-            at = await food.InstantAtAsync(today.AddDays(-1).ToDateTime(clock), cancellationToken);
+            at = await instantAt(today.AddDays(-1).ToDateTime(clock), cancellationToken);
         }
 
         return at;

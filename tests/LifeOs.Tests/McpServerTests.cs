@@ -167,9 +167,13 @@ public sealed class McpServerTests(PostgresFixture postgres)
         Assert.Equal(new[] { "home", "rewards" }, options.Excluded.Order());
         Assert.False(options.AllowsType(SubjectTypes.Space));
         Assert.True(options.AllowsType(SubjectTypes.Goal));
+        // A Metric (MEASURE-6) comes under the health area, as Oura's data does.
+        Assert.True(options.AllowsType(SubjectTypes.Metric));
         Assert.True(options.IsBlocked("b"));
         Assert.False(options.IsBlocked("c"));
-        Assert.Empty(McpOptions.From(Config((McpOptions.DomainsKey, "none"))).Domains);
+        var none = McpOptions.From(Config((McpOptions.DomainsKey, "none")));
+        Assert.Empty(none.Domains);
+        Assert.False(none.AllowsType(SubjectTypes.Metric));
     }
 
     [Theory]

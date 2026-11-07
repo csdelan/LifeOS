@@ -11,12 +11,12 @@ namespace LifeOs.Application.Subjects;
 /// an append-only event, and <c>bsk.is_archived</c> folds the newest one per
 /// subject. Nothing is ever deleted — archive merely hides a subject from default
 /// views, and restore reverses it, with both recorded in history. A space's name is unique among
-/// the spaces not archived (HOME-1), so restoring one is refused while another uses its name,
-/// whichever route restores it.
+/// the spaces not archived (HOME-1), and a metric's among the metrics (MEASURE-1), so restoring
+/// one is refused while another uses its name, whichever route restores it.
 /// </summary>
 public sealed class ArchiveService(
     SubjectService subjects, IEventStore events, IClock clock, string sourceId, TaskSeriesService? taskSeries = null,
-    ISpaceRepository? spaces = null)
+    ISpaceRepository? spaces = null, IMetricRepository? metrics = null)
 {
     /// <summary>Archives the subject — hides it from default views, reversibly.</summary>
     public Task<ArchiveResult> ArchiveAsync(
@@ -44,6 +44,11 @@ public sealed class ArchiveService(
         if (!archived && subject.Type == SubjectTypes.Space)
         {
             await CheckSpaceNameFreeAsync(subject.Id, cancellationToken);
+        }
+
+        if (!archived && subject.Type == SubjectTypes.Metric)
+        {
+            await CheckMetricNameFreeAsync(subject.Id, cancellationToken);
         }
 
         var payload = JsonSerializer.Serialize(new { subject_id = subject.Id.ToString(), archived });
@@ -87,6 +92,28 @@ public sealed class ArchiveService(
         {
             throw new InvalidOperationException(
                 $"You already have a space called '{space.Name}': rename one of them first.");
+        }
+    }
+
+    private async Task CheckMetricNameFreeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (metrics is null)
+        {
+            return;
+        }
+
+        var all = await metrics.GetMetricsAsync(cancellationToken);
+        var metric = all.FirstOrDefault(m => m.Id == id);
+        if (metric is not { Archived: true })
+        {
+            return;
+        }
+
+        if (all.Any(m => !m.Archived && m.Id != id
+                         && string.Equals(m.Name.Trim(), metric.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"You already have a metric called '{metric.Name}': rename one of them first.");
         }
     }
 }

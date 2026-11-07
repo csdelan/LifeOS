@@ -66,6 +66,7 @@ public sealed class McpGuide
         | Season | A bounded period that sets the context | none |
         | Reward | Something he can spend earned coins on | none |
         | Space | A room in his home, rated for the Home Score | none |
+        | Metric | Something he measures (Weight, Waist, HbA1c), with a unit and a goal; its readings are measurement events. Shown only with the health area | none |
 
         An item with no status reads as its type's first status. Archived items are hidden
         unless a tool is asked to include them.

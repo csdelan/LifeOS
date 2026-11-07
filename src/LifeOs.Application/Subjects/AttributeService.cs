@@ -109,6 +109,16 @@ public sealed class AttributeService(
                     nameof(assignments));
             }
 
+            // A metric's unit, decimals, target, direction and starter-list key are checked values
+            // the trend and goal read (MEASURE-1), with one writer.
+            if (subject.Type == SubjectTypes.Metric
+                && MetricLimits.Keys.Any(k => string.Equals(key, k, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new ArgumentException(
+                    "A metric's unit, decimals, target and which way is better are set with `bsk metric set`, not `bsk set`.",
+                    nameof(assignments));
+            }
+
             if (string.IsNullOrWhiteSpace(assignment.Value))
             {
                 removed.Add(key);

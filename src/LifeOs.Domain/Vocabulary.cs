@@ -89,6 +89,13 @@ public static class SubjectTypes
     /// migration 0044).
     /// </summary>
     public const string Space = "Space";
+
+    /// <summary>
+    /// Something measured about Chris (Weight, Waist, HbA1c), with a unit, a goal and which way
+    /// is better; its readings are versioned <c>measurement</c> events. Status-less; archive it
+    /// to retire it (MEASURE-1, D20, migration 0050).
+    /// </summary>
+    public const string Metric = "Metric";
 }
 
 /// <summary>

@@ -5,6 +5,7 @@ using LifeOs.Application.Capture;
 using LifeOs.Application.Covers;
 using LifeOs.Application.Food;
 using LifeOs.Application.Home;
+using LifeOs.Application.Measurements;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
@@ -91,6 +92,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IHomeCalendar>(_ => new NpgsqlHomeCalendar(connectionString, homeZone));
         services.AddSingleton<IFoodLogRepository>(_ => new NpgsqlFoodLogRepository(connectionString));
         services.AddSingleton<ISpaceRepository>(_ => new NpgsqlSpaceRepository(connectionString));
+        services.AddSingleton<IMetricRepository>(_ => new NpgsqlMetricRepository(connectionString));
         services.AddSingleton<IIntegrationRepository>(_ =>
             new NpgsqlIntegrationRepository(connectionString, integrations?.TokenCipher));
         services.AddSingleton<IActivityRepository>(_ => new NpgsqlActivityRepository(connectionString));
@@ -172,7 +174,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IClock>(),
             sourceId,
             sp.GetRequiredService<TaskSeriesService>(),
-            sp.GetRequiredService<ISpaceRepository>()));
+            sp.GetRequiredService<ISpaceRepository>(),
+            sp.GetRequiredService<IMetricRepository>()));
 
         services.AddSingleton(sp => new PromotionService(
             sp.GetRequiredService<SubjectService>(),
@@ -266,6 +269,24 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IClock>(),
             sourceId));
         services.AddSingleton(sp => new HomeService(sp.GetRequiredService<ILedgerRepository>()));
+
+        // Metrics and their readings (MEASURE-1, measurements plan §4.5): information only, so
+        // nothing here touches the ledger.
+        services.AddSingleton(sp => new MetricService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<IMetricRepository>(),
+            sp.GetRequiredService<ArchiveService>()));
+        services.AddSingleton(sp => new MetricReadingService(
+            sp.GetRequiredService<IMetricRepository>(),
+            sp.GetRequiredService<MetricService>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId));
+        services.AddSingleton(sp => new MetricReads(
+            sp.GetRequiredService<IMetricRepository>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>()));
 
         // Photos of each space, from a baseline (HOME-4, environment plan §8): the Food Log's
         // photo storage, so the same hosts take them.

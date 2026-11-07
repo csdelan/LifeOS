@@ -32,13 +32,15 @@ public sealed class McpOptions
 
     /// <summary>
     /// Whether agents may see items of <paramref name="type"/>: a Reward belongs to the rewards
-    /// area and a Space to the home area, so each goes when its area is off.
+    /// area, a Space to the home area and a Metric to the health area (MEASURE-6), so each goes
+    /// when its area is off.
     /// </summary>
     public bool AllowsType(string type)
         => type switch
         {
             Domain.SubjectTypes.Reward => Allows(McpDomains.Rewards),
             Domain.SubjectTypes.Space => Allows(McpDomains.Home),
+            Domain.SubjectTypes.Metric => Allows(McpDomains.Health),
             _ => true,
         };
 

@@ -70,6 +70,7 @@ requirements cluster and the ID says where it lives:
 | `ACTIVITY-` | Activity: Oura steps, exercise, sleep and readiness, activity XP, tags |
 | `COVER-` | Cover images: Unsplash photos on identity statements, goals and projects |
 | `HOME-` | Home environment: spaces, ratings, the Home Score |
+| `MEASURE-` | Measurements: weight, body measurements, lab results, charts beside Oura |
 | `NAV-` | Navigation shell |
 | `GEN-` | Cross-cutting conventions **and** per-subject-type object specs (Goals, Projects, Tasks, Identity Statements, Commitments, Decisions, Problems, People, Vision, …) |
 
@@ -4132,6 +4133,136 @@ Build:      built
 - Open decisions: none blocking (plan §8.1). A home gallery, a swipe slider, a camera
   overlay and ratings suggested from photos are later (plan §8.4).
 
+### MEASURE-1 — I can record my weight and other measurements by hand, at any time up to now
+Horizon:    Pilot
+Definition: active
+Build:      building
+
+**Workflow (Chris):**
+- "I would like to add the ability to record custom health metrics in LifeOs. Oura ring does
+  not track weight, and this will be the first use case for health metrics. However, I will
+  track a wide variety of metrics over time within LifeOs, such as blood work (CMP, A1c,
+  etc), body measurements, VO2Max and the like." (2026-11-07)
+- "I have an Arboleaf smart scale. I won't worry about importing past weight data, as long
+  as I can add new weight data by hand for previous dates (if I decide to)." (2026-11-07)
+- "No health XP for measurements. They are info only." (2026-11-07)
+- Agreed in Q&A (2026-11-07): pounds and inches; a reading keeps its exact time; the day's
+  number is the first reading of the day; a reading can be changed or deleted.
+
+**Ontology fit (Claude):**
+- Maps to: a new subject type, **`Metric`** (the 17th), and each reading a versioned
+  `declared` `measurement` event about one, with a `concerns` edge (D20).
+  - A Metric's title is its name; `unit`, `decimals`, `target`, `better` and `catalog` are
+    attributes only `MetricService` writes. It has no status and archives through D9.
+  - A reading's payload is `metric_reading: {id, metric, value, unit, note?}`;
+    `occurred_at` is when it was taken. Newest version per id wins; a delete is voided.
+- Kernel delta:
+  - migration 0050: `Metric` in the type check, `v_metric` and `v_metric_reading`
+  - `MetricService`, `MetricReadingService`, `bsk metric`, `bsk measure`
+  - the `/api/measurements` endpoints
+
+  Phase M1 of [measurements-plan.md](measurements-plan.md).
+- Implications:
+  - Readings never touch the ledger, a level or XP.
+  - A metric's unit is locked once it has readings, so none is mislabelled.
+  - Past weigh-ins are typed in with their date and time; there's no import.
+- Open decisions: none.
+
+### MEASURE-2 — My weight shows as a trend toward my 185 lb goal, with the date it's heading for
+Horizon:    Pilot
+Definition: active
+Build:      building
+
+**Workflow (Chris):**
+- "Goal weight: 185, yes target line and add a trending date based on extrapolation of my
+  weigh-ins trend….. once I have more than 1 reading" (2026-11-07)
+- Agreed in Q&A (2026-11-07): each weigh-in as a dot with a smoothed trend line; ranges
+  from 30 days to all time; a page called Measurements, beside Food Log and Activity; logging
+  a weight quickly from the phone.
+
+**Ontology fit (Claude):**
+- Maps to: a read, worked out on every request and never stored: the day values, the trend
+  (exponential smoothing, α = 0.2, gap-aware) and the goal date (a 28-day least-squares rate
+  from the trend toward `target`, in the direction `better` says). Pure functions in
+  `MetricTrend`, ported to TypeScript for the mock store.
+- Kernel delta: `GET /api/measurements/metrics/{id}` with `days`, `trend` and `goal` (M1);
+  the `/measurements` page, the Weight card and `TrendChart` (M2).
+- Implications:
+  - The goal date shows from the second day with a weigh-in, labelled with how many days it's
+    based on while it's an early estimate.
+  - A rate away from the goal, or more than two years out, says so instead of a date.
+- Open decisions: none. α and the 28-day basis are calibrated in use (plan §2.2, M2).
+
+### MEASURE-3 — I can add my own metrics, each with a unit, a goal and which way is better
+Horizon:    Pilot
+Definition: active
+Build:      mapped
+
+**Workflow (Chris):**
+- "I will track a wide variety of metrics over time within LifeOs, such as … body
+  measurements, VO2Max and the like." (2026-11-07)
+- Agreed in Q&A (2026-11-07): a starter list keeps names and units consistent; blood
+  pressure is two metrics entered together; VO2 max from both Oura's estimate and a lab test,
+  as two series.
+
+**Ontology fit (Claude):**
+- Maps to: Metric subjects made from the starter list (`catalog`) or from scratch, and from
+  M3 a normal range on the metric.
+- Kernel delta: M1's `MetricService` already makes any metric; M3 adds the range attributes,
+  the starter list's body metrics, the add-a-metric form and a card per metric (plan M3).
+- Implications: a renamed metric keeps its starter-list key, so the app still knows which is
+  weight.
+- Open decisions: none blocking.
+
+### MEASURE-4 — I can log a lab visit's results at once, with the report PDF and normal ranges
+Horizon:    Pilot phase 2
+Definition: drafting
+Build:      unmapped
+
+**Workflow (Chris):**
+- "blood work (CMP, A1c, etc)" (2026-11-07)
+- Agreed in Q&A (2026-11-07): a lab visit groups its readings under one date and lab, with
+  the report PDF kept with it; each value shows its normal range and is flagged high or low.
+
+**Ontology fit (Claude):**
+- Maps to: readings of the panel's metrics sharing a visit, with the PDF as an artifact.
+  Whether the visit is its own event or a key on each reading is settled when M4 is planned.
+- Kernel delta: TBD (plan M4).
+- Open decisions: how a visit is stored; whether a reading carries the lab's own range.
+
+### MEASURE-5 — I can chart any of my metrics beside my Oura and Food Log data on one timeline
+Horizon:    Pilot phase 2
+Definition: drafting
+Build:      unmapped
+
+**Workflow (Chris):**
+- "Eventual goal is to be able to chart all or some of this together with other Oura stats
+  to see trends and relationships." (2026-11-07)
+- Agreed in Q&A (2026-11-07): stacked charts sharing one timeline and one hover line, not
+  two y-axes on one chart.
+
+**Ontology fit (Claude):**
+- Maps to: a series read over the metrics' day values and the Oura and Food Log day views
+  (plan §4.8). No new storage.
+- Kernel delta: `GET /api/series` and the Compare view (plan M5).
+- Open decisions: none blocking.
+
+### MEASURE-6 — Claude can read my measurements under the same Health switch as my Oura data
+Horizon:    Pilot
+Definition: active
+Build:      building
+
+**Workflow (Chris):**
+- Agreed in Q&A (2026-11-07): measurements and lab results come under the Health switch
+  that already covers Oura in `/mcp`, not a switch of their own.
+
+**Ontology fit (Claude):**
+- Maps to: Metric items shown to agents only while the Health area is on (M1), and the
+  `health` tool reading the readings and the goal (M6).
+- Kernel delta: `McpOptions.AllowsType` and the item-type list (M1); the `health` tool
+  (plan M6).
+- Open decisions: none.
+
 
 
 
@@ -4410,6 +4541,24 @@ Scores support. Health keeps its XP tests.
 
 Design and build order: [environment-plan.md](environment-plan.md).
 
+**D20 — A measurement is a versioned reading of a Metric, and its trend is a reading too
+(MEASURE-1..6, 2026-11-07).**
+
+- **Metric is the 17th subject type:** a durable thing Chris measures (Weight, Waist,
+  HbA1c), with a unit, decimals, an optional target and which way is better, made from a
+  starter list or from scratch. It has no status and archives through D9.
+- **A reading is a `declared` `measurement` event** with a `concerns` edge to its metric,
+  versioned by id and voided to delete, as food entries (D13) and space ratings (D18) are.
+  `occurred_at` is when it was taken, so past readings are entered with their own time.
+- **Nothing is derived and stored:** the day's value (the first of the day), the trend and
+  the goal date are worked out on every read, in Domain.
+- **Information only:** readings never reach the ledger, XP or a level.
+- **Not observed data:** anything a device sends later (a scale through Fitbit, Oura's VO2
+  max) is `observed` from its own source, as D14's records are, and charts beside the
+  readings as its own series.
+
+Design and build order: [measurements-plan.md](measurements-plan.md).
+
 ### Method for the Habit ↔ Commitment discrepancy
 
 "Habit" (UI concept) and "Commitment" (storage type) are deliberately decoupled — Chris
@@ -4527,6 +4676,12 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   space cards, the compare dialog, photos in the walk-through, Add photos and shots in the
   spaces editor. — **Shipped** (E6–E7 in [environment-plan.md](environment-plan.md) §8,
   migration 0045).
+- **Measurements** (MEASURE-1..6 / D20): the `Metric` subject type (the 17th), readings as
+  versioned `measurement` events, `v_metric` and `v_metric_reading` (migration 0050),
+  `MetricTrend` (day values, trend, goal date), `bsk metric`, `bsk measure`, the
+  `/api/measurements` endpoints, the `/measurements` page; then any metric, lab visits,
+  Compare and the `health` tool. — **Open** (planned in
+  [measurements-plan.md](measurements-plan.md), M1–M6).
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;
