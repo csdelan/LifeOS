@@ -53,6 +53,8 @@ import type {
   TaskTimer,
   Wallet,
   EnvironmentRead,
+  MetricDetailRead,
+  MetricRow,
   HomeDaysRead,
   SpacePhotosRead,
   SpaceRatingsRead,
@@ -109,6 +111,7 @@ import {
   mockSpaceRatings,
   mockSpaces,
 } from "@/lib/mock/environment-store";
+import { mockMetricDetail, mockMetrics } from "@/lib/mock/measurements-store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 
@@ -238,6 +241,14 @@ export interface LifeOsReads {
    * shot (its id or name) when given, each with the space's score on its day; its shots too.
    */
   spacePhotos(space: string, shot?: string): Promise<SpacePhotosRead>;
+  /** Every metric (MEASURE-1, `GET /api/measurements/metrics`), archived ones included, by name. */
+  metrics(): Promise<MetricRow[]>;
+  /**
+   * One metric (its id or name) over the last `days` days, all history when null
+   * (`GET /api/measurements/metrics/{id}`): readings newest first, day values with the trend,
+   * and the goal.
+   */
+  metric(metric: string, days: number | null): Promise<MetricDetailRead>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /**
@@ -514,6 +525,16 @@ export const mockReads: LifeOsReads = {
   async spacePhotos(space: string, shot?: string): Promise<SpacePhotosRead> {
     await wait();
     return mockSpacePhotos(space, shot, storeState().exceptionDays);
+  },
+
+  async metrics(): Promise<MetricRow[]> {
+    await wait();
+    return mockMetrics();
+  },
+
+  async metric(metric: string, days: number | null): Promise<MetricDetailRead> {
+    await wait();
+    return mockMetricDetail(metric, days);
   },
 
   async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {

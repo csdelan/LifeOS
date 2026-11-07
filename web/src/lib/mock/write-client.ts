@@ -80,6 +80,14 @@ import {
   mockSetSpaceBaseline,
 } from "@/lib/mock/environment-store";
 import { ratedMessage } from "@/lib/environment";
+import {
+  mockAddMetric,
+  mockArchiveMetric,
+  mockDeleteReading,
+  mockEditReading,
+  mockLogReading,
+  mockSetMetric,
+} from "@/lib/mock/measurements-store";
 
 const wait = (ms = 90) => new Promise((r) => setTimeout(r, ms));
 
@@ -144,15 +152,15 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
 
     async archive(subject) {
       await wait();
-      // A space is archived in the home's half of the store (HOME-1).
-      if (!mockArchiveSpace(subject, true)) archiveSubject(subject, true);
+      // A space is archived in the home's half of the store (HOME-1), a metric in measurements'.
+      if (!mockArchiveSpace(subject, true) && !mockArchiveMetric(subject, true)) archiveSubject(subject, true);
       notify("Archived");
       bump();
     },
 
     async restore(subject) {
       await wait();
-      if (!mockArchiveSpace(subject, false)) archiveSubject(subject, false);
+      if (!mockArchiveSpace(subject, false) && !mockArchiveMetric(subject, false)) archiveSubject(subject, false);
       notify("Restored");
       bump();
     },
@@ -429,6 +437,44 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       await wait();
       const result = mockRemoveShot(space, shot, exceptions());
       notify("Shot removed");
+      bump();
+      return result;
+    },
+
+    async addMetric(req) {
+      await wait();
+      const row = mockAddMetric(req);
+      notify(`Added ${row.name}`);
+      bump();
+      return row;
+    },
+
+    async setMetric(metric, req) {
+      await wait();
+      const row = mockSetMetric(metric, req);
+      notify(`Saved ${row.name}`);
+      bump();
+      return row;
+    },
+
+    // A reading write says nothing itself: the sheet announces it with the metric's decimals.
+    async logReading(req) {
+      await wait();
+      const result = mockLogReading(req);
+      bump();
+      return result;
+    },
+
+    async editReading(reading, req) {
+      await wait();
+      const result = mockEditReading(reading, req);
+      bump();
+      return result;
+    },
+
+    async deleteReading(reading) {
+      await wait();
+      const result = mockDeleteReading(reading);
       bump();
       return result;
     },

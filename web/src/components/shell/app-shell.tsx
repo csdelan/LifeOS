@@ -34,6 +34,7 @@ import {
   SunIcon,
   UsersIcon,
   EyeIcon,
+  WeightIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,6 +93,7 @@ const NAV = [
   { to: "/habits", label: "Habits", icon: RepeatIcon },
   { to: "/food", label: "Food Log", icon: UtensilsIcon },
   { to: "/activity", label: "Activity", icon: ActivityIcon },
+  { to: "/measurements", label: "Measurements", icon: WeightIcon },
   { to: "/environment", label: "Environment", icon: HouseIcon },
   { to: "/rewards", label: "Rewards", icon: GiftIcon },
   { to: "/character", label: "Character", icon: MedalIcon },

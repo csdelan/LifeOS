@@ -16,6 +16,7 @@ import { CharacterPage } from "@/pages/character-page";
 import { FoodPage } from "@/pages/food-page";
 import { ActivityConnectedPage, ActivityPage } from "@/pages/activity-page";
 import { EnvironmentPage } from "@/pages/environment-page";
+import { MeasurementsPage } from "@/pages/measurements-page";
 import { VisionPage } from "@/pages/vision-page";
 import { ReviewsPage } from "@/pages/reviews-page";
 import { PeoplePage } from "@/pages/people-page";
@@ -215,6 +216,13 @@ const activityRoute = createRoute({
   component: ActivityPage,
 });
 
+/** Weight and, later, any metric Chris measures (MEASURE-1, MEASURE-2). */
+const measurementsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/measurements",
+  component: MeasurementsPage,
+});
+
 /** The home's spaces, ratings and Home Score (HOME-1..3). */
 const environmentRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -283,6 +291,7 @@ const routeTree = rootRoute.addChildren([
   foodRoute,
   activityRoute,
   activityConnectedRoute,
+  measurementsRoute,
   environmentRoute,
   rewardsRoute,
   characterRoute,

@@ -247,6 +247,28 @@ with readings) is a 400 in words, with nothing written.
 - The mock store, a TypeScript port of `MetricTrend` with shared cases, unit tests, a golden
   path, and a11y in both themes and on a phone.
 
+**As built (M2, 2026-11-07).** Filled in from how LifeOS already works:
+
+- **Dots are each day's number**, the first weigh-in of the day, so the dots and the trend
+  agree. The table lists every weigh-in; a later one that day says *Not the day's first* and
+  has no trend of its own.
+- **The trend line breaks across a gap of more than a week** (`TrendChart`'s 7 days). The
+  dots either side still show, and the trend carries on from where it was (§2.2).
+- **The axis** runs from the range's start, or from the first weigh-in when the whole history
+  fits in the range, so a new metric doesn't sit at the right edge of an empty 90 days.
+- **The range** defaults to 90 days and is remembered in the browser.
+- **The goal line** reads "185.0 lb by Jan 21, 2027 at 0.9 lb a week, from 23 weigh-ins." With
+  fewer than 7 days in the basis it says "an early estimate from 3 weigh-ins"; with one day,
+  "Log another day to see when you'll reach 185.0 lb."; the other statuses as §2.3.
+- **The time is sent only when it's changed.** Left alone, a new weigh-in is the kernel's
+  now, and a changed weigh-in keeps its exact time.
+- **An archived Weight** shows as not tracked; *Start tracking weight* makes a new one, as a
+  name is unique only among metrics not archived.
+- **Toasts**: "Logged 192.4 lb", "Saved 192.4 lb", "Deleted the reading".
+- **Shared fixes found on the way**: a destructive button's dark-theme tint was 4.3:1 against
+  its text (the Food Log's Delete, the Inbox's Drop); it's now 5:1. The chart tables'
+  headings are padded like their cells.
+
 ### 4.8 Compare (M5)
 
 - **A series** is anything with a value per day: each metric's day values, and from Oura:
@@ -320,7 +342,7 @@ Each of these has to earn its place through use.
 
 - [x] M0 — Plan + requirements (MEASURE-1 to MEASURE-6, D20)
 - [x] M1 — Metrics and readings in the kernel (migration 0050)
-- [ ] M2 — Weight on the web
+- [x] M2 — Weight on the web (no migration; calibration of α and the basis after a few weeks)
 - [ ] M3 — Any metric on the web
 - [ ] M4 — Lab results
 - [ ] M5 — Compare with Oura and the Food Log

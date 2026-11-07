@@ -371,8 +371,8 @@ export function MetricTable({
         <caption className="sr-only">{caption}</caption>
         <thead className="sticky top-0 bg-card">
           <tr className="text-left text-xs text-muted-foreground">
-            {columns.map((c) => (
-              <th key={c.key} scope="col" className={cn("py-1 font-medium", c.numeric && "text-right")}>
+            {columns.map((c, i) => (
+              <th key={c.key} scope="col" className={cn("py-1 font-medium", i === 0 ? "pr-2" : "pl-2", c.numeric && "text-right")}>
                 {c.label}
               </th>
             ))}

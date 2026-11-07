@@ -1088,6 +1088,83 @@ test.describe("golden paths", () => {
     await expect(page.getByRole("article", { name: "Attic" })).toBeVisible();
   });
 
+  // Measurements (MEASURE-1, MEASURE-2, measurements plan §4.7): the mock seeds six weeks of
+  // weigh-ins ending yesterday, so the page's date is fixed to keep "Today" and the goal steady.
+  test("Measurements: log a weigh-in, see it on the chart, then change and delete it in the table", async ({ page }) => {
+    await page.clock.install({ time: new Date("2026-11-07T08:30:00") });
+    await page.goto("/");
+    await page.getByRole("link", { name: "Measurements" }).click();
+    await expect(page).toHaveURL(/\/measurements$/);
+    await expect(page.getByRole("heading", { name: "Your measurements" })).toBeVisible();
+
+    await expect(page.getByTestId("weight-trend")).toHaveText(/^\d+\.\d lb$/, { timeout: 10_000 });
+    await expect(page.getByTestId("weight-goal")).toHaveText(/^185\.0 lb by .+ at [\d.]+ lb a week, from \d+ weigh-ins\.$/);
+    const chart = page.getByRole("group", { name: /^Weight by day, last 90 days/ });
+    const dots = chart.getByTestId("trend-dot");
+    await expect(dots.first()).toBeVisible();
+    const before = await dots.count();
+    await expect(chart.getByTestId("trend-target")).toBeVisible();
+
+    await page.getByRole("button", { name: "Log weight" }).click();
+    const sheet = page.getByRole("dialog", { name: "Log weight" });
+    await expect(sheet.getByLabel("Weight (lb)")).toBeFocused();
+    await sheet.getByLabel("Weight (lb)").fill("192.45");
+    await expect(sheet.getByText("Weight takes at most 1 decimal place; got 192.45.")).toBeVisible();
+    await sheet.getByLabel("Weight (lb)").fill("192.4");
+    await sheet.getByLabel("Note (optional)").fill("after a run");
+    await sheet.getByRole("button", { name: "Log", exact: true }).click();
+    await expect(page.getByText("Logged 192.4 lb")).toBeVisible();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByTestId("weight-last")).toHaveText(/^Last weigh-in 192\.4 lb · Today, 8:30 AM$/);
+    await expect(dots).toHaveCount(before + 1);
+
+    // Today's dot reads out from the keyboard.
+    await chart.focus();
+    await page.keyboard.press("End");
+    await expect(page.getByText(/^Today: 192\.4 lb, trend \d+\.\d lb$/)).toBeAttached();
+
+    await page.getByRole("group", { name: "Show as" }).getByRole("button", { name: "Table" }).click();
+    const table = page.getByRole("table", { name: "Weight weigh-ins, last 90 days, newest first" });
+    const newest = table.getByTestId("metric-row").first();
+    await expect(newest).toContainText("Today, 8:30 AM");
+    await expect(newest).toContainText("after a run");
+    await newest.getByRole("button", { name: /^Change 192\.4 lb/ }).click();
+    const change = page.getByRole("dialog", { name: "Change weigh-in" });
+    await expect(change.getByLabel("Weight (lb)")).toHaveValue("192.4");
+    await change.getByLabel("Weight (lb)").fill("192.0");
+    await change.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Saved 192.0 lb")).toBeVisible();
+    await expect(newest).toContainText("192.0 lb");
+
+    await newest.getByRole("button", { name: /^Delete 192\.0 lb/ }).click();
+    const ask = page.getByRole("alertdialog", { name: "Delete this weigh-in?" });
+    await ask.getByRole("button", { name: "Delete" }).click();
+    await expect(page.getByText("Deleted the reading")).toBeVisible();
+    await expect(table.getByTestId("metric-row").first()).not.toContainText("Today");
+    await expect(page.getByTestId("weight-last")).toHaveText(/^Last weigh-in \d+\.\d lb · Yesterday, /);
+  });
+
+  test("Measurements: change the goal, and narrow the chart to 30 days", async ({ page }) => {
+    await page.clock.install({ time: new Date("2026-11-07T08:30:00") });
+    await page.goto("/measurements");
+    await expect(page.getByTestId("weight-goal")).toHaveText(/^185\.0 lb by /, { timeout: 10_000 });
+    await page.getByRole("button", { name: "Change goal" }).click();
+    const dialog = page.getByRole("dialog", { name: "Weight goal" });
+    await dialog.getByLabel("Goal weight (lb)").fill("180");
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByTestId("weight-goal")).toHaveText(/^180\.0 lb by /);
+    await expect(page.getByRole("list", { name: "Legend" })).toContainText("Goal 180.0 lb");
+
+    const ninety = await page.getByTestId("trend-dot").count();
+    await page.getByRole("group", { name: "Range" }).getByRole("button", { name: "30 days" }).click();
+    await expect(page.getByRole("group", { name: /^Weight by day, last 30 days/ })).toBeVisible();
+    await expect.poll(() => page.getByTestId("trend-dot").count()).toBeLessThan(ninety);
+    // The range is remembered.
+    await page.reload();
+    await expect(page.getByRole("group", { name: /^Weight by day, last 30 days/ })).toBeVisible({ timeout: 10_000 });
+  });
+
   test("Browse: pick Decisions, filter by status, find one from the search box, and make a new one", async ({
     page,
   }) => {

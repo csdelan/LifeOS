@@ -87,6 +87,10 @@ export const qk = {
   spaces: ["environment", "spaces"] as const,
   spaceRatings: (space: string, days: number) => ["environment", "ratings", space, days] as const,
   spacePhotos: (space: string, shot: string) => ["environment", "photos", space, shot] as const,
+  // Every Measurements read sits under ["measurements"], so a metric or a reading write refreshes them all.
+  measurements: ["measurements"] as const,
+  metrics: ["measurements", "metrics"] as const,
+  metric: (metric: string, days: number | null) => ["measurements", "metric", metric, days ?? "all"] as const,
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
@@ -218,8 +222,9 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async archive(subject) {
       await client.archive(subject);
       await invalidate(qc, [
-        // A space leaves the Home Score (HOME-1).
+        // A space leaves the Home Score (HOME-1); a metric stops taking readings.
         qk.environment,
+        qk.measurements,
         qk.domains,
         qk.timers,
         qk.rewards,
@@ -238,6 +243,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       await client.restore(subject);
       await invalidate(qc, [
         qk.environment,
+        qk.measurements,
         qk.domains,
         qk.timers,
         qk.rewards,
@@ -474,6 +480,47 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
 
     async removeShot(space, shot) {
       return photoWrite(qc, () => client.removeShot(space, shot));
+    },
+
+    // Readings are information only (D20): a write moves no level, so only Measurements refreshes.
+    async addMetric(req) {
+      try {
+        return await client.addMetric(req);
+      } finally {
+        await invalidate(qc, [qk.measurements]);
+      }
+    },
+
+    async setMetric(metric, req) {
+      try {
+        return await client.setMetric(metric, req);
+      } finally {
+        await invalidate(qc, [qk.measurements]);
+      }
+    },
+
+    async logReading(req) {
+      try {
+        return await client.logReading(req);
+      } finally {
+        await invalidate(qc, [qk.measurements]);
+      }
+    },
+
+    async editReading(reading, req) {
+      try {
+        return await client.editReading(reading, req);
+      } finally {
+        await invalidate(qc, [qk.measurements]);
+      }
+    },
+
+    async deleteReading(reading) {
+      try {
+        return await client.deleteReading(reading);
+      } finally {
+        await invalidate(qc, [qk.measurements]);
+      }
     },
 
     async recur(subject, spec, opts) {
@@ -1157,6 +1204,28 @@ export function useSpacePhotos(space: string | null, shot: string | null = null,
     queryKey: qk.spacePhotos(space ?? "", shot ?? ""),
     queryFn: () => reads().spacePhotos(space!, shot ?? undefined),
     enabled: enabled && space != null,
+  });
+}
+
+/** Every metric, archived ones too: the Measurements page finds Weight among them. */
+export function useMetrics(enabled = true) {
+  return useQuery({
+    queryKey: qk.metrics,
+    queryFn: () => reads().metrics(),
+    enabled,
+  });
+}
+
+/**
+ * One metric over the last `days` days (all history when null): the chart, the table and the
+ * goal; the last range stays up while the next loads.
+ */
+export function useMetric(metric: string | null, days: number | null, enabled = true) {
+  return useQuery({
+    queryKey: qk.metric(metric ?? "", days),
+    queryFn: () => reads().metric(metric!, days),
+    enabled: enabled && metric != null,
+    placeholderData: keepPreviousData,
   });
 }
 

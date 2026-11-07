@@ -1,6 +1,8 @@
 import { toast } from "sonner";
 import { api, unwrap } from "@/lib/live/http";
 import type {
+  MetricReadingResult,
+  MetricRow,
   ActivitySyncResult,
   BountyResult,
   CoverCleared,
@@ -35,6 +37,7 @@ import {
   normalizeSpaceRatingResult,
   ratedMessage,
 } from "@/lib/environment";
+import { normalizeMetric, normalizeReadingResult } from "@/lib/measurements";
 import {
   normalizeBountyResult,
   normalizeHabitTarget,
@@ -389,6 +392,47 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       );
       notify("Shot removed");
       return result;
+    },
+
+    async addMetric(req) {
+      const row = normalizeMetric(
+        (await unwrap(api().POST("/api/measurements/metrics", { body: req }))) as unknown as MetricRow,
+      );
+      notify(`Added ${row.name}`);
+      return row;
+    },
+
+    async setMetric(metric, req) {
+      const row = normalizeMetric(
+        (await unwrap(
+          api().POST("/api/measurements/metrics/{id}", { params: { path: { id: metric } }, body: req }),
+        )) as unknown as MetricRow,
+      );
+      notify(`Saved ${row.name}`);
+      return row;
+    },
+
+    // A reading write says nothing itself: the sheet announces it with the metric's decimals.
+    async logReading(req) {
+      return normalizeReadingResult(
+        (await unwrap(api().POST("/api/measurements/readings", { body: req }))) as unknown as MetricReadingResult,
+      );
+    },
+
+    async editReading(reading, req) {
+      return normalizeReadingResult(
+        (await unwrap(
+          api().POST("/api/measurements/readings/{id}", { params: { path: { id: reading } }, body: req }),
+        )) as unknown as MetricReadingResult,
+      );
+    },
+
+    async deleteReading(reading) {
+      return normalizeReadingResult(
+        (await unwrap(
+          api().POST("/api/measurements/readings/{id}/delete", { params: { path: { id: reading } } }),
+        )) as unknown as MetricReadingResult,
+      );
     },
 
     async timer(task, action) {

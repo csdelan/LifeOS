@@ -828,6 +828,86 @@ test.describe("accessibility", () => {
     expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
   });
 
+  // The Measurements page (MEASURE-1, MEASURE-2): the Weight card with the chart focused and a
+  // day read out, then the table, the Log weight sheet with a problem showing, the goal dialog
+  // and the ask before a delete, in both themes.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /measurements with the chart, table and sheet, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        await settled(page);
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/measurements");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      await expect(page.getByTestId("weight-trend")).toHaveText(/^\d+\.\d lb$/, { timeout: 10_000 });
+      const chart = page.getByRole("group", { name: /^Weight by day/ });
+      await chart.focus();
+      await page.keyboard.press("ArrowLeft");
+      const card = await scan();
+      expect(card, JSON.stringify(card, null, 2)).toEqual([]);
+
+      await page.getByRole("group", { name: "Show as" }).getByRole("button", { name: "Table" }).click();
+      await expect(page.getByRole("table")).toBeVisible();
+      const table = await scan();
+      expect(table, JSON.stringify(table, null, 2)).toEqual([]);
+
+      await page.getByRole("button", { name: "Log weight" }).click();
+      const sheet = page.getByRole("dialog", { name: "Log weight" });
+      await sheet.getByLabel("Weight (lb)").fill("192.45");
+      await expect(sheet.getByText(/takes at most 1 decimal place/)).toBeVisible();
+      const log = await scan();
+      expect(log, JSON.stringify(log, null, 2)).toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(sheet).toBeHidden();
+
+      await page.getByRole("button", { name: "Change goal" }).click();
+      await expect(page.getByRole("dialog", { name: "Weight goal" })).toBeVisible();
+      const goal = await scan();
+      expect(goal, JSON.stringify(goal, null, 2)).toEqual([]);
+      await page.keyboard.press("Escape");
+
+      await page.getByRole("table").getByRole("button", { name: /^Delete / }).first().click();
+      await expect(page.getByRole("alertdialog", { name: "Delete this weigh-in?" })).toBeVisible();
+      const ask = await scan();
+      expect(ask, JSON.stringify(ask, null, 2)).toEqual([]);
+      await page.keyboard.press("Escape");
+
+      // A weigh-in's own sheet, with its Delete.
+      await page.getByRole("table").getByRole("button", { name: /^Change / }).first().click();
+      await expect(page.getByRole("dialog", { name: "Change weigh-in" })).toBeVisible();
+      const change = await scan();
+      expect(change, JSON.stringify(change, null, 2)).toEqual([]);
+    });
+  }
+
+  // Measurements on a phone: Log weight sits at the bottom, the sheet rises from there with a
+  // number pad, and nothing scrolls sideways.
+  test("axe serious/critical: /measurements on a phone with the Log weight sheet open", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/measurements");
+    await expect(page.getByTestId("weight-trend")).toHaveText(/^\d+\.\d lb$/, { timeout: 10_000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+    await settled(page);
+    const page1 = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    const card = page1.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    expect(card, JSON.stringify(card, null, 2)).toEqual([]);
+
+    await page.getByRole("button", { name: "Log weight" }).click();
+    const sheet = page.getByRole("dialog", { name: "Log weight" });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByLabel("Weight (lb)")).toHaveAttribute("inputmode", "decimal");
+    const box = await sheet.boundingBox();
+    expect(box && box.y + box.height).toBeGreaterThan(800);
+    await settled(page);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    const blocking = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
+  });
+
   // Photos (HOME-4): the compare dialog with Change day open, then Make this its own shot, then
   // Remove photo asking; the add photos sheet with a photo picked for a new shot; a held photo in
   // the walk-through beside the Kitchen's baseline; and the spaces editor's shots, in both themes.

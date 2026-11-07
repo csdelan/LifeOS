@@ -71,6 +71,8 @@ import type {
   SpacePhotosRead,
   SpaceRatingsRead,
   SpaceRow,
+  MetricDetailRead,
+  MetricRow,
 } from "@/lib/production-ui-types";
 import {
   normalizeEnvironment,
@@ -79,6 +81,7 @@ import {
   normalizeSpacePhotos,
   normalizeSpaceRatings,
 } from "@/lib/environment";
+import { normalizeMetric, normalizeMetricDetail } from "@/lib/measurements";
 
 function asType<T>(value: unknown): T {
   return value as T;
@@ -357,6 +360,19 @@ export const liveReads: LifeOsReads = {
       api().GET("/api/environment/spaces/{id}/photos", { params: { path: { id: space }, query: { shot } } }),
     );
     return normalizeSpacePhotos(asType<SpacePhotosRead>(data));
+  },
+
+  async metrics() {
+    return asType<MetricRow[]>(await unwrap(api().GET("/api/measurements/metrics"))).map(normalizeMetric);
+  },
+
+  async metric(metric, days) {
+    const data = await unwrap(
+      api().GET("/api/measurements/metrics/{id}", {
+        params: { path: { id: metric }, query: { days: days ?? undefined } },
+      }),
+    );
+    return normalizeMetricDetail(asType<MetricDetailRead>(data));
   },
 
   async activityDay(date) {

@@ -7,6 +7,7 @@ import { ACTIVITY_RULES, exerciseSeconds, exerciseXp, sleepXp, stepsXp } from "@
 import { ouraDayAt } from "@/lib/activity-xp";
 import { mockActivityRecords, resetActivityStore } from "@/lib/mock/activity-store";
 import { mockHomeScoreUnits, resetEnvironmentStore } from "@/lib/mock/environment-store";
+import { resetMeasurementsStore } from "@/lib/mock/measurements-store";
 import { addDays, nowIso, slugify, todayIso, startOfWeekMonday, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
 import {
   CALORIES_MAX,
@@ -177,6 +178,7 @@ export function resetStore() {
   state = createSeed();
   resetActivityStore();
   resetEnvironmentStore();
+  resetMeasurementsStore();
   emit();
 }
 

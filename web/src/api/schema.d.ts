@@ -1300,6 +1300,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/measurements/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetMetrics"];
+        put?: never;
+        post: operations["AddMetric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/measurements/metrics/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetMetric"];
+        put?: never;
+        post: operations["SetMetric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/measurements/readings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["LogReading"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/measurements/readings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EditReading"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/measurements/readings/{id}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DeleteReading"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/artifacts/{id}/content": {
         parameters: {
             query?: never;
@@ -2736,6 +2816,106 @@ export interface components {
             loggedAt?: string;
             /** Format: int32 */
             versions?: number | string;
+        };
+        MetricBody: {
+            name?: null | string;
+            unit?: null | string;
+            /** Format: int32 */
+            decimals?: null | number | string;
+            /** Format: double */
+            target?: null | number | string;
+            clearTarget?: null | boolean;
+            better?: null | string;
+        };
+        MetricDayRow: {
+            day?: string;
+            /** Format: double */
+            value?: number | string;
+            /** Format: double */
+            trend?: number | string;
+            /** Format: uuid */
+            readingId?: string;
+        };
+        MetricDetailRead: {
+            today?: string;
+            from?: null | string;
+            metric?: components["schemas"]["MetricRow"];
+            readings?: components["schemas"]["MetricReadingRow"][];
+            days?: components["schemas"]["MetricDayRow"][];
+            goal?: components["schemas"]["MetricGoalRow"];
+        };
+        MetricGoalBasis: {
+            /** Format: int32 */
+            days?: number | string;
+            from?: null | string;
+            to?: null | string;
+        };
+        MetricGoalRow: {
+            status?: string;
+            /** Format: double */
+            target?: null | number | string;
+            direction?: null | string;
+            /** Format: double */
+            now?: null | number | string;
+            /** Format: double */
+            ratePerWeek?: null | number | string;
+            reachedBy?: null | string;
+            basis?: components["schemas"]["MetricGoalBasis"];
+        };
+        MetricReadingBody: {
+            metric?: null | string;
+            /** Format: double */
+            value?: null | number | string;
+            /** Format: date-time */
+            takenAt?: null | string;
+            note?: null | string;
+        };
+        MetricReadingEditBody: {
+            /** Format: double */
+            value?: null | number | string;
+            /** Format: date-time */
+            takenAt?: null | string;
+            note?: null | string;
+        };
+        MetricReadingResult: {
+            reading?: null | components["schemas"]["MetricReadingRow"];
+        };
+        MetricReadingRow: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            metricId?: string;
+            /** Format: double */
+            value?: number | string;
+            unit?: string;
+            note?: null | string;
+            /** Format: date-time */
+            takenAt?: string;
+            takenOn?: string;
+            takenLocal?: string;
+            /** Format: date-time */
+            loggedAt?: string;
+            /** Format: int32 */
+            versions?: number | string;
+        };
+        MetricRow: {
+            /** Format: uuid */
+            id?: string;
+            urn?: string;
+            name?: string;
+            unit?: string;
+            /** Format: int32 */
+            decimals?: number | string;
+            /** Format: double */
+            target?: null | number | string;
+            better?: null | string;
+            catalog?: null | string;
+            /** Format: date-time */
+            archivedAt?: null | string;
+            archivedOn?: null | string;
+            /** Format: int32 */
+            readings?: number | string;
+            lastReading?: null | components["schemas"]["MetricReadingRow"];
         };
         NewSubjectBody: {
             type?: string;
@@ -5904,6 +6084,253 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricRow"][];
+                };
+            };
+        };
+    };
+    AddMetric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetMetric: {
+        parameters: {
+            query?: {
+                days?: number | string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricDetailRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SetMetric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    LogReading: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricReadingBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricReadingResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    EditReading: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricReadingEditBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricReadingResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    DeleteReading: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricReadingResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -4171,7 +4171,7 @@ Build:      building
 ### MEASURE-2 — My weight shows as a trend toward my 185 lb goal, with the date it's heading for
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "Goal weight: 185, yes target line and add a trending date based on extrapolation of my
@@ -4192,6 +4192,9 @@ Build:      building
     based on while it's an early estimate.
   - A rate away from the goal, or more than two years out, says so instead of a date.
 - Open decisions: none. α and the 28-day basis are calibrated in use (plan §2.2, M2).
+- Built (M2, 2026-11-07): the Measurements page's Weight card: the trend, the goal date in
+  words, the chart (a dot a day, the trend, the dashed goal; 30 days to All) and the table
+  with Change and Delete. As built: plan §4.7.
 
 ### MEASURE-3 — I can add my own metrics, each with a unit, a goal and which way is better
 Horizon:    Pilot

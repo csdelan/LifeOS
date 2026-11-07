@@ -1953,6 +1953,127 @@ export interface HomeDaysRead {
   days: HomeDayRow[];
 }
 
+// ---------------------------------------------------------------------------
+// Measurements (MEASURE-1, MEASURE-2, D20, measurements plan §4.6): `/api/measurements`. A
+// metric is something Chris measures (Weight); a reading is one measurement of it, taken at an
+// instant. Days are home-zone days (`yyyy-MM-dd`). Readings are information only: no write
+// earns or moves a level.
+// ---------------------------------------------------------------------------
+
+/** Which way is good for a metric: it sets the goal date's direction. */
+export type MetricBetter = "lower" | "higher";
+
+/** How a metric stands against its target (measurements plan §2.3). */
+export type MetricGoalStatus = "no_target" | "too_few" | "reached" | "heading" | "far" | "not_heading";
+
+/** One reading (MEASURE-1): its value in `unit`, when it was taken, and how many versions it has. */
+export interface MetricReadingRow {
+  id: string;
+  metricId: string;
+  value: number;
+  /** The metric's unit when the reading was written. */
+  unit: string;
+  note: string | null;
+  /** ISO instant it was taken. */
+  takenAt: string;
+  /** The home-zone day it was taken. */
+  takenOn: string;
+  /** The home-zone wall-clock time it was taken, `yyyy-MM-ddTHH:mm:ss`. */
+  takenLocal: string;
+  /** ISO instant it was last written. */
+  loggedAt: string;
+  versions: number;
+}
+
+/** One metric (MEASURE-1), with how many readings it has and its newest one. */
+export interface MetricRow {
+  id: string;
+  urn: string;
+  name: string;
+  unit: string;
+  /** 0–3: the decimal places a reading takes and shows. */
+  decimals: number;
+  target: number | null;
+  better: MetricBetter | null;
+  /** The starter-list key it was made from (`weight`), kept through a rename. */
+  catalog: string | null;
+  archivedAt: string | null;
+  archivedOn: string | null;
+  readings: number;
+  lastReading: MetricReadingRow | null;
+}
+
+/** One day's value (its first reading) and the trend on that day (measurements plan §2.2). */
+export interface MetricDayRow {
+  day: string;
+  value: number;
+  trend: number;
+  readingId: string;
+}
+
+/**
+ * Where a metric stands against its target (§2.3): `now` is the trend on the newest day,
+ * `ratePerWeek` the rate over the basis, and `reachedBy` the day the rate reaches the target
+ * (`heading` only). The basis is the days the rate was measured over.
+ */
+export interface MetricGoalRow {
+  status: MetricGoalStatus;
+  target: number | null;
+  direction: MetricBetter | null;
+  now: number | null;
+  ratePerWeek: number | null;
+  reachedBy: string | null;
+  basis: { days: number; from: string | null; to: string | null };
+}
+
+/**
+ * `GET /api/measurements/metrics/{id}?days=N`: the readings from `from` (all of them when null)
+ * to `today`, newest first; the day values with the trend, oldest first; and the goal, which
+ * reads the newest 28 days of all history.
+ */
+export interface MetricDetailRead {
+  today: string;
+  from: string | null;
+  metric: MetricRow;
+  readings: MetricReadingRow[];
+  days: MetricDayRow[];
+  goal: MetricGoalRow;
+}
+
+/** A reading write's answer: the reading as it now reads, or null after a delete. */
+export interface MetricReadingResult {
+  reading: MetricReadingRow | null;
+}
+
+/**
+ * Adding or changing a metric. A starter-list name (Weight) fills in the unit, decimals and
+ * which way is better when a new one leaves them out; `clearTarget` removes the target.
+ */
+export interface MetricRequest {
+  name?: string;
+  unit?: string;
+  decimals?: number;
+  target?: number;
+  clearTarget?: boolean;
+  better?: MetricBetter;
+}
+
+/** Logging a reading: the metric (id or name), the value, when it was taken (now when left out), a note. */
+export interface MetricReadingRequest {
+  metric: string;
+  value: number;
+  /** ISO instant; now when left out. */
+  takenAt?: string;
+  note?: string;
+}
+
+/** Changing a reading: any of the value, the time and the note; a blank note removes it. */
+export interface MetricReadingEditRequest {
+  value?: number;
+  takenAt?: string;
+  note?: string;
+}
+
 /**
  * The write client the UI calls. Every method maps to a bsk verb / API endpoint.
  * Mock all of these for the first pass; return shapes match the real API.
@@ -2064,6 +2185,22 @@ export interface LifeOsWriteClient {
   renameShot(space: string, shot: string, name: string): Promise<SpacePhotoResult>;
   /** Remove a shot; its photos stay in the record (`POST …/shots/{shot}/delete`). A space keeps one. */
   removeShot(space: string, shot: string): Promise<SpacePhotoResult>;
+  /**
+   * Add a metric (MEASURE-1, `POST /api/measurements/metrics`): a starter-list name (Weight)
+   * fills in the rest. Archive one with `archive(urn)`.
+   */
+  addMetric(req: MetricRequest & { name: string }): Promise<MetricRow>;
+  /** Rename a metric or change its unit, decimals, target or direction (`POST …/metrics/{id}`). */
+  setMetric(metric: string, req: MetricRequest): Promise<MetricRow>;
+  /**
+   * Log a reading (`POST /api/measurements/readings`), now or at any past time. Refused, with
+   * nothing written, for a future time, too many decimal places, or an archived metric.
+   */
+  logReading(req: MetricReadingRequest): Promise<MetricReadingResult>;
+  /** Change a reading's value, time or note (`POST …/readings/{id}`). */
+  editReading(reading: string, req: MetricReadingEditRequest): Promise<MetricReadingResult>;
+  /** Delete a reading; the record keeps its versions (`POST …/readings/{id}/delete`). */
+  deleteReading(reading: string): Promise<MetricReadingResult>;
   /**
    * Set a subject's repeat pattern (D8, `POST /api/recur`); `null` clears it. A Task's `start`
    * is the first date it repeats from (TASKS-3); setting one makes its first repetition.

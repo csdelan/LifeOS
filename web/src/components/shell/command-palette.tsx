@@ -35,6 +35,7 @@ import {
   UsersIcon,
   EyeIcon,
   ClipboardCheckIcon,
+  WeightIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -119,6 +120,9 @@ export function CommandPalette({
           </CommandItem>
           <CommandItem onSelect={() => go("/activity")}>
             <ActivityIcon /> Activity
+          </CommandItem>
+          <CommandItem onSelect={() => go("/measurements")}>
+            <WeightIcon /> Measurements
           </CommandItem>
           <CommandItem onSelect={() => go("/environment")}>
             <HouseIcon /> Environment
