@@ -120,12 +120,19 @@ function Show-BackupToast([string] $Title, [string] $Message) {
 }
 
 # The dead-man's switch (healthchecks.io or alike): '' on success, 'start', or 'fail'.
+# The log says whether it's set up, since the URL itself is encrypted in the settings.
 function Send-HealthcheckPing([hashtable] $Settings, [string] $Suffix, [string] $Body = '') {
     $url = ConvertFrom-SecureText $Settings['HealthcheckUrl']
-    if (-not $url) { return }
+    if (-not $url) {
+        if ($Suffix -eq 'start') {
+            Write-BackupLog "No dead-man's switch is set up, so a night with no backup alerts no one. See docs/pilot/backup-restore.md." -Level Warn
+        }
+        return
+    }
     $uri = if ($Suffix) { "$($url.TrimEnd('/'))/$Suffix" } else { $url }
     try {
         Invoke-RestMethod -Method Post -Uri $uri -Body $Body -TimeoutSec 15 -MaximumRetryCount 2 -RetryIntervalSec 5 | Out-Null
+        if ($Suffix -ne 'start') { Write-BackupLog "Told the dead-man's switch the run $(if ($Suffix) { 'failed' } else { 'succeeded' })." }
     }
     catch {
         Write-BackupLog "Couldn't ping the dead-man's switch: $($_.Exception.Message)" -Level Warn

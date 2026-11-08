@@ -78,7 +78,9 @@ instead.
 **A night with no run** sends no notification. For that, set up the optional dead-man's
 switch. Create a free check at [healthchecks.io](https://healthchecks.io) with a one-day period
 and a few hours' grace, then pass its ping URL to setup (`-HealthcheckUrl`). It emails Chris
-when a day passes with no successful ping.
+when a day passes with no successful ping. The URL is encrypted in the settings, so the log
+says whether it's on: each run without one warns "No dead-man's switch is set up", and each
+run with one ends "Told the dead-man's switch the run succeeded" (or failed).
 
 The app's own checks (`bsk rebuild`, `bsk check`) are built from this working copy. If
 it doesn't build at 3 am, the copy is still saved and the run reports why.
