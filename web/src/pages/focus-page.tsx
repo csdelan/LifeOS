@@ -10,6 +10,7 @@ import { AdherenceButtons } from "@/components/habits/adherence-buttons";
 import { MaintainingGroup } from "@/components/habits/maintaining-group";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
 import { useTaskSettleOnOpen } from "@/components/tasks/use-task-settle-on-open";
+import { TodayAppointments } from "@/components/appointments/today-appointments";
 import { cn } from "@/lib/utils";
 import { useDashboard, useWrites } from "@/lib/queries";
 import { todayIso } from "@/lib/dates";
@@ -117,6 +118,14 @@ export function FocusPage() {
             </CardContent>
           </Card>
         </div>
+
+        <TodayAppointments
+          today={today}
+          className="mt-4"
+          onOpen={(id) =>
+            void navigate({ to: "/browse", search: { type: "Appointment", selected: id } })
+          }
+        />
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">

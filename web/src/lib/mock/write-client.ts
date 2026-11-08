@@ -6,6 +6,7 @@ import type {
 } from "@/lib/production-ui-types";
 import { inferChildRelation, renamedMessage } from "@/lib/production-ui-types";
 import { extensionForMime, sha256Hex } from "@/lib/artifacts";
+import { materializedMessage } from "@/lib/appointments";
 import { redemptionMessage } from "@/lib/rewards";
 import { foodWriteMessage } from "@/lib/food";
 import { exceptionMarkedMessage, exceptionUnmarkedMessage } from "@/lib/domains";
@@ -55,6 +56,7 @@ import {
   saveReviewBody,
   setRecurrence,
   mockSettleTasks,
+  materializeAppointments,
   setTags,
 } from "@/lib/mock/store";
 import { getState } from "@/lib/mock/store";
@@ -497,6 +499,14 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       await wait();
       const result = mockSettleTasks();
       if (result.made.length > 0) bump();
+      return result;
+    },
+
+    async materialize(series, through) {
+      await wait();
+      const result = materializeAppointments(series, through);
+      notify(materializedMessage(result, through));
+      bump();
       return result;
     },
 

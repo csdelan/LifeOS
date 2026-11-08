@@ -21,6 +21,7 @@ import type {
   ActivitySummaryRead,
   ActivityTagsRead,
   ActivityWorkoutsRead,
+  AppointmentRow,
   AreaRow,
   ArtifactRecord,
   CoverSearchRead,
@@ -66,6 +67,7 @@ import { mapSubjects } from "@/lib/task-series";
 import { BOUNTY_DEFAULTS } from "@/lib/bounty";
 import { tagUniverse, toRelationEdge } from "@/lib/mock/seed";
 import {
+  appointmentsOn,
   byUrn,
   detailWithBounty,
   ensureReview,
@@ -191,6 +193,11 @@ export interface LifeOsReads {
   people(): Promise<PersonRow[]>;
   habits(): Promise<HabitRow[]>;
   occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]>;
+  /**
+   * The appointments on a day (CAL-1, `GET /api/appointments?on=`): one-time ones and a series'
+   * occurrences, never the series itself; all-day first, then by start time.
+   */
+  appointments(opts: { on: string }): Promise<AppointmentRow[]>;
   /** Every timed Task's timer (TASKS-2), running first. Archived tasks are left out. */
   timers(): Promise<TaskTimer[]>;
   /** Every repeating Task (TASKS-3), by title, with its repetitions counted. */
@@ -403,6 +410,11 @@ export const mockReads: LifeOsReads = {
   async habits(): Promise<HabitRow[]> {
     await wait();
     return mockHabits();
+  },
+
+  async appointments(opts: { on: string }): Promise<AppointmentRow[]> {
+    await wait();
+    return appointmentsOn(opts.on);
   },
 
   async occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]> {

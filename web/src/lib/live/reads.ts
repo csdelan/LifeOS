@@ -35,6 +35,7 @@ import type {
   ActivitySummaryRead,
   ActivityTagsRead,
   ActivityWorkoutsRead,
+  AppointmentRow,
   AreaRow,
   DomainDaysRead,
   DomainReportRead,
@@ -235,6 +236,11 @@ export const liveReads: LifeOsReads = {
   async habits() {
     const data = await unwrap(api().GET("/api/habits"));
     return asType<HabitRow[]>(data).map(normalizeHabit);
+  },
+
+  async appointments(opts) {
+    const data = await unwrap(api().GET("/api/appointments", { params: { query: { on: opts.on } } }));
+    return asType<AppointmentRow[]>(data);
   },
 
   async occurrences(opts) {

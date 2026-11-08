@@ -3,7 +3,12 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DashboardRead } from "@/lib/derive";
-import type { CoverRead, HabitOccurrenceRow, SubjectListItem } from "@/lib/production-ui-types";
+import type {
+  AppointmentRow,
+  CoverRead,
+  HabitOccurrenceRow,
+  SubjectListItem,
+} from "@/lib/production-ui-types";
 import { FocusPage } from "@/pages/focus-page";
 
 const adhere = vi.fn();
@@ -33,15 +38,18 @@ const base: DashboardRead = {
   activeProjects: [],
 };
 let dashboard: DashboardRead = base;
+let appointments: AppointmentRow[] = [];
+const navigate = vi.fn();
 
 vi.mock("@/lib/queries", () => ({
   useDashboard: () => ({ data: dashboard, isLoading: false, isError: false }),
   useWrites: () => ({ adhere, settleTasks }),
+  useAppointments: () => ({ data: appointments, isLoading: false, isError: false }),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="#">{children}</a>,
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigate,
 }));
 
 describe("FocusPage habit check-offs", () => {
@@ -139,5 +147,48 @@ describe("FocusPage covers (COVER-3)", () => {
     expect(within(screen.getByRole("button", { name: /Run a half/ })).queryByTestId("cover-image")).toBeNull();
     const web = screen.getByRole("button", { name: /Production web UI/ });
     expect(within(web).getByTestId("cover-image")).toHaveAttribute("title", "Photo by Sam on Unsplash");
+  });
+});
+
+function appointment(title: string, extra: Partial<AppointmentRow> = {}): AppointmentRow {
+  return {
+    id: title.toLowerCase().replace(/ /g, "-"),
+    urn: `urn:bsk:appointment:${title.toLowerCase()}`,
+    title,
+    date: "2026-10-20",
+    status: "Scheduled",
+    archived: false,
+    createdAt: "2026-10-01T00:00:00.000Z",
+    ...extra,
+  };
+}
+
+describe("FocusPage appointments (CAL-1)", () => {
+  beforeEach(() => {
+    dashboard = base;
+    appointments = [];
+    navigate.mockClear();
+  });
+
+  it("lists today's appointments with their time and status, and opens one in Browse", async () => {
+    appointments = [
+      appointment("Farmers market", { allDay: "true" }),
+      appointment("Dentist", { startTime: "09:15", endTime: "10:00", location: "Main St", status: "Completed" }),
+    ];
+    render(<FocusPage />);
+    const section = screen.getByRole("heading", { name: "Today's appointments" }).closest("section")!;
+    const rows = within(section).getAllByRole("button");
+    expect(rows.map((r) => r.textContent)).toEqual([
+      "All dayFarmers marketScheduled",
+      "9:15 AM – 10:00 AMDentistMain StCompleted",
+    ]);
+
+    await userEvent.click(rows[1]);
+    expect(navigate).toHaveBeenCalledWith({ to: "/browse", search: { type: "Appointment", selected: "dentist" } });
+  });
+
+  it("says so quietly when there are none", () => {
+    render(<FocusPage />);
+    expect(screen.getByText("No appointments today.")).toBeInTheDocument();
   });
 });

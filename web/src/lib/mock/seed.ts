@@ -949,6 +949,8 @@ export function createSeed(): MockState {
     attendees: "person-maya,person-jonah",
     all_day: "false",
   });
+  bag("appt-camp", { date: t(2), start: "10:00", end: "10:30", all_day: "false" });
+  bag("appt-premarket", { date: t(1), start: "06:00", end: "06:30", all_day: "false" });
 
   // Covers (cover-images plan §3.9): an identity statement, a goal and a project start with
   // one of the bundled scenes, so the banner and the cards show without picking first.

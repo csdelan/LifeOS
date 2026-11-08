@@ -43,6 +43,7 @@ import { ReadyToEstablish } from "@/components/habits/establish-dialog";
 import { BountyChip } from "@/components/rewards/bounty-chip";
 import { BountySection } from "@/components/rewards/bounty-editor";
 import { TaskTimerPanel } from "@/components/timer/task-timer";
+import { MaterializePanel } from "@/components/appointments/materialize-panel";
 import { RepeatPanel } from "@/components/tasks/repeat-panel";
 import { JournalEditor, looksLikeHtml } from "@/components/journal/journal-editor";
 import { CoverBanner } from "@/components/cover/cover-banner";
@@ -467,6 +468,13 @@ export function SubjectDetail({
             title={subject.title}
             status={subject.status}
             estimate={parseAttrBag(subject.attributes).estimated_duration}
+            className="mt-3"
+          />
+        ) : null}
+        {subject.type === "Appointment" && parseAttrBag(subject.attributes).recurrence ? (
+          <MaterializePanel
+            seriesId={subject.id}
+            recurrence={parseAttrBag(subject.attributes).recurrence}
             className="mt-3"
           />
         ) : null}

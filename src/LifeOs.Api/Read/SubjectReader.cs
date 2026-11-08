@@ -744,6 +744,26 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             new { includeArchived, onIso }).AsList();
     }
 
+    /// <summary>
+    /// The appointments on one day (CAL-1's "Today's Appointments"): one-time appointments and a
+    /// series' occurrences, never the series itself, whose pattern makes those occurrences.
+    /// All-day ones first, then by start time.
+    /// </summary>
+    public IReadOnlyList<AppointmentRow> GetAppointmentsOn(string day)
+    {
+        using var db = Open();
+        return db.Query<AppointmentRow>(
+            """
+            SELECT id, urn, title, date, start_time, end_time, all_day,
+                   location, meeting_link, area, series_urn,
+                   recurrence::text AS recurrence, status, archived, created_at
+            FROM bsk.v_appointment
+            WHERE NOT archived AND date = @day AND recurrence IS NULL
+            ORDER BY (lower(coalesce(all_day, '')) IN ('true', 't')) DESC, start_time NULLS LAST, title
+            """,
+            new { day }).AsList();
+    }
+
     public IReadOnlyList<PersonRow> GetPeople(bool includeArchived = false, string? kind = null)
     {
         using var db = Open();

@@ -1604,6 +1604,15 @@ Horizon:    Pilot
 Definition: active
 Build:      built
 
+**Update (2026-11-08 — on the web):** Focus has a *Today's appointments* card (`GET
+/api/appointments?on=`, the home-zone day by default): all-day first, then by start time, each
+with its time, title, location and status; choosing one opens it in Browse. An occurrence
+shows its series' times and place when it has none of its own, and a series template never
+shows as an appointment of its own. A repeating Appointment's detail has **Make occurrences**
+through a day, three months ahead by default (`POST /api/appointments/{id}/materialize`, the
+twin of `bsk materialize`); running it again only makes the dates still missing. Occurrences
+are anchored on the series' `start_date`, or the day it was made, not its `date`.
+
 **Workflow (Chris):**
 - Pilot Appointments are entered and maintained manually. Synchronization with an external
   calendar is deferred to a later phase.

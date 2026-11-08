@@ -39,6 +39,7 @@ import {
 import type {
   ActivityPaid,
   Amounts,
+  AppointmentRow,
   ArtifactRecord,
   Award,
   BountyRequest,
@@ -127,7 +128,8 @@ import {
   toDomainRow,
 } from "@/lib/domain-fold";
 import { applyStreakToHabit } from "@/lib/habit-streak";
-import { serializeRecurrence } from "@/lib/recurrence";
+import { isOccurrenceDate, parseRecurrence, serializeRecurrence } from "@/lib/recurrence";
+import { sortAppointments } from "@/lib/appointments";
 import { taskPatternProblem } from "@/lib/task-series";
 import {
   COPIED_KEYS,
@@ -1219,6 +1221,83 @@ export function setRecurrence(subjectRef: string, spec: RecurrenceSpec | null, s
   const made = subject.type === "Task" ? afterPattern(state, subject.id, todayIso(), start) : [];
   emit();
   return made.map((m) => ({ id: m.id, urn: m.urn, type: m.type, title: m.title }));
+}
+
+/** An appointment's text attribute, or its series' when the occurrence has none (v_appointment). */
+function appointmentAttr(own: Record<string, unknown>, series: Record<string, unknown>, key: string): string | null {
+  const value = own[key] ?? series[key];
+  return typeof value === "string" && value ? value : null;
+}
+
+/** `GET /api/appointments?on=`: the day's one-time appointments and occurrences (CAL-1). */
+export function appointmentsOn(day: string): AppointmentRow[] {
+  const rows: AppointmentRow[] = [];
+  for (const s of state.subjects) {
+    if (s.type !== "Appointment" || s.archived) continue;
+    const own = rawAttrs(state.details[s.id]?.attributes);
+    if (own.recurrence) continue;
+    const date = typeof own.date === "string" ? own.date : s.due;
+    if (date !== day) continue;
+    const seriesUrn = typeof own.series === "string" ? own.series : null;
+    const series = seriesUrn ? byUrn(seriesUrn) : undefined;
+    const inherited = series ? rawAttrs(state.details[series.id]?.attributes) : {};
+    rows.push({
+      id: s.id,
+      urn: s.urn,
+      title: s.title,
+      date,
+      startTime: appointmentAttr(own, inherited, "start"),
+      endTime: appointmentAttr(own, inherited, "end"),
+      allDay: appointmentAttr(own, inherited, "all_day"),
+      location: appointmentAttr(own, inherited, "location"),
+      meetingLink: appointmentAttr(own, inherited, "meeting_link"),
+      area: s.area ?? null,
+      seriesUrn,
+      recurrence: null,
+      status: s.status ?? "Scheduled",
+      archived: false,
+      createdAt: s.createdAt ?? "",
+    });
+  }
+  return sortAppointments(rows);
+}
+
+/**
+ * `bsk materialize` / `POST /api/appointments/{id}/materialize` (CAL-1, D10): an occurrence for
+ * each of the pattern's dates from the series' start through `through` that isn't made yet.
+ */
+export function materializeAppointments(
+  seriesRef: string,
+  through: string,
+): { series: CreatedSubject; created: CreatedSubject[] } {
+  const series = byRef(seriesRef);
+  if (!series) throw new Error(`No subject matches "${seriesRef}".`);
+  if (series.type !== "Appointment") {
+    throw new Error(`'${series.urn}' is a ${series.type}, not an Appointment series.`);
+  }
+  const attrs = rawAttrs(state.details[series.id]?.attributes);
+  const spec = attrs.recurrence ? parseRecurrence(JSON.stringify(attrs.recurrence)) : null;
+  const start =
+    (typeof attrs.start_date === "string" && attrs.start_date) || (series.createdAt ?? todayIso()).slice(0, 10);
+  const made = new Set(
+    state.subjects
+      .filter((s) => s.type === "Appointment")
+      .map((s) => rawAttrs(state.details[s.id]?.attributes))
+      .filter((a) => a.series === series.urn && typeof a.date === "string")
+      .map((a) => a.date as string),
+  );
+  const created: CreatedSubject[] = [];
+  for (let day = start, guard = 0; spec && day <= through && guard < 1500; day = addDays(day, 1), guard += 1) {
+    if (made.has(day) || !isOccurrenceDate(spec, day, start)) continue;
+    created.push(
+      createSubject({ type: "Appointment", title: series.title, attrs: { series: series.urn, date: day } }),
+    );
+  }
+  emit();
+  return {
+    series: { id: series.id, urn: series.urn, type: series.type, title: series.title },
+    created,
+  };
 }
 
 /** `POST /api/tasks/settle`: the repetitions every repeating Task is owed by today. */

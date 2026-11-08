@@ -1248,6 +1248,12 @@ export interface AppointmentRow {
   createdAt: string;
 }
 
+/** What Materialize made (CAL-1, `bsk materialize`): the series and each new occurrence. */
+export interface MaterializeResult {
+  series: CreatedSubject;
+  created: CreatedSubject[];
+}
+
 export interface PersonRow {
   id: string;
   urn: string;
@@ -2251,6 +2257,11 @@ export interface LifeOsWriteClient {
    * which the Tasks and Focus pages do when they open. Changes no status.
    */
   settleTasks(): Promise<TaskSettleResult>;
+  /**
+   * Make a repeating Appointment's occurrences through `through` (CAL-1, D10), each with its own
+   * status. Dates already made are skipped, so a later date only extends the horizon.
+   */
+  materialize(series: string, through: string): Promise<MaterializeResult>;
   involve(subject: string, person: string, role: PersonRole, remove?: boolean): Promise<void>;
   /** Drive a Task's timer (TASKS-2). Starting or resuming pauses any other running timer. */
   timer(task: string, action: TimerAction): Promise<TimerActionResult>;

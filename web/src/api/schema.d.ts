@@ -628,6 +628,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetAppointments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/appointments/{id}/materialize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MaterializeAppointments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/series": {
         parameters: {
             query?: never;
@@ -2051,6 +2083,25 @@ export interface components {
             error: string;
             candidates?: unknown;
         };
+        AppointmentRow: {
+            /** Format: uuid */
+            id?: string;
+            urn?: string;
+            title?: string;
+            date?: null | string;
+            startTime?: null | string;
+            endTime?: null | string;
+            allDay?: null | string;
+            location?: null | string;
+            meetingLink?: null | string;
+            area?: null | string;
+            seriesUrn?: null | string;
+            recurrence?: null | string;
+            status?: string;
+            archived?: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+        };
         AreaRow: {
             /** Format: uuid */
             id?: string;
@@ -2893,6 +2944,13 @@ export interface components {
             from?: string;
             relation?: string;
             to?: string;
+        };
+        MaterializeBody: {
+            through?: null | string;
+        };
+        MaterializeRow: {
+            series?: components["schemas"]["CreatedSubject"];
+            created?: components["schemas"]["CreatedSubject"][];
         };
         MeResponse: {
             email: string;
@@ -4808,6 +4866,72 @@ export interface operations {
             };
             /** @description Bad Gateway */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetAppointments: {
+        parameters: {
+            query?: {
+                on?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentRow"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    MaterializeAppointments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterializeBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterializeRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -11,6 +11,7 @@ import type {
   CreatedSubject,
   HabitTargetResult,
   LifeOsWriteClient,
+  MaterializeResult,
   OuraStatus,
   Redemption,
   RenamedSubject,
@@ -40,6 +41,7 @@ import {
 } from "@/lib/environment";
 import { normalizeMetric, normalizeReadingResult, normalizeReadingsResult } from "@/lib/measurements";
 import { extensionForMime, normalizeBinaryCapture } from "@/lib/artifacts";
+import { materializedMessage } from "@/lib/appointments";
 import {
   normalizeBountyResult,
   normalizeHabitTarget,
@@ -536,6 +538,17 @@ export function createLiveWriteClient(): LifeOsWriteClient {
           },
         }),
       );
+    },
+
+    async materialize(series, through) {
+      const result = (await unwrap(
+        api().POST("/api/appointments/{id}/materialize", {
+          params: { path: { id: series } },
+          body: { through },
+        }),
+      )) as unknown as MaterializeResult;
+      notify(materializedMessage(result, through));
+      return result;
     },
 
     async settleTasks() {

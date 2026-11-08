@@ -99,6 +99,8 @@ export const qk = {
   reviews: ["reviews"] as const,
   recap: ["recap"] as const,
   dashboard: ["dashboard"] as const,
+  // Under the dashboard, so every subject write that refreshes Focus refreshes these too.
+  appointments: (on: string) => ["dashboard", "appointments", on] as const,
   forest: (archived: boolean, lens: MapLens) =>
     ["forest", archived, lens] as const,
   edges: (archived: boolean) => ["edges", archived] as const,
@@ -545,6 +547,12 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         ["forest"],
         ["edges"],
       ]);
+    },
+
+    async materialize(series, through) {
+      const result = await client.materialize(series, through);
+      await invalidate(qc, [qk.subjects, qk.dashboard, ["forest"], ["edges"]]);
+      return result;
     },
 
     async settleTasks() {
@@ -994,6 +1002,14 @@ export function useAgentAction() {
       }
     },
     onSettled: () => qc.invalidateQueries({ queryKey: qk.agents }),
+  });
+}
+
+/** A day's appointments for Focus (CAL-1). */
+export function useAppointments(on: string) {
+  return useQuery({
+    queryKey: qk.appointments(on),
+    queryFn: () => reads().appointments({ on }),
   });
 }
 
