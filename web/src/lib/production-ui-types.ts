@@ -1954,14 +1954,17 @@ export interface HomeDaysRead {
 }
 
 // ---------------------------------------------------------------------------
-// Measurements (MEASURE-1, MEASURE-2, D20, measurements plan §4.6): `/api/measurements`. A
-// metric is something Chris measures (Weight); a reading is one measurement of it, taken at an
+// Measurements (MEASURE-1 to MEASURE-3, D20, measurements plan §4.6, §4.8): `/api/measurements`.
+// A metric is something Chris measures (Weight); a reading is one measurement of it, taken at an
 // instant. Days are home-zone days (`yyyy-MM-dd`). Readings are information only: no write
 // earns or moves a level.
 // ---------------------------------------------------------------------------
 
 /** Which way is good for a metric: it sets the goal date's direction. */
 export type MetricBetter = "lower" | "higher";
+
+/** Where a reading sits against its metric's normal range (MEASURE-3): below it or above it. */
+export type MetricFlag = "low" | "high";
 
 /** How a metric stands against its target (measurements plan §2.3). */
 export type MetricGoalStatus = "no_target" | "too_few" | "reached" | "heading" | "far" | "not_heading";
@@ -1983,9 +1986,14 @@ export interface MetricReadingRow {
   /** ISO instant it was last written. */
   loggedAt: string;
   versions: number;
+  /**
+   * `low` or `high` outside the metric's normal range as it is now (the ends themselves are
+   * normal); null inside it or with no range.
+   */
+  flag: MetricFlag | null;
 }
 
-/** One metric (MEASURE-1), with how many readings it has and its newest one. */
+/** One metric (MEASURE-1), with its normal range (MEASURE-3), how many readings it has and its newest one. */
 export interface MetricRow {
   id: string;
   urn: string;
@@ -1999,6 +2007,10 @@ export interface MetricRow {
   catalog: string | null;
   archivedAt: string | null;
   archivedOn: string | null;
+  /** The normal range's low end, or null; a reading below it is flagged `low`. */
+  low: number | null;
+  /** The normal range's high end, or null; a reading above it is flagged `high`. */
+  high: number | null;
   readings: number;
   lastReading: MetricReadingRow | null;
 }
@@ -2045,9 +2057,15 @@ export interface MetricReadingResult {
   reading: MetricReadingRow | null;
 }
 
+/** Readings logged together: each as it now reads, in the order given. */
+export interface MetricReadingsResult {
+  readings: MetricReadingRow[];
+}
+
 /**
- * Adding or changing a metric. A starter-list name (Weight) fills in the unit, decimals and
- * which way is better when a new one leaves them out; `clearTarget` removes the target.
+ * Adding or changing a metric. A starter-list name (Weight, Systolic BP) fills in the unit,
+ * decimals, which way is better and the normal range when a new one leaves them out;
+ * `clearTarget`, `clearLow` and `clearHigh` remove the target or an end of the range.
  */
 export interface MetricRequest {
   name?: string;
@@ -2056,6 +2074,10 @@ export interface MetricRequest {
   target?: number;
   clearTarget?: boolean;
   better?: MetricBetter;
+  low?: number;
+  clearLow?: boolean;
+  high?: number;
+  clearHigh?: boolean;
 }
 
 /** Logging a reading: the metric (id or name), the value, when it was taken (now when left out), a note. */
@@ -2063,6 +2085,16 @@ export interface MetricReadingRequest {
   metric: string;
   value: number;
   /** ISO instant; now when left out. */
+  takenAt?: string;
+  note?: string;
+}
+
+/**
+ * Logging readings of several metrics taken together (blood pressure's two, MEASURE-3): one
+ * time (now when left out) and one note. All or nothing.
+ */
+export interface MetricReadingBatchRequest {
+  readings: { metric: string; value: number }[];
   takenAt?: string;
   note?: string;
 }
@@ -2190,13 +2222,19 @@ export interface LifeOsWriteClient {
    * fills in the rest. Archive one with `archive(urn)`.
    */
   addMetric(req: MetricRequest & { name: string }): Promise<MetricRow>;
-  /** Rename a metric or change its unit, decimals, target or direction (`POST …/metrics/{id}`). */
+  /** Rename a metric or change its unit, decimals, target, direction or normal range (`POST …/metrics/{id}`). */
   setMetric(metric: string, req: MetricRequest): Promise<MetricRow>;
   /**
    * Log a reading (`POST /api/measurements/readings`), now or at any past time. Refused, with
    * nothing written, for a future time, too many decimal places, or an archived metric.
    */
   logReading(req: MetricReadingRequest): Promise<MetricReadingResult>;
+  /**
+   * Log readings of several metrics at one time with one note (`POST …/readings/batch`), all or
+   * nothing: blood pressure's systolic and diastolic. Refused as `logReading` is, and for a
+   * metric given twice.
+   */
+  logReadings(req: MetricReadingBatchRequest): Promise<MetricReadingsResult>;
   /** Change a reading's value, time or note (`POST …/readings/{id}`). */
   editReading(reading: string, req: MetricReadingEditRequest): Promise<MetricReadingResult>;
   /** Delete a reading; the record keeps its versions (`POST …/readings/{id}/delete`). */

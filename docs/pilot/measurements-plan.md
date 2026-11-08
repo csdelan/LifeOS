@@ -269,7 +269,100 @@ with readings) is a 400 in words, with nothing written.
   its text (the Food Log's Delete, the Inbox's Drop); it's now 5:1. The chart tables'
   headings are padded like their cells.
 
-### 4.8 Compare (M5)
+### 4.8 Any metric (M3)
+
+**Chris's answers (2026-11-07),** all four as recommended:
+
+| Question | Answer |
+|---|---|
+| How the page holds many metrics (M4 adds ~20 lab values) | **A compact list, Weight open.** Weight keeps its full card at the top; every other metric is a row (latest value, when, a High/Low flag, a small trend line) that opens its full card in place. |
+| Which normal ranges come filled in | **Blood pressure only:** systolic 90–119, diastolic 60–79 (the American Heart Association's "normal"). Body fat, waist and VO2 max depend on age and sex, so he sets those. |
+| How blood pressure is charted | **One chart, two lines:** systolic and diastolic on one axis, each with its dots, trend and normal band; a day reads "122/78". |
+| Logging on a phone | **Log weight stays** as the bottom bar; every other metric is logged from its own row or card. |
+
+**Kernel (migration 0051):**
+
+- **A normal range** is two optional attributes, `low` and `high`: numbers with at most the
+  metric's decimal places, `low` ≤ `high`, written only by `MetricService` (so `bsk set`
+  refuses them). Either can be left out ("up to 40 in" has only `high`).
+- **A reading is flagged** `low` below `low` and `high` above `high`; the bounds themselves are
+  normal, as on a lab report. The flag is worked out on read from the metric's range as it is
+  now, so changing the range re-flags old readings. (Whether a lab reading carries its own
+  printed range is M4's call.)
+- **The starter list** gains Body fat (%, 1 place, lower), Waist (in, 1, lower), Systolic BP
+  (mmHg, 0, lower, 90–119), Diastolic BP (mmHg, 0, lower, 60–79) and VO2 max (lab) (mL/kg/min,
+  1, higher). Making one by name fills in its range.
+- **Logging several at once:** `MetricReadingService.LogManyAsync` writes readings of several
+  metrics with one time and note in one transaction, all checked before anything is written.
+  Blood pressure uses it; M4's lab visit can build on it.
+- `bsk.v_metric` gains `low` and `high`; nothing else in the schema changes.
+
+**API and CLI:**
+
+- `MetricRow` gains `low` and `high`; `POST /api/measurements/metrics[/{id}]` takes `low`,
+  `high`, `clearLow` and `clearHigh`; every reading row gains `flag` (`low`, `high` or null).
+- `POST /api/measurements/readings/batch`: `{ readings: [{ metric, value }], takenAt?, note? }`,
+  answering `{ readings }`; all or nothing.
+- `bsk metric add|set … [--low N] [--high N] [--no-low] [--no-high]`; `list` and `show` print the
+  range, and `show` and `bsk measure --list` flag readings outside it.
+- `bsk measure "Systolic BP" 122 --and "Diastolic BP=78"` logs them together.
+
+**Web:**
+
+- **Weight** stays at the top as M2 built it (or *Start tracking weight*), with **Log weight**
+  in the phone's bottom bar.
+- **Your other metrics** follow as rows, in starter-list order (Body fat, Waist, Blood
+  pressure, VO2 max (lab)) and then his own by name. A row shows the newest value with High or
+  Low, when, and the trend over the last 90 days; it opens the metric's card in place, and has
+  its own Log button.
+- **Blood pressure is one row and one card** made of the two metrics (paired by their
+  starter-list keys): "124/79", one chart with both series, one Log sheet with both values,
+  and a table with a row for each pair.
+- **Add a metric** offers the starter metrics not yet tracked, or **your own**: name, unit,
+  decimal places, goal, which way is better and normal range.
+- **Each card's Edit** changes the name, unit (only while it has no readings), decimal places,
+  goal, which way is better and normal range, or archives it. It replaces M2's goal dialog.
+- **Archived metrics** are listed at the foot of the page with Restore.
+- **The chart** shades the normal range; a flagged dot is drawn hollow, so it shows without
+  colour, and the table says High or Low.
+
+**As built (M3, 2026-11-07).** Filled in from how LifeOS already works:
+
+- **Migration 0051** recreates `bsk.v_metric` with `low` and `high` on the end; nothing else
+  in the schema changes. Ranges are kept to the metric's decimal places, and the low end must
+  be at or below the high end ("The normal range's low end (300) is above its high end (30).").
+  Changing a metric's decimals checks its range again, as it checks the goal.
+- **A flag is worked out on read** from the range as it is now, in C# (`Metric.Flag`) and in
+  the mock store, so a new range re-flags old readings at once.
+- **Logging together** (`LogManyAsync`, `POST …/readings/batch`) takes up to 50 readings, one
+  value for each metric, and refuses a metric given twice. `LogAsync` is the one-reading case
+  of it. `bsk measure "Systolic BP" 122 --and "Diastolic BP=78"` splits each `--and` at its
+  last `=`.
+- **Blood pressure pairs by instant:** a pair is the two readings with the same time, which
+  one write gives them. Changing a pair's time changes both. A half without its pair (one was
+  deleted, or logged alone from the CLI) shows as "121/— mmHg", and its sheet can fill the
+  missing half in at the pair's time.
+- **A pair's flag** names each kind once: "High", "Low", or "High, low". Its readout and table
+  read "121/78 mmHg (high)".
+- **Rows**: the newest value and its flag, when, and a small trend line over the last 90 days
+  (left out on a phone, where the name needs the room). The row button reads as one sentence
+  to a screen reader: "Blood pressure: 121/78 mmHg, high, Thu, Nov 5, 7:30 AM". Which rows are
+  open is remembered in the browser, as each card's range is.
+- **The card** is Weight's, made general: Weight keeps its own testids and its big trend
+  number; an opened row shows "Trend 117/76 mmHg", the goal line for each metric that has
+  one (blood pressure's prefixed "Systolic:" or "Diastolic:"), and "Normal: systolic 90–119,
+  diastolic 60–79 mmHg". A second series is drawn with square dots, so systolic and diastolic
+  read apart without colour.
+- **The axis doesn't stretch to show a range**: the band is clipped to the axis, which still
+  fits the values, the trend and the goal.
+- **Edit** has Name, Unit (locked once there are readings, saying why), Decimal places, Goal,
+  Better (lower or higher), and the range's Low end and High end; a blank field clears it.
+  Blood pressure's Edit picks Systolic or Diastolic, and its Archive archives both.
+- **Add a metric** lists the starter metrics not tracked yet as one-click choices (blood
+  pressure adds whichever half is missing), then *Your own*. The new metric's row opens.
+- **Toasts**: "Logged 122/78 mmHg", "Saved 117/78 mmHg"; a single metric's are M2's.
+
+### 4.9 Compare (M5)
 
 - **A series** is anything with a value per day: each metric's day values, and from Oura:
   steps, active calories, sleep score, readiness, HRV (`average_hrv`), lowest heart rate,
@@ -286,7 +379,7 @@ with readings) is a 400 in words, with nothing written.
 | **M0** | This plan, MEASURE-1 to MEASURE-6, D20 | — | Yes |
 | **M1** | The Metric type, readings, views, `MetricTrend`, `MetricService`, `MetricReadingService`, `bsk metric`, `bsk measure`, the `/api/measurements` endpoints, Metric items under `/mcp`'s Health switch. Nothing on the web yet. | 0050 | Yes |
 | **M2** | The Measurements page with the Weight card, `TrendChart`, the TypeScript port and the mock store. Chris sets his 185 goal and starts logging. Calibration: α and the goal-date basis after a few weeks of use. | — | After M1 |
-| **M3** | Any metric on the web: add one from the starter list or from scratch (name, unit, decimals, goal, which way is better), a card for each, normal ranges and flags. Body fat, waist, blood pressure (two metrics entered together), VO2 max (lab). | — | Yes |
+| **M3** | Any metric on the web: add one from the starter list or from scratch (name, unit, decimals, goal, which way is better), a card for each, normal ranges and flags. Body fat, waist, blood pressure (two metrics entered together), VO2 max (lab). | 0051 | Yes |
 | **M4** | Lab results: a lab visit (date, lab, all its values at once, the PDF), reference ranges per reading, high and low flags, the CMP, lipid and A1c panels in the starter list. Design detail is settled before it starts. | Maybe | Yes |
 | **M5** | Compare: the series read, the stacked chart, the series picker; Oura's VO2 max estimate pulled as a series. | — | Yes |
 | **M6** | Agents: `/mcp`'s `health` tool gains the readings and the goal, and the series read for a range. | — | Yes |
@@ -343,7 +436,7 @@ Each of these has to earn its place through use.
 - [x] M0 — Plan + requirements (MEASURE-1 to MEASURE-6, D20)
 - [x] M1 — Metrics and readings in the kernel (migration 0050)
 - [x] M2 — Weight on the web (no migration; calibration of α and the basis after a few weeks)
-- [ ] M3 — Any metric on the web
+- [x] M3 — Any metric on the web (migration 0051)
 - [ ] M4 — Lab results
 - [ ] M5 — Compare with Oura and the Food Log
 - [ ] M6 — Agents

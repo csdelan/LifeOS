@@ -7,6 +7,7 @@ import {
   mockDeleteReading,
   mockEditReading,
   mockLogReading,
+  mockLogReadings,
   mockMetricDetail,
   mockMetrics,
   mockSetMetric,
@@ -29,9 +30,9 @@ function localAt(daysAgo: number, hour: number, minute = 0): string {
   return new Date(y, m - 1, d, hour, minute).toISOString();
 }
 
-describe("the mock store's measurements (measurements plan §4.7)", () => {
+describe("the mock store's measurements (measurements plan §4.7–§4.8)", () => {
   it("seeds Weight with a 185 goal and weeks of morning weigh-ins, the newest yesterday", () => {
-    const [weight] = mockMetrics();
+    const weight = mockMetrics().find((m) => m.catalog === "weight")!;
     expect(weight).toMatchObject({ name: "Weight", unit: "lb", decimals: 1, target: 185, better: "lower", catalog: "weight" });
     expect(weight.readings).toBeGreaterThan(30);
     expect(weight.lastReading?.takenOn).toBe(addDays(todayIso(), -1));
@@ -65,7 +66,7 @@ describe("the mock store's measurements (measurements plan §4.7)", () => {
     expect(() => mockLogReading({ metric: "Weight", value: 190.25 })).toThrow(
       "Weight takes at most 1 decimal place; got 190.25.",
     );
-    expect(() => mockLogReading({ metric: "Waist", value: 34 })).toThrow("No subject matches 'Waist'.");
+    expect(() => mockLogReading({ metric: "Neck", value: 15 })).toThrow("No subject matches 'Neck'.");
 
     const edited = mockEditReading(backdated.id, { value: 193.8, note: "scale on carpet" }).reading!;
     expect(edited).toMatchObject({ value: 193.8, note: "scale on carpet", versions: 2, takenAt: backdated.takenAt });
@@ -87,7 +88,7 @@ describe("the mock store's measurements (measurements plan §4.7)", () => {
     expect(weight).toMatchObject({ name: "weight", unit: "lb", decimals: 1, better: "lower", catalog: "weight", readings: 0 });
     expect(mockMetricDetail("Weight").goal.status).toBe("too_few");
     expect(() => mockAddMetric({ name: "Weight" })).toThrow("You already have a metric called 'weight'.");
-    expect(() => mockAddMetric({ name: "Waist" })).toThrow("Give the metric a unit, e.g. lb, in, % or mg/dL.");
+    expect(() => mockAddMetric({ name: "Neck" })).toThrow("Give the metric a unit, e.g. lb, in, % or mg/dL.");
     expect(() => mockAddMetric({ name: "Body fat", unit: "%", target: 18.25 })).toThrow(
       "The target takes at most 1 decimal place; got 18.25.",
     );
@@ -108,5 +109,98 @@ describe("the mock store's measurements (measurements plan §4.7)", () => {
       "'weight' is archived: bring it back before logging to it.",
     );
     expect(mockArchiveMetric("urn:bsk:task:not-a-metric", true)).toBe(false);
+  });
+
+  it("seeds blood pressure as a pair with its normal ranges, the newest high, and Waist with none", () => {
+    const metrics = mockMetrics();
+    const systolic = metrics.find((m) => m.catalog === "bp_systolic")!;
+    const diastolic = metrics.find((m) => m.catalog === "bp_diastolic")!;
+    expect(systolic).toMatchObject({ name: "Systolic BP", unit: "mmHg", decimals: 0, low: 90, high: 119, target: null });
+    expect(diastolic).toMatchObject({ name: "Diastolic BP", low: 60, high: 79 });
+    // Logged together, so each pair shares its instant; the newest is two days ago.
+    expect(systolic.lastReading).toMatchObject({ value: 121, flag: "high", takenOn: addDays(todayIso(), -2) });
+    expect(diastolic.lastReading).toMatchObject({ value: 78, flag: null, takenAt: systolic.lastReading!.takenAt });
+
+    const all = mockMetricDetail("Systolic BP");
+    expect(all.readings.filter((r) => r.flag === "high").length).toBeGreaterThan(1);
+    expect(all.readings.every((r) => r.flag === "high" || r.flag === null)).toBe(true);
+
+    const waist = metrics.find((m) => m.catalog === "waist")!;
+    expect(waist).toMatchObject({ unit: "in", low: null, high: null, target: null });
+    expect(waist.lastReading?.flag).toBeNull();
+    // Body fat and VO2 max (lab) are Chris's to add.
+    expect(metrics.some((m) => m.catalog === "body_fat" || m.catalog === "vo2max_lab")).toBe(false);
+  });
+
+  it("keeps a normal range, refused in the kernel's words, and flags against it as it is now", () => {
+    clearMockMeasurements();
+    // A starter name fills in its range; his own has none until he gives one.
+    expect(mockAddMetric({ name: "systolic bp" })).toMatchObject({ unit: "mmHg", decimals: 0, low: 90, high: 119 });
+    expect(mockAddMetric({ name: "Neck", unit: "in", high: 16 })).toMatchObject({ low: null, high: 16 });
+    expect(() => mockAddMetric({ name: "Ferritin", unit: "ng/mL", decimals: 0, low: 300, high: 30 })).toThrow(
+      "The normal range's low end (300) is above its high end (30).",
+    );
+    expect(() => mockAddMetric({ name: "Ferritin", unit: "ng/mL", decimals: 0, low: 30.5 })).toThrow(
+      "The normal range's low end takes a whole number; got 30.5.",
+    );
+
+    const high = mockLogReading({ metric: "Neck", value: 16.5 }).reading!;
+    expect(high.flag).toBe("high");
+    // The end itself is normal.
+    expect(mockLogReading({ metric: "Neck", value: 16, takenAt: localAt(1, 7) }).reading!.flag).toBeNull();
+
+    // Raising the high end re-flags the old reading; clearing it leaves none flagged.
+    expect(mockSetMetric("Neck", { high: 17 })).toMatchObject({ high: 17 });
+    expect(mockMetricDetail("Neck").readings.find((r) => r.id === high.id)!.flag).toBeNull();
+    expect(mockSetMetric("Neck", { low: 16.2 }).lastReading?.flag).toBeNull();
+    expect(mockMetricDetail("Neck").readings.map((r) => r.flag)).toEqual([null, "low"]);
+    expect(() => mockSetMetric("Neck", { low: 18 })).toThrow("The normal range's low end (18.0) is above its high end (17.0).");
+    expect(() => mockSetMetric("Neck", { high: 17, clearHigh: true })).toThrow(
+      "Set an end of the normal range or clear it, not both.",
+    );
+    expect(mockSetMetric("Neck", { clearLow: true, clearHigh: true })).toMatchObject({ low: null, high: null });
+    expect(() => mockSetMetric("Neck", {})).toThrow(
+      "Say what to change: a name, a unit, decimals, a target, which way is better or the normal range.",
+    );
+  });
+
+  it("logs readings together at one time with one note, all or none", () => {
+    const before = mockMetricDetail("Systolic BP").readings.length;
+    const { readings } = mockLogReadings({
+      readings: [
+        { metric: "Systolic BP", value: 126 },
+        { metric: "diastolic bp", value: 77 },
+      ],
+      takenAt: localAt(0, 7, 30),
+      note: "after coffee",
+    });
+    expect(readings.map((r) => [r.value, r.flag, r.note])).toEqual([
+      [126, "high", "after coffee"],
+      [77, null, "after coffee"],
+    ]);
+    expect(readings[0].takenAt).toBe(readings[1].takenAt);
+
+    // Any refusal writes none.
+    const refusals: [Parameters<typeof mockLogReadings>[0], string][] = [
+      [{ readings: [] }, "Give at least one reading: a metric and its value."],
+      [
+        { readings: [{ metric: "Systolic BP", value: 120 }, { metric: "Systolic BP", value: 121 }] },
+        "Systolic BP is given twice: log one value for each metric.",
+      ],
+      [
+        { readings: [{ metric: "Systolic BP", value: 120 }, { metric: "Diastolic BP", value: 78.5 }] },
+        "Diastolic BP takes a whole number; got 78.5.",
+      ],
+      [{ readings: [{ metric: "Systolic BP", value: 120 }, { metric: "Pulse", value: 60 }] }, "No subject matches 'Pulse'."],
+    ];
+    for (const [req, message] of refusals) expect(() => mockLogReadings(req)).toThrow(message);
+    expect(mockMetricDetail("Systolic BP").readings.length).toBe(before + 1);
+
+    const waist = mockMetrics().find((m) => m.catalog === "waist")!;
+    mockArchiveMetric(waist.urn, true);
+    expect(() =>
+      mockLogReadings({ readings: [{ metric: "Systolic BP", value: 120 }, { metric: waist.id, value: 37.5 }] }),
+    ).toThrow("'Waist' is archived: bring it back before logging to it.");
+    expect(mockMetricDetail("Systolic BP").readings.length).toBe(before + 1);
   });
 });

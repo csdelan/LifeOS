@@ -4199,7 +4199,7 @@ Build:      built
 ### MEASURE-3 — I can add my own metrics, each with a unit, a goal and which way is better
 Horizon:    Pilot
 Definition: active
-Build:      mapped
+Build:      built
 
 **Workflow (Chris):**
 - "I will track a wide variety of metrics over time within LifeOs, such as … body
@@ -4216,6 +4216,12 @@ Build:      mapped
 - Implications: a renamed metric keeps its starter-list key, so the app still knows which is
   weight.
 - Open decisions: none blocking.
+- Built (M3, 2026-11-07): migration 0051 gives a metric a normal range (`low`, `high`) and
+  every reading a High or Low flag; the starter list gains Body fat, Waist, Systolic and
+  Diastolic BP (90–119 and 60–79) and VO2 max (lab); readings can be logged together. On the
+  web, every metric but Weight is a row under Your metrics that opens its card in place, blood
+  pressure's two as one row, one chart and one Log sheet; Add a metric, Edit (which replaced
+  M2's goal dialog) and Archived with Restore. As built: plan §4.8.
 
 ### MEASURE-4 — I can log a lab visit's results at once, with the report PDF and normal ranges
 Horizon:    Pilot phase 2

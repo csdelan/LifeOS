@@ -1,7 +1,8 @@
 /**
- * The Measurements page's words and the API's shapes (MEASURE-1, MEASURE-2, D20, measurements
- * plan §2–§4.7): the kernel's limits, how a value, a reading's time and the goal date read, the
- * checks a typed value goes through (in the kernel's words), and the live API's numbers
+ * The Measurements page's words and the API's shapes (MEASURE-1 to MEASURE-3, D20, measurements
+ * plan §2–§4.8): the kernel's limits and starter list, how a value, a reading's time, the goal
+ * date and the normal range read, the checks a typed value goes through (in the kernel's words),
+ * how the page groups metrics (blood pressure's two are one), and the live API's numbers
  * (`number | string`) as numbers. The trend itself is `lib/metric-trend.ts`.
  */
 import { formatDay } from "@/lib/dates";
@@ -9,10 +10,12 @@ import type {
   MetricBetter,
   MetricDayRow,
   MetricDetailRead,
+  MetricFlag,
   MetricGoalRow,
   MetricGoalStatus,
   MetricReadingResult,
   MetricReadingRow,
+  MetricReadingsResult,
   MetricRow,
 } from "@/lib/production-ui-types";
 
@@ -34,11 +37,51 @@ export interface MetricTemplate {
   unit: string;
   decimals: number;
   better: MetricBetter;
+  /** The normal range it comes with; only blood pressure has one (§4.8). */
+  low?: number;
+  high?: number;
 }
 
-/** The starter list. M2 needs Weight; M3 adds the body metrics. */
+/**
+ * The starter list, as the kernel's `MetricCatalog`: Weight (M1), then the body metrics (M3).
+ * Blood pressure is two metrics logged together, paired by their keys. Only it comes with a
+ * normal range (the American Heart Association's "normal"); the others depend on age and sex.
+ */
 export const WEIGHT: MetricTemplate = { key: "weight", name: "Weight", unit: "lb", decimals: 1, better: "lower" };
-export const CATALOG: readonly MetricTemplate[] = [WEIGHT];
+export const BODY_FAT: MetricTemplate = { key: "body_fat", name: "Body fat", unit: "%", decimals: 1, better: "lower" };
+export const WAIST: MetricTemplate = { key: "waist", name: "Waist", unit: "in", decimals: 1, better: "lower" };
+export const SYSTOLIC: MetricTemplate = {
+  key: "bp_systolic",
+  name: "Systolic BP",
+  unit: "mmHg",
+  decimals: 0,
+  better: "lower",
+  low: 90,
+  high: 119,
+};
+export const DIASTOLIC: MetricTemplate = {
+  key: "bp_diastolic",
+  name: "Diastolic BP",
+  unit: "mmHg",
+  decimals: 0,
+  better: "lower",
+  low: 60,
+  high: 79,
+};
+export const VO2MAX_LAB: MetricTemplate = {
+  key: "vo2max_lab",
+  name: "VO2 max (lab)",
+  unit: "mL/kg/min",
+  decimals: 1,
+  better: "higher",
+};
+export const CATALOG: readonly MetricTemplate[] = [WEIGHT, BODY_FAT, WAIST, SYSTOLIC, DIASTOLIC, VO2MAX_LAB];
+
+/** The starter-list template a metric named `name` is made from, in any case. */
+export function findTemplate(name: string): MetricTemplate | undefined {
+  const wanted = name.trim().toLowerCase();
+  return CATALOG.find((t) => t.name.toLowerCase() === wanted);
+}
 
 /** The chart's ranges: 30 days, 90 days, a year, and all of history. */
 export const RANGES = [
@@ -58,6 +101,216 @@ export function rangeDays(range: MetricRange): number | null {
 export function findCatalog(metrics: readonly MetricRow[], key: string): MetricRow | undefined {
   const made = metrics.filter((m) => m.catalog === key);
   return made.find((m) => m.archivedAt == null) ?? made[0];
+}
+
+// ---------------------------------------------------------------------------
+// Groups: what the page shows as one row and one card (§4.8)
+// ---------------------------------------------------------------------------
+
+/** Blood pressure's group key, the name its row and card go by, and its two halves' labels. */
+export const BLOOD_PRESSURE = {
+  key: "bp",
+  name: "Blood pressure",
+  noun: "reading",
+  labels: ["Systolic", "Diastolic"],
+} as const;
+
+/**
+ * One row and one card on the page: a metric on its own, or blood pressure's two (systolic
+ * first). `key` is the starter-list key, `bp`, or a metric's id; `noun` names a reading
+ * ("weigh-in" for Weight); `labels` name each metric within it (its name, or "Systolic").
+ */
+export interface MetricGroup {
+  key: string;
+  name: string;
+  noun: string;
+  labels: readonly string[];
+  metrics: MetricRow[];
+}
+
+/** A metric as a group of its own. */
+export function singleGroup(metric: MetricRow): MetricGroup {
+  return {
+    key: metric.catalog ?? metric.id,
+    name: metric.name,
+    noun: metric.catalog === WEIGHT.key ? "weigh-in" : "reading",
+    labels: [metric.name],
+    metrics: [metric],
+  };
+}
+
+/** A name inside a sentence: "weight", "body fat", but "VO2 max (lab)" and "LDL" as they are. */
+export function nameInText(name: string): string {
+  const second = name.charAt(1);
+  if (/[A-Z0-9]/.test(second)) return name;
+  return name.charAt(0).toLowerCase() + name.slice(1);
+}
+
+/** A group's normal range in words: "Normal: 90–119 mmHg", "Normal: systolic 90–119, diastolic 60–79 mmHg". */
+export function groupRangeText(group: Pick<MetricGroup, "metrics" | "labels">): string | null {
+  if (group.metrics.length === 1) {
+    const text = rangeText(group.metrics[0]);
+    return text ? `Normal: ${text}` : null;
+  }
+  const parts = group.metrics
+    .map((m, i) => {
+      const text = rangeText({ ...m, unit: "" });
+      return text ? `${nameInText(group.labels[i])} ${text}` : null;
+    })
+    .filter((p): p is string => p != null);
+  if (parts.length === 0) return null;
+  const unit = group.metrics[0].unit;
+  return `Normal: ${parts.join(", ")}${unit ? ` ${unit}` : ""}`;
+}
+
+/** Where a group sits: the starter list's order (blood pressure at systolic's place), then his own. */
+function catalogRank(group: MetricGroup): number {
+  const key = group.key === BLOOD_PRESSURE.key ? SYSTOLIC.key : group.metrics[0].catalog;
+  const i = CATALOG.findIndex((t) => t.key === key);
+  return i < 0 ? CATALOG.length : i;
+}
+
+/**
+ * `metrics` as the page's rows (§4.8): blood pressure's two paired into one when both are there,
+ * in starter-list order, then his own by name. Pass the live ones or the archived ones; a half of
+ * blood pressure without its pair is a row of its own.
+ */
+export function groupMetrics(metrics: readonly MetricRow[]): MetricGroup[] {
+  const systolic = metrics.find((m) => m.catalog === SYSTOLIC.key);
+  const diastolic = metrics.find((m) => m.catalog === DIASTOLIC.key);
+  const paired: MetricRow[] = systolic && diastolic ? [systolic, diastolic] : [];
+  const groups: MetricGroup[] = metrics.filter((m) => !paired.includes(m)).map(singleGroup);
+  if (paired.length === 2) groups.push({ ...BLOOD_PRESSURE, metrics: paired });
+  return groups.sort((a, b) => catalogRank(a) - catalogRank(b) || a.name.localeCompare(b.name));
+}
+
+/** A group's values as they read: "192.4 lb", "122/78 mmHg"; a missing half is "—". */
+export function groupValue(group: Pick<MetricGroup, "metrics">, values: readonly (number | null)[]): string {
+  const [first] = group.metrics;
+  if (group.metrics.length === 1) return values[0] == null ? "—" : withUnit(values[0], first);
+  const text = group.metrics.map((m, i) => (values[i] == null ? "—" : formatValue(values[i]!, m.decimals))).join("/");
+  return first.unit ? `${text} ${first.unit}` : text;
+}
+
+/**
+ * A group's readings taken together, newest first. Blood pressure's two share an instant (they're
+ * logged in one write), so each pair is one set; a metric on its own has a set for each reading.
+ * `readings` is each metric's readings, in the group's order.
+ */
+export function readingSets(readings: readonly (readonly MetricReadingRow[])[]): (MetricReadingRow | null)[][] {
+  const width = readings.length;
+  const sets: (MetricReadingRow | null)[][] = [];
+  // The open set at each instant; a second reading of one metric at that instant starts another.
+  const open = new Map<number, (MetricReadingRow | null)[]>();
+  readings.forEach((list, i) => {
+    for (const r of list) {
+      const at = Date.parse(r.takenAt);
+      let set = open.get(at);
+      if (!set || set[i] != null) {
+        set = Array<MetricReadingRow | null>(width).fill(null);
+        open.set(at, set);
+        sets.push(set);
+      }
+      set[i] = r;
+    }
+  });
+  const first = (set: (MetricReadingRow | null)[]) => set.find((r) => r != null)!;
+  return sets.sort(
+    (a, b) => Date.parse(first(b).takenAt) - Date.parse(first(a).takenAt) || first(b).id.localeCompare(first(a).id),
+  );
+}
+
+/** A set of readings taken together: one for a metric on its own, blood pressure's pair. */
+export type ReadingSet = (MetricReadingRow | null)[];
+
+/** The newest set among a group's metrics' newest readings. */
+export function lastSet(group: Pick<MetricGroup, "metrics">): ReadingSet | null {
+  return readingSets(group.metrics.map((m) => (m.lastReading ? [m.lastReading] : [])))[0] ?? null;
+}
+
+/** "122/78 mmHg · Today, 7:10 AM": a set as its row, sheet and delete ask name it. */
+export function setText(group: Pick<MetricGroup, "metrics">, set: ReadingSet, today: string): string {
+  const taken = set.find((r) => r != null)!;
+  return `${groupValue(group, set.map((r) => r?.value ?? null))} · ${readingWhen(taken, today || taken.takenOn)}`;
+}
+
+/** A starter-list choice in Add a metric: one metric, or blood pressure's two. */
+export interface StarterChoice {
+  key: string;
+  name: string;
+  templates: MetricTemplate[];
+}
+
+/**
+ * The starter metrics not tracked yet (§2.1, §4.8), in the list's order: blood pressure is one
+ * choice (its two), and Weight has its own card at the top.
+ */
+export function starterChoices(metrics: readonly MetricRow[]): StarterChoice[] {
+  const tracked = new Set(metrics.filter((m) => m.archivedAt == null).map((m) => m.catalog));
+  const choices: StarterChoice[] = [];
+  for (const t of CATALOG) {
+    if (t.key === WEIGHT.key || t.key === DIASTOLIC.key) continue;
+    if (t.key === SYSTOLIC.key) {
+      if (!tracked.has(SYSTOLIC.key) || !tracked.has(DIASTOLIC.key)) {
+        choices.push({ key: BLOOD_PRESSURE.key, name: BLOOD_PRESSURE.name, templates: [SYSTOLIC, DIASTOLIC] });
+      }
+      continue;
+    }
+    if (!tracked.has(t.key)) choices.push({ key: t.key, name: t.name, templates: [t] });
+  }
+  return choices;
+}
+
+/** What a starter choice comes with, in words: "mmHg · lower is better · normal 90–119 / 60–79". */
+export function starterText(choice: StarterChoice): string {
+  const [t] = choice.templates;
+  const ranges = choice.templates
+    .map((x) => rangeText({ low: x.low ?? null, high: x.high ?? null, unit: "", decimals: x.decimals }))
+    .filter((r): r is string => r != null);
+  return [t.unit, `${t.better} is better`, ranges.length > 0 ? `normal ${ranges.join(" / ")}` : null]
+    .filter((p): p is string => p != null)
+    .join(" · ");
+}
+
+// ---------------------------------------------------------------------------
+// The normal range (MEASURE-3, §4.8)
+// ---------------------------------------------------------------------------
+
+/** `low` below the range and `high` above it; the ends themselves are normal. As `Metric.Flag`. */
+export function flagOf(value: number, metric: Pick<MetricRow, "low" | "high">): MetricFlag | null {
+  if (metric.low != null && value < metric.low) return "low";
+  if (metric.high != null && value > metric.high) return "high";
+  return null;
+}
+
+/** "High", "Low". */
+export function flagWord(flag: MetricFlag): string {
+  return flag === "high" ? "High" : "Low";
+}
+
+/** A set's flags in words, each once: "High", "Low", "High, low"; null when none is flagged. */
+export function flagsText(readings: readonly (Pick<MetricReadingRow, "flag"> | null)[]): string | null {
+  const flags = [...new Set(readings.map((r) => r?.flag).filter((f): f is MetricFlag => f != null))];
+  if (flags.length === 0) return null;
+  return flags.map((f, i) => (i === 0 ? flagWord(f) : flagWord(f).toLowerCase())).join(", ");
+}
+
+/** The normal range in words, as `Metric.RangeText`: "90–119 mmHg", "up to 40.0 in", "at least 30.0". */
+export function rangeText(metric: Pick<MetricRow, "low" | "high" | "unit" | "decimals">): string | null {
+  const unit = metric.unit ? ` ${metric.unit}` : "";
+  const { low, high, decimals } = metric;
+  if (low != null && high != null) return `${formatValue(low, decimals)}–${formatValue(high, decimals)}${unit}`;
+  if (high != null) return `up to ${formatValue(high, decimals)}${unit}`;
+  if (low != null) return `at least ${formatValue(low, decimals)}${unit}`;
+  return null;
+}
+
+/** A normal range checked as the kernel's `MetricLimits.CheckRange` checks one: the low end at or below the high. */
+export function rangeProblem(low: number | null, high: number | null, decimals: number): string | null {
+  if (low != null && high != null && low > high) {
+    return `The normal range's low end (${formatValue(low, decimals)}) is above its high end (${formatValue(high, decimals)}).`;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,9 +348,14 @@ function placesWords(decimals: number): string {
  * A typed value checked as the kernel checks one (`MetricLimits.CheckValue`): the number, or
  * what's wrong in the kernel's words. Trailing zeros past the places are fine ("192.40").
  */
-export function parseValue(raw: string, decimals: number, what: string): { value: number } | { problem: string } {
+export function parseValue(
+  raw: string,
+  decimals: number,
+  what: string,
+  example = decimals === 0 ? "70" : "192.4",
+): { value: number } | { problem: string } {
   const text = raw.trim();
-  if (text === "") return { problem: `Type the ${what.toLowerCase()}, e.g. ${decimals === 0 ? "70" : "192.4"}.` };
+  if (text === "") return { problem: `Type the ${nameInText(what)}, e.g. ${example}.` };
   if (!/^-?(\d+\.?\d*|\.\d+)$/.test(text)) return { problem: `'${text}' isn't a number.` };
   const value = Number(text);
   if (Math.abs(value) > VALUE_MAX) return { problem: `${what} is between -1,000,000 and 1,000,000; got ${text}.` };
@@ -199,6 +457,10 @@ function better(value: unknown): MetricBetter | null {
   return value === "lower" || value === "higher" ? value : null;
 }
 
+function flag(value: unknown): MetricFlag | null {
+  return value === "low" || value === "high" ? value : null;
+}
+
 export function normalizeReading(raw: MetricReadingRow): MetricReadingRow {
   return {
     id: raw.id,
@@ -211,6 +473,7 @@ export function normalizeReading(raw: MetricReadingRow): MetricReadingRow {
     takenLocal: raw.takenLocal,
     loggedAt: raw.loggedAt,
     versions: num(raw.versions),
+    flag: flag(raw.flag),
   };
 }
 
@@ -226,6 +489,8 @@ export function normalizeMetric(raw: MetricRow): MetricRow {
     catalog: raw.catalog ?? null,
     archivedAt: raw.archivedAt ?? null,
     archivedOn: raw.archivedOn ?? null,
+    low: numOrNull(raw.low),
+    high: numOrNull(raw.high),
     readings: num(raw.readings),
     lastReading: raw.lastReading ? normalizeReading(raw.lastReading) : null,
   };
@@ -266,6 +531,10 @@ export function normalizeReadingResult(raw: MetricReadingResult): MetricReadingR
   return { reading: raw.reading ? normalizeReading(raw.reading) : null };
 }
 
+export function normalizeReadingsResult(raw: MetricReadingsResult): MetricReadingsResult {
+  return { readings: (raw.readings ?? []).map(normalizeReading) };
+}
+
 /** The toast after a reading write: "Logged 192.4 lb", "Saved 192.2 lb", "Deleted the reading". */
 export function readingMessage(
   kind: "logged" | "saved" | "deleted",
@@ -275,4 +544,13 @@ export function readingMessage(
   if (kind === "deleted" || !reading) return "Deleted the reading";
   const value = withUnit(reading.value, { unit: reading.unit, decimals });
   return kind === "logged" ? `Logged ${value}` : `Saved ${value}`;
+}
+
+/** The toast after a group's write: "Logged 122/78 mmHg", "Saved 192.2 lb". */
+export function readingsMessage(
+  kind: "logged" | "saved",
+  group: Pick<MetricGroup, "metrics">,
+  values: readonly (number | null)[],
+): string {
+  return `${kind === "logged" ? "Logged" : "Saved"} ${groupValue(group, values)}`;
 }

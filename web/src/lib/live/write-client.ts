@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { api, unwrap } from "@/lib/live/http";
 import type {
   MetricReadingResult,
+  MetricReadingsResult,
   MetricRow,
   ActivitySyncResult,
   BountyResult,
@@ -37,7 +38,7 @@ import {
   normalizeSpaceRatingResult,
   ratedMessage,
 } from "@/lib/environment";
-import { normalizeMetric, normalizeReadingResult } from "@/lib/measurements";
+import { normalizeMetric, normalizeReadingResult, normalizeReadingsResult } from "@/lib/measurements";
 import {
   normalizeBountyResult,
   normalizeHabitTarget,
@@ -416,6 +417,12 @@ export function createLiveWriteClient(): LifeOsWriteClient {
     async logReading(req) {
       return normalizeReadingResult(
         (await unwrap(api().POST("/api/measurements/readings", { body: req }))) as unknown as MetricReadingResult,
+      );
+    },
+
+    async logReadings(req) {
+      return normalizeReadingsResult(
+        (await unwrap(api().POST("/api/measurements/readings/batch", { body: req }))) as unknown as MetricReadingsResult,
       );
     },
 

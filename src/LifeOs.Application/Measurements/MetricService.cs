@@ -7,7 +7,8 @@ namespace LifeOs.Application.Measurements;
 
 /// <summary>
 /// What to change about a metric. Each field left null keeps its value; <paramref name="ClearTarget"/>
-/// removes the target.
+/// removes the target, and <paramref name="ClearLow"/> and <paramref name="ClearHigh"/> an end of
+/// the normal range.
 /// </summary>
 public sealed record MetricChange(
     string? Name = null,
@@ -15,18 +16,24 @@ public sealed record MetricChange(
     int? Decimals = null,
     decimal? Target = null,
     bool ClearTarget = false,
-    string? Better = null)
+    string? Better = null,
+    decimal? Low = null,
+    bool ClearLow = false,
+    decimal? High = null,
+    bool ClearHigh = false)
 {
     /// <summary>Whether anything is asked for.</summary>
-    public bool IsEmpty => Name is null && Unit is null && Decimals is null && Target is null && !ClearTarget && Better is null;
+    public bool IsEmpty => Name is null && Unit is null && Decimals is null && Target is null && !ClearTarget
+                           && Better is null && Low is null && !ClearLow && High is null && !ClearHigh;
 }
 
 /// <summary>
-/// The metrics Chris measures (MEASURE-1, D20, measurements plan §4.1), behind <c>bsk metric</c>
-/// and <c>/api/measurements/metrics</c>. A metric is a <c>Metric</c> subject: its title is its
-/// name, and <c>unit</c>, <c>decimals</c>, <c>target</c>, <c>better</c> and <c>catalog</c> are
-/// attributes only this service writes, so <c>bsk set</c> refuses them. A name from the starter
-/// list (<see cref="MetricCatalog"/>) fills in what isn't given. A metric has no status; archiving
+/// The metrics Chris measures (MEASURE-1, MEASURE-3, D20, measurements plan §4.1, §4.8), behind
+/// <c>bsk metric</c> and <c>/api/measurements/metrics</c>. A metric is a <c>Metric</c> subject: its
+/// title is its name, and <c>unit</c>, <c>decimals</c>, <c>target</c>, <c>better</c>,
+/// <c>catalog</c> and the normal range's <c>low</c> and <c>high</c> are attributes only this service
+/// writes, so <c>bsk set</c> refuses them. A name from the starter list (<see cref="MetricCatalog"/>)
+/// fills in what isn't given, its normal range included. A metric has no status; archiving
 /// it (D9) stops new readings. A name is unique among the metrics not archived, and the unit is
 /// locked once there are readings. Refusals are in words, with nothing written.
 /// </summary>
@@ -39,18 +46,20 @@ public sealed class MetricService(
         => (await metrics.GetMetricsAsync(cancellationToken)).Where(m => includeArchived || !m.Archived).ToList();
 
     /// <summary>
-    /// Adds a metric called <paramref name="name"/>. A starter-list name (Weight) fills in the
-    /// unit, decimals and which way is better when they aren't given; any other needs a unit.
+    /// Adds a metric called <paramref name="name"/>. A starter-list name (Weight, Systolic BP)
+    /// fills in the unit, decimals, which way is better and the normal range when they aren't
+    /// given; any other needs a unit.
     /// </summary>
     public async Task<Metric> AddAsync(
         string name, string? unit = null, int? decimals = null, decimal? target = null, string? better = null,
-        CancellationToken cancellationToken = default)
+        decimal? low = null, decimal? high = null, CancellationToken cancellationToken = default)
     {
         var title = MetricLimits.CheckName(name);
         var template = MetricCatalog.Find(title);
         var keptUnit = MetricLimits.CheckUnit(unit ?? template?.Unit);
         var places = MetricLimits.CheckDecimals(decimals ?? template?.Decimals ?? MetricLimits.DefaultDecimals);
         var direction = better is null ? template?.Better : MetricLimits.CheckBetter(better);
+        var range = MetricLimits.CheckRange(low ?? template?.Low, high ?? template?.High, places);
 
         var attributes = new JsonObject
         {
@@ -67,6 +76,16 @@ public sealed class MetricService(
             attributes[MetricLimits.BetterKey] = direction;
         }
 
+        if (range.Low is { } l)
+        {
+            attributes[MetricLimits.LowKey] = l;
+        }
+
+        if (range.High is { } h)
+        {
+            attributes[MetricLimits.HighKey] = h;
+        }
+
         if (template is not null)
         {
             attributes[MetricLimits.CatalogKey] = template.Key;
@@ -79,21 +98,27 @@ public sealed class MetricService(
     }
 
     /// <summary>
-    /// Renames a metric or changes its unit, decimals, target or which way is better. Refused
-    /// when nothing is asked, for a unit change once the metric has readings, and for a target
-    /// with more decimal places than the metric takes.
+    /// Renames a metric or changes its unit, decimals, target, which way is better or normal
+    /// range. Refused when nothing is asked, for a unit change once the metric has readings, and
+    /// for a target or range end with more decimal places than the metric takes.
     /// </summary>
     public async Task<Metric> SetAsync(
         string reference, MetricChange change, CancellationToken cancellationToken = default)
     {
         if (change.IsEmpty)
         {
-            throw new ArgumentException("Say what to change: a name, a unit, decimals, a target or which way is better.");
+            throw new ArgumentException(
+                "Say what to change: a name, a unit, decimals, a target, which way is better or the normal range.");
         }
 
         if (change.Target is not null && change.ClearTarget)
         {
             throw new ArgumentException("Set a target or clear it, not both.");
+        }
+
+        if ((change.Low is not null && change.ClearLow) || (change.High is not null && change.ClearHigh))
+        {
+            throw new ArgumentException("Set an end of the normal range or clear it, not both.");
         }
 
         var metric = await ResolveAsync(reference, cancellationToken);
@@ -140,6 +165,29 @@ public sealed class MetricService(
         if (change.Better is not null)
         {
             patch[MetricLimits.BetterKey] = MetricLimits.CheckBetter(change.Better);
+        }
+
+        // The range as it will be, checked whole, so fewer decimal places or one new end can't
+        // leave a range the metric can't show, or one upside down.
+        var low = change.ClearLow ? null : change.Low ?? metric.Low;
+        var high = change.ClearHigh ? null : change.High ?? metric.High;
+        var range = MetricLimits.CheckRange(low, high, places);
+        if (change.Low is not null)
+        {
+            patch[MetricLimits.LowKey] = range.Low;
+        }
+        else if (change.ClearLow && metric.Low is not null)
+        {
+            removed.Add(MetricLimits.LowKey);
+        }
+
+        if (change.High is not null)
+        {
+            patch[MetricLimits.HighKey] = range.High;
+        }
+        else if (change.ClearHigh && metric.High is not null)
+        {
+            removed.Add(MetricLimits.HighKey);
         }
 
         if (title is not null && title != metric.Name)

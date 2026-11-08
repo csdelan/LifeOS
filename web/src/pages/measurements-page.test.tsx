@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { addDays, todayIso } from "@/lib/dates";
 import { goalText, withUnit } from "@/lib/measurements";
-import { clearMockMeasurements, mockMetricDetail } from "@/lib/mock/measurements-store";
+import { clearMockMeasurements, mockMetricDetail, mockMetrics } from "@/lib/mock/measurements-store";
 import { resetStore } from "@/lib/mock/store";
 import { MeasurementsPage } from "@/pages/measurements-page";
 
@@ -104,9 +104,11 @@ describe("Measurements page: the Weight card (MEASURE-1, MEASURE-2, measurements
   it("changes the goal, and the dashed line and the date follow it", async () => {
     const user = userEvent.setup();
     renderPage();
-    await user.click(await screen.findByRole("button", { name: "Change goal" }));
-    const dialog = await screen.findByRole("dialog", { name: "Weight goal" });
-    const input = within(dialog).getByLabelText("Goal weight (lb)");
+    await user.click(await screen.findByRole("button", { name: "Edit Weight" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit weight" });
+    // The unit stays once there are weigh-ins.
+    expect(within(dialog).getByLabelText("Unit")).toBeDisabled();
+    const input = within(dialog).getByLabelText("Goal (lb), optional");
     expect(input).toHaveValue("185.0");
 
     await user.clear(input);
@@ -236,12 +238,193 @@ describe("Measurements page: before there's a Weight (MEASURE-1)", () => {
     expect(screen.getByTestId("weight-last")).toHaveTextContent("No weigh-ins yet: log your first to start the trend.");
     expect(await screen.findByText("Nothing logged yet.")).toBeInTheDocument();
     expect(screen.queryByTestId("weight-goal")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Change goal" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Weight" })).toBeInTheDocument();
 
     const sheet = await openSheet(user);
     await user.type(within(sheet).getByLabelText("Weight (lb)"), "199.8");
     await user.click(within(sheet).getByRole("button", { name: "Log" }));
     await waitFor(() => expect(screen.getByTestId("weight-goal")).toHaveTextContent("Log another day to see when you'll reach 185.0 lb."));
     expect(screen.getByTestId("weight-trend")).toHaveTextContent("199.8 lb");
+  });
+});
+
+/** A row of Your metrics by its name, and its disclosure button. */
+function row(name: string) {
+  const list = screen.getByRole("list", { name: "Your metrics" });
+  const item = within(list)
+    .getAllByTestId("metric-list-row")
+    .find((li) => within(li).queryByRole("heading", { name: new RegExp(`^${name}`) }))!;
+  return { item, toggle: within(item).getAllByRole("button").find((b) => b.hasAttribute("aria-expanded"))! };
+}
+
+describe("Measurements page: any metric (MEASURE-3, measurements plan §4.8)", () => {
+  it("lists the other metrics as rows in starter-list order, blood pressure as one, with its newest pair flagged", async () => {
+    renderPage();
+    const list = await screen.findByRole("list", { name: "Your metrics" });
+    const rows = within(list).getAllByTestId("metric-list-row");
+    // Weight has its own card at the top; Waist comes before blood pressure on the starter list.
+    expect(rows.map((r) => within(r).getByRole("heading").textContent)).toEqual([
+      expect.stringMatching(/^Waist/),
+      expect.stringMatching(/^Blood pressure/),
+    ]);
+    const bp = row("Blood pressure").item;
+    expect(within(bp).getByTestId("metric-row-value")).toHaveTextContent("121/78 mmHg");
+    expect(within(bp).getByTestId("metric-row-flag")).toHaveTextContent("High");
+    expect(within(bp).getByTestId("metric-row-when")).toHaveTextContent(/^Thu, Nov 5, 7:\d\d [AP]M$/);
+    expect(within(row("Waist").item).queryByTestId("metric-row-flag")).not.toBeInTheDocument();
+    await waitFor(() => expect(within(bp).getByTestId("metric-sparkline")).toBeInTheDocument());
+  });
+
+  it("opens blood pressure's card in place: one chart with both lines and their ranges, and a table of pairs", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("list", { name: "Your metrics" });
+    const { item, toggle } = row("Blood pressure");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    const card = await within(item).findByRole("region", { name: "Blood pressure" });
+    expect(within(card).getByTestId("bp-range")).toHaveTextContent("Normal: systolic 90–119, diastolic 60–79 mmHg");
+    const chart = await within(card).findByRole("group", { name: /^Blood pressure by day, last 90 days/ });
+    const systolic = mockMetricDetail("Systolic BP");
+    await waitFor(() => expect(within(chart).getAllByTestId("trend-dot")).toHaveLength(systolic.days.length * 2));
+    expect(within(chart).getAllByTestId("trend-band")).toHaveLength(2);
+    expect(within(chart).getAllByTestId("trend-dot").filter((d) => d.dataset.flagged).length).toBeGreaterThan(1);
+    const legend = within(card).getByRole("list", { name: "Legend" });
+    expect(legend).toHaveTextContent("Systolic");
+    expect(legend).toHaveTextContent("Diastolic");
+    expect(legend).toHaveTextContent("Outside the range");
+
+    fireEvent.focus(chart);
+    expect(within(card).getByText(/^Thu, Nov 5: 121\/78 mmHg \(high\), trend \d+\/\d+ mmHg$/)).toBeInTheDocument();
+
+    await user.click(within(card).getByRole("button", { name: "Table" }));
+    const table = await within(card).findByRole("table", { name: "Blood pressure readings, last 90 days, newest first" });
+    const rows = within(table).getAllByTestId("metric-row");
+    expect(rows).toHaveLength(systolic.readings.length);
+    expect(rows[0]).toHaveTextContent("121/78 mmHg");
+    expect(rows[0]).toHaveTextContent("High");
+    expect(rows.at(-1)).toHaveTextContent("after coffee");
+  });
+
+  it("logs blood pressure from its row, both values in one write", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("list", { name: "Your metrics" });
+    await user.click(within(row("Blood pressure").item).getByRole("button", { name: "Log blood pressure" }));
+    const sheet = await screen.findByRole("dialog", { name: "Log blood pressure" });
+    expect(within(sheet).getByText("Type the systolic BP, e.g. 118.")).toBeInTheDocument();
+    await user.type(within(sheet).getByLabelText("Systolic (mmHg)"), "118");
+    expect(within(sheet).getByText("Type the diastolic BP, e.g. 76.")).toBeInTheDocument();
+    await user.type(within(sheet).getByLabelText("Diastolic (mmHg)"), "82.5");
+    expect(within(sheet).getByText("Diastolic BP takes a whole number; got 82.5.")).toBeInTheDocument();
+    await user.clear(within(sheet).getByLabelText("Diastolic (mmHg)"));
+    await user.type(within(sheet).getByLabelText("Diastolic (mmHg)"), "82");
+    await user.click(within(sheet).getByRole("button", { name: "Log" }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Logged 118/82 mmHg"));
+    const bp = row("Blood pressure").item;
+    await waitFor(() => expect(within(bp).getByTestId("metric-row-value")).toHaveTextContent("118/82 mmHg"));
+    // Diastolic 82 is over 79.
+    expect(within(bp).getByTestId("metric-row-flag")).toHaveTextContent("High");
+    const [sys] = mockMetricDetail("Systolic BP").readings;
+    const [dia] = mockMetricDetail("Diastolic BP").readings;
+    expect([sys.value, dia.value, sys.takenAt === dia.takenAt]).toEqual([118, 82, true]);
+  });
+
+  it("changes a pair from its card's table, both halves at once", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("list", { name: "Your metrics" });
+    const { item, toggle } = row("Blood pressure");
+    await user.click(toggle);
+    await user.click(await within(item).findByRole("button", { name: "Table" }));
+    const table = await within(item).findByRole("table");
+    await user.click(within(within(table).getAllByTestId("metric-row")[0]).getByRole("button", { name: /^Change 121\/78 mmHg/ }));
+
+    const sheet = await screen.findByRole("dialog", { name: "Change reading" });
+    expect(within(sheet).getByLabelText("Systolic (mmHg)")).toHaveValue("121");
+    await user.clear(within(sheet).getByLabelText("Systolic (mmHg)"));
+    await user.type(within(sheet).getByLabelText("Systolic (mmHg)"), "117");
+    await user.click(within(sheet).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Saved 117/78 mmHg"));
+    await waitFor(() => expect(within(row("Blood pressure").item).queryByTestId("metric-row-flag")).not.toBeInTheDocument());
+    expect(mockMetricDetail("Systolic BP").readings[0]).toMatchObject({ value: 117, versions: 2, flag: null });
+  });
+
+  it("adds a starter metric and one of his own, and opens it", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Add a metric" }));
+    let dialog = await screen.findByRole("dialog", { name: "Add a metric" });
+    // Waist and blood pressure are tracked; Weight has its own card.
+    expect(within(dialog).getAllByRole("button", { name: /^Add / }).map((b) => b.firstChild?.textContent)).toEqual([
+      "Add Body fat",
+      "Add VO2 max (lab)",
+    ]);
+    expect(within(dialog).getByRole("button", { name: "Add" })).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: /^Add Body fat/ }));
+    await waitFor(() => expect(row("Body fat").item).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Add a metric" }));
+    dialog = await screen.findByRole("dialog", { name: "Add a metric" });
+    await user.type(within(dialog).getByLabelText("Name"), "Resting heart rate");
+    expect(within(dialog).getByText("Give the metric a unit, e.g. lb, in, % or mg/dL.")).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText("Unit"), "bpm");
+    await user.click(within(within(dialog).getByRole("group", { name: "Decimal places" })).getByRole("button", { name: "0" }));
+    await user.type(within(dialog).getByLabelText("Low end"), "70");
+    await user.type(within(dialog).getByLabelText("High end"), "50");
+    expect(within(dialog).getByText("The normal range's low end (70) is above its high end (50).")).toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText("Low end"));
+    await user.type(within(dialog).getByLabelText("Low end"), "40");
+    await user.click(within(dialog).getByRole("button", { name: "Add Resting heart rate" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a metric" })).not.toBeInTheDocument());
+    const added = mockMetrics().find((m) => m.name === "Resting heart rate")!;
+    expect(added).toMatchObject({ unit: "bpm", decimals: 0, low: 40, high: 50, catalog: null });
+    // His own come after the starter list's; the new one is open, with nothing logged yet.
+    const list = screen.getByRole("list", { name: "Your metrics" });
+    expect(within(list).getAllByRole("heading").map((h) => h.textContent)).toEqual([
+      expect.stringMatching(/^Body fat/),
+      expect.stringMatching(/^Waist/),
+      expect.stringMatching(/^Blood pressure/),
+      expect.stringMatching(/^Resting heart rate/),
+    ]);
+    const card = await within(list).findByRole("region", { name: "Resting heart rate" });
+    expect(await within(card).findByText("Nothing logged yet.")).toBeInTheDocument();
+  });
+
+  it("gives Waist a normal range, which flags its readings, then archives and restores it", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("list", { name: "Your metrics" });
+    const { item, toggle } = row("Waist");
+    await user.click(toggle);
+    const card = await within(item).findByRole("region", { name: "Waist" });
+    expect(within(card).queryByTestId("waist-range")).not.toBeInTheDocument();
+
+    await user.click(within(card).getByRole("button", { name: "Edit Waist" }));
+    let dialog = await screen.findByRole("dialog", { name: "Edit waist" });
+    await user.type(within(dialog).getByLabelText("High end"), "38");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(within(card).getByTestId("waist-range")).toHaveTextContent("Normal: up to 38.0 in"));
+    // 38.6, 38.4 and 38.3 are over it.
+    await waitFor(() =>
+      expect(within(card).getAllByTestId("trend-dot").filter((d) => d.dataset.flagged)).toHaveLength(3),
+    );
+    expect(within(row("Waist").item).queryByTestId("metric-row-flag")).not.toBeInTheDocument();
+
+    await user.click(within(card).getByRole("button", { name: "Edit Waist" }));
+    dialog = await screen.findByRole("dialog", { name: "Edit waist" });
+    await user.click(within(dialog).getByRole("button", { name: "Archive waist" }));
+    const archived = await screen.findByRole("list", { name: "Archived metrics" });
+    expect(archived).toHaveTextContent("Waist");
+    expect(archived).toHaveTextContent("6 readings");
+    expect(within(screen.getByRole("list", { name: "Your metrics" })).queryByRole("heading", { name: /^Waist/ })).not.toBeInTheDocument();
+
+    await user.click(within(archived).getByRole("button", { name: "Restore Waist" }));
+    await waitFor(() => expect(screen.queryByRole("list", { name: "Archived metrics" })).not.toBeInTheDocument());
+    expect(row("Waist").item).toBeInTheDocument();
   });
 });

@@ -1148,9 +1148,9 @@ test.describe("golden paths", () => {
     await page.clock.install({ time: new Date("2026-11-07T08:30:00") });
     await page.goto("/measurements");
     await expect(page.getByTestId("weight-goal")).toHaveText(/^185\.0 lb by /, { timeout: 10_000 });
-    await page.getByRole("button", { name: "Change goal" }).click();
-    const dialog = page.getByRole("dialog", { name: "Weight goal" });
-    await dialog.getByLabel("Goal weight (lb)").fill("180");
+    await page.getByRole("button", { name: "Edit Weight" }).click();
+    const dialog = page.getByRole("dialog", { name: "Edit weight" });
+    await dialog.getByLabel("Goal (lb), optional").fill("180");
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByTestId("weight-goal")).toHaveText(/^180\.0 lb by /);
@@ -1163,6 +1163,91 @@ test.describe("golden paths", () => {
     // The range is remembered.
     await page.reload();
     await expect(page.getByRole("group", { name: /^Weight by day, last 30 days/ })).toBeVisible({ timeout: 10_000 });
+  });
+
+  // Any metric (MEASURE-3, measurements plan §4.8): the mock seeds blood pressure (its newest
+  // pair, two days ago, high on systolic) and Waist under Weight's card.
+  test("Measurements: log blood pressure from its row, open its card, and read both lines", async ({ page }) => {
+    await page.clock.install({ time: new Date("2026-11-07T08:30:00") });
+    await page.goto("/measurements");
+    const list = page.getByRole("list", { name: "Your metrics" });
+    const bp = list.getByTestId("metric-list-row").filter({ has: page.getByRole("heading", { name: /^Blood pressure/ }) });
+    await expect(bp.getByTestId("metric-row-value")).toHaveText("121/78 mmHg", { timeout: 10_000 });
+    await expect(bp.getByTestId("metric-row-flag")).toHaveText("High");
+
+    await bp.getByRole("button", { name: "Log blood pressure" }).click();
+    const sheet = page.getByRole("dialog", { name: "Log blood pressure" });
+    await expect(sheet.getByLabel("Systolic (mmHg)")).toBeFocused();
+    await sheet.getByLabel("Systolic (mmHg)").fill("116");
+    await sheet.getByLabel("Diastolic (mmHg)").fill("74");
+    await sheet.getByLabel("Note (optional)").fill("left arm");
+    await sheet.getByRole("button", { name: "Log", exact: true }).click();
+    await expect(page.getByText("Logged 116/74 mmHg")).toBeVisible();
+    await expect(bp.getByTestId("metric-row-value")).toHaveText("116/74 mmHg");
+    await expect(bp.getByTestId("metric-row-flag")).toHaveCount(0);
+    await expect(bp.getByTestId("metric-row-when")).toHaveText("Today, 8:30 AM");
+
+    const toggle = bp.getByRole("button", { name: /^Blood pressure/ });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const card = bp.getByRole("region", { name: "Blood pressure" });
+    await expect(card.getByTestId("bp-range")).toHaveText("Normal: systolic 90–119, diastolic 60–79 mmHg");
+    const chart = card.getByRole("group", { name: /^Blood pressure by day, last 90 days/ });
+    await expect(chart.getByTestId("trend-band")).toHaveCount(2);
+    await chart.focus();
+    await page.keyboard.press("End");
+    await expect(page.getByText(/^Today: 116\/74 mmHg, trend \d+\/\d+ mmHg$/)).toBeAttached();
+
+    await card.getByRole("group", { name: "Show as" }).getByRole("button", { name: "Table" }).click();
+    const table = card.getByRole("table", { name: "Blood pressure readings, last 90 days, newest first" });
+    await expect(table.getByTestId("metric-row").first()).toContainText("left arm");
+    // The open row is remembered.
+    await page.reload();
+    await expect(page.getByRole("region", { name: "Blood pressure" })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("Measurements: add a metric of your own, give it a normal range, then archive and restore it", async ({ page }) => {
+    await page.clock.install({ time: new Date("2026-11-07T08:30:00") });
+    await page.goto("/measurements");
+    await page.getByRole("button", { name: "Add a metric" }).click();
+    const add = page.getByRole("dialog", { name: "Add a metric" });
+    await expect(add.getByRole("button", { name: /^Add Body fat/ })).toBeVisible();
+    await add.getByLabel("Name").fill("Resting heart rate");
+    await add.getByLabel("Unit").fill("bpm");
+    await add.getByRole("group", { name: "Decimal places" }).getByRole("button", { name: "0" }).click();
+    await add.getByRole("button", { name: "Add Resting heart rate" }).click();
+    await expect(add).toBeHidden();
+
+    const list = page.getByRole("list", { name: "Your metrics" });
+    const rhr = list.getByTestId("metric-list-row").filter({ has: page.getByRole("heading", { name: /^Resting heart rate/ }) });
+    const card = rhr.getByRole("region", { name: "Resting heart rate" });
+    await expect(card.getByText("Nothing logged yet.")).toBeVisible();
+
+    // The row's Log, and the empty card's own: either opens the sheet.
+    await rhr.getByRole("button", { name: "Log resting heart rate" }).first().click();
+    const sheet = page.getByRole("dialog", { name: "Log resting heart rate" });
+    await sheet.getByLabel("Resting heart rate (bpm)").fill("64");
+    await sheet.getByRole("button", { name: "Log", exact: true }).click();
+    await expect(page.getByText("Logged 64 bpm")).toBeVisible();
+    await expect(rhr.getByTestId("metric-row-value")).toHaveText("64 bpm");
+
+    await card.getByRole("button", { name: "Edit Resting heart rate" }).click();
+    const edit = page.getByRole("dialog", { name: "Edit resting heart rate" });
+    await expect(edit.getByLabel("Unit")).toBeDisabled();
+    await edit.getByLabel("High end").fill("60");
+    await edit.getByRole("button", { name: "Save" }).click();
+    await expect(edit).toBeHidden();
+    await expect(card.getByTestId(/-range$/)).toHaveText("Normal: up to 60 bpm");
+    await expect(rhr.getByTestId("metric-row-flag")).toHaveText("High");
+
+    await card.getByRole("button", { name: "Edit Resting heart rate" }).click();
+    await page.getByRole("dialog", { name: "Edit resting heart rate" }).getByRole("button", { name: "Archive resting heart rate" }).click();
+    const archived = page.getByRole("list", { name: "Archived metrics" });
+    await expect(archived).toContainText("Resting heart rate");
+    await expect(rhr).toHaveCount(0);
+    await archived.getByRole("button", { name: "Restore Resting heart rate" }).click();
+    await expect(rhr).toBeVisible();
+    await expect(page.getByRole("list", { name: "Archived metrics" })).toHaveCount(0);
   });
 
   test("Browse: pick Decisions, filter by status, find one from the search box, and make a new one", async ({

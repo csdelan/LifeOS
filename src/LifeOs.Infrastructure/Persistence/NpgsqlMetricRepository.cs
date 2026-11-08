@@ -7,8 +7,8 @@ using Npgsql;
 namespace LifeOs.Infrastructure.Persistence;
 
 /// <summary>
-/// Metrics and their readings (MEASURE-1, D20, measurements plan M1). Reads go through
-/// <c>bsk.v_metric</c> and <c>bsk.v_metric_reading</c> (migration 0050); a reading version write
+/// Metrics and their readings (MEASURE-1, MEASURE-3, D20, measurements plan M1, M3). Reads go
+/// through <c>bsk.v_metric</c> (migrations 0050, 0051) and <c>bsk.v_metric_reading</c> (0050); a reading version write
 /// inserts each event and its <c>concerns</c> edge to the metric in one transaction, since the
 /// stream is append-only. The API reads through one of these on the reader connection.
 /// </summary>
@@ -18,7 +18,7 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
     // dates and local times as text, since Dapper has no DateOnly mapping in every host.
     private const string MetricSql = """
         SELECT id, urn, name, unit, decimals, target, better, catalog, archived_at AS archivedat,
-               to_char(archived_on, 'YYYY-MM-DD') AS archivedon, created_at AS createdat
+               to_char(archived_on, 'YYYY-MM-DD') AS archivedon, created_at AS createdat, low, high
         FROM bsk.v_metric
         """;
 
@@ -178,6 +178,8 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
         public DateTime? ArchivedAt { get; set; }
         public string? ArchivedOn { get; set; }
         public DateTime CreatedAt { get; set; }
+        public decimal? Low { get; set; }
+        public decimal? High { get; set; }
 
         public Metric ToMetric() => new(
             Id, Urn, Name, Unit, Decimals,
@@ -185,7 +187,9 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
             Better, Catalog,
             ArchivedAt is { } at ? Utc(at) : null,
             ArchivedOn is { } on ? ParseDay(on) : null,
-            Utc(CreatedAt));
+            Utc(CreatedAt),
+            Low is { } low ? Normal(low) : null,
+            High is { } high ? Normal(high) : null);
     }
 
     private sealed class ReadingRow

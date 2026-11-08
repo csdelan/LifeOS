@@ -6,6 +6,7 @@ import {
   keepPreviousData,
   useInfiniteQuery,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
   type QueryClient,
@@ -502,6 +503,14 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async logReading(req) {
       try {
         return await client.logReading(req);
+      } finally {
+        await invalidate(qc, [qk.measurements]);
+      }
+    },
+
+    async logReadings(req) {
+      try {
+        return await client.logReadings(req);
       } finally {
         await invalidate(qc, [qk.measurements]);
       }
@@ -1207,7 +1216,7 @@ export function useSpacePhotos(space: string | null, shot: string | null = null,
   });
 }
 
-/** Every metric, archived ones too: the Measurements page finds Weight among them. */
+/** Every metric, archived ones too: the Measurements page finds Weight among them and groups the rest. */
 export function useMetrics(enabled = true) {
   return useQuery({
     queryKey: qk.metrics,
@@ -1226,6 +1235,27 @@ export function useMetric(metric: string | null, days: number | null, enabled = 
     queryFn: () => reads().metric(metric!, days),
     enabled: enabled && metric != null,
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Several metrics over the same range, read together: blood pressure's two on one card and in
+ * one row (MEASURE-3). Each shares `useMetric`'s cache, so a card and its row read once.
+ */
+export function useMetricsOver(metrics: readonly string[], days: number | null, enabled = true) {
+  return useQueries({
+    queries: metrics.map((metric) => ({
+      queryKey: qk.metric(metric, days),
+      queryFn: () => reads().metric(metric, days),
+      enabled,
+      placeholderData: keepPreviousData,
+    })),
+    combine: (results) => ({
+      data: results.every((r) => r.data) ? results.map((r) => r.data!) : undefined,
+      isLoading: results.some((r) => r.isLoading),
+      isError: results.some((r) => r.isError),
+      isPlaceholderData: results.some((r) => r.isPlaceholderData),
+    }),
   });
 }
 

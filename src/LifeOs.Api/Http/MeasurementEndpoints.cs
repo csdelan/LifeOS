@@ -5,7 +5,7 @@ using LifeOs.Application.Measurements;
 namespace LifeOs.Api.Http;
 
 /// <summary>
-/// Metrics and their readings (MEASURE-1, MEASURE-2, measurements plan §4.6) — the HTTP twin of
+/// Metrics and their readings (MEASURE-1 to MEASURE-3, measurements plan §4.6, §4.8) — the HTTP twin of
 /// <c>bsk metric</c> and <c>bsk measure</c>. Reads go through <see cref="MeasurementReader"/> on
 /// the reader connection; writes call <see cref="MetricService"/> and
 /// <see cref="MetricReadingService"/>, as the CLI does. Readings are information only, so no write
@@ -34,6 +34,9 @@ public static class MeasurementEndpoints
         api.MapPost("/readings", LogReading).WithName("LogReading")
             .Produces<MetricReadingResult>().Produces<ApiError>(StatusCodes.Status400BadRequest)
             .Produces<ApiError>(StatusCodes.Status404NotFound);
+        api.MapPost("/readings/batch", LogReadings).WithName("LogReadings")
+            .Produces<MetricReadingsResult>().Produces<ApiError>(StatusCodes.Status400BadRequest)
+            .Produces<ApiError>(StatusCodes.Status404NotFound);
         api.MapPost("/readings/{id}", EditReading).WithName("EditReading")
             .Produces<MetricReadingResult>().Produces<ApiError>(StatusCodes.Status400BadRequest);
         api.MapPost("/readings/{id}/delete", DeleteReading).WithName("DeleteReading")
@@ -44,12 +47,15 @@ public static class MeasurementEndpoints
     private static async Task<IResult> GetMetrics(MeasurementReader measurements, CancellationToken cancellationToken)
         => Results.Ok(await measurements.GetMetricsAsync(cancellationToken));
 
-    /// <summary>Adds a metric; a starter-list name (Weight) fills in the unit, decimals and which way is better.</summary>
+    /// <summary>
+    /// Adds a metric; a starter-list name (Weight, Systolic BP) fills in the unit, decimals, which way
+    /// is better and the normal range.
+    /// </summary>
     private static async Task<IResult> AddMetric(
         MetricBody body, MetricService metrics, MeasurementReader measurements, CancellationToken cancellationToken)
     {
         var metric = await metrics.AddAsync(
-            body.Name ?? "", body.Unit, body.Decimals, body.Target, body.Better, cancellationToken);
+            body.Name ?? "", body.Unit, body.Decimals, body.Target, body.Better, body.Low, body.High, cancellationToken);
         return Results.Ok(await measurements.GetMetricAsync(metric.Id, cancellationToken));
     }
 
@@ -61,13 +67,15 @@ public static class MeasurementEndpoints
         string id, int? days, MeasurementReader measurements, CancellationToken cancellationToken)
         => Results.Ok(await measurements.GetDetailAsync(id, days, cancellationToken));
 
-    /// <summary>Renames a metric (by id or name) or changes its unit, decimals, target or which way is better.</summary>
+    /// <summary>Renames a metric (by id or name) or changes its unit, decimals, target, which way is better or normal range.</summary>
     private static async Task<IResult> SetMetric(
         string id, MetricBody body, MetricService metrics, MeasurementReader measurements, CancellationToken cancellationToken)
     {
         var metric = await metrics.SetAsync(
             id,
-            new MetricChange(body.Name, body.Unit, body.Decimals, body.Target, body.ClearTarget ?? false, body.Better),
+            new MetricChange(
+                body.Name, body.Unit, body.Decimals, body.Target, body.ClearTarget ?? false, body.Better,
+                body.Low, body.ClearLow ?? false, body.High, body.ClearHigh ?? false),
             cancellationToken);
         return Results.Ok(await measurements.GetMetricAsync(metric.Id, cancellationToken));
     }
@@ -84,6 +92,35 @@ public static class MeasurementEndpoints
 
         var reading = await readings.LogAsync(body.Metric ?? "", value, body.TakenAt, body.Note, cancellationToken);
         return Results.Ok(new MetricReadingResult { Reading = await measurements.GetReadingAsync(reading.Id, cancellationToken) });
+    }
+
+    /// <summary>
+    /// Logs readings of several metrics taken together (blood pressure's two), at one time and with
+    /// one note. All or nothing: a refusal of any writes none.
+    /// </summary>
+    private static async Task<IResult> LogReadings(
+        MetricReadingBatchBody body, MetricReadingService readings, MeasurementReader measurements,
+        CancellationToken cancellationToken)
+    {
+        var entries = new List<ReadingEntry>();
+        foreach (var entry in body.Readings ?? [])
+        {
+            if (entry.Value is not { } value)
+            {
+                return Results.BadRequest(new ApiError($"Give {entry.Metric ?? "each metric"}'s value, e.g. 122."));
+            }
+
+            entries.Add(new ReadingEntry(entry.Metric ?? "", value));
+        }
+
+        var logged = await readings.LogManyAsync(entries, body.TakenAt, body.Note, cancellationToken);
+        var rows = new List<MetricReadingRow>(logged.Count);
+        foreach (var reading in logged)
+        {
+            rows.Add((await measurements.GetReadingAsync(reading.Id, cancellationToken))!);
+        }
+
+        return Results.Ok(new MetricReadingsResult { Readings = rows });
     }
 
     /// <summary>Changes a reading's value, time or note.</summary>

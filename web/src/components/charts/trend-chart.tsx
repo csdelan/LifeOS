@@ -2,15 +2,36 @@ import { useId, useState } from "react";
 import { dayNumber } from "@/lib/metric-trend";
 import { cn } from "@/lib/utils";
 
-/** One day with a value: a dot, and the trend through it. */
+/** One day with a value in a series: a dot, and the trend through it. */
 export interface TrendChartPoint {
   /** `yyyy-MM-dd`: where it sits on the time axis. */
   day: string;
   value: number;
   trend: number;
-  /** The readout's first words: "Today", "Tue, Nov 4". */
+  /** Outside the normal range (MEASURE-3): the dot is drawn hollow, so it shows without colour. */
+  flagged?: boolean;
+}
+
+/**
+ * One line on the chart: its dots and trend, and its normal range shaded behind them. Blood
+ * pressure has two (systolic and diastolic); the second's dots are squares, so the two read
+ * apart without colour.
+ */
+export interface TrendChartSeries {
+  key: string;
+  /** The legend's words for its dots: "Each day's first weigh-in", "Systolic". */
+  label: string;
+  /** The days with a value, oldest first. */
+  points: TrendChartPoint[];
+  /** The normal range; either end may be open (to the axis's edge). */
+  band?: { low: number | null; high: number | null };
+}
+
+/** What a day reads as, when hovered or reached with the arrow keys. */
+export interface TrendChartReadout {
+  /** "Today", "Tue, Nov 4". */
   title: string;
-  /** The readout: "192.4 lb, trend 193.1 lb". */
+  /** "192.4 lb, trend 193.1 lb". */
   text: string;
   /** A second line under it: "2 weigh-ins: the first counts". */
   detail?: string;
@@ -25,6 +46,12 @@ export interface TrendChartTarget {
 
 /** A gap longer than this many days breaks the trend line: across it, the line would guess. */
 const TREND_GAP_DAYS = 7;
+
+/** Each series' look: its dot, its hollow (flagged) dot, and its band. */
+const TONES = [
+  { dot: "rounded-full bg-chart-earned", hollow: "rounded-full border-2 border-chart-earned bg-card", band: "bg-chart-earned/12 border-chart-earned/30" },
+  { dot: "rounded-[2px] bg-chart-3", hollow: "rounded-[2px] border-2 border-chart-3 bg-card", band: "bg-chart-3/12 border-chart-3/30" },
+] as const;
 
 /** A clean step for an axis spanning `span`: about four steps, from 0.1 up. */
 function niceStep(span: number): number {
@@ -71,29 +98,33 @@ function trendRuns(points: readonly TrendChartPoint[], x: (day: string) => numbe
 const HEIGHT = 1000;
 
 /**
- * A metric over time (measurements plan §4.7), in the house style of `DailyMetricChart`: a dot
- * for each day's value, the smoothed trend as a line, and the target as a dashed line labelled
+ * A metric over time (measurements plan §4.7–§4.8), in the house style of `DailyMetricChart`:
+ * for each series a dot for each day's value and the smoothed trend as a line, its normal range
+ * shaded behind (a reading outside it is a hollow dot), and the target as a dashed line labelled
  * on the axis. The time axis is spaced by date, so a day without a value is a gap, and a gap of
- * more than a week breaks the trend line. Hover or the arrow keys read a day in words. The axis
- * runs from `from` to `to` whatever the values, so charts that share a range line up (M5
- * stacks several). The card around it owns the range switch and the Table view.
+ * more than a week breaks the trend line. Hover or the arrow keys read a day in words, across
+ * every series. The axis runs from `from` to `to` whatever the values, so charts that share a
+ * range line up (M5 stacks several). The card around it owns the range switch and the Table view.
  */
 export function TrendChart({
   label,
-  points,
+  series,
+  readout,
   from,
   to,
   target,
   formatValue,
   trendLabel = "Trend",
-  valueLabel = "Each day's value",
+  bandLabel = "Normal range",
   axisLabel,
   className,
 }: {
   /** What the chart shows, for screen readers: "Weight by day, last 90 days". */
   label: string;
-  /** The days with a value, oldest first. */
-  points: TrendChartPoint[];
+  /** One or two series; the first is drawn last, on top. */
+  series: TrendChartSeries[];
+  /** A day in words, across the series. */
+  readout: (day: string) => TrendChartReadout;
   /** The axis's first and last days, `yyyy-MM-dd`. */
   from: string;
   to: string;
@@ -101,7 +132,8 @@ export function TrendChart({
   /** How the axis says a value: "190". */
   formatValue: (n: number) => string;
   trendLabel?: string;
-  valueLabel?: string;
+  /** The legend's words for the shading: "Normal range 90–119 mmHg". */
+  bandLabel?: string;
   /** Under the axis at its ends and middle: "Oct 9", "Today". */
   axisLabel: (day: string) => string;
   className?: string;
@@ -109,36 +141,38 @@ export function TrendChart({
   const [hovered, setHovered] = useState<number | null>(null);
   const readoutId = useId();
 
+  const days = [...new Set(series.flatMap((s) => s.points.map((p) => p.day)))].sort();
   const first = dayNumber(from);
   const slots = Math.max(dayNumber(to) - first + 1, 1);
   const { lo, hi } = trendScale([
-    ...points.flatMap((p) => [p.value, p.trend]),
+    ...series.flatMap((s) => s.points.flatMap((p) => [p.value, p.trend])),
     ...(target ? [target.value] : []),
   ]);
   const xOf = (day: string) => dayNumber(day) - first + 0.5;
   const yOf = (v: number) => ((hi - v) / (hi - lo)) * HEIGHT;
   const left = (day: string) => `${(xOf(day) / slots) * 100}%`;
   const top = (v: number) => `${(yOf(v) / HEIGHT) * 100}%`;
-  const runs = trendRuns(points, xOf, yOf);
-  const shown = hovered != null ? points[hovered] : null;
-  const dense = points.length > 120;
+  const shownDay = hovered != null ? days[hovered] : null;
+  const shown = shownDay ? readout(shownDay) : null;
+  const dense = days.length > 120;
   const middle = Math.floor((first + first + slots - 1) / 2);
   const middleDay = new Date(middle * 86_400_000).toISOString().slice(0, 10);
+  const banded = series.some((s) => s.band && (s.band.low != null || s.band.high != null));
 
   function pick(clientX: number, el: HTMLElement) {
     const box = el.getBoundingClientRect();
-    if (points.length === 0 || box.width === 0) return;
+    if (days.length === 0 || box.width === 0) return;
     const at = ((clientX - box.left) / box.width) * slots;
     let best = 0;
-    points.forEach((p, i) => {
-      if (Math.abs(xOf(p.day) - at) < Math.abs(xOf(points[best].day) - at)) best = i;
+    days.forEach((d, i) => {
+      if (Math.abs(xOf(d) - at) < Math.abs(xOf(days[best]) - at)) best = i;
     });
     setHovered(best);
   }
 
   function onKey(e: React.KeyboardEvent) {
-    if (points.length === 0) return;
-    const last = points.length - 1;
+    if (days.length === 0) return;
+    const last = days.length - 1;
     const now = hovered ?? last;
     const next =
       e.key === "ArrowLeft" ? now - 1 : e.key === "ArrowRight" ? now + 1 : e.key === "Home" ? 0 : e.key === "End" ? last : null;
@@ -146,6 +180,17 @@ export function TrendChart({
     e.preventDefault();
     setHovered(Math.min(Math.max(next, 0), last));
   }
+
+  /** A band clipped to the axis: from its high end (or the top) down to its low end (or the bottom). */
+  function bandBox(band: { low: number | null; high: number | null }) {
+    const upper = Math.min(band.high ?? hi, hi);
+    const lower = Math.max(band.low ?? lo, lo);
+    if (upper <= lower) return null;
+    return { top: top(upper), height: `${((upper - lower) / (hi - lo)) * 100}%` };
+  }
+
+  // Drawn back to front: the second series under the first.
+  const drawn = series.map((s, i) => ({ s, i })).reverse();
 
   return (
     <div className={className}>
@@ -165,7 +210,7 @@ export function TrendChart({
           aria-describedby={readoutId}
           tabIndex={0}
           onKeyDown={onKey}
-          onFocus={() => setHovered((h) => h ?? (points.length > 0 ? points.length - 1 : null))}
+          onFocus={() => setHovered((h) => h ?? (days.length > 0 ? days.length - 1 : null))}
           onBlur={() => setHovered(null)}
           onPointerMove={(e) => pick(e.clientX, e.currentTarget)}
           onPointerLeave={() => setHovered(null)}
@@ -173,6 +218,18 @@ export function TrendChart({
           className="relative h-48 min-w-0 flex-1 touch-pan-y rounded-sm border-b border-foreground/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <div className="absolute inset-x-0 top-0 border-t border-foreground/8" aria-hidden />
+          {drawn.map(({ s, i }) => {
+            const box = s.band ? bandBox(s.band) : null;
+            return box ? (
+              <div
+                key={`band-${s.key}`}
+                data-testid="trend-band"
+                className={cn("pointer-events-none absolute inset-x-0 border-y", TONES[i % TONES.length].band)}
+                style={box}
+                aria-hidden
+              />
+            ) : null;
+          })}
           {target ? (
             <div
               data-testid="trend-target"
@@ -181,35 +238,43 @@ export function TrendChart({
               aria-hidden
             />
           ) : null}
-          {shown ? (
+          {shownDay ? (
             <div
               className="pointer-events-none absolute inset-y-0 border-l border-foreground/25"
-              style={{ left: left(shown.day) }}
+              style={{ left: left(shownDay) }}
               aria-hidden
             />
           ) : null}
-          {points.map((p, i) => (
-            <span
-              key={p.day}
-              data-testid="trend-dot"
-              className={cn(
-                "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-chart-earned",
-                dense ? "size-1.5" : "size-2",
-                hovered === i && "size-3 ring-2 ring-foreground/50",
-              )}
-              style={{ left: left(p.day), top: top(p.value) }}
-              aria-hidden
-            />
-          ))}
-          {runs.length > 0 ? (
-            <svg
-              className="pointer-events-none absolute inset-0 size-full overflow-visible"
-              viewBox={`0 0 ${slots} ${HEIGHT}`}
-              preserveAspectRatio="none"
-              aria-hidden
-            >
-              {runs.map((run) => (
-                <g key={run}>
+          {drawn.map(({ s, i }) =>
+            s.points.map((p) => {
+              const tone = TONES[i % TONES.length];
+              const on = p.day === shownDay;
+              return (
+                <span
+                  key={`${s.key}-${p.day}`}
+                  data-testid="trend-dot"
+                  data-flagged={p.flagged || undefined}
+                  className={cn(
+                    "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2",
+                    p.flagged ? tone.hollow : tone.dot,
+                    p.flagged ? (dense ? "size-2" : "size-2.5") : dense ? "size-1.5" : "size-2",
+                    on && "size-3 ring-2 ring-foreground/50",
+                  )}
+                  style={{ left: left(p.day), top: top(p.value) }}
+                  aria-hidden
+                />
+              );
+            }),
+          )}
+          <svg
+            className="pointer-events-none absolute inset-0 size-full overflow-visible"
+            viewBox={`0 0 ${slots} ${HEIGHT}`}
+            preserveAspectRatio="none"
+            aria-hidden
+          >
+            {drawn.flatMap(({ s }) =>
+              trendRuns(s.points, xOf, yOf).map((run) => (
+                <g key={`${s.key}-${run}`}>
                   <polyline
                     points={run}
                     fill="none"
@@ -230,15 +295,15 @@ export function TrendChart({
                     vectorEffect="non-scaling-stroke"
                   />
                 </g>
-              ))}
-            </svg>
-          ) : null}
-          {shown ? (
+              )),
+            )}
+          </svg>
+          {shown && shownDay ? (
             <div
               className="pointer-events-none absolute top-1 z-10 w-max max-w-60 rounded-md bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/10"
               style={{
-                left: left(shown.day),
-                transform: `translateX(${xOf(shown.day) < slots / 2 ? "-10%" : "-90%"})`,
+                left: left(shownDay),
+                transform: `translateX(${xOf(shownDay) < slots / 2 ? "-10%" : "-90%"})`,
               }}
               aria-hidden
             >
@@ -261,10 +326,12 @@ export function TrendChart({
         {shown ? `${shown.title}: ${shown.text}${shown.detail ? `; ${shown.detail}` : ""}` : ""}
       </p>
       <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] text-muted-foreground" aria-label="Legend">
-        <li className="flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-chart-earned" aria-hidden />
-          {valueLabel}
-        </li>
+        {series.map((s, i) => (
+          <li key={s.key} className="flex items-center gap-1.5">
+            <span className={cn("size-2", TONES[i % TONES.length].dot)} aria-hidden />
+            {s.label}
+          </li>
+        ))}
         <li className="flex items-center gap-1.5">
           <span className="h-0.5 w-3 rounded-full bg-metric-average" aria-hidden />
           {trendLabel}
@@ -273,6 +340,18 @@ export function TrendChart({
           <li className="flex items-center gap-1.5">
             <span className="w-3 border-t-2 border-dashed border-foreground/70" aria-hidden />
             {target.label}
+          </li>
+        ) : null}
+        {banded ? (
+          <li className="flex items-center gap-1.5">
+            <span className={cn("h-2 w-3 border-y", TONES[0].band)} aria-hidden />
+            {bandLabel}
+          </li>
+        ) : null}
+        {series.some((s) => s.points.some((p) => p.flagged)) ? (
+          <li className="flex items-center gap-1.5">
+            <span className={cn("size-2.5", TONES[0].hollow)} aria-hidden />
+            Outside the range
           </li>
         ) : null}
       </ul>

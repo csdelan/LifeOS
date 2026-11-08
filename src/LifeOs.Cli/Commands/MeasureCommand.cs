@@ -10,7 +10,8 @@ namespace LifeOs.Cli.Commands;
 /// <summary>
 /// Readings of a metric (MEASURE-1, measurements plan §4.6):
 /// <list type="bullet">
-/// <item><c>bsk measure &lt;metric&gt; &lt;value&gt; [--at …] [--note …]</c> logs one, now or at a past time;</item>
+/// <item><c>bsk measure &lt;metric&gt; &lt;value&gt; [--at …] [--note …]</c> logs one, now or at a past time, and
+/// <c>--and "Diastolic BP=78"</c> (repeatable) logs others with it, all or none (MEASURE-3);</item>
 /// <item><c>bsk measure --edit &lt;id&gt; [--value N] [--at …] [--note …]</c> changes one, and
 /// <c>bsk measure --delete &lt;id&gt;</c> deletes one;</item>
 /// <item><c>bsk measure --list [&lt;metric&gt;] [--days N]</c> lists them, newest first.</item>
@@ -32,6 +33,11 @@ internal static class MeasureCommand
             Description = "When it was taken (home-zone time, e.g. 7:10, \"yesterday 7:00\", \"2026-11-01 07:10\" or 2026-11-01 for noon). Now by default."
         };
         var noteOption = new Option<string?>("--note") { Description = "A one-line note, up to 140 characters." };
+        var andOption = new Option<string[]>("--and")
+        {
+            Description = "Another metric's reading taken at the same time, as name=value, e.g. --and \"Diastolic BP=78\". Repeatable.",
+            AllowMultipleArgumentsPerToken = false
+        };
         var valueOption = new Option<decimal?>("--value") { Description = "With --edit, the new value." };
         var editOption = new Option<string?>("--edit") { Description = "Change the reading with this id (or the start of it)." };
         var deleteOption = new Option<string?>("--delete") { Description = "Delete the reading with this id (or the start of it)." };
@@ -43,7 +49,7 @@ internal static class MeasureCommand
 
         var command = new Command("measure", "Log a reading of a metric, e.g. bsk measure Weight 192.4.");
         command.Arguments.Add(wordsArgument);
-        foreach (var option in new Option[] { atOption, noteOption, valueOption, editOption, deleteOption, listOption, daysOption })
+        foreach (var option in new Option[] { atOption, noteOption, andOption, valueOption, editOption, deleteOption, listOption, daysOption })
         {
             command.Options.Add(option);
         }
@@ -55,6 +61,7 @@ internal static class MeasureCommand
             var words = parseResult.GetValue(wordsArgument) ?? [];
             var edit = parseResult.GetValue(editOption);
             var delete = parseResult.GetValue(deleteOption);
+            var together = parseResult.GetValue(andOption) ?? [];
 
             return Cli.RunAsync(asJson, async () =>
             {
@@ -69,13 +76,18 @@ internal static class MeasureCommand
                         throw new ArgumentException("--list takes at most a metric's name.");
                     }
 
+                    if (together.Length > 0)
+                    {
+                        throw new ArgumentException("--and goes with a new reading, not --list.");
+                    }
+
                     var list = await service.ListAsync(
                         words.Length == 1 ? words[0] : null,
                         parseResult.GetValue(daysOption) ?? MetricReadingService.DefaultDays,
                         cancellationToken);
                     if (asJson)
                     {
-                        Cli.WriteJson(new { today = Day(list.Today), readings = list.Readings.Select(Json) });
+                        Cli.WriteJson(new { today = Day(list.Today), readings = list.Readings.Select(r => Json(r, Find(metrics, r))) });
                         return 0;
                     }
 
@@ -95,6 +107,11 @@ internal static class MeasureCommand
 
                 var at = await ParseAtAsync(parseResult.GetValue(atOption), service, cancellationToken);
                 var note = parseResult.GetValue(noteOption);
+                if (together.Length > 0 && (delete is not null || edit is not null))
+                {
+                    throw new ArgumentException("--and goes with a new reading, not --edit or --delete.");
+                }
+
                 MetricReading reading;
                 string done;
                 if (delete is not null)
@@ -125,13 +142,32 @@ internal static class MeasureCommand
                         throw new ArgumentException("--value goes with --edit; a new reading takes the value after the metric.");
                     }
 
+                    if (together.Length > 0)
+                    {
+                        var entries = new List<ReadingEntry> { new(words[0], ParseValue(words[1])) };
+                        entries.AddRange(together.Select(ParseEntry));
+                        var logged = await service.LogManyAsync(entries, at, note, cancellationToken);
+                        if (asJson)
+                        {
+                            Cli.WriteJson(new { readings = logged.Select(r => Json(r, Find(metrics, r))) });
+                            return 0;
+                        }
+
+                        foreach (var r in logged)
+                        {
+                            Console.WriteLine($"Logged {Short(r.Id)}: {Describe(r, metrics)}");
+                        }
+
+                        return 0;
+                    }
+
                     reading = await service.LogAsync(words[0], ParseValue(words[1]), at, note, cancellationToken);
                     done = "Logged";
                 }
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new { reading = delete is not null ? null : Json(reading) });
+                    Cli.WriteJson(new { reading = delete is not null ? null : Json(reading, Find(metrics, reading)) });
                     return 0;
                 }
 
@@ -142,7 +178,8 @@ internal static class MeasureCommand
         return command;
     }
 
-    internal static object Json(MetricReading reading) => new
+    /// <summary>A reading as JSON, flagged against <paramref name="metric"/>'s normal range when it's given.</summary>
+    internal static object Json(MetricReading reading, Metric? metric) => new
     {
         id = reading.Id,
         metricId = reading.MetricId,
@@ -153,7 +190,8 @@ internal static class MeasureCommand
         takenOn = Day(reading.TakenOn),
         takenLocal = reading.TakenLocal.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
         loggedAt = reading.LoggedAt,
-        versions = reading.Versions
+        versions = reading.Versions,
+        flag = metric?.Flag(reading.Value)
     };
 
     /// <summary>A time for <c>--at</c>: the Food Log's forms, plus a date alone, which is noon that day.</summary>
@@ -175,6 +213,18 @@ internal static class MeasureCommand
         return await FoodCommand.ParseAtAsync(text, service.InstantAtAsync, service.TodayAsync, cancellationToken);
     }
 
+    /// <summary>An <c>--and</c> reading: "Diastolic BP=78", split at its last '='.</summary>
+    internal static ReadingEntry ParseEntry(string text)
+    {
+        var at = text.LastIndexOf('=');
+        return at > 0
+            ? new ReadingEntry(text[..at].Trim(), ParseValue(text[(at + 1)..]))
+            : throw new ArgumentException($"--and takes name=value, e.g. \"Diastolic BP=78\"; got '{text}'.");
+    }
+
+    private static Metric? Find(IReadOnlyList<Metric> metrics, MetricReading reading)
+        => metrics.FirstOrDefault(m => m.Id == reading.MetricId);
+
     private static decimal ParseValue(string text)
         => decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
             ? value
@@ -188,7 +238,8 @@ internal static class MeasureCommand
             : $"{MetricLimits.Format(reading.Value, metric.Decimals)} {reading.Unit}";
         var when = reading.TakenLocal.ToString("ddd MMM d yyyy, h:mm tt", CultureInfo.InvariantCulture);
         var note = reading.Note is null ? "" : $" — {reading.Note}";
-        return $"{metric?.Name ?? "?"} {value.Trim()} on {when}{note}";
+        var flag = metric?.Flag(reading.Value) is { } f ? $" ({f})" : "";
+        return $"{metric?.Name ?? "?"} {value.Trim()}{flag} on {when}{note}";
     }
 
     private static string Short(Guid id) => id.ToString("N")[..8];

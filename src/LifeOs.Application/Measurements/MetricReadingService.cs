@@ -10,6 +10,9 @@ namespace LifeOs.Application.Measurements;
 /// </summary>
 public sealed record ReadingEdit(decimal? Value = null, DateTimeOffset? TakenAt = null, string? Note = null);
 
+/// <summary>One reading among several logged together: the metric (by name or id) and its value.</summary>
+public sealed record ReadingEntry(string Metric, decimal Value);
+
 /// <summary>Today in the home zone and the readings in the range asked for, newest first.</summary>
 public sealed record ReadingList(DateOnly Today, int? Days, IReadOnlyList<MetricReading> Readings);
 
@@ -34,6 +37,9 @@ public sealed class MetricReadingService(
     /// <summary>The earliest time a reading can have.</summary>
     public static readonly DateTimeOffset Earliest = new(1900, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
+    /// <summary>The most readings logged together: a lab report's worth.</summary>
+    public const int MaxTogether = 50;
+
     /// <summary>
     /// Logs <paramref name="value"/> for <paramref name="metric"/>, taken at
     /// <paramref name="takenAt"/> (now when null). Refused for an archived or unknown metric, a
@@ -43,21 +49,63 @@ public sealed class MetricReadingService(
     public async Task<MetricReading> LogAsync(
         string metric, decimal value, DateTimeOffset? takenAt = null, string? note = null,
         CancellationToken cancellationToken = default)
+        => (await LogManyAsync([new ReadingEntry(metric, value)], takenAt, note, cancellationToken))[0];
+
+    /// <summary>
+    /// Logs readings of several metrics taken together (blood pressure's systolic and diastolic,
+    /// MEASURE-3; a lab report's values, M4), all at <paramref name="takenAt"/> (now when null) with
+    /// one note, in one transaction. Every one is checked before anything is written, so a refusal
+    /// writes none: the refusals of <see cref="LogAsync"/>, a metric named twice, or none or more
+    /// than <see cref="MaxTogether"/> at once. Answers them in the order given.
+    /// </summary>
+    public async Task<IReadOnlyList<MetricReading>> LogManyAsync(
+        IReadOnlyList<ReadingEntry> entries, DateTimeOffset? takenAt = null, string? note = null,
+        CancellationToken cancellationToken = default)
     {
-        var target = await metricService.ResolveAsync(metric, cancellationToken);
-        if (target.Archived)
+        if (entries.Count == 0)
         {
-            throw new InvalidOperationException($"'{target.Name}' is archived: bring it back before logging to it.");
+            throw new ArgumentException("Give at least one reading: a metric and its value.");
         }
 
+        if (entries.Count > MaxTogether)
+        {
+            throw new ArgumentException($"Log up to {MaxTogether} readings at once; that's {entries.Count}.");
+        }
+
+        var all = await metrics.GetMetricsAsync(cancellationToken);
         var now = clock.UtcNow;
-        var kept = MetricLimits.CheckValue(value, target.Decimals, target.Name);
         var at = CheckTime(takenAt ?? now, now);
-        var id = Guid.NewGuid();
-        await metrics.AppendReadingsAsync(
-            [new MetricReadingWrite(Declared(at, now, Payload(id, target.Id, kept, target.Unit, MetricLimits.CheckNote(note))), target.Id)],
-            cancellationToken);
-        return await ReadAsync(id, cancellationToken);
+        var keptNote = MetricLimits.CheckNote(note);
+        var writes = new List<MetricReadingWrite>(entries.Count);
+        var ids = new List<Guid>(entries.Count);
+        var seen = new HashSet<Guid>();
+        foreach (var entry in entries)
+        {
+            var target = MetricService.Resolve(all, entry.Metric);
+            if (target.Archived)
+            {
+                throw new InvalidOperationException($"'{target.Name}' is archived: bring it back before logging to it.");
+            }
+
+            if (!seen.Add(target.Id))
+            {
+                throw new ArgumentException($"{target.Name} is given twice: log one value for each metric.");
+            }
+
+            var kept = MetricLimits.CheckValue(entry.Value, target.Decimals, target.Name);
+            var id = Guid.NewGuid();
+            ids.Add(id);
+            writes.Add(new MetricReadingWrite(Declared(at, now, Payload(id, target.Id, kept, target.Unit, keptNote)), target.Id));
+        }
+
+        await metrics.AppendReadingsAsync(writes, cancellationToken);
+        var readings = new List<MetricReading>(ids.Count);
+        foreach (var id in ids)
+        {
+            readings.Add(await ReadAsync(id, cancellationToken));
+        }
+
+        return readings;
     }
 
     /// <summary>

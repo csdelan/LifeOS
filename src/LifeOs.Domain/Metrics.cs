@@ -8,6 +8,8 @@ namespace LifeOs.Domain;
 /// how many decimal places a reading takes; <paramref name="Target"/> is his goal, and
 /// <paramref name="Better"/> (<see cref="MetricBetter"/>) which way is good. <paramref name="Catalog"/>
 /// is the starter-list key it was made from (<see cref="MetricCatalog"/>), kept through a rename.
+/// <paramref name="Low"/> and <paramref name="High"/> are its normal range (MEASURE-3, plan §4.8),
+/// either or both, the bounds themselves normal.
 /// </summary>
 public sealed record Metric(
     Guid Id,
@@ -20,10 +22,34 @@ public sealed record Metric(
     string? Catalog,
     DateTimeOffset? ArchivedAt,
     DateOnly? ArchivedOn,
-    DateTimeOffset CreatedAt)
+    DateTimeOffset CreatedAt,
+    decimal? Low = null,
+    decimal? High = null)
 {
     /// <summary>Whether the metric is archived now.</summary>
     public bool Archived => ArchivedAt is not null;
+
+    /// <summary>
+    /// <see cref="MetricFlags.Low"/> below the normal range, <see cref="MetricFlags.High"/> above
+    /// it, null inside it or with no range (MEASURE-3, plan §4.8).
+    /// </summary>
+    public string? Flag(decimal value)
+        => Low is { } low && value < low ? MetricFlags.Low
+            : High is { } high && value > high ? MetricFlags.High
+            : null;
+
+    /// <summary>The normal range in words: "90–119 mmHg", "up to 40.0 in", "at least 35.0", or null with none.</summary>
+    public string? RangeText()
+    {
+        var unit = Unit.Length == 0 ? "" : " " + Unit;
+        return (Low, High) switch
+        {
+            ({ } low, { } high) => $"{MetricLimits.Format(low, Decimals)}–{MetricLimits.Format(high, Decimals)}{unit}",
+            (null, { } high) => $"up to {MetricLimits.Format(high, Decimals)}{unit}",
+            ({ } low, null) => $"at least {MetricLimits.Format(low, Decimals)}{unit}",
+            _ => null
+        };
+    }
 
     /// <summary>A value as this metric shows it: "192.4 lb", "6 %".</summary>
     public string Format(decimal value)
@@ -59,18 +85,33 @@ public static class MetricBetter
     public static readonly IReadOnlyList<string> All = [Lower, Higher];
 }
 
+/// <summary>Where a reading sits against its metric's normal range (MEASURE-3, plan §4.8).</summary>
+public static class MetricFlags
+{
+    public const string Low = "low";
+    public const string High = "high";
+}
+
 /// <summary>A metric on the starter list (measurements plan §2.1): what making one by that name fills in.</summary>
-public sealed record MetricTemplate(string Key, string Name, string Unit, int Decimals, string? Better);
+public sealed record MetricTemplate(
+    string Key, string Name, string Unit, int Decimals, string? Better, decimal? Low = null, decimal? High = null);
 
 /// <summary>
-/// The starter list (measurements plan §2.1). M1 has Weight; later phases add body
-/// measurements and lab panels.
+/// The starter list (measurements plan §2.1, §4.8). M1 has Weight and M3 the body metrics; M4
+/// adds the lab panels. Blood pressure is two metrics logged together, paired by their keys.
+/// Only blood pressure comes with a normal range (the American Heart Association's "normal"):
+/// the others depend on age and sex, so Chris sets them.
 /// </summary>
 public static class MetricCatalog
 {
     public static readonly MetricTemplate Weight = new("weight", "Weight", "lb", 1, MetricBetter.Lower);
+    public static readonly MetricTemplate BodyFat = new("body_fat", "Body fat", "%", 1, MetricBetter.Lower);
+    public static readonly MetricTemplate Waist = new("waist", "Waist", "in", 1, MetricBetter.Lower);
+    public static readonly MetricTemplate Systolic = new("bp_systolic", "Systolic BP", "mmHg", 0, MetricBetter.Lower, 90m, 119m);
+    public static readonly MetricTemplate Diastolic = new("bp_diastolic", "Diastolic BP", "mmHg", 0, MetricBetter.Lower, 60m, 79m);
+    public static readonly MetricTemplate Vo2MaxLab = new("vo2max_lab", "VO2 max (lab)", "mL/kg/min", 1, MetricBetter.Higher);
 
-    public static readonly IReadOnlyList<MetricTemplate> All = [Weight];
+    public static readonly IReadOnlyList<MetricTemplate> All = [Weight, BodyFat, Waist, Systolic, Diastolic, Vo2MaxLab];
 
     /// <summary>The template a metric named <paramref name="name"/> is made from, in any case; null when none is.</summary>
     public static MetricTemplate? Find(string? name)
@@ -95,9 +136,11 @@ public static class MetricLimits
     public const string TargetKey = "target";
     public const string BetterKey = "better";
     public const string CatalogKey = "catalog";
+    public const string LowKey = "low";
+    public const string HighKey = "high";
 
     /// <summary>The attributes only <c>MetricService</c> writes, so <c>bsk set</c> refuses them.</summary>
-    public static readonly IReadOnlyList<string> Keys = [UnitKey, DecimalsKey, TargetKey, BetterKey, CatalogKey];
+    public static readonly IReadOnlyList<string> Keys = [UnitKey, DecimalsKey, TargetKey, BetterKey, CatalogKey, LowKey, HighKey];
 
     public const int MaxName = 60;
     public const int MaxUnit = 16;
@@ -191,6 +234,23 @@ public static class MetricLimits
         }
 
         return value;
+    }
+
+    /// <summary>
+    /// A normal range as kept: each end with at most <paramref name="decimals"/> places, and the
+    /// low end at or below the high end. Either can be null.
+    /// </summary>
+    public static (decimal? Low, decimal? High) CheckRange(decimal? low, decimal? high, int decimals)
+    {
+        var keptLow = low is { } l ? CheckValue(l, decimals, "The normal range's low end") : (decimal?)null;
+        var keptHigh = high is { } h ? CheckValue(h, decimals, "The normal range's high end") : (decimal?)null;
+        if (keptLow is { } a && keptHigh is { } b && a > b)
+        {
+            throw new ArgumentException(
+                $"The normal range's low end ({Format(a, decimals)}) is above its high end ({Format(b, decimals)}).");
+        }
+
+        return (keptLow, keptHigh);
     }
 
     /// <summary>A reading's note as kept: null when blank, else trimmed, one line, at most 140 characters.</summary>

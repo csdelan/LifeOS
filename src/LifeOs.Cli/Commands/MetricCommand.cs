@@ -8,12 +8,13 @@ using Microsoft.Extensions.DependencyInjection;
 namespace LifeOs.Cli.Commands;
 
 /// <summary>
-/// The metrics Chris measures (MEASURE-1, MEASURE-2, measurements plan §4.6):
+/// The metrics Chris measures (MEASURE-1 to MEASURE-3, measurements plan §4.6, §4.8):
 /// <list type="bullet">
-/// <item><c>bsk metric add Weight [--unit lb] [--decimals 1] [--target 185] [--better lower]</c> adds one;
-/// a starter-list name fills in what isn't given;</item>
-/// <item><c>bsk metric list [--archived]</c> lists them with their newest reading;</item>
-/// <item><c>bsk metric set &lt;metric&gt; [--name …] [--unit …] [--decimals N] [--target N | --no-target] [--better …]</c>;</item>
+/// <item><c>bsk metric add Weight [--unit lb] [--decimals 1] [--target 185] [--better lower] [--low N] [--high N]</c>
+/// adds one; a starter-list name fills in what isn't given, its normal range included;</item>
+/// <item><c>bsk metric list [--archived]</c> lists them with their normal range and newest reading;</item>
+/// <item><c>bsk metric set &lt;metric&gt; [--name …] [--unit …] [--decimals N] [--target N | --no-target] [--better …]
+/// [--low N | --no-low] [--high N | --no-high]</c>;</item>
 /// <item><c>bsk metric archive &lt;metric&gt;</c> and <c>bsk metric restore &lt;metric&gt;</c>;</item>
 /// <item><c>bsk metric show &lt;metric&gt; [--days N]</c>: the readings by day, the trend and the goal date.</item>
 /// </list>
@@ -41,10 +42,14 @@ internal static class MetricCommand
         var decimalsOption = DecimalsOption();
         var targetOption = TargetOption();
         var betterOption = BetterOption();
+        var lowOption = LowOption();
+        var highOption = HighOption();
 
-        var command = new Command("add", "Add a metric to measure. Weight fills in lb, 1 decimal place and lower is better.");
+        var command = new Command(
+            "add",
+            "Add a metric to measure. A starter-list name fills in the rest: Weight is lb, 1 decimal place, lower is better; Systolic BP is mmHg with a normal range of 90–119.");
         command.Arguments.Add(nameArgument);
-        foreach (var option in new Option[] { unitOption, decimalsOption, targetOption, betterOption })
+        foreach (var option in new Option[] { unitOption, decimalsOption, targetOption, betterOption, lowOption, highOption })
         {
             command.Options.Add(option);
         }
@@ -59,7 +64,8 @@ internal static class MetricCommand
                 var metric = await provider.GetRequiredService<MetricService>().AddAsync(
                     parseResult.GetValue(nameArgument)!, parseResult.GetValue(unitOption),
                     parseResult.GetValue(decimalsOption), parseResult.GetValue(targetOption),
-                    parseResult.GetValue(betterOption), cancellationToken);
+                    parseResult.GetValue(betterOption), parseResult.GetValue(lowOption), parseResult.GetValue(highOption),
+                    cancellationToken);
                 return Write(metric, asJson, "Added");
             });
         });
@@ -70,7 +76,7 @@ internal static class MetricCommand
     {
         var archivedOption = new Option<bool>("--archived") { Description = "Include archived metrics." };
 
-        var command = new Command("list", "The metrics, with each one's unit, goal and newest reading.");
+        var command = new Command("list", "The metrics, with each one's unit, goal, normal range and newest reading.");
         command.Options.Add(archivedOption);
         command.SetAction((parseResult, cancellationToken) =>
         {
@@ -89,7 +95,7 @@ internal static class MetricCommand
                         {
                             metric = Json(s.Metric),
                             readings = s.Readings,
-                            last = s.Last is { } last ? MeasureCommand.Json(last) : null
+                            last = s.Last is { } last ? MeasureCommand.Json(last, s.Metric) : null
                         })
                     });
                     return 0;
@@ -106,9 +112,10 @@ internal static class MetricCommand
                 {
                     var m = s.Metric;
                     var goal = m.Target is { } t ? $"goal {m.Format(t)}" : "no goal";
-                    var last = s.Last is { } r ? $"last {m.Format(r.Value)} on {Day(r.TakenOn)}" : "no readings";
+                    var range = m.RangeText() is { } normal ? $", normal {normal}" : "";
+                    var last = s.Last is { } r ? $"last {m.Format(r.Value)}{FlagText(m.Flag(r.Value))} on {Day(r.TakenOn)}" : "no readings";
                     Console.WriteLine(
-                        $"{m.Name.PadRight(width)}  {m.Unit,-6}  {goal}, {last}{(m.Archived ? "  (archived)" : "")}");
+                        $"{m.Name.PadRight(width)}  {m.Unit,-9}  {goal}{range}, {last}{(m.Archived ? "  (archived)" : "")}");
                 }
 
                 return 0;
@@ -126,11 +133,20 @@ internal static class MetricCommand
         var targetOption = TargetOption();
         var noTargetOption = new Option<bool>("--no-target") { Description = "Remove the target." };
         var betterOption = BetterOption();
+        var lowOption = LowOption();
+        var noLowOption = new Option<bool>("--no-low") { Description = "Remove the normal range's low end." };
+        var highOption = HighOption();
+        var noHighOption = new Option<bool>("--no-high") { Description = "Remove the normal range's high end." };
 
         var command = new Command(
-            "set", "Rename a metric or change its unit (only while it has no readings), decimals, target or which way is better.");
+            "set",
+            "Rename a metric or change its unit (only while it has no readings), decimals, target, which way is better or normal range.");
         command.Arguments.Add(metricArgument);
-        foreach (var option in new Option[] { nameOption, unitOption, decimalsOption, targetOption, noTargetOption, betterOption })
+        foreach (var option in new Option[]
+                 {
+                     nameOption, unitOption, decimalsOption, targetOption, noTargetOption, betterOption,
+                     lowOption, noLowOption, highOption, noHighOption
+                 })
         {
             command.Options.Add(option);
         }
@@ -147,7 +163,9 @@ internal static class MetricCommand
                     new MetricChange(
                         parseResult.GetValue(nameOption), parseResult.GetValue(unitOption),
                         parseResult.GetValue(decimalsOption), parseResult.GetValue(targetOption),
-                        parseResult.GetValue(noTargetOption), parseResult.GetValue(betterOption)),
+                        parseResult.GetValue(noTargetOption), parseResult.GetValue(betterOption),
+                        parseResult.GetValue(lowOption), parseResult.GetValue(noLowOption),
+                        parseResult.GetValue(highOption), parseResult.GetValue(noHighOption)),
                     cancellationToken);
                 return Write(metric, asJson, "Updated");
             });
@@ -204,7 +222,7 @@ internal static class MetricCommand
                         today = Day(read.Today),
                         from = read.From is { } f ? Day(f) : null,
                         metric = Json(read.Metric),
-                        readings = read.Readings.Select(MeasureCommand.Json),
+                        readings = read.Readings.Select(r => MeasureCommand.Json(r, read.Metric)),
                         days = read.Days.Select(p => new { day = Day(p.Day), value = p.Value, trend = p.Trend, readingId = p.ReadingId }),
                         goal = GoalJson(read.Goal)
                     });
@@ -212,7 +230,8 @@ internal static class MetricCommand
                 }
 
                 var m = read.Metric;
-                Console.WriteLine($"{m.Name} ({m.Unit}){(m.Target is { } t ? $", goal {m.Format(t)}" : "")}");
+                Console.WriteLine(
+                    $"{m.Name} ({m.Unit}){(m.Target is { } t ? $", goal {m.Format(t)}" : "")}{(m.RangeText() is { } normal ? $", normal {normal}" : "")}");
                 if (read.Days.Count == 0)
                 {
                     Console.WriteLine(read.From is null ? "  No readings yet." : "  No readings in that range.");
@@ -222,7 +241,7 @@ internal static class MetricCommand
                 {
                     Console.WriteLine(
                         $"  {p.Day.ToString("ddd MMM d yyyy", CultureInfo.InvariantCulture),-16}  {MetricLimits.Format(p.Value, m.Decimals),10}"
-                        + $"  trend {MetricLimits.Format(p.Trend, m.Decimals)}");
+                        + $"  trend {MetricLimits.Format(p.Trend, m.Decimals)}{FlagText(m.Flag(p.Value))}");
                 }
 
                 Console.WriteLine(Describe(read.Goal, m));
@@ -266,9 +285,14 @@ internal static class MetricCommand
         target = metric.Target,
         better = metric.Better,
         catalog = metric.Catalog,
+        low = metric.Low,
+        high = metric.High,
         archivedAt = metric.ArchivedAt,
         archivedOn = metric.ArchivedOn is { } on ? Day(on) : null
     };
+
+    /// <summary>A flag as a reading's listing ends with it: "  (high)", or nothing.</summary>
+    internal static string FlagText(string? flag) => flag is null ? "" : $"  ({flag})";
 
     internal static object GoalJson(MetricGoal goal) => new
     {
@@ -296,8 +320,9 @@ internal static class MetricCommand
 
         var goal = metric.Target is { } t ? $", goal {metric.Format(t)}" : "";
         var better = metric.Better is { } b ? $", {b} is better" : "";
+        var range = metric.RangeText() is { } normal ? $", normal {normal}" : "";
         var archived = metric.Archived ? " (archived)" : "";
-        Console.WriteLine($"{done} {metric.Name}: {metric.Unit}, {metric.Decimals} decimal place{(metric.Decimals == 1 ? "" : "s")}{goal}{better}{archived}.");
+        Console.WriteLine($"{done} {metric.Name}: {metric.Unit}, {metric.Decimals} decimal place{(metric.Decimals == 1 ? "" : "s")}{goal}{better}{range}{archived}.");
         return 0;
     }
 
@@ -313,4 +338,8 @@ internal static class MetricCommand
     private static Option<decimal?> TargetOption() => new("--target") { Description = "Your goal, e.g. 185." };
 
     private static Option<string?> BetterOption() => new("--better") { Description = "Which way is better: lower or higher." };
+
+    private static Option<decimal?> LowOption() => new("--low") { Description = "The normal range's low end: a reading below it is flagged low." };
+
+    private static Option<decimal?> HighOption() => new("--high") { Description = "The normal range's high end: a reading above it is flagged high." };
 }

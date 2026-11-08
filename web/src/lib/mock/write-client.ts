@@ -86,6 +86,7 @@ import {
   mockDeleteReading,
   mockEditReading,
   mockLogReading,
+  mockLogReadings,
   mockSetMetric,
 } from "@/lib/mock/measurements-store";
 
@@ -461,6 +462,13 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async logReading(req) {
       await wait();
       const result = mockLogReading(req);
+      bump();
+      return result;
+    },
+
+    async logReadings(req) {
+      await wait();
+      const result = mockLogReadings(req);
       bump();
       return result;
     },

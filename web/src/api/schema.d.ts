@@ -1348,6 +1348,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/measurements/readings/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["LogReadings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/measurements/readings/{id}": {
         parameters: {
             query?: never;
@@ -2826,6 +2842,12 @@ export interface components {
             target?: null | number | string;
             clearTarget?: null | boolean;
             better?: null | string;
+            /** Format: double */
+            low?: null | number | string;
+            clearLow?: null | boolean;
+            /** Format: double */
+            high?: null | number | string;
+            clearHigh?: null | boolean;
         };
         MetricDayRow: {
             day?: string;
@@ -2862,6 +2884,12 @@ export interface components {
             reachedBy?: null | string;
             basis?: components["schemas"]["MetricGoalBasis"];
         };
+        MetricReadingBatchBody: {
+            readings?: null | components["schemas"]["MetricReadingEntryBody"][];
+            /** Format: date-time */
+            takenAt?: null | string;
+            note?: null | string;
+        };
         MetricReadingBody: {
             metric?: null | string;
             /** Format: double */
@@ -2876,6 +2904,11 @@ export interface components {
             /** Format: date-time */
             takenAt?: null | string;
             note?: null | string;
+        };
+        MetricReadingEntryBody: {
+            metric?: null | string;
+            /** Format: double */
+            value?: null | number | string;
         };
         MetricReadingResult: {
             reading?: null | components["schemas"]["MetricReadingRow"];
@@ -2897,6 +2930,10 @@ export interface components {
             loggedAt?: string;
             /** Format: int32 */
             versions?: number | string;
+            flag?: null | string;
+        };
+        MetricReadingsResult: {
+            readings?: components["schemas"]["MetricReadingRow"][];
         };
         MetricRow: {
             /** Format: uuid */
@@ -2913,6 +2950,10 @@ export interface components {
             /** Format: date-time */
             archivedAt?: null | string;
             archivedOn?: null | string;
+            /** Format: double */
+            low?: null | number | string;
+            /** Format: double */
+            high?: null | number | string;
             /** Format: int32 */
             readings?: number | string;
             lastReading?: null | components["schemas"]["MetricReadingRow"];
@@ -6252,6 +6293,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MetricReadingResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    LogReadings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricReadingBatchBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricReadingsResult"];
                 };
             };
             /** @description Bad Request */

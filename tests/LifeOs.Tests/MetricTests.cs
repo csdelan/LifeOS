@@ -12,8 +12,8 @@ using Npgsql;
 namespace LifeOs.Tests;
 
 /// <summary>
-/// MEASURE-1 / MEASURE-2, D20 (measurements plan M1, §4.1–§4.6, migration 0050): metrics and their
-/// readings. A metric is a <c>Metric</c> subject read through <c>bsk.v_metric</c>, with attributes
+/// MEASURE-1 to MEASURE-3, D20 (measurements plan M1, M3, §4.1–§4.8, migrations 0050 and 0051):
+/// metrics, their normal ranges and their readings. A metric is a <c>Metric</c> subject read through <c>bsk.v_metric</c>, with attributes
 /// only <see cref="MetricService"/> writes; a reading is a versioned <c>measurement</c> event read
 /// through <c>bsk.v_metric_reading</c>, newest version per id, voided to delete. Each test runs in
 /// a database of its own (<see cref="DomainTestDatabase"/>, home zone UTC), since a metric's name is
@@ -45,12 +45,12 @@ public sealed class MetricTests(PostgresFixture postgres)
         var cleared = await service.SetAsync("Body weight", new MetricChange(ClearTarget: true), Ct);
         Assert.Null(cleared.Target);
 
-        var waist = await service.AddAsync("Waist", "in", cancellationToken: Ct);
-        Assert.Equal(("in", 1, null, null), (waist.Unit, waist.Decimals, waist.Better, waist.Catalog));
+        var neck = await service.AddAsync("Neck", "in", cancellationToken: Ct);
+        Assert.Equal(("in", 1, null, null, null, null), (neck.Unit, neck.Decimals, neck.Better, neck.Catalog, neck.Low, neck.High));
 
         var archived = await service.ArchiveAsync("Body weight", Ct);
         Assert.Equal((true, await db.TodayAsync()), (archived.Archived, archived.ArchivedOn));
-        Assert.Equal(["Waist"], (await service.ListAsync(cancellationToken: Ct)).Select(m => m.Name));
+        Assert.Equal(["Neck"], (await service.ListAsync(cancellationToken: Ct)).Select(m => m.Name));
 
         // An archived metric's name is free again; restoring it while it's taken is refused,
         // whichever route restores it.
@@ -69,11 +69,11 @@ public sealed class MetricTests(PostgresFixture postgres)
         var service = db.Get<MetricService>();
 
         Assert.Contains("Give the metric a unit",
-            (await Assert.ThrowsAsync<ArgumentException>(() => service.AddAsync("Waist", cancellationToken: Ct))).Message);
+            (await Assert.ThrowsAsync<ArgumentException>(() => service.AddAsync("Neck", cancellationToken: Ct))).Message);
         await Assert.ThrowsAsync<ArgumentException>(() => service.AddAsync("  ", "lb", cancellationToken: Ct));
         await Assert.ThrowsAsync<ArgumentException>(() => service.AddAsync("two\nlines", "lb", cancellationToken: Ct));
-        await Assert.ThrowsAsync<ArgumentException>(() => service.AddAsync("Waist", "in", decimals: 4, cancellationToken: Ct));
-        await Assert.ThrowsAsync<ArgumentException>(() => service.AddAsync("Waist", "in", better: "down", cancellationToken: Ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.AddAsync("Neck", "in", decimals: 4, cancellationToken: Ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.AddAsync("Neck", "in", better: "down", cancellationToken: Ct));
         Assert.Contains("The target takes at most 1 decimal place",
             (await Assert.ThrowsAsync<ArgumentException>(() => service.AddAsync("Weight", target: 185.25m, cancellationToken: Ct))).Message);
         Assert.Empty(await service.ListAsync(true, Ct));
@@ -167,6 +167,98 @@ public sealed class MetricTests(PostgresFixture postgres)
         Assert.Equal(At(today.AddDays(-1), 7), await MeasureCommand.ParseAtAsync("yesterday 7:00", readings, Ct));
         Assert.Null(await MeasureCommand.ParseAtAsync(null, readings, Ct));
         await Assert.ThrowsAsync<ArgumentException>(() => MeasureCommand.ParseAtAsync("this morning", readings, Ct));
+
+        // --and takes name=value, split at the last '='.
+        Assert.Equal(new ReadingEntry("Diastolic BP", 78m), MeasureCommand.ParseEntry(" Diastolic BP = 78 "));
+        Assert.Contains("--and takes name=value",
+            Assert.Throws<ArgumentException>(() => MeasureCommand.ParseEntry("Diastolic BP 78")).Message);
+    }
+
+    [Fact]
+    public async Task Starter_metrics_bring_their_normal_range_which_can_change_and_flags_readings_outside_it()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var service = db.Get<MetricService>();
+
+        // Blood pressure comes with the American Heart Association's normal; body fat with none.
+        var systolic = await service.AddAsync("systolic bp", cancellationToken: Ct);
+        Assert.Equal(("mmHg", 0, "lower", "bp_systolic", 90m, 119m),
+            (systolic.Unit, systolic.Decimals, systolic.Better, systolic.Catalog, systolic.Low, systolic.High));
+        Assert.Equal("90–119 mmHg", systolic.RangeText());
+        var bodyFat = await service.AddAsync("Body fat", cancellationToken: Ct);
+        Assert.Equal(("%", 1, "lower", null, null), (bodyFat.Unit, bodyFat.Decimals, bodyFat.Better, bodyFat.Low, bodyFat.High));
+        var vo2 = await service.AddAsync("VO2 max (lab)", cancellationToken: Ct);
+        Assert.Equal(("mL/kg/min", 1, "higher", "vo2max_lab"), (vo2.Unit, vo2.Decimals, vo2.Better, vo2.Catalog));
+
+        // The bounds are normal, as on a lab report; past them is high or low.
+        Assert.Equal(new string?[] { null, null, MetricFlags.High, MetricFlags.Low },
+            new[] { 119m, 90m, 120m, 89m }.Select(systolic.Flag));
+
+        // One end alone; then the other; then one cleared.
+        var waist = await service.AddAsync("Waist", high: 40m, cancellationToken: Ct);
+        Assert.Equal(("in", null, 40m, "up to 40.0 in"), (waist.Unit, waist.Low, waist.High, waist.RangeText()));
+        var both = await service.SetAsync("Waist", new MetricChange(Low: 30m), Ct);
+        Assert.Equal((30m, 40m), (both.Low, both.High));
+        var noHigh = await service.SetAsync("Waist", new MetricChange(ClearHigh: true), Ct);
+        Assert.Equal((30m, null, "at least 30.0 in"), (noHigh.Low, noHigh.High, noHigh.RangeText()));
+        Assert.Null(noHigh.Flag(45m));
+
+        // Refusals, in words, with nothing written: both ends upside down, or one new end below
+        // the kept one.
+        Assert.Contains("The normal range's low end (35.0) is above its high end (32.0)",
+            (await Assert.ThrowsAsync<ArgumentException>(() => service.SetAsync("Waist", new MetricChange(Low: 35m, High: 32m), Ct))).Message);
+        Assert.Contains("low end (30.0) is above its high end (25.0)",
+            (await Assert.ThrowsAsync<ArgumentException>(() => service.SetAsync("Waist", new MetricChange(High: 25m), Ct))).Message);
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SetAsync("Waist", new MetricChange(Low: 30m, ClearLow: true), Ct));
+        Assert.Contains("The normal range's low end takes a whole number",
+            (await Assert.ThrowsAsync<ArgumentException>(() => service.SetAsync("Systolic BP", new MetricChange(Low: 90.5m), Ct))).Message);
+        Assert.Contains("The normal range's low end (120) is above its high end (110)",
+            (await Assert.ThrowsAsync<ArgumentException>(() => service.AddAsync("Grip", "lb", decimals: 0, low: 120m, high: 110m, cancellationToken: Ct))).Message);
+        // Fewer decimal places mustn't strand an end of the range.
+        await service.SetAsync("Waist", new MetricChange(Low: 30.5m), Ct);
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SetAsync("Waist", new MetricChange(Decimals: 0), Ct));
+        var kept = await service.ResolveAsync("Waist", Ct);
+        Assert.Equal((30.5m, (decimal?)null), (kept.Low, kept.High));
+
+        var refused = await Assert.ThrowsAsync<ArgumentException>(() => db.Get<AttributeService>().SetAsync(
+            systolic.Urn, [new AttributeAssignment("high", "140")], Ct));
+        Assert.Contains("bsk metric set", refused.Message);
+    }
+
+    [Fact]
+    public async Task Readings_logged_together_share_their_time_and_note_and_are_written_all_or_none()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var service = db.Get<MetricService>();
+        await service.AddAsync("Systolic BP", cancellationToken: Ct);
+        await service.AddAsync("Diastolic BP", cancellationToken: Ct);
+        await service.AddAsync("Weight", cancellationToken: Ct);
+        var readings = db.Get<MetricReadingService>();
+        var at = DateTimeOffset.UtcNow.AddHours(-2);
+
+        var pair = await readings.LogManyAsync(
+            [new ReadingEntry("systolic bp", 122m), new ReadingEntry("Diastolic BP", 78m)], at, " after coffee ", Ct);
+        Assert.Equal([(122m, "mmHg", "after coffee"), (78m, "mmHg", "after coffee")], pair.Select(r => (r.Value, r.Unit, r.Note)));
+        Assert.Equal(at.ToUnixTimeMilliseconds(), pair[0].TakenAt.ToUnixTimeMilliseconds());
+        Assert.Equal(pair[0].TakenAt, pair[1].TakenAt);
+
+        // Any refusal writes none of them.
+        async Task Refused<T>(IReadOnlyList<ReadingEntry> entries, string words) where T : Exception
+        {
+            var refusal = await Assert.ThrowsAsync<T>(() => readings.LogManyAsync(entries, cancellationToken: Ct));
+            Assert.Contains(words, refusal.Message);
+            Assert.Equal(2, (await readings.ListAsync(cancellationToken: Ct)).Readings.Count);
+        }
+
+        await Refused<ArgumentException>([new("Systolic BP", 130m), new("Diastolic BP", 80.5m)], "Diastolic BP takes a whole number");
+        await Refused<ArgumentException>([new("Systolic BP", 130m), new("systolic bp", 131m)], "Systolic BP is given twice");
+        await Refused<ArgumentException>([], "Give at least one reading");
+        await Refused<SubjectNotFoundException>([new("Systolic BP", 130m), new("Pulse", 64m)], "Pulse");
+        await Refused<ArgumentException>(
+            Enumerable.Range(0, MetricReadingService.MaxTogether + 1).Select(_ => new ReadingEntry("Weight", 190m)).ToList(),
+            "Log up to 50 readings at once");
+        await service.ArchiveAsync("Diastolic BP", Ct);
+        await Refused<InvalidOperationException>([new("Systolic BP", 130m), new("Diastolic BP", 80m)], "'Diastolic BP' is archived");
     }
 
     [Fact]
@@ -256,6 +348,56 @@ public sealed class MetricTests(PostgresFixture postgres)
         var noGoal = await JsonAsync(await host.Client.GetAsync($"/api/measurements/metrics/{id}", Ct));
         Assert.Equal("no_target", noGoal.GetProperty("goal").GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.Null, noGoal.GetProperty("from").ValueKind);
+    }
+
+    [Fact]
+    public async Task The_api_keeps_a_normal_range_flags_readings_and_logs_blood_pressure_together()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
+
+        var systolic = await JsonAsync(await host.Client.PostAsJsonAsync("/api/measurements/metrics", new { name = "Systolic BP" }, Ct));
+        Assert.Equal((90m, 119m, "bp_systolic"), (systolic.GetProperty("low").GetDecimal(), systolic.GetProperty("high").GetDecimal(),
+            systolic.GetProperty("catalog").GetString()));
+        await JsonAsync(await host.Client.PostAsJsonAsync("/api/measurements/metrics", new { name = "Diastolic BP" }, Ct));
+        var own = await JsonAsync(await host.Client.PostAsJsonAsync("/api/measurements/metrics",
+            new { name = "Resting HR", unit = "bpm", decimals = 0, better = "lower", low = 50, high = 70 }, Ct));
+        Assert.Equal((50m, 70m), (own.GetProperty("low").GetDecimal(), own.GetProperty("high").GetDecimal()));
+
+        var pair = await JsonAsync(await host.Client.PostAsJsonAsync("/api/measurements/readings/batch",
+            new { readings = new[] { new { metric = "Systolic BP", value = 132 }, new { metric = "Diastolic BP", value = 78 } }, note = "after coffee" }, Ct));
+        var logged = pair.GetProperty("readings").EnumerateArray().ToList();
+        Assert.Equal(new (string?, string?)[] { ("high", "after coffee"), (null, "after coffee") },
+            logged.Select(r => (r.GetProperty("flag").GetString(), r.GetProperty("note").GetString())));
+        Assert.Equal(logged[0].GetProperty("takenAt").GetDateTimeOffset(), logged[1].GetProperty("takenAt").GetDateTimeOffset());
+
+        // A refusal of one writes none; a value left out is a 400 too.
+        var bad = await host.Client.PostAsJsonAsync("/api/measurements/readings/batch",
+            new { readings = new[] { new { metric = "Systolic BP", value = 130m }, new { metric = "Diastolic BP", value = 80.5m } } }, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        Assert.Contains("Diastolic BP takes a whole number", await bad.Content.ReadAsStringAsync(Ct));
+        var noValue = await host.Client.PostAsJsonAsync("/api/measurements/readings/batch",
+            new { readings = new object[] { new { metric = "Systolic BP", value = 130 }, new { metric = "Diastolic BP" } } }, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, noValue.StatusCode);
+        Assert.Contains("Give Diastolic BP's value", await noValue.Content.ReadAsStringAsync(Ct));
+
+        var detail = await JsonAsync(await host.Client.GetAsync("/api/measurements/metrics/Systolic BP", Ct));
+        var only = Assert.Single(detail.GetProperty("readings").EnumerateArray());
+        Assert.Equal("high", only.GetProperty("flag").GetString());
+        var list = await JsonAsync(await host.Client.GetAsync("/api/measurements/metrics", Ct));
+        var row = list.EnumerateArray().Single(m => m.GetProperty("name").GetString() == "Systolic BP");
+        Assert.Equal((1, "high"), (row.GetProperty("readings").GetInt32(), row.GetProperty("lastReading").GetProperty("flag").GetString()));
+
+        // A wider range re-flags the readings it has; clearing an end leaves the other.
+        var id = systolic.GetProperty("id").GetString();
+        var wider = await JsonAsync(await host.Client.PostAsJsonAsync($"/api/measurements/metrics/{id}", new { high = 139 }, Ct));
+        Assert.Equal(139m, wider.GetProperty("high").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, wider.GetProperty("lastReading").GetProperty("flag").ValueKind);
+        var lowCleared = await JsonAsync(await host.Client.PostAsJsonAsync($"/api/measurements/metrics/{id}", new { clearLow = true }, Ct));
+        Assert.Equal((JsonValueKind.Null, 139m), (lowCleared.GetProperty("low").ValueKind, lowCleared.GetProperty("high").GetDecimal()));
+        var upsideDown = await host.Client.PostAsJsonAsync($"/api/measurements/metrics/{id}", new { low = 150 }, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, upsideDown.StatusCode);
+        Assert.Contains("above its high end", await upsideDown.Content.ReadAsStringAsync(Ct));
     }
 
     private async Task<JsonElement> JsonAsync(HttpResponseMessage response)

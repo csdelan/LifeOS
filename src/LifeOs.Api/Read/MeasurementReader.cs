@@ -38,7 +38,9 @@ public sealed class MeasurementReader(string readerConnectionString, IClock cloc
         return MeasurementRows.Detail(read, all.Count, all.Count == 0 ? null : all[^1]);
     }
 
-    /// <summary>A reading as a row, or null when it's gone (deleted).</summary>
+    /// <summary>A reading as a row, flagged against its metric's normal range, or null when it's gone (deleted).</summary>
     public async Task<MetricReadingRow?> GetReadingAsync(Guid id, CancellationToken cancellationToken = default)
-        => await metrics.GetReadingAsync(id, cancellationToken) is { } reading ? MeasurementRows.Reading(reading) : null;
+        => await metrics.GetReadingAsync(id, cancellationToken) is { } reading
+            ? MeasurementRows.Reading(reading, await metrics.GetMetricAsync(reading.MetricId, cancellationToken))
+            : null;
 }

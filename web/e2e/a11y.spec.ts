@@ -863,8 +863,8 @@ test.describe("accessibility", () => {
       await page.keyboard.press("Escape");
       await expect(sheet).toBeHidden();
 
-      await page.getByRole("button", { name: "Change goal" }).click();
-      await expect(page.getByRole("dialog", { name: "Weight goal" })).toBeVisible();
+      await page.getByRole("button", { name: "Edit Weight" }).click();
+      await expect(page.getByRole("dialog", { name: "Edit weight" })).toBeVisible();
       const goal = await scan();
       expect(goal, JSON.stringify(goal, null, 2)).toEqual([]);
       await page.keyboard.press("Escape");
@@ -883,6 +883,65 @@ test.describe("accessibility", () => {
     });
   }
 
+  // Any metric (MEASURE-3): blood pressure's row open on its two-line chart with a day read out,
+  // then its table of pairs, its Log sheet, its Edit dialog, and Add a metric, in both themes.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /measurements with blood pressure open, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        await settled(page);
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/measurements");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      const bp = page
+        .getByRole("list", { name: "Your metrics" })
+        .getByTestId("metric-list-row")
+        .filter({ has: page.getByRole("heading", { name: /^Blood pressure/ }) });
+      await expect(bp.getByTestId("metric-row-flag")).toHaveText("High", { timeout: 10_000 });
+      const rows = await scan();
+      expect(rows, JSON.stringify(rows, null, 2)).toEqual([]);
+
+      await bp.getByRole("button", { name: /^Blood pressure/ }).click();
+      const card = bp.getByRole("region", { name: "Blood pressure" });
+      const chart = card.getByRole("group", { name: /^Blood pressure by day/ });
+      await chart.focus();
+      await page.keyboard.press("ArrowLeft");
+      const open = await scan();
+      expect(open, JSON.stringify(open, null, 2)).toEqual([]);
+
+      await card.getByRole("group", { name: "Show as" }).getByRole("button", { name: "Table" }).click();
+      await expect(card.getByRole("table")).toBeVisible();
+      const table = await scan();
+      expect(table, JSON.stringify(table, null, 2)).toEqual([]);
+
+      await bp.getByRole("button", { name: "Log blood pressure" }).click();
+      const sheet = page.getByRole("dialog", { name: "Log blood pressure" });
+      await sheet.getByLabel("Systolic (mmHg)").fill("120");
+      await sheet.getByLabel("Diastolic (mmHg)").fill("78.5");
+      await expect(sheet.getByText(/takes a whole number/)).toBeVisible();
+      const log = await scan();
+      expect(log, JSON.stringify(log, null, 2)).toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(sheet).toBeHidden();
+
+      await card.getByRole("button", { name: "Edit Blood pressure" }).click();
+      await expect(page.getByRole("dialog", { name: "Edit blood pressure" })).toBeVisible();
+      const edit = await scan();
+      expect(edit, JSON.stringify(edit, null, 2)).toEqual([]);
+      await page.keyboard.press("Escape");
+
+      await page.getByRole("button", { name: "Add a metric" }).click();
+      const add = page.getByRole("dialog", { name: "Add a metric" });
+      await add.getByLabel("Name").fill("Ferritin");
+      await expect(add.getByText(/Give the metric a unit/)).toBeVisible();
+      const adding = await scan();
+      expect(adding, JSON.stringify(adding, null, 2)).toEqual([]);
+    });
+  }
+
   // Measurements on a phone: Log weight sits at the bottom, the sheet rises from there with a
   // number pad, and nothing scrolls sideways.
   test("axe serious/critical: /measurements on a phone with the Log weight sheet open", async ({ page }) => {
@@ -895,6 +954,19 @@ test.describe("accessibility", () => {
     const page1 = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
     const card = page1.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
     expect(card, JSON.stringify(card, null, 2)).toEqual([]);
+
+    // A row opened on a phone stays inside the screen.
+    const bp = page
+      .getByRole("list", { name: "Your metrics" })
+      .getByTestId("metric-list-row")
+      .filter({ has: page.getByRole("heading", { name: /^Blood pressure/ }) });
+    await bp.getByRole("button", { name: /^Blood pressure/ }).click();
+    await expect(bp.getByRole("region", { name: "Blood pressure" }).getByTestId("trend-chart")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+    await settled(page);
+    const opened = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    const row = opened.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    expect(row, JSON.stringify(row, null, 2)).toEqual([]);
 
     await page.getByRole("button", { name: "Log weight" }).click();
     const sheet = page.getByRole("dialog", { name: "Log weight" });
