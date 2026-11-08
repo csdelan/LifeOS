@@ -2246,7 +2246,7 @@ still confirms. See [inbox-attention-vs-status.md](inbox-attention-vs-status.md)
 ### REVIEW-0 — Review sessions are recurring commitments with a consistent sequence
 Horizon:    Pilot phase 2
 Definition: active
-Build:      needs-kernel
+Build:      building
 
 **Workflow (Chris):**
 - Daily, weekly, and monthly review sessions are commitments I make to myself, not optional
@@ -2297,11 +2297,20 @@ Build:      needs-kernel
   different mechanisms. Adherence is backfillable / correctable (GEN-5).
 - Open decisions: none beyond D3 / D8 details.
 
+**Update (2026-11-08 — the Review type landed, [reviews plan](reviews-plan.md) R1):** migration
+0052 adds `Review`, the 18th subject type, with `bsk.v_review`. A review is daily or weekly, one
+per day or per Monday-to-Sunday week named by its Sunday, made the first time it's opened. It's
+due at the end of its day; an Open review whose day is over reads as Missed, worked out on every
+read rather than written on a schedule (D8), and completing it late keeps the miss. Its statuses
+are Open, Completed and Missed. `bsk review open | complete | list` are the verbs. The answers'
+storage (D3's edit trail) is reviews plan §4: they go to SuperJournal (#29), behind a port. Build
+stays `building`: the API and the live page are next.
+
 
 ### REVIEW-1 — I want to perform daily reviews
 Horizon:    Pilot phase 2
 Definition: active
-Build:      mapped
+Build:      building
 
 **Workflow (Chris):**
 - A daily review should be created automatically at the start of every day and remain
@@ -2377,11 +2386,17 @@ Build:      mapped
   an uncompleted one becomes missed (D8).
 - Open decisions: plain text vs dictated responses; recap grouping (both app-side).
 
+**Update (2026-11-08 — reviews plan R1):** a daily review is a `Review` subject for its day
+(migration 0052), made the first time it's opened and never ahead of its day. It's due at the
+end of the day and reads as Missed after that unless completed; a late completion reads
+"Completed late" and stays missed. `bsk review open daily` and `bsk review complete daily`.
+Build stays `building`.
+
 
 ### REVIEW-2 — I want to perform weekly reviews (every Sunday)
 Horizon:    Pilot phase 2
 Definition: active
-Build:      mapped
+Build:      building
 
 **Workflow (Chris):**
 - The weekly review should be created on Sunday and should normally be completed on Sunday.
@@ -2449,6 +2464,12 @@ Build:      mapped
   with `startOfWeekSunday` and keys a weekly doc by that start; change it when this is built
   (`startOfWeekMonday`, keyed by the Sunday).
 - Open decisions: the weekly-specific reflection questions (content, app-side).
+
+**Update (2026-11-08 — reviews plan R1):** a weekly review is a `Review` subject named by its
+Sunday (migration 0052): "Weekly review, Sun Nov 8" looks back on Mon Nov 2 – Sun Nov 8 and plans
+Mon Nov 9 – Sun Nov 15. It opens on that Sunday and not before, so the week has only daily
+reviews until then. Missed with no grace period once Sunday is over, backfillable, and a late
+completion keeps the miss. Build stays `building`.
 
 
 ### REVIEW-3 — I want to perform monthly reviews with an end-of-month completion window

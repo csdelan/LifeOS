@@ -149,7 +149,7 @@ public static class McpResults
         SubjectTypes.Value, SubjectTypes.Area, SubjectTypes.Goal, SubjectTypes.Project, SubjectTypes.Task,
         SubjectTypes.Habit, SubjectTypes.Commitment, SubjectTypes.Appointment, SubjectTypes.Decision,
         SubjectTypes.Problem, SubjectTypes.Idea, SubjectTypes.Person, SubjectTypes.Constraint,
-        SubjectTypes.Season, SubjectTypes.Reward, SubjectTypes.Space, SubjectTypes.Metric,
+        SubjectTypes.Season, SubjectTypes.Reward, SubjectTypes.Space, SubjectTypes.Metric, SubjectTypes.Review,
     ];
 
     /// <summary>A JSON document stored as text, as JSON; null when there's none or it's malformed.</summary>

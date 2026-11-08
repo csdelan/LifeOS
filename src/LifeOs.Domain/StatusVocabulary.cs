@@ -15,7 +15,9 @@ namespace LifeOs.Domain;
 /// status-less. Habit's lifecycle (Building → Established | Abandoned)
 /// arrived with habit earning (migration 0027): a terminal habit graduates and leaves
 /// daily tracking. Planned came before it (migration 0049): a new habit starts Planned and
-/// isn't tracked until it moves to Building. Review gains its vocabulary when its type lands.</para>
+/// isn't tracked until it moves to Building. Review (migration 0052) is Open until completed;
+/// Missed is what an Open review reads as once its day is over (<see cref="Review.StatusAsOf"/>),
+/// and can be set by hand, which is also what Drop sets.</para>
 /// </summary>
 public static class StatusVocabulary
 {
@@ -39,6 +41,7 @@ public static class StatusVocabulary
         [SubjectTypes.Appointment] = ["Scheduled", "Completed", "Cancelled", "Missed"],
         [SubjectTypes.Idea] = ["New", "Promoted", "Rejected"],
         [SubjectTypes.Habit] = [Planned, "Building", "Established", "Abandoned"],
+        [SubjectTypes.Review] = [ReviewStatuses.Open, ReviewStatuses.Completed, ReviewStatuses.Missed],
     };
 
     /// <summary>
@@ -87,6 +90,7 @@ public static class StatusVocabulary
         [SubjectTypes.Appointment] = "Cancelled",
         [SubjectTypes.Idea] = "Rejected",
         [SubjectTypes.Habit] = "Abandoned",
+        [SubjectTypes.Review] = ReviewStatuses.Missed,
     };
 
     /// <summary>The subject types that carry a status workflow.</summary>

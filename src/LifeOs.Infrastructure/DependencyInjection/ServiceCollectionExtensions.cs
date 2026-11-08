@@ -6,6 +6,7 @@ using LifeOs.Application.Covers;
 using LifeOs.Application.Food;
 using LifeOs.Application.Home;
 using LifeOs.Application.Measurements;
+using LifeOs.Application.Reviews;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
@@ -93,6 +94,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFoodLogRepository>(_ => new NpgsqlFoodLogRepository(connectionString));
         services.AddSingleton<ISpaceRepository>(_ => new NpgsqlSpaceRepository(connectionString));
         services.AddSingleton<IMetricRepository>(_ => new NpgsqlMetricRepository(connectionString));
+        services.AddSingleton<IReviewRepository>(_ => new NpgsqlReviewRepository(connectionString));
         services.AddSingleton<IIntegrationRepository>(_ =>
             new NpgsqlIntegrationRepository(connectionString, integrations?.TokenCipher));
         services.AddSingleton<IActivityRepository>(_ => new NpgsqlActivityRepository(connectionString));
@@ -285,6 +287,16 @@ public static class ServiceCollectionExtensions
             sourceId));
         services.AddSingleton(sp => new MetricReads(
             sp.GetRequiredService<IMetricRepository>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>()));
+
+        // Daily and weekly reviews (REVIEW-1, REVIEW-2, reviews plan §2): opened lazily, one per
+        // kind and period, completed by a status change.
+        services.AddSingleton(sp => new ReviewService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<IReviewRepository>(),
+            sp.GetRequiredService<StatusService>(),
             sp.GetRequiredService<IHomeCalendar>(),
             sp.GetRequiredService<IClock>()));
 

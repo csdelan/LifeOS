@@ -119,6 +119,16 @@ public sealed class AttributeService(
                     nameof(assignments));
             }
 
+            // A review's kind and period say which review it is (one per kind and period,
+            // migration 0052), set once when it's opened.
+            if (subject.Type == SubjectTypes.Review
+                && ReviewPeriods.ReservedKeys.Any(k => string.Equals(key, k, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new ArgumentException(
+                    "A review's kind and period are set when it's opened (`bsk review open`), not with `bsk set`.",
+                    nameof(assignments));
+            }
+
             if (string.IsNullOrWhiteSpace(assignment.Value))
             {
                 removed.Add(key);

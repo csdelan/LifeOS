@@ -22,6 +22,7 @@ internal static class PilotVocab
     public const string Area = "Area";
     public const string Habit = "Habit";
     public const string Appointment = "Appointment";
+    public const string Review = "Review";
 
     public const string Serves = "serves";
     public const string ResultsIn = "results_in";
@@ -56,6 +57,7 @@ internal static class PilotVocab
         [Appointment] = ["Scheduled", "Completed", "Cancelled", "Missed"],
         [Idea] = ["New", "Promoted", "Rejected"],
         [Habit] = ["Planned", "Building", "Established", "Abandoned"],
+        [Review] = ["Open", "Completed", "Missed"],
     };
 
     // What no status reads as, where it isn't the first word: a habit made before Planned
@@ -85,6 +87,7 @@ internal static class PilotVocab
         [Appointment] = "Cancelled",
         [Idea] = "Rejected",
         [Habit] = "Abandoned",
+        [Review] = "Missed",
     };
 
     /// <summary>The status Drop assigns to a subject of this type, or "" if it has none.</summary>

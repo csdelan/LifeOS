@@ -47,7 +47,8 @@ public sealed class ReaderRoleTests(PostgresFixture postgres)
                      "bsk.v_meal", "bsk.v_fast", "bsk.v_food_day",
                      "bsk.v_exception_day",
                      "bsk.v_space", "bsk.v_space_rating", "bsk.v_space_photo",
-                     "bsk.v_metric", "bsk.v_metric_reading"
+                     "bsk.v_metric", "bsk.v_metric_reading",
+                     "bsk.v_review"
                  })
         {
             var count = await reader.ExecuteScalarAsync<long>(new CommandDefinition(

@@ -96,6 +96,13 @@ public static class SubjectTypes
     /// to retire it (MEASURE-1, D20, migration 0050).
     /// </summary>
     public const string Metric = "Metric";
+
+    /// <summary>
+    /// A daily or weekly review (REVIEW-0..2, D3, D8): one per day or per Sunday-named week,
+    /// opened on its day, due at the end of it and missed if not completed by then. Its kind and
+    /// period are attributes the review service writes (migration 0052).
+    /// </summary>
+    public const string Review = "Review";
 }
 
 /// <summary>

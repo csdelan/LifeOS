@@ -49,6 +49,7 @@ rootCommand.Subcommands.Add(RateCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(HomeCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(MetricCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(MeasureCommand.Create(connectionOption, jsonOption));
+rootCommand.Subcommands.Add(ReviewCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(OuraCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(WalletCommand.Create(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(LedgerCommand.Create(connectionOption, jsonOption));
