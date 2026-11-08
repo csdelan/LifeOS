@@ -165,6 +165,7 @@ public static class ApiHost
         app.MapAuthEndpoints();
         app.MapReadEndpoints();
         app.MapWriteEndpoints();
+        app.MapCaptureEndpoints();
         app.MapTaskEndpoints();
         app.MapRewardEndpoints();
         app.MapDomainEndpoints();

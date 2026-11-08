@@ -1732,7 +1732,15 @@ Build:      mapped
 ### CAP-2 — I want Voice mode for captures. 
 Horizon:    Pilot phase 2
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-11-08 — live on the web):** `POST /api/capture/voice` takes the transcript and,
+only when **Keep audio** is on or there's no transcript, the recording (multipart). A
+transcript-only note is a `voice` event with no audio; one with no transcript keeps its audio
+and shows in the Inbox as *Needs transcription*. Idea and Problem are made at once (D4) with the
+voice event concerning them, so a kept recording shows in their Files. Still not possible from a
+web page: Alt+V while the app is minimized to the tray (it works while LifeOS has focus), and the
+WinForms Pilot has no voice capture.
 
 **Update (2026-09-20 — kernel landed):** the `voice` write path and managed binary-artifact
 storage shipped (`bsk voice`; migration 0022 `artifact_blob`, bytea + `IArtifactBlobStore`
@@ -1816,7 +1824,14 @@ Build:      mapped
 ### CAP-4 — I want to capture "documents" (represented as attachments)
 Horizon:    Pilot phase 2
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-11-08 — live on the web):** Capture's file picker sends `POST
+/api/capture/document` (multipart: the file, the description, Note / Idea / Problem). The same
+file captured twice is one capture. The Inbox shows the file on its row and in the preview, an
+Idea or Problem made from it lists it under Files (`GET /api/subjects/{id}/files`), and Open or
+Download fetches the managed copy (`GET /api/artifacts/{id}/content`); a browser can't hand it to
+an OS app on double-click. The WinForms Pilot has no document capture.
 
 **Update (2026-09-20 — kernel landed):** managed binary-artifact storage and the `bsk attach`
 document/reference write path shipped (migration 0022 `artifact_blob`; note event + binary
@@ -4727,6 +4742,6 @@ integration** (ACTIVITY-1..4 / D14); **cover images** (COVER-1..3 / D15). Everyt
 above has shipped, the rewards work included (R1–R7 in [rewards-plan.md](rewards-plan.md))
 and life-domain XP (X1–X7 in [xp-domains-plan.md](xp-domains-plan.md)), and the Food Log
 (F1–F6 in [food-log-plan.md](food-log-plan.md)). The user-facing UIs for the shipped kernel bits still vary by surface — see each
-requirement's Build field (e.g. CAP-2 / CAP-4 are `building`: kernel done, capture UI pending).
+requirement's Build field (e.g. CAP-5 still rides a plain note).
 
 *(Prior mapping gaps already closed: the `concerns` write path — shipped as `bsk relate`.)*

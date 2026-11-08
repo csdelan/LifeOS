@@ -6,6 +6,7 @@ import {
   FileVideoIcon,
   type LucideIcon,
 } from "lucide-react";
+import type { ArtifactRecord, BinaryCaptureResult } from "@/lib/production-ui-types";
 
 /** Kernel default (`BSK_MAX_ARTIFACT_BYTES`) — reject before we copy into the mock store. */
 export const MAX_ARTIFACT_BYTES = 25 * 1024 * 1024;
@@ -40,6 +41,41 @@ export function iconForContentType(contentType: string): LucideIcon {
     return FileTextIcon;
   }
   return FileIcon;
+}
+
+/**
+ * A stored file's metadata as the live API answers it (`bsk.v_artifact`), with the byte
+ * count as a number: the API's int64 may arrive as a string.
+ */
+export function normalizeArtifact(raw: unknown): ArtifactRecord {
+  const a = (raw ?? {}) as Partial<Record<keyof ArtifactRecord, unknown>>;
+  return {
+    id: String(a.id ?? ""),
+    eventId: String(a.eventId ?? ""),
+    eventKind: String(a.eventKind ?? ""),
+    filename: (a.filename as string | null | undefined) ?? null,
+    contentType: String(a.contentType ?? "application/octet-stream"),
+    byteSize: Number(a.byteSize) || 0,
+    sha256: (a.sha256 as string | null | undefined) ?? null,
+    hasBytes: a.hasBytes !== false,
+  };
+}
+
+/** A document or voice capture's answer, with its byte count as a number. */
+export function normalizeBinaryCapture(raw: unknown): BinaryCaptureResult {
+  const r = (raw ?? {}) as Partial<Record<keyof BinaryCaptureResult, unknown>>;
+  return {
+    eventId: String(r.eventId ?? ""),
+    artifactId: (r.artifactId as string | null | undefined) ?? null,
+    kind: String(r.kind ?? ""),
+    filename: (r.filename as string | null | undefined) ?? null,
+    contentType: (r.contentType as string | null | undefined) ?? null,
+    byteSize: r.byteSize == null ? undefined : Number(r.byteSize) || 0,
+    sha256: (r.sha256 as string | null | undefined) ?? null,
+    subject: (r.subject as BinaryCaptureResult["subject"]) ?? null,
+    needsTranscription: r.needsTranscription === true,
+    deduplicated: r.deduplicated === true,
+  };
 }
 
 export function extensionForMime(contentType: string): string {

@@ -22,6 +22,14 @@ public sealed class CaptureService(
         => CaptureBodyAsync(EventKinds.Journal, text, cancellationToken);
 
     /// <summary>
+    /// Captures a voice note whose audio isn't kept (CAP-2's transcript-only default) as one
+    /// <c>voice</c> event holding just the transcript. A voice note that keeps its audio goes
+    /// through <see cref="AttachmentService.CaptureVoiceAsync"/> instead.
+    /// </summary>
+    public Task<CaptureResult> CaptureVoiceTranscriptAsync(string transcript, CancellationToken cancellationToken = default)
+        => CaptureBodyAsync(EventKinds.Voice, transcript, cancellationToken);
+
+    /// <summary>
     /// Records an idea session — a problem statement and all its ideas — as ONE
     /// immutable <c>idea_session</c> event that references the Problem subject.
     /// The ideas are stored verbatim; no rating or judgement happens here, and no

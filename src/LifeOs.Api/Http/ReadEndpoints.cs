@@ -31,6 +31,8 @@ public static class ReadEndpoints
             .Produces<IReadOnlyList<JournalEntry>>();
         api.MapGet("/subjects/{id:guid}/history", GetHistory).WithName("GetHistory")
             .Produces<IReadOnlyList<StatusHistoryEntry>>();
+        api.MapGet("/subjects/{id:guid}/files", GetFiles).WithName("GetSubjectFiles")
+            .Produces<IReadOnlyList<ArtifactRecord>>();
         api.MapGet("/tags", GetTagUniverse).WithName("GetTagUniverse")
             .Produces<IReadOnlyList<TagUniverseItem>>();
         api.MapGet("/inbox", GetInbox).WithName("GetInbox")
@@ -89,6 +91,9 @@ public static class ReadEndpoints
 
     private static IResult GetHistory(Guid id, SubjectReader reader)
         => Results.Ok(reader.GetStatusHistory(id));
+
+    private static IResult GetFiles(Guid id, SubjectReader reader)
+        => Results.Ok(reader.GetSubjectFiles(id));
 
     private static IResult GetTagUniverse(SubjectReader reader)
         => Results.Ok(reader.GetTagUniverse());

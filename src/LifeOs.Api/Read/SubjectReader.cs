@@ -465,17 +465,102 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     public IReadOnlyList<InboxItem> GetInbox()
     {
         using var db = Open();
-        return db.Query<InboxItem>(
-            """
+        return db.Query<InboxItem, ArtifactRecord?, InboxItem>(
+            $"""
             SELECT i.item_id, i.item_kind, i.triaged_at,
                    i.subject_urn, i.subject_type, i.subject_title,
                    i.event_kind, i.event_content,
                    ARRAY(SELECT t.tag FROM bsk.v_item_tag t
                          WHERE t.item_kind = i.item_kind AND t.item_id = i.item_id
-                         ORDER BY t.tag) AS tags
+                         ORDER BY t.tag) AS tags,
+                   {AttachmentColumns}
             FROM bsk.v_inbox i
+            {AttachmentJoin("i")}
             ORDER BY i.triaged_at DESC
-            """).AsList();
+            """,
+            WithAttachment,
+            splitOn: "id").AsList();
+    }
+
+    // The file or audio an Inbox item carries (CAP-2 / CAP-4): a raw capture's own, or for an Idea
+    // or Problem made from a capture, the earliest note or voice event concerning it that has bytes.
+    // needs_transcription comes first so it maps onto the item; the split starts at id.
+    private const string AttachmentColumns =
+        """
+        coalesce(att.needs_transcription, false) AS needs_transcription,
+        att.id, att.event_id, att.event_kind, att.filename, att.content_type,
+        att.byte_size, att.sha256, att.has_bytes
+        """;
+
+    private static string AttachmentJoin(string alias) =>
+        $"""
+        LEFT JOIN LATERAL (
+            SELECT va.id, va.event_id, ce.kind AS event_kind, va.filename, va.content_type,
+                   va.byte_size, va.sha256, va.has_bytes,
+                   (ce.kind = 'voice' AND coalesce(btrim(ca.content), '') = '') AS needs_transcription
+            FROM bsk.event ce
+            JOIN bsk.artifact ca ON ca.id = ce.artifact_id
+            JOIN bsk.v_artifact va ON va.id = ce.artifact_id AND va.has_bytes
+            WHERE ce.kind IN ('note', 'voice')
+              AND ((({alias}.item_kind = 'event') AND ce.id = {alias}.item_id)
+                   OR ({alias}.item_kind = 'subject' AND ce.id IN (
+                         SELECT se.event_id FROM bsk.v_subject_event se
+                         WHERE se.subject_id = {alias}.item_id AND se.relation = 'concerns')))
+            ORDER BY ce.recorded_at, ce.id
+            LIMIT 1
+        ) att ON true
+        """;
+
+    private static InboxItem WithAttachment(InboxItem item, ArtifactRecord? attachment)
+    {
+        item.Attachment = attachment;
+        return item;
+    }
+
+    private static ResolvedInboxItem WithAttachment(ResolvedInboxItem item, ArtifactRecord? attachment)
+    {
+        item.Attachment = attachment;
+        return item;
+    }
+
+    /// <summary>
+    /// A stored file's metadata by its artifact id, or by the id of the event that carries it.
+    /// Null when neither names an artifact with bytes.
+    /// </summary>
+    public ArtifactRecord? GetArtifact(Guid id)
+    {
+        using var db = Open();
+        return db.QueryFirstOrDefault<ArtifactRecord>(
+            """
+            SELECT va.id, va.event_id, va.kind AS event_kind, va.filename, va.content_type,
+                   va.byte_size, va.sha256, va.has_bytes
+            FROM bsk.v_artifact va
+            WHERE va.has_bytes AND (va.id = @id OR va.event_id = @id)
+            ORDER BY (va.id = @id) DESC
+            LIMIT 1
+            """,
+            new { id });
+    }
+
+    /// <summary>
+    /// The files on a subject (its Files section): every stored file on an event that concerns
+    /// it, oldest first. A cover or a food photo isn't one: those hang off their own events.
+    /// </summary>
+    public IReadOnlyList<ArtifactRecord> GetSubjectFiles(Guid subjectId)
+    {
+        using var db = Open();
+        return db.Query<ArtifactRecord>(
+            """
+            SELECT va.id, va.event_id, va.kind AS event_kind, va.filename, va.content_type,
+                   va.byte_size, va.sha256, va.has_bytes
+            FROM bsk.v_subject_event se
+            JOIN bsk.event e ON e.id = se.event_id
+            JOIN bsk.v_artifact va ON va.id = e.artifact_id AND va.has_bytes
+            WHERE se.subject_id = @subjectId AND se.relation = 'concerns'
+              AND e.kind IN ('note', 'voice')
+            ORDER BY e.recorded_at, e.id
+            """,
+            new { subjectId }).AsList();
     }
 
     /// <summary>
@@ -485,8 +570,8 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     public IReadOnlyList<ResolvedInboxItem> GetResolvedInbox(int limit)
     {
         using var db = Open();
-        return db.Query<ResolvedInboxItem>(
-            """
+        return db.Query<ResolvedInboxItem, ArtifactRecord?, ResolvedInboxItem>(
+            $"""
             SELECT r.item_id, r.item_kind, r.triaged_at,
                    r.resolution, r.resolved_at,
                    r.subject_status, r.subject_status_terminal,
@@ -494,12 +579,16 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
                    r.event_kind, r.event_content,
                    ARRAY(SELECT t.tag FROM bsk.v_item_tag t
                          WHERE t.item_kind = r.item_kind AND t.item_id = r.item_id
-                         ORDER BY t.tag) AS tags
+                         ORDER BY t.tag) AS tags,
+                   {AttachmentColumns}
             FROM bsk.v_inbox_resolved r
+            {AttachmentJoin("r")}
             ORDER BY r.resolved_at DESC
             LIMIT @limit
             """,
-            new { limit }).AsList();
+            WithAttachment,
+            new { limit },
+            splitOn: "id").AsList();
     }
 
     public int GetInboxCount()

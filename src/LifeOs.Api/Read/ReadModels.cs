@@ -144,6 +144,13 @@ public sealed class InboxItem
     public string? EventContent { get; set; }
     /// <summary>The item's own tags — on the event for a raw capture, on the subject otherwise.</summary>
     public string[] Tags { get; set; } = [];
+    /// <summary>
+    /// The file or audio the capture carries (CAP-2 / CAP-4): the event's own for a raw capture,
+    /// the capture it was made from for an Idea or Problem. Null when there's none.
+    /// </summary>
+    public ArtifactRecord? Attachment { get; set; }
+    /// <summary>A voice note with no transcript: its audio is kept for later processing (CAP-2).</summary>
+    public bool NeedsTranscription { get; set; }
 }
 
 /// <summary>
@@ -167,6 +174,25 @@ public sealed class ResolvedInboxItem
     public string? EventKind { get; set; }
     public string? EventContent { get; set; }
     public string[] Tags { get; set; } = [];
+    public ArtifactRecord? Attachment { get; set; }
+    public bool NeedsTranscription { get; set; }
+}
+
+/// <summary>
+/// A stored file's metadata, from <c>bsk.v_artifact</c> (CAP-2 / CAP-4): never its bytes, which
+/// come from <c>GET /api/artifacts/{id}/content</c>.
+/// </summary>
+public sealed class ArtifactRecord
+{
+    public Guid Id { get; set; }
+    public Guid EventId { get; set; }
+    /// <summary>The event that carries it: <c>note</c> for a document, <c>voice</c> for audio.</summary>
+    public string EventKind { get; set; } = "";
+    public string? Filename { get; set; }
+    public string ContentType { get; set; } = "";
+    public long ByteSize { get; set; }
+    public string? Sha256 { get; set; }
+    public bool HasBytes { get; set; }
 }
 
 public sealed class AreaRow

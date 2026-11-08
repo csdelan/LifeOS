@@ -21,12 +21,24 @@ public static class ArtifactEndpoints
             .WithTags("Artifacts")
             .RequireAuthorization(AuthServiceCollectionExtensions.AllowlistedUserPolicy);
 
+        api.MapGet("/{id:guid}", GetMetadata).WithName("GetArtifact")
+            .Produces<ArtifactRecord>()
+            .Produces<ApiError>(StatusCodes.Status404NotFound);
         api.MapGet("/{id:guid}/content", GetContent).WithName("GetArtifactContent")
             .Produces(StatusCodes.Status200OK, typeof(Stream), "image/jpeg", "image/png", "image/webp", "application/octet-stream")
             .Produces(StatusCodes.Status304NotModified)
             .Produces<ApiError>(StatusCodes.Status404NotFound)
             .Produces<ApiError>(StatusCodes.Status502BadGateway);
     }
+
+    /// <summary>
+    /// A stored file's metadata (CAP-2 / CAP-4), by its artifact id or the id of the event that
+    /// carries it. Never the bytes: those are <c>/content</c>.
+    /// </summary>
+    private static IResult GetMetadata(Guid id, SubjectReader reader)
+        => reader.GetArtifact(id) is { } artifact
+            ? Results.Ok(artifact)
+            : Results.NotFound(new ApiError($"No artifact with bytes has the id {id}."));
 
     /// <summary>
     /// The artifact's bytes in their own content type. Images show inline; anything else

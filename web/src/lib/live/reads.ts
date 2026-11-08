@@ -36,7 +36,6 @@ import type {
   ActivityTagsRead,
   ActivityWorkoutsRead,
   AreaRow,
-  ArtifactRecord,
   DomainDaysRead,
   DomainReportRead,
   DomainsRead,
@@ -82,9 +81,15 @@ import {
   normalizeSpaceRatings,
 } from "@/lib/environment";
 import { normalizeMetric, normalizeMetricDetail } from "@/lib/measurements";
+import { normalizeArtifact } from "@/lib/artifacts";
 
 function asType<T>(value: unknown): T {
   return value as T;
+}
+
+/** An Inbox row with its file's metadata in numbers (CAP-2 / CAP-4); null when it has none. */
+function withNormalAttachment<T extends InboxItem>(item: T): T {
+  return { ...item, attachment: item.attachment ? normalizeArtifact(item.attachment) : null };
 }
 
 /** The API types int64 as `number | string`; the timer maths needs numbers. */
@@ -191,28 +196,30 @@ export const liveReads: LifeOsReads = {
 
   async inbox() {
     const data = await unwrap(api().GET("/api/inbox"));
-    return asType<InboxItem[]>(data);
+    return asType<InboxItem[]>(data).map(withNormalAttachment);
   },
 
   async inboxResolved() {
     const data = await unwrap(api().GET("/api/inbox/resolved"));
-    return asType<ResolvedInboxItem[]>(data);
+    return asType<ResolvedInboxItem[]>(data).map(withNormalAttachment);
   },
 
-  async artifact(_id) {
-    // TODO(api): GET /api/artifacts/{id} — metadata from `bsk.v_artifact`.
-    void _id;
-    return asType<ArtifactRecord | null>(null);
+  async artifact(id) {
+    const { data, response } = await api().GET("/api/artifacts/{id}", { params: { path: { id } } });
+    if (response.status === 404) return null;
+    if (!response.ok || data === undefined) throw new ApiRequestError(`API ${response.status}`, response.status);
+    return normalizeArtifact(data);
   },
 
   async artifactBytesUrl(id) {
     return artifactObjectUrl(id);
   },
 
-  async subjectFiles(_subjectId) {
-    // TODO(api): GET /api/subjects/{id}/files — artifacts related onto the subject.
-    void _subjectId;
-    return asType<ArtifactRecord[]>([]);
+  async subjectFiles(subjectId) {
+    const data = await unwrap(
+      api().GET("/api/subjects/{id}/files", { params: { path: { id: subjectId } } }),
+    );
+    return (data as unknown[]).map(normalizeArtifact);
   },
 
   async areas() {

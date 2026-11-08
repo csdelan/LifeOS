@@ -39,6 +39,7 @@ import {
   ratedMessage,
 } from "@/lib/environment";
 import { normalizeMetric, normalizeReadingResult, normalizeReadingsResult } from "@/lib/measurements";
+import { extensionForMime, normalizeBinaryCapture } from "@/lib/artifacts";
 import {
   normalizeBountyResult,
   normalizeHabitTarget,
@@ -469,18 +470,49 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       notify("Captured to Inbox");
     },
 
-    async captureDocument(_req) {
-      // TODO(api): multipart POST /api/capture/document — kernel `bsk attach`.
-      void _req;
-      toast.error("Document capture is not on the live API yet.");
-      throw new Error("Document capture is not on the live API yet.");
+    async captureDocument(req) {
+      // CAP-4: one file per capture; the API names an Idea or Problem from the description.
+      const form = new FormData();
+      form.append("file", req.file, req.file.name || "attachment");
+      const description = req.description.trim();
+      if (description) form.append("description", description);
+      form.append("type", req.type);
+      const result = normalizeBinaryCapture(
+        await unwrap(
+          api().POST("/api/capture/document", {
+            // The browser sets the multipart boundary; openapi-fetch leaves FormData as it is.
+            body: form as unknown as { description?: string; type?: string },
+            bodySerializer: (body) => body as unknown as FormData,
+          }),
+        ),
+      );
+      notify(result.deduplicated ? "That file is already in LifeOS" : "Captured to Inbox");
+      return result;
     },
 
-    async captureVoice(_req) {
-      // TODO(api): multipart POST /api/capture/voice — kernel `bsk voice`.
-      void _req;
-      toast.error("Voice capture is not on the live API yet.");
-      throw new Error("Voice capture is not on the live API yet.");
+    async captureVoice(req) {
+      // CAP-2: the transcript only, unless Keep audio is on or there's no transcript to keep,
+      // so the recording is sent only when it will be stored.
+      const transcript = req.transcript.trim();
+      const keep = req.keepAudio || !transcript;
+      const form = new FormData();
+      if (keep) {
+        const type = req.audioBlob.type || "audio/webm";
+        form.append("audio", req.audioBlob, `voice.${extensionForMime(type)}`);
+      }
+      if (transcript) form.append("transcript", transcript);
+      form.append("keepAudio", String(keep));
+      form.append("type", req.type);
+      const result = normalizeBinaryCapture(
+        await unwrap(
+          api().POST("/api/capture/voice", {
+            body: form as unknown as { transcript?: string; keepAudio?: boolean; type?: string },
+            bodySerializer: (body) => body as unknown as FormData,
+          }),
+        ),
+      );
+      notify("Captured to Inbox");
+      return result;
     },
 
     async recur(subject, spec, opts) {

@@ -595,6 +595,8 @@ export interface BinaryCaptureResult {
   /** Present when type is Idea or Problem — those become subjects immediately (D4). */
   subject?: CreatedSubject | null;
   needsTranscription?: boolean;
+  /** Live: the same file was captured before, so this is that capture and nothing new was written. */
+  deduplicated?: boolean;
 }
 
 /** A Task timer's folded state (TASKS-2). A task never timed has no timer row. */

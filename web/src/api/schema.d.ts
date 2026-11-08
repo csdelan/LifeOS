@@ -132,6 +132,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/subjects/{id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetSubjectFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tags": {
         parameters: {
             query?: never;
@@ -574,6 +590,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["Capture"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/capture/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CaptureDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/capture/voice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CaptureVoice"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1396,6 +1444,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/artifacts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/artifacts/{id}/content": {
         parameters: {
             query?: never;
@@ -1997,6 +2061,19 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
+        ArtifactRecord: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            eventId?: string;
+            eventKind?: string;
+            filename?: null | string;
+            contentType?: string;
+            /** Format: int64 */
+            byteSize?: number | string;
+            sha256?: null | string;
+            hasBytes?: boolean;
+        };
         AwardRow: {
             /** Format: uuid */
             id?: string;
@@ -2014,6 +2091,21 @@ export interface components {
             multipliers?: null | {
                 [key: string]: number | string;
             };
+        };
+        BinaryCaptureRow: {
+            /** Format: uuid */
+            eventId?: string;
+            /** Format: uuid */
+            artifactId?: null | string;
+            kind?: string;
+            filename?: null | string;
+            contentType?: null | string;
+            /** Format: int64 */
+            byteSize?: null | number | string;
+            sha256?: null | string;
+            deduplicated?: boolean;
+            subject?: null | components["schemas"]["CreatedSubject"];
+            needsTranscription?: boolean;
         };
         BountyBody: {
             subject?: string;
@@ -2736,6 +2828,8 @@ export interface components {
             eventKind?: null | string;
             eventContent?: null | string;
             tags?: string[];
+            attachment?: null | components["schemas"]["ArtifactRecord"];
+            needsTranscription?: boolean;
         };
         InvolveBody: {
             subject?: string;
@@ -3111,6 +3205,8 @@ export interface components {
             eventKind?: null | string;
             eventContent?: null | string;
             tags?: string[];
+            attachment?: null | components["schemas"]["ArtifactRecord"];
+            needsTranscription?: boolean;
         };
         RewardPriceBody: {
             reward?: string;
@@ -3780,6 +3876,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusHistoryEntry"][];
+                };
+            };
+        };
+    };
+    GetSubjectFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactRecord"][];
                 };
             };
         };
@@ -4588,6 +4706,108 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    CaptureDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    file?: components["schemas"]["IFormFile"];
+                } & {
+                    description?: string;
+                } & {
+                    type?: string;
+                } & {
+                    title?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BinaryCaptureRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    CaptureVoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    audio?: components["schemas"]["IFormFile"];
+                } & {
+                    transcript?: string;
+                } & {
+                    keepAudio?: boolean;
+                } & {
+                    type?: string;
+                } & {
+                    title?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BinaryCaptureRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6414,6 +6634,37 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactRecord"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
