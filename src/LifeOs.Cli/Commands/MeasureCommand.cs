@@ -191,7 +191,10 @@ internal static class MeasureCommand
         takenLocal = reading.TakenLocal.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
         loggedAt = reading.LoggedAt,
         versions = reading.Versions,
-        flag = metric?.Flag(reading.Value)
+        flag = metric?.Flag(reading),
+        visitId = reading.VisitId,
+        low = reading.Low,
+        high = reading.High
     };
 
     /// <summary>A time for <c>--at</c>: the Food Log's forms, plus a date alone, which is noon that day.</summary>
@@ -238,7 +241,7 @@ internal static class MeasureCommand
             : $"{MetricLimits.Format(reading.Value, metric.Decimals)} {reading.Unit}";
         var when = reading.TakenLocal.ToString("ddd MMM d yyyy, h:mm tt", CultureInfo.InvariantCulture);
         var note = reading.Note is null ? "" : $" — {reading.Note}";
-        var flag = metric?.Flag(reading.Value) is { } f ? $" ({f})" : "";
+        var flag = metric?.Flag(reading) is { } f ? $" ({f})" : "";
         return $"{metric?.Name ?? "?"} {value.Trim()}{flag} on {when}{note}";
     }
 

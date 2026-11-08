@@ -349,6 +349,13 @@ public sealed class McpServerTests(PostgresFixture postgres)
         }
 
         await PostOkAsync(host, "api/capture", new { text = $"A capture {ns}" });
+
+        // A made-up lab visit (MEASURE-4): its tests, results and the visit are health too.
+        await PostOkAsync(host, "api/measurements/visits", new
+        {
+            lab = $"Lab {ns}",
+            results = new object[] { new { metric = "Glucose", value = 104, low = 65, high = 99 } }
+        });
         await using var client = await ConnectAsync(host, ApiTestHost.TokenFor(clientId: Agent));
 
         var tools = (await client.ListToolsAsync(cancellationToken: Ct)).Select(t => t.Name).ToList();
@@ -361,6 +368,9 @@ public sealed class McpServerTests(PostgresFixture postgres)
         Assert.DoesNotContain("oura", sources);
         Assert.Contains(changes.GetProperty("events").EnumerateArray(),
             e => e.TryGetProperty("text", out var text) && (text.GetString() ?? "").Contains(ns, StringComparison.Ordinal));
+        Assert.DoesNotContain(changes.GetProperty("events").EnumerateArray(),
+            e => e.GetRawText().Contains("Glucose", StringComparison.Ordinal) || e.GetRawText().Contains("lab_visit", StringComparison.Ordinal)
+                 || e.GetRawText().Contains("metric_reading", StringComparison.Ordinal));
         Assert.False((await CallAsync(client, "life_snapshot")).TryGetProperty("domain_xp", out _));
 
         // With the health area on, the same reading shows.
@@ -368,6 +378,10 @@ public sealed class McpServerTests(PostgresFixture postgres)
         await using var openClient = await ConnectAsync(open, ApiTestHost.TokenFor(clientId: Agent));
         var all = await CallAsync(openClient, "recent_changes", new() { ["since"] = "1h" });
         Assert.Contains(all.GetProperty("events").EnumerateArray(), e => e.GetProperty("source").GetString() == "oura");
+        Assert.Contains(all.GetProperty("events").EnumerateArray(),
+            e => e.TryGetProperty("payload", out var p) && p.ValueKind == JsonValueKind.Object && p.TryGetProperty("lab_visit", out _));
+        Assert.Contains(all.GetProperty("events").EnumerateArray(),
+            e => e.TryGetProperty("payload", out var p) && p.ValueKind == JsonValueKind.Object && p.TryGetProperty("metric_reading", out _));
     }
 
     [Fact]

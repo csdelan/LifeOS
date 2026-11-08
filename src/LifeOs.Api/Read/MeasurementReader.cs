@@ -6,17 +6,36 @@ using LifeOs.Infrastructure.Persistence;
 namespace LifeOs.Api.Read;
 
 /// <summary>
-/// The measurements' reads (MEASURE-1, MEASURE-2, measurements plan §4.6) on the <c>bsk_reader</c>
-/// connection, like every other API read: the metrics and readings through <c>bsk.v_metric</c> and
-/// <c>bsk.v_metric_reading</c>, with the trend and goal from <see cref="MetricReads"/>, on the days
-/// of <paramref name="homeTimeZone"/>. No writes live here; they go through
-/// <see cref="MetricService"/> and <see cref="MetricReadingService"/>.
+/// The measurements' reads (MEASURE-1, MEASURE-2, MEASURE-4, measurements plan §4.6, §4.9) on the
+/// <c>bsk_reader</c> connection, like every other API read: the metrics and readings through
+/// <c>bsk.v_metric</c> and <c>bsk.v_metric_reading</c>, with the trend and goal from
+/// <see cref="MetricReads"/>, and the lab visits through <c>bsk.v_lab_visit</c>, on the days of
+/// <paramref name="homeTimeZone"/>. No writes live here; they go through <see cref="MetricService"/>,
+/// <see cref="MetricReadingService"/> and <see cref="LabVisitService"/>.
 /// </summary>
 public sealed class MeasurementReader(string readerConnectionString, IClock clock, string homeTimeZone = HomeZone.Default)
 {
     private readonly NpgsqlMetricRepository metrics = new(readerConnectionString);
     private readonly MetricReads reads = new(
         new NpgsqlMetricRepository(readerConnectionString), new NpgsqlHomeCalendar(readerConnectionString, homeTimeZone), clock);
+
+    private readonly LabVisitReads visits = new(
+        new NpgsqlMetricRepository(readerConnectionString), new NpgsqlHomeCalendar(readerConnectionString, homeTimeZone), clock);
+
+    /// <summary>Every lab visit with its results, newest collected first (<c>GET /api/measurements/visits</c>).</summary>
+    public async Task<LabVisitsRead> GetVisitsAsync(CancellationToken cancellationToken = default)
+    {
+        var list = await visits.ListAsync(cancellationToken);
+        return new LabVisitsRead
+        {
+            Today = list.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+            Visits = list.Visits.Select(MeasurementRows.Visit).ToList()
+        };
+    }
+
+    /// <summary>One lab visit (by its id or the start of it) with its results.</summary>
+    public async Task<LabVisitRow> GetVisitAsync(string visit, CancellationToken cancellationToken = default)
+        => MeasurementRows.Visit(await visits.GetAsync(visit, cancellationToken));
 
     /// <summary>Every metric, archived ones included, by name (<c>GET /api/measurements/metrics</c>).</summary>
     public async Task<IReadOnlyList<MetricRow>> GetMetricsAsync(CancellationToken cancellationToken = default)

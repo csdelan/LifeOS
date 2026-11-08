@@ -68,7 +68,8 @@ function Sparkline({ group }: { group: MetricGroup }) {
 /**
  * A metric's row on the Measurements page (MEASURE-3, measurements plan §4.8): its name, its
  * newest value with High or Low, when that was, and a small trend line. The row opens the
- * metric's card in place (the heading is a disclosure button); Log opens the sheet.
+ * metric's card in place (the heading is a disclosure button); Log opens the sheet. A lab test's
+ * row (§4.9) has no Log: its results come with a visit, which `onLog` then starts from the card.
  */
 export function MetricListRow({
   group,
@@ -76,12 +77,16 @@ export function MetricListRow({
   onToggle,
   onLog,
   onChange,
+  showLog = true,
+  heading: Heading = "h3",
 }: {
   group: MetricGroup;
   open: boolean;
   onToggle: () => void;
   onLog: () => void;
   onChange: (set: ReadingSet) => void;
+  showLog?: boolean;
+  heading?: "h3" | "h4";
 }) {
   const bodyId = useId();
   const last = lastSet(group);
@@ -96,7 +101,7 @@ export function MetricListRow({
   return (
     <li className="rounded-xl bg-card ring-1 ring-foreground/10" data-testid="metric-list-row">
       <div className="flex items-center gap-2 py-1.5 pr-3 pl-1.5">
-        <h3 className="min-w-0 flex-1">
+        <Heading className="min-w-0 flex-1">
           <button
             type="button"
             aria-label={spoken}
@@ -127,18 +132,20 @@ export function MetricListRow({
               ) : null}
             </span>
           </button>
-        </h3>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="min-h-11 shrink-0 md:min-h-0"
-          aria-label={`Log ${nameInText(group.name)}`}
-          onClick={onLog}
-        >
-          <PlusIcon />
-          Log
-        </Button>
+        </Heading>
+        {showLog ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11 shrink-0 md:min-h-0"
+            aria-label={`Log ${nameInText(group.name)}`}
+            onClick={onLog}
+          >
+            <PlusIcon />
+            Log
+          </Button>
+        ) : null}
       </div>
       {open ? (
         <div id={bodyId} className="border-t px-4 py-4">

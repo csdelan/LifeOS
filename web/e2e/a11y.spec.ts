@@ -980,6 +980,87 @@ test.describe("accessibility", () => {
     expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
   });
 
+  // Lab results (MEASURE-4): the visit open on its results beside a test's card as a table,
+  // then the visit sheet with a problem showing and a test added, and the ask before a delete,
+  // in both themes.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: /measurements lab results and the visit sheet, ${theme} theme`, async ({ page }) => {
+      const scan = async () => {
+        await settled(page);
+        const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        return results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      };
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/measurements");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      const labs = page.getByRole("region", { name: "Lab results" });
+      const visit = labs.getByTestId("lab-visit");
+      await expect(visit).toHaveCount(1, { timeout: 10_000 });
+      await visit.getByRole("button", { name: /Quest Diagnostics/ }).click();
+      await expect(visit.getByTestId("lab-visit-results")).toBeVisible();
+      const glucose = labs
+        .getByRole("list", { name: "CMP" })
+        .getByTestId("metric-list-row")
+        .filter({ has: page.getByRole("heading", { name: /^Glucose/ }) });
+      await glucose.getByRole("button", { name: /^Glucose/ }).click();
+      const card = glucose.getByRole("region", { name: "Glucose" });
+      await card.getByRole("group", { name: "Show as" }).getByRole("button", { name: "Table" }).click();
+      await expect(card.getByRole("table")).toBeVisible();
+      const open = await scan();
+      expect(open, JSON.stringify(open, null, 2)).toEqual([]);
+
+      await visit.getByRole("button", { name: "Edit visit" }).click();
+      const sheet = page.getByRole("dialog", { name: "Edit lab visit" });
+      await sheet.getByLabel(/^Glucose\s*mg\/dL$/).fill("104.5");
+      await expect(sheet.getByText(/takes a whole number/)).toBeVisible();
+      await sheet.getByRole("button", { name: "Add a test" }).click();
+      const editing = await scan();
+      expect(editing, JSON.stringify(editing, null, 2)).toEqual([]);
+
+      await sheet.getByRole("button", { name: "Delete visit" }).click();
+      await expect(page.getByRole("alertdialog", { name: "Delete this lab visit?" })).toBeVisible();
+      const ask = await scan();
+      expect(ask, JSON.stringify(ask, null, 2)).toEqual([]);
+    });
+  }
+
+  // Lab results on a phone: a visit's results fit the screen, and the visit sheet rises from the
+  // bottom with a number pad and its rows inside the screen.
+  test("axe serious/critical: /measurements lab results on a phone with the visit sheet open", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/measurements");
+    const labs = page.getByRole("region", { name: "Lab results" });
+    const visit = labs.getByTestId("lab-visit");
+    await expect(visit).toHaveCount(1, { timeout: 10_000 });
+    await visit.getByRole("button", { name: /Quest Diagnostics/ }).click();
+    const table = visit.getByTestId("lab-visit-results");
+    await expect(table).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+    // The results fit without scrolling sideways, eGFR's long unit wrapped under its number.
+    expect(await table.evaluate((t) => t.parentElement!.scrollWidth <= t.parentElement!.clientWidth)).toBe(true);
+    await settled(page);
+    const opened = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    const results = opened.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    expect(results, JSON.stringify(results, null, 2)).toEqual([]);
+
+    await labs.getByRole("button", { name: "Log a lab visit" }).click();
+    const sheet = page.getByRole("dialog", { name: "Log a lab visit" });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByLabel(/^Glucose\s*mg\/dL$/)).toHaveAttribute("inputmode", "decimal");
+    const box = await sheet.boundingBox();
+    expect(box && box.y + box.height).toBeGreaterThan(800);
+    const right = await sheet.evaluate((el) =>
+      Math.max(...[...el.querySelectorAll("input, button")].map((n) => n.getBoundingClientRect().right)),
+    );
+    expect(right).toBeLessThanOrEqual(375);
+    await settled(page);
+    const scan = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    const blocking = scan.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+    expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
+  });
+
   // Photos (HOME-4): the compare dialog with Change day open, then Make this its own shot, then
   // Remove photo asking; the add photos sheet with a photo picked for a new shot; a held photo in
   // the walk-through beside the Kitchen's baseline; and the spaces editor's shots, in both themes.

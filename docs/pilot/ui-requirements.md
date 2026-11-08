@@ -4289,20 +4289,33 @@ Build:      built
   M2's goal dialog) and Archived with Restore. As built: plan §4.8.
 
 ### MEASURE-4 — I can log a lab visit's results at once, with the report PDF and normal ranges
-Horizon:    Pilot phase 2
-Definition: drafting
-Build:      unmapped
+Horizon:    Pilot
+Definition: active
+Build:      built
 
 **Workflow (Chris):**
 - "blood work (CMP, A1c, etc)" (2026-11-07)
 - Agreed in Q&A (2026-11-07): a lab visit groups its readings under one date and lab, with
   the report PDF kept with it; each value shows its normal range and is flagged high or low.
+- Chris's answers (2026-11-08), before his first labs on 2026-11-09: each result keeps the
+  range printed beside it and is flagged by it for good; a Lab results section below Your
+  metrics; the starter list has the CMP, the lipid panel and A1c, and other tests are added
+  from the visit form.
 
 **Ontology fit (Claude):**
-- Maps to: readings of the panel's metrics sharing a visit, with the PDF as an artifact.
-  Whether the visit is its own event or a key on each reading is settled when M4 is planned.
-- Kernel delta: TBD (plan M4).
-- Open decisions: how a visit is stored; whether a reading carries the lab's own range.
+- Maps to: a lab visit is its own versioned `measurement` event (`lab_visit`), not a subject;
+  its results are readings of the tests' metrics carrying the visit's id and the printed
+  range; the report is an artifact.
+- Kernel delta: migration 0053 (`v_lab_visit`; `v_metric_reading` gains `visit_id`, `low`,
+  `high`; `v_metric` gains `panel`), `LabVisitService`, `bsk lab`, the
+  `/api/measurements/visits` endpoints, and visits under `/mcp`'s Health switch.
+- Implications: a test's range follows its newest report, so the chart shades it and the next
+  visit's form starts from it, while each old result keeps its own.
+- Open decisions: none.
+- Built (M4, 2026-11-08): migration 0053, `bsk lab add|list|show|set|report|delete`, and on the
+  web the Lab results section (visits that open to their results laid out like the report,
+  then the tests by panel, each opening its chart) and the visit sheet, which fills each range
+  in from the last report and takes the report's PDF or a photo. As built: plan §4.9.
 
 ### MEASURE-5 — I can chart any of my metrics beside my Oura and Food Log data on one timeline
 Horizon:    Pilot phase 2

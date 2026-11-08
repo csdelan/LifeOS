@@ -58,8 +58,8 @@ place through use.
 | `weight` | Weight | lb | 1 | lower |
 
 M1 ships Weight only. M3 adds body fat (%), waist (in), resting blood pressure (mmHg, two
-metrics) and VO2 max (mL/kg/min). M4 adds the lab panels (CMP's 14 values, the lipid panel,
-A1c), each with its usual unit and range.
+metrics) and VO2 max (mL/kg/min). M4 adds the lab panels (the CMP's 14 tests and eGFR, the
+lipid panel, A1c), each with its usual unit and a common adult range (§4.9).
 
 - **Better** says which way is good: `lower` or `higher`. It decides which way the goal date
   counts (§2.3) and, from M3, which side of a range is flagged. A metric may have none.
@@ -110,7 +110,8 @@ now     = the trend on the newest day
   while it's an early estimate.
 - **Direction:** Better, or when a metric has none, lower if `now` is above T and higher if
   below. (With no Better, a metric that's past its target reads as heading the other way.
-  Every metric from the starter list has one.)
+  Every body metric on the starter list has one; most lab tests don't, since either side of
+  their range is a concern.)
 - These are pure functions in `LifeOs.Domain.MetricTrend`. The web's mock store gets a
   TypeScript port in M2, with shared cases so the two agree.
 
@@ -362,7 +363,148 @@ with readings) is a 400 in words, with nothing written.
   pressure adds whichever half is missing), then *Your own*. The new metric's row opens.
 - **Toasts**: "Logged 122/78 mmHg", "Saved 117/78 mmHg"; a single metric's are M2's.
 
-### 4.9 Compare (M5)
+### 4.9 Lab results (M4)
+
+**Chris's answers (2026-11-08),** all as recommended but the panels. His first labs are drawn on
+2026-11-09, with results soon after: the first real use.
+
+| Question | Answer |
+|---|---|
+| A result's normal range | **The report's.** Each result keeps the range printed beside it, and its High or Low follows that range for good, as the report does. The form fills each range in from the last report (common adult ranges the first time), so only the ones that differ are changed. The chart shades the newest report's range. |
+| Where results go | **A Lab results section** below Your metrics: the visits newest first (date, lab, how many results were outside the range, the report), each opening to its results laid out like the report; then each test under its panel's heading, opening its chart across visits. Lab tests stay out of Your metrics. |
+| Which panels the starter list has | **The CMP, the lipid panel and A1c only.** Any other test on a report is added from the visit form the first time it comes up. |
+
+**Kernel (migration 0053):**
+
+- **A lab visit** is a versioned `measurement` event, declared, with `occurred_at` when the
+  sample was collected:
+  `{"lab_visit": {"id": "<uuid>", "lab": "Quest Diagnostics", "note": "…", "report": "<artifact id>"}}`.
+  It isn't a subject: it's something that happened, corrected now and then but never managed
+  over time. An edit writes a newer version with the same id; a delete writes
+  `{id, voided: true}`; the newest `recorded_at, id` wins, as readings do.
+  - `lab` and `note` are optional, one line each, up to 60 and 140 characters.
+  - **The report** (a PDF or a photo of the paper, up to 10 MB, known by its first bytes) is an
+    artifact. The version that adds it is the event that stores the bytes, as a space photo's
+    first version is; later versions carry `report`. A version with neither has no report.
+- **A result** is a reading of a test's metric with three more keys: `visit` (the visit's id) and
+  `low` and `high`, the range printed beside it (either or both). Its time is the visit's:
+  changing the visit's time moves its results, and a result's own time can't be changed apart
+  from it.
+- **Flags:** a reading with a range of its own is flagged against that range, for good; any other
+  against its metric's range as it is now (M3).
+- **A test's range follows its newest report:** after any write to a visit, each test it touched
+  takes the range of its newest result that has one. So the chart shades the newest report's
+  range, and the next visit's form starts from it.
+- **Lab tests** are metrics with a `panel` attribute: `cmp`, `lipids`, `a1c`, or `other` for one
+  added from the visit form. Only `MetricService` writes it. Lab tests are listed under Lab
+  results, not Your metrics, and Add a metric doesn't offer them.
+- **The starter list** gains the panels' tests, in the order reports print them. The ranges are
+  MedlinePlus's (checked 2026-11-08), with the bounds normal; HDL's is left out because its low
+  end depends on sex (40 for men, 50 for women), so the first report fills it in.
+
+  | Panel | Test | Unit | Decimals | Better | Range |
+  |---|---|---|---|---|---|
+  | CMP | Glucose | mg/dL | 0 | — | 70–100 |
+  | | BUN | mg/dL | 0 | — | 6–20 |
+  | | Creatinine | mg/dL | 2 | — | 0.60–1.30 |
+  | | eGFR | mL/min/1.73m2 | 0 | higher | at least 60 |
+  | | Sodium | mmol/L | 0 | — | 135–145 |
+  | | Potassium | mmol/L | 1 | — | 3.7–5.2 |
+  | | Chloride | mmol/L | 0 | — | 96–106 |
+  | | CO2 | mmol/L | 0 | — | 23–29 |
+  | | Calcium | mg/dL | 1 | — | 8.5–10.2 |
+  | | Total protein | g/dL | 1 | — | 6.0–8.3 |
+  | | Albumin | g/dL | 1 | — | 3.4–5.4 |
+  | | Total bilirubin | mg/dL | 1 | — | 0.1–1.2 |
+  | | Alkaline phosphatase | U/L | 0 | — | 20–130 |
+  | | AST | U/L | 0 | — | 8–33 |
+  | | ALT | U/L | 0 | — | 4–36 |
+  | Lipid panel | Total cholesterol | mg/dL | 0 | lower | up to 199 |
+  | | HDL | mg/dL | 0 | higher | — |
+  | | Triglycerides | mg/dL | 0 | lower | up to 149 |
+  | | LDL | mg/dL | 0 | lower | up to 99 |
+  | | Non-HDL cholesterol | mg/dL | 0 | lower | up to 129 |
+  | A1c | A1c | % | 1 | lower | up to 5.6 |
+
+  "Below 200" is "up to 199" because the bounds themselves are normal. Triglycerides' 150 is
+  the usual adult cutoff, which MedlinePlus doesn't print.
+- **Views:** `bsk.v_lab_visit` (the newest live version of each visit, with its report's file
+  name, type and size); `bsk.v_metric_reading` gains `visit_id`, `low` and `high` at its end;
+  `bsk.v_metric` gains `panel`. An index keeps the visit view off a full scan, as 0050's does.
+- **`LabVisitService`** saves a visit and all its results as one write: a test not tracked yet
+  is made first (from the starter list by its name, or with the unit given, under `other`);
+  in an edit, the results left out are deleted and the rest re-versioned only when they
+  change; every refusal is checked before anything is written. It also adds or removes the
+  report, deletes a visit with its results, and lists them.
+- **`/mcp`:** visits and results come under the Health switch. With health off,
+  `recent_changes` leaves out readings and visits (closing a gap M1 left for readings), and
+  each is listed once, as its newest version.
+
+**API and CLI:**
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/measurements/visits` | `{ today, visits }`, newest first; each `{ id, lab, note, collectedAt, collectedOn, collectedLocal, report: { id, filename, contentType, byteSize } \| null, results, outside, loggedAt, versions }`, its results ordered as the report prints them. |
+| `GET /api/measurements/visits/{id}` | `{ visit }`. |
+| `POST /api/measurements/visits` | `{ collectedAt?, lab?, note?, results: [{ metric, value, low?, high?, note?, unit? }] }`, answering `{ visit }`. `unit` adds a test that isn't tracked or on the starter list. |
+| `POST /api/measurements/visits/{id}` | The same body, with `reading` on each result kept; the visit's results become the ones given. `collectedAt` left out keeps the time, and a blank `lab` or `note` clears it. |
+| `POST /api/measurements/visits/{id}/delete` | Deletes the visit and its results; `{ visit: null }`. |
+| `POST /api/measurements/visits/{id}/report` | Multipart `report`: adds or replaces the report. `…/report/delete` removes it. |
+
+- Reading rows gain `visitId`, `low` and `high`; metric rows gain `panel`.
+- `bsk lab add [--at "2026-11-09 08:15"] [--lab …] [--note …] "Glucose=104@70..100" "LDL=131@..99" "TSH=2.1@0.45..4.5" --unit "TSH=mIU/L"`;
+  a range is `low..high`, `..high` or `low..`.
+- `bsk lab list`, `bsk lab show <visit>`, `bsk lab set <visit> [--at …] [--lab …] [--note …] [results…] [--drop <test>]`,
+  `bsk lab report <visit> <file>` (or `--remove`) and `bsk lab delete <visit>`. A visit is
+  named by its id or its first 4+ hex digits. Every command takes `--json`.
+
+**Web:**
+
+- **Lab results** follows Your metrics, with *Log a lab visit*. With no visits it says what a
+  visit holds.
+  - **Visits**, newest first: "Nov 9, 2026 · Quest Diagnostics", "21 results, 3 outside the
+    range", and the report. A visit opens in place to its results by panel (Test, Result, Range,
+    Flag), with *Edit visit* and the report to open.
+  - **Tests by panel** (CMP, Lipid panel, A1c, Other tests): each a row as in Your metrics, but
+    with no Log button, opening its card. The card's table gives each result's range; its Change
+    opens the visit.
+- **The visit sheet**, for a new visit and for an edit: when it was collected (the date; the
+  time is optional), the lab (suggesting ones used before) and a note; the panels as toggles,
+  each listing its tests with a Result and the range's two ends, filled in; tests tracked under
+  Other tests listed too; *Add a test* (name and unit) for anything else. Blank results are
+  skipped. The report (PDF or photo) is optional and uploads after the visit saves. An edit
+  also has *Delete visit*.
+- **Toasts:** "Saved 21 results from Nov 9", "Deleted the lab visit".
+
+**As built (M4, 2026-11-08).** Filled in while building it:
+
+- **A visit can have no results yet**, so it can be logged when the blood is drawn and filled
+  in when the results come back. It reads "No results yet", and its toast is "Saved the lab
+  visit from Nov 9".
+- **When it was collected:** the time is optional. With none, it's noon on that day, or now
+  for today before noon, as a reading with no time is.
+- **A test added in the sheet** takes as many decimal places as its values are written with
+  (up to 3), and goes under Other tests. Once made, it's listed in the sheet like any tracked
+  test.
+- **An archived test** isn't offered in the sheet unless the visit already has a result for
+  it; logging to one is refused ("'TSH' is archived: bring it back before adding results to
+  it.").
+- **Which panels the sheet opens with:** in an edit, the ones the visit has results on; for a
+  new visit, the ones the newest visit had (the starter three the first time). In an edit, a
+  result left blank, or on a panel turned off, is deleted, and the sheet says so.
+- **The report uploads after the visit saves.** If the upload fails, the visit stays saved and
+  a second toast says "The visit is saved, but its report isn't: …".
+- **A lab test's card** leads with "Latest 104 mg/dL (high)" instead of a trend, says
+  "Newest report's range: 65–99 mg/dL", and opens on all time because labs come months apart.
+  Its table shows each result's range where other cards show the trend. A result has *Change …
+  in its lab visit* and no Delete of its own: it's deleted from its visit.
+- **The results table on a phone:** the unit is set small after its number, and eGFR's long
+  unit wraps under it, so the table fits a 375 px screen without scrolling sideways. A range
+  never breaks at its dash.
+- **The mock** seeds one visit 120 days back from Quest Diagnostics: 21 results with the
+  report's own ranges, Glucose, LDL and non-HDL cholesterol high, and a report to open.
+
+### 4.10 Compare (M5)
 
 - **A series** is anything with a value per day: each metric's day values, and from Oura:
   steps, active calories, sleep score, readiness, HRV (`average_hrv`), lowest heart rate,
@@ -380,7 +522,7 @@ with readings) is a 400 in words, with nothing written.
 | **M1** | The Metric type, readings, views, `MetricTrend`, `MetricService`, `MetricReadingService`, `bsk metric`, `bsk measure`, the `/api/measurements` endpoints, Metric items under `/mcp`'s Health switch. Nothing on the web yet. | 0050 | Yes |
 | **M2** | The Measurements page with the Weight card, `TrendChart`, the TypeScript port and the mock store. Chris sets his 185 goal and starts logging. Calibration: α and the goal-date basis after a few weeks of use. | — | After M1 |
 | **M3** | Any metric on the web: add one from the starter list or from scratch (name, unit, decimals, goal, which way is better), a card for each, normal ranges and flags. Body fat, waist, blood pressure (two metrics entered together), VO2 max (lab). | 0051 | Yes |
-| **M4** | Lab results: a lab visit (date, lab, all its values at once, the PDF), reference ranges per reading, high and low flags, the CMP, lipid and A1c panels in the starter list. Design detail is settled before it starts. | Maybe | Yes |
+| **M4** | Lab results: a lab visit (date, lab, all its values at once, the PDF), reference ranges per reading, high and low flags, the CMP, lipid and A1c panels in the starter list. Design detail is settled before it starts. | 0053 | Yes |
 | **M5** | Compare: the series read, the stacked chart, the series picker; Oura's VO2 max estimate pulled as a series. | — | Yes |
 | **M6** | Agents: `/mcp`'s `health` tool gains the readings and the goal, and the series read for a range. | — | Yes |
 
@@ -437,6 +579,6 @@ Each of these has to earn its place through use.
 - [x] M1 — Metrics and readings in the kernel (migration 0050)
 - [x] M2 — Weight on the web (no migration; calibration of α and the basis after a few weeks)
 - [x] M3 — Any metric on the web (migration 0051)
-- [ ] M4 — Lab results
+- [x] M4 — Lab results (migration 0053)
 - [ ] M5 — Compare with Oura and the Food Log
 - [ ] M6 — Agents

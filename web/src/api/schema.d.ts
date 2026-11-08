@@ -1476,6 +1476,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/measurements/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetLabVisits"];
+        put?: never;
+        post: operations["LogLabVisit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/measurements/visits/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetLabVisit"];
+        put?: never;
+        post: operations["SaveLabVisit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/measurements/visits/{id}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DeleteLabVisit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/measurements/visits/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AttachLabReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/measurements/visits/{id}/report/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RemoveLabReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reviews": {
         parameters: {
             query?: never;
@@ -2982,6 +3062,58 @@ export interface components {
             occurredAt?: string;
             content?: string;
         };
+        LabReportRow: {
+            /** Format: uuid */
+            id?: string;
+            filename?: null | string;
+            contentType?: string;
+            /** Format: int64 */
+            byteSize?: number | string;
+        };
+        LabResultBody: {
+            metric?: null | string;
+            /** Format: double */
+            value?: null | number | string;
+            /** Format: double */
+            low?: null | number | string;
+            /** Format: double */
+            high?: null | number | string;
+            note?: null | string;
+            unit?: null | string;
+            reading?: null | string;
+        };
+        LabVisitBody: {
+            /** Format: date-time */
+            collectedAt?: null | string;
+            lab?: null | string;
+            note?: null | string;
+            results?: null | components["schemas"]["LabResultBody"][];
+        };
+        LabVisitResult: {
+            visit?: null | components["schemas"]["LabVisitRow"];
+        };
+        LabVisitRow: {
+            /** Format: uuid */
+            id?: string;
+            lab?: null | string;
+            note?: null | string;
+            /** Format: date-time */
+            collectedAt?: string;
+            collectedOn?: string;
+            collectedLocal?: string;
+            report?: null | components["schemas"]["LabReportRow"];
+            results?: components["schemas"]["MetricReadingRow"][];
+            /** Format: int32 */
+            outside?: number | string;
+            /** Format: date-time */
+            loggedAt?: string;
+            /** Format: int32 */
+            versions?: number | string;
+        };
+        LabVisitsRead: {
+            today?: string;
+            visits?: components["schemas"]["LabVisitRow"][];
+        };
         LedgerDayRow: {
             date?: string;
             earned?: {
@@ -3163,6 +3295,12 @@ export interface components {
             /** Format: int32 */
             versions?: number | string;
             flag?: null | string;
+            /** Format: uuid */
+            visitId?: null | string;
+            /** Format: double */
+            low?: null | number | string;
+            /** Format: double */
+            high?: null | number | string;
         };
         MetricReadingsResult: {
             readings?: components["schemas"]["MetricReadingRow"][];
@@ -3186,6 +3324,7 @@ export interface components {
             low?: null | number | string;
             /** Format: double */
             high?: null | number | string;
+            panel?: null | string;
             /** Format: int32 */
             readings?: number | string;
             lastReading?: null | components["schemas"]["MetricReadingRow"];
@@ -6884,6 +7023,251 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MetricReadingResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetLabVisits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabVisitsRead"];
+                };
+            };
+        };
+    };
+    LogLabVisit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabVisitBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabVisitResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetLabVisit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabVisitResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SaveLabVisit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabVisitBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabVisitResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    DeleteLabVisit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabVisitResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    AttachLabReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    report?: components["schemas"]["IFormFile"];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabVisitResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    RemoveLabReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabVisitResult"];
                 };
             };
             /** @description Bad Request */

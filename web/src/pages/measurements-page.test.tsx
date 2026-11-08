@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { addDays, todayIso } from "@/lib/dates";
 import { goalText, withUnit } from "@/lib/measurements";
-import { clearMockMeasurements, mockMetricDetail, mockMetrics } from "@/lib/mock/measurements-store";
+import { clearMockMeasurements, mockLabVisits, mockMetricDetail, mockMetrics } from "@/lib/mock/measurements-store";
 import { resetStore } from "@/lib/mock/store";
 import { MeasurementsPage } from "@/pages/measurements-page";
 
@@ -426,5 +426,136 @@ describe("Measurements page: any metric (MEASURE-3, measurements plan §4.8)", (
     await user.click(within(archived).getByRole("button", { name: "Restore Waist" }));
     await waitFor(() => expect(screen.queryByRole("list", { name: "Archived metrics" })).not.toBeInTheDocument());
     expect(row("Waist").item).toBeInTheDocument();
+  });
+});
+
+/** A sheet's result box for a test: its label is the test's name over its unit. */
+function resultBox(sheet: HTMLElement, name: string, unit: string) {
+  return within(sheet).getByRole("textbox", { name: new RegExp(`^${name}\\s*${unit.replace("/", "\\/")}$`) });
+}
+
+describe("Measurements page: lab results (MEASURE-4, measurements plan §4.9)", () => {
+  it("lists the visits, then the tests by panel, under Your metrics, which leaves the tests out", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const yours = await screen.findByRole("list", { name: "Your metrics" });
+    expect(within(yours).queryByRole("heading", { name: /^Glucose/ })).not.toBeInTheDocument();
+
+    const section = await screen.findByRole("region", { name: "Lab results" });
+    const visits = await within(section).findByRole("list", { name: "Visits" });
+    const toggle = within(visits).getByRole("button", {
+      name: /^Jul \d+, 2026 · Quest Diagnostics: 21 results, 3 outside the range, with its report$/,
+    });
+    expect(within(section).getByRole("list", { name: "CMP" })).toHaveTextContent("Glucose");
+    expect(within(within(section).getByRole("list", { name: "Lipid panel" })).getAllByTestId("metric-list-row")).toHaveLength(5);
+    expect(within(section).getByRole("list", { name: "A1c" })).toHaveTextContent("5.4 %");
+    // A test's results come with a visit, so its row has no Log of its own.
+    expect(within(section).queryByRole("button", { name: /^Log glucose$/i })).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const table = within(section).getByRole("table", { name: /^Results from Jul \d+, 2026 · Quest Diagnostics$/ });
+    const flagged = within(table)
+      .getAllByRole("row")
+      .filter((r) => r.textContent!.endsWith("High"));
+    expect(flagged.map((r) => within(r).getByRole("rowheader").textContent)).toEqual(["Glucose", "LDL", "Non-HDL cholesterol"]);
+    // The range never breaks at its dash, so word joiners sit either side of it.
+    const glucose = within(table).getByRole("rowheader", { name: "Glucose" }).closest("tr")!;
+    expect(glucose.textContent!.replace(/⁠/g, "")).toBe("Glucose104 mg/dL65–99High");
+    expect(within(section).getByRole("button", { name: "Open the report, quest-results.pdf" })).toBeInTheDocument();
+  });
+
+  it("logs a visit with the last report's ranges filled in and a test of his own, and flags what's outside", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const section = await screen.findByRole("region", { name: "Lab results" });
+    await within(section).findByRole("list", { name: "Visits" });
+    await user.click(within(section).getByRole("button", { name: "Log a lab visit" }));
+
+    const sheet = await screen.findByRole("dialog", { name: "Log a lab visit" });
+    const panels = within(sheet).getByRole("group", { name: "Panels" });
+    expect(within(panels).getAllByRole("button").map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual([
+      ["CMP", "true"],
+      ["Lipid panel", "true"],
+      ["A1c", "true"],
+    ]);
+    // The last report's range, not the starter list's 70–100.
+    expect(within(sheet).getByLabelText("Glucose: the range's low end")).toHaveValue("65");
+    expect(within(sheet).getByLabelText("Glucose: the range's high end")).toHaveValue("99");
+    await user.click(within(panels).getByRole("button", { name: "Lipid panel" }));
+    await user.click(within(panels).getByRole("button", { name: "A1c" }));
+    expect(within(sheet).queryByLabelText("LDL: the range's high end")).not.toBeInTheDocument();
+
+    await user.type(within(sheet).getByLabelText("Lab (optional)"), "LabCorp");
+    await user.type(resultBox(sheet, "Glucose", "mg/dL"), "101");
+    await user.click(within(sheet).getByRole("button", { name: "Add a test" }));
+    await user.type(within(sheet).getByLabelText("Test"), "TSH");
+    expect(within(sheet).getByText("Give TSH's unit, as the report prints it (e.g. mIU/L).")).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Save visit" })).toBeDisabled();
+    await user.type(within(sheet).getByLabelText("Unit"), "mIU/L");
+    await user.type(within(sheet).getByLabelText("Result"), "2.15");
+    await user.type(within(sheet).getByLabelText("Low"), "0.45");
+    await user.type(within(sheet).getByLabelText("High"), "4.5");
+    await user.click(within(sheet).getByRole("button", { name: "Save visit" }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Saved 2 results from Nov 7"));
+    const visits = within(section).getByRole("list", { name: "Visits" });
+    await waitFor(() => expect(within(visits).getAllByTestId("lab-visit")).toHaveLength(2));
+    // Glucose 101 is over the 99 printed beside it.
+    expect(within(visits).getAllByTestId("lab-visit-summary").map((s) => s.textContent)).toEqual([
+      "2 results, 1 outside the range",
+      "21 results, 3 outside the range",
+    ]);
+    expect(within(visits).getAllByRole("button", { name: /^Nov 7, 2026 · LabCorp:/ })).toHaveLength(1);
+    expect(await within(section).findByRole("list", { name: "Other tests" })).toHaveTextContent("TSH");
+    expect(mockMetrics().find((m) => m.name === "TSH")).toMatchObject({ panel: "other", unit: "mIU/L", low: 0.45, high: 4.5 });
+  });
+
+  it("opens a result's visit from its card, saves a change, and deletes the visit after asking", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const section = await screen.findByRole("region", { name: "Lab results" });
+    const cmp = await within(section).findByRole("list", { name: "CMP" });
+    const item = within(cmp)
+      .getAllByTestId("metric-list-row")
+      .find((li) => within(li).queryByRole("heading", { name: /^Glucose/ }))!;
+    await user.click(within(item).getAllByRole("button").find((b) => b.hasAttribute("aria-expanded"))!);
+
+    // Its card leads with the latest result, and opens on all of it: labs come months apart.
+    const card = await within(item).findByRole("region", { name: "Glucose" });
+    await waitFor(() => expect(card).toHaveTextContent(/Latest 104 mg\/dL.*\(high\)/));
+    expect(card).toHaveTextContent("Newest report's range: 65–99 mg/dL");
+    await user.click(within(card).getByRole("button", { name: "Table" }));
+    const table = await within(card).findByRole("table");
+    const [result] = within(table).getAllByTestId("metric-row");
+    // The range the report printed beside it, its unit left to the result.
+    expect(result).toHaveTextContent(/104 mg\/dL.*High.*65–99$/);
+    // A result goes with its visit, never on its own.
+    expect(within(result).queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
+    await user.click(within(result).getByRole("button", { name: /in its lab visit$/ }));
+
+    const sheet = await screen.findByRole("dialog", { name: "Edit lab visit" });
+    const value = resultBox(sheet, "Glucose", "mg/dL");
+    expect(value).toHaveValue("104");
+    await user.clear(value);
+    await user.type(value, "98");
+    await user.click(within(sheet).getByRole("button", { name: "Save visit" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/^Saved 21 results from Jul \d+$/)));
+    await waitFor(() =>
+      expect(within(section).getByTestId("lab-visit-summary")).toHaveTextContent("21 results, 2 outside the range"),
+    );
+
+    await user.click(within(section).getByRole("button", { name: /^Jul \d+, 2026 · Quest Diagnostics/ }));
+    await user.click(within(section).getByRole("button", { name: "Edit visit" }));
+    const again = await screen.findByRole("dialog", { name: "Edit lab visit" });
+    await user.click(within(again).getByRole("button", { name: "Delete visit" }));
+    const ask = await screen.findByRole("alertdialog", { name: "Delete this lab visit?" });
+    expect(ask).toHaveTextContent("21 results, 2 outside the range");
+    await user.click(within(ask).getByRole("button", { name: "Delete visit" }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Deleted the lab visit"));
+    await waitFor(() => expect(within(section).queryByRole("list", { name: "Visits" })).not.toBeInTheDocument());
+    expect(section).toHaveTextContent("Log a lab visit when you have blood drawn");
+    expect(mockLabVisits().visits).toHaveLength(0);
   });
 });

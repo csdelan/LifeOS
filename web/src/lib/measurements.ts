@@ -1,12 +1,13 @@
 /**
- * The Measurements page's words and the API's shapes (MEASURE-1 to MEASURE-3, D20, measurements
- * plan §2–§4.8): the kernel's limits and starter list, how a value, a reading's time, the goal
+ * The Measurements page's words and the API's shapes (MEASURE-1 to MEASURE-4, D20, measurements
+ * plan §2–§4.9): the kernel's limits and starter list, how a value, a reading's time, the goal
  * date and the normal range read, the checks a typed value goes through (in the kernel's words),
  * how the page groups metrics (blood pressure's two are one), and the live API's numbers
  * (`number | string`) as numbers. The trend itself is `lib/metric-trend.ts`.
  */
 import { formatDay } from "@/lib/dates";
 import type {
+  LabPanel,
   MetricBetter,
   MetricDayRow,
   MetricDetailRead,
@@ -36,10 +37,13 @@ export interface MetricTemplate {
   name: string;
   unit: string;
   decimals: number;
-  better: MetricBetter;
-  /** The normal range it comes with; only blood pressure has one (§4.8). */
+  /** Which way is better; most lab tests have none. */
+  better: MetricBetter | null;
+  /** The normal range it comes with: blood pressure's (§4.8) and the lab tests' common adult ones (§4.9). */
   low?: number;
   high?: number;
+  /** The lab panel a lab test is on (§4.9); a metric that isn't a lab test has none. */
+  panel?: LabPanel;
 }
 
 /**
@@ -75,7 +79,57 @@ export const VO2MAX_LAB: MetricTemplate = {
   decimals: 1,
   better: "higher",
 };
-export const CATALOG: readonly MetricTemplate[] = [WEIGHT, BODY_FAT, WAIST, SYSTOLIC, DIASTOLIC, VO2MAX_LAB];
+
+/** A lab test on the starter list (M4, §4.9), with the common adult range a first visit starts from. */
+function lab(
+  key: string,
+  name: string,
+  unit: string,
+  decimals: number,
+  better: MetricBetter | null,
+  low: number | null,
+  high: number | null,
+  panel: LabPanel,
+): MetricTemplate {
+  return { key, name, unit, decimals, better, panel, ...(low == null ? {} : { low }), ...(high == null ? {} : { high }) };
+}
+
+/** The comprehensive metabolic panel's 14 tests and eGFR, as the kernel's `MetricCatalog.Cmp`. */
+export const CMP_TESTS: readonly MetricTemplate[] = [
+  lab("glucose", "Glucose", "mg/dL", 0, null, 70, 100, "cmp"),
+  lab("bun", "BUN", "mg/dL", 0, null, 6, 20, "cmp"),
+  lab("creatinine", "Creatinine", "mg/dL", 2, null, 0.6, 1.3, "cmp"),
+  lab("egfr", "eGFR", "mL/min/1.73m2", 0, "higher", 60, null, "cmp"),
+  lab("sodium", "Sodium", "mmol/L", 0, null, 135, 145, "cmp"),
+  lab("potassium", "Potassium", "mmol/L", 1, null, 3.7, 5.2, "cmp"),
+  lab("chloride", "Chloride", "mmol/L", 0, null, 96, 106, "cmp"),
+  lab("co2", "CO2", "mmol/L", 0, null, 23, 29, "cmp"),
+  lab("calcium", "Calcium", "mg/dL", 1, null, 8.5, 10.2, "cmp"),
+  lab("total_protein", "Total protein", "g/dL", 1, null, 6.0, 8.3, "cmp"),
+  lab("albumin", "Albumin", "g/dL", 1, null, 3.4, 5.4, "cmp"),
+  lab("bilirubin", "Total bilirubin", "mg/dL", 1, null, 0.1, 1.2, "cmp"),
+  lab("alp", "Alkaline phosphatase", "U/L", 0, null, 20, 130, "cmp"),
+  lab("ast", "AST", "U/L", 0, null, 8, 33, "cmp"),
+  lab("alt", "ALT", "U/L", 0, null, 4, 36, "cmp"),
+];
+
+/** The lipid panel, as `MetricCatalog.Lipids`. HDL's range depends on sex, so it has none. */
+export const LIPID_TESTS: readonly MetricTemplate[] = [
+  lab("cholesterol", "Total cholesterol", "mg/dL", 0, "lower", null, 199, "lipids"),
+  lab("hdl", "HDL", "mg/dL", 0, "higher", null, null, "lipids"),
+  lab("triglycerides", "Triglycerides", "mg/dL", 0, "lower", null, 149, "lipids"),
+  lab("ldl", "LDL", "mg/dL", 0, "lower", null, 99, "lipids"),
+  lab("non_hdl", "Non-HDL cholesterol", "mg/dL", 0, "lower", null, 129, "lipids"),
+];
+
+/** Hemoglobin A1c, as `MetricCatalog.A1c`. */
+export const A1C: MetricTemplate = lab("a1c", "A1c", "%", 1, "lower", null, 5.6, "a1c");
+
+/** Every lab test on the starter list, in the order a report prints them. */
+export const LAB_TESTS: readonly MetricTemplate[] = [...CMP_TESTS, ...LIPID_TESTS, A1C];
+
+/** The whole starter list, as `MetricCatalog.All`: the body metrics, then the lab tests. */
+export const CATALOG: readonly MetricTemplate[] = [WEIGHT, BODY_FAT, WAIST, SYSTOLIC, DIASTOLIC, VO2MAX_LAB, ...LAB_TESTS];
 
 /** The starter-list template a metric named `name` is made from, in any case. */
 export function findTemplate(name: string): MetricTemplate | undefined {
@@ -243,13 +297,13 @@ export interface StarterChoice {
 
 /**
  * The starter metrics not tracked yet (§2.1, §4.8), in the list's order: blood pressure is one
- * choice (its two), and Weight has its own card at the top.
+ * choice (its two), and Weight has its own card at the top. Lab tests come from a lab visit (§4.9).
  */
 export function starterChoices(metrics: readonly MetricRow[]): StarterChoice[] {
   const tracked = new Set(metrics.filter((m) => m.archivedAt == null).map((m) => m.catalog));
   const choices: StarterChoice[] = [];
   for (const t of CATALOG) {
-    if (t.key === WEIGHT.key || t.key === DIASTOLIC.key) continue;
+    if (t.key === WEIGHT.key || t.key === DIASTOLIC.key || t.panel != null) continue;
     if (t.key === SYSTOLIC.key) {
       if (!tracked.has(SYSTOLIC.key) || !tracked.has(DIASTOLIC.key)) {
         choices.push({ key: BLOOD_PRESSURE.key, name: BLOOD_PRESSURE.name, templates: [SYSTOLIC, DIASTOLIC] });
@@ -267,7 +321,7 @@ export function starterText(choice: StarterChoice): string {
   const ranges = choice.templates
     .map((x) => rangeText({ low: x.low ?? null, high: x.high ?? null, unit: "", decimals: x.decimals }))
     .filter((r): r is string => r != null);
-  return [t.unit, `${t.better} is better`, ranges.length > 0 ? `normal ${ranges.join(" / ")}` : null]
+  return [t.unit, t.better ? `${t.better} is better` : null, ranges.length > 0 ? `normal ${ranges.join(" / ")}` : null]
     .filter((p): p is string => p != null)
     .join(" · ");
 }
@@ -474,7 +528,14 @@ export function normalizeReading(raw: MetricReadingRow): MetricReadingRow {
     loggedAt: raw.loggedAt,
     versions: num(raw.versions),
     flag: flag(raw.flag),
+    visitId: raw.visitId ?? null,
+    low: numOrNull(raw.low),
+    high: numOrNull(raw.high),
   };
+}
+
+function panel(value: unknown): LabPanel | null {
+  return value === "cmp" || value === "lipids" || value === "a1c" || value === "other" ? value : null;
 }
 
 export function normalizeMetric(raw: MetricRow): MetricRow {
@@ -491,6 +552,7 @@ export function normalizeMetric(raw: MetricRow): MetricRow {
     archivedOn: raw.archivedOn ?? null,
     low: numOrNull(raw.low),
     high: numOrNull(raw.high),
+    panel: panel(raw.panel),
     readings: num(raw.readings),
     lastReading: raw.lastReading ? normalizeReading(raw.lastReading) : null,
   };

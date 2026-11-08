@@ -540,12 +540,16 @@ public interface ISpaceRepository
         IReadOnlyList<SpacePhotoWrite> writes, CancellationToken cancellationToken = default);
 }
 
-/// <summary>A reading version to append and the metric its <c>concerns</c> edge points at (MEASURE-1).</summary>
-public sealed record MetricReadingWrite(NewEvent Event, Guid MetricId);
+/// <summary>
+/// A reading version to append and the metric its <c>concerns</c> edge points at (MEASURE-1); a lab
+/// visit's own version (MEASURE-4) has no metric and so no edge.
+/// </summary>
+public sealed record MetricReadingWrite(NewEvent Event, Guid? MetricId);
 
 /// <summary>
-/// Metrics and their readings (MEASURE-1, D20, measurements plan §4.1–§4.3), through
-/// <c>bsk.v_metric</c> and <c>bsk.v_metric_reading</c> (migration 0050).
+/// Metrics, their readings and lab visits (MEASURE-1, MEASURE-4, D20, measurements plan §4.1–§4.3,
+/// §4.9), through <c>bsk.v_metric</c>, <c>bsk.v_metric_reading</c> (migrations 0050, 0051, 0053)
+/// and <c>bsk.v_lab_visit</c> (0053).
 /// </summary>
 public interface IMetricRepository
 {
@@ -575,11 +579,23 @@ public interface IMetricRepository
     Task<DateTimeOffset> InstantAtAsync(DateTime local, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Appends reading versions and their <c>concerns</c> edges as one transaction. Returns the
-    /// new event ids, in order.
+    /// Appends reading versions (and a lab visit's own versions) and their <c>concerns</c> edges as
+    /// one transaction. Returns the new event ids, in order.
     /// </summary>
     Task<IReadOnlyList<Guid>> AppendReadingsAsync(
         IReadOnlyList<MetricReadingWrite> writes, CancellationToken cancellationToken = default);
+
+    /// <summary>Every live lab visit, newest collected first.</summary>
+    Task<IReadOnlyList<LabVisit>> GetVisitsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The live lab visit with that id, or null (never written, or deleted).</summary>
+    Task<LabVisit?> GetVisitAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Live lab visits whose id starts with <paramref name="prefix"/> (hex), newest first.</summary>
+    Task<IReadOnlyList<LabVisit>> FindVisitsAsync(string prefix, CancellationToken cancellationToken = default);
+
+    /// <summary>The live results of <paramref name="visitId"/>, or of every visit when null, oldest first.</summary>
+    Task<IReadOnlyList<MetricReading>> GetResultsAsync(Guid? visitId = null, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

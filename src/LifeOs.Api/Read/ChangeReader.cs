@@ -28,7 +28,8 @@ public sealed class ChangeReader(string readerConnectionString)
     /// <item>Null <paramref name="kinds"/> is every kind but <c>ledger</c>: a day of meals writes
     /// many earns and reversals, which would drown the rest; ask for <c>ledger</c> by name.</item>
     /// <item>Some records are kept as versions: Oura re-sends a day as it changes, and editing a
-    /// meal, a fast, a space photo or a rating writes it again under the same id. Only the newest
+    /// meal, a fast, a space photo, a rating, a reading or a lab visit writes it again under the
+    /// same id. Only the newest
     /// version comes back, with how many it saw in <see cref="ChangeRow.Versions"/>. An older
     /// version in the window whose newest one is outside it (a meal moved to another day) is
     /// left out too.</item>
@@ -62,7 +63,9 @@ public sealed class ChangeReader(string readerConnectionString)
                 LEFT JOIN bsk.v_subject s ON s.id::text = coalesce(e.subject_id, about.subject_id::text)
                 WHERE e.{at} >= @since
                   AND ((@kinds::text[] IS NULL AND e.kind <> 'ledger') OR e.kind = ANY(@kinds::text[]))
-                  AND NOT (@noHealth AND (e.source_id = 'oura' OR jsonb_exists(e.payload, 'workout_note')))
+                  AND NOT (@noHealth AND (e.source_id = 'oura'
+                                          OR jsonb_exists_any(e.payload, ARRAY['workout_note', 'metric_reading', 'lab_visit'])
+                                          OR s.type IS NOT DISTINCT FROM 'Metric'))
                   AND NOT (@noFood AND jsonb_exists_any(e.payload, ARRAY['meal', 'fast', 'food_day']))
                   AND NOT (@noRewards AND (e.kind = 'ledger' OR jsonb_exists(e.payload, 'exception_day')
                                            OR s.type IS NOT DISTINCT FROM 'Reward'))
@@ -130,6 +133,10 @@ public sealed class ChangeReader(string readerConnectionString)
                   THEN 'space_photo:' || ({e}.payload->'space_photo'->>'id')
              WHEN {e}.payload->'space_rating'->>'id' IS NOT NULL
                   THEN 'space_rating:' || ({e}.payload->'space_rating'->>'id')
+             WHEN {e}.payload->'metric_reading'->>'id' IS NOT NULL
+                  THEN 'metric_reading:' || ({e}.payload->'metric_reading'->>'id')
+             WHEN {e}.payload->'lab_visit'->>'id' IS NOT NULL
+                  THEN 'lab_visit:' || ({e}.payload->'lab_visit'->>'id')
         END
         """;
 }

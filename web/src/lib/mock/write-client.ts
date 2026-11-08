@@ -86,6 +86,11 @@ import { ratedMessage } from "@/lib/environment";
 import {
   mockAddMetric,
   mockArchiveMetric,
+  mockAttachLabReport,
+  mockDeleteLabVisit,
+  mockLogLabVisit,
+  mockRemoveLabReport,
+  mockSaveLabVisit,
   mockDeleteReading,
   mockEditReading,
   mockLogReading,
@@ -486,6 +491,42 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async deleteReading(reading) {
       await wait();
       const result = mockDeleteReading(reading);
+      bump();
+      return result;
+    },
+
+    // A visit write says nothing itself either: the sheet announces it once its report is in.
+    async logLabVisit(req) {
+      await wait();
+      const result = mockLogLabVisit(req);
+      bump();
+      return result;
+    },
+
+    async saveLabVisit(visit, req) {
+      await wait();
+      const result = mockSaveLabVisit(visit, req);
+      bump();
+      return result;
+    },
+
+    async deleteLabVisit(visit) {
+      await wait();
+      const result = mockDeleteLabVisit(visit);
+      bump();
+      return result;
+    },
+
+    async attachLabReport(visit, report, filename) {
+      await wait();
+      const result = mockAttachLabReport(visit, report, filename ?? (report instanceof File ? report.name : undefined));
+      bump();
+      return result;
+    },
+
+    async removeLabReport(visit) {
+      await wait();
+      const result = mockRemoveLabReport(visit);
       bump();
       return result;
     },

@@ -1250,6 +1250,61 @@ test.describe("golden paths", () => {
     await expect(page.getByRole("list", { name: "Archived metrics" })).toHaveCount(0);
   });
 
+  // Lab results (MEASURE-4, measurements plan §4.9): the mock seeds one visit 120 days back with
+  // 21 results; Glucose, LDL and non-HDL cholesterol are high against the ranges printed beside them.
+  test("Measurements: log a lab visit with a test of your own and its report, open it, then delete it", async ({
+    page,
+  }) => {
+    await page.clock.install({ time: new Date("2026-11-07T08:30:00") });
+    await page.goto("/measurements");
+    const labs = page.getByRole("region", { name: "Lab results" });
+    const visits = labs.getByRole("list", { name: "Visits" });
+    await expect(visits.getByTestId("lab-visit")).toHaveCount(1, { timeout: 10_000 });
+    await expect(visits.getByTestId("lab-visit-summary")).toHaveText("21 results, 3 outside the range");
+
+    await labs.getByRole("button", { name: "Log a lab visit" }).click();
+    const sheet = page.getByRole("dialog", { name: "Log a lab visit" });
+    // Filled in from the last report.
+    await expect(sheet.getByLabel("Glucose: the range's high end")).toHaveValue("99");
+    await sheet.getByLabel("Time (optional)").fill("07:45");
+    await sheet.getByLabel("Lab (optional)").fill("LabCorp");
+    await sheet.getByLabel("Note (optional)").fill("Fasting");
+    await sheet.getByLabel(/^Glucose\s*mg\/dL$/).fill("101");
+    await sheet.getByRole("button", { name: "Add a test" }).click();
+    await sheet.getByLabel("Test", { exact: true }).fill("TSH");
+    await sheet.getByLabel("Unit", { exact: true }).fill("mIU/L");
+    await sheet.getByLabel("Result", { exact: true }).fill("2.15");
+    await sheet.getByLabel("Low", { exact: true }).fill("0.45");
+    await sheet.getByLabel("High", { exact: true }).fill("4.5");
+    await sheet.getByLabel("Report (optional)").setInputFiles({
+      name: "labcorp-results.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4\n%%EOF\n"),
+    });
+    await sheet.getByRole("button", { name: "Save visit" }).click();
+    await expect(page.getByText("Saved 2 results from Nov 7")).toBeVisible();
+    await expect(sheet).toBeHidden();
+
+    await expect(visits.getByTestId("lab-visit")).toHaveCount(2);
+    const visit = visits.getByTestId("lab-visit").first();
+    await visit.getByRole("button", { name: "Nov 7, 2026 · LabCorp: 2 results, 1 outside the range, with its report" }).click();
+    const results = visit.getByTestId("lab-visit-results");
+    await expect(results.getByRole("row", { name: /^Glucose/ })).toContainText("High");
+    await expect(results.getByRole("row", { name: /^TSH/ })).toContainText("2.15 mIU/L");
+    await expect(visit.getByText("Fasting")).toBeVisible();
+    await expect(visit.getByRole("button", { name: "Open the report, labcorp-results.pdf" })).toBeEnabled();
+    // TSH is a test now, under Other tests.
+    await expect(labs.getByRole("list", { name: "Other tests" }).getByRole("heading", { name: /^TSH/ })).toBeVisible();
+
+    await visit.getByRole("button", { name: "Edit visit" }).click();
+    const edit = page.getByRole("dialog", { name: "Edit lab visit" });
+    await expect(edit.getByText("labcorp-results.pdf")).toBeVisible();
+    await edit.getByRole("button", { name: "Delete visit" }).click();
+    await page.getByRole("alertdialog", { name: "Delete this lab visit?" }).getByRole("button", { name: "Delete visit" }).click();
+    await expect(page.getByText("Deleted the lab visit")).toBeVisible();
+    await expect(visits.getByTestId("lab-visit")).toHaveCount(1);
+  });
+
   test("Browse: pick Decisions, filter by status, find one from the search box, and make a new one", async ({
     page,
   }) => {

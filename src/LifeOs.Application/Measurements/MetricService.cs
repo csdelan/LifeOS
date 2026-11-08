@@ -31,8 +31,8 @@ public sealed record MetricChange(
 /// The metrics Chris measures (MEASURE-1, MEASURE-3, D20, measurements plan §4.1, §4.8), behind
 /// <c>bsk metric</c> and <c>/api/measurements/metrics</c>. A metric is a <c>Metric</c> subject: its
 /// title is its name, and <c>unit</c>, <c>decimals</c>, <c>target</c>, <c>better</c>,
-/// <c>catalog</c> and the normal range's <c>low</c> and <c>high</c> are attributes only this service
-/// writes, so <c>bsk set</c> refuses them. A name from the starter list (<see cref="MetricCatalog"/>)
+/// <c>catalog</c>, the normal range's <c>low</c> and <c>high</c>, and a lab test's <c>panel</c>
+/// (MEASURE-4) are attributes only this service writes, so <c>bsk set</c> refuses them. A name from the starter list (<see cref="MetricCatalog"/>)
 /// fills in what isn't given, its normal range included. A metric has no status; archiving
 /// it (D9) stops new readings. A name is unique among the metrics not archived, and the unit is
 /// locked once there are readings. Refusals are in words, with nothing written.
@@ -46,16 +46,23 @@ public sealed class MetricService(
         => (await metrics.GetMetricsAsync(cancellationToken)).Where(m => includeArchived || !m.Archived).ToList();
 
     /// <summary>
-    /// Adds a metric called <paramref name="name"/>. A starter-list name (Weight, Systolic BP)
-    /// fills in the unit, decimals, which way is better and the normal range when they aren't
-    /// given; any other needs a unit.
+    /// Adds a metric called <paramref name="name"/>. A starter-list name (Weight, Systolic BP,
+    /// Glucose) fills in the unit, decimals, which way is better, the normal range and a lab test's
+    /// panel when they aren't given; any other needs a unit. <paramref name="panel"/> makes it a lab
+    /// test (<see cref="LabPanels"/>).
     /// </summary>
     public async Task<Metric> AddAsync(
         string name, string? unit = null, int? decimals = null, decimal? target = null, string? better = null,
-        decimal? low = null, decimal? high = null, CancellationToken cancellationToken = default)
+        decimal? low = null, decimal? high = null, string? panel = null, CancellationToken cancellationToken = default)
     {
         var title = MetricLimits.CheckName(name);
         var template = MetricCatalog.Find(title);
+        var onPanel = panel ?? template?.Panel;
+        if (onPanel is not null && !LabPanels.All.Contains(onPanel))
+        {
+            throw new ArgumentException($"A lab panel is {string.Join(", ", LabPanels.All)}; got '{panel}'.");
+        }
+
         var keptUnit = MetricLimits.CheckUnit(unit ?? template?.Unit);
         var places = MetricLimits.CheckDecimals(decimals ?? template?.Decimals ?? MetricLimits.DefaultDecimals);
         var direction = better is null ? template?.Better : MetricLimits.CheckBetter(better);
@@ -89,6 +96,11 @@ public sealed class MetricService(
         if (template is not null)
         {
             attributes[MetricLimits.CatalogKey] = template.Key;
+        }
+
+        if (onPanel is not null)
+        {
+            attributes[MetricLimits.PanelKey] = onPanel;
         }
 
         await CheckFreeAsync(title, except: null, cancellationToken);

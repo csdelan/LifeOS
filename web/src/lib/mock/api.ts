@@ -55,6 +55,7 @@ import type {
   TaskTimer,
   Wallet,
   EnvironmentRead,
+  LabVisitsRead,
   MetricDetailRead,
   MetricRow,
   HomeDaysRead,
@@ -113,7 +114,7 @@ import {
   mockSpaceRatings,
   mockSpaces,
 } from "@/lib/mock/environment-store";
-import { mockMetricDetail, mockMetrics } from "@/lib/mock/measurements-store";
+import { mockLabReportUrl, mockLabVisits, mockMetricDetail, mockMetrics } from "@/lib/mock/measurements-store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 
@@ -257,6 +258,11 @@ export interface LifeOsReads {
    * and the goal.
    */
   metric(metric: string, days: number | null): Promise<MetricDetailRead>;
+  /**
+   * Every lab visit with its results, newest collected first (MEASURE-4,
+   * `GET /api/measurements/visits`). A report's bytes come from `artifactBytesUrl`.
+   */
+  labVisits(): Promise<LabVisitsRead>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /**
@@ -394,7 +400,7 @@ export const mockReads: LifeOsReads = {
   async artifactBytesUrl(id: string): Promise<string | null> {
     await wait();
     // TODO(api): stream from the kernel's bytes-fetch / export path.
-    return getArtifact(id)?.bytesUrl ?? mockSpacePhotoUrl(id);
+    return getArtifact(id)?.bytesUrl ?? mockSpacePhotoUrl(id) ?? mockLabReportUrl(id);
   },
 
   async subjectFiles(subjectId: string): Promise<ArtifactRecord[]> {
@@ -554,6 +560,11 @@ export const mockReads: LifeOsReads = {
   async metric(metric: string, days: number | null): Promise<MetricDetailRead> {
     await wait();
     return mockMetricDetail(metric, days);
+  },
+
+  async labVisits(): Promise<LabVisitsRead> {
+    await wait();
+    return mockLabVisits();
   },
 
   async ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]> {

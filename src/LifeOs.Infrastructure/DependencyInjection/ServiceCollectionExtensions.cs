@@ -290,6 +290,17 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IHomeCalendar>(),
             sp.GetRequiredService<IClock>()));
 
+        // Lab visits and their results (MEASURE-4, measurements plan §4.9): reports are stored where
+        // photos are, so the same hosts take them.
+        services.AddSingleton(sp => new LabVisitService(
+            sp.GetRequiredService<IMetricRepository>(),
+            sp.GetRequiredService<MetricService>(),
+            sp.GetRequiredService<IArtifactBlobStore>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>(),
+            sourceId,
+            reportsEnabled: allowPhotosInDatabase || sp.GetService<IObjectStorage>() is not null));
+
         // Daily and weekly reviews (REVIEW-1, REVIEW-2, reviews plan §2): opened lazily, one per
         // kind and period, completed by a status change.
         services.AddSingleton(sp => new ReviewService(

@@ -1,6 +1,8 @@
 import { useId, useState } from "react";
 import { PlusIcon, WeightIcon } from "lucide-react";
 import { AddMetricDialog } from "@/components/measurements/add-metric-dialog";
+import { LabResults } from "@/components/measurements/lab-results";
+import { LabVisitSheet } from "@/components/measurements/lab-visit-sheet";
 import { LogReadingSheet } from "@/components/measurements/log-reading-sheet";
 import { MetricCard } from "@/components/measurements/metric-card";
 import { ArchivedMetrics, MetricListRow } from "@/components/measurements/metric-list";
@@ -17,26 +19,31 @@ import {
   type MetricGroup,
   type ReadingSet,
 } from "@/lib/measurements";
-import { useMetrics } from "@/lib/queries";
+import type { LabVisitRow } from "@/lib/production-ui-types";
+import { useLabVisits, useMetrics } from "@/lib/queries";
 import { loadView, saveView } from "@/lib/view-state";
 
 const OPEN_VIEW = "measurements.open";
 
 /**
- * The Measurements page (MEASURE-1 to MEASURE-3, D20, measurements plan §4.7–§4.8), phone-first.
+ * The Measurements page (MEASURE-1 to MEASURE-4, D20, measurements plan §4.7–§4.9), phone-first.
  * Weight's card is first: Start tracking weight until there's a Weight metric, then the trend,
  * the goal date and the chart, with Log weight in the header on a desktop and at the bottom on a
  * phone. Every other metric is a row under Your metrics, in starter-list order then his own by
  * name, blood pressure's two as one; a row opens its card in place and has its own Log. Add a
- * metric starts another, and archived ones wait at the foot with Restore. An archived Weight
+ * metric starts another. Lab results follow (§4.9): the visits and the lab tests by panel, which
+ * stay out of Your metrics. Archived metrics wait at the foot with Restore. An archived Weight
  * shows as not tracked: Start tracking makes a new one.
  */
 export function MeasurementsPage() {
   const metrics = useMetrics();
+  const visits = useLabVisits();
   const yoursId = useId();
   const [sheet, setSheet] = useState<{ group: MetricGroup; readings: ReadingSet | null } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [visitSheet, setVisitSheet] = useState<{ visit: LabVisitRow | null } | null>(null);
+  const [visitOpen, setVisitOpen] = useState(false);
   const [open, setOpenState] = useState<Set<string>>(
     () => new Set(loadView<{ keys: string[] }>(OPEN_VIEW, { keys: [] }).keys),
   );
@@ -45,12 +52,16 @@ export function MeasurementsPage() {
   const weight = findCatalog(all, WEIGHT.key);
   const tracking = weight != null && weight.archivedAt == null;
   const weightGroup = tracking ? singleGroup(weight) : null;
-  const groups = groupMetrics(all.filter((m) => m.archivedAt == null && m.id !== weight?.id));
+  const groups = groupMetrics(all.filter((m) => m.archivedAt == null && m.id !== weight?.id && m.panel == null));
   const archived = groupMetrics(all.filter((m) => m.archivedAt != null));
 
   const log = (group: MetricGroup, readings: ReadingSet | null = null) => {
     setSheet({ group, readings });
     setSheetOpen(true);
+  };
+  const openVisit = (visit: LabVisitRow | null) => {
+    setVisitSheet({ visit });
+    setVisitOpen(true);
   };
   const setOpen = (key: string, on: boolean) => {
     setOpenState((now) => {
@@ -135,6 +146,16 @@ export function MeasurementsPage() {
             </section>
           ) : null}
 
+          {metrics.data ? (
+            <LabResults
+              metrics={all}
+              isOpen={(key) => open.has(key)}
+              onToggle={(key) => setOpen(key, !open.has(key))}
+              onNewVisit={() => openVisit(null)}
+              onEditVisit={openVisit}
+            />
+          ) : null}
+
           {archived.length > 0 ? <ArchivedMetrics groups={archived} /> : null}
         </div>
       </div>
@@ -155,6 +176,16 @@ export function MeasurementsPage() {
           group={sheet.group}
           readings={sheet.readings}
           today={todayIso()}
+        />
+      ) : null}
+      {visitSheet ? (
+        <LabVisitSheet
+          open={visitOpen}
+          onOpenChange={setVisitOpen}
+          visit={visitSheet.visit}
+          visits={visits.data?.visits ?? []}
+          metrics={all}
+          today={visits.data?.today ?? todayIso()}
         />
       ) : null}
       <AddMetricDialog

@@ -7,10 +7,12 @@ using Npgsql;
 namespace LifeOs.Infrastructure.Persistence;
 
 /// <summary>
-/// Metrics and their readings (MEASURE-1, MEASURE-3, D20, measurements plan M1, M3). Reads go
-/// through <c>bsk.v_metric</c> (migrations 0050, 0051) and <c>bsk.v_metric_reading</c> (0050); a reading version write
-/// inserts each event and its <c>concerns</c> edge to the metric in one transaction, since the
-/// stream is append-only. The API reads through one of these on the reader connection.
+/// Metrics, their readings and lab visits (MEASURE-1, MEASURE-3, MEASURE-4, D20, measurements plan
+/// M1, M3, M4). Reads go through <c>bsk.v_metric</c> (migrations 0050, 0051, 0053),
+/// <c>bsk.v_metric_reading</c> (0050, 0053) and <c>bsk.v_lab_visit</c> (0053); a version write
+/// inserts each event and its <c>concerns</c> edge to the metric (a visit's own version has none)
+/// in one transaction, since the stream is append-only. The API reads through one of these on the
+/// reader connection.
 /// </summary>
 public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRepository
 {
@@ -18,7 +20,7 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
     // dates and local times as text, since Dapper has no DateOnly mapping in every host.
     private const string MetricSql = """
         SELECT id, urn, name, unit, decimals, target, better, catalog, archived_at AS archivedat,
-               to_char(archived_on, 'YYYY-MM-DD') AS archivedon, created_at AS createdat, low, high
+               to_char(archived_on, 'YYYY-MM-DD') AS archivedon, created_at AS createdat, low, high, panel
         FROM bsk.v_metric
         """;
 
@@ -26,11 +28,24 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
         SELECT id, metric_id AS metricid, value, unit, note, taken_at AS takenat,
                to_char(taken_on, 'YYYY-MM-DD') AS takenon,
                to_char(taken_local, 'YYYY-MM-DD"T"HH24:MI:SS') AS takenlocal,
-               first_logged_at AS firstloggedat, logged_at AS loggedat, versions, event_id AS eventid
+               first_logged_at AS firstloggedat, logged_at AS loggedat, versions, event_id AS eventid,
+               visit_id AS visitid, low, high
         FROM bsk.v_metric_reading
         """;
 
     private const string ReadingOrder = " ORDER BY taken_at, id";
+
+    private const string VisitSql = """
+        SELECT id, lab, note, collected_at AS collectedat,
+               to_char(collected_on, 'YYYY-MM-DD') AS collectedon,
+               to_char(collected_local, 'YYYY-MM-DD"T"HH24:MI:SS') AS collectedlocal,
+               report_id AS reportid, report_filename AS reportfilename,
+               report_content_type AS reportcontenttype, report_byte_size AS reportbytesize,
+               first_logged_at AS firstloggedat, logged_at AS loggedat, versions, event_id AS eventid
+        FROM bsk.v_lab_visit
+        """;
+
+    private const string VisitOrder = " ORDER BY collected_at DESC, id DESC";
 
     private const string InsertEventSql = """
         INSERT INTO bsk.event
@@ -82,6 +97,28 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
                 new { prefix = IdPrefix(prefix) }, cancellationToken))
             .Select(r => r.ToReading()).ToList();
 
+    public async Task<IReadOnlyList<LabVisit>> GetVisitsAsync(CancellationToken cancellationToken = default)
+        => (await QueryAsync<VisitRow>(VisitSql + VisitOrder, null, cancellationToken)).Select(r => r.ToVisit()).ToList();
+
+    public async Task<LabVisit?> GetVisitAsync(Guid id, CancellationToken cancellationToken = default)
+        => (await QueryAsync<VisitRow>(VisitSql + " WHERE id = @id", new { id }, cancellationToken))
+            .Select(r => r.ToVisit()).FirstOrDefault();
+
+    public async Task<IReadOnlyList<LabVisit>> FindVisitsAsync(string prefix, CancellationToken cancellationToken = default)
+        => (await QueryAsync<VisitRow>(
+                VisitSql + " WHERE id::text LIKE @prefix" + VisitOrder + " LIMIT 20",
+                new { prefix = IdPrefix(prefix) }, cancellationToken))
+            .Select(r => r.ToVisit()).ToList();
+
+    public async Task<IReadOnlyList<MetricReading>> GetResultsAsync(
+        Guid? visitId = null, CancellationToken cancellationToken = default)
+        => (await QueryAsync<ReadingRow>(
+                ReadingSql + """
+                     WHERE visit_id IS NOT NULL AND (@visitId::uuid IS NULL OR visit_id = @visitId::uuid)
+                    """ + ReadingOrder,
+                new { visitId }, cancellationToken))
+            .Select(r => r.ToReading()).ToList();
+
     public async Task<DateTimeOffset> InstantAtAsync(DateTime local, CancellationToken cancellationToken = default)
     {
         await using var connection = new NpgsqlConnection(connectionString);
@@ -126,17 +163,21 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
                 transaction: transaction,
                 cancellationToken: cancellationToken));
 
-            await connection.ExecuteAsync(new CommandDefinition(
-                InsertEdgeSql,
-                new
-                {
-                    EventId = eventId,
-                    Relation = SubjectEventRelations.Concerns,
-                    SubjectId = write.MetricId,
-                    e.Provenance
-                },
-                transaction: transaction,
-                cancellationToken: cancellationToken));
+            if (write.MetricId is { } metricId)
+            {
+                await connection.ExecuteAsync(new CommandDefinition(
+                    InsertEdgeSql,
+                    new
+                    {
+                        EventId = eventId,
+                        Relation = SubjectEventRelations.Concerns,
+                        SubjectId = metricId,
+                        e.Provenance
+                    },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken));
+            }
+
             ids.Add(eventId);
         }
 
@@ -180,6 +221,7 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
         public DateTime CreatedAt { get; set; }
         public decimal? Low { get; set; }
         public decimal? High { get; set; }
+        public string? Panel { get; set; }
 
         public Metric ToMetric() => new(
             Id, Urn, Name, Unit, Decimals,
@@ -189,7 +231,8 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
             ArchivedOn is { } on ? ParseDay(on) : null,
             Utc(CreatedAt),
             Low is { } low ? Normal(low) : null,
-            High is { } high ? Normal(high) : null);
+            High is { } high ? Normal(high) : null,
+            Panel);
     }
 
     private sealed class ReadingRow
@@ -206,10 +249,42 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
         public DateTime LoggedAt { get; set; }
         public int Versions { get; set; }
         public Guid EventId { get; set; }
+        public Guid? VisitId { get; set; }
+        public decimal? Low { get; set; }
+        public decimal? High { get; set; }
 
         public MetricReading ToReading() => new(
             Id, MetricId, Normal(Value), Unit, Note, Utc(TakenAt), ParseDay(TakenOn),
             DateTime.ParseExact(TakenLocal, "yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
+            Utc(FirstLoggedAt), Utc(LoggedAt), Versions, EventId,
+            VisitId,
+            Low is { } low ? Normal(low) : null,
+            High is { } high ? Normal(high) : null);
+    }
+
+    private sealed class VisitRow
+    {
+        public Guid Id { get; set; }
+        public string? Lab { get; set; }
+        public string? Note { get; set; }
+        public DateTime CollectedAt { get; set; }
+        public string CollectedOn { get; set; } = "";
+        public string CollectedLocal { get; set; } = "";
+        public Guid? ReportId { get; set; }
+        public string? ReportFilename { get; set; }
+        public string? ReportContentType { get; set; }
+        public long? ReportByteSize { get; set; }
+        public DateTime FirstLoggedAt { get; set; }
+        public DateTime LoggedAt { get; set; }
+        public int Versions { get; set; }
+        public Guid EventId { get; set; }
+
+        public LabVisit ToVisit() => new(
+            Id, Lab, Note, Utc(CollectedAt), ParseDay(CollectedOn),
+            DateTime.ParseExact(CollectedLocal, "yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
+            ReportId is { } report
+                ? new LabReport(report, ReportFilename, ReportContentType ?? "application/octet-stream", ReportByteSize ?? 0)
+                : null,
             Utc(FirstLoggedAt), Utc(LoggedAt), Versions, EventId);
     }
 

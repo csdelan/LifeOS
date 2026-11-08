@@ -27,6 +27,8 @@ public sealed class MetricRow
     public decimal? Low { get; set; }
     /// <summary>The normal range's high end; a reading above it is flagged <c>high</c>.</summary>
     public decimal? High { get; set; }
+    /// <summary>The lab panel a test is on (<c>cmp</c>, <c>lipids</c>, <c>a1c</c>, <c>other</c>); null for a metric that isn't a lab test.</summary>
+    public string? Panel { get; set; }
     public int Readings { get; set; }
     public MetricReadingRow? LastReading { get; set; }
 }
@@ -35,8 +37,10 @@ public sealed class MetricRow
 /// One reading (MEASURE-1): its value in <see cref="Unit"/>, an optional note, when it was taken
 /// (<see cref="TakenAt"/>, and in the home zone <see cref="TakenOn"/> <c>yyyy-MM-dd</c> and
 /// <see cref="TakenLocal"/> <c>yyyy-MM-ddTHH:mm:ss</c>), when it was last written, how many
-/// versions it has, and <see cref="Flag"/>: <c>low</c> or <c>high</c> outside its metric's normal
-/// range as it is now, null inside it or with no range.
+/// versions it has, and <see cref="Flag"/>: <c>low</c> or <c>high</c> outside its normal range, null
+/// inside it or with no range. A lab result (MEASURE-4) has its <see cref="VisitId"/> and the range
+/// printed beside it on the report (<see cref="Low"/>, <see cref="High"/>), which its flag follows
+/// for good; any other reading's flag follows its metric's range as it is now.
 /// </summary>
 public sealed class MetricReadingRow
 {
@@ -51,6 +55,12 @@ public sealed class MetricReadingRow
     public DateTimeOffset LoggedAt { get; set; }
     public int Versions { get; set; }
     public string? Flag { get; set; }
+    /// <summary>The lab visit a result belongs to, null for any other reading.</summary>
+    public Guid? VisitId { get; set; }
+    /// <summary>The low end of the range printed beside a lab result.</summary>
+    public decimal? Low { get; set; }
+    /// <summary>The high end of the range printed beside a lab result.</summary>
+    public decimal? High { get; set; }
 }
 
 /// <summary>One day's value (the first reading that day) and the trend on that day (measurements plan §2.2).</summary>
@@ -170,9 +180,102 @@ public sealed class MetricReadingEditBody
     public string? Note { get; set; }
 }
 
+/// <summary>A lab visit's report (MEASURE-4): the artifact whose bytes <c>GET /api/artifacts/{id}/content</c> serves.</summary>
+public sealed class LabReportRow
+{
+    public Guid Id { get; set; }
+    public string? Filename { get; set; }
+    public string ContentType { get; set; } = "";
+    public long ByteSize { get; set; }
+}
+
+/// <summary>
+/// One lab visit (MEASURE-4, measurements plan §4.9): the lab, a note, when the sample was
+/// collected (<see cref="CollectedAt"/>, and in the home zone <see cref="CollectedOn"/>
+/// <c>yyyy-MM-dd</c> and <see cref="CollectedLocal"/> <c>yyyy-MM-ddTHH:mm:ss</c>), the report,
+/// its results in the order its report prints them, and how many of them are outside the range
+/// printed beside them.
+/// </summary>
+public sealed class LabVisitRow
+{
+    public Guid Id { get; set; }
+    public string? Lab { get; set; }
+    public string? Note { get; set; }
+    public DateTimeOffset CollectedAt { get; set; }
+    public string CollectedOn { get; set; } = "";
+    public string CollectedLocal { get; set; } = "";
+    public LabReportRow? Report { get; set; }
+    public IReadOnlyList<MetricReadingRow> Results { get; set; } = [];
+    public int Outside { get; set; }
+    public DateTimeOffset LoggedAt { get; set; }
+    public int Versions { get; set; }
+}
+
+/// <summary><c>GET /api/measurements/visits</c>: today in the home zone and every visit, newest collected first.</summary>
+public sealed class LabVisitsRead
+{
+    public string Today { get; set; } = "";
+    public IReadOnlyList<LabVisitRow> Visits { get; set; } = [];
+}
+
+/// <summary>A visit write's answer: the visit as it now reads, or null after a delete.</summary>
+public sealed class LabVisitResult
+{
+    public LabVisitRow? Visit { get; set; }
+}
+
+/// <summary>
+/// One result in a visit's body: the test (a metric's id or name), its value, the range printed
+/// beside it, a note, the unit for a test that isn't tracked or on the starter list, and in an
+/// edit the result it keeps (<see cref="Reading"/>, its id).
+/// </summary>
+public sealed class LabResultBody
+{
+    public string? Metric { get; set; }
+    public decimal? Value { get; set; }
+    public decimal? Low { get; set; }
+    public decimal? High { get; set; }
+    public string? Note { get; set; }
+    public string? Unit { get; set; }
+    public string? Reading { get; set; }
+}
+
+/// <summary>
+/// <c>POST /api/measurements/visits</c> and <c>…/{id}</c>: when the sample was collected (now for a
+/// new visit when left out; kept by an edit), the lab and a note (an edit keeps each when left out
+/// and clears it when blank), and all the visit's results.
+/// </summary>
+public sealed class LabVisitBody
+{
+    public DateTimeOffset? CollectedAt { get; set; }
+    public string? Lab { get; set; }
+    public string? Note { get; set; }
+    public IReadOnlyList<LabResultBody>? Results { get; set; }
+}
+
 /// <summary>Builds the measurement rows from the kernel's records.</summary>
 public static class MeasurementRows
 {
+    public static LabVisitRow Visit(LabVisitRead read) => new()
+    {
+        Id = read.Visit.Id,
+        Lab = read.Visit.Lab,
+        Note = read.Visit.Note,
+        CollectedAt = read.Visit.CollectedAt,
+        CollectedOn = Day(read.Visit.CollectedOn),
+        CollectedLocal = read.Visit.CollectedLocal.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
+        Report = read.Visit.Report is { } report
+            ? new LabReportRow
+            {
+                Id = report.ArtifactId, Filename = report.Filename, ContentType = report.ContentType, ByteSize = report.ByteSize
+            }
+            : null,
+        Results = read.Results.Select(r => Reading(r.Reading, r.Metric)).ToList(),
+        Outside = read.Outside,
+        LoggedAt = read.Visit.LoggedAt,
+        Versions = read.Visit.Versions
+    };
+
     public static MetricRow From(MetricSummary summary) => From(summary.Metric, summary.Readings, summary.Last);
 
     public static MetricRow From(Metric metric, int readings, MetricReading? last) => new()
@@ -189,6 +292,7 @@ public static class MeasurementRows
         ArchivedOn = metric.ArchivedOn is { } on ? Day(on) : null,
         Low = metric.Low,
         High = metric.High,
+        Panel = metric.Panel,
         Readings = readings,
         LastReading = last is null ? null : Reading(last, metric)
     };
@@ -206,7 +310,10 @@ public static class MeasurementRows
         TakenLocal = reading.TakenLocal.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
         LoggedAt = reading.LoggedAt,
         Versions = reading.Versions,
-        Flag = metric?.Flag(reading.Value)
+        Flag = metric?.Flag(reading),
+        VisitId = reading.VisitId,
+        Low = reading.Low,
+        High = reading.High
     };
 
     public static MetricDetailRead Detail(MetricRead read, int readings, MetricReading? last) => new()

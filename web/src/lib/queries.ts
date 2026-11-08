@@ -92,6 +92,7 @@ export const qk = {
   measurements: ["measurements"] as const,
   metrics: ["measurements", "metrics"] as const,
   metric: (metric: string, days: number | null) => ["measurements", "metric", metric, days ?? "all"] as const,
+  labVisits: ["measurements", "visits"] as const,
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
@@ -529,6 +530,47 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async deleteReading(reading) {
       try {
         return await client.deleteReading(reading);
+      } finally {
+        await invalidate(qc, [qk.measurements]);
+      }
+    },
+
+    // A visit write makes tests and moves their ranges, so all of Measurements refreshes too.
+    async logLabVisit(req) {
+      try {
+        return await client.logLabVisit(req);
+      } finally {
+        await invalidate(qc, [qk.measurements]);
+      }
+    },
+
+    async saveLabVisit(visit, req) {
+      try {
+        return await client.saveLabVisit(visit, req);
+      } finally {
+        await invalidate(qc, [qk.measurements]);
+      }
+    },
+
+    async deleteLabVisit(visit) {
+      try {
+        return await client.deleteLabVisit(visit);
+      } finally {
+        await invalidate(qc, [qk.measurements]);
+      }
+    },
+
+    async attachLabReport(visit, report, filename) {
+      try {
+        return await client.attachLabReport(visit, report, filename);
+      } finally {
+        await invalidate(qc, [qk.measurements]);
+      }
+    },
+
+    async removeLabReport(visit) {
+      try {
+        return await client.removeLabReport(visit);
       } finally {
         await invalidate(qc, [qk.measurements]);
       }
@@ -1278,6 +1320,15 @@ export function useMetricsOver(metrics: readonly string[], days: number | null, 
       isError: results.some((r) => r.isError),
       isPlaceholderData: results.some((r) => r.isPlaceholderData),
     }),
+  });
+}
+
+/** Every lab visit with its results, newest first (MEASURE-4): the Lab results section and the visit sheet. */
+export function useLabVisits(enabled = true) {
+  return useQuery({
+    queryKey: qk.labVisits,
+    queryFn: () => reads().labVisits(),
+    enabled,
   });
 }
 

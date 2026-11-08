@@ -95,7 +95,8 @@ public sealed class MetricReadingService(
             var kept = MetricLimits.CheckValue(entry.Value, target.Decimals, target.Name);
             var id = Guid.NewGuid();
             ids.Add(id);
-            writes.Add(new MetricReadingWrite(Declared(at, now, Payload(id, target.Id, kept, target.Unit, keptNote)), target.Id));
+            writes.Add(new MetricReadingWrite(
+                Declared(at, now, Payload(new ReadingPayload(id, target.Id, kept, target.Unit, keptNote))), target.Id));
         }
 
         await metrics.AppendReadingsAsync(writes, cancellationToken);
@@ -110,7 +111,9 @@ public sealed class MetricReadingService(
 
     /// <summary>
     /// Changes a reading's value, time or note. Changing nothing writes nothing. The value is
-    /// checked against the metric's decimals; the reading keeps the unit it was written in.
+    /// checked against the metric's decimals; the reading keeps the unit it was written in, and a
+    /// lab result keeps its visit and range. A lab result's time is its visit's, so changing it
+    /// here is refused (MEASURE-4).
     /// </summary>
     public async Task<MetricReading> EditAsync(
         string reference, ReadingEdit edit, CancellationToken cancellationToken = default)
@@ -121,6 +124,12 @@ public sealed class MetricReadingService(
         var now = clock.UtcNow;
         var value = edit.Value is { } v ? MetricLimits.CheckValue(v, metric.Decimals, metric.Name) : reading.Value;
         var at = edit.TakenAt is { } t ? CheckTime(t, now) : reading.TakenAt;
+        if (reading.VisitId is not null && at != reading.TakenAt)
+        {
+            throw new InvalidOperationException(
+                $"That {metric.Name} result is part of a lab visit: change the visit's time instead, and its results move with it.");
+        }
+
         var note = edit.Note is null ? reading.Note : MetricLimits.CheckNote(edit.Note);
         if (value == reading.Value && at == reading.TakenAt && note == reading.Note)
         {
@@ -128,7 +137,8 @@ public sealed class MetricReadingService(
         }
 
         await metrics.AppendReadingsAsync(
-            [new MetricReadingWrite(Declared(at, now, Payload(reading.Id, metric.Id, value, reading.Unit, note)), metric.Id)],
+            [new MetricReadingWrite(
+                Declared(at, now, Payload(ReadingPayload.Of(reading) with { Value = value, Note = note })), metric.Id)],
             cancellationToken);
         return await ReadAsync(reading.Id, cancellationToken);
     }
@@ -138,11 +148,8 @@ public sealed class MetricReadingService(
     {
         var reading = await ResolveAsync(reference, cancellationToken);
         var now = clock.UtcNow;
-        var payload = JsonSerializer.Serialize(new Dictionary<string, object>
-        {
-            [MetricLimits.ReadingKey] = new Dictionary<string, object> { ["id"] = reading.Id.ToString(), ["voided"] = true }
-        });
-        await metrics.AppendReadingsAsync([new MetricReadingWrite(Declared(now, now, payload), reading.MetricId)], cancellationToken);
+        await metrics.AppendReadingsAsync(
+            [new MetricReadingWrite(Declared(now, now, Voided(reading.Id)), reading.MetricId)], cancellationToken);
         return reading;
     }
 
@@ -226,21 +233,55 @@ public sealed class MetricReadingService(
     private NewEvent Declared(DateTimeOffset occurredAt, DateTimeOffset now, string payload)
         => new(EventKinds.Measurement, Provenances.Declared, occurredAt, now, sourceId, PayloadJson: payload);
 
-    /// <summary>A reading's payload; the value as a number (192.4), the note left out when there's none.</summary>
-    private static string Payload(Guid id, Guid metric, decimal value, string unit, string? note)
+    /// <summary>
+    /// A reading's payload; the value as a number (192.4), and the note, the visit and the printed
+    /// range left out when there are none.
+    /// </summary>
+    internal static string Payload(ReadingPayload reading)
     {
-        var reading = new Dictionary<string, object>
+        var fields = new Dictionary<string, object>
         {
-            ["id"] = id.ToString(),
-            ["metric"] = metric.ToString(),
-            ["value"] = value,
-            ["unit"] = unit
+            ["id"] = reading.Id.ToString(),
+            ["metric"] = reading.Metric.ToString(),
+            ["value"] = reading.Value,
+            ["unit"] = reading.Unit
         };
-        if (note is not null)
+        if (reading.Note is not null)
         {
-            reading["note"] = note;
+            fields["note"] = reading.Note;
         }
 
-        return JsonSerializer.Serialize(new Dictionary<string, object> { [MetricLimits.ReadingKey] = reading });
+        if (reading.Visit is { } visit)
+        {
+            fields["visit"] = visit.ToString();
+        }
+
+        if (reading.Low is { } low)
+        {
+            fields["low"] = low;
+        }
+
+        if (reading.High is { } high)
+        {
+            fields["high"] = high;
+        }
+
+        return JsonSerializer.Serialize(new Dictionary<string, object> { [MetricLimits.ReadingKey] = fields });
     }
+
+    /// <summary>A voided reading's payload: its id and <c>voided</c>.</summary>
+    internal static string Voided(Guid id)
+        => JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            [MetricLimits.ReadingKey] = new Dictionary<string, object> { ["id"] = id.ToString(), ["voided"] = true }
+        });
+}
+
+/// <summary>What one version of a reading says: a lab result (MEASURE-4) adds its visit and printed range.</summary>
+internal sealed record ReadingPayload(
+    Guid Id, Guid Metric, decimal Value, string Unit, string? Note,
+    Guid? Visit = null, decimal? Low = null, decimal? High = null)
+{
+    public static ReadingPayload Of(MetricReading reading)
+        => new(reading.Id, reading.MetricId, reading.Value, reading.Unit, reading.Note, reading.VisitId, reading.Low, reading.High);
 }

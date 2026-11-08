@@ -27,6 +27,7 @@ function metric(name: string, catalog: string | null, more: Partial<MetricRow> =
     archivedOn: null,
     low: null,
     high: null,
+    panel: null,
     readings: 0,
     lastReading: null,
     ...more,
@@ -46,6 +47,9 @@ function reading(id: string, metricId: string, value: number, takenAt: string): 
     loggedAt: takenAt,
     versions: 1,
     flag: null,
+    visitId: null,
+    low: null,
+    high: null,
   };
 }
 

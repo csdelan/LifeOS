@@ -71,6 +71,7 @@ import type {
   SpacePhotosRead,
   SpaceRatingsRead,
   SpaceRow,
+  LabVisitsRead,
   MetricDetailRead,
   MetricRow,
 } from "@/lib/production-ui-types";
@@ -81,6 +82,7 @@ import {
   normalizeSpacePhotos,
   normalizeSpaceRatings,
 } from "@/lib/environment";
+import { normalizeLabVisits } from "@/lib/labs";
 import { normalizeMetric, normalizeMetricDetail } from "@/lib/measurements";
 import { normalizeArtifact } from "@/lib/artifacts";
 
@@ -388,6 +390,10 @@ export const liveReads: LifeOsReads = {
       }),
     );
     return normalizeMetricDetail(asType<MetricDetailRead>(data));
+  },
+
+  async labVisits() {
+    return normalizeLabVisits(asType<LabVisitsRead>(await unwrap(api().GET("/api/measurements/visits"))));
   },
 
   async activityDay(date) {

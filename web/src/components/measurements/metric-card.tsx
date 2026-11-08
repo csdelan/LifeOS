@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { dayTitle } from "@/lib/activity";
 import { formatDay } from "@/lib/dates";
+import { resultRange } from "@/lib/labs";
 import {
   RANGES,
   flagOf,
@@ -22,6 +23,7 @@ import {
   lastSet,
   nameInText,
   rangeDays,
+  rangeText,
   readingSets,
   readingWhen,
   setText,
@@ -29,17 +31,26 @@ import {
   type MetricRange,
   type ReadingSet,
 } from "@/lib/measurements";
-import type { MetricDetailRead } from "@/lib/production-ui-types";
+import type { MetricDayRow, MetricDetailRead, MetricFlag } from "@/lib/production-ui-types";
 import { useMetricsOver, useWrites } from "@/lib/queries";
 import { loadView, saveView } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
+
+/**
+ * A day's flag: its reading's, which for a lab result follows the range printed beside it (§4.9);
+ * against the metric's range as it is now when the reading isn't in the read.
+ */
+function dayFlag(day: MetricDayRow, read: MetricDetailRead): MetricFlag | null {
+  const reading = read.readings.find((r) => r.id === day.readingId);
+  return reading ? reading.flag : flagOf(day.value, read.metric);
+}
 
 /** The chart's series: each metric's day values and trend, flagged against its range, its range shaded. */
 function chartSeries(group: MetricGroup, reads: MetricDetailRead[]): TrendChartSeries[] {
   return reads.map((read, i) => ({
     key: read.metric.id,
     label: group.metrics.length === 1 ? `Each day's first ${group.noun}` : group.labels[i],
-    points: read.days.map((d) => ({ day: d.day, value: d.value, trend: d.trend, flagged: flagOf(d.value, read.metric) != null })),
+    points: read.days.map((d) => ({ day: d.day, value: d.value, trend: d.trend, flagged: dayFlag(d, read) != null })),
     band: read.metric.low != null || read.metric.high != null ? { low: read.metric.low, high: read.metric.high } : undefined,
   }));
 }
@@ -55,7 +66,7 @@ function chartReadout(group: MetricGroup, reads: MetricDetailRead[], sets: Readi
   const today = reads[0].today;
   return (day: string): TrendChartReadout => {
     const days = byDay.map((m) => m.get(day));
-    const flags = flagsText(days.map((d, i) => (d ? { flag: flagOf(d.value, reads[i].metric) } : null)));
+    const flags = flagsText(days.map((d, i) => (d ? { flag: dayFlag(d, reads[i]) } : null)));
     const count = perDay.get(day) ?? 1;
     return {
       title: dayTitle(day, today),
@@ -75,7 +86,9 @@ function chartReadout(group: MetricGroup, reads: MetricDetailRead[], sets: Readi
  * with a reading outside it hollow — over 30 days, 90 days, a year or all of it, or as a table
  * of every reading (each pair one row) with Change and Delete. Edit changes the metric or
  * archives it. As `card` it stands alone with its own heading (Weight, at the top of the page);
- * `inline` is a row's opened body, under the row's heading.
+ * `inline` is a row's opened body, under the row's heading. A lab test's card (§4.9) leads with
+ * its latest result, shades its newest report's range, and its table gives each result's range;
+ * a result's Change opens its visit, where it's deleted too.
  */
 export function MetricCard({
   group,
@@ -91,7 +104,10 @@ export function MetricCard({
   const titleId = useId();
   const writes = useWrites();
   const view = `measurements.${group.key}`;
-  const [range, setRangeState] = useState<MetricRange>(() => loadView<{ range: MetricRange }>(view, { range: "90" }).range);
+  // Labs come months apart, so a lab test opens on all of it; any other metric on 90 days.
+  const [range, setRangeState] = useState<MetricRange>(
+    () => loadView<{ range: MetricRange }>(view, { range: group.metrics[0].panel != null ? "all" : "90" }).range,
+  );
   const [mode, setMode] = useState<"chart" | "table">("chart");
   const [editOpen, setEditOpen] = useState(false);
   const [deleting, setDeleting] = useState<ReadingSet | null>(null);
@@ -125,7 +141,9 @@ export function MetricCard({
         .map((text, i) => (text && group.metrics.length > 1 ? `${group.labels[i]}: ${text}` : text))
         .filter((text): text is string => text != null)
     : [];
-  const normal = groupRangeText(fresh);
+  const lab = fresh.metrics[0].panel != null;
+  const labRange = lab ? rangeText(fresh.metrics[0]) : null;
+  const normal = lab ? (labRange ? `Newest report's range: ${labRange}` : null) : groupRangeText(fresh);
   const sets = reads ? readingSets(reads.map((r) => r.readings)) : [];
   const total = reads?.reduce((n, r) => n + r.metric.readings, 0) ?? 0;
   const shown = reads?.reduce((n, r) => n + r.readings.length, 0) ?? 0;
@@ -191,7 +209,15 @@ export function MetricCard({
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <p className="text-sm">
-            {trendNow != null ? (
+            {lab && last ? (
+              <>
+                <span className="text-muted-foreground">Latest </span>
+                <span className="font-semibold tabular-nums" data-testid={`${tid}-latest`}>
+                  {setText(fresh, last, today)}
+                </span>
+                {lastFlags ? <span className="text-muted-foreground"> ({lastFlags.toLowerCase()})</span> : null}
+              </>
+            ) : trendNow != null ? (
               <>
                 <span className="text-muted-foreground">Trend </span>
                 <span className="font-semibold tabular-nums" data-testid={`${tid}-trend`}>
@@ -199,7 +225,9 @@ export function MetricCard({
                 </span>
               </>
             ) : (
-              <span className="text-muted-foreground">No {noun}s yet: log your first to start the trend.</span>
+              <span className="text-muted-foreground">
+                {lab ? "No results yet." : `No ${noun}s yet: log your first to start the trend.`}
+              </span>
             )}
           </p>
           {edit}
@@ -252,7 +280,7 @@ export function MetricCard({
             <div className="space-y-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
               <p>{total === 0 ? "Nothing logged yet." : `No ${noun}s in the ${rangeLabel}.`}</p>
               <Button type="button" variant="outline" size="sm" onClick={onLog}>
-                Log {nameInText(group.name)}
+                {lab ? "Log a lab visit" : `Log ${nameInText(group.name)}`}
               </Button>
             </div>
           ) : mode === "chart" ? (
@@ -277,7 +305,7 @@ export function MetricCard({
               columns={[
                 { key: "when", label: "When" },
                 { key: "value", label: group.name, numeric: true },
-                { key: "trend", label: "Trend", numeric: true },
+                lab ? { key: "range", label: "Range" } : { key: "trend", label: "Trend", numeric: true },
                 { key: "actions", label: "Change" },
               ]}
               rows={sets.map((set) => {
@@ -288,6 +316,7 @@ export function MetricCard({
                 const flags = flagsText(set);
                 const firsts = set.every((r, i) => r == null || counted[i].has(r.id));
                 const trend = set.map((r, i) => (r ? (trendOf[i].get(r.id) ?? null) : null));
+                const inVisit = set.some((r) => r?.visitId != null);
                 return {
                   key: taken.id,
                   cells: [
@@ -300,14 +329,26 @@ export function MetricCard({
                       {groupValue(fresh, set.map((r) => r?.value ?? null))}
                       {flags ? <Badge variant="outline">{flags}</Badge> : null}
                     </span>,
-                    trend.some((t) => t != null) ? groupValue(fresh, trend) : "—",
+                    lab
+                      ? (resultRange({ ...taken, unit: "" }, fresh.metrics[0].decimals) ?? "—")
+                      : trend.some((t) => t != null)
+                        ? groupValue(fresh, trend)
+                        : "—",
                     <span key="actions" className="flex gap-1">
-                      <Button type="button" variant="ghost" size="icon" aria-label={`Change ${what}`} onClick={() => onChange(set)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={inVisit ? `Change ${what} in its lab visit` : `Change ${what}`}
+                        onClick={() => onChange(set)}
+                      >
                         <PencilIcon />
                       </Button>
-                      <Button type="button" variant="ghost" size="icon" aria-label={`Delete ${what}`} onClick={() => setDeleting(set)}>
-                        <Trash2Icon />
-                      </Button>
+                      {inVisit ? null : (
+                        <Button type="button" variant="ghost" size="icon" aria-label={`Delete ${what}`} onClick={() => setDeleting(set)}>
+                          <Trash2Icon />
+                        </Button>
+                      )}
                     </span>,
                   ],
                 };

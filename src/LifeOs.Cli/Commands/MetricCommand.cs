@@ -65,7 +65,7 @@ internal static class MetricCommand
                     parseResult.GetValue(nameArgument)!, parseResult.GetValue(unitOption),
                     parseResult.GetValue(decimalsOption), parseResult.GetValue(targetOption),
                     parseResult.GetValue(betterOption), parseResult.GetValue(lowOption), parseResult.GetValue(highOption),
-                    cancellationToken);
+                    cancellationToken: cancellationToken);
                 return Write(metric, asJson, "Added");
             });
         });
@@ -113,7 +113,7 @@ internal static class MetricCommand
                     var m = s.Metric;
                     var goal = m.Target is { } t ? $"goal {m.Format(t)}" : "no goal";
                     var range = m.RangeText() is { } normal ? $", normal {normal}" : "";
-                    var last = s.Last is { } r ? $"last {m.Format(r.Value)}{FlagText(m.Flag(r.Value))} on {Day(r.TakenOn)}" : "no readings";
+                    var last = s.Last is { } r ? $"last {m.Format(r.Value)}{FlagText(m.Flag(r))} on {Day(r.TakenOn)}" : "no readings";
                     Console.WriteLine(
                         $"{m.Name.PadRight(width)}  {m.Unit,-9}  {goal}{range}, {last}{(m.Archived ? "  (archived)" : "")}");
                 }
@@ -239,9 +239,10 @@ internal static class MetricCommand
 
                 foreach (var p in read.Days)
                 {
+                    var flag = read.Readings.FirstOrDefault(r => r.Id == p.ReadingId) is { } day ? m.Flag(day) : m.Flag(p.Value);
                     Console.WriteLine(
                         $"  {p.Day.ToString("ddd MMM d yyyy", CultureInfo.InvariantCulture),-16}  {MetricLimits.Format(p.Value, m.Decimals),10}"
-                        + $"  trend {MetricLimits.Format(p.Trend, m.Decimals)}{FlagText(m.Flag(p.Value))}");
+                        + $"  trend {MetricLimits.Format(p.Trend, m.Decimals)}{FlagText(flag)}");
                 }
 
                 Console.WriteLine(Describe(read.Goal, m));
@@ -287,6 +288,7 @@ internal static class MetricCommand
         catalog = metric.Catalog,
         low = metric.Low,
         high = metric.High,
+        panel = metric.Panel,
         archivedAt = metric.ArchivedAt,
         archivedOn = metric.ArchivedOn is { } on ? Day(on) : null
     };

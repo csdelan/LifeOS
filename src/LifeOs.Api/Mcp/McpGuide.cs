@@ -66,7 +66,7 @@ public sealed class McpGuide
         | Season | A bounded period that sets the context | none |
         | Reward | Something he can spend earned coins on | none |
         | Space | A room in his home, rated for the Home Score | none |
-        | Metric | Something he measures (Weight, Waist, HbA1c), with a unit and a goal; its readings are measurement events. Shown only with the health area | none |
+        | Metric | Something he measures (Weight, Waist, A1c), with a unit and a goal; its readings are measurement events. A lab test (Glucose, LDL) has a panel, and its results belong to a lab visit (a measurement event with the lab and the report) and keep the range printed beside them. Shown only with the health area | none |
         | Review | His daily or weekly review: one per day, and one per Monday-to-Sunday week named by its Sunday. Opened on its day, due at the end of it; an Open one past its day reads as Missed | Open, Completed, Missed |
 
         An item with no status reads as its type's first status. Archived items are hidden

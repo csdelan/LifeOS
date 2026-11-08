@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { api, unwrap } from "@/lib/live/http";
 import type {
+  LabVisitResult,
   MetricReadingResult,
   MetricReadingsResult,
   MetricRow,
@@ -40,6 +41,7 @@ import {
   normalizeSpaceRatingResult,
   ratedMessage,
 } from "@/lib/environment";
+import { normalizeLabVisitResult } from "@/lib/labs";
 import { normalizeMetric, normalizeReadingResult, normalizeReadingsResult } from "@/lib/measurements";
 import { extensionForMime, normalizeBinaryCapture } from "@/lib/artifacts";
 import { materializedMessage } from "@/lib/appointments";
@@ -443,6 +445,52 @@ export function createLiveWriteClient(): LifeOsWriteClient {
         (await unwrap(
           api().POST("/api/measurements/readings/{id}/delete", { params: { path: { id: reading } } }),
         )) as unknown as MetricReadingResult,
+      );
+    },
+
+    // A visit write says nothing itself either: the sheet announces it once its report is in.
+    async logLabVisit(req) {
+      return normalizeLabVisitResult(
+        (await unwrap(api().POST("/api/measurements/visits", { body: req }))) as unknown as LabVisitResult,
+      );
+    },
+
+    async saveLabVisit(visit, req) {
+      return normalizeLabVisitResult(
+        (await unwrap(
+          api().POST("/api/measurements/visits/{id}", { params: { path: { id: visit } }, body: req }),
+        )) as unknown as LabVisitResult,
+      );
+    },
+
+    async deleteLabVisit(visit) {
+      return normalizeLabVisitResult(
+        (await unwrap(
+          api().POST("/api/measurements/visits/{id}/delete", { params: { path: { id: visit } } }),
+        )) as unknown as LabVisitResult,
+      );
+    },
+
+    async attachLabReport(visit, report, filename) {
+      const form = new FormData();
+      form.append("report", report, filename ?? (report instanceof File ? report.name : "report.pdf"));
+      return normalizeLabVisitResult(
+        (await unwrap(
+          api().POST("/api/measurements/visits/{id}/report", {
+            params: { path: { id: visit } },
+            // The browser sets the multipart boundary; openapi-fetch leaves FormData as it is.
+            body: form as unknown as { report?: string },
+            bodySerializer: (body) => body as unknown as FormData,
+          }),
+        )) as unknown as LabVisitResult,
+      );
+    },
+
+    async removeLabReport(visit) {
+      return normalizeLabVisitResult(
+        (await unwrap(
+          api().POST("/api/measurements/visits/{id}/report/delete", { params: { path: { id: visit } } }),
+        )) as unknown as LabVisitResult,
       );
     },
 
