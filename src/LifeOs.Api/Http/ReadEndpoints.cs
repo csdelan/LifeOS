@@ -113,16 +113,17 @@ public static class ReadEndpoints
     private static IResult GetHabits(SubjectReader reader, bool includeArchived = false)
         => Results.Ok(reader.GetHabits(includeArchived));
 
-    private static IResult GetOccurrences(SubjectReader reader, Guid? habitId = null, string? on = null)
-    {
-        DateOnly? date = null;
-        if (!string.IsNullOrWhiteSpace(on) && DateOnly.TryParse(on, out var parsed))
-        {
-            date = parsed;
-        }
+    /// <summary>
+    /// Habit days: one habit's or every habit's, on one day (<paramref name="on"/>) or from
+    /// <paramref name="from"/> to <paramref name="to"/> (each end optional; a review's days,
+    /// REVIEW-5). A day that doesn't parse is ignored.
+    /// </summary>
+    private static IResult GetOccurrences(
+        SubjectReader reader, Guid? habitId = null, string? on = null, string? from = null, string? to = null)
+        => Results.Ok(reader.GetHabitOccurrences(habitId, Day(on), Day(from), Day(to)));
 
-        return Results.Ok(reader.GetHabitOccurrences(habitId, date));
-    }
+    private static DateOnly? Day(string? text)
+        => !string.IsNullOrWhiteSpace(text) && DateOnly.TryParse(text, out var parsed) ? parsed : null;
 
     private static IResult GetEdges(SubjectReader reader, bool includeArchived = false)
         => Results.Ok(reader.GetAlignmentEdges(includeArchived));

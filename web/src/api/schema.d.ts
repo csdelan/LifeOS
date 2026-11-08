@@ -1476,6 +1476,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OpenReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CompleteReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SaveReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/recap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetReviewRecap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/artifacts/{id}": {
         parameters: {
             query?: never;
@@ -3120,6 +3200,10 @@ export interface components {
                 [key: string]: string;
             };
         };
+        OpenReviewBody: {
+            kind?: null | string;
+            date?: null | string;
+        };
         OuraAuthorizeBody: {
             redirectUri?: null | string;
         };
@@ -3161,6 +3245,19 @@ export interface components {
             source?: string;
             type?: string;
             title?: string;
+        };
+        RecapItemRow: {
+            kind?: string;
+            at?: string;
+            title?: string;
+            detail?: null | string;
+            /** Format: uuid */
+            subjectId?: null | string;
+        };
+        RecapSectionRow: {
+            id?: string;
+            label?: string;
+            items?: components["schemas"]["RecapItemRow"][];
         };
         RecurBody: {
             subject?: string;
@@ -3266,6 +3363,34 @@ export interface components {
             attachment?: null | components["schemas"]["ArtifactRecord"];
             needsTranscription?: boolean;
         };
+        ReviewRow: {
+            /** Format: uuid */
+            id?: string;
+            urn?: string;
+            title?: string;
+            kind?: string;
+            /** Format: date */
+            date?: string;
+            /** Format: date */
+            weekStart?: string;
+            /** Format: date */
+            weekEnd?: string;
+            /** Format: date */
+            planStart?: string;
+            /** Format: date */
+            planEnd?: string;
+            /** Format: date */
+            dueOn?: string;
+            status?: string;
+            missed?: boolean;
+            completedLate?: boolean;
+            /** Format: date-time */
+            completedAt?: null | string;
+            keepFocus?: boolean;
+            archived?: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+        };
         RewardPriceBody: {
             reward?: string;
             price?: {
@@ -3302,6 +3427,9 @@ export interface components {
             reward?: string;
             /** Format: double */
             targetUsd?: null | number | string;
+        };
+        SaveReviewBody: {
+            keepFocus?: null | boolean;
         };
         SetAttributesBody: {
             subject?: string;
@@ -4092,6 +4220,8 @@ export interface operations {
             query?: {
                 habitId?: string;
                 on?: string;
+                from?: string;
+                to?: string;
             };
             header?: never;
             path?: never;
@@ -6754,6 +6884,180 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MetricReadingResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetReviews: {
+        parameters: {
+            query?: {
+                kind?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRow"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    OpenReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenReviewBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    CompleteReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRow"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SaveReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveReviewBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetReviewRecap: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                asOf?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecapSectionRow"][];
                 };
             };
             /** @description Bad Request */

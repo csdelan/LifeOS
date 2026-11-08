@@ -705,10 +705,13 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
         return rows;
     }
 
-    public IReadOnlyList<HabitOccurrenceRow> GetHabitOccurrences(Guid? habitId = null, DateOnly? on = null)
+    public IReadOnlyList<HabitOccurrenceRow> GetHabitOccurrences(
+        Guid? habitId = null, DateOnly? on = null, DateOnly? from = null, DateOnly? to = null)
     {
         using var db = Open();
         var onText = on?.ToString("yyyy-MM-dd");
+        var fromText = from?.ToString("yyyy-MM-dd");
+        var toText = to?.ToString("yyyy-MM-dd");
         var rows = db.Query<HabitOccurrenceRow>(
             """
             SELECT o.habit_id, o.habit_urn, h.name AS habit_name,
@@ -717,9 +720,11 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             JOIN bsk.v_habit h ON h.id = o.habit_id
             WHERE (@habitId IS NULL OR o.habit_id = @habitId)
               AND (@onText IS NULL OR o.occurrence_date = @onText::date)
+              AND (@fromText IS NULL OR o.occurrence_date >= @fromText::date)
+              AND (@toText IS NULL OR o.occurrence_date <= @toText::date)
             ORDER BY o.occurrence_date DESC, h.name
             """,
-            new { habitId, onText }).AsList();
+            new { habitId, onText, fromText, toText }).AsList();
         foreach (var row in rows)
         {
             row.State = MapAdherenceState(row.State) ?? row.State;

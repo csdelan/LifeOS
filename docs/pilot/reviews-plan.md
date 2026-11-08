@@ -83,7 +83,19 @@ SuperJournal implementation can replace the interim one without touching the pag
 
 ## 3. API and web (R2, R3)
 
-Filled in as R2 and R3 land.
+### 3.1 API (R2)
+
+`/api/reviews`, the twin of `bsk review`. Reads use `ReviewReader` on the reader connection;
+writes call `ReviewService`. Refusals are 400s in words; an unknown review is a 404.
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/reviews?kind=&from=&to=` | The reviews whose period is in the range (the four weeks to today by default, at most 400 days), daily first on a day. Each row has its `date` (the day, or the Sunday), `weekStart`–`weekEnd` (its Monday-to-Sunday week), `planStart`–`planEnd`, `dueOn`, `status` as of today (Open, Completed, Missed), `missed`, `completedLate`, `completedAt` and `keepFocus`. |
+| `POST /api/reviews/open {kind, date?}` | Open-or-create the review holding the day (today by default). A weekly review is the week's, named by its Sunday. Ahead of its day: 400. |
+| `POST /api/reviews/{id}/complete` | Completes it; again writes nothing. |
+| `POST /api/reviews/{id} {keepFocus?}` | Saves what's sent. R4 adds the answers. |
+| `GET /api/reviews/recap?from=&to=&asOf=` | What was recorded over the days (at most 62): status changes (reviews' own left out), Tasks completed, Tasks open and due before `asOf` (the earlier of today and `to`), habit days, appointments, journal entries and what came into the Inbox. A repeating Task's series is left out; the web adds the repeating Tasks' own section, as it did before. |
+| `GET /api/habits/occurrences?from=&to=` | Gains a range, for a weekly review's check-offs (REVIEW-5). |
 
 ## 4. Answers
 
@@ -95,7 +107,7 @@ Waiting on Chris (asked 2026-11-08): where answers go until SuperJournal is live
 |---|---|---|---|
 | **R0** | This plan | — | Yes |
 | **R1** | The Review type, `bsk.v_review`, the rules in Domain, `ReviewService`, `bsk review`, the `/mcp` guide row | 0052 | Yes |
-| **R2** | `/api/reviews`: list, open, complete, keep focus; the recap read; habit days for a range; the web client types | — | After R1 |
+| **R2** | `/api/reviews`: list, open, complete, keep focus; the recap read; habit days for a range; `schema.d.ts` regenerated | — | After R1 |
 | **R3** | The live Reviews page: Monday-to-Sunday weeks named by their Sunday, open on view, Missed and late, the recap and the habit check-offs | — | After R2 |
 | **R4** | Answers behind a port (§4) | Maybe | After R2 |
 | **R5** | Answers in SuperJournal (#29), once SuperJournal#2 and #28 are in | No | After #28 |
@@ -134,7 +146,7 @@ Waiting on Chris (asked 2026-11-08): where answers go until SuperJournal is live
 
 - [x] R0 — This plan
 - [x] R1 — Reviews in the kernel (migration 0052)
-- [ ] R2 — The reviews API
+- [x] R2 — The reviews API
 - [ ] R3 — The live Reviews page
 - [ ] R4 — Answers behind a port
 - [ ] R5 — Answers in SuperJournal (blocked on csdelan/SuperJournal#2 and #28)
