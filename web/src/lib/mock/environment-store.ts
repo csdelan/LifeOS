@@ -164,6 +164,22 @@ function mockId(kind: number, n: number): string {
   return `00000000-0000-4000-8${hex(kind, 3)}-${hex(n, 12)}`;
 }
 
+/**
+ * A seeded instant at `hour`:`minute` UTC on `day`. While that hour is still to come today (a
+ * Sunday before 17:00 UTC), today's sit in the minute before the day began instead, in the same
+ * order: otherwise this week's walk-through is seeded in the future, ahead of anything saved
+ * now. Either way it's the same on every load that day.
+ */
+function seededAt(day: string, hour: number, minute: number): string {
+  const hh = String(hour).padStart(2, "0");
+  const m = Math.min(minute, 59);
+  if (day === todayIso() && Date.parse(`${day}T${hh}:59:59.999Z`) > Date.now()) {
+    const [y, mo, d] = day.split("-").map(Number);
+    return new Date(new Date(y, mo - 1, d).getTime() - (60 - m) * 1000).toISOString();
+  }
+  return `${day}T${hh}:${String(m).padStart(2, "0")}:00.000Z`;
+}
+
 function seedEnvironment(): EnvironmentState {
   const today = todayIso();
   const lastSunday = startOfWeekSunday(today);
@@ -196,7 +212,7 @@ function seedEnvironment(): EnvironmentState {
       cleanliness: parts[1],
       aesthetics: parts[2],
       note,
-      ratedAt: `${day}T${String(hour).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}:00.000Z`,
+      ratedAt: seededAt(day, hour, n % 60),
     });
   };
 
@@ -287,7 +303,7 @@ function seedPhotos(
       shotId,
       day,
       artifactId,
-      addedAt: `${day}T16:${String(n).padStart(2, "0")}:00.000Z`,
+      addedAt: seededAt(day, 16, n),
     });
   };
   const last = SEEDED_WALK_THROUGHS - 1;
