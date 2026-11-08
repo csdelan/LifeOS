@@ -15,8 +15,8 @@ SuperJournal isn't deployed yet: csdelan/SuperJournal#2 waits on
 csdelan/BlueSkies.Platform#184, and LifeOS's client for it (#28) sits unmerged on branch
 `claude/superjournal-connect-9e24c0`. Everything else about a review stays in LifeOS under #29's
 own design: the Review subject, whether it's due, done or missed, completing it, the recap and the
-habit check-offs. This plan builds that half now, and puts the answers behind a port (§4) so the
-SuperJournal implementation can replace the interim one without touching the page.
+habit check-offs. This plan builds that half now. The answers wait for SuperJournal: Chris chose
+not to keep them in LifeOS in the meantime (§4).
 
 ## 0. Read these first
 
@@ -45,7 +45,7 @@ SuperJournal implementation can replace the interim one without touching the pag
 | Keep focus | A **"keep my Primary focus" switch** on each review, on unless turned off. |
 | The recap | **A read over `bsk`**: status changes, completed and overdue Tasks, repeating Tasks, habits, appointments and the Inbox for the days it looks back on. |
 | Habit check-offs | **The same buttons as Focus** (followed, partial, not followed) for each habit day the review looks back on, writing the same adherence events (REVIEW-5). |
-| Answers | **Behind a port** (§4). Where they live until SuperJournal is up is Chris's call, asked 2026-11-08. |
+| Answers | **In SuperJournal, and not written on the live site until it's up** (Chris, 2026-11-08, §4). No interim store in LifeOS. |
 
 ## 2. The model
 
@@ -93,7 +93,7 @@ writes call `ReviewService`. Refusals are 400s in words; an unknown review is a 
 | `GET /api/reviews?kind=&from=&to=` | The reviews whose period is in the range (the four weeks to today by default, at most 400 days), daily first on a day. Each row has its `date` (the day, or the Sunday), `weekStart`–`weekEnd` (its Monday-to-Sunday week), `planStart`–`planEnd`, `dueOn`, `status` as of today (Open, Completed, Missed), `missed`, `completedLate`, `completedAt` and `keepFocus`. |
 | `POST /api/reviews/open {kind, date?}` | Open-or-create the review holding the day (today by default). A weekly review is the week's, named by its Sunday. Ahead of its day: 400. |
 | `POST /api/reviews/{id}/complete` | Completes it; again writes nothing. |
-| `POST /api/reviews/{id} {keepFocus?}` | Saves what's sent. R4 adds the answers. |
+| `POST /api/reviews/{id} {keepFocus?}` | Saves what's sent. The answers come with R5, in SuperJournal. |
 | `GET /api/reviews/recap?from=&to=&asOf=` | What was recorded over the days (at most 62): status changes (reviews' own left out), Tasks completed, Tasks open and due before `asOf` (the earlier of today and `to`), habit days, appointments, journal entries and what came into the Inbox. A repeating Task's series is left out; the web adds the repeating Tasks' own section, as it did before. |
 | `GET /api/habits/occurrences?from=&to=` | Gains a range, for a weekly review's check-offs (REVIEW-5). |
 
@@ -113,14 +113,36 @@ writes call `ReviewService`. Refusals are 400s in words; an unknown review is a 
   from its start (or the day it was made) to its end.
 - **The week:** a weekly review lists its seven daily reviews and where each stands; a daily one
   links to its week's review.
-- **Answers:** on the live site the questions show but can't be written until §4 is settled, and
-  the page says so. Keep focus saves.
+- **Answers:** on the live site the questions show but can't be written until SuperJournal is up
+  (§4), and the page says so. Keep focus saves.
 - **Mock mode** follows the same rules: reading never makes a review, opening does, and its
   status is worked out on read.
 
 ## 4. Answers
 
-Waiting on Chris (asked 2026-11-08): where answers go until SuperJournal is live.
+**Decided (Chris, 2026-11-08): wait for SuperJournal.** The two options were an interim store in
+LifeOS, replaced by SuperJournal later, or no answers on the live site until SuperJournal is up.
+He chose the second. So:
+
+- There's no interim store and no migration for answers, and nothing to copy into SuperJournal
+  later.
+- On the live site the three questions show but can't be typed into, and the page says "Answers
+  aren't saved on the live site yet: they'll be kept in SuperJournal." Opening, keep focus, the
+  recap, the habit check-offs and completing all work.
+- Mock mode still keeps answers in memory, so the editor is exercised there and in the tests.
+
+**Where R5 plugs in.** On the web the seam is already there:
+
+- `ReviewDoc` (`web/src/lib/production-ui-types.ts`) carries the answers (`workedWell`,
+  `differently`, `planning`) and `canWriteAnswers`.
+- `normalizeReview` (`web/src/lib/reviews.ts`) reads the answers as empty with
+  `canWriteAnswers: false`.
+- `saveReview` (`web/src/lib/live/write-client.ts`) sends only `keepFocus`, and
+  `POST /api/reviews/{id}` takes only `keepFocus`.
+
+R5 fills the answers from SuperJournal (one entry per question, every version kept, #29), sends
+them on save and sets `canWriteAnswers`. Where the SuperJournal client sits, in the API or the
+browser, is #28's and #29's design, so no port is built ahead of it.
 
 ## 5. Phases
 
@@ -130,12 +152,12 @@ Waiting on Chris (asked 2026-11-08): where answers go until SuperJournal is live
 | **R1** | The Review type, `bsk.v_review`, the rules in Domain, `ReviewService`, `bsk review`, the `/mcp` guide row | 0052 | Yes |
 | **R2** | `/api/reviews`: list, open, complete, keep focus; the recap read; habit days for a range; `schema.d.ts` regenerated | — | After R1 |
 | **R3** | The live Reviews page: Monday-to-Sunday weeks named by their Sunday, open on view, Missed and late, the recap and the habit check-offs | — | After R2 |
-| **R4** | Answers behind a port (§4) | Maybe | After R2 |
+| **R4** | Where answers live until SuperJournal: decided, nothing to build (§4) | — | — |
 | **R5** | Answers in SuperJournal (#29), once SuperJournal#2 and #28 are in | No | After #28 |
 
 - **Migration numbers:** this plan takes 0052. Branch `claude/superjournal-connect-9e24c0` has
   `0049__journal_pointer.sql`, which must be renumbered above the highest number on `main` when
-  it merges (0053 or higher, more if R4 adds one).
+  it merges (0053 or higher).
 - Checks before each commit: `./test.ps1` (.NET), and from `web/`: `npm run lint`,
   `npm run typecheck`, `npm test`.
 
@@ -149,6 +171,8 @@ Waiting on Chris (asked 2026-11-08): where answers go until SuperJournal is live
   LifeOS.
 - **2026-11-08:** Chris picked "Reviews, the LifeOS half" as the next most useful piece of work,
   since SuperJournal is blocked on hosting.
+- **2026-11-08, Chris:** "Wait for SuperJournal" for the answers, rather than keeping them in
+  LifeOS until it's up (§4).
 - **Filled in here:** lazy creation on first open; one per kind and period; nothing opens ahead
   of its day; Missed read, not written; a late completion stays missed; Missed as Drop's status;
   keep focus on by default.
@@ -171,5 +195,5 @@ Waiting on Chris (asked 2026-11-08): where answers go until SuperJournal is live
 - [x] R1 — Reviews in the kernel (migration 0052)
 - [x] R2 — The reviews API
 - [x] R3 — The live Reviews page
-- [ ] R4 — Answers behind a port
+- [x] R4 — Answers until SuperJournal: Chris chose to wait, so nothing was built (§4)
 - [ ] R5 — Answers in SuperJournal (blocked on csdelan/SuperJournal#2 and #28)

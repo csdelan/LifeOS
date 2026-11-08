@@ -2302,9 +2302,9 @@ Build:      building
 per day or per Monday-to-Sunday week named by its Sunday, made the first time it's opened. It's
 due at the end of its day; an Open review whose day is over reads as Missed, worked out on every
 read rather than written on a schedule (D8), and completing it late keeps the miss. Its statuses
-are Open, Completed and Missed. `bsk review open | complete | list` are the verbs. The answers'
-storage (D3's edit trail) is reviews plan §4: they go to SuperJournal (#29), behind a port. Build
-stays `building`: the API and the live page are next.
+are Open, Completed and Missed. `bsk review open | complete | list` are the verbs. The answers
+(D3's edit trail) go to SuperJournal (#29), and Chris chose not to keep them in LifeOS until it's
+up (reviews plan §4). Build stays `building`: the API and the live page are next.
 
 
 ### REVIEW-1 — I want to perform daily reviews
@@ -2397,8 +2397,9 @@ review as soon as it's looked at (`POST /api/reviews/open`), says when it's due,
 it. A past day with no review shows as missed with *Write it late*. The recap is read from the
 record (`GET /api/reviews/recap`): status changes, completed and overdue Tasks, repeating Tasks,
 appointments, journal entries and the Inbox; the day's habits have their own check-offs
-(REVIEW-5). The answers aren't saved on the live site until reviews plan §4 is settled. Build
-stays `building`.
+(REVIEW-5). The answers aren't saved on the live site until SuperJournal is up (Chris,
+2026-11-08, reviews plan §4); the page says so. Build stays `building` until they are (reviews
+plan R5).
 
 
 ### REVIEW-2 — I want to perform weekly reviews (every Sunday)
@@ -2481,7 +2482,7 @@ completion keeps the miss. Build stays `building`.
 this Sunday. On its Sunday the review opens as soon as it's looked at; earlier in the week it
 says when it opens, with the recap so far. It lists the week's seven daily reviews with where
 each stands, and its habit check-offs pick one day of the week at a time. Build stays
-`building` until the answers have a home (reviews plan §4).
+`building` until the answers are saved in SuperJournal (reviews plan §4, R5).
 
 
 ### REVIEW-3 — I want to perform monthly reviews with an end-of-month completion window
