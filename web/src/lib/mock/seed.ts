@@ -1,4 +1,4 @@
-import { addDays, nowIso, slugify, todayIso, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
+import { addDays, nowIso, slugify, todayIso, startOfWeekMonday, endOfWeekSunday } from "@/lib/dates";
 import { dataUrlFor, silentWavDataUrl } from "@/lib/artifacts";
 import type {
   Amounts,
@@ -84,6 +84,12 @@ export interface CanonicalEdge {
   toId: string;
 }
 
+/**
+ * A review as the mock keeps it: what the kernel stores, plus the day it was first completed.
+ * Its status, missed and late are worked out on read (`reviewStateAsOf`), as the server does.
+ */
+export type MockReview = ReviewDoc & { firstCompletedOn: string | null };
+
 export interface MockState {
   subjects: SubjectListItem[];
   details: Record<string, SubjectDetail>;
@@ -103,7 +109,8 @@ export interface MockState {
   occurrences: HabitOccurrenceRow[];
   people: PersonRow[];
   associations: PersonAssociationRow[];
-  reviews: ReviewDoc[];
+  /** Reviews as the kernel keeps them; what each reads as today is worked out on read. */
+  reviews: MockReview[];
   /** Task timer actions, oldest first — the mock's copy of the timer activity events. */
   timerEvents: TimerEvent[];
   /** Ledger entries, oldest first (REWARD-1). Catalog Rewards are ordinary `Reward` subjects. */
@@ -1641,17 +1648,23 @@ export function createSeed(): MockState {
   ];
 
   const yesterday = addDays(today, -1);
-  const weekStart = startOfWeekSunday(today);
-  const weekEnd = endOfWeekSaturday(today);
-  const reviews: ReviewDoc[] = [
+  const reviews: MockReview[] = [
     {
       id: `review-daily-${yesterday}`,
+      title: "Daily review",
       kind: "daily",
       date: yesterday,
-      weekStart,
-      weekEnd,
+      weekStart: startOfWeekMonday(yesterday),
+      weekEnd: endOfWeekSunday(yesterday),
+      planStart: today,
+      planEnd: today,
+      dueOn: yesterday,
+      status: "Completed",
       completedAt: isoAgo(18),
+      firstCompletedOn: yesterday,
       missed: false,
+      completedLate: false,
+      canWriteAnswers: true,
       workedWell: "Easy long-run pace. The graph and the outline stayed the same data.",
       differently: "Phone was still on the nightstand. Park it before the kettle.",
       planning: "Keep LifeOS as primary focus. Finish Map graph. Long run stays easy.",

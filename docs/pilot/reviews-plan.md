@@ -97,6 +97,27 @@ writes call `ReviewService`. Refusals are 400s in words; an unknown review is a 
 | `GET /api/reviews/recap?from=&to=&asOf=` | What was recorded over the days (at most 62): status changes (reviews' own left out), Tasks completed, Tasks open and due before `asOf` (the earlier of today and `to`), habit days, appointments, journal entries and what came into the Inbox. A repeating Task's series is left out; the web adds the repeating Tasks' own section, as it did before. |
 | `GET /api/habits/occurrences?from=&to=` | Gains a range, for a weekly review's check-offs (REVIEW-5). |
 
+### 3.2 The live Reviews page (R3)
+
+- `web/src/lib/reviews.ts` is the web's twin of the rules in Domain: `reviewPeriod` (the days a
+  review looks back on and plans), `whyNotOpen`, `reviewStateAsOf` (the mock works status out
+  with it; the live site reads it from the API) and `reviewHabitDays`.
+- **Daily** shows today by default; **Weekly** shows the week ending this Sunday. Previous and
+  Next step a day or a week. An old link with a weekday for a weekly review lands on its Sunday.
+- **Opening:** today's review, and on a Sunday the week's, opens as soon as it's looked at. A past
+  one that was never written reads Missed, with *Write it late*. A future one says when it opens.
+- **Recap:** the server's sections plus the repeating Tasks' section, for any period that has
+  started, with or without a review. Habit days leave the recap for their own check-offs.
+- **Habit check-offs (REVIEW-5):** each habit day the review looks back on, up to today, with the
+  Focus buttons; a week picks one day at a time. A habit counts while Building or Established,
+  from its start (or the day it was made) to its end.
+- **The week:** a weekly review lists its seven daily reviews and where each stands; a daily one
+  links to its week's review.
+- **Answers:** on the live site the questions show but can't be written until §4 is settled, and
+  the page says so. Keep focus saves.
+- **Mock mode** follows the same rules: reading never makes a review, opening does, and its
+  status is worked out on read.
+
 ## 4. Answers
 
 Waiting on Chris (asked 2026-11-08): where answers go until SuperJournal is live.
@@ -122,7 +143,7 @@ Waiting on Chris (asked 2026-11-08): where answers go until SuperJournal is live
 
 - **2026-10-23, Chris:** weeks run Monday to Sunday; the weekly review is named by its Sunday,
   looks back on the week ending that day and plans the next (REVIEW-2). The placeholder page
-  stayed on `startOfWeekSunday` until REVIEW-2 was built (R3 changes it).
+  stayed on `startOfWeekSunday` until REVIEW-2 was built; R3 moved it to Monday-to-Sunday weeks.
 - **2026-10-28, Chris (#27, #29):** answers live in SuperJournal, one entry per question, every
   version kept; the review subject, due, done and missed, the recap and the check-offs stay in
   LifeOS.
@@ -141,12 +162,14 @@ Waiting on Chris (asked 2026-11-08): where answers go until SuperJournal is live
 - **Monthly reviews** (REVIEW-3) with their three-day grace window.
 - **Reviews in the Pilot**, if Chris wants them there.
 - **A missed-review nudge** wherever other due or missed things surface (D8, REVIEW-0).
+- **REVIEW-5's rest:** an optional note on a habit day from the review, and telling
+  self-assessed habit days from automatically scored ones.
 
 ## Status
 
 - [x] R0 — This plan
 - [x] R1 — Reviews in the kernel (migration 0052)
 - [x] R2 — The reviews API
-- [ ] R3 — The live Reviews page
+- [x] R3 — The live Reviews page
 - [ ] R4 — Answers behind a port
 - [ ] R5 — Answers in SuperJournal (blocked on csdelan/SuperJournal#2 and #28)

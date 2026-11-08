@@ -624,6 +624,12 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       return result;
     },
 
+    async openReview(kind, date) {
+      const doc = await client.openReview(kind, date);
+      await invalidate(qc, [qk.reviews]);
+      return doc;
+    },
+
     async saveReview(id, body) {
       await client.saveReview(id, body);
       await invalidate(qc, [qk.reviews]);
@@ -1328,10 +1334,20 @@ export function useRewards(includeArchived = false) {
   });
 }
 
-export function useReviews(kind?: "daily" | "weekly", date?: string) {
+/** The reviews whose day is from `from` to `to` (REVIEW-1, REVIEW-2). Reading never makes one. */
+export function useReviews(from: string, to: string) {
   return useQuery({
-    queryKey: [...qk.reviews, kind ?? "all", date ?? ""],
-    queryFn: () => reads().reviews(kind && date ? { kind, date } : undefined),
+    queryKey: [...qk.reviews, from, to],
+    queryFn: () => reads().reviews({ from, to }),
+  });
+}
+
+/** The habit days recorded from `from` to `to`, for a review's check-offs (REVIEW-5). */
+export function useOccurrencesBetween(from: string, to: string, enabled = true) {
+  return useQuery({
+    queryKey: [...qk.occurrences, "between", from, to],
+    queryFn: () => reads().occurrences({ from, to }),
+    enabled,
   });
 }
 

@@ -36,6 +36,7 @@ import {
   captureNote,
   captureVoice,
   completeReviewDoc,
+  openReviewDoc,
   createSubject,
   dropInboxItem,
   flagItem,
@@ -562,6 +563,13 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       notify("Captured to Inbox");
       bump();
       return result;
+    },
+
+    async openReview(kind, date) {
+      await wait();
+      const doc = openReviewDoc(kind, date);
+      bump();
+      return doc;
     },
 
     async saveReview(id, body) {

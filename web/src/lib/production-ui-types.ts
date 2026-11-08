@@ -226,8 +226,14 @@ export interface RecurrenceSpec {
   cue?: string;
 }
 
-/** Review working document (REVIEW-1/2). Mock-only until the kernel ships D3. */
+/**
+ * A daily or weekly review (REVIEW-0, REVIEW-1, REVIEW-2, D3): a Review subject in the kernel,
+ * opened the first time it's looked at, due at the end of its day and Missed if that passes
+ * before it's completed (D8). See docs/pilot/reviews-plan.md.
+ */
 export type ReviewKind = "daily" | "weekly";
+/** What a review reads as today. Missed is worked out from its day, never written on a schedule. */
+export type ReviewStatus = "Open" | "Completed" | "Missed";
 export interface ReviewBody {
   workedWell: string;
   differently: string;
@@ -236,13 +242,31 @@ export interface ReviewBody {
 }
 export interface ReviewDoc extends ReviewBody {
   id: string;
+  urn?: string;
+  title?: string;
   kind: ReviewKind;
-  /** Daily: the calendar day. Weekly: the Sunday the week starts. */
+  /** Daily: the day. Weekly: the Sunday naming the Monday-to-Sunday week it looks back on. */
   date: string;
+  /** The Monday-to-Sunday week holding its day; a weekly review looks back on it. */
   weekStart: string;
   weekEnd: string;
+  /** What it plans: the next day, or the next Monday-to-Sunday week. */
+  planStart: string;
+  planEnd: string;
+  /** It's due by the end of this day: its own day, or its Sunday. */
+  dueOn: string;
+  status: ReviewStatus;
+  /** When the current completion was set; null while it isn't completed. */
   completedAt?: string | null;
+  /** Its day ended before it was first completed. A late completion keeps it. */
   missed: boolean;
+  /** Completed, but only after its day. */
+  completedLate: boolean;
+  /**
+   * Whether the answers can be written here. False on the live site until they have a home
+   * (reviews plan §4); the recap, the habit check-offs and completing still work.
+   */
+  canWriteAnswers: boolean;
 }
 
 /** Inbox item kinds — an event (raw capture) or a subject (Idea/Problem flagged). */
@@ -2279,8 +2303,14 @@ export interface LifeOsWriteClient {
    * // TODO(api): multipart POST to the kernel voice write path.
    */
   captureVoice(req: CaptureVoiceRequest): Promise<BinaryCaptureResult>;
-  /** Mock-only until Review subjects (D3) exist. */
+  /**
+   * Open the review of a kind holding a day, or make it the first time it's looked at, so
+   * opening it twice gives the same review (REVIEW-1, REVIEW-2). Refused ahead of its day.
+   */
+  openReview(kind: ReviewKind, date: string): Promise<ReviewDoc>;
+  /** Save what the review holds: keep focus, and the answers where they can be written. */
   saveReview(id: string, body: ReviewBody): Promise<void>;
+  /** Complete it, as `bsk review complete` does. Late is fine: it stays missed. */
   completeReview(id: string): Promise<void>;
   /**
    * Spend currencies (REWARD-3). Refused — nothing written — on an overdraft, a tracked

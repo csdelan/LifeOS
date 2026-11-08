@@ -25,6 +25,7 @@ import { normalizeOuraStatus, normalizeSync, normalizeWorkout } from "@/lib/acti
 import { normalizeCover } from "@/lib/cover";
 import { renamedMessage } from "@/lib/production-ui-types";
 import { normalizeTimer } from "@/lib/live/reads";
+import { normalizeReview } from "@/lib/reviews";
 import {
   exceptionMarkedMessage,
   exceptionUnmarkedMessage,
@@ -556,14 +557,24 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       return { series: Number(read.series) || 0, made: (read.made ?? []) as CreatedSubject[] };
     },
 
-    async saveReview(_id, _body) {
-      // TODO(api): Review subjects (D3) are not on the live API yet.
-      toast.error("Reviews are mock-only until the kernel ships.");
+    async openReview(kind, date) {
+      return normalizeReview(await unwrap(api().POST("/api/reviews/open", { body: { kind, date } })));
     },
 
-    async completeReview(_id) {
-      // TODO(api): POST /api/reviews/{id}/complete
-      toast.error("Reviews are mock-only until the kernel ships.");
+    async saveReview(id, body) {
+      // Keep focus only: the answers have no home on the live site yet (reviews plan §4).
+      await unwrap(
+        api().POST("/api/reviews/{id}", {
+          params: { path: { id } },
+          body: { keepFocus: body.keepFocus },
+        }),
+      );
+      notify("Review saved");
+    },
+
+    async completeReview(id) {
+      await unwrap(api().POST("/api/reviews/{id}/complete", { params: { path: { id } } }));
+      notify("Review complete");
     },
 
     async redeem(req) {

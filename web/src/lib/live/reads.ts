@@ -6,7 +6,8 @@ import {
 } from "@/lib/derive";
 import { api, ApiRequestError, unwrap } from "@/lib/live/http";
 import { normalizeCoverSearch, withNormalCover } from "@/lib/cover";
-import { repeatingSection } from "@/lib/review-recap";
+import { repeatingSection, type RecapSection } from "@/lib/review-recap";
+import { normalizeReview } from "@/lib/reviews";
 import {
   normalizeBountyDefaults,
   normalizeDetailBounty,
@@ -55,7 +56,6 @@ import type {
   PersonRow,
   RelationEdge,
   ResolvedInboxItem,
-  ReviewDoc,
   RewardRow,
   StatusHistoryEntry,
   SubjectDetail,
@@ -250,6 +250,8 @@ export const liveReads: LifeOsReads = {
           query: {
             habitId: opts?.habitId,
             on: opts?.on,
+            from: opts?.from,
+            to: opts?.to,
           },
         },
       }),
@@ -431,23 +433,43 @@ export const liveReads: LifeOsReads = {
   },
 
   async reviews(opts) {
-    // TODO(api): Review documents (D3) are not on the live API yet.
-    void opts;
-    return asType<ReviewDoc[]>([]);
+    const data = await unwrap(
+      api().GET("/api/reviews", {
+        params: { query: { kind: opts?.kind, from: opts?.from, to: opts?.to } },
+      }),
+    );
+    return asType<unknown[]>(data).map(normalizeReview);
   },
 
   async recap(opts) {
-    // TODO(api): the rest of the recap is a composed read over the day's/week's events. The
-    // repeating Tasks' section is made here from their histories (TASKS-3).
-    const series = await this.taskSeries({});
+    // The server reads the recorded days in one call; the repeating Tasks' section is made
+    // here from their histories (TASKS-3), after the overdue Tasks, as the mock places it.
+    const [sections, series] = await Promise.all([
+      unwrap(
+        api().GET("/api/reviews/recap", {
+          params: { query: { from: opts.start, to: opts.end, asOf: opts.asOf } },
+        }),
+      ),
+      this.taskSeries({}),
+    ]);
     const histories = await Promise.all(series.map((row) => this.taskSeriesHistory(row.id)));
-    const section = repeatingSection(
+    const repeating = repeatingSection(
       histories.filter((h): h is TaskSeriesHistory => h !== null),
       opts.start,
       opts.end,
       opts.asOf,
     );
-    return section.items.length > 0 ? [section] : [];
+    const recorded: RecapSection[] = asType<RecapSection[]>(sections).map((section) => ({
+      ...section,
+      items: (section.items ?? []).map((item) => ({
+        ...item,
+        detail: item.detail ?? undefined,
+        subjectId: item.subjectId ?? undefined,
+      })),
+    }));
+    const at = recorded.findIndex((section) => section.id === "overdue");
+    recorded.splice(at < 0 ? recorded.length : at + 1, 0, repeating);
+    return recorded;
   },
 
   async edges(opts) {

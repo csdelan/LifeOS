@@ -91,8 +91,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   example).
 - Weeks run Monday to Sunday (`startOfWeekMonday` in `web/src/lib/dates.ts`). Sunday is review
   day: a weekly review is named by its Sunday, reviews the week ending that day and plans the
-  next one. The placeholder Reviews page stays on
-  `startOfWeekSunday` until REVIEW-2 is built; Chris chose that.
+  next one. On the web, `reviewPeriod` in `web/src/lib/reviews.ts` and `ReviewPeriods` in
+  `src/LifeOs.Domain/Reviews.cs` hold that rule; keep them the same.
 - Versioned entries (meals, fasts, room ratings, photos): the newest by `recorded_at` wins, never
   by `occurred_at`.
 - Rewards and XP progression is a pure fold over events and is never stored.

@@ -8,7 +8,7 @@ import { ouraDayAt } from "@/lib/activity-xp";
 import { mockActivityRecords, resetActivityStore } from "@/lib/mock/activity-store";
 import { mockHomeScoreUnits, resetEnvironmentStore } from "@/lib/mock/environment-store";
 import { resetMeasurementsStore } from "@/lib/mock/measurements-store";
-import { addDays, nowIso, slugify, todayIso, startOfWeekMonday, startOfWeekSunday, endOfWeekSaturday } from "@/lib/dates";
+import { addDays, nowIso, slugify, todayIso, startOfWeekMonday, endOfWeekSunday } from "@/lib/dates";
 import {
   CALORIES_MAX,
   DIET_CAP,
@@ -156,8 +156,10 @@ import {
   createSeed,
   type CanonicalEdge,
   type MockLedgerEntry,
+  type MockReview,
   type MockState,
 } from "@/lib/mock/seed";
+import { reviewPeriod, reviewStateAsOf, whyNotOpen } from "@/lib/reviews";
 
 let state: MockState = createSeed();
 const listeners = new Set<() => void>();
@@ -1348,72 +1350,75 @@ export function isTaskSeries(id: string): boolean {
   return isSeries(state, id);
 }
 
-export function ensureReviewDocs(today = todayIso()): ReviewDoc[] {
-  const weekStart = startOfWeekSunday(today);
-  const weekEnd = endOfWeekSaturday(today);
-  if (!state.reviews.some((r) => r.kind === "daily" && r.date === today)) {
-    state.reviews = [makeReview("daily", today, weekStart, weekEnd), ...state.reviews];
-  }
-  if (!state.reviews.some((r) => r.kind === "weekly" && r.weekStart === weekStart)) {
-    state.reviews = [makeReview("weekly", weekStart, weekStart, weekEnd), ...state.reviews];
-  }
-  return state.reviews;
+/** A review as it reads today: its status, missed and late worked out from its day (D8). */
+export function reviewAsOf(review: MockReview, today = todayIso()): ReviewDoc {
+  const { firstCompletedOn: _first, ...doc } = review;
+  return { ...doc, ...reviewStateAsOf(review, today) };
 }
 
-export function ensureReview(kind: ReviewDoc["kind"], date: string): ReviewDoc {
-  ensureReviewDocs();
-  const weekStart = startOfWeekSunday(date);
-  const weekEnd = endOfWeekSaturday(weekStart);
-  if (kind === "daily") {
-    let found = state.reviews.find((r) => r.kind === "daily" && r.date === date);
-    if (!found) {
-      found = makeReview("daily", date, weekStart, weekEnd);
-      state.reviews = [found, ...state.reviews];
-    }
-    if (!state.reviews.some((r) => r.kind === "weekly" && r.weekStart === weekStart)) {
-      state.reviews = [makeReview("weekly", weekStart, weekStart, weekEnd), ...state.reviews];
-    }
-    return found;
-  }
-  let found = state.reviews.find((r) => r.kind === "weekly" && r.weekStart === weekStart);
+/** The reviews whose day is in the range, of the kind when given, as they read today. */
+export function listReviews(opts?: { kind?: ReviewDoc["kind"]; from?: string; to?: string }): ReviewDoc[] {
+  const today = todayIso();
+  return state.reviews
+    .filter(
+      (r) =>
+        (!opts?.kind || r.kind === opts.kind) &&
+        (!opts?.from || r.date >= opts.from) &&
+        (!opts?.to || r.date <= opts.to),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.kind === "daily" ? -1 : 1))
+    .map((r) => reviewAsOf(r, today));
+}
+
+/**
+ * Open the review of a kind holding a day, or make it the first time (the mock's
+ * `bsk review open`): one per kind and period, never ahead of its day.
+ */
+export function openReviewDoc(kind: ReviewDoc["kind"], day: string): ReviewDoc {
+  const today = todayIso();
+  const period = reviewPeriod(kind, day);
+  const refusal = whyNotOpen(period, today);
+  if (refusal) throw new Error(refusal);
+  let found = state.reviews.find((r) => r.kind === kind && r.date === period.date);
   if (!found) {
-    found = makeReview("weekly", weekStart, weekStart, weekEnd);
-    state.reviews = [found, ...state.reviews];
+    found = {
+      id: `review-${kind}-${period.date}`,
+      title: `${kind === "daily" ? "Daily" : "Weekly"} review`,
+      kind,
+      date: period.date,
+      weekStart: startOfWeekMonday(period.date),
+      weekEnd: endOfWeekSunday(period.date),
+      planStart: period.planStart,
+      planEnd: period.planEnd,
+      dueOn: period.date,
+      status: "Open",
+      completedAt: null,
+      firstCompletedOn: null,
+      missed: false,
+      completedLate: false,
+      canWriteAnswers: true,
+      workedWell: "",
+      differently: "",
+      planning: "",
+      keepFocus: true,
+    };
+    state.reviews = [...state.reviews, found];
+    emit();
   }
-  return found;
-}
-
-function makeReview(
-  kind: ReviewDoc["kind"],
-  date: string,
-  weekStart: string,
-  weekEnd: string,
-): ReviewDoc {
-  return {
-    id: `review-${kind}-${date}`,
-    kind,
-    date,
-    weekStart,
-    weekEnd,
-    completedAt: null,
-    missed: false,
-    workedWell: "",
-    differently: "",
-    planning: "",
-    keepFocus: true,
-  };
+  return reviewAsOf(found, today);
 }
 
 export function saveReviewBody(id: string, body: ReviewBody) {
-  ensureReviewDocs();
   state.reviews = state.reviews.map((r) => (r.id === id ? { ...r, ...body } : r));
   emit();
 }
 
+/** Completes the review; completing it again changes nothing, and the first completion stays. */
 export function completeReviewDoc(id: string) {
-  ensureReviewDocs();
   state.reviews = state.reviews.map((r) =>
-    r.id === id ? { ...r, completedAt: nowIso(), missed: false } : r,
+    r.id === id && !r.completedAt
+      ? { ...r, completedAt: nowIso(), firstCompletedOn: r.firstCompletedOn ?? todayIso() }
+      : r,
   );
   emit();
 }

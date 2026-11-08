@@ -2392,6 +2392,14 @@ end of the day and reads as Missed after that unless completed; a late completio
 "Completed late" and stays missed. `bsk review open daily` and `bsk review complete daily`.
 Build stays `building`.
 
+**Update (2026-11-08 — reviews plan R2, R3, on the web):** the Reviews page opens today's
+review as soon as it's looked at (`POST /api/reviews/open`), says when it's due, and completes
+it. A past day with no review shows as missed with *Write it late*. The recap is read from the
+record (`GET /api/reviews/recap`): status changes, completed and overdue Tasks, repeating Tasks,
+appointments, journal entries and the Inbox; the day's habits have their own check-offs
+(REVIEW-5). The answers aren't saved on the live site until reviews plan §4 is settled. Build
+stays `building`.
+
 
 ### REVIEW-2 — I want to perform weekly reviews (every Sunday)
 Horizon:    Pilot phase 2
@@ -2459,10 +2467,8 @@ Build:      building
 - Week boundaries (2026-10-23): the weekly Review is identified by its Sunday. Its summary
   covers the Monday–Sunday week ending on that Sunday; its planning covers the Monday–Sunday
   week after. The week's daily Reviews are the seven that end on that Sunday, so a late
-  (backfilled) review still belongs to the week it looks back on. The placeholder web Reviews
-  page (`web/src/pages/reviews-page.tsx`, the mock store and seed) still groups Sunday–Saturday
-  with `startOfWeekSunday` and keys a weekly doc by that start; change it when this is built
-  (`startOfWeekMonday`, keyed by the Sunday).
+  (backfilled) review still belongs to the week it looks back on. The web Reviews page groups
+  Monday–Sunday and keys a weekly review by its Sunday (reviews plan R3).
 - Open decisions: the weekly-specific reflection questions (content, app-side).
 
 **Update (2026-11-08 — reviews plan R1):** a weekly review is a `Review` subject named by its
@@ -2470,6 +2476,12 @@ Sunday (migration 0052): "Weekly review, Sun Nov 8" looks back on Mon Nov 2 – 
 Mon Nov 9 – Sun Nov 15. It opens on that Sunday and not before, so the week has only daily
 reviews until then. Missed with no grace period once Sunday is over, backfillable, and a late
 completion keeps the miss. Build stays `building`.
+
+**Update (2026-11-08 — reviews plan R3, on the web):** the Weekly tab shows the week ending
+this Sunday. On its Sunday the review opens as soon as it's looked at; earlier in the week it
+says when it opens, with the recap so far. It lists the week's seven daily reviews with where
+each stands, and its habit check-offs pick one day of the week at a time. Build stays
+`building` until the answers have a home (reviews plan §4).
 
 
 ### REVIEW-3 — I want to perform monthly reviews with an end-of-month completion window
@@ -2540,7 +2552,7 @@ Build:      unmapped
 ### REVIEW-5 — Habits should be recordable and reviewable during daily, or weekly reviews
 Horizon:    Pilot phase 2
 Definition: active
-Build:      mapped
+Build:      building
 
 **Workflow (Chris):**
 - Habit streaks should be trackable.  I should be able to record whether I stuck with that habit or not.  The UI will show a small grid that renders a box for each time period I followed the habit.
@@ -2572,6 +2584,13 @@ Build:      mapped
 - Implications: recording a habit in a review and on the Dashboard are the **same** occurrence —
   consistency comes from both reading / writing the one adherence stream (GEN-3).
 - Open decisions: none blocking.
+
+**Update (2026-11-08 — reviews plan R3, on the web):** daily and weekly reviews show each
+habit day they look back on, up to today, with the Focus buttons (followed, partial, not
+followed), writing the same adherence events (`GET /api/habits/occurrences?from=&to=`). A day
+not yet recorded reads "Unrecorded", never a failure, and a past day can be backfilled or
+corrected from the review. Still to build: the optional note, and telling self-assessed days
+from automatically scored ones. Build is `building`.
 
 
 

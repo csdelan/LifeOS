@@ -85,18 +85,22 @@ export function weekdayIndex(iso: string): number {
   return new Date(y, m - 1, d).getDay();
 }
 
-/** Sunday-start week (REVIEW-2). */
+/** The Sunday on or before the day (the mock home walk-throughs' Sundays). */
 export function startOfWeekSunday(iso: string): string {
   return addDays(iso, -weekdayIndex(iso));
 }
 
-/** Monday-start week (Monday to Sunday): the rewards history's week. */
+/** The Monday starting the Monday-to-Sunday week holding the day: the app's week. */
 export function startOfWeekMonday(iso: string): string {
   return addDays(iso, -((weekdayIndex(iso) + 6) % 7));
 }
 
-export function endOfWeekSaturday(iso: string): string {
-  return addDays(startOfWeekSunday(iso), 6);
+/**
+ * The Sunday ending the Monday-to-Sunday week holding the day: the day itself on a Sunday.
+ * A weekly review is named by this Sunday (REVIEW-2).
+ */
+export function endOfWeekSunday(iso: string): string {
+  return addDays(startOfWeekMonday(iso), 6);
 }
 
 export function startOfMonth(iso: string): string {

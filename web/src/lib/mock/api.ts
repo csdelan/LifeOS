@@ -44,6 +44,7 @@ import type {
   RelationEdge,
   ResolvedInboxItem,
   ReviewDoc,
+  ReviewKind,
   RewardRow,
   StatusHistoryEntry,
   SubjectDetail,
@@ -70,11 +71,10 @@ import {
   appointmentsOn,
   byUrn,
   detailWithBounty,
-  ensureReview,
-  ensureReviewDocs,
   filesForSubject,
   getArtifact,
   getState as storeState,
+  listReviews,
   listTimers,
   mockHabits,
   mockLedger,
@@ -192,7 +192,8 @@ export interface LifeOsReads {
   areas(): Promise<AreaRow[]>;
   people(): Promise<PersonRow[]>;
   habits(): Promise<HabitRow[]>;
-  occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]>;
+  /** Habit days, of one habit, on one day or over a range (a weekly review's check-offs). */
+  occurrences(opts?: { habitId?: string; on?: string; from?: string; to?: string }): Promise<HabitOccurrenceRow[]>;
   /**
    * The appointments on a day (CAL-1, `GET /api/appointments?on=`): one-time ones and a series'
    * occurrences, never the series itself; all-day first, then by start time.
@@ -272,7 +273,11 @@ export interface LifeOsReads {
    * Without an Access Key there, `configured` is false and there are no photos.
    */
   coverSearch(query: string, page?: number): Promise<CoverSearchRead>;
-  reviews(opts?: { kind?: "daily" | "weekly"; date?: string }): Promise<ReviewDoc[]>;
+  /**
+   * The reviews whose day is in the range (REVIEW-1, REVIEW-2), as they read today. Reading
+   * never makes one: `openReview` does, the first time a review is looked at.
+   */
+  reviews(opts?: { kind?: ReviewKind; from?: string; to?: string }): Promise<ReviewDoc[]>;
   recap(opts: { start: string; end: string; asOf: string }): Promise<RecapSection[]>;
   /**
    * Bulk alignment edges (serves / results_in / supersedes) for Map outline + graph.
@@ -417,11 +422,13 @@ export const mockReads: LifeOsReads = {
     return appointmentsOn(opts.on);
   },
 
-  async occurrences(opts?: { habitId?: string; on?: string }): Promise<HabitOccurrenceRow[]> {
+  async occurrences(opts?: { habitId?: string; on?: string; from?: string; to?: string }): Promise<HabitOccurrenceRow[]> {
     await wait();
     return storeState().occurrences.filter((o) => {
       if (opts?.habitId && o.habitId !== opts.habitId) return false;
       if (opts?.on && o.occurrenceDate !== opts.on) return false;
+      if (opts?.from && o.occurrenceDate < opts.from) return false;
+      if (opts?.to && o.occurrenceDate > opts.to) return false;
       return true;
     });
   },
@@ -574,11 +581,9 @@ export const mockReads: LifeOsReads = {
     return BOUNTY_DEFAULTS;
   },
 
-  async reviews(opts?: { kind?: "daily" | "weekly"; date?: string }): Promise<ReviewDoc[]> {
+  async reviews(opts) {
     await wait();
-    ensureReviewDocs();
-    if (opts?.kind && opts?.date) ensureReview(opts.kind, opts.date);
-    return storeState().reviews;
+    return listReviews(opts);
   },
 
   async recap(opts: { start: string; end: string; asOf: string }): Promise<RecapSection[]> {
