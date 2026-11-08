@@ -42,7 +42,9 @@ seed data: make the change and click through it in one page load.
      `Oura__ClientSecret` and a throwaway `Integrations__TokenKey`;
    - for covers: `Unsplash__ApiUrl` pointing at a fake.
 
-   `dotnet run` leaves `LifeOs.Api.exe` listening after the task stops. Kill it by PID.
+   `dotnet run` leaves `LifeOs.Api.exe` listening after the task stops. Kill it by PID. While it
+   runs, its exe in `src/LifeOs.Api/bin` is locked, so stop it before building the solution or
+   running the .NET tests, and restart it with `--no-build` after a rebuild.
 3. **Fakes.** One small node http server can serve all of them:
    - the empty JWKS at `/auth/v1/.well-known/jwks.json`;
    - Oura: `/oauth/authorize` redirects back with `code` and `state`; `/oauth/token` returns JSON
