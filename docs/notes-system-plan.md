@@ -223,7 +223,7 @@ The tools for it are in the copy's `99 System/tools/`: `media` (plan, move, rest
 10. **The other devices,** one at a time: open Obsidian and let it sync.
 11. **Later, Chris** deletes HOLD once he's happy (the videos are in OneDrive) and decides what happens to the copy, whose Git history holds the old secrets.
 
-**Cut over on PICARD, 2026-11-12, 13:53 to 14:05,** after Chris had done his three steps, except a Project for Clean the House, which he'll add later. Steps 1 to 8 ran as written:
+**Cut over on PICARD, 2026-11-12, 13:53 to 13:59,** after Chris had done his three steps, except a Project for Clean the House, which he'll add later. Steps 1 to 8 ran as written:
 
 - **Snapshot** `Chris2.0 2026-11-12 1353.zip`, identical to the rehearsal's of 13:51.
 - **Git** in the live vault: `910c6e0` is the vault as found, `151e291` the spec and `CLAUDE.md`. In between: the tools, the media list, the videos moved, the manifest, the reorganization (`aea69d7`) and the plugins.
