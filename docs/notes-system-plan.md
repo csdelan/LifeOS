@@ -235,7 +235,8 @@ The tools for it are in the copy's `99 System/tools/`: `media` (plan, move, rest
   - Chris's removal of the secrets moved three notes' file dates, which the manifest uses when a note has no `created`. Tech Stack, Discord Bot Poster and LifeOS Pilot Punchlist keep their dates as found (`CREATED` in `build_manifest.py`).
 - **Step 9, the first sync, 14:02.** Sync stayed connected and no note came back at an old path, but Jupiter was still open with the old plugins. The reorganization reached it as new files, so Templater filled in the five archived templates (Another template example renamed itself to `2026-11-12 - Daily Note`), and Iconize dropped its icons for the old paths and uploaded its settings, which brought back `.obsidian/plugins/obsidian-icon-folder/data.json` (so PICARD's Sync does sync installed plugins). Committed as found (`57df40a`); the originals are in Git. `validate --secrets` crashed on the renamed template, which Git still listed; fixed (`7270519`).
 - **Step 10.** Jupiter restarted with only the kept plugins and synced; it changed nothing on PICARD. Obsidian runs on PICARD and Jupiter only: the Mercury and Venus this plan first named came from old workspace files in the vault. With Templater gone everywhere, the five templates are back as found, text and file dates (`1f1279e`), and Iconize's synced `data.json` is in `HOLD\after-first-sync\`.
-- **Left:** step 11, and linking Clean the House once its Project exists.
+- **Clean the House,** 14:26. Chris chose to delete its two notes instead of making a Project for them (vault `d53d279`, with a change log; Git and the snapshot keep them). The validator now fails no note, so N4 is done.
+- **Left:** step 11, Chris's, whenever he's ready.
 
 ## Status
 
@@ -243,7 +244,7 @@ The tools for it are in the copy's `99 System/tools/`: `media` (plan, move, rest
 - [x] N1 — Notes Spec (frozen at v1.0 on 2026-11-12; it lives in the vault as `99 System/Notes Spec.md`)
 - [x] N2 — Snapshot and a working copy (2026-11-12; Chris opened the copy in Obsidian the same day)
 - [x] N3 — Reorganize the copy, in rounds (round 1 and its follow-ups, approved by Chris 2026-11-12 at spec v0.7)
-- [ ] N4 — Freeze the spec and cut over (cut over and synced to PICARD and Jupiter 2026-11-12; waits on Clean the House's Project)
+- [x] N4 — Freeze the spec and cut over (2026-11-12, synced to PICARD and Jupiter; Chris deletes HOLD when he's ready)
 - [ ] N5 — Formatter skill, media sweep and related-links sweep
 - [ ] N6 — Minimal dictation pipeline
 - [ ] N7 — LifeOS agent writes at `capture`
