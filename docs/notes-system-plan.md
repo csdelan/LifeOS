@@ -118,6 +118,12 @@ Live with that for a few weeks before designing the rest.
   - **The spec is frozen only after he has seen the reorganized vault,** so the first version is reached by iterating (N3).
 - **2026-11-12: source and knowledge stay separate** (spec v0.4). A note about one outside work is a source, even in Chris's own words.
 - **2026-11-12: agents link related notes, option B** (spec v0.5 §4). "I shouldn't have to explicitly define every way to link things myself." Links go in when a note is filed and in a nightly sweep that adds them to older notes, and the existing notes get a backfill. Chris accepted the recommended details: a Related section at the end of the note, and no approval step.
+- **2026-11-12: the reorganized copy is approved** ("Vault re-org approved"), as round 1 left it, with its follow-ups through spec v0.7: sources, related links and hidden markers. The round's proposals in the spec's Still open list are accepted with it. Next is N4. Before the cutover, these need Chris:
+  - the plugin keep-and-remove list (spec Still open 1);
+  - Blue Skies' LifeOS Area (Still open 5);
+  - a LifeOS item for each of the 4 projects the validator fails;
+  - the 3 secrets moved to his password manager, with the webhook and key rotated;
+  - a moment when the other devices can take the synced reorganization.
 - **2026-11-12: stricter related links (spec v0.6).** The first backfill linked by topic and made the graph "a big web where everything is related to everything else". Chris accepted the recommendation as it stood: each link names its kind (part of, continues, answers, same thing), at most two per note, one direction, and the graph hides the maps, Home and tags.
 
 ## The vault today (surveyed 2026-11-12)
@@ -191,8 +197,8 @@ The tools (apply script, map generator, validator) are Python, kept in the vault
 
 - [x] N0 — This plan
 - [ ] N1 — Notes Spec (draft v0.7, 2026-11-12; revised in each N3 round)
-- [ ] N2 — Snapshot and a working copy (both made 2026-11-12; done once Chris has opened the copy in Obsidian)
-- [ ] N3 — Reorganize the copy, in rounds (round 1 applied 2026-11-12; waiting on Chris's review)
+- [x] N2 — Snapshot and a working copy (2026-11-12; Chris opened the copy in Obsidian the same day)
+- [x] N3 — Reorganize the copy, in rounds (round 1 and its follow-ups, approved by Chris 2026-11-12 at spec v0.7)
 - [ ] N4 — Freeze the spec and cut over
 - [ ] N5 — Formatter skill, media sweep and related-links sweep
 - [ ] N6 — Minimal dictation pipeline

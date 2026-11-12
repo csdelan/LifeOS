@@ -247,8 +247,9 @@ recorded in the changelog below.
    and icon plugins. Local REST API stays only if an agent uses it.
 2. **The tag list** in §4.
 3. **The starting maps** in §6.
-4. **Proposed in round 1** (2026-11-12, for Chris to accept or change; the round's tools already
-   work this way, and the copy's `99 System/Reorg round 1 report.md` explains each):
+4. **Proposed in round 1, accepted** when Chris approved the reorganized copy on 2026-11-12. The
+   copy works this way, and its `99 System/Reorg round 1 report.md` explains each. They move into
+   their sections when the spec freezes (N4):
    - a reflection's four sections are required from 2026-11-12 on; older logs keep their own
      headings, since their writing stays untouched (§2);
    - `98 Archive` requires only `type` and `created` (§2, §3);
