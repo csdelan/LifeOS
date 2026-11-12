@@ -124,6 +124,10 @@ Live with that for a few weeks before designing the rest.
   - a LifeOS item for each of the 4 projects the validator fails;
   - the 3 secrets moved to his password manager, with the webhook and key rotated;
   - a moment when the other devices can take the synced reorganization.
+- **2026-11-12: Chris's answers for the cutover (N4).**
+  - **Plugins:** keep Dataview, Style Settings and the cosmetic ones: Rainbow-Colored Sidebar, Colored Text, Emoji Toolbar and Multi-Column Markdown, whose layout two 2025 reflections use. Remove Tasks, Kanban, Full Calendar, Big Calendar, Make.md, Iconize, Templater, Thumbnails, Columns, MetaEdit and Local REST API. Removing is reversible: each plugin's folder moves out of the vault, nothing is deleted.
+  - **Blue Skies** belongs to the Trader Area, every note of it.
+  - **The 4 projects with no LifeOS item:** Chris creates a LifeOS Project for each before the cutover, and the agent links them.
 - **2026-11-12: stricter related links (spec v0.6).** The first backfill linked by topic and made the graph "a big web where everything is related to everything else". Chris accepted the recommendation as it stood: each link names its kind (part of, continues, answers, same thing), at most two per note, one direction, and the graph hides the maps, Home and tags.
 
 ## The vault today (surveyed 2026-11-12)
@@ -193,13 +197,39 @@ The tools (apply script, map generator, validator) are Python, kept in the vault
 - **Edits Chris makes in the copy** are lost when a new round resets it to the as-found commit, so each round first commits them and carries any he wants to keep into the live vault or the manifest.
 - **For N4:** the copy's Git history holds the 3 secrets, so it stays on PICARD, and they come out of the live notes before Git starts there. Plugin settings that name old folders (Iconize, Make.md) were left as they are.
 
+### N4: the cutover
+
+**Prepared 2026-11-12.** A rehearsal ran the whole cutover below on a fresh copy of the live vault (snapshot `Chris2.0 2026-11-12 1321.zip`), with its 14 videos in place and a stand-in folder for `Vault Media`, and compared the result with the approved copy. Notes, folders, front matter, links, maps and settings came out the same. What differed was meant: the Blue Skies Area (since copied into the copy), the removed plugins, the stand-in video paths, and blank lines at the end of notes whose Related section came and went in the first backfill. The rehearsal found two gaps, both closed: Git's line-ending settings must be set before the first commit, and the graph filter and marker snippet, set by hand in the copy, are now in the manifest. `media plan` run on the live vault itself lists the same 14 files as the copy.
+
+The tools for it are in the copy's `99 System/tools/`: `media` (plan, move, restore), `plugins` (list, remove, restore) and `validate --secrets`. The vault's new `CLAUDE.md` is drafted in the copy.
+
+**Before the day, Chris:**
+
+1. Moves the three secrets into his password manager and deletes them from the notes: the database password in Blue Skies' Tech Stack, the two Discord lines in Discord Bot Poster, and the key in LifeOS Pilot Punchlist. Then rotates the webhook and the key. Git keeps whatever its first commit holds, so `validate --secrets` must find nothing before it.
+2. Creates a LifeOS Project for each of Clean the House, Front lawn Sprinkler system, Full 2026 Budget, and Inbox to Zero and Sustaining, and re-authorizes the LifeOS connector (`/mcp`) so the agent can read their URNs.
+3. Picks a time. Just before it, on each device (PICARD, Mercury, Venus, Jupiter): opens Obsidian, lets Sync finish, and closes it. Nothing may change the vault until step 9.
+
+**The cutover,** by an agent on PICARD with Chris at hand. `LIVE` is `C:\Users\csdel\Vaults\Chris2.0`; `HOLD` is `C:\Users\csdel\Vaults\_cutover\<date>`, outside the vault so Sync never sees it. Until step 3 copies the tools in, they run from the copy's `99 System/tools` with `uv run python -X utf8 -m notes_tools.<tool>`.
+
+1. **Snapshot and rehearse.** `snapshot take --vault LIVE --out C:\Users\csdel\Vaults\_snapshots`. Make a copy of that snapshot at a short path (`make_copy`, which leaves the videos out) and run `build_manifest.py` on it. It stops on any note it has no call for: notes written since 2026-11-12 need a call in the copy's `build_manifest.py`, as do the 4 projects' new URNs. Repeat until it passes, then run the apply, `related`, `maps` and `validate` there too; only the 5 links to notes never written may warn.
+2. **Git.** In LIVE: `git init`, then `git config` `core.autocrlf false`, `core.safecrlf false`, `core.quotepath false` and `core.longpaths true`, so Git never rewrites a note's line endings. Copy the copy's `.gitignore`. `validate --vault LIVE --secrets` must say 0. Then `git add -A` and commit the vault as found.
+3. **Tools in.** Copy in what the tools README's "A new round" step 1 lists, with `.obsidian/snippets/hide-comments.css`, and commit. From here the tools run from `LIVE\99 System\tools`.
+4. **Videos.** `media plan --vault ../..` (14 files; it names any file over 20 MB that isn't a video, which `.gitignore` wouldn't cover), commit. `media move --vault ../.. --hold HOLD\media`, first with `--dry-run`. It copies each file to OneDrive, checks size and SHA-256, and only then moves the original into HOLD. Commit the list it updates.
+5. **Reorganize.** `build_manifest.py --vault ../..`, commit. Then `apply`, `related`, `maps` and `validate`, which should fail nothing now, and commit.
+6. **Plugins.** `plugins remove --vault ../.. --hold HOLD\plugins obsidian-tasks-plugin obsidian-kanban obsidian-full-calendar big-calendar make-md obsidian-icon-folder templater-obsidian obsidian-thumbnails obsidian-columns metaedit obsidian-local-rest-api`. `plugins list` then shows the 6 kept. Commit.
+7. **The spec frozen.** Version 1.0: the Still open items folded into their sections, the plugin list in it. Copy it to `99 System/Notes Spec.md` and the drafted `CLAUDE.md` over the vault's, and commit. LifeOS's `docs/notes-spec.md` becomes a pointer to it.
+8. **Check before syncing.** Nothing has left PICARD yet. If anything looks wrong, the snapshot from step 1 is a complete undo (videos included), and `media restore` and `plugins restore` put back what they moved.
+9. **Sync.** Open Obsidian on PICARD. Check Settings → Sync is still connected to the remote vault, and whether it syncs installed plugins (if not, each device keeps its own until removed there). Let it upload. Then `git status` must show only Obsidian's own settings: a note back at an old path means Sync restored it, so stop and look. Check Home, a video playing from OneDrive, the graph, and that the Related markers are hidden.
+10. **The other devices,** one at a time: open Obsidian and let it sync.
+11. **Later, Chris** deletes HOLD once he's happy (the videos are in OneDrive) and decides what happens to the copy, whose Git history holds the old secrets.
+
 ## Status
 
 - [x] N0 — This plan
-- [ ] N1 — Notes Spec (draft v0.7, 2026-11-12; revised in each N3 round)
+- [ ] N1 — Notes Spec (draft v0.8, 2026-11-12; frozen at the cutover)
 - [x] N2 — Snapshot and a working copy (2026-11-12; Chris opened the copy in Obsidian the same day)
 - [x] N3 — Reorganize the copy, in rounds (round 1 and its follow-ups, approved by Chris 2026-11-12 at spec v0.7)
-- [ ] N4 — Freeze the spec and cut over
+- [ ] N4 — Freeze the spec and cut over (prepared and rehearsed 2026-11-12; waits on Chris's three steps before the day)
 - [ ] N5 — Formatter skill, media sweep and related-links sweep
 - [ ] N6 — Minimal dictation pipeline
 - [ ] N7 — LifeOS agent writes at `capture`

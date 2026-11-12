@@ -1,6 +1,6 @@
 # Notes Spec (draft, iterating toward the first freeze)
 
-**Status: draft v0.7, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
+**Status: draft v0.8, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
 calls for. It isn't frozen yet: Chris freezes it only after he has seen the vault reorganized to
 it (notes plan N3). Until then each round of the reorganization can change it, and the
 changelog at the end records each change. Once frozen it moves into the vault as
@@ -241,10 +241,12 @@ recorded in the changelog below.
 
 ## Still open
 
-1. **Plugins.** Proposed keep list: Templater (a template per type, for notes made by hand),
-   Dataview (read-only views), the theme and Style Settings. Proposed removals: Tasks, Kanban, Full
-   Calendar, Big Calendar, Make.md (it leaves `.mdc`, `.mdb` and `.space` files), the column, color
-   and icon plugins. Local REST API stays only if an agent uses it.
+1. **Plugins, decided 2026-11-12** for the cutover (N4), moving into §7 at the freeze. Kept:
+   Dataview (read-only views), Style Settings (the theme), Rainbow-Colored Sidebar, Colored Text,
+   Emoji Toolbar and Multi-Column Markdown, whose layout two 2025 reflections use. Removed: Tasks,
+   Kanban, Full Calendar, Big Calendar, Make.md (and the `.mdc`, `.mdb` and `.space` files it
+   leaves), Iconize, Templater (the templates use the core Templates plugin), Thumbnails, Columns,
+   MetaEdit and Local REST API, since no agent uses it.
 2. **The tag list** in §4.
 3. **The starting maps** in §6.
 4. **Proposed in round 1, accepted** when Chris approved the reorganized copy on 2026-11-12. The
@@ -264,8 +266,7 @@ recorded in the changelog below.
    - a source's `author` is a plain name, not a wiki link (§2);
    - change logs live in `99 System/change_logs/`; the vault's `CLAUDE.md` still says
      `_AI_Workspace` and is updated at cutover (§7).
-5. **Which LifeOS Area Blue Skies belongs to** (round 1 used Software Engineer Career for its
-   reference notes).
+5. **Blue Skies' LifeOS Area, decided 2026-11-12:** Trader, for every Blue Skies note.
 
 ## Changelog
 
@@ -296,3 +297,5 @@ recorded in the changelog below.
 - 2026-11-12, v0.7, so Chris doesn't see the `%%` markers while reading: maps and `Home.md` are
   wholly generated and carry none, and a CSS snippet hides the Related section's markers in Live
   Preview (§4, §6).
+- 2026-11-12, v0.8, Chris's answers for the cutover: the plugins kept and removed (Still open 1),
+  and Blue Skies under the Trader Area (Still open 5).
