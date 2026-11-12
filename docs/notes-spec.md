@@ -1,6 +1,6 @@
 # Notes Spec (draft, iterating toward the first freeze)
 
-**Status: draft v0.5, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
+**Status: draft v0.6, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
 calls for. It isn't frozen yet: Chris freezes it only after he has seen the vault reorganized to
 it (notes plan N3). Until then each round of the reorganization can change it, and the
 changelog at the end records each change. Once frozen it moves into the vault as
@@ -125,23 +125,36 @@ Chris doesn't link notes by hand: agents find related notes and link them (Chris
 reflection about losing focus, for instance, gets links to the Wisey ADHD course notes.
 
 - **Where:** a Related section at the end of the note, between `%% related:start %%` and
-  `%% related:end %%`. Each line is a link and a few words on why:
+  `%% related:end %%`. Each line names the kind of link, the note, and the specific thing behind
+  it:
 
   ```markdown
   %% related:start %%
   ## Related
 
-  - [[ADHD Day 1]]: micro-starts and body doubling, for getting started
+  - Answers: [[ADHD Day 3-4]]: capture mode, to empty the mind when overwhelmed
   %% related:end %%
   ```
 
   The agent writes only inside the markers. Links in Chris's own text are his, and the section
   doesn't repeat them.
-- **What counts:** the notes share real substance, so Chris would want to open the target while
-  reading the note. A shared tag or area isn't enough. At most five, best first; none is fine.
-- **Direction:** a reflection links out to projects, knowledge, reference and sources. Nothing
-  links to a reflection, since Obsidian's backlinks list the reflections that link a note.
-  Archived notes aren't linked.
+- **Four kinds of link, and nothing else** (Chris, 2026-11-12, after the first backfill made the
+  graph a web where everything linked to everything):
+  - **Part of:** a lesson and its course, or a design note and its project.
+  - **Continues:** a later note picks up the same thread, like Lyn Alden's next report on the
+    same theme.
+  - **Answers:** the note raises a problem and the target holds a specific answer to it.
+  - **Same thing:** both notes are about the same trade, repo, service, person or event.
+
+  A shared theme ("both about trading", "both about focus") is never enough: tags and maps cover
+  themes. The why names the specific thing: the technique, the repo, the trade.
+- **Few:** at most two per note, best first. Most notes have none. A note that many notes would
+  link for the same reason is a theme, so it isn't linked.
+- **One direction:** from the more specific or later note to the more general or earlier one,
+  never both ways. A series links to its hub (the ADHD days to the course note), not each member to
+  the others. A reflection links out to projects, knowledge, reference and sources; nothing links to
+  a reflection, since Obsidian's backlinks list the reflections that link a note. Archived notes
+  aren't linked.
 - **When:** as a note is filed, it gets links to the notes already there. A nightly sweep goes the
   other way: when a note arrives, older notes it fits get a line. The vault as found got one
   backfill pass, in the reorganization (notes plan N3).
@@ -187,6 +200,10 @@ work on every device and for agents, with or without plugins.
   - a link to every map, with its count;
   - the notes added or changed in the last 7 days;
   - what's waiting in `00 Inbox` and the validator's needs-fixing list.
+- **The graph view shows only links between notes.** Its filter hides the maps, `Home.md`, tags,
+  `98 Archive` and `99 System`, which link to most notes and would draw everything into one web.
+  The filter is `-path:"05 MoC" -path:"Home.md" -path:"98 Archive" -path:"99 System"`, with
+  tags off. Chris can switch them back on in the graph's settings.
 - **Generated text sits between markers** (`%% generated:start %%` and `%% generated:end %%`). Text
   Chris writes above the start marker is kept; anything inside is replaced on the next build.
 
@@ -270,3 +287,7 @@ recorded in the changelog below.
   filed and in a nightly sweep that adds links to older notes, in a Related section between
   markers at the end of the note. Reflections link out, nothing links to a reflection, and there's
   no approval step (§4, §7). The existing notes get links in a backfill pass.
+- 2026-11-12, v0.6, after the first backfill (204 links) made the graph a web: a link names one
+  of four kinds (part of, continues, answers, same thing), and a shared theme is never enough; at
+  most two per note, one direction only, and a series links to its hub (§4). The graph view
+  hides the maps, Home, tags, the archive and `99 System` (§6).
