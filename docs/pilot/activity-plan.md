@@ -1022,7 +1022,7 @@ Checked 2026-10-22. Facts from Oura's docs unless marked otherwise.
 - [x] A3 — API
 - [x] A4 — Activity page: steps and exercise
 - [x] A5 — Activity page: sleep and readiness
-- [ ] A6 — Live on staging
+- [x] A6 — Live on staging (Chris confirmed on 2026-11-12 that the page matches the Oura app)
 - [x] A7 — Phase 2 rules (`ActivityRules` and its TypeScript port)
 - [x] A8 — Activity XP on the ledger
 - [x] A9 — Activity XP on the page
@@ -1349,7 +1349,7 @@ plus:
   message ("Failed to bind parameter…") as its 400, not a 400 in words. The page never sends
   a bad date. Left for later.
 
-**A6 (started 2026-10-22; the week of comparing is still to come).** No migration.
+**A6 (2026-10-22 to 2026-11-12).** No migration.
 
 - **A sync cut-off, built and withdrawn the same day** (§5): at the start of A6, Chris's ask
   read as "read nothing from Oura before 2026-10-22". It went out as `Oura:StartDate`
@@ -1410,8 +1410,8 @@ plus:
     `api.ouraring.com/oauth/token`, so the `moi.ouraring.com` fallback isn't needed.
   - A sync on the refreshed token worked, and the history is all in, back to 2023-04-27.
     The sync's output was discarded, so no agent saw the data (§7).
-- **Left for Chris:** for a week, compare the page with the Oura app, imported workouts
-  included if there are any. Then A6 is ticked.
+- **Compared (2026-11-12):** after three weeks of use, Chris confirmed the page matches the
+  Oura app. A6 is ticked and ACTIVITY-1 to ACTIVITY-6 are built.
 - **Not built yet:** the `bsk oura forget` purge (§7). Real data is on staging now, so a
   deletion request would have to wait for it to be built.
 

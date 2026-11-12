@@ -3515,7 +3515,10 @@ one. Build moves `building → built`.
 ### ACTIVITY-1 — LifeOS reads my Oura Ring data and keeps it in step
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-11-12 — live on staging, A6):** Chris confirmed the Activity page matches the
+Oura app after three weeks of use. ACTIVITY-1 to ACTIVITY-6 move to `built`.
 
 **Update (2026-10-22 — connection landed, A1):** migration 0036 adds `bsk_ops.integration`,
 which `bsk_reader` can't read, with Oura's tokens sealed under `Integrations:TokenKey`.
@@ -3584,7 +3587,7 @@ synthetic data. Build stays `building`: a real ring (A6) is next.
 ### ACTIVITY-2 — Steps show as a trend against my 5,000 minimum and 7,500 goal
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Update (2026-10-22 — kernel landed, A2):** `v_activity_day` holds each day's steps,
 calories, activity time and non-wear time, and `ActivityTargets` the two thresholds.
@@ -3624,7 +3627,7 @@ numbers from a real ring (A6) are next.
 ### ACTIVITY-3 — Exercise I record in Oura is tracked by week, with an optional note
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Update (2026-10-22 — kernel landed, A2):** `v_workout` holds each live workout with its
 note, `ExerciseRules` says whether it counts and why not, and `WorkoutNoteService` writes the
@@ -3676,7 +3679,7 @@ Enter, on leaving the box, or on closing the sheet. Build stays `building`: real
 ### ACTIVITY-4 — My sleep score and readiness are tracked every day
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Update (2026-10-22 — kernel landed, A2):** `v_sleep_day` holds each day's sleep score, the
 night (the longest `long_sleep`) and naps, leaving out periods Oura rejected or deleted;
@@ -3727,7 +3730,7 @@ numbers from a real ring (A6) are next.
 ### ACTIVITY-5 — My Oura data earns Health XP automatically
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "Assigning health XP (or other rewards) automatically based on the data. I don't know
@@ -3819,7 +3822,7 @@ have locked in that XP 24 hours ago after my first sync after sleeping?"
 ### ACTIVITY-6 — Tags I add in the Oura app are kept beside my health data
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "Does the Oura Ring API also report tagged events? In the Oura App, I can apply a tag to a
@@ -4791,8 +4794,7 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   - `ExerciseRules`, workout notes and `bsk oura`
   - the `/activity` page
 
-  — **Open** (planned in [activity-plan.md](activity-plan.md), A1–A6; activity XP,
-  ACTIVITY-5, follows).
+  — **Shipped** (A1–A11 in [activity-plan.md](activity-plan.md); live on staging, 2026-11-12).
 - **Cover images** (COVER-1..3 / D15): `attributes.cover` (an Unsplash photo reference),
   the Unsplash client behind a port, `CoverService`, `bsk cover`, the cover endpoints and
   `cover` on the subject reads; no migration. — **Open** (planned in
