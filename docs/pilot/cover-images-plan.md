@@ -359,7 +359,8 @@ Read 2026-10-23.
 - [x] C2 — API, the security policy and the key on Fly
 - [x] C3 — Picker and banner
 - [x] C4 — Card images
-- [ ] C5 — Live on staging
+- [x] C5 — Live on staging (Chris picked his first real cover on 2026-10-27; habits gained
+  covers and the Vision page became a gallery on 2026-10-29)
 
 ### As built
 

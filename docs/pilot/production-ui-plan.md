@@ -6,9 +6,13 @@ survived daily use. This doc owns the **UI technology, structure, and design** h
 Production; it does not re-open the ontology (see [ontology.md](../ontology.md)) or the
 kernel backlog (see [kernel-build-plan.md](kernel-build-plan.md)).
 
-**Status:** planning. Production has **not** started — the WinForms Pilot
-([ui-refactor-plan.md](ui-refactor-plan.md)) remains the live build. This is the target we
-scaffold toward.
+**Status (2026-11-12):** built and in daily use. The React SPA and the .NET API this plan
+describes (`web/`, `src/LifeOs.Api`) are what Chris uses on staging (`lifeos-mz55-staging`).
+Each feature since has been planned in its own `docs/pilot/<feature>-plan.md`, so this doc is
+history: read it for why the stack is what it is, not for what to build next. The WinForms
+Pilot ([ui-refactor-plan.md](ui-refactor-plan.md)) still runs, often against staging, but new
+features land on the web first. The production *environment* (a second Supabase project and
+Fly app) isn't set up yet; see [deploy.md](deploy.md).
 
 **Decisions approved by Chris 2026-09-20:** React + TypeScript frontend; a .NET Web API in
 front of `LifeOs.Application`; **no PostgREST**; Supabase Auth; single repo; the streamlined

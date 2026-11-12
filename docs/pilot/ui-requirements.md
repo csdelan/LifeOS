@@ -3858,7 +3858,11 @@ reconnects and compares the page with his tags in the Oura app.
 ### COVER-1 — I can pick a cover photo from Unsplash for an identity statement, goal or project
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-11-12 — live on staging, C5):** Chris has used covers on staging since
+2026-10-27. On 2026-10-29 habits gained covers and the Vision page became a gallery (his
+LifeOS tasks). Build moves to `built`.
 
 **Update (2026-10-23 — kernel landed, C1):** `bsk cover search`, `set`, `move`, `clear`
 and `show` work end to end with `Unsplash__AccessKey` in the environment. The cover is
@@ -3910,7 +3914,7 @@ the server, filled in with the title, and tapping a photo sets it. It works in t
 ### COVER-2 — A subject's cover shows as a banner at the top of its detail
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Update (2026-10-23 — banner landed, C3):** The banner shows across the top of the detail
 panel and the phone sheet, with "Photo by … on Unsplash" (both linked) in its corner. Its
@@ -3935,7 +3939,7 @@ building`. It becomes `built` once it's on staging (C5).
 ### COVER-3 — Covers show on the cards where identity statements, goals and projects appear
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Update (2026-10-23 — cards landed, C4):**
 - Vision: each identity statement's card has its photo across the top, with its credit,
@@ -4201,7 +4205,7 @@ Build:      built
 ### MEASURE-1 — I can record my weight and other measurements by hand, at any time up to now
 Horizon:    Pilot
 Definition: active
-Build:      building
+Build:      built
 
 **Workflow (Chris):**
 - "I would like to add the ability to record custom health metrics in LifeOs. Oura ring does

@@ -714,7 +714,9 @@ Chris took all three (§8.1). The rest (§8.2) was chosen in planning and is eas
 - [x] E2 — The Home Score (no migration)
 - [x] E3 — Environment's rules (no migration; push with E4)
 - [x] E4 — Environment on the web (no migration)
-- [ ] E5 — Chris's spaces, first walk-through, calibration
+- [x] E5a — Chris's nine spaces, the first walk-through and baseline photos (2026-10-27)
+- [ ] E5b — Calibration: recheck the curve's price once the home is clean, and edit the rating
+  examples
 - [x] E6–E7 planned (§8, HOME-4)
 - [x] E6 — Photos in the kernel (migration 0045)
 - [x] E7 — Photos on the web (no migration)

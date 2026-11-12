@@ -372,8 +372,9 @@ through the app. The drill is the only check that the private key still works.
 - [x] The drill restores staging's copy into local Docker, the row counts match, and the
   app reads it (2026-10-28: `bsk check` gives the same 12 findings, and the photos decrypt).
   Next drill: 2027-01.
-- [ ] The nightly run is green for a week. Optional: the dead-man's switch is set, and a
-  skipped night trips it.
+- [x] The nightly run is green for a week (every night from 2026-11-01 to 2026-11-12; the PC
+  missed 2026-10-30).
+- [ ] Optional: the dead-man's switch is set, and a skipped night trips it.
 - [x] deploy.md and the README link the runbook.
 
 ## 4. Phase 1: read-only MCP server
