@@ -2312,6 +2312,13 @@ Horizon:    Pilot phase 2
 Definition: active
 Build:      building
 
+**Update (2026-11-12 — answers move to the notes vault):** Chris chose to dictate his
+reflections and have an agent format each into a note in his Obsidian vault, in the Notes
+Spec's review format; the review links to the note ([notes system plan](../notes-system-plan.md),
+[reviews plan](reviews-plan.md) §4). This replaces SuperJournal as the home of review answers
+(#29); the earlier updates below that name SuperJournal are history. Build stays `building`
+until R5 links reviews to their notes.
+
 **Workflow (Chris):**
 - A daily review should be created automatically at the start of every day and remain
   available throughout that day.
@@ -2406,6 +2413,9 @@ plan R5).
 Horizon:    Pilot phase 2
 Definition: active
 Build:      building
+
+**Update (2026-11-12 — answers move to the notes vault):** as REVIEW-1: the weekly
+reflection is dictated and filed as a vault note the review links to (reviews plan §4, R5).
 
 **Workflow (Chris):**
 - The weekly review should be created on Sunday and should normally be completed on Sunday.
@@ -4797,17 +4807,18 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   — **Shipped** (A1–A11 in [activity-plan.md](activity-plan.md); live on staging, 2026-11-12).
 - **Cover images** (COVER-1..3 / D15): `attributes.cover` (an Unsplash photo reference),
   the Unsplash client behind a port, `CoverService`, `bsk cover`, the cover endpoints and
-  `cover` on the subject reads; no migration. — **Open** (planned in
-  [cover-images-plan.md](cover-images-plan.md), C1–C5).
+  `cover` on the subject reads; no migration. — **Shipped** (C1–C5 in
+  [cover-images-plan.md](cover-images-plan.md); live on staging, 2026-11-12).
 - **Repeating Tasks** (TASKS-3 / D16): series and repetitions, Task's Missed, the
   once-each-week and after-completion shapes, `TaskSeriesService` with settle, the price
   from the series, migrations 0041 (the text repair) and 0042, `bsk tasks settle`, `POST /api/recur` and
   `POST /api/tasks/settle`. — **Shipped** (RT1–RT5 in
   [recurring-tasks-plan.md](recurring-tasks-plan.md), 2026-10-24).
 
-**Still open:** the **Review** subject type + mutable-body edit trail and review
-scheduling/missed (REVIEW-0 / D3 / D8); **D6 focus storage** (TODAY-1); the **Oura
-integration** (ACTIVITY-1..4 / D14); **cover images** (COVER-1..3 / D15). Everything else
+**Still open:** **D6 focus storage** (TODAY-1), and where a **review's answers** live: the
+Review type, scheduling and missed shipped in migration 0052 (REVIEW-0 / D8), and the answers
+go to the notes vault (reviews plan §4, R5). The Oura integration (D14) and cover images (D15)
+shipped. Everything else
 above has shipped, the rewards work included (R1–R7 in [rewards-plan.md](rewards-plan.md))
 and life-domain XP (X1–X7 in [xp-domains-plan.md](xp-domains-plan.md)), and the Food Log
 (F1–F6 in [food-log-plan.md](food-log-plan.md)). The user-facing UIs for the shipped kernel bits still vary by surface — see each

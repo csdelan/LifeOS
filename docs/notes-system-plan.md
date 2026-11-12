@@ -27,6 +27,8 @@ For a Markdown vault that LifeOS indexes, Syncthing fits better, and Git should 
 
 **Recommended setup:** Syncthing for device sync, an always-on machine as the hub, and a Git repo for history. AI writes become commits you can diff and revert, which gives provenance and auditability for free.
 
+**Update (2026-11-12): stay on Obsidian Sync.** The vault (`C:\Users\csdel\Vaults\Chris2.0`) already syncs across PICARD, Mercury, Venus and Jupiter with Obsidian Sync, which works on Android and keeps version history. Moving to Syncthing would add work without fixing a problem. Git still sits alongside, on PICARD only; Obsidian Sync skips dot-folders, so `.git` stays local. PICARD is the hub: agents work on its copy of the vault.
+
 ## The fix: decide once, freeze it, enforce it with tooling
 
 The resistance to Obsidian is option paralysis, not the tool. The answer is a written spec that makes the decisions once, plus automation that enforces it, so the knobs stop being your problem.
@@ -76,7 +78,7 @@ Clear captures are filed without you; anything uncertain, and any system problem
 
 - **Keep the raw transcript.** Store it untouched and link each formatted note back to it.
 - **Confidence threshold.** Clear items are filed automatically; ambiguous ones become "needs input" items.
-- **Route by kind.** Tasks, ideas, and journal entries go to LifeOS state objects; only reference and knowledge go to the vault.
+- **Route by kind.** Tasks and ideas go to LifeOS state objects. Reflections and journal entries, reference, knowledge, sources and project notes go to the vault ([Notes Spec](notes-spec.md) §1; changed 2026-11-12, when reflections moved to the vault).
 - **Create, don't rewrite.** The agent adds new notes and appended sections; restructuring hand-edited notes needs review.
 - **Daily digest.** A short "here's what I filed today" summary for spot-checking.
 
@@ -103,9 +105,66 @@ Clear captures are filed without you; anything uncertain, and any system problem
 
 Live with that for a few weeks before designing the rest.
 
-## Next steps
+## Decisions (Chris)
 
-- [ ] Draft the Notes Spec: note types, frontmatter schemas, templates, folder layout, linking rules, freeze rule
-- [ ] Turn the spec into a note-formatter Claude skill
-- [ ] Build the minimal dictation pipeline (dictate, file, needs-input)
-- [ ] Add a Paperless search tool to the LifeOS MCP server
+- **2026-11-12: reflections live in the vault (option A).** Chris dictates his daily reflections; an agent summarizes and formats each into a vault note in the Notes Spec's format, and the LifeOS review links to it. This replaces SuperJournal as the home of review answers ([reviews plan](pilot/reviews-plan.md) §4). He still uses SuperJournal for other things.
+- **2026-11-12: the notes system comes before the rest of the roadmap's daily command center** (TODAY-1, TODAY-2, monthly reviews), because it also gives reviews their answers.
+- **2026-11-12: one of the first jobs after the spec is a complete cleanup of the vault,** done by an agent, so the vault is standardised as a baseline before the pipeline starts writing into it (N3).
+
+## The vault today (surveyed 2026-11-12)
+
+- 172 notes, about 56,000 words, and 4.6 GB, of which about 3.6 GB is course videos.
+- Folders mix two numbering schemes (`00 - Inbox`, `10 - Projects`, `200-Areas`, `300-Resources`, `98 - Attachments`), clippings sit in two places, and `Tags/` and `10 - Projects/Untitled/` are empty. The vault's own `CLAUDE.md` describes folder names that no longer match.
+- 93 notes have no front matter, 42 have fewer than 15 words, and 35 link targets don't resolve.
+- 67 daily logs in `300-Resources/Journals/`, with a routine checklist (now LifeOS habits) and a sober-streak field (now the Food Log's).
+- 154 open checkboxes, mostly in project notes, behind a Tasks-plugin dashboard.
+- 13 community plugins. Make.md leaves `.mdc`, `.mdb` and `.space` files; `.obsidian` holds about 80 `workspace-<device>-N.json` files.
+- Not under Git. The vault's `CLAUDE.md` already defines APPEND-ONLY and DIRECT-MODIFY modes for agents, which the spec keeps.
+
+## Phases
+
+| Phase | What | Done when |
+|---|---|---|
+| **N0** | This plan | Committed |
+| **N1** | The [Notes Spec](notes-spec.md): drafted, marked up by Chris, frozen, moved into the vault | Chris freezes it |
+| **N2** | Baseline: a full snapshot of the vault, then `git init` on PICARD with attachments and workspace files ignored, first commit "before cleanup" | A restore from the snapshot opens in Obsidian |
+| **N3** | The cleanup (below) | The validator passes on every note, and Chris has spot-checked the result |
+| **N4** | The formatter skill (the spec packaged so every Claude surface writes conforming notes) and the validator script | A dictated sample becomes a valid note of each type |
+| **N5** | The minimal dictation pipeline: dictate, the agent files clear notes and commits, anything unclear comes back as a needs-input item | A week of real use |
+| **N6** | LifeOS agent writes at the `capture` level (agent-access plan Phase 2), so the agent can mark a capture handled, file Tasks and Ideas, and link a reflection to its review | The agent-access plan's Phase 2 tests |
+| **N7** | Reviews R5: the review links to its reflection note, and the page shows its summary and an "Open in Obsidian" link | A daily and a weekly review answered by dictation |
+| **N8** | Paperless search in `/mcp` | An agent finds a document by asking |
+
+N2 and N3 need nothing from LifeOS, so they can start as soon as the spec is frozen. N5 can start before N6 by filing only into the vault.
+
+### N3: the cleanup
+
+An agent in a Claude Code session on PICARD, working in the vault, in DIRECT-MODIFY mode.
+
+**Safety first:**
+
+1. N2's snapshot and Git baseline exist before anything changes.
+2. Obsidian is closed on the other devices while the cleanup runs, so Obsidian Sync can't merge half-finished moves. Afterwards Obsidian opens on PICARD first and syncs.
+3. Nothing is deleted. Notes leave through `98 Archive/`; Chris empties it later if he wants.
+4. Every move rewrites every link to the moved note in the same commit, since renames made outside Obsidian don't update links.
+
+**Then, in order:**
+
+1. **A manifest for Chris to approve before anything moves:** every note with its proposed type, new folder and name, front matter changes, merges, archivals, and the open tasks it holds. It's one table, with the agent's uncertain calls marked.
+2. **Batches by type,** one Git commit and one change log each: reflections (the 67 daily logs become `reflection` notes, `kind: daily`, body untouched), projects (linked to their LifeOS items by URN, with unmatched ones listed), sources (clippings), then knowledge and reference.
+3. **Tasks:** the open checkboxes are listed per note for Chris to triage into LifeOS or drop. They aren't moved automatically.
+4. **Attachments** into `90 Attachments/`, and the large videos out to OneDrive if spec question 3 says so.
+5. **System:** dashboards and templates into `99 System/`, a template per type, removed plugins uninstalled, the stale workspace files cleared, and the vault's `CLAUDE.md` rewritten to point at the spec.
+6. **Check:** the validator passes, the unresolved links are fixed or listed, and Chris opens a sample of each type.
+
+## Status
+
+- [x] N0 — This plan
+- [ ] N1 — Notes Spec (drafted 2026-11-12, waiting for Chris)
+- [ ] N2 — Vault baseline
+- [ ] N3 — Vault cleanup
+- [ ] N4 — Formatter skill and validator
+- [ ] N5 — Minimal dictation pipeline
+- [ ] N6 — LifeOS agent writes at `capture`
+- [ ] N7 — Reviews R5: reflections linked to reviews
+- [ ] N8 — Paperless search in `/mcp`
