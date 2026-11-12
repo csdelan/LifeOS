@@ -192,6 +192,24 @@ recorded in the changelog below.
    and icon plugins. Local REST API stays only if an agent uses it.
 2. **The tag list** in §4.
 3. **The starting maps** in §6.
+4. **Proposed in round 1** (2026-11-12, for Chris to accept or change; the round's tools already
+   work this way, and the copy's `99 System/Reorg round 1 report.md` explains each):
+   - a reflection's four sections are required from 2026-11-12 on; older logs keep their own
+     headings, since their writing stays untouched (§2);
+   - `98 Archive` requires only `type` and `created` (§2, §3);
+   - projects may have `area`, which the Projects map groups by; `related` may hold an Area's URN
+     when there's no Project yet (§2);
+   - small attachments are committed in Git, and only videos and files over 20 MB are ignored, so
+     Git can restore a note's images (§7);
+   - retired hubs and dashboards keep `type: moc` in the archive (§2);
+   - the validator also warns about secrets: keys, webhooks, passwords in connection strings (§8);
+   - templates in `99 System/templates/` are named `Template - <type>`, so no name clashes with a
+     map, and use Obsidian's core `{{date}}` syntax (§3);
+   - a source's `author` is a plain name, not a wiki link (§2);
+   - change logs live in `99 System/change_logs/`; the vault's `CLAUDE.md` still says
+     `_AI_Workspace` and is updated at cutover (§7).
+5. **Which LifeOS Area Blue Skies belongs to** (round 1 used Software Engineer Career for its
+   reference notes).
 
 ## Changelog
 

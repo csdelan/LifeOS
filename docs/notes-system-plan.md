@@ -169,12 +169,21 @@ An agent in a Claude Code session on PICARD. Chris keeps using the live vault as
 
 The tools (apply script, map generator, validator) are Python, kept in the vault under `99 System/tools/`, so they're versioned with it.
 
+### Round 1 (2026-11-12)
+
+- **Snapshot:** `C:\Users\csdel\Vaults\_snapshots\Chris2.0 2026-11-12 1014.zip` (628 files, 4.84 GB, every member read back), with an inventory of each file's size, date and CRC beside it. `snapshot.py compare` against it showed the live vault unchanged after the round.
+- **The copy** left out 14 videos (4.8 GB); `99 System/Media to move.md` lists each with its `Vault Media` path. Sync is off in its `core-plugins.json`. Git: `0c9e876` is the vault as found, `d7957da` the round.
+- **Result:** 169 notes moved to the type folders (54 of them to `98 Archive`), 331 checkboxes taken out, 22 links rewritten, the maps and `Home.md` generated. The validator fails only the 4 projects with no LifeOS item, and warns about 3 notes holding secrets (by location in the round report) and 5 links to notes that were never written.
+- **The manifest** is written by `99 System/reorg/build_manifest.py`, which holds every call, the summaries an agent wrote for the daily reflections, and the routine-checklist items. Change the calls there, not in the YAML.
+- **A new round** starts from the as-found commit; `99 System/tools/README.md` has the steps. Git writes every file with today's date, so `snapshot.py restore-times` puts the dates back before the apply.
+- **For N4:** the copy's Git history holds the 3 secrets, so it stays on PICARD, and they come out of the live notes before Git starts there. Plugin settings that name old folders (Iconize, Make.md) were left as they are.
+
 ## Status
 
 - [x] N0 — This plan
 - [ ] N1 — Notes Spec (draft v0.2, 2026-11-12; revised in each N3 round)
-- [ ] N2 — Snapshot and a working copy
-- [ ] N3 — Reorganize the copy, in rounds
+- [ ] N2 — Snapshot and a working copy (both made 2026-11-12; done once Chris has opened the copy in Obsidian)
+- [ ] N3 — Reorganize the copy, in rounds (round 1 applied 2026-11-12; waiting on Chris's review)
 - [ ] N4 — Freeze the spec and cut over
 - [ ] N5 — Formatter skill and media sweep
 - [ ] N6 — Minimal dictation pipeline
