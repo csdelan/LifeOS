@@ -71,6 +71,7 @@ requirements cluster and the ID says where it lives:
 | `COVER-` | Cover images: Unsplash photos on identity statements, goals and projects |
 | `HOME-` | Home environment: spaces, ratings, the Home Score |
 | `MEASURE-` | Measurements: weight, body measurements, lab results, charts beside Oura |
+| `CHECKLIST-` | Checklists: reusable procedures, run alone or inside reviews |
 | `NAV-` | Navigation shell |
 | `GEN-` | Cross-cutting conventions **and** per-subject-type object specs (Goals, Projects, Tasks, Identity Statements, Commitments, Decisions, Problems, People, Vision, …) |
 
@@ -4371,6 +4372,26 @@ Build:      building
 
 
 ---
+
+### CHECKLIST-1 — Checklists are procedures I run, on their own or as part of my reviews
+Horizon:    Pilot phase 2
+Definition: drafting
+Build:      unmapped
+
+**Workflow (Chris):**
+- "I'm reading checklist manifesto right now. I think it makes sense to incorporate many
+  checklists into my life systems processes, and some of them may be sections in
+  daily/weekly/monthly reviews." (2026-11-12)
+- "How do we manage that, since technically these are state objects (done/not done).
+  Checklists may become a first class entity eventually." (2026-11-12)
+- Interim (Notes Spec §1): until this is settled, a checklist can be written in the vault as a
+  numbered list in a `reference` note tagged `checklist`, with no checkboxes.
+- Open questions (Claude, 2026-11-12): does each run need a record of which items were done or
+  skipped, and when, or is a checklist mainly read and followed? Which checklists come first?
+
+**Ontology fit (Claude):**
+- pending (Definition is `drafting`).
+
 
 ## Cross-cutting ontology decisions
 

@@ -110,6 +110,12 @@ Live with that for a few weeks before designing the rest.
 - **2026-11-12: reflections live in the vault (option A).** Chris dictates his daily reflections; an agent summarizes and formats each into a vault note in the Notes Spec's format, and the LifeOS review links to it. This replaces SuperJournal as the home of review answers ([reviews plan](pilot/reviews-plan.md) §4). He still uses SuperJournal for other things.
 - **2026-11-12: the notes system comes before the rest of the roadmap's daily command center** (TODAY-1, TODAY-2, monthly reviews), because it also gives reviews their answers.
 - **2026-11-12: one of the first jobs after the spec is a complete cleanup of the vault,** done by an agent, so the vault is standardised as a baseline before the pipeline starts writing into it (N3).
+- **2026-11-12, Chris's answers on the draft spec:**
+  - **Folders by type,** and today's folders retired as their notes move. "This is especially not needed if my AI agents will organize and link stuff for me." Claude's reorganization suggestions stand.
+  - **Zero task objects in the vault.** "Most tasks I figure will be deleted out of Obsidian."
+  - **Large videos in a standard OneDrive place, linked from notes.** He'll have many more. Adding one mustn't need hand-linking (spec §5).
+  - **Generated maps (MoC):** for instance one for all the daily, weekly and monthly reflections with past months and years folded, per note type or as he defines them, plus a central dashboard to drill down from, all managed by agents (spec §6).
+  - **The spec is frozen only after he has seen the reorganized vault,** so the first version is reached by iterating (N3).
 
 ## The vault today (surveyed 2026-11-12)
 
@@ -126,45 +132,56 @@ Live with that for a few weeks before designing the rest.
 | Phase | What | Done when |
 |---|---|---|
 | **N0** | This plan | Committed |
-| **N1** | The [Notes Spec](notes-spec.md): drafted, marked up by Chris, frozen, moved into the vault | Chris freezes it |
-| **N2** | Baseline: a full snapshot of the vault, then `git init` on PICARD with attachments and workspace files ignored, first commit "before cleanup" | A restore from the snapshot opens in Obsidian |
-| **N3** | The cleanup (below) | The validator passes on every note, and Chris has spot-checked the result |
-| **N4** | The formatter skill (the spec packaged so every Claude surface writes conforming notes) and the validator script | A dictated sample becomes a valid note of each type |
-| **N5** | The minimal dictation pipeline: dictate, the agent files clear notes and commits, anything unclear comes back as a needs-input item | A week of real use |
-| **N6** | LifeOS agent writes at the `capture` level (agent-access plan Phase 2), so the agent can mark a capture handled, file Tasks and Ideas, and link a reflection to its review | The agent-access plan's Phase 2 tests |
-| **N7** | Reviews R5: the review links to its reflection note, and the page shows its summary and an "Open in Obsidian" link | A daily and a weekly review answered by dictation |
-| **N8** | Paperless search in `/mcp` | An agent finds a document by asking |
+| **N1** | The [Notes Spec](notes-spec.md): drafted, then revised in each N3 round | Frozen in N4 |
+| **N2** | Baseline: a full snapshot of the live vault, and a working copy to reorganize (below) | The copy opens in Obsidian as its own vault, with Sync off |
+| **N3** | The reorganization, on the copy, in rounds (below): the manifest and the script that applies it, the map generator and `Home.md`, the validator. Chris browses each round in Obsidian; the spec changes with his feedback | Chris is happy with the reorganized copy |
+| **N4** | Freeze and cut over: the spec frozen and moved into the vault, the manifest re-run on the live vault, Git started there, the videos moved to `Vault Media`, the dropped plugins removed | The live vault matches the copy and the validator passes |
+| **N5** | The formatter skill (the spec packaged so every Claude surface writes conforming notes) and the media sweep | A dictated sample becomes a valid note of each type, and a dropped video gets its note |
+| **N6** | The minimal dictation pipeline: dictate, the agent files clear notes and commits, anything unclear comes back as a needs-input item | A week of real use |
+| **N7** | LifeOS agent writes at the `capture` level (agent-access plan Phase 2), so the agent can mark a capture handled, file Tasks and Ideas, and link a reflection to its review | The agent-access plan's Phase 2 tests |
+| **N8** | Reviews R5: the review links to its reflection note, and the page shows its summary and an "Open in Obsidian" link | A daily and a weekly review answered by dictation |
+| **N9** | Paperless search in `/mcp` | An agent finds a document by asking |
 
-N2 and N3 need nothing from LifeOS, so they can start as soon as the spec is frozen. N5 can start before N6 by filing only into the vault.
+N2 to N4 need nothing from LifeOS. N6 can start before N7 by filing only into the vault.
 
-### N3: the cleanup
+### N2 and N3: reorganizing a copy
 
-An agent in a Claude Code session on PICARD, working in the vault, in DIRECT-MODIFY mode.
+An agent in a Claude Code session on PICARD. Chris keeps using the live vault as usual the whole time.
 
-**Safety first:**
+**The copy:**
 
-1. N2's snapshot and Git baseline exist before anything changes.
-2. Obsidian is closed on the other devices while the cleanup runs, so Obsidian Sync can't merge half-finished moves. Afterwards Obsidian opens on PICARD first and syncs.
-3. Nothing is deleted. Notes leave through `98 Archive/`; Chris empties it later if he wants.
-4. Every move rewrites every link to the moved note in the same commit, since renames made outside Obsidian don't update links.
+1. A full snapshot of the live vault first: a zip in `C:\Users\csdel\Vaults\_snapshots\`, checked by opening it.
+2. The working copy is `C:\Users\csdel\Vaults\Chris2.0 reorg`, without the large videos (they're only linked).
+3. **Obsidian Sync must stay off in the copy,** or the reorganization could sync into the live vault and every device. Before the copy is first opened, the `sync` core plugin is switched off in its `.obsidian/core-plugins.json`, and Chris doesn't connect it to a remote vault.
+4. Git starts in the copy, with a first commit of it as found, so every round is a diff Chris can read and undo.
 
-**Then, in order:**
+**What a round does:**
 
-1. **A manifest for Chris to approve before anything moves:** every note with its proposed type, new folder and name, front matter changes, merges, archivals, and the open tasks it holds. It's one table, with the agent's uncertain calls marked.
-2. **Batches by type,** one Git commit and one change log each: reflections (the 67 daily logs become `reflection` notes, `kind: daily`, body untouched), projects (linked to their LifeOS items by URN, with unmatched ones listed), sources (clippings), then knowledge and reference.
-3. **Tasks:** the open checkboxes are listed per note for Chris to triage into LifeOS or drop. They aren't moved automatically.
-4. **Attachments** into `90 Attachments/`, and the large videos out to OneDrive if spec question 3 says so.
-5. **System:** dashboards and templates into `99 System/`, a template per type, removed plugins uninstalled, the stale workspace files cleared, and the vault's `CLAUDE.md` rewritten to point at the spec.
-6. **Check:** the validator passes, the unresolved links are fixed or listed, and Chris opens a sample of each type.
+1. **A manifest:** every note with its type, new folder and name, front matter changes, merges and archivals, as a file the apply script reads. The agent's uncertain calls are marked in it.
+2. **An apply script** that turns the copy into the reorganized vault from the manifest, rewriting every link to a moved note. Reorganizing by script, not by hand, is what lets N4 re-run it on the live vault, which has moved on in the meantime.
+3. **Reflections:** the 67 daily logs become `reflection` notes, `kind: daily`, with their writing untouched; the routine checklists and sober-streak fields go, since LifeOS keeps both.
+4. **Tasks:** checkboxes are removed. Git keeps the old text, and a list in `99 System/` shows what was removed from each note, so Chris can carry any he wants into LifeOS.
+5. **Projects** are linked to their LifeOS items by URN, and the ones with no match are listed.
+6. **Maps and `Home.md`** generated from the starting definitions (spec §6).
+7. **The validator** runs, and the unresolved links are fixed or listed.
+8. **Nothing is deleted.** Notes leave through `98 Archive/`.
+9. Chris opens the copy in Obsidian ("Open folder as vault") and says what to change. The spec and the manifest change, and the next round starts from the snapshot again.
+
+The tools (apply script, map generator, validator) are Python, kept in the vault under `99 System/tools/`, so they're versioned with it.
 
 ## Status
 
 - [x] N0 — This plan
-- [ ] N1 — Notes Spec (drafted 2026-11-12, waiting for Chris)
-- [ ] N2 — Vault baseline
-- [ ] N3 — Vault cleanup
-- [ ] N4 — Formatter skill and validator
-- [ ] N5 — Minimal dictation pipeline
-- [ ] N6 — LifeOS agent writes at `capture`
-- [ ] N7 — Reviews R5: reflections linked to reviews
-- [ ] N8 — Paperless search in `/mcp`
+- [ ] N1 — Notes Spec (draft v0.2, 2026-11-12; revised in each N3 round)
+- [ ] N2 — Snapshot and a working copy
+- [ ] N3 — Reorganize the copy, in rounds
+- [ ] N4 — Freeze the spec and cut over
+- [ ] N5 — Formatter skill and media sweep
+- [ ] N6 — Minimal dictation pipeline
+- [ ] N7 — LifeOS agent writes at `capture`
+- [ ] N8 — Reviews R5: reflections linked to reviews
+- [ ] N9 — Paperless search in `/mcp`
+
+## Later
+
+- **Videos that play on the phone.** The `file:///` embeds play only on PCs that sync OneDrive. OneDrive share links, made by the agent through Microsoft Graph, would play anywhere.
