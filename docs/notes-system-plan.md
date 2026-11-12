@@ -116,6 +116,8 @@ Live with that for a few weeks before designing the rest.
   - **Large videos in a standard OneDrive place, linked from notes.** He'll have many more. Adding one mustn't need hand-linking (spec §5).
   - **Generated maps (MoC):** for instance one for all the daily, weekly and monthly reflections with past months and years folded, per note type or as he defines them, plus a central dashboard to drill down from, all managed by agents (spec §6).
   - **The spec is frozen only after he has seen the reorganized vault,** so the first version is reached by iterating (N3).
+- **2026-11-12: source and knowledge stay separate** (spec v0.4). A note about one outside work is a source, even in Chris's own words.
+- **2026-11-12: agents link related notes, option B** (spec v0.5 §4). "I shouldn't have to explicitly define every way to link things myself." Links go in when a note is filed and in a nightly sweep that adds them to older notes, and the existing notes get a backfill. Chris accepted the recommended details: a Related section at the end of the note, and no approval step.
 
 ## The vault today (surveyed 2026-11-12)
 
@@ -136,7 +138,7 @@ Live with that for a few weeks before designing the rest.
 | **N2** | Baseline: a full snapshot of the live vault, and a working copy to reorganize (below) | The copy opens in Obsidian as its own vault, with Sync off |
 | **N3** | The reorganization, on the copy, in rounds (below): the manifest and the script that applies it, the map generator and `Home.md`, the validator. Chris browses each round in Obsidian; the spec changes with his feedback | Chris is happy with the reorganized copy |
 | **N4** | Freeze and cut over: the spec frozen and moved into the vault, the manifest re-run on the live vault, Git started there, the videos moved to `Vault Media`, the dropped plugins removed | The live vault matches the copy and the validator passes |
-| **N5** | The formatter skill (the spec packaged so every Claude surface writes conforming notes) and the media sweep | A dictated sample becomes a valid note of each type, and a dropped video gets its note |
+| **N5** | The formatter skill (the spec packaged so every Claude surface writes conforming notes), the media sweep and the nightly related-links sweep (spec §4) | A dictated sample becomes a valid note of each type with its related links, older notes it fits link to it the next night, and a dropped video gets its note |
 | **N6** | The minimal dictation pipeline: dictate, the agent files clear notes and commits, anything unclear comes back as a needs-input item | A week of real use |
 | **N7** | LifeOS agent writes at the `capture` level (agent-access plan Phase 2), so the agent can mark a capture handled, file Tasks and Ideas, and link a reflection to its review | The agent-access plan's Phase 2 tests |
 | **N8** | Reviews R5: the review links to its reflection note, and the page shows its summary and an "Open in Obsidian" link | A daily and a weekly review answered by dictation |
@@ -176,6 +178,7 @@ The tools (apply script, map generator, validator) are Python, kept in the vault
 - **Result:** 169 notes moved to the type folders (54 of them to `98 Archive`), 331 checkboxes taken out, 22 links rewritten, the maps and `Home.md` generated. The validator fails only the 4 projects with no LifeOS item, and warns about 3 notes holding secrets (by location in the round report) and 5 links to notes that were never written.
 - **Checklists (CHECKLIST-1):** no note was a checklist on its own. Oral Care, with its numbered routine, is tagged `checklist` and is the one note on the Checklists map; the weekly planning and pre-open checklists inside 2025 reflections wait on Chris saying he still uses them.
 - **Sources and knowledge (spec v0.4):** Chris kept both and drew the line at "about one outside work". His notes on Tom Bilyeu's courses and the Wisey ADHD course, Ketogenic Expert reset and Procrastination moved to `50 Sources`, which leaves 4 knowledge notes and 28 sources.
+- **Related links (spec v0.5):** the backfill put 204 links in 81 notes' Related sections. Three agents chose them against a catalog of every note's summary, and a review dropped 12 thin ones. They live in `99 System/reorg/related.yaml`, and `notes_tools.related` writes them after the apply, keeping file dates. Before the N5 sweep does the same on the live vault, check that Obsidian Sync carries a change whose file date was kept.
 - **Follow-ups within the round** (the checklist tag, the sources move) are applied the same way: change the calls, rebuild the manifest and apply it in a throwaway as-found worktree at a short path, check that only the expected notes differ from the copy, and copy those notes in with a change log for the change. This keeps Chris's own edits in the copy.
 - **The manifest** is written by `99 System/reorg/build_manifest.py`, which holds every call, the summaries an agent wrote for the daily reflections, and the routine-checklist items. Change the calls there, not in the YAML.
 - **A new round** starts from the as-found commit; `99 System/tools/README.md` has the steps. Git writes every file with today's date, so `snapshot.py restore-times` puts the dates back before the apply.
@@ -186,11 +189,11 @@ The tools (apply script, map generator, validator) are Python, kept in the vault
 ## Status
 
 - [x] N0 — This plan
-- [ ] N1 — Notes Spec (draft v0.4, 2026-11-12; revised in each N3 round)
+- [ ] N1 — Notes Spec (draft v0.5, 2026-11-12; revised in each N3 round)
 - [ ] N2 — Snapshot and a working copy (both made 2026-11-12; done once Chris has opened the copy in Obsidian)
 - [ ] N3 — Reorganize the copy, in rounds (round 1 applied 2026-11-12; waiting on Chris's review)
 - [ ] N4 — Freeze the spec and cut over
-- [ ] N5 — Formatter skill and media sweep
+- [ ] N5 — Formatter skill, media sweep and related-links sweep
 - [ ] N6 — Minimal dictation pipeline
 - [ ] N7 — LifeOS agent writes at `capture`
 - [ ] N8 — Reviews R5: reflections linked to reviews

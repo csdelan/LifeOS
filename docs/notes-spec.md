@@ -1,6 +1,6 @@
 # Notes Spec (draft, iterating toward the first freeze)
 
-**Status: draft v0.4, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
+**Status: draft v0.5, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
 calls for. It isn't frozen yet: Chris freezes it only after he has seen the vault reorganized to
 it (notes plan N3). Until then each round of the reorganization can change it, and the
 changelog at the end records each change. Once frozen it moves into the vault as
@@ -119,6 +119,35 @@ Home.md            the dashboard (§6)
   `health`, `home`, `finance`, `trading`, `career`, `blueskies`, `learning`, `family`, `games`,
   `adhd`, `mindset`, `checklist`.
 
+### Related links an agent adds
+
+Chris doesn't link notes by hand: agents find related notes and link them (Chris, 2026-11-12). A
+reflection about losing focus, for instance, gets links to the Wisey ADHD course notes.
+
+- **Where:** a Related section at the end of the note, between `%% related:start %%` and
+  `%% related:end %%`. Each line is a link and a few words on why:
+
+  ```markdown
+  %% related:start %%
+  ## Related
+
+  - [[ADHD Day 1]]: micro-starts and body doubling, for getting started
+  %% related:end %%
+  ```
+
+  The agent writes only inside the markers. Links in Chris's own text are his, and the section
+  doesn't repeat them.
+- **What counts:** the notes share real substance, so Chris would want to open the target while
+  reading the note. A shared tag or area isn't enough. At most five, best first; none is fine.
+- **Direction:** a reflection links out to projects, knowledge, reference and sources. Nothing
+  links to a reflection, since Obsidian's backlinks list the reflections that link a note.
+  Archived notes aren't linked.
+- **When:** as a note is filed, it gets links to the notes already there. A nightly sweep goes the
+  other way: when a note arrives, older notes it fits get a line. The vault as found got one
+  backfill pass, in the reorganization (notes plan N3).
+- **No approval step.** Links appear; Chris deletes the ones that are wrong, and the agent doesn't
+  add a link he deleted again (the vault's Git history shows it).
+
 ## 5. Media
 
 - **Videos, and any file over 20 MB, live in OneDrive,** in `C:\Users\csdel\OneDrive\Vault Media\`,
@@ -168,8 +197,8 @@ work on every device and for agents, with or without plugins.
   Chris wrote needs his review.
 - **Formatting:** an agent turns a capture into a note of the right type, with the front matter,
   summary and links above, and keeps the raw text untouched in `transcript`.
-- **Organizing and linking is the agents' job,** within this spec: filing, naming, links that
-  reflect real relationships, the maps and the media sweep.
+- **Organizing and linking is the agents' job,** within this spec: filing, naming, the related
+  links and their nightly sweep (§4), the maps and the media sweep.
 - **When unsure,** it files nothing and asks through the inbox with two to four options and its
   recommendation.
 - **Git:** the vault is a Git repository on PICARD only. One commit per processed item, naming the
@@ -237,3 +266,7 @@ recorded in the changelog below.
   his own thinking and may name where an idea came from in `source` (§1, §2). Round 1's notes on
   Tom Bilyeu's courses, the Wisey ADHD course, Ketogenic Expert reset and Procrastination move to
   `50 Sources`.
+- 2026-11-12, v0.5, Chris's call on linking (option B): agents link related notes, as each note is
+  filed and in a nightly sweep that adds links to older notes, in a Related section between
+  markers at the end of the note. Reflections link out, nothing links to a reflection, and there's
+  no approval step (§4, §7). The existing notes get links in a backfill pass.
