@@ -1,6 +1,6 @@
 # Notes Spec (draft, iterating toward the first freeze)
 
-**Status: draft v0.6, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
+**Status: draft v0.7, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
 calls for. It isn't frozen yet: Chris freezes it only after he has seen the vault reorganized to
 it (notes plan N3). Until then each round of the reorganization can change it, and the
 changelog at the end records each change. Once frozen it moves into the vault as
@@ -137,7 +137,8 @@ reflection about losing focus, for instance, gets links to the Wisey ADHD course
   ```
 
   The agent writes only inside the markers. Links in Chris's own text are his, and the section
-  doesn't repeat them.
+  doesn't repeat them. The markers are Obsidian comments: Reading view hides them, and the
+  `hide-comments` CSS snippet hides them in Live Preview too. Source mode shows them.
 - **Four kinds of link, and nothing else** (Chris, 2026-11-12, after the first backfill made the
   graph a web where everything linked to everything):
   - **Part of:** a lesson and its course, or a design note and its project.
@@ -204,8 +205,8 @@ work on every device and for agents, with or without plugins.
   `98 Archive` and `99 System`, which link to most notes and would draw everything into one web.
   The filter is `-path:"05 MoC" -path:"Home.md" -path:"98 Archive" -path:"99 System"`, with
   tags off. Chris can switch them back on in the graph's settings.
-- **Generated text sits between markers** (`%% generated:start %%` and `%% generated:end %%`). Text
-  Chris writes above the start marker is kept; anything inside is replaced on the next build.
+- **Maps and `Home.md` are wholly generated.** Everything below the front matter is rebuilt each
+  time, so they carry no markers; to change a map, change its definition.
 
 ## 7. Agents in the vault
 
@@ -291,3 +292,6 @@ recorded in the changelog below.
   of four kinds (part of, continues, answers, same thing), and a shared theme is never enough; at
   most two per note, one direction only, and a series links to its hub (§4). The graph view
   hides the maps, Home, tags, the archive and `99 System` (§6).
+- 2026-11-12, v0.7, so Chris doesn't see the `%%` markers while reading: maps and `Home.md` are
+  wholly generated and carry none, and a CSS snippet hides the Related section's markers in Live
+  Preview (§4, §6).

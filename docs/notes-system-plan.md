@@ -190,7 +190,7 @@ The tools (apply script, map generator, validator) are Python, kept in the vault
 ## Status
 
 - [x] N0 — This plan
-- [ ] N1 — Notes Spec (draft v0.6, 2026-11-12; revised in each N3 round)
+- [ ] N1 — Notes Spec (draft v0.7, 2026-11-12; revised in each N3 round)
 - [ ] N2 — Snapshot and a working copy (both made 2026-11-12; done once Chris has opened the copy in Obsidian)
 - [ ] N3 — Reorganize the copy, in rounds (round 1 applied 2026-11-12; waiting on Chris's review)
 - [ ] N4 — Freeze the spec and cut over
