@@ -1,6 +1,6 @@
 # Notes Spec (draft, iterating toward the first freeze)
 
-**Status: draft v0.2, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
+**Status: draft v0.3, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
 calls for. It isn't frozen yet: Chris freezes it only after he has seen the vault reorganized to
 it (notes plan N3). Until then each round of the reorganization can change it, and the
 changelog at the end records each change. Once frozen it moves into the vault as
@@ -23,7 +23,7 @@ the vault holds text worth keeping, and agents keep it organized and linked.
 | Something someone else made: articles, clippings, books, videos, courses | **Vault** (`source`) | |
 | Videos and other large media | **OneDrive** `Vault Media` (§5) | Too big for the vault and for Obsidian Sync; a note links to each one. |
 | Documents and scans | **Paperless** | Linked by `paperless:<id>`, never copied in. |
-| Checklists | **To decide** (CHECKLIST-1) | Until then, a checklist is a numbered list in a `reference` note tagged `checklist`, with no checkboxes. |
+| Checklists | **Vault** (`reference` tagged `checklist`) | Chris decided on 2026-11-12 to read and follow them first (CHECKLIST-1): a checklist is a numbered list with no checkboxes. Runs aren't recorded; a reflection mentions anything skipped. A LifeOS Checklist type that records runs may come later. |
 
 **Zero task objects in the vault** (Chris, 2026-11-12). No `- [ ]` checkboxes anywhere: the
 validator fails a note that has one. Work to be done goes to LifeOS.
@@ -145,6 +145,7 @@ work on every device and for agents, with or without plugins.
     line is the note's link and its one-line summary.
   - **Projects:** grouped by LifeOS Area, each linking its LifeOS item.
   - **Knowledge, Reference and Sources:** one map each, grouped by tag.
+  - **Checklists:** the `reference` notes tagged `checklist`, in one list by name.
 - **`Home.md` is the dashboard,** also generated:
   - today's and this week's reflections, or a line saying they're missing;
   - a link to every map, with its count;
@@ -174,9 +175,9 @@ work on every device and for agents, with or without plugins.
 ## 8. Enforcement
 
 A validator checks each note against a JSON Schema for its type (`99 System/schemas/`): the
-required front matter, the folder matching the type, unique names, tags from the list, a
-reflection's sections, and no checkboxes. A note that fails goes to the needs-fixing list on
-`Home.md` instead of being accepted quietly.
+required front matter, the folder matching the type, unique names, tags from the list, the
+`checklist` tag only on `reference` notes, a reflection's sections, and no checkboxes. A note
+that fails goes to the needs-fixing list on `Home.md` instead of being accepted quietly.
 
 ## 9. Freeze rule
 
@@ -219,3 +220,8 @@ recorded in the changelog below.
   `Vault Media` with notes linking to it, and new files linked by the agent (§5); generated maps
   and a generated `Home.md` dashboard (§6); the first freeze only after Chris has seen the
   reorganized vault (§9); checklists recorded as CHECKLIST-1, with an interim rule (§1).
+- 2026-11-12, v0.3, Chris's decision on checklists (CHECKLIST-1): read and follow first. The
+  interim rule becomes the rule: a checklist is a numbered list in a `reference` note tagged
+  `checklist`, runs aren't recorded, and a reflection mentions anything skipped (§1). A
+  Checklists map joins the starting set (§6), and the validator fails a `checklist` tag on any
+  other type (§8).
