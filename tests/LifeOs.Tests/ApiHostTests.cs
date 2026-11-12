@@ -129,6 +129,29 @@ public sealed class ApiHostTests
     }
 
     [Fact]
+    public async Task Production_pages_may_record_and_play_back_voice_captures()
+    {
+        // Voice capture (CAP-2) was built in mock mode, which sends no headers, and staging's
+        // microphone=() refused the mic whatever Chrome's site settings said.
+        await using var host = await StartAsync(Ct, environmentName: "Production");
+        var response = await host.Client.GetAsync("/health", Ct);
+
+        var permissions = Assert.Single(response.Headers.GetValues("Permissions-Policy"))
+            .Split(", ")
+            .ToDictionary(p => p.Split('=')[0], p => p.Split('=')[1]);
+        Assert.Equal("(self)", permissions["microphone"]);
+        Assert.Equal("(self)", permissions["camera"]);
+        Assert.Equal("()", permissions["geolocation"]);
+
+        // The recording plays back from a blob: URL before it's saved, and kept audio in the
+        // Inbox does too, so media-src must allow blob: (it would otherwise fall back to 'self').
+        var media = Assert.Single(response.Headers.GetValues("Content-Security-Policy"))
+            .Split("; ")
+            .Single(d => d.StartsWith("media-src ", StringComparison.Ordinal));
+        Assert.Equal("media-src 'self' blob:", media);
+    }
+
+    [Fact]
     public void Spa_fallback_does_not_capture_api_or_health()
     {
         Assert.True(SpaFallback.IsReserved("/api/subjects"));

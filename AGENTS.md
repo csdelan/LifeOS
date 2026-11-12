@@ -101,6 +101,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 
 - Web-only UI: mock mode, `npm --prefix web run dev -- --mode mock --port 5174`. The mock store
   resets on every reload, so make the change and click through it in one page load.
+- Mock mode sends none of the API's security headers. A feature that uses a browser permission
+  (camera, microphone, location) or loads from a new kind of URL also needs
+  `src/LifeOs.Api/Http/SecurityHeaders.cs` changed, or it breaks only on staging.
 - With the real API and a database, or in the WinForms Pilot: the recipes are in
   [docs/agents/verifying.md](docs/agents/verifying.md), including faking sign-in and Oura.
 
