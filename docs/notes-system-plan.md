@@ -175,6 +175,8 @@ The tools (apply script, map generator, validator) are Python, kept in the vault
 - **The copy** left out 14 videos (4.8 GB); `99 System/Media to move.md` lists each with its `Vault Media` path. Sync is off in its `core-plugins.json`. Git: `0c9e876` is the vault as found, `d7957da` the round.
 - **Result:** 169 notes moved to the type folders (54 of them to `98 Archive`), 331 checkboxes taken out, 22 links rewritten, the maps and `Home.md` generated. The validator fails only the 4 projects with no LifeOS item, and warns about 3 notes holding secrets (by location in the round report) and 5 links to notes that were never written.
 - **Checklists (CHECKLIST-1):** no note was a checklist on its own. Oral Care, with its numbered routine, is tagged `checklist` and is the one note on the Checklists map; the weekly planning and pre-open checklists inside 2025 reflections wait on Chris saying he still uses them.
+- **Sources and knowledge (spec v0.4):** Chris kept both and drew the line at "about one outside work". His notes on Tom Bilyeu's courses and the Wisey ADHD course, Ketogenic Expert reset and Procrastination moved to `50 Sources`, which leaves 4 knowledge notes and 28 sources.
+- **Follow-ups within the round** (the checklist tag, the sources move) are applied the same way: change the calls, rebuild the manifest and apply it in a throwaway as-found worktree at a short path, check that only the expected notes differ from the copy, and copy those notes in with a change log for the change. This keeps Chris's own edits in the copy.
 - **The manifest** is written by `99 System/reorg/build_manifest.py`, which holds every call, the summaries an agent wrote for the daily reflections, and the routine-checklist items. Change the calls there, not in the YAML.
 - **A new round** starts from the as-found commit; `99 System/tools/README.md` has the steps. Git writes every file with today's date, so `snapshot.py restore-times` puts the dates back before the apply.
 - **The one write to the live vault,** at Chris's request: heading sizes 28, 24, 22 and 20 px in `.obsidian/snippets/colors.css`, the same file as the copy's. `snapshot.py compare` lists it as changed, along with the settings and Make.md caches Obsidian rewrites as he uses the vault.
@@ -184,7 +186,7 @@ The tools (apply script, map generator, validator) are Python, kept in the vault
 ## Status
 
 - [x] N0 — This plan
-- [ ] N1 — Notes Spec (draft v0.3, 2026-11-12; revised in each N3 round)
+- [ ] N1 — Notes Spec (draft v0.4, 2026-11-12; revised in each N3 round)
 - [ ] N2 — Snapshot and a working copy (both made 2026-11-12; done once Chris has opened the copy in Obsidian)
 - [ ] N3 — Reorganize the copy, in rounds (round 1 applied 2026-11-12; waiting on Chris's review)
 - [ ] N4 — Freeze the spec and cut over

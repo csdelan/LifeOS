@@ -1,6 +1,6 @@
 # Notes Spec (draft, iterating toward the first freeze)
 
-**Status: draft v0.3, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
+**Status: draft v0.4, 2026-11-12.** This is the spec the [notes system plan](notes-system-plan.md)
 calls for. It isn't frozen yet: Chris freezes it only after he has seen the vault reorganized to
 it (notes plan N3). Until then each round of the reorganization can change it, and the
 changelog at the end records each change. Once frozen it moves into the vault as
@@ -18,15 +18,22 @@ the vault holds text worth keeping, and agents keep it organized and linked.
 | Tasks, projects' status and dates, habits, ideas, decisions, appointments | **LifeOS** | They have a status and a due date, earn XP and show on Focus. |
 | Reflections: daily, weekly and monthly reviews, journaling | **Vault** (`reflection`) | Chris decided this on 2026-11-12 (reviews plan §4). The LifeOS review links to the note. |
 | Working notes for a LifeOS Project, Goal or Area: brainstorming, research, support material | **Vault** (`project`) | Long text; the item itself stays in LifeOS. |
-| Chris's own understanding of a topic: lessons, frameworks, course takeaways | **Vault** (`knowledge`) | |
+| Chris's own thinking: his rules, ideas and conclusions, not tied to one work | **Vault** (`knowledge`) | It may say where an idea came from in `source`. |
 | Facts to look up later: the house, appliances, supplements, how-tos, account details (never passwords) | **Vault** (`reference`) | |
-| Something someone else made: articles, clippings, books, videos, courses | **Vault** (`source`) | |
+| Something someone else made, or Chris's notes on it: articles, clippings, books, videos, courses | **Vault** (`source`) | Chris decided on 2026-11-12 that notes on one work are a source, even in his own words. |
 | Videos and other large media | **OneDrive** `Vault Media` (§5) | Too big for the vault and for Obsidian Sync; a note links to each one. |
 | Documents and scans | **Paperless** | Linked by `paperless:<id>`, never copied in. |
 | Checklists | **Vault** (`reference` tagged `checklist`) | Chris decided on 2026-11-12 to read and follow them first (CHECKLIST-1): a checklist is a numbered list with no checkboxes. Runs aren't recorded; a reflection mentions anything skipped. A LifeOS Checklist type that records runs may come later. |
 
 **Zero task objects in the vault** (Chris, 2026-11-12). No `- [ ]` checkboxes anywhere: the
 validator fails a note that has one. Work to be done goes to LifeOS.
+
+**Source or knowledge** (Chris, 2026-11-12). Ask whether the note is about one outside work. If it
+is, it's a `source`, whether it holds the work's own text or Chris's notes on it: his notes on
+Tom Bilyeu's courses and on each day of the Wisey ADHD course are sources, with `source` naming
+the course. If it's his own thinking, drawn from many places or none (My Rules in Life), it's
+`knowledge`. The line lets an agent tell an author's view from Chris's own, and keeps long
+clippings out of the list of his own ideas.
 
 ## 2. Note types
 
@@ -37,7 +44,7 @@ Generated maps (§6) are system notes with `type: moc`, not a sixth content type
 |---|---|---|---|
 | `reflection` | `10 Reflections/` | `kind` (`daily`, `weekly`, `monthly`, `journal`), `period`, `summary` | `review`, `transcript`, `tags` |
 | `project` | `20 Projects/` | `related` (at least one LifeOS URN) | `tags` |
-| `knowledge` | `30 Knowledge/` | — | `area`, `related`, `tags` |
+| `knowledge` | `30 Knowledge/` | — | `source` (where an idea came from), `area`, `related`, `tags` |
 | `reference` | `40 Reference/` | — | `area`, `related`, `tags` |
 | `source` | `50 Sources/` | `source` (URL or citation), `summary` | `author`, `published`, `media`, `area`, `related`, `tags` |
 
@@ -225,3 +232,8 @@ recorded in the changelog below.
   `checklist`, runs aren't recorded, and a reflection mentions anything skipped (§1). A
   Checklists map joins the starting set (§6), and the validator fails a `checklist` tag on any
   other type (§8).
+- 2026-11-12, v0.4, Chris's call on sources and knowledge: `source` and `knowledge` stay
+  separate. A note about one outside work is a source, even in Chris's own words; knowledge is
+  his own thinking and may name where an idea came from in `source` (§1, §2). Round 1's notes on
+  Tom Bilyeu's courses, the Wisey ADHD course, Ketogenic Expert reset and Procrastination move to
+  `50 Sources`.
