@@ -177,6 +177,8 @@ The tools (apply script, map generator, validator) are Python, kept in the vault
 - **Checklists (CHECKLIST-1):** no note was a checklist on its own. Oral Care, with its numbered routine, is tagged `checklist` and is the one note on the Checklists map; the weekly planning and pre-open checklists inside 2025 reflections wait on Chris saying he still uses them.
 - **The manifest** is written by `99 System/reorg/build_manifest.py`, which holds every call, the summaries an agent wrote for the daily reflections, and the routine-checklist items. Change the calls there, not in the YAML.
 - **A new round** starts from the as-found commit; `99 System/tools/README.md` has the steps. Git writes every file with today's date, so `snapshot.py restore-times` puts the dates back before the apply.
+- **The one write to the live vault,** at Chris's request: heading sizes 28, 24, 22 and 20 px in `.obsidian/snippets/colors.css`, the same file as the copy's. `snapshot.py compare` lists it as changed, along with the settings and Make.md caches Obsidian rewrites as he uses the vault.
+- **Edits Chris makes in the copy** are lost when a new round resets it to the as-found commit, so each round first commits them and carries any he wants to keep into the live vault or the manifest.
 - **For N4:** the copy's Git history holds the 3 secrets, so it stays on PICARD, and they come out of the live notes before Git starts there. Plugin settings that name old folders (Iconize, Make.md) were left as they are.
 
 ## Status
