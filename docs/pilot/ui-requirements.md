@@ -4384,10 +4384,12 @@ Build:      unmapped
   daily/weekly/monthly reviews." (2026-11-12)
 - "How do we manage that, since technically these are state objects (done/not done).
   Checklists may become a first class entity eventually." (2026-11-12)
-- Interim (Notes Spec §1): until this is settled, a checklist can be written in the vault as a
-  numbered list in a `reference` note tagged `checklist`, with no checkboxes.
-- Open questions (Claude, 2026-11-12): does each run need a record of which items were done or
-  skipped, and when, or is a checklist mainly read and followed? Which checklists come first?
+- **Decided (Chris, 2026-11-12): read and follow first.** A checklist is a numbered list in a
+  vault `reference` note tagged `checklist`, with no checkboxes (Notes Spec §1). Runs aren't
+  recorded; a reflection mentions anything skipped. A Checklist type in LifeOS that records each
+  run, with check-offs inside reviews, waits until Chris wants to see patterns across runs.
+- Open question (Claude, 2026-11-12): which checklists come first (for example the weekly
+  review, pre-trade, travel)?
 
 **Ontology fit (Claude):**
 - pending (Definition is `drafting`).
