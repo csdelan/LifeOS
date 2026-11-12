@@ -233,7 +233,8 @@ The tools for it are in the copy's `99 System/tools/`: `media` (plan, move, rest
   - The media dry run removed empty folders, which it mustn't. It removed the empty `10 - Projects/Untitled`, which the apply would have removed anyway.
   - The empty `Tags` folder has Windows' read-only mark, which blocks removing it. The tools now clear the mark.
   - Chris's removal of the secrets moved three notes' file dates, which the manifest uses when a note has no `created`. Tech Stack, Discord Bot Poster and LifeOS Pilot Punchlist keep their dates as found (`CREATED` in `build_manifest.py`).
-- **Left:** steps 9 to 11, and linking Clean the House once its Project exists.
+- **Step 9, the first sync, 14:02.** Sync stayed connected and no note came back at an old path, but another device was still open with the old plugins. The reorganization reached it as new files, so Templater filled in the five archived templates (Another template example renamed itself to `2026-11-12 - Daily Note`), and Iconize dropped its icons for the old paths and uploaded its settings, which brought back `.obsidian/plugins/obsidian-icon-folder/data.json` (so PICARD's Sync does sync installed plugins). Committed as found (`57df40a`); the originals are in Git. `validate --secrets` crashed on the renamed template, which Git still listed; fixed (`7270519`).
+- **Left:** step 10 and 11; the five templates put back from Git and Iconize's settings moved to HOLD, once no device runs those plugins; and linking Clean the House once its Project exists.
 
 ## Status
 
@@ -241,7 +242,7 @@ The tools for it are in the copy's `99 System/tools/`: `media` (plan, move, rest
 - [x] N1 — Notes Spec (frozen at v1.0 on 2026-11-12; it lives in the vault as `99 System/Notes Spec.md`)
 - [x] N2 — Snapshot and a working copy (2026-11-12; Chris opened the copy in Obsidian the same day)
 - [x] N3 — Reorganize the copy, in rounds (round 1 and its follow-ups, approved by Chris 2026-11-12 at spec v0.7)
-- [ ] N4 — Freeze the spec and cut over (cut over on PICARD 2026-11-12; waits on the first sync and Clean the House's Project)
+- [ ] N4 — Freeze the spec and cut over (cut over and first sync on PICARD 2026-11-12; waits on the other devices and Clean the House's Project)
 - [ ] N5 — Formatter skill, media sweep and related-links sweep
 - [ ] N6 — Minimal dictation pipeline
 - [ ] N7 — LifeOS agent writes at `capture`
