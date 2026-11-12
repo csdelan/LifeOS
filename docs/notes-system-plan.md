@@ -238,6 +238,18 @@ The tools for it are in the copy's `99 System/tools/`: `media` (plan, move, rest
 - **Clean the House,** 14:26. Chris chose to delete its two notes instead of making a Project for them (vault `d53d279`, with a change log; Git and the snapshot keep them). The validator now fails no note, so N4 is done.
 - **Left:** step 11, Chris's, whenever he's ready.
 
+### N5: the formatter skill and the nightly sweep
+
+Designed 2026-11-12, when Chris said to start N5. Everything runs on PICARD, where the vault's Git is, and is built in the vault's `99 System/` with tests, in this order:
+
+1. **Links Chris deletes stay deleted** (spec §4). `related` writes every note's Related section from `related.yaml`, so today a link Chris deletes in Obsidian would come back at the next run. `related harvest` runs first each time: a link that's in the YAML but no longer in its note moves to a `declined` list there, and `related` never adds a declined link again.
+2. **The media sweep** (spec §5), `media sweep`. It moves any video or file over 20 MB out of the vault into `Vault Media\<year>\` (copy, check SHA-256, then remove the vault's copy), and rewrites every embed or link to it the §5 way. It also lists the files in `Vault Media` that no note links. It's deterministic; the agent writes a `source` note for each listed file, or asks.
+3. **The formatter skill,** `notes-formatter`, kept in the vault at `99 System/skills/notes-formatter/`. It is the spec as a procedure: decide the type (§1), name the note (§3), write the front matter its schema asks for and the body (a reflection's four sections), keep the raw words in `95 Transcripts` and point `transcript` at them, add up to two Related links through `related.yaml` and `related`, then validate, rebuild the maps, write the change log and commit. When unsure, it files nothing: the capture stays in `00 Inbox` with its question appended (APPEND-ONLY), where Home lists it, until N7 gives agents LifeOS's inbox. On PICARD a junction in `%USERPROFILE%\.claude\skills\` gives it to every Claude Code session. For the phone and claude.ai, `skills build` zips it with the spec, schemas and templates for Chris to upload; there it writes the note's text, since it can't reach the vault.
+4. **The nightly sweep,** a Claude desktop scheduled task on PICARD at 3:00 AM, like the 4 AM daily report. It commits Chris's own edits since the last run, runs `related harvest` and `media sweep`, writes notes for unlinked media, and for each note added since the last sweep adds its links and the lines older notes should get (§4's rules). Then `related`, `maps` and `validate`, one commit and a change log. It changes nothing outside Related sections and the notes it writes, and never pushes (the vault has no remote). Chris approves the task before it's created.
+5. **The check** (the phase's "done when"), on a copy of the vault: sample captures, written for the test, become a valid note of each type with links; the sweep links an older note to a new one; a video dropped into a stand-in `Vault Media` gets its note.
+
+Decided rather than asked, since one option wins: a desktop scheduled task, not Task Scheduler with `claude -p` (which can bill the API) or a cloud routine (which can't reach the vault); and questions waiting in `00 Inbox` until N7.
+
 ## Status
 
 - [x] N0 — This plan
