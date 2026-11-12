@@ -223,13 +223,25 @@ The tools for it are in the copy's `99 System/tools/`: `media` (plan, move, rest
 10. **The other devices,** one at a time: open Obsidian and let it sync.
 11. **Later, Chris** deletes HOLD once he's happy (the videos are in OneDrive) and decides what happens to the copy, whose Git history holds the old secrets.
 
+**Cut over on PICARD, 2026-11-12, 13:53 to 14:05,** after Chris had done his three steps, except a Project for Clean the House, which he'll add later. Steps 1 to 8 ran as written:
+
+- **Snapshot** `Chris2.0 2026-11-12 1353.zip`, identical to the rehearsal's of 13:51.
+- **Git** in the live vault: `910c6e0` is the vault as found, `151e291` the spec and `CLAUDE.md`. In between: the tools, the media list, the videos moved, the manifest, the reorganization (`aea69d7`) and the plugins.
+- **HOLD** is `C:\Users\csdel\Vaults\_cutover\2026-11-12\`: `media\` has the 13 video originals, `plugins\` the 11 plugins with Make.md's caches and Iconize's icons.
+- **The validator** fails only Clean the House, and warns about the 5 links to notes never written.
+- **Found and fixed on the way:**
+  - The media dry run removed empty folders, which it mustn't. It removed the empty `10 - Projects/Untitled`, which the apply would have removed anyway.
+  - The empty `Tags` folder has Windows' read-only mark, which blocks removing it. The tools now clear the mark.
+  - Chris's removal of the secrets moved three notes' file dates, which the manifest uses when a note has no `created`. Tech Stack, Discord Bot Poster and LifeOS Pilot Punchlist keep their dates as found (`CREATED` in `build_manifest.py`).
+- **Left:** steps 9 to 11, and linking Clean the House once its Project exists.
+
 ## Status
 
 - [x] N0 — This plan
-- [ ] N1 — Notes Spec (draft v0.8, 2026-11-12; frozen at the cutover)
+- [x] N1 — Notes Spec (frozen at v1.0 on 2026-11-12; it lives in the vault as `99 System/Notes Spec.md`)
 - [x] N2 — Snapshot and a working copy (2026-11-12; Chris opened the copy in Obsidian the same day)
 - [x] N3 — Reorganize the copy, in rounds (round 1 and its follow-ups, approved by Chris 2026-11-12 at spec v0.7)
-- [ ] N4 — Freeze the spec and cut over (prepared and rehearsed 2026-11-12; waits on Chris's three steps before the day)
+- [ ] N4 — Freeze the spec and cut over (cut over on PICARD 2026-11-12; waits on the first sync and Clean the House's Project)
 - [ ] N5 — Formatter skill, media sweep and related-links sweep
 - [ ] N6 — Minimal dictation pipeline
 - [ ] N7 — LifeOS agent writes at `capture`
