@@ -27,7 +27,7 @@ For a Markdown vault that LifeOS indexes, Syncthing fits better, and Git should 
 
 **Recommended setup:** Syncthing for device sync, an always-on machine as the hub, and a Git repo for history. AI writes become commits you can diff and revert, which gives provenance and auditability for free.
 
-**Update (2026-11-12): stay on Obsidian Sync.** The vault (`C:\Users\csdel\Vaults\Chris2.0`) already syncs across PICARD, Mercury, Venus and Jupiter with Obsidian Sync, which works on Android and keeps version history. Moving to Syncthing would add work without fixing a problem. Git still sits alongside, on PICARD only; Obsidian Sync skips dot-folders, so `.git` stays local. PICARD is the hub: agents work on its copy of the vault.
+**Update (2026-11-12): stay on Obsidian Sync.** The vault (`C:\Users\csdel\Vaults\Chris2.0`) already syncs across PICARD, Earth and Jupiter (Chris's laptop) with Obsidian Sync, which works on Android and keeps version history. Moving to Syncthing would add work without fixing a problem. Git still sits alongside, on PICARD only; Obsidian Sync skips dot-folders, so `.git` stays local. PICARD is the hub: agents work on its copy of the vault.
 
 ## The fix: decide once, freeze it, enforce it with tooling
 
@@ -207,7 +207,7 @@ The tools for it are in the copy's `99 System/tools/`: `media` (plan, move, rest
 
 1. Moves the three secrets into his password manager and deletes them from the notes: the database password in Blue Skies' Tech Stack, the two Discord lines in Discord Bot Poster, and the key in LifeOS Pilot Punchlist. Then rotates the webhook and the key. Git keeps whatever its first commit holds, so `validate --secrets` must find nothing before it.
 2. Creates a LifeOS Project for each of Clean the House, Front lawn Sprinkler system, Full 2026 Budget, and Inbox to Zero and Sustaining, and re-authorizes the LifeOS connector (`/mcp`) so the agent can read their URNs.
-3. Picks a time. Just before it, on each device (PICARD, Mercury, Venus, Jupiter): opens Obsidian, lets Sync finish, and closes it. Nothing may change the vault until step 9.
+3. Picks a time. Just before it, on each device (PICARD, Earth, Jupiter): opens Obsidian, lets Sync finish, and closes it. Nothing may change the vault until step 9.
 
 **The cutover,** by an agent on PICARD with Chris at hand. `LIVE` is `C:\Users\csdel\Vaults\Chris2.0`; `HOLD` is `C:\Users\csdel\Vaults\_cutover\<date>`, outside the vault so Sync never sees it. Until step 3 copies the tools in, they run from the copy's `99 System/tools` with `uv run python -X utf8 -m notes_tools.<tool>`.
 
@@ -233,8 +233,9 @@ The tools for it are in the copy's `99 System/tools/`: `media` (plan, move, rest
   - The media dry run removed empty folders, which it mustn't. It removed the empty `10 - Projects/Untitled`, which the apply would have removed anyway.
   - The empty `Tags` folder has Windows' read-only mark, which blocks removing it. The tools now clear the mark.
   - Chris's removal of the secrets moved three notes' file dates, which the manifest uses when a note has no `created`. Tech Stack, Discord Bot Poster and LifeOS Pilot Punchlist keep their dates as found (`CREATED` in `build_manifest.py`).
-- **Step 9, the first sync, 14:02.** Sync stayed connected and no note came back at an old path, but another device was still open with the old plugins. The reorganization reached it as new files, so Templater filled in the five archived templates (Another template example renamed itself to `2026-11-12 - Daily Note`), and Iconize dropped its icons for the old paths and uploaded its settings, which brought back `.obsidian/plugins/obsidian-icon-folder/data.json` (so PICARD's Sync does sync installed plugins). Committed as found (`57df40a`); the originals are in Git. `validate --secrets` crashed on the renamed template, which Git still listed; fixed (`7270519`).
-- **Left:** step 10 and 11; the five templates put back from Git and Iconize's settings moved to HOLD, once no device runs those plugins; and linking Clean the House once its Project exists.
+- **Step 9, the first sync, 14:02.** Sync stayed connected and no note came back at an old path, but another device (Earth or Jupiter) was still open with the old plugins. The reorganization reached it as new files, so Templater filled in the five archived templates (Another template example renamed itself to `2026-11-12 - Daily Note`), and Iconize dropped its icons for the old paths and uploaded its settings, which brought back `.obsidian/plugins/obsidian-icon-folder/data.json` (so PICARD's Sync does sync installed plugins). Committed as found (`57df40a`); the originals are in Git. `validate --secrets` crashed on the renamed template, which Git still listed; fixed (`7270519`).
+- **Step 10.** Jupiter restarted, checked its plugins and synced; it changed nothing on PICARD. The device list this plan first gave (Mercury, Venus) came from old workspace files in the vault; Obsidian runs on PICARD, Earth and Jupiter.
+- **Left:** step 10 on Earth, and step 11; the five templates put back from Git and Iconize's settings moved to HOLD, once no device runs those plugins; and linking Clean the House once its Project exists.
 
 ## Status
 
