@@ -203,15 +203,32 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, st
         }
     }
 
-    /// <summary>The subject to insert, with the status its type is born with, if any.</summary>
+    /// <summary>
+    /// The subject to insert, with the status its type is born with, if any. A Task made with a
+    /// pattern is a repeating Task (D16), so one it can't repeat on is refused here, before
+    /// anything is written, whichever door made it.
+    /// </summary>
     private NewSubject Insertable(
         string urn, string type, string title, string attributesJson, Guid? originEventId = null)
-        => new(urn, type, title, Recurrence.NormalizeAttributes(attributesJson), originEventId)
+    {
+        var attributes = Recurrence.NormalizeAttributes(attributesJson);
+        if (type == SubjectTypes.Task && PatternOf(attributes) is { } pattern)
+        {
+            TaskSeries.CheckTaskPattern(pattern);
+        }
+
+        return new(urn, type, title, attributes, originEventId)
         {
             Status = StatusVocabulary.InitialStatusFor(type) is { } status
                 ? new InitialStatus(status, clock.UtcNow, sourceId)
                 : null
         };
+    }
+
+    private static string? PatternOf(string attributesJson)
+        => string.IsNullOrWhiteSpace(attributesJson)
+            ? null
+            : (System.Text.Json.Nodes.JsonNode.Parse(attributesJson) as System.Text.Json.Nodes.JsonObject)?[Recurrence.AttributeKey]?.ToJsonString();
 
     // Trim and collapse internal whitespace runs to a single space.
     private static string NormalizeTitle(string title)

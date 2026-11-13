@@ -500,6 +500,15 @@ public sealed class TaskSeriesTests(PostgresFixture postgres)
         await Assert.ThrowsAsync<ArgumentException>(() => k.Attributes.SetAsync(
             cue.Urn, [new AttributeAssignment(Recurrence.AttributeKey, Recurrence.Trigger("after dinner"))], Ct));
         Assert.Null(await AttributeAsync(cue.Id, Recurrence.AttributeKey));
+
+        // Made with a cue, as `bsk new Task --attr recurrence=…` or the API does: refused, unwritten.
+        var title = Unique("Cue at birth");
+        await Assert.ThrowsAsync<ArgumentException>(() => k.Subjects.CreateAsync(
+            SubjectTypes.Task, title, $$"""{"{{Recurrence.AttributeKey}}": {{Recurrence.Trigger("after dinner")}}}""",
+            cancellationToken: Ct));
+        await using var c = await OpenAsync();
+        Assert.Equal(0, await c.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject WHERE title = @title;", new { title }, cancellationToken: Ct)));
     }
 
     // -----------------------------------------------------------------------------------

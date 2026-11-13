@@ -103,15 +103,6 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("relation only applies with parent."));
         }
 
-        // A Task made with a pattern is a repeating Task (D16): one it can't repeat on is refused
-        // before anything is written.
-        if (canonicalType == SubjectTypes.Task
-            && attributes[Recurrence.AttributeKey] is JsonValue pattern
-            && pattern.TryGetValue<string>(out var patternText))
-        {
-            TaskSeries.CheckTaskPattern(Recurrence.Canonicalize(patternText));
-        }
-
         SubjectRef created;
         if (!string.IsNullOrWhiteSpace(body.Parent))
         {
