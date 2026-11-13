@@ -42,4 +42,7 @@ public interface IEventStore
 public interface IEventReader
 {
     Task<SourceEvent?> FindAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Whether any <c>triage</c> event names <paramref name="itemId"/>: it was flagged or cleared at least once.</summary>
+    Task<bool> EverTriagedAsync(Guid itemId, CancellationToken cancellationToken = default);
 }

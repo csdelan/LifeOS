@@ -53,7 +53,6 @@ public static class CaptureEndpoints
         [FromForm] string? description,
         [FromForm] string? type,
         [FromForm] string? title,
-        AttachmentService attachments,
         InboxFilingService filing,
         CancellationToken cancellationToken)
     {
@@ -62,31 +61,12 @@ public static class CaptureEndpoints
             return Results.BadRequest(new ApiError("Send the document as multipart/form-data, in a field named file."));
         }
 
-        var kind = InboxFilingService.ParseKind(type);
-
-        var bytes = await ReadAsync(file, cancellationToken);
-        var text = Clean(description);
-        var filename = string.IsNullOrWhiteSpace(file.FileName) ? null : Path.GetFileName(file.FileName);
-        var result = await attachments.CaptureAttachmentAsync(
-            bytes, filename, file.ContentType, text, cancellationToken);
-
-        var subject = await FileAsync(
-            kind, result.EventId, result.Deduplicated,
-            Clean(title) ?? InboxFilingService.FirstLine(text) ?? filename ?? "Document",
-            text ?? filename ?? "Document", filing, cancellationToken);
-
-        return Results.Ok(new BinaryCaptureRow
-        {
-            EventId = result.EventId,
-            ArtifactId = result.ArtifactId,
-            Kind = result.Kind,
-            Filename = filename,
-            ContentType = result.ContentType,
-            ByteSize = result.ByteSize,
-            Sha256 = result.Sha256,
-            Deduplicated = result.Deduplicated,
-            Subject = subject
-        });
+        var filename = FileName(file);
+        // Once stored, the filing runs to the end even if the phone drops (code review CR63).
+        var captured = await filing.CaptureDocumentAsync(
+            new CaptureFile(await ReadAsync(file, cancellationToken), filename, file.ContentType),
+            description, type, title, concerning: null, cancellationToken);
+        return Results.Ok(Row(captured, filename));
     }
 
     /// <summary>
@@ -105,14 +85,10 @@ public static class CaptureEndpoints
         [FromForm] string? type,
         [FromForm] string? title,
         [FromForm] string? concerning,
-        AttachmentService attachments,
-        CaptureService capture,
         SubjectReader reader,
         InboxFilingService filing,
-        RelateService relate,
         CancellationToken cancellationToken)
     {
-        var kind = InboxFilingService.ParseKind(type);
 
         // Found before anything is written, so a bad id leaves no capture behind.
         string? about = null;
@@ -127,70 +103,33 @@ public static class CaptureEndpoints
             about = detail.Urn;
         }
 
-        var result = await CaptureVoiceAsync(audio, transcript, keepAudio, kind, title, attachments, capture, filing, cancellationToken);
-        if (about is not null && result.Row is { } row)
-        {
-            await relate.RelateAsync(row.EventId, about, SubjectEventRelations.Concerns, cancellationToken);
-        }
-
-        return result.Response;
+        var filename = audio is null ? null : FileName(audio);
+        var recording = audio is null ? null : new CaptureFile(await ReadAsync(audio, cancellationToken), filename, audio.ContentType);
+        // Once stored, the filing and the concerns edge run to the end even if the phone drops (CR63).
+        var captured = await filing.CaptureVoiceAsync(
+            recording, transcript, keepAudio == true, type, title, about, cancellationToken);
+        return Results.Ok(Row(captured, filename));
     }
 
-    private static async Task<(IResult Response, BinaryCaptureRow? Row)> CaptureVoiceAsync(
-        IFormFile? audio, string? transcript, bool? keepAudio, string kind, string? title,
-        AttachmentService attachments, CaptureService capture, InboxFilingService filing,
-        CancellationToken cancellationToken)
+    private static string? FileName(IFormFile file)
+        => string.IsNullOrWhiteSpace(file.FileName) ? null : Path.GetFileName(file.FileName);
+
+    /// <summary>What a capture wrote, as the API says it: the file's facts only when one was stored.</summary>
+    private static BinaryCaptureRow Row(FiledCapture captured, string? filename) => new()
     {
-        var text = Clean(transcript);
-        var needsTranscription = text is null;
-        var keep = keepAudio == true || needsTranscription;
-        var heading = Clean(title) ?? InboxFilingService.FirstLine(text) ?? "Needs transcription";
-        var body = text ?? "Needs transcription.";
-
-        if (!keep)
-        {
-            var spoken = await capture.CaptureVoiceTranscriptAsync(text!, cancellationToken);
-            var made = await FileAsync(kind, spoken.EventId, deduplicated: false, heading, body, filing, cancellationToken);
-            var said = new BinaryCaptureRow { EventId = spoken.EventId, Kind = EventKinds.Voice, Subject = made };
-            return (Results.Ok(said), said);
-        }
-
-        if (audio is null)
-        {
-            return (Results.BadRequest(new ApiError(needsTranscription
-                ? "A voice note with no transcript needs its recording, in a field named audio."
-                : "Keep audio needs the recording, in a field named audio.")), null);
-        }
-
-        var bytes = await ReadAsync(audio, cancellationToken);
-        var filename = string.IsNullOrWhiteSpace(audio.FileName) ? null : Path.GetFileName(audio.FileName);
-        var result = await attachments.CaptureVoiceAsync(
-            bytes, filename, audio.ContentType, text, cancellationToken);
-        var subject = await FileAsync(kind, result.EventId, result.Deduplicated, heading, body, filing, cancellationToken);
-
-        var row = new BinaryCaptureRow
-        {
-            EventId = result.EventId,
-            ArtifactId = result.ArtifactId,
-            Kind = result.Kind,
-            Filename = filename,
-            ContentType = result.ContentType,
-            ByteSize = result.ByteSize,
-            Sha256 = result.Sha256,
-            Deduplicated = result.Deduplicated,
-            Subject = subject,
-            NeedsTranscription = needsTranscription
-        };
-        return (Results.Ok(row), row);
-    }
-
-    /// <summary>Files a capture in the Inbox (<see cref="InboxFilingService"/>), as the API reads what it made.</summary>
-    private static async Task<CreatedSubject?> FileAsync(
-        string kind, Guid eventId, bool deduplicated, string title, string description,
-        InboxFilingService filing, CancellationToken cancellationToken)
-        => await filing.FileAsync(kind, eventId, deduplicated, title, description, cancellationToken) is { } made
+        EventId = captured.EventId,
+        ArtifactId = captured.Stored?.ArtifactId,
+        Kind = captured.EventKind,
+        Filename = captured.Stored is null ? null : filename,
+        ContentType = captured.Stored?.ContentType,
+        ByteSize = captured.Stored?.ByteSize,
+        Sha256 = captured.Stored?.Sha256,
+        Deduplicated = captured.Stored?.Deduplicated ?? false,
+        Subject = captured.Item is { } made
             ? new CreatedSubject { Id = made.Id, Urn = made.Urn, Type = made.Type, Title = made.Title }
-            : null;
+            : null,
+        NeedsTranscription = captured.NeedsTranscription
+    };
 
     private static async Task<byte[]> ReadAsync(IFormFile file, CancellationToken cancellationToken)
     {

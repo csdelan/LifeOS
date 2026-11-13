@@ -2007,9 +2007,8 @@ Build:      built
   is an *exact* fit for "entries are permanently read-only; a correction is a new entry."
   "One Journal per subject" is a **projection** (all journal-kind events concerning that
   subject, chronological), not a stored container.
-- Kernel delta: minimal — today it's `bsk journal` then `bsk relate <event> <subject>`; a
-  convenience verb that journals-and-relates atomically + a `v_subject_journal` reader would
-  smooth it. No ontology change.
+- Kernel delta: minimal — `bsk journal <subject>` journals and relates atomically through
+  `JournalService`, as the API and `/mcp` do (code review CR44, CR63). No ontology change.
 - Implications: the cleanest fit in the batch — the append-only spine was built for exactly
   this. "Journal vs a related Note" is a flavor distinction (D4); both are events that
   `concern` the subject.

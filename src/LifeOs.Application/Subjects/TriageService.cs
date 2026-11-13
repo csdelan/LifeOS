@@ -67,6 +67,23 @@ public sealed class TriageService(
         => SetStateAsync(isEvent, itemId, TriageStates.Flagged, cancellationToken);
 
     /// <summary>
+    /// Flags an item whose id is known unless it was ever triaged, flagged or cleared: a capture
+    /// sent again finishes what its first send stopped before, but one Chris dealt with stays
+    /// dealt with (code review CR63). Returns whether it flagged.
+    /// </summary>
+    public async Task<bool> FlagIfNeverTriagedAsync(
+        bool isEvent, Guid itemId, CancellationToken cancellationToken = default)
+    {
+        if (await events.EverTriagedAsync(itemId, cancellationToken))
+        {
+            return false;
+        }
+
+        await AppendAsync(isEvent, itemId, TriageStates.Flagged, cancellationToken);
+        return true;
+    }
+
+    /// <summary>
     /// Writes a triage state for an item whose id is already known — used by the
     /// promote path to resolve an item out of the inbox (<see cref="TriageStates.Promoted"/>)
     /// without re-resolving the reference. Returns the marker event id.

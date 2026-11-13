@@ -153,34 +153,27 @@ public sealed class BskCli(string executablePath, bool fromWorkingTree = false)
         => RunJson<CreatedSubject>(args);
 
     /// <summary>
-    /// Append a journal entry and relate it to <paramref name="subjectUrn"/> without
-    /// opening $EDITOR: a tiny helper copies the drafted text into the file the
-    /// existing <c>bsk journal</c> verb already expects, then <c>bsk relate</c> files it.
+    /// Adds a journal entry to <paramref name="subjectUrn"/> in one <c>bsk journal &lt;item&gt;</c>
+    /// call, which writes the entry and its link to the item in one transaction (code review
+    /// CR63). Before, an editor shim captured the entry and a second <c>bsk relate</c> linked it,
+    /// so a failure between them left an entry about nothing. The text goes through a temp file,
+    /// not the command line, so a long entry fits.
     /// </summary>
     public void AppendJournal(string subjectUrn, string text)
     {
         var draft = Path.Combine(Path.GetTempPath(), $"lifeos-journal-draft-{Guid.NewGuid():N}.txt");
-        var helper = Path.Combine(Path.GetTempPath(), $"lifeos-journal-write-{Guid.NewGuid():N}.cmd");
         File.WriteAllText(draft, text);
-        File.WriteAllText(helper, $"@echo off{Environment.NewLine}copy /Y \"{draft}\" %1 >nul{Environment.NewLine}exit 0{Environment.NewLine}");
         try
         {
-            var created = Run(
-                new Dictionary<string, string> { ["VISUAL"] = helper, ["EDITOR"] = helper },
-                "journal", "--json");
-            var parsed = JsonSerializer.Deserialize<JournalCapture>(created, JsonOptions)
-                ?? throw new BskException("bsk journal --json returned empty output.");
-            if (parsed.Id == Guid.Empty)
+            var created = RunJson<JournalCapture>("journal", subjectUrn, "--file", draft);
+            if (created.Id == Guid.Empty)
             {
-                throw new BskException("Journal capture did not return an event id.");
+                throw new BskException("bsk journal did not return an event id.");
             }
-
-            Run("relate", parsed.Id.ToString(), subjectUrn);
         }
         finally
         {
             TryDelete(draft);
-            TryDelete(helper);
         }
     }
 

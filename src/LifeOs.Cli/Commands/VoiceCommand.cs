@@ -80,16 +80,13 @@ internal static class VoiceCommand
                 var filename = Path.GetFileName(path);
 
                 await using var provider = Cli.BuildServices(connectionString);
-                var result = await provider.GetRequiredService<AttachmentService>()
-                    .CaptureVoiceAsync(bytes, filename, contentType, transcript, cancellationToken);
+                // The recording is always kept here, and filed into the Inbox the way the web's
+                // voice capture is (code review CR63).
+                var captured = await provider.GetRequiredService<InboxFilingService>()
+                    .CaptureVoiceAsync(new CaptureFile(bytes, filename, contentType), transcript, keepAudio: true,
+                        cancellationToken: cancellationToken);
 
-                if (!result.Deduplicated)
-                {
-                    await provider.GetRequiredService<TriageService>()
-                        .FlagItemAsync(isEvent: true, result.EventId, cancellationToken);
-                }
-
-                CaptureOutput.Write(asJson, result, filename, "Recorded voice note");
+                CaptureOutput.Write(asJson, captured.Stored!, filename, "Recorded voice note");
                 return 0;
             });
         });

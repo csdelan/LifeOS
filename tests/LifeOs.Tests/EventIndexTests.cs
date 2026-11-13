@@ -1,4 +1,5 @@
 using Dapper;
+using LifeOs.Infrastructure.Persistence;
 using Npgsql;
 
 namespace LifeOs.Tests;
@@ -54,6 +55,12 @@ public sealed class EventIndexTests(PostgresFixture postgres)
     [InlineData("SELECT e.id FROM bsk.event e WHERE e.kind = 'ledger' AND e.payload->>'award_key' IS NOT NULL AND e.payload->>'trigger' = ANY('{food_day,food_meal}');", "event_ledger_trigger_idx")]
     public async Task The_ledger_is_read_by_subject_and_trigger_by_index(string query, string index)
         => Assert.Contains(index, await PlanAsync(query));
+
+    // Code review CR63: a capture sent again asks whether it was ever triaged, by index.
+    [Fact]
+    public async Task Whether_an_item_was_ever_triaged_is_read_by_index()
+        => Assert.Contains("event_triage_item", await PlanAsync(
+            NpgsqlEventReader.EverTriagedSql.Replace("@item", "'00000000-0000-0000-0000-000000000001'", StringComparison.Ordinal)));
 
     private async Task<string> PlanAsync(string query)
     {

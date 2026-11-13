@@ -1,6 +1,5 @@
 using System.CommandLine;
 using LifeOs.Application.Capture;
-using LifeOs.Application.Subjects;
 using LifeOs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -55,17 +54,13 @@ internal static class AttachCommand
                 var filename = Path.GetFileName(path);
 
                 await using var provider = Cli.BuildServices(connectionString);
-                var result = await provider.GetRequiredService<AttachmentService>()
-                    .CaptureAttachmentAsync(bytes, filename, contentType, description, cancellationToken);
+                // Filed into the Inbox the way the web's document capture is (code review CR63): a
+                // file attached again that never reached the Inbox is flagged now.
+                var captured = await provider.GetRequiredService<InboxFilingService>()
+                    .CaptureDocumentAsync(new CaptureFile(bytes, filename, contentType), description,
+                        cancellationToken: cancellationToken);
 
-                // A newly captured attachment enters the inbox; a dedup hit is already there.
-                if (!result.Deduplicated)
-                {
-                    await provider.GetRequiredService<TriageService>()
-                        .FlagItemAsync(isEvent: true, result.EventId, cancellationToken);
-                }
-
-                CaptureOutput.Write(asJson, result, filename, "Attached");
+                CaptureOutput.Write(asJson, captured.Stored!, filename, "Attached");
                 return 0;
             });
         });

@@ -28,4 +28,16 @@ public sealed class NpgsqlEventReader(NpgsqlDataSource dataSource) : IEventReade
         var subjectId = Guid.TryParse(row.Value.SubjectId, out var parsed) ? parsed : (Guid?)null;
         return new SourceEvent(row.Value.Id, row.Value.Kind, subjectId);
     }
+
+    public async Task<bool> EverTriagedAsync(Guid itemId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = dataSource.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            EverTriagedSql, new { item = itemId.ToString() }, cancellationToken: cancellationToken));
+    }
+
+    /// <summary>The read behind <see cref="EverTriagedAsync"/>; <c>EventIndexTests</c> checks it uses <c>event_triage_item</c>.</summary>
+    public const string EverTriagedSql =
+        "SELECT EXISTS (SELECT 1 FROM bsk.event WHERE kind = 'triage' AND payload->>'item_id' = @item);";
 }
