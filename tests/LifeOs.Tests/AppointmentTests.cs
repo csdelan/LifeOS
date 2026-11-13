@@ -1,4 +1,5 @@
 using Dapper;
+using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.DependencyInjection;
@@ -17,8 +18,33 @@ public sealed class AppointmentTests(ClassDatabase classDb) : IClassFixture<Clas
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+    // Materialize reads today from the home calendar, so the kernel's zone is the database's.
+    private IServiceProvider Provider(IClock? clock = null)
+    {
+        var services = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone);
+        if (clock is not null)
+        {
+            services.AddSingleton(clock);
+        }
+
+        return services.BuildServiceProvider();
+    }
+
+    private static readonly DateTimeOffset June2026 = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
+
+    private async Task<SubjectRef> SeriesAsync(IServiceProvider provider, string start, string recurrence)
+        => await provider.GetRequiredService<SubjectService>().CreateAsync(
+            SubjectTypes.Appointment, $"Series {Guid.NewGuid():N}",
+            attributesJson: $"{{\"start_date\":\"{start}\",\"recurrence\":{recurrence}}}",
+            cancellationToken: Ct);
+
+    private async Task<List<string>> OccurrenceDatesAsync(SubjectRef series)
+    {
+        await using var c = await OpenAsync();
+        return (await c.QueryAsync<string>(new CommandDefinition(
+            "SELECT attributes->>'date' FROM bsk.subject WHERE type = 'Appointment' AND attributes->>'series' = @s ORDER BY 1;",
+            new { s = series.Urn }, cancellationToken: Ct))).ToList();
+    }
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
@@ -133,5 +159,97 @@ public sealed class AppointmentTests(ClassDatabase classDb) : IClassFixture<Clas
 
         Assert.Equal("Cancelled", statuses[0]);                 // only the one changed
         Assert.All(statuses.Skip(1), s => Assert.Equal("Scheduled", s));
+    }
+
+    // ---- Code review CR65: bounded, locked per series, keyed ----
+
+    [Fact]
+    public async Task Materialize_reaches_two_years_past_today_and_no_further()
+    {
+        var provider = Provider(new TestClock(June2026));
+        var appointments = provider.GetRequiredService<AppointmentService>();
+        var series = await SeriesAsync(provider, "2026-06-01", """{"freq":"weekly","on":["mon"]}""");
+
+        var refusal = await Assert.ThrowsAsync<ArgumentException>(
+            () => appointments.MaterializeAsync(series.Urn, new DateOnly(2099, 12, 31), Ct));
+        Assert.Contains("at most 2 years ahead, through 2028-06-01", refusal.Message, StringComparison.Ordinal);
+        Assert.Empty(await OccurrenceDatesAsync(series));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => appointments.MaterializeAsync(series.Urn, new DateOnly(2028, 6, 2), Ct));
+        var made = await appointments.MaterializeAsync(series.Urn, new DateOnly(2028, 6, 1), Ct);
+        Assert.Equal(new DateOnly(2028, 5, 29).ToString("yyyy-MM-dd"), (await OccurrenceDatesAsync(series))[^1]);
+        Assert.Equal(105, made.Created.Count);
+    }
+
+    [Fact]
+    public async Task One_run_makes_at_most_750_and_more_than_that_makes_none()
+    {
+        var provider = Provider(new TestClock(June2026));
+        var appointments = provider.GetRequiredService<AppointmentService>();
+        // Daily since 2024: 883 days through 2026-06-01.
+        var series = await SeriesAsync(provider, "2024-01-01", """{"freq":"daily"}""");
+
+        var refusal = await Assert.ThrowsAsync<ArgumentException>(
+            () => appointments.MaterializeAsync(series.Urn, new DateOnly(2026, 6, 1), Ct));
+        Assert.Contains("has 883 occurrences to make through 2026-06-01", refusal.Message, StringComparison.Ordinal);
+        Assert.Empty(await OccurrenceDatesAsync(series));
+
+        Assert.Equal(31, (await appointments.MaterializeAsync(series.Urn, new DateOnly(2024, 1, 31), Ct)).Created.Count);
+    }
+
+    [Fact]
+    public async Task Runs_at_once_make_each_date_once()
+    {
+        var provider = Provider();
+        var appointments = provider.GetRequiredService<AppointmentService>();
+        var series = await SeriesAsync(provider, "2026-01-01", """{"freq":"daily"}""");
+
+        var runs = await Task.WhenAll(Enumerable.Range(0, 4).Select(
+            _ => Task.Run(() => appointments.MaterializeAsync(series.Urn, new DateOnly(2026, 3, 31), Ct), Ct)));
+
+        var dates = await OccurrenceDatesAsync(series);
+        Assert.Equal(90, dates.Count);
+        Assert.Equal(90, dates.Distinct().Count());
+        Assert.Equal(90, runs.Sum(r => r.Created.Count));
+    }
+
+    [Fact]
+    public async Task An_occurrence_moved_to_another_day_still_holds_its_date()
+    {
+        var provider = Provider();
+        var appointments = provider.GetRequiredService<AppointmentService>();
+        var series = await SeriesAsync(provider, "2026-01-01", """{"freq":"weekly","on":["mon"]}""");
+        var first = (await appointments.MaterializeAsync(series.Urn, new DateOnly(2026, 1, 31), Ct)).Created[0];
+
+        // The Monday the 5th moves to Tuesday the 6th.
+        await provider.GetRequiredService<AttributeService>()
+            .SetAsync(first.Urn, [new AttributeAssignment("date", "2026-01-06")], Ct);
+        var again = await appointments.MaterializeAsync(series.Urn, new DateOnly(2026, 1, 31), Ct);
+
+        Assert.Empty(again.Created);
+        Assert.Equal(["2026-01-06", "2026-01-12", "2026-01-19", "2026-01-26"], await OccurrenceDatesAsync(series));
+    }
+
+    [Fact]
+    public async Task An_occurrences_series_and_slot_are_set_only_by_materialize_and_the_store_keys_them()
+    {
+        var provider = Provider();
+        var appointments = provider.GetRequiredService<AppointmentService>();
+        var series = await SeriesAsync(provider, "2026-01-01", """{"freq":"weekly","on":["mon"]}""");
+        var first = (await appointments.MaterializeAsync(series.Urn, new DateOnly(2026, 1, 11), Ct)).Created[0];
+
+        var refusal = await Assert.ThrowsAsync<ArgumentException>(() => provider.GetRequiredService<AttributeService>()
+            .SetAsync(first.Urn, [new AttributeAssignment("occurrence", "2026-01-12")], Ct));
+        Assert.Contains("bsk materialize", refusal.Message, StringComparison.Ordinal);
+
+        // A second occurrence for the same slot, by any path, is refused by the store.
+        await using var c = await OpenAsync();
+        var duplicate = await Assert.ThrowsAsync<PostgresException>(() => c.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO bsk.subject (urn, type, title, attributes)
+            VALUES (@urn, 'Appointment', 'Copy', jsonb_build_object('series', @s, 'occurrence', '2026-01-05', 'date', '2026-01-05'));
+            """,
+            new { urn = $"urn:bsk:appointment:copy-{Guid.NewGuid():N}", s = series.Urn }, cancellationToken: Ct)));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, duplicate.SqlState);
     }
 }

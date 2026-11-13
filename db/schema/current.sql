@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0063 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0064 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -263,6 +263,7 @@ CREATE INDEX event_workout_note_idx ON bsk.event USING btree ((((payload -> 'wor
 CREATE UNIQUE INDEX item_tag_event_key ON bsk.item_tag USING btree (event_id, tag) WHERE (event_id IS NOT NULL);
 CREATE UNIQUE INDEX item_tag_subject_key ON bsk.item_tag USING btree (subject_id, tag) WHERE (subject_id IS NOT NULL);
 CREATE INDEX item_tag_tag ON bsk.item_tag USING btree (tag);
+CREATE UNIQUE INDEX subject_appointment_occurrence_key ON bsk.subject USING btree (((attributes ->> 'series'::text)), ((attributes ->> 'occurrence'::text))) WHERE ((type = 'Appointment'::text) AND ((attributes ->> 'series'::text) IS NOT NULL));
 CREATE INDEX subject_attributes_gin ON bsk.subject USING gin (attributes);
 CREATE INDEX subject_next_review_at ON bsk.subject USING btree (((attributes ->> 'next_review_at'::text))) WHERE jsonb_exists(attributes, 'next_review_at'::text);
 CREATE UNIQUE INDEX subject_reuse_title_key ON bsk.subject USING btree (type, title) WHERE (type = 'Problem'::text);

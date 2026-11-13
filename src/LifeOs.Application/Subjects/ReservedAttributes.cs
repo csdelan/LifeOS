@@ -34,6 +34,11 @@ public static class ReservedAttributes
         new(SubjectTypes.Task, [TaskSeries.SeriesKey, TaskSeries.OccurrenceKey],
             "A Task's '{0}' is set by its repeating task, not `bsk set`."),
 
+        // An appointment occurrence's place in its series (D10, code review CR65). Its day
+        // (attributes.date) stays Chris's to move.
+        new(SubjectTypes.Appointment, [AppointmentSeries.SeriesKey, AppointmentSeries.OccurrenceKey],
+            "An appointment's '{0}' is set when its repeating appointment makes it (`bsk materialize`), not `bsk set`."),
+
         // The Home Score reads a space's weight and pace (HOME-1) and its shots (HOME-4).
         new(SubjectTypes.Space, [SpaceLimits.WeightKey, SpaceLimits.PaceKey],
             "A space's weight and pace are set with `bsk space set`, not `bsk set`."),

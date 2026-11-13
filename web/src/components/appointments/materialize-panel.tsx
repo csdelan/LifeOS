@@ -9,10 +9,14 @@ import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { errorText } from "@/lib/write-action";
 
+/** The furthest ahead Materialize reaches, as the kernel holds it (`AppointmentSeries.HorizonYears`). */
+export const HORIZON_MONTHS = 24;
+
 /**
  * A repeating Appointment's Materialize (CAL-1, D10; the Pilot's "Materialize…"): makes its
  * occurrences through a date, each with its own status. Three months ahead by default, as the
- * Pilot offers; running it again only fills in dates not made yet.
+ * Pilot offers, and at most two years (code review CR65); running it again only fills in dates
+ * not made yet.
  */
 export function MaterializePanel({
   seriesId,
@@ -62,6 +66,7 @@ export function MaterializePanel({
             type="date"
             value={through}
             min={todayIso()}
+            max={addMonthsClamped(todayIso(), HORIZON_MONTHS)}
             onChange={(e) => setThrough(e.target.value)}
             className="h-8 w-40"
           />

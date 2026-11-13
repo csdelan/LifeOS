@@ -1281,18 +1281,20 @@ export function materializeAppointments(
   const spec = attrs.recurrence ? parseRecurrence(JSON.stringify(attrs.recurrence)) : null;
   const start =
     (typeof attrs.start_date === "string" && attrs.start_date) || (series.createdAt ?? todayIso()).slice(0, 10);
+  // A date is taken by the occurrence that stands for it, wherever it's moved (code review CR65).
   const made = new Set(
     state.subjects
       .filter((s) => s.type === "Appointment")
       .map((s) => rawAttrs(state.details[s.id]?.attributes))
-      .filter((a) => a.series === series.urn && typeof a.date === "string")
-      .map((a) => a.date as string),
+      .filter((a) => a.series === series.urn)
+      .map((a) => (typeof a.occurrence === "string" ? a.occurrence : a.date))
+      .filter((d): d is string => typeof d === "string"),
   );
   const created: CreatedSubject[] = [];
   for (let day = start, guard = 0; spec && day <= through && guard < 1500; day = addDays(day, 1), guard += 1) {
     if (made.has(day) || !isOccurrenceDate(spec, day, start)) continue;
     created.push(
-      createSubject({ type: "Appointment", title: series.title, attrs: { series: series.urn, date: day } }),
+      createSubject({ type: "Appointment", title: series.title, attrs: { series: series.urn, occurrence: day, date: day } }),
     );
   }
   emit();

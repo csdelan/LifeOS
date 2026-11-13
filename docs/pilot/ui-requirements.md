@@ -1614,6 +1614,14 @@ through a day, three months ahead by default (`POST /api/appointments/{id}/mater
 twin of `bsk materialize`); running it again only makes the dates still missing. Occurrences
 are anchored on the series' `start_date`, or the day it was made, not its `date`.
 
+**Update (2026-11-13, code review CR65):** each new occurrence carries `attributes.occurrence`,
+the date of the pattern it stands for, beside `attributes.date`, the day it's on. Moving an
+occurrence to another day keeps its slot, so Make occurrences doesn't make that date again;
+`series` and `occurrence` are set only by Materialize. One run reaches at most two years past
+today and makes at most 750; occurrences are made under a lock per series, and migration 0064
+keys (series, occurrence), so two runs at once make each date once. Occurrences made before
+this have no `occurrence` and stand for their `date`.
+
 **Workflow (Chris):**
 - Pilot Appointments are entered and maintained manually. Synchronization with an external
   calendar is deferred to a later phase.

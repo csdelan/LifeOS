@@ -1,26 +1,31 @@
 using Dapper;
 using LifeOs.Application.Abstractions;
+using LifeOs.Domain;
 using Npgsql;
 
 namespace LifeOs.Infrastructure.Persistence;
 
 /// <summary>
-/// Computes which occurrence dates of a recurring appointment series are not yet
-/// materialized: expand the series' recurrence (from its start through the requested
-/// horizon) and drop any date that already exists as an occurrence subject
-/// (<c>attributes.series</c> = the series urn, <c>attributes.date</c> = the date).
+/// Repeating appointments in the store (CAL-1, D10). Materialize expands the series' recurrence
+/// from its start through the requested day and makes each date no occurrence stands for yet,
+/// under a transaction-scoped advisory lock per series; migration 0064's unique index on
+/// (series, occurrence) backs that up (code review CR65).
 /// </summary>
 public sealed class NpgsqlAppointmentRepository(NpgsqlDataSource dataSource, EventSource eventSource, IClock clock) : IAppointmentRepository
 {
-    public async Task<IReadOnlyList<DateOnly>> PendingOccurrenceDatesAsync(
-        Guid seriesId, string seriesUrn, DateOnly through, CancellationToken cancellationToken = default)
+    public async Task<OccurrencesMade> MaterializeAsync(
+        SubjectRef series, DateOnly through, int max, CancellationToken cancellationToken = default)
     {
         await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await AdvisoryLocks.TakeAsync(connection, transaction, $"bsk.appointment_series:{series.Id}", cancellationToken);
 
         // Anchor and window start at the series' start_date, or the day it was made at home
         // (code review CR62: created_at::date was the session's UTC day, tomorrow by evening in
         // Pacific time). start_date is the series anchor; start/end are the time-of-day fields (CAL-1).
+        // A date is taken by the occurrence that stands for it, wherever it's been moved to since;
+        // one made before CR65 stands for its date.
         const string sql = """
             SELECT to_char(d, 'YYYY-MM-DD')
             FROM bsk.subject s
@@ -34,15 +39,42 @@ public sealed class NpgsqlAppointmentRepository(NpgsqlDataSource dataSource, Eve
                   SELECT 1 FROM bsk.subject o
                   WHERE o.type = 'Appointment'
                     AND o.attributes->>'series' = @seriesUrn
-                    AND o.attributes->>'date' = to_char(d, 'YYYY-MM-DD'))
+                    AND coalesce(o.attributes->>'occurrence', o.attributes->>'date') = to_char(d, 'YYYY-MM-DD'))
             ORDER BY d;
             """;
 
-        var dates = await connection.QueryAsync<string>(new CommandDefinition(
+        var due = (await connection.QueryAsync<string>(new CommandDefinition(
             sql,
-            new { seriesId, seriesUrn, through = through.ToString("yyyy-MM-dd") },
-            cancellationToken: cancellationToken));
-        return dates.Select(d => DateOnly.ParseExact(d, "yyyy-MM-dd")).ToList();
+            new { seriesId = series.Id, seriesUrn = series.Urn, through = through.ToString("yyyy-MM-dd") },
+            transaction, cancellationToken: cancellationToken))).ToList();
+        if (due.Count > max)
+        {
+            return new OccurrencesMade([], due.Count);
+        }
+
+        var created = new List<SubjectRef>(due.Count);
+        foreach (var day in due)
+        {
+            // An occurrence is born with no status (it reads Scheduled), as a Task repetition is.
+            var urn = Urns.Build(SubjectTypes.Appointment, series.Title);
+            var id = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
+                """
+                INSERT INTO bsk.subject (urn, type, title, attributes)
+                VALUES (@urn, 'Appointment', @title, @attributes::jsonb)
+                RETURNING id;
+                """,
+                new
+                {
+                    urn,
+                    title = series.Title,
+                    attributes = AppointmentSeries.OccurrenceAttributes(series.Urn, DateOnly.ParseExact(day, "yyyy-MM-dd")),
+                },
+                transaction, cancellationToken: cancellationToken));
+            created.Add(new SubjectRef(id, urn, SubjectTypes.Appointment, series.Title));
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return new OccurrencesMade(created, due.Count);
     }
 
     public async Task<(bool Updated, int OccurrencesRenamed)> RenameWithUpcomingOccurrencesAsync(

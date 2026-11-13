@@ -21,7 +21,7 @@ public sealed class RenameServiceTests(ClassDatabase classDb) : IClassFixture<Cl
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone).BuildServiceProvider();
 
     private async Task<string?> ReadTitle(Guid id)
     {

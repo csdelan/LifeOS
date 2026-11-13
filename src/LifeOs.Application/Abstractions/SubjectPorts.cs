@@ -88,15 +88,18 @@ public interface ISubjectRepository
     Task<string?> GetStatusAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// Reads which occurrence dates of a recurring appointment series still need to be
-/// materialized (CAL-1 / D10). Expands the series' recurrence in the database and
-/// subtracts the dates already materialized as occurrence subjects.
-/// </summary>
+/// <summary>Repeating appointments in the store (CAL-1 / D10).</summary>
 public interface IAppointmentRepository
 {
-    Task<IReadOnlyList<DateOnly>> PendingOccurrenceDatesAsync(
-        Guid seriesId, string seriesUrn, DateOnly through, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Makes the occurrences of <paramref name="series"/> through <paramref name="through"/> that
+    /// aren't made yet, in one transaction under an advisory lock per series, so two runs at once
+    /// make each date once (code review CR65). A date is made when an occurrence stands for it
+    /// (<see cref="AppointmentSeries.OccurrenceKey"/>, or an older occurrence's date). When more
+    /// than <paramref name="max"/> are due it makes none, and says how many were.
+    /// </summary>
+    Task<OccurrencesMade> MaterializeAsync(
+        SubjectRef series, DateOnly through, int max, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Renames an Appointment and, in the same transaction, the occurrences it has
@@ -110,6 +113,9 @@ public interface IAppointmentRepository
         Guid id, string urn, string previousTitle, string newTitle, DateOnly fromDate,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>What one Materialize made, and how many occurrences were due (none made when that's over the limit).</summary>
+public sealed record OccurrencesMade(IReadOnlyList<SubjectRef> Created, int Due);
 
 /// <summary>Creates directed subject → subject edges in <c>bsk.subject_relation</c>.</summary>
 public interface IRelationRepository
