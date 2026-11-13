@@ -459,6 +459,34 @@ public sealed class OuraSyncTests(PostgresFixture postgres)
         Assert.Equal(11, await h.CountAsync("SELECT count(*) FROM bsk.event WHERE source_id = 'oura';"));
     }
 
+    // Code review CR79: a slow or paging Oura held the sync lock, a pooled connection and an open
+    // transaction for as long as it took to answer up to six collections.
+    [Fact]
+    public async Task Oura_is_read_with_no_sync_lock_or_transaction_held()
+    {
+        await using var h = await CreateAsync();
+        h.Oura.ActivityDays.Add(OuraHarness.Steps(Today, 3000));
+        h.Oura.Workouts.Add(OuraHarness.Workout("w-run", Today));
+        var seen = new System.Collections.Concurrent.ConcurrentQueue<(string Collection, long Locks, long Open)>();
+        h.Oura.OnRead = async collection => seen.Enqueue((
+            collection,
+            await h.CountAsync("""
+                SELECT count(*) FROM pg_locks l JOIN pg_database d ON d.oid = l.database
+                WHERE l.locktype = 'advisory' AND d.datname = current_database();
+                """),
+            await h.CountAsync("""
+                SELECT count(*) FROM pg_stat_activity
+                WHERE datname = current_database() AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';
+                """)));
+
+        var result = await h.Sync.SyncAsync(Recent, Ct);
+
+        // Six collections, tags included, and both records written once Oura had answered.
+        Assert.Equal((1, 2), (result.Windows, result.Written));
+        Assert.Equal(6, seen.Count);
+        Assert.All(seen, read => Assert.Equal((read.Collection, 0L, 0L), read));
+    }
+
     [Fact]
     public async Task The_night_is_the_longest_long_sleep_and_everything_else_but_rest_and_deleted_is_a_nap()
     {

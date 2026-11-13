@@ -61,8 +61,9 @@ public sealed record OuraPageSync(OuraSyncResult? Result, DateTimeOffset? LastSy
 /// from the newest LifeOS holds. A workout, sleep period or tag LifeOS holds on a day in the
 /// window that Oura no longer answers gets a voided version; if it comes back, a new version
 /// restores it. Daily records are never withdrawn.</item>
-/// <item><b>One at a time:</b> each window is read and written under a lock every sync
-/// shares, so a second sync waits, then finds nothing new.</item>
+/// <item><b>One at a time:</b> each window is read from Oura with nothing held, then
+/// compared and written under a lock every sync shares, so of two racing syncs the second
+/// waits, then finds nothing new.</item>
 /// <item><b>Tokens:</b> a token Oura refuses (401) is refreshed once and the request tried
 /// again; refused again, the connection needs reconnecting.</item>
 /// </list>
@@ -224,8 +225,11 @@ public sealed class OuraSyncService(
         }
     }
 
-    // Reads one window of every collection (tags too, with their scope) and writes what changed,
-    // under the sync lock. Answers how many records Oura has on the window's days.
+    // Reads one window of every collection (tags too, with their scope), then writes what changed
+    // under the sync lock. Oura is read first, with no lock, connection or transaction held, since
+    // it may page and may be slow; what's written is decided under the lock against what LifeOS
+    // holds then, so a sync that raced this one leaves it nothing to write (code review CR79).
+    // Answers how many records Oura has on the window's days.
     private async Task<int> SyncWindowAsync(
         IOuraClient oura, Token token, bool readTags, DateOnly from, DateOnly to, Tally tally,
         CancellationToken cancellationToken)
@@ -233,7 +237,6 @@ public sealed class OuraSyncService(
         var start = from.AddDays(-PadDays);
         var end = to.AddDays(PadDays);
 
-        await using var sync = await activity.BeginSyncAsync(cancellationToken);
         var days = await FetchAsync(t => oura.GetDailyActivityAsync(t, start, end, cancellationToken), token, cancellationToken);
         var workouts = await FetchAsync(t => oura.GetWorkoutsAsync(t, start, end, cancellationToken), token, cancellationToken);
         var sleepScores = await FetchAsync(t => oura.GetDailySleepAsync(t, start, end, cancellationToken), token, cancellationToken);
@@ -243,6 +246,7 @@ public sealed class OuraSyncService(
             ? await FetchAsync(t => oura.GetTagsAsync(t, start, end, cancellationToken), token, cancellationToken)
             : null;
 
+        await using var sync = await activity.BeginSyncAsync(cancellationToken);
         var found = 0;
         found += await ApplyAsync(sync, OuraCollections.DailyActivity, days.Select(OuraPayloads.Activity), from, to, tally, cancellationToken);
         found += await ApplyAsync(sync, OuraCollections.Workout, workouts.Select(OuraPayloads.Workout), from, to, tally, cancellationToken);

@@ -109,6 +109,9 @@ internal sealed class FakeOuraClient(IClock clock) : IOuraClient
     public Exception? FailReads { get; set; }
     public TimeSpan ReadDelay { get; set; }
 
+    /// <summary>Run as each read is answered, with its collection: a test looks at the database while Oura answers.</summary>
+    public Func<string, Task>? OnRead { get; set; }
+
     public Task<IReadOnlyList<OuraActivityDay>> GetDailyActivityAsync(
         string accessToken, DateOnly start, DateOnly end, CancellationToken cancellationToken = default)
         => ReadAsync(OuraCollections.DailyActivity, accessToken, start, end, ActivityDays, d => d.Day, cancellationToken);
@@ -141,6 +144,11 @@ internal sealed class FakeOuraClient(IClock clock) : IOuraClient
         if (ReadDelay > TimeSpan.Zero)
         {
             await Task.Delay(ReadDelay, cancellationToken);
+        }
+
+        if (OnRead is { } onRead)
+        {
+            await onRead(collection.Name);
         }
 
         if (FailReads is { } failure)
