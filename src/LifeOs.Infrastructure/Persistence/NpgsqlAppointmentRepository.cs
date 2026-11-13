@@ -52,33 +52,44 @@ public sealed class NpgsqlAppointmentRepository(NpgsqlDataSource dataSource, Eve
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        // The series' own rename is recorded (code review CR24); the ones that follow it aren't.
+        // The series' own rename is recorded (code review CR24), and each upcoming occurrence's
+        // that follows it, as derived (CR51).
         var before = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT title FROM bsk.subject WHERE id = @id FOR UPDATE;",
             new { id }, transaction, cancellationToken: cancellationToken));
         var updated = await connection.ExecuteAsync(new CommandDefinition(
             "UPDATE bsk.subject SET title = @newTitle WHERE id = @id;",
             new { id, newTitle }, transaction, cancellationToken: cancellationToken));
+        Guid? renamed = null;
         if (before is not null && AttributeChanges.Title(before, newTitle) is { } change)
         {
-            await AttributeChanges.AppendAsync(connection, transaction, id, change, eventSource, clock, cancellationToken);
+            renamed = await AttributeChanges.AppendAsync(connection, transaction, id, change, eventSource, clock, cancellationToken);
         }
 
         // Only occurrences that still match the old series title follow it, so one
         // renamed by hand keeps its own name; past dates keep the name they happened under.
-        var occurrences = await connection.ExecuteAsync(new CommandDefinition(
+        var occurrences = (await connection.QueryAsync<Guid>(new CommandDefinition(
             """
             UPDATE bsk.subject
             SET title = @newTitle
             WHERE type = 'Appointment'
               AND attributes->>'series' = @urn
               AND title = @previousTitle
-              AND bsk.try_to_date(attributes->>'date') >= @fromDate::date;
+              AND bsk.try_to_date(attributes->>'date') >= @fromDate::date
+            RETURNING id;
             """,
             new { urn, previousTitle, newTitle, fromDate = fromDate.ToString("yyyy-MM-dd") },
-            transaction, cancellationToken: cancellationToken));
+            transaction, cancellationToken: cancellationToken))).ToList();
+        if (AttributeChanges.Title(previousTitle, newTitle) is { } followed)
+        {
+            foreach (var occurrence in occurrences)
+            {
+                await AttributeChanges.AppendAsync(
+                    connection, transaction, occurrence, followed, eventSource, clock, cancellationToken, renamed);
+            }
+        }
 
         await transaction.CommitAsync(cancellationToken);
-        return (updated > 0, occurrences);
+        return (updated > 0, occurrences.Count);
     }
 }

@@ -108,6 +108,20 @@ public sealed class TaskSeriesTests(ClassDatabase classDb) : IClassFixture<Class
             "SELECT title FROM bsk.subject WHERE id = @id;", new { id }, cancellationToken: Ct)) ?? "";
     }
 
+    /// <summary>The derived attribute_change payloads on <paramref name="id"/>, oldest first (code review CR51).</summary>
+    private async Task<IReadOnlyList<string>> DerivedChangesAsync(Guid id)
+    {
+        await using var c = await OpenAsync();
+        return (await c.QueryAsync<string>(new CommandDefinition(
+            """
+            SELECT e.payload - 'subject_id'
+            FROM bsk.event e
+            JOIN bsk.subject_event se ON se.event_id = e.id AND se.relation = 'concerns'
+            WHERE e.kind = 'attribute_change' AND e.provenance = 'derived' AND se.subject_id = @id
+            ORDER BY e.recorded_at, e.id;
+            """, new { id }, cancellationToken: Ct))).AsList();
+    }
+
     private async Task<IReadOnlyList<string>> TagsAsync(Guid id)
     {
         await using var c = await OpenAsync();
@@ -505,6 +519,14 @@ public sealed class TaskSeriesTests(ClassDatabase classDb) : IClassFixture<Class
         Assert.Equal(rep.Id, friday.Id);
         Assert.Equal((Monday.AddDays(4), Monday.AddDays(4), (DateOnly?)null), (friday.Occurrence, friday.Due!.Value, friday.Scheduled));
 
+        // The new date is recorded on the repetition, as following from the series.
+        var wednesday = Iso(Monday.AddDays(2));
+        var fri = Iso(Monday.AddDays(4));
+        Assert.Equal(
+            ["""{"attributes": {"due": {"to": "FRI", "from": "WED"}, "occurrence": {"to": "FRI", "from": "WED"}}}"""
+                .Replace("FRI", fri, StringComparison.Ordinal).Replace("WED", wednesday, StringComparison.Ordinal)],
+            await DerivedChangesAsync(rep.Id));
+
         await k.Recurrence.SetAsync(series.Urn, Recurrence.Each("week"), null, Ct);
         var week = Assert.Single(await RepetitionsAsync(k, series));
         Assert.Equal((Monday, Monday.AddDays(6), (DateOnly?)Monday), (week.Occurrence, week.Due!.Value, week.Scheduled));
@@ -553,11 +575,31 @@ public sealed class TaskSeriesTests(ClassDatabase classDb) : IClassFixture<Class
             series.Urn, [new AttributeAssignment("description", "Stairs too"), new AttributeAssignment("priority", "Medium")], Ct);
         Assert.Equal("Stairs too", await AttributeAsync(rep1.Id, "description"));
         Assert.Equal("Low", await AttributeAsync(rep1.Id, "priority"));
+        Assert.Equal(
+            ["""{"attributes": {"description": {"to": "Stairs too", "from": "Upstairs too"}}}"""],
+            await DerivedChangesAsync(rep1.Id));
+        await using (var c = await OpenAsync())
+        {
+            // It cites the series' own change to the description.
+            Assert.Equal("Stairs too", await c.ExecuteScalarAsync<string>(new CommandDefinition(
+                """
+                SELECT cause.payload #>> '{attributes,description,to}'
+                FROM bsk.event e
+                JOIN bsk.subject_event se ON se.event_id = e.id AND se.subject_id = @rep
+                JOIN bsk.event cause ON cause.id = e.derived_from[1]
+                JOIN bsk.subject_event ce ON ce.event_id = cause.id AND ce.subject_id = @series
+                WHERE e.kind = 'attribute_change' AND e.provenance = 'derived';
+                """, new { rep = rep1.Id, series = series.Id }, cancellationToken: Ct)));
+        }
 
         // A rename follows to the open one.
         var renamed = await k.Rename.RenameAsync(series.Urn, Unique("Hoover"), Ct);
         Assert.Equal(1, renamed.OccurrencesRenamed);
         Assert.Equal(renamed.Subject.Title, await TitleAsync(rep1.Id));
+        Assert.Contains(
+            """{"title": {"to": "NEW", "from": "OLD"}}"""
+                .Replace("NEW", renamed.Subject.Title, StringComparison.Ordinal).Replace("OLD", series.Title, StringComparison.Ordinal),
+            await DerivedChangesAsync(rep1.Id));
 
         // Done: the next takes the series as it is now; a later rename leaves the done one be.
         k.Clock.On(Monday.AddDays(1));

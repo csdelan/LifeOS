@@ -211,10 +211,22 @@ public sealed class NpgsqlTaskSeriesRepository(NpgsqlDataSource dataSource, Even
             return false;
         }
 
+        // The new date follows from the series' pattern, so it's recorded as derived from the
+        // series' change to it (code review CR51).
+        var before = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT attributes::text FROM bsk.subject WHERE id = @repetitionId FOR UPDATE;",
+            new { repetitionId }, transaction, cancellationToken: cancellationToken));
         await connection.ExecuteAsync(new CommandDefinition(
             "UPDATE bsk.subject SET attributes = (attributes || @patch::jsonb) - @remove WHERE id = @repetitionId;",
             new { repetitionId, patch = patchJson, remove = removeKeys.ToArray() },
             transaction, cancellationToken: cancellationToken));
+        if (before is not null && AttributeChanges.Attributes(before, patchJson, removeKeys.ToArray()) is { } change)
+        {
+            var cause = await AttributeChanges.CauseAsync(
+                connection, transaction, seriesId, [Recurrence.AttributeKey, TaskSeries.StartKey], cancellationToken);
+            await AttributeChanges.AppendAsync(
+                connection, transaction, repetitionId, change, eventSource, clock, cancellationToken, cause);
+        }
 
         await transaction.CommitAsync(cancellationToken);
         return true;
@@ -227,21 +239,23 @@ public sealed class NpgsqlTaskSeriesRepository(NpgsqlDataSource dataSource, Even
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        // The series' own rename is recorded (code review CR24); the ones that follow it aren't.
+        // The series' own rename is recorded (code review CR24), and each open repetition's
+        // that follows it, as derived (CR51).
         var before = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT title FROM bsk.subject WHERE id = @id FOR UPDATE;",
             new { id }, transaction, cancellationToken: cancellationToken));
         var updated = await connection.ExecuteAsync(new CommandDefinition(
             "UPDATE bsk.subject SET title = @newTitle WHERE id = @id;",
             new { id, newTitle }, transaction, cancellationToken: cancellationToken));
+        Guid? renamed = null;
         if (before is not null && AttributeChanges.Title(before, newTitle) is { } change)
         {
-            await AttributeChanges.AppendAsync(connection, transaction, id, change, eventSource, clock, cancellationToken);
+            renamed = await AttributeChanges.AppendAsync(connection, transaction, id, change, eventSource, clock, cancellationToken);
         }
 
         // Only open repetitions still carrying the old title follow, so one renamed by hand
         // keeps its own name, and a closed one keeps the name it was done under.
-        var repetitions = await connection.ExecuteAsync(new CommandDefinition(
+        var repetitions = (await connection.QueryAsync<Guid>(new CommandDefinition(
             """
             UPDATE bsk.subject r
             SET title = @newTitle
@@ -249,12 +263,21 @@ public sealed class NpgsqlTaskSeriesRepository(NpgsqlDataSource dataSource, Even
             WHERE v.id = r.id
               AND v.series_urn = @urn
               AND NOT v.closed
-              AND r.title = @previousTitle;
+              AND r.title = @previousTitle
+            RETURNING r.id;
             """,
-            new { urn, previousTitle, newTitle }, transaction, cancellationToken: cancellationToken));
+            new { urn, previousTitle, newTitle }, transaction, cancellationToken: cancellationToken))).ToList();
+        if (AttributeChanges.Title(previousTitle, newTitle) is { } followed)
+        {
+            foreach (var repetition in repetitions)
+            {
+                await AttributeChanges.AppendAsync(
+                    connection, transaction, repetition, followed, eventSource, clock, cancellationToken, renamed);
+            }
+        }
 
         await transaction.CommitAsync(cancellationToken);
-        return (updated > 0, repetitions);
+        return (updated > 0, repetitions.Count);
     }
 
     public async Task<int> FollowAttributeAsync(
@@ -263,8 +286,9 @@ public sealed class NpgsqlTaskSeriesRepository(NpgsqlDataSource dataSource, Even
     {
         await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        return await connection.ExecuteAsync(new CommandDefinition(
+        var followed = (await connection.QueryAsync<Guid>(new CommandDefinition(
             """
             UPDATE bsk.subject r
             SET attributes = CASE WHEN @newValue::text IS NULL THEN r.attributes - @key
@@ -273,9 +297,28 @@ public sealed class NpgsqlTaskSeriesRepository(NpgsqlDataSource dataSource, Even
             WHERE v.id = r.id
               AND v.series_urn = @seriesUrn
               AND NOT v.closed
-              AND (r.attributes->>@key) IS NOT DISTINCT FROM @previousValue::text;
+              AND (r.attributes->>@key) IS NOT DISTINCT FROM @previousValue::text
+            RETURNING r.id;
             """,
-            new { seriesUrn, key, previousValue, newValue }, cancellationToken: cancellationToken));
+            new { seriesUrn, key, previousValue, newValue }, transaction, cancellationToken: cancellationToken))).ToList();
+
+        // Each open repetition that took the series' edit records it, derived from the series'
+        // change to that key (code review CR51).
+        if (followed.Count > 0 && AttributeChanges.Key(key, previousValue, newValue) is { } change)
+        {
+            var seriesId = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
+                "SELECT id FROM bsk.subject WHERE urn = @seriesUrn;",
+                new { seriesUrn }, transaction, cancellationToken: cancellationToken));
+            var cause = await AttributeChanges.CauseAsync(connection, transaction, seriesId, [key], cancellationToken);
+            foreach (var repetition in followed)
+            {
+                await AttributeChanges.AppendAsync(
+                    connection, transaction, repetition, change, eventSource, clock, cancellationToken, cause);
+            }
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return followed.Count;
     }
 
     public async Task<int> FollowTagsAsync(
