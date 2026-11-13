@@ -97,7 +97,7 @@ same `(source_id, sha256)`; on a hit it returns the pre-existing ids with `Dedup
 and inserts nothing. Dedup is therefore scoped per source, exactly like every other idempotent
 ingest.
 
-## The write/read paths (all `bsk`, the only writer)
+## The write/read paths (`bsk`, when it was the only writer; the API now writes through the same Application services)
 
 - `bsk attach --file <path> [--content-type <ct>] [--description <text>]` — a document/attachment
   capture (CAP-4 / D4 reference flavor): a `note` event whose artifact carries the file's bytes,

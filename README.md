@@ -1,15 +1,21 @@
 # LifeOS — Life Kernel
 
-Stage 1 of the Life Kernel: the minimum system needed to test whether the
-[Life ontology](docs/ontology.md) survives contact with real daily use. It
-delivers a PostgreSQL schema,
-a `bsk` command-line interface, and a set of diagnostic queries — **no UI, no
-agent, no integrations**. See [epic #1](https://github.com/csdelan/LifeOS/issues/1)
-for the hypothesis under test and the full scope.
+Chris's personal life tracker, in daily use on staging with his real data. It
+began as Stage 1 of the Life Kernel, a test of whether the
+[Life ontology](docs/ontology.md) survives contact with real daily use
+([epic #1](https://github.com/csdelan/LifeOS/issues/1)): a PostgreSQL schema, the
+`bsk` command-line interface and a set of diagnostic queries. It survived, and
+these were built on the same core since:
 
-> This repo is an explicit hypothesis test and may be discarded. It is
-> deliberately standalone so that discarding it is `rm -rf`, not an untangling
-> exercise.
+- an ASP.NET Core API and a React web app (Tasks, Habits, the Calendar, the Food
+  Log, Activity from the Oura Ring, Home, Measurements, Reviews, Rewards and XP);
+- `/mcp`, the connector Chris's agents read through, and capture to when he
+  allows it ([docs/pilot/agent-access-plan.md](docs/pilot/agent-access-plan.md));
+- the WinForms Pilot, the first app, which Chris still runs.
+
+What each feature does and why is in its plan under [docs/pilot](docs/pilot);
+[docs/README.md](docs/README.md) lists them. Notes for agents working on the code
+are in [AGENTS.md](AGENTS.md).
 
 ## High-level goals
 
@@ -70,24 +76,33 @@ identity, choices, attention, and life.
 ## Layout
 
 ```
-db/migrations/       Versioned SQL migrations, named NNNN__name.sql
+db/
+  migrations/             Versioned SQL migrations, named NNNN__name.sql
+  schema/current.sql      Every table, view and function as the migrations leave them
+  diagnostics/            The `bsk check` rules, one SQL file each
 src/
-  LifeOs.Domain          Domain model (entities, rules)
-  LifeOs.Application      Transport-neutral application services
+  LifeOs.Domain           Domain model (entities, rules)
+  LifeOs.Application      Transport-neutral application services: every write goes through them
   LifeOs.Infrastructure   Npgsql + Dapper data access and the migration runner
   LifeOs.Cli              The `bsk` executable (System.CommandLine)
-  LifeOs.Api              ASP.NET Core door into Application (serves the SPA in prod)
-web/                      React + Vite SPA
+  LifeOs.Api              ASP.NET Core door into Application: /api, /mcp, and the SPA in prod
+  LifeOs.Pilot            The WinForms app; writes by running an installed `bsk`
+web/                      React + Vite SPA (mock mode with no API configured)
 tests/
   LifeOs.Tests            xUnit v3 + Testcontainers integration tests
-Dockerfile               Multi-stage image: SPA + API
+  rules/                  Shared cases for kernel rules the web copies
+docs/                     The ontology, feature plans and agent notes (docs/README.md)
+scripts/                  Deploy, migrate, backup, seed and code-generation scripts
+Dockerfile                Multi-stage image: SPA + API
 fly.toml / fly.staging.toml
-run.ps1                  Build the solution (and optionally run `bsk`)
-test.ps1                 Run the test suite
-docker-compose.yml       Local persistent Postgres for interactive use
+run.ps1                   Build the solution (and optionally run `bsk`)
+test.ps1                  Run the test suite
+docker-compose.yml        Local persistent Postgres for interactive use
 ```
 
-The layers depend inward only: `Cli → Infrastructure → Application → Domain`.
+The layers depend inward only: `Cli` and `Api` → `Infrastructure` → `Application` →
+`Domain`. Both doors compose the same Application services, so a rule holds whichever
+door a write comes through.
 
 ## Build and test
 
@@ -172,7 +187,7 @@ regenerated from `bsk` on demand. See [the ontology design document](docs/ontolo
 for the three-layer model, the full vocabulary, and how each layer maps to the
 high-level goals above.
 
-`subject_current` (the one Stage 1 projection) folds `state_change` events to
+`subject_current` (the first projection, from Stage 1) folds `state_change` events to
 the current status of each subject. A status changes only by appending a
 `state_change` event whose payload names the subject and new status:
 
@@ -209,15 +224,16 @@ findings (and their evidence arrays) as data.
 
 Each diagnostic is a plain SQL file under `db/diagnostics`, embedded into
 `LifeOs.Infrastructure` and run inside a single read-only transaction — the
-runner never involves a model. The individual Stage 1 diagnostics land in
-M4.2–M4.6; until then `bsk check` reports that none are configured. See
+runner never involves a model. There are seven today (neglect, breach, wishes,
+drift, unclosed loops, decorative identity and constraint). See
 [`db/diagnostics/README.md`](db/diagnostics/README.md) for the file-naming and
 result contract every diagnostic must satisfy.
 
 ## Read-only access (`bsk_reader`)
 
-`bsk` is the only write path. Every other consumer reads Postgres directly
-through the `bsk_reader` role, which has `USAGE` + `SELECT` and no write grants.
+Every write goes through the Application services, from `bsk`, the API or `/mcp`.
+Outside programs read Postgres directly through the `bsk_reader` role, which has
+`USAGE` + `SELECT` and no write grants.
 Flattened views unpack common jsonb attributes into columns for convenience:
 `bsk.v_subject`, `bsk.v_event`, `bsk.v_subject_relation`, `bsk.v_subject_event`,
 and `bsk.v_subject_current`.

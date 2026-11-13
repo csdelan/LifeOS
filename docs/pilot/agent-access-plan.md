@@ -27,7 +27,8 @@ prototype (step 3.1) runs on Phase 1; the rest of Phase 3 needs Phase 2.
 ## 0. Read these first
 
 - [ontology.md](../ontology.md) §4.4 (provenance) and §5 (the invariants): append-only
-  source, `bsk` as the only writer, `bsk_reader` for everyone else.
+  source, the Application services as the one write path (`bsk`, the API and `/mcp` are
+  doors into them), `bsk_reader` for outside readers.
 - [deploy.md](deploy.md): Fly, GitHub Environments and secrets. Production is still "later".
 - [supabase-hosting.md](supabase-hosting.md): the session pooler and role usernames
   (`<role>.<project-ref>`).

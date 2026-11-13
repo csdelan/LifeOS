@@ -40,6 +40,10 @@ commit each, and skipped P3.
   zone (REWARD-5).
 - **CR24:** a rename or attribute change appends an `attribute_change` event in the same
   transaction, so "what was this habit's recurrence on a date" can be answered later.
+- **CR25:** the ontology's invariant 9 now reads "one write path": every write goes through the
+  Application services, and `bsk`, the API and `/mcp` are doors into them. It said `bsk` was the
+  only writer, which stopped being true when the API began to write. The ontology's Stage 1
+  scope is marked as history, and its type and event-kind lists match the CHECK constraints.
 
 ## Items
 

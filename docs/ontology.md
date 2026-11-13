@@ -1,7 +1,10 @@
 # The LifeOS Ontology — Design Document
 
-**Status:** Stage 1 (Life Kernel). Describes the ontology as implemented in
-`db/migrations/0001`–`0007` and `src/LifeOs.Domain`.
+**Status:** Written for Stage 1 (Life Kernel, `db/migrations/0001`–`0007`). The vocabulary
+(§4) and the invariants (§5) are kept true to the code today: `src/LifeOs.Domain/Vocabulary.cs`
+and the CHECK constraints in [`db/schema/current.sql`](../db/schema/current.sql). The Stage 1
+scope in §1 and §8 (no UI, no agent, no integrations) is history: the web app, the API, `/mcp`
+and the Oura sync have been built on this core since, as the [README](../README.md) says.
 **Audience:** anyone deciding whether the Life ontology is the right foundation for
 BlueSkies Life Intelligence, or extending it.
 
@@ -66,7 +69,7 @@ flowchart BT
 
     subgraph SUBJECT["SUBJECT — schema: bsk · durable, interpreted truth"]
         direction LR
-        SUB["subject<br/><i>the 11 things in my life</i>"]
+        SUB["subject<br/><i>the things in my life (§4.1)</i>"]
         SR["subject_relation<br/><i>serves · results_in · supersedes</i>"]
         SE["subject_event<br/><i>concerns · evidences · violates</i>"]
     end
@@ -130,12 +133,13 @@ The ontology's vocabulary is fixed and enumerated in two mirrored places: the da
 CHECK constraints (authoritative) and `src/LifeOs.Domain/Vocabulary.cs` (the code mirror).
 Adding a term is a deliberate act in both.
 
-### 4.1 Subject types — the 11 things a life is made of
+### 4.1 Subject types — the things a life is made of
 
 `bsk.subject` is a **single table** with a `type` column and a typed `attributes` jsonb
-column. All 11 types share one table; per-type tables are intentionally avoided until a
-type stabilizes and earns real constraints. This means exercising or adding a type costs
-**zero DDL** — critical while the hypothesis is still under test.
+column. All 18 types share one table; per-type tables are intentionally avoided until a
+type stabilizes and earns real constraints. Adding a type costs one migration that widens
+the `type` CHECK, and no new table — critical while the hypothesis is still under test.
+Stage 1 had the first eleven; the last seven came with the features that needed them.
 
 | Type | What it represents |
 | --- | --- |
@@ -150,20 +154,35 @@ type stabilizes and earns real constraints. This means exercising or adding a ty
 | **Person** | A person the record concerns. |
 | **Constraint** | A limit on capacity or interaction (scope lives in `attributes`). |
 | **Season** | A bounded period that contextualizes everything else. |
+| **Area** | An Area of Focus: a durable life domain items point to (GEN-2, D1, migration `0014`). |
+| **Habit** | A recurring behaviour with a cue and a target; each expected day is evidenced or violated (GEN-3, D2, `0017`). |
+| **Appointment** | A calendar appointment; a repeating one materializes its occurrences as subjects (CAL-1, D10, `0020`). |
+| **Reward** | A priced treat or savings goal that earned currency is redeemed against (REWARD-3, D11, `0028`). |
+| **Space** | A space in the home, rated for the Home Score (HOME-1, D18, `0044`). |
+| **Metric** | Something measured about me, such as weight, with a unit and a goal; readings are `measurement` events (MEASURE-1, D20, `0050`). |
+| **Review** | A daily or weekly review, one per day or per Sunday-named week (REVIEW-0..2, D3, D8, `0052`). |
 
 Each subject has a stable, human-referenceable **URN** — `urn:bsk:<type>:<slug>-<shortid>`
 (e.g. `urn:bsk:problem:how-do-i-sleep-a1b2c3`). The slug keeps it readable; the short id
 makes it unique by construction. This is the identity by which people, scripts, and future
 agents name a subject without quoting a raw UUID.
 
-### 4.2 Event kinds — the 9 shapes of what happens
+### 4.2 Event kinds — the 13 shapes of what happens
 
 `bsk.event.kind` ∈ { `journal`, `note`, `voice`, `idea_session`, `observation`,
-`activity`, `measurement`, `interaction`, `state_change` }.
+`activity`, `measurement`, `interaction`, `state_change`, `archive_change`, `triage`,
+`ledger`, `attribute_change` }.
 
 Events are the raw stream of *what happened*: things I wrote or said, things observed about
 me, things measured, interactions, and — one special kind — `state_change`, the only way a
 subject's status ever moves (§5, invariant 8).
+
+The last four are the kernel's own bookkeeping, each folded by a view rather than edited in
+place: `archive_change` archives or restores a subject (D9, `0012`); `triage` flags an item
+into the Inbox or resolves it out (INBOX-1, `0015`); `ledger` earns, reverses or redeems
+reward currency (D11, `0025`); `attribute_change` records what a rename or an attribute
+change did, from and to (`0057`). Subject titles and attributes are still updated in place,
+and the views read the subject row; the `attribute_change` events are the trace of when.
 
 ### 4.3 Relations — the edges
 
@@ -232,8 +251,11 @@ migrations cite them by number.
    it moves only by appending a `state_change` event. `subject_current` *folds* those
    events — newest-occurrence-wins, deterministically tie-broken. The current state of
    anything is always reconstructible, and always explainable by the event that set it.
-7. **`bsk` is the only write path** (inv. 9). Every other consumer reads Postgres directly
-   through the `bsk_reader` role (SELECT-only, no write grants). One writer, many readers.
+7. **One write path** (inv. 9). Every write goes through the Application services
+   (`src/LifeOs.Application`). `bsk`, the API and `/mcp` are doors into them, so a rule is
+   written once and holds whichever door the write comes through. Outside programs read
+   Postgres directly through the `bsk_reader` role (SELECT-only, no write grants). At Stage 1
+   `bsk` was the only door; the write path stayed one when the API and `/mcp` joined it.
 8. **Task is a leaf** (`RelationRules`). Nothing may `serves` a Task. This keeps the
    alignment graph from degenerating into chains of tasks serving tasks, where *"does this
    work serve anything I care about?"* stops being answerable — the exact question the
@@ -296,8 +318,8 @@ ontology. That reduction is the whole point of fixing the ontology first.
 | **A trustworthy, evolving model of my life** | Immutable Source + disposable Derived: the model can be re-derived and improved endlessly without ever corrupting or losing the record it is built from. Provenance makes every belief traceable. |
 | **Protects my attention** | The alignment graph (`serves` / `results_in`) plus `state_change` history make "what matters now", "neglected commitments", and "conflicts" *computable*. `bsk check` is the Stage-1 seed of exactly this: rules that fire against your own data. |
 | **Adaptive coach whose interventions stay explainable** | Every diagnostic finding cites its evidence; every fact carries provenance. An intervention can always answer "why are you telling me this?" with source rows — the precondition for coaching that respects autonomy. |
-| **Launchpad for delegating work** | Subjects + provenance + the single write path give an agent typed context, a record of what it did (as provenance-tagged events), and a store it can read but only write through `bsk` — permissions and progress tracking fall out of the structure. |
-| **Works across every interface** | `bsk` is the *only* writer; everyone else reads through `bsk_reader`. Mobile, voice, BI, future BCI are all just more readers and more callers of the one write path — different doors, one authoritative store, invariants enforced below all of them. |
+| **Launchpad for delegating work** | Subjects + provenance + the single write path give an agent typed context, a record of what it did (as provenance-tagged events), and a store it can read but only write through the one write path (`/mcp` writes only what Chris allows) — permissions and progress tracking fall out of the structure. |
+| **Works across every interface** The Application services are the *only* write path, and `bsk`, the web and `/mcp` are doors into them; outside programs read through `bsk_reader`. Mobile, voice, BI, future BCI are all just more readers and more callers of the one write path — different doors, one authoritative store, invariants enforced below all of them. |
 | **Accumulates a governed history** | Append-only, bitemporal, deduplicated, provenance-tagged Source *is* the governed history. As interfaces advance, more ambient assistance is more projections over the same growing record — no re-architecture. |
 
 The long-term destination — a trusted cognitive companion that guides with minimal effort

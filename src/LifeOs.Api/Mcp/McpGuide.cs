@@ -12,10 +12,20 @@ public sealed class McpGuide
 {
     public const string GuideUri = "lifeos://guide";
 
-    public const string Instructions = """
+    private const string About = """
         LifeOS is Chris's personal record of his life: who he's choosing to be (identity
         statements), the goals, projects and tasks that serve them, his habits, appointments,
-        people, and what happened day by day. This connection is read-only.
+        people, and what happened day by day.
+        """;
+
+    /// <summary>The instructions when <c>Mcp:Writes</c> is off: reads only.</summary>
+    public const string Instructions = About + " This connection is read-only." + Reading;
+
+    /// <summary>The instructions when <c>Mcp:Writes</c> is on (agent-access plan §5).</summary>
+    public const string WriteInstructions = About + " This connection reads, and writes only as \"Writing\" below says." + Reading + Writing;
+
+    private const string Reading = """
+
 
         Call life_snapshot first; it shows today at a glance. Then follow ids with get_item,
         list_items, alignment, recent_changes, habits, calendar, inbox, people and diagnostics.
@@ -28,8 +38,7 @@ public sealed class McpGuide
         - Read lifeos://guide for the types, statuses and how to read the answers.
         """;
 
-    /// <summary>The instructions when <c>Mcp:Writes</c> is on (agent-access plan §5).</summary>
-    public const string WriteInstructions = Instructions + """
+    private const string Writing = """
 
 
         Writing: Chris may allow you to write. If capture, add_journal_entry, dismiss and
