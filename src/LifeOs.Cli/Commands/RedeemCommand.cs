@@ -55,7 +55,7 @@ internal static class RedeemCommand
                     tokens.Where(t => t.Contains('=')), "redeem expects currency=amount, e.g. freedom=45");
 
                 await using var provider = Cli.BuildServices(connectionString);
-                var redemption = await provider.GetRequiredService<RewardService>().RedeemAsync(
+                var redemption = await provider.GetRequiredService<RedemptionService>().RedeemAsync(
                     names.SingleOrDefault(), amounts.Count == 0 ? null : amounts, note, cancellationToken);
 
                 if (asJson)

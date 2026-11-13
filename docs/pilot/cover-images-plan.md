@@ -133,7 +133,7 @@ A cover is one object under the subject's `cover` attribute:
     fake change it.
   - A key with spaces, or an ApiUrl that isn't http(s), fails startup. `ToString` never
     prints the key.
-- **Port** `IUnsplashClient` (Application/Abstractions/Ports.cs):
+- **Port** `IUnsplashClient` (Application/Abstractions/IntegrationPorts.cs):
   - `SearchAsync(query, page, perPage)`: `GET /search/photos?query=…&page=…&per_page=24&orientation=landscape&content_filter=high`.
   - `GetPhotoAsync(photoId)`: `GET /photos/{id}`.
   - `TrackDownloadAsync(downloadLocation)`: `GET` the photo's `links.download_location`.
@@ -367,7 +367,7 @@ Read 2026-10-23.
 **C1 (2026-10-23).** As planned, plus:
 
 - **Where things live.** `Cover` is in `src/LifeOs.Domain/Covers.cs`. `IUnsplashClient`,
-  `UnsplashPhoto` and `UnsplashSearchPage` are in `Application/Abstractions/Ports.cs`, and
+  `UnsplashPhoto` and `UnsplashSearchPage` are in `Application/Abstractions/IntegrationPorts.cs`, and
   `CoverService` is in `Application/Covers`. `UnsplashOptions` and `UnsplashHttpClient` are
   in `Infrastructure/Integrations`.
 - **The settings ride on `IntegrationSettings`** (a third, optional member), so the API host

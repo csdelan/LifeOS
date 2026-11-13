@@ -74,7 +74,7 @@ public sealed record DomainChange(
 /// day, folded under each configured domain's rules on every read. Nothing here is stored, so a
 /// retuned rule, a corrected entry or a marked day shows at once.
 /// </summary>
-public sealed class DomainService(ILedgerRepository ledger)
+public sealed class DomainService(IDomainCreditReader ledger)
 {
     /// <summary>Every life domain, configured or not.</summary>
     public async Task<DomainsReading> GetAsync(CancellationToken cancellationToken = default)

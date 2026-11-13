@@ -98,6 +98,9 @@ public static class ServiceCollectionExtensions
             new NpgsqlLedgerRepository(sp.GetRequiredService<NpgsqlDataSource>(), settings.HomeTimeZone));
         services.AddSingleton<IHomeCalendar>(sp =>
             new NpgsqlHomeCalendar(sp.GetRequiredService<NpgsqlDataSource>(), settings.HomeTimeZone));
+        // The ledger's narrower reads (code review CR19) are the same repository.
+        services.AddSingleton<IRewardCatalogReader>(sp => sp.GetRequiredService<ILedgerRepository>());
+        services.AddSingleton<IDomainCreditReader>(sp => sp.GetRequiredService<ILedgerRepository>());
         services.AddSingleton<IIntegrationRepository>(sp =>
             new NpgsqlIntegrationRepository(sp.GetRequiredService<NpgsqlDataSource>(), settings.Integrations?.TokenCipher));
 
@@ -159,10 +162,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => new RewardService(
             sp.GetRequiredService<ILedgerRepository>(),
             sp.GetRequiredService<ISubjectRepository>(),
-            sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IClock>(),
             sp.GetRequiredService<EventSource>(),
             settings.CoinValueUsd));
+        services.AddSingleton<RedemptionService>();
         services.AddSingleton<DomainService>();
         services.AddSingleton<ExceptionDayService>();
         services.AddSingleton<RewardCatalogService>();

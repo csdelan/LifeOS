@@ -48,7 +48,7 @@ public sealed record HomeSeries(
 /// with the life-domain credit (<see cref="ILedgerRepository.GetDomainDaysAsync"/>), so the
 /// Home Score shown is the one Environment's level is held by. Nothing is stored.
 /// </summary>
-public sealed class HomeService(ILedgerRepository ledger)
+public sealed class HomeService(IDomainCreditReader ledger)
 {
     /// <summary>How many parts Fix next names.</summary>
     public const int FixNextCount = 3;

@@ -144,7 +144,7 @@ internal static partial class DomainsSimulateCommand
                     {
                         var connectionString = KernelConnectionString.Resolve(parseResult.GetValue(connectionOption));
                         await using var provider = Cli.BuildServices(connectionString);
-                        var credit = await provider.GetRequiredService<ILedgerRepository>()
+                        var credit = await provider.GetRequiredService<IDomainCreditReader>()
                             .GetDomainDaysAsync([currency.Key], cancellationToken);
                         var history = DomainService.Fold(rules, credit).Periods
                             .Select(p => new DomainDay(p.Start, p.Base, p.Paid, p.Passive))
@@ -193,7 +193,7 @@ internal static partial class DomainsSimulateCommand
                 {
                     var connectionString = KernelConnectionString.Resolve(parseResult.GetValue(connectionOption));
                     await using var provider = Cli.BuildServices(connectionString);
-                    var credit = await provider.GetRequiredService<ILedgerRepository>()
+                    var credit = await provider.GetRequiredService<IDomainCreditReader>()
                         .GetDomainDaysAsync([currency.Key], cancellationToken);
                     var history = DomainService.Fold(rules, credit).Periods
                         .Select(p => new DomainDay(p.Start, p.Base, p.Paid, p.Passive))

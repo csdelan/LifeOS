@@ -80,14 +80,14 @@ public static class RewardEndpoints
 
     private static async Task<IResult> Redeem(
         RedeemBody body,
-        RewardService rewards,
+        RedemptionService redemptions,
         SubjectReader reader,
         CancellationToken cancellationToken)
     {
         var reward = string.IsNullOrWhiteSpace(body.Reward)
             ? null
             : await WriteEndpoints.ResolveWriteRefAsync(body.Reward, reader, cancellationToken);
-        var redemption = await rewards.RedeemAsync(
+        var redemption = await redemptions.RedeemAsync(
             reward, body.Amounts is { Count: > 0 } amounts ? amounts : null, body.Note, cancellationToken);
         return Results.Ok(RewardRows.From(redemption));
     }

@@ -26,7 +26,10 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private sealed record Kernel(
-        ServiceProvider Provider, RewardService Rewards, RewardCatalogService Catalog, SubjectService Subjects);
+        ServiceProvider Provider, RewardService Rewards, RewardCatalogService Catalog, SubjectService Subjects)
+    {
+        public RedemptionService Redemptions => Provider.GetRequiredService<RedemptionService>();
+    }
 
     private Kernel Build(decimal? coinValueUsd = null)
     {
@@ -93,8 +96,8 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
         await EarnAsync(kernel, Spend(Currencies.Coins, 80));
         var before = (await kernel.Rewards.GetWalletAsync(Ct)).BalanceOf(Currencies.Coins);
 
-        var first = await kernel.Rewards.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 30), note: null, Ct);
-        var second = await kernel.Rewards.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 50), "Birthday money", Ct);
+        var first = await kernel.Redemptions.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 30), note: null, Ct);
+        var second = await kernel.Redemptions.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 50), "Birthday money", Ct);
 
         // Each deposit stamps the dollars it moved and the rate.
         Assert.Equal((15.00m, 0.50m), (first.Dollars, first.CoinRate));
@@ -125,11 +128,11 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
         var goal = await atHalf.Catalog.AddAsync(Unique("Trip fund"), RewardKinds.Savings, targetUsd: 60m, cancellationToken: Ct);
         await EarnAsync(atHalf, Spend(Currencies.Coins, 40));
 
-        var early = await atHalf.Rewards.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 20), null, Ct);
+        var early = await atHalf.Redemptions.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 20), null, Ct);
 
         // The rate is raised to a dollar a coin; the next deposit is worth twice as much…
         var atDollar = Build(coinValueUsd: 1.00m);
-        var late = await atDollar.Rewards.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 20), null, Ct);
+        var late = await atDollar.Redemptions.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 20), null, Ct);
 
         Assert.Equal((10.00m, 0.50m), (early.Dollars, early.CoinRate));
         Assert.Equal((20.00m, 1.00m), (late.Dollars, late.CoinRate));
@@ -156,7 +159,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
         await EarnAsync(kernel, Spend(Currencies.Freedom, 40));
         var before = (await kernel.Rewards.GetWalletAsync(Ct)).BalanceOf(Currencies.Freedom);
 
-        var redemption = await kernel.Rewards.RedeemAsync(movie.Reward.Title, amounts: null, note: null, Ct);
+        var redemption = await kernel.Redemptions.RedeemAsync(movie.Reward.Title, amounts: null, note: null, Ct);
 
         Assert.Equal(Spend(Currencies.Freedom, 40), redemption.Amounts);
         Assert.Equal(before - 40, redemption.Wallet.BalanceOf(Currencies.Freedom));
@@ -181,7 +184,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
             Unique("Gaming"), price: Spend(Currencies.Freedom, 60), cancellationToken: Ct);
         await EarnAsync(kernel, new Dictionary<string, long> { [Currencies.Freedom] = 20, [Currencies.Coins] = 2 });
 
-        var redemption = await kernel.Rewards.RedeemAsync(
+        var redemption = await kernel.Redemptions.RedeemAsync(
             gaming.Reward.Urn,
             new Dictionary<string, long> { [Currencies.Freedom] = 20, [Currencies.Coins] = 2 },
             "A short session",
@@ -201,7 +204,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
         var kernel = Build();
         await EarnAsync(kernel, Spend(Currencies.Coins, 3));
 
-        var redemption = await kernel.Rewards.RedeemAsync(Spend(Currencies.Coins, 3), "Coffee out", Ct);
+        var redemption = await kernel.Redemptions.RedeemAsync(Spend(Currencies.Coins, 3), "Coffee out", Ct);
 
         Assert.Null(redemption.Reward);
         Assert.Equal(((string?)null, "Coffee out", 1.50m, 0.50m), await PayloadAsync(redemption.EventId));
@@ -216,16 +219,16 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
         var events = await LedgerEventCountAsync();
 
         var none = await Assert.ThrowsAsync<ArgumentException>(() =>
-            kernel.Rewards.RedeemAsync(goal.Reward.Urn, amounts: null, "Nothing", Ct));
+            kernel.Redemptions.RedeemAsync(goal.Reward.Urn, amounts: null, "Nothing", Ct));
         var freedom = await Assert.ThrowsAsync<ArgumentException>(() =>
-            kernel.Rewards.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Freedom, 5), null, Ct));
+            kernel.Redemptions.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Freedom, 5), null, Ct));
 
         Assert.Contains("how many Coins", none.Message);
         Assert.Contains("only Coins", freedom.Message);
         Assert.Equal(events, await LedgerEventCountAsync());
 
         // Without a target there is progress but no percentage.
-        var deposit = await kernel.Rewards.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 5), null, Ct);
+        var deposit = await kernel.Redemptions.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 5), null, Ct);
         Assert.Equal((2.50m, (decimal?)null, (decimal?)null),
             (deposit.Reward!.DollarsRedeemed, deposit.Reward.PercentOfTarget, deposit.Reward.RemainingUsd));
     }
@@ -239,7 +242,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
         var events = await LedgerEventCountAsync();
 
         var refused = await Assert.ThrowsAsync<ArgumentException>(() =>
-            kernel.Rewards.RedeemAsync(treat.Reward.Urn, amounts: null, note: null, Ct));
+            kernel.Redemptions.RedeemAsync(treat.Reward.Urn, amounts: null, note: null, Ct));
 
         Assert.Contains("no price yet", refused.Message);
         Assert.Equal(events, await LedgerEventCountAsync());
@@ -256,9 +259,9 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
         var events = await LedgerEventCountAsync();
 
         var notReward = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            kernel.Rewards.RedeemAsync(task.Urn, Spend(Currencies.Karma, 1), "x", Ct));
+            kernel.Redemptions.RedeemAsync(task.Urn, Spend(Currencies.Karma, 1), "x", Ct));
         var archived = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            kernel.Rewards.RedeemAsync(retired.Reward.Urn, amounts: null, note: null, Ct));
+            kernel.Redemptions.RedeemAsync(retired.Reward.Urn, amounts: null, note: null, Ct));
 
         Assert.Contains("not a Reward", notReward.Message);
         Assert.Contains("archived", archived.Message);
@@ -280,7 +283,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
         var events = await LedgerEventCountAsync();
 
         var refused = await Assert.ThrowsAsync<InsufficientBalanceException>(() =>
-            kernel.Rewards.RedeemAsync(trip.Reward.Urn, amounts: null, note: null, Ct));
+            kernel.Redemptions.RedeemAsync(trip.Reward.Urn, amounts: null, note: null, Ct));
 
         Assert.Equal(balance + 1, refused.Requested);
         Assert.Equal(events, await LedgerEventCountAsync());

@@ -21,7 +21,7 @@ public sealed record ExceptionDays(DateOnly Today, int Days, IReadOnlyList<Excep
 /// words, with nothing written.
 /// </summary>
 public sealed class ExceptionDayService(
-    ILedgerRepository ledger, IEventStore events, RewardService rewards, IHomeCalendar calendar, IClock clock,
+    IDomainCreditReader ledger, IEventStore events, RewardService rewards, IHomeCalendar calendar, IClock clock,
     EventSource eventSource)
 {
     /// <summary>The longest comment, in characters.</summary>

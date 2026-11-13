@@ -33,7 +33,10 @@ public sealed class RewardDomainTests(PostgresFixture postgres)
 
     private sealed record Kernel(
         ServiceProvider Provider, SubjectService Subjects, StatusService Status, AdherenceService Adherence,
-        RewardService Rewards, BountyService Bounties, ILedgerRepository Ledger, IEventStore Events);
+        RewardService Rewards, BountyService Bounties, ILedgerRepository Ledger, IEventStore Events)
+    {
+        public RedemptionService Redemptions => Provider.GetRequiredService<RedemptionService>();
+    }
 
     private Kernel Build(string? homeTimeZone = null)
     {
@@ -232,7 +235,7 @@ public sealed class RewardDomainTests(PostgresFixture postgres)
         var kernel = Build();
 
         var refused = await Assert.ThrowsAsync<ArgumentException>(
-            () => kernel.Rewards.RedeemAsync(Health(5), "a treat", Ct));
+            () => kernel.Redemptions.RedeemAsync(Health(5), "a treat", Ct));
 
         Assert.Equal("Health XP is tracked, not spent; it can't be redeemed.", refused.Message);
     }

@@ -23,10 +23,10 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private (RewardService Rewards, ILedgerRepository Ledger, ServiceProvider Provider) Build()
+    private (RewardService Rewards, RedemptionService Redemptions, ServiceProvider Provider) Build()
     {
         var provider = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
-        return (provider.GetRequiredService<RewardService>(), provider.GetRequiredService<ILedgerRepository>(), provider);
+        return (provider.GetRequiredService<RewardService>(), provider.GetRequiredService<RedemptionService>(), provider);
     }
 
     /// <summary>
@@ -102,11 +102,11 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
     [Fact]
     public async Task Earnings_and_redemptions_fold_into_the_balance()
     {
-        var (rewards, _, provider) = Build();
+        var (rewards, redemptions, provider) = Build();
         var before = await rewards.GetWalletAsync(Ct);
 
         await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Freedom] = 30, [Currencies.Xp] = 10 });
-        await rewards.RedeemAsync(new Dictionary<string, long> { [Currencies.Freedom] = 12 }, "A short game", Ct);
+        await redemptions.RedeemAsync(new Dictionary<string, long> { [Currencies.Freedom] = 12 }, "A short game", Ct);
 
         var after = await rewards.GetWalletAsync(Ct);
         var freedomBefore = Line(before, Currencies.Freedom);
@@ -120,10 +120,10 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
     [Fact]
     public async Task A_redemption_is_a_declared_ledger_entry_with_its_note_and_negative_amounts()
     {
-        var (rewards, _, provider) = Build();
+        var (rewards, redemptions, provider) = Build();
         await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Coins] = 5 });
 
-        var redemption = await rewards.RedeemAsync(
+        var redemption = await redemptions.RedeemAsync(
             new Dictionary<string, long> { ["Coins"] = 5 }, "  Toward the bike  ", Ct);
 
         Assert.Equal(5, redemption.Amounts[Currencies.Coins]);
@@ -169,13 +169,13 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
     [Fact]
     public async Task Redeeming_more_than_the_balance_is_refused_and_writes_nothing()
     {
-        var (rewards, _, provider) = Build();
+        var (rewards, redemptions, provider) = Build();
         await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Gems] = 2 });
         var balance = (await rewards.GetWalletAsync(Ct)).BalanceOf(Currencies.Gems);
         var events = await LedgerEventCountAsync();
 
         var refused = await Assert.ThrowsAsync<InsufficientBalanceException>(() =>
-            rewards.RedeemAsync(new Dictionary<string, long> { [Currencies.Gems] = balance + 1 }, "A road trip", Ct));
+            redemptions.RedeemAsync(new Dictionary<string, long> { [Currencies.Gems] = balance + 1 }, "A road trip", Ct));
 
         Assert.Equal(Currencies.Gems, refused.Currency);
         Assert.Equal(balance, refused.Balance);
@@ -188,11 +188,11 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
     [Fact]
     public async Task A_refused_redemption_leaves_its_other_currencies_untouched_too()
     {
-        var (rewards, _, provider) = Build();
+        var (rewards, redemptions, provider) = Build();
         await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Freedom] = 10, [Currencies.Karma] = 1 });
         var before = await rewards.GetWalletAsync(Ct);
 
-        await Assert.ThrowsAsync<InsufficientBalanceException>(() => rewards.RedeemAsync(
+        await Assert.ThrowsAsync<InsufficientBalanceException>(() => redemptions.RedeemAsync(
             new Dictionary<string, long>
             {
                 [Currencies.Freedom] = 1,
@@ -211,12 +211,12 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
     [InlineData(Currencies.Resolve)]
     public async Task Tracked_currencies_cannot_be_redeemed(string currency)
     {
-        var (rewards, _, provider) = Build();
+        var (rewards, redemptions, provider) = Build();
         await EarnAsync(provider, new Dictionary<string, long> { [currency] = 50 });
         var events = await LedgerEventCountAsync();
 
         var refused = await Assert.ThrowsAsync<ArgumentException>(() =>
-            rewards.RedeemAsync(new Dictionary<string, long> { [currency] = 1 }, "Spend the unspendable", Ct));
+            redemptions.RedeemAsync(new Dictionary<string, long> { [currency] = 1 }, "Spend the unspendable", Ct));
 
         Assert.Contains("tracked, not spent", refused.Message);
         Assert.Equal(events, await LedgerEventCountAsync());
@@ -230,11 +230,11 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
     public async Task A_redemption_needs_a_known_currency_a_positive_amount_and_a_note(
         string currency, long amount, string note)
     {
-        var (rewards, _, _) = Build();
+        var (rewards, redemptions, _) = Build();
         var events = await LedgerEventCountAsync();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            rewards.RedeemAsync(new Dictionary<string, long> { [currency] = amount }, note, Ct));
+            redemptions.RedeemAsync(new Dictionary<string, long> { [currency] = amount }, note, Ct));
 
         Assert.Equal(events, await LedgerEventCountAsync());
     }
@@ -242,9 +242,9 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
     [Fact]
     public async Task A_currency_named_twice_in_one_redemption_is_refused()
     {
-        var (rewards, _, _) = Build();
+        var (rewards, redemptions, _) = Build();
 
-        var refused = await Assert.ThrowsAsync<ArgumentException>(() => rewards.RedeemAsync(
+        var refused = await Assert.ThrowsAsync<ArgumentException>(() => redemptions.RedeemAsync(
             new Dictionary<string, long> { ["freedom"] = 1, ["Freedom"] = 2 }, "Twice", Ct));
 
         Assert.Contains("listed twice", refused.Message);
@@ -253,7 +253,7 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
     [Fact]
     public async Task Two_redemptions_racing_for_the_same_balance_cannot_both_land()
     {
-        var (rewards, _, provider) = Build();
+        var (rewards, redemptions, provider) = Build();
         await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Karma] = 7 });
         var balance = (await rewards.GetWalletAsync(Ct)).BalanceOf(Currencies.Karma);
         var spendAll = new Dictionary<string, long> { [Currencies.Karma] = balance };
@@ -262,7 +262,7 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
         {
             try
             {
-                await rewards.RedeemAsync(spendAll, "Racing for the same Karma", Ct);
+                await redemptions.RedeemAsync(spendAll, "Racing for the same Karma", Ct);
                 return true;
             }
             catch (InsufficientBalanceException)

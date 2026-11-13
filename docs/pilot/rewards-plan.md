@@ -257,7 +257,7 @@ awards them only for specific things, per item. Time on the timer has no default
   - or `savings`, with an optional `target_usd`
 - **`v_reward`:** the catalog rows. For savings goals it adds the coins and dollars deposited
   (the sum of redeem entries concerning the goal) and the percentage of target.
-- **`RewardService.RedeemAsync(reward?, amounts, note)`:**
+- **`RedemptionService.RedeemAsync(reward?, amounts, note)`** (in `RewardService` until code review CR19):
   - It refuses tracked currencies and non-positive amounts.
   - It requires a note when no Reward is given.
   - Under one wallet-wide advisory lock, it reads `v_wallet` and refuses if any balance would

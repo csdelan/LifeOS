@@ -14,7 +14,7 @@ namespace LifeOs.Application.Rewards;
 /// what has been redeemed is folded by <c>bsk.v_reward</c>, so nothing here is a balance.
 /// </summary>
 public sealed class RewardCatalogService(
-    SubjectService subjects, ISubjectRepository repository, ILedgerRepository ledger)
+    SubjectService subjects, ISubjectRepository repository, IRewardCatalogReader ledger)
 {
     /// <summary>The catalog by name, with what has been redeemed against each; archived Rewards only when asked.</summary>
     public Task<IReadOnlyList<CatalogReward>> ListAsync(

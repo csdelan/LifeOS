@@ -48,7 +48,7 @@ or the web API needs the bytes.
 
 ### The swap seam — `IArtifactBlobStore`
 
-`IArtifactBlobStore` (`src/LifeOs.Application/Abstractions/Ports.cs`) is the port that isolates
+`IArtifactBlobStore` (`src/LifeOs.Application/Abstractions/ArtifactPorts.cs`) is the port that isolates
 *where the bytes live* from everything above it:
 
 - `PutAsync(NewBinaryCapture)` — writes the event + artifact + payload as one atomic unit,
