@@ -128,6 +128,7 @@ Live with that for a few weeks before designing the rest.
   - **Plugins:** keep Dataview, Style Settings and the cosmetic ones: Rainbow-Colored Sidebar, Colored Text, Emoji Toolbar and Multi-Column Markdown, whose layout two 2025 reflections use. Remove Tasks, Kanban, Full Calendar, Big Calendar, Make.md, Iconize, Templater, Thumbnails, Columns, MetaEdit and Local REST API. Removing is reversible: each plugin's folder moves out of the vault, nothing is deleted.
   - **Blue Skies** belongs to the Trader Area, every note of it.
   - **The 4 projects with no LifeOS item:** Chris creates a LifeOS Project for each before the cutover, and the agent links them.
+- **2026-11-12: Chris dictates into LifeOS's voice capture (N6, option A).** The other option was Obsidian on his phone, dictating into `00 Inbox`: nothing to build in LifeOS and nothing to clear, but Obsidian on another device and two places to speak into. LifeOS is the one inbox the plan was built around, and N7 later lets the agent clear what it filed.
 - **2026-11-12: stricter related links (spec v0.6).** The first backfill linked by topic and made the graph "a big web where everything is related to everything else". Chris accepted the recommendation as it stood: each link names its kind (part of, continues, answers, same thing), at most two per note, one direction, and the graph hides the maps, Home and tags.
 
 ## The vault today (surveyed 2026-11-12)
@@ -250,6 +251,19 @@ Designed 2026-11-12, when Chris said to start N5. Everything runs on PICARD, whe
 
 Decided rather than asked, since one option wins: a desktop scheduled task, not Task Scheduler with `claude -p` (which can bill the API) or a cloud routine (which can't reach the vault); and questions waiting in `00 Inbox` until N7.
 
+### N6: the minimal dictation pipeline
+
+Started 2026-11-12. Chris dictates into LifeOS's voice capture, the mic button that went live on the web on 2026-11-08 (CAP-2), and the nightly sweep on PICARD files what belongs in the vault. In this order:
+
+1. **The connector passes whole captures.** `inbox` cut each capture's text at 1,000 characters, a little over a minute of talking, without saying so. Now it passes up to 20,000 (about twenty minutes), marks a longer one `cut: true`, and its result carries `text_limit`, so the vault agent can tell it from the older connector and files nothing from that one (agent-access plan §4.3). It reaches staging at the next push.
+2. **The capture log,** `notes_tools.captures`, writing `99 System/capture-log.yaml` (vault `3f3c363`; the connector change is LifeOS `c90b635`). Agents can't mark a capture handled in LifeOS until N7, so the log records each capture the agent filed, asked about or left for LifeOS, and `record` refuses to file one twice. `stamp` turns a capture's `flagged_at` into its time in Pacific, for its names and `created`.
+3. **The skill and the sweep** (vault `3f3c363`; the scheduled task's prompt updated the same day). The skill's new "Captures from LifeOS" section: read `inbox` (read-only, never `health`), take the raw note and voice captures that have text, skip the logged ones, and file each by the skill's steps with its own commit. Tasks, ideas and appointments stay in LifeOS's Inbox for Chris's triage (logged as `left`); when unsure, the agent asks in `00 Inbox`. A reflection's `transcript` is `urn:bsk:capture:<id>`, as the spec's §2 has it: LifeOS keeps the raw words for good, so nothing goes in `95 Transcripts`. LifeOS doesn't resolve these URNs yet, since a capture is an event and events have no URN of their own; the form names the event by its id, for N7 or N8 to resolve. The sweep now files LifeOS captures, and the notes in `00 Inbox` that Chris answered or put there, right after committing his edits.
+4. **Chris clears the filed captures in LifeOS himself until N7.** Each run's For LifeOS note lists them under "Filed; dismiss in LifeOS's Inbox", and the run's reply names them. A capture waiting on a question stays in LifeOS's Inbox until he answers.
+5. **The check. Done 2026-11-12,** by a fresh agent given only the skill. It ran the nightly sweep on a clone of the vault, with a made-up inbox standing in for the connector. Of seven items, a dictated daily reflection and a trading rule became valid notes (the rule with an Answers link from an older trading journal). A to-do was left in LifeOS, and workshop notes with no LifeOS Project became a question. It skipped the voice note with no text, the Idea, and a capture the log already had. A second `check` found nothing new. Its gaps went back into the skill and tools (vault `2460bed`): when a question's capture may be dismissed, when `left` records and the For LifeOS note are committed, plans whose day has passed, and `captures stamp now` for the time in Pacific. Not covered: the real connector, which can't be used before the push, and an answered question filed by a later run.
+6. **Done when:** a week of real use, counted from the first night after the push.
+
+Chris chose where to dictate on 2026-11-12 (below). Decided rather than asked: the agent files in the 3 AM sweep and whenever Chris asks a Claude Code session on PICARD to file his captures, with no extra task; the sweep's reply is the daily digest, since the 4 AM daily report is switched off.
+
 ## Status
 
 - [x] N0 — This plan
@@ -258,7 +272,7 @@ Decided rather than asked, since one option wins: a desktop scheduled task, not 
 - [x] N3 — Reorganize the copy, in rounds (round 1 and its follow-ups, approved by Chris 2026-11-12 at spec v0.7)
 - [x] N4 — Freeze the spec and cut over (2026-11-12, synced to PICARD and Jupiter; Chris deletes HOLD when he's ready)
 - [ ] N5 — Formatter skill, media sweep and related-links sweep (all built and installed 2026-11-12; waiting on the first nightly run)
-- [ ] N6 — Minimal dictation pipeline
+- [ ] N6 — Minimal dictation pipeline (built 2026-11-12; it files captures once the connector change is pushed, then a week of use)
 - [ ] N7 — LifeOS agent writes at `capture`
 - [ ] N8 — Reviews R5: reflections linked to reviews
 - [ ] N9 — Paperless search in `/mcp`
