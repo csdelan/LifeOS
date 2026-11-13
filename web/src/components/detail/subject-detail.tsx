@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Resolver } from "react-hook-form";
-import { toast } from "sonner";
 import {
   BookOpenIcon,
   HistoryIcon,
@@ -70,11 +69,14 @@ import { RelationshipsTab } from "./relationships-tab";
 import { TagsTab } from "./tags-tab";
 import { HistoryTab } from "./history-tab";
 import { EstablishmentPanel } from "./establishment-panel";
-import { errorText, useWriteAction } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 // The journal (tiptap's editor and its HTML schema) is fetched when the Journal tab is first
 // opened, not with every page that shows an item (code review CR23).
 const JournalTab = lazy(() => import("./journal-tab").then((m) => ({ default: m.JournalTab })));
+
+/** A save is several writes, so one that fails with no words of its own may have kept some. */
+const SAVE_FAILED = "That didn't all save. The item shows what was kept.";
 
 export function SubjectDetail({
   subjectId,
@@ -102,6 +104,10 @@ export function SubjectDetail({
   const [targetDraft, setTargetDraft] = useState<TargetDraft>({});
   const writes = useWrites();
   const reported = useWriteAction({ report: "toast" });
+  // A save is many writes in a row; inline runs one save at a time, so a second click or Enter
+  // can't send them all again while the first is still going (code review CR60).
+  const saving = useWriteAction({ report: "inline", fallback: SAVE_FAILED });
+  const { setError: setSaveError } = saving;
   const { openNew } = useCreateActions();
 
   const habit = useMemo(
@@ -136,7 +142,8 @@ export function SubjectDetail({
     setBountyDraft({});
     setTargetDraft({});
     setChoosingCover(false);
-  }, [subjectId]);
+    setSaveError(null);
+  }, [subjectId, setSaveError]);
 
   const bountyLines = data?.bounty ?? [];
   const dirty = isDetailDirty(
@@ -178,30 +185,34 @@ export function SubjectDetail({
   const cfg = formConfig(subject.type);
   const childTypes = childTypesFor(subject.type);
 
-  async function save(values: SubjectFormValues) {
+  /** Checked before anything is written; a problem is said beside Save and nothing runs. */
+  function saveProblem(values: SubjectFormValues): string | null {
     if (subject.type === "Goal" && values.status === "Active" && !values.attrs.target_date) {
-      toast.error("A Goal needs a target date before it can be Active.");
-      return;
+      return "A Goal needs a target date before it can be Active.";
     }
     if (subject.type === "Habit" && selectedParentIds(values).length < 1) {
-      toast.error("A Habit needs at least one Goal or Identity Statement.");
+      return "A Habit needs at least one Goal or Identity Statement.";
+    }
+    return bountyProblem(bountyDraft) ?? targetProblem(targetDraft);
+  }
+
+  function save(values: SubjectFormValues) {
+    const problem = saveProblem(values);
+    if (problem) {
+      setSaveError(problem);
       return;
     }
-    const bountyIssue = bountyProblem(bountyDraft) ?? targetProblem(targetDraft);
-    if (bountyIssue) {
-      toast.error(bountyIssue);
-      return;
-    }
+    void saving.run(() => writeSave(values));
+  }
+
+  // Each write waits for the one before it, and the first refusal stops the rest and is said
+  // beside Save, with the panel left open on what was typed.
+  async function writeSave(values: SubjectFormValues) {
     // Rename first, so a refused rename (two Problems can't share a title) stops the
     // save before any other field changes — the same order the Pilot's Edit uses.
     const nextTitle = values.title.trim().split(/\s+/).join(" ");
     if (nextTitle && nextTitle !== subject.title) {
-      try {
-        await writes.rename(subject.id, nextTitle);
-      } catch (err) {
-        toast.error(errorText(err, "Could not rename."));
-        return;
-      }
+      await writes.rename(subject.id, nextTitle);
     }
     const attrs = attrsToWrite(subject.type, values);
     if (Object.keys(attrs).length > 0) {
@@ -228,16 +239,11 @@ export function SubjectDetail({
     const startChanged =
       subject.type === "Task" && !!values.attrs.recurrence && (values.attrs.start ?? "") !== (saved?.start ?? "");
     if (hasRecurrenceField(subject.type) && (patternChanged || startChanged)) {
-      try {
-        await writes.recur(
-          subject.id,
-          parseRecurrence(values.attrs.recurrence),
-          subject.type === "Task" && values.attrs.start ? { start: values.attrs.start } : undefined,
-        );
-      } catch (err) {
-        toast.error(errorText(err, "Could not change the repeat."));
-        return;
-      }
+      await writes.recur(
+        subject.id,
+        parseRecurrence(values.attrs.recurrence),
+        subject.type === "Task" && values.attrs.start ? { start: values.attrs.start } : undefined,
+      );
     }
     // Parents and people as the form now has them, against what it showed: a new item's create
     // makes the same writes (lib/subject-save.ts). An Appointment's attendees are involved, and a
@@ -274,6 +280,7 @@ export function SubjectDetail({
     );
     setBountyDraft({});
     setTargetDraft({});
+    setSaveError(null);
     setEditing(false);
   }
 
@@ -400,10 +407,14 @@ export function SubjectDetail({
             ) : null}
             {editing ? (
               <>
-                <Button variant="outline" size="sm" onClick={cancel}>
+                <Button variant="outline" size="sm" onClick={cancel} disabled={saving.pending}>
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => void form.handleSubmit((v) => void save(v))()} disabled={!dirty}>
+                <Button
+                  size="sm"
+                  onClick={() => void form.handleSubmit(save)()}
+                  disabled={!dirty || saving.pending}
+                >
                   Save
                 </Button>
               </>
@@ -424,6 +435,11 @@ export function SubjectDetail({
             ) : null}
           </div>
         </div>
+        {editing && saving.error ? (
+          <p role="alert" className="mt-2 text-sm text-destructive">
+            {saving.error}
+          </p>
+        ) : null}
         {/* The series is never worked on itself: its repetitions are timed. */}
         {subject.type === "Task" && !series ? (
           <TaskTimerPanel

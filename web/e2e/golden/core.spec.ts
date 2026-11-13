@@ -26,6 +26,23 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     });
   });
 
+  test("Enter pressed twice in the Map's inline create makes one item", async ({ page }) => {
+    await page.goto("/map");
+    await expect(page.getByRole("tree", { name: "Alignment outline" })).toBeVisible();
+    await page.getByRole("button", { name: "Run a half-marathon", exact: true }).click();
+    await page.keyboard.press("Enter");
+    const title = page.getByLabel(/New (project|task|goal)/i);
+    await title.fill("Track tempo runs");
+    // The second Enter lands while the first create is still saving (code review CR60).
+    await title.press("Enter");
+    await title.press("Enter");
+    const made = page.getByRole("button", { name: "Track tempo runs", exact: true });
+    await expect(made.first()).toBeVisible({ timeout: 10_000 });
+    // A second create would land a moment after the first; give it time to show before counting.
+    await page.waitForTimeout(500);
+    await expect(made).toHaveCount(1);
+  });
+
   test("the Map hides finished work until Show asks for it", async ({ page }) => {
     await page.goto("/map");
     const outline = page.getByRole("tree", { name: "Alignment outline" });

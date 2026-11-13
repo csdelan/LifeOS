@@ -39,6 +39,7 @@ import { PeekPanel } from "@/components/shell/panels";
 import { loadExpanded, saveExpanded, loadView, saveView } from "@/lib/view-state";
 import { mapSubjects } from "@/lib/task-series";
 import { MapIcon } from "lucide-react";
+import { useWriteAction } from "@/lib/write-action";
 
 const LENSES: { id: MapLens; label: string }[] = [
   { id: "all", label: "All" },
@@ -618,20 +619,24 @@ function InlineCreate({
   const [type, setType] = useState<SubjectType>(types[0]);
   const [title, setTitle] = useState("");
   const create = useCreateSubject();
+  // Enter and Add both run through here, one create at a time: a second Enter while the first is
+  // still saving made a second item (code review CR60).
+  const adding = useWriteAction({ onDone });
 
-  async function save() {
+  function save() {
     if (!title.trim()) return;
     const parentRef = isSibling ? parent.parentId : parent.id;
     const parentType = isSibling ? undefined : parent.subject.type;
     const relation =
       parentRef && parentType ? inferChildRelation(type, parentType) : undefined;
-    await create.mutateAsync({
-      type,
-      title: title.trim(),
-      parent: parentRef ?? undefined,
-      relation,
-    });
-    onDone();
+    void adding.run(() =>
+      create.mutateAsync({
+        type,
+        title: title.trim(),
+        parent: parentRef ?? undefined,
+        relation,
+      }),
+    );
   }
 
   return (
@@ -660,7 +665,7 @@ function InlineCreate({
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            void save();
+            save();
           }
           if (e.key === "Escape") {
             e.preventDefault();
@@ -673,9 +678,14 @@ function InlineCreate({
           }
         }}
       />
-      <Button size="xs" onClick={() => void save()} disabled={!title.trim() || create.isPending}>
+      <Button size="xs" onClick={save} disabled={!title.trim() || adding.pending}>
         Add
       </Button>
+      {adding.error ? (
+        <p role="alert" className="basis-full text-xs text-destructive">
+          {adding.error}
+        </p>
+      ) : null}
     </div>
   );
 }
