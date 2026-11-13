@@ -3,7 +3,8 @@
 **Status:** CR1 to CR26 built (2026-11-12). CR27 to CR56, the second review's P0, P1 and P2, built
 (2026-11-13), and CR57 for its choice A; choices B and C wait for Chris
 ([Second review](#second-review-2026-11-13)). The third review scored the code 6.1 of 10, and Chris
-chose its P0 and P1, CR58 to CR67, built (2026-11-13) ([Third review](#third-review-2026-11-13)).
+chose its P0 and P1, CR58 to CR67, built (2026-11-13), then its P2, CR68 to CR90
+([Third review](#third-review-2026-11-13)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
@@ -277,33 +278,33 @@ behaviour (CR60 to CR63, CR65, CR66), it was run against the code before the fix
 | CR66 | 9 | A `bsk` older than the database refuses every verb but `migrate` and `check` (`StaleBskGuard`). |
 | CR67 | 10 | The Pilot's New item closes once the item exists, and names each follow-up that failed (`NewItemWrites`). |
 
-### P2: proposed
+### P2: chosen (CR68 to CR90)
 
-| Review # | Fix |
-|----------|-----|
-| 11 | Request idempotency moves into Application: the capture's text and event in one transaction, "already written" as a kernel result. Before agent access level `full`. |
-| 12 | System follow-ups (lab-visit range sync, a series' start) are recorded as derived, citing their cause; metric and space edits in one transaction each. |
-| 13 | `v_habit` reads `allows_partial` the way `AdherenceService` does, so one bad value can't break every habit read. |
-| 14 | `bsk` stores photos and reports in the database only on localhost without object storage. |
-| 15 | Space share, "a Value needs a statement" and the food-edit merge move out of the doors into Domain and Application. |
-| 16 | The measurement catalog and currency labels come from the API, not a copy. |
-| 17 | One `isOverdue`, so Browse's Overdue leaves finished items out. |
-| 18 | `usePersistedChoice` for the ten remembered view choices; a renamed option can't crash a render. |
-| 19 | `/api/subjects` filters by status and limit; Focus, Tasks, the palette and pickers read open items; Browse caps what it draws; Resolved loads older. |
-| 20 | `EventIndexTests` needs a read per index and checks the index is used for the lookup; the timer view, six newest-version views and the recap use their indexes. |
-| 21 | The Food and Activity paid reads are bounded by date in SQL, in one shared read. |
-| 22 | Oura sync fetches before it opens its transaction. |
-| 23 | Feature follow-ups on the generic verbs become required, then a hook per feature. |
-| 24 | Readers are built from a reader kernel through DI (CR18's read side). |
-| 25 | Every live call goes through `fits()`; the normalizers stop converting numbers (CR9, CR38). |
-| 26 | Generated types aliased in one line, with a ratchet; a folder per web feature; `decorateWrites` as a table of effects. |
-| 27 | The bundle: the graph and closed dialogs load lazily, mock-only code moves under `lib/mock`, unused packages go. |
-| 28 | A `ReadState` component with Retry. |
-| 29 | `DomainDailyChart` moves onto `DailyMetricChart`. |
-| 30 | Keyboard access for the Map outline, "+ child" and the resize handle. |
-| 31 | Test kernels in their database's zone; tests of a global fold get their own database; one UTC+14 test of every home-date column. |
-| 32 | `bsk --json` emits the API's DTOs. |
-| 33 | One image built per commit and deployed by digest; `/health/ready` checked after a deploy. |
+| ID | Review # | Fix |
+|----|----------|-----|
+| CR68 | 11 | Request idempotency moves into Application: the capture's text and event in one transaction, "already written" as a kernel result. Before agent access level `full`. |
+| CR69 | 12 | System follow-ups (lab-visit range sync, a series' start) are recorded as derived, citing their cause; metric and space edits in one transaction each. |
+| CR70 | 13 | `v_habit` reads `allows_partial` the way `AdherenceService` does, so one bad value can't break every habit read. |
+| CR71 | 14 | `bsk` stores photos and reports in the database only on localhost without object storage. |
+| CR72 | 15 | Space share, "a Value needs a statement" and the food-edit merge move out of the doors into Domain and Application. |
+| CR73 | 16 | The measurement catalog and currency labels come from the API, not a copy. |
+| CR74 | 17 | One `isOverdue`, so Browse's Overdue leaves finished items out. |
+| CR75 | 18 | `usePersistedChoice` for the ten remembered view choices; a renamed option can't crash a render. |
+| CR76 | 19 | `/api/subjects` filters by status and limit; Focus, Tasks, the palette and pickers read open items; Browse caps what it draws; Resolved loads older. |
+| CR77 | 20 | `EventIndexTests` needs a read per index and checks the index is used for the lookup; the timer view, six newest-version views and the recap use their indexes. |
+| CR78 | 21 | The Food and Activity paid reads are bounded by date in SQL, in one shared read. |
+| CR79 | 22 | Oura sync fetches before it opens its transaction. |
+| CR80 | 23 | Feature follow-ups on the generic verbs become required, then a hook per feature. |
+| CR81 | 24 | Readers are built from a reader kernel through DI (CR18's read side). |
+| CR82 | 25 | Every live call goes through `fits()`; the normalizers stop converting numbers (CR9, CR38). |
+| CR83 | 26 | Generated types aliased in one line, with a ratchet; a folder per web feature; `decorateWrites` as a table of effects. |
+| CR84 | 27 | The bundle: the graph and closed dialogs load lazily, mock-only code moves under `lib/mock`, unused packages go. |
+| CR85 | 28 | A `ReadState` component with Retry. |
+| CR86 | 29 | `DomainDailyChart` moves onto `DailyMetricChart`. |
+| CR87 | 30 | Keyboard access for the Map outline, "+ child" and the resize handle. |
+| CR88 | 31 | Test kernels in their database's zone; tests of a global fold get their own database; one UTC+14 test of every home-date column. |
+| CR89 | 32 | `bsk --json` emits the API's DTOs. |
+| CR90 | 33 | One image built per commit and deployed by digest; `/health/ready` checked after a deploy. |
 
 ### P3: when working in that area
 
