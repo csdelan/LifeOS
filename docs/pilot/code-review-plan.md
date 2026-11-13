@@ -50,3 +50,11 @@ commit each, and skipped P3.
 | CR24 | P2 | Renames and attribute changes leave an event. |
 | CR25 | P2 | Docs say what is true now, and the plans have an index. |
 | CR26 | P2 | One mapping from kernel refusals to HTTP and MCP errors. |
+
+## Found along the way
+
+Defects the fixes turned up, each fixed in a commit of its own that says where it was found.
+
+- **While doing CR12:** one Decision whose review date isn't a date ("soon-ish") made every read
+  of `bsk.v_subject` raise, so the subject list, search and detail all failed. Migration 0055
+  reads such a date as none.
