@@ -459,7 +459,7 @@ Results are structured JSON plus a one-line text summary. Every tool is annotate
 | `recent_changes(since, types?, by?, limit?, cursor?)` | Events since a time (status changes, captures, journal entries, check-offs, meals, Oura days), so an agent can catch up. `by` is `recorded` (the default) or `occurred`, for what happened in a period. Each Oura record, and each edited meal, fast, space photo or rating, shows once, as its newest version, with how many versions there were. Ledger entries only when `types` names `ledger`. A cut answer gives `next`, passed back as `cursor` for the older events | New reader over `bsk.v_event` by `recorded_at` or `occurred_at` |
 | `habits(on?)` | Habits with the day's occurrences, streaks and establishment | `GetHabits`, `GetHabitOccurrences` |
 | `calendar(from, to)` | Appointments and due tasks in a range | `GetAppointments`, `QuerySubjects` |
-| `inbox()` | Untriaged captures | `GetInbox` |
+| `inbox()` | Untriaged captures, each capture's text whole up to 20,000 characters (`cut: true` past that), so the vault agent can file a dictated reflection ([notes plan](../notes-system-plan.md) N6) | `GetInbox` |
 | `people(kind?)` | People and AI agents (GEN-15) | `GetPeople`, `GetInvolvements` |
 | `diagnostics(only?)` | `bsk check` findings with their evidence | A `DiagnosticRunner` on the reader connection. It already runs in a read-only transaction, but the CLI runs it as the owner today, so first confirm `bsk_reader` can run every diagnostic |
 

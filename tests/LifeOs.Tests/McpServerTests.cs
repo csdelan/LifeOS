@@ -310,6 +310,34 @@ public sealed class McpServerTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task The_inbox_passes_a_long_dictation_whole_and_says_when_it_cuts_one()
+    {
+        // The vault agent files spoken reflections from the inbox (notes plan N6), so a few minutes
+        // of dictation must come through whole, and text past the limit must say it was cut.
+        await using var host = await StartAsync(postgres.ConnectionString);
+        var ns = Guid.NewGuid().ToString("N")[..8];
+        var reflection = $"Daily reflection {ns}. " + string.Concat(Enumerable.Repeat("Good focus today, bad sleep. ", 200)).TrimEnd();
+        var tooLong = $"Long dictation {ns}. " + new string('x', PlanTools.MaxCaptureLength);
+        await PostOkAsync(host, "api/capture", new { text = reflection });
+        await PostOkAsync(host, "api/capture", new { text = tooLong });
+        await using var client = await ConnectAsync(host, ApiTestHost.TokenFor(clientId: Agent));
+
+        var inbox = await CallAsync(client, "inbox", new() { ["limit"] = 200 });
+        Assert.Equal(PlanTools.MaxCaptureLength, inbox.GetProperty("text_limit").GetInt32());
+        var items = inbox.GetProperty("items").EnumerateArray().ToList();
+        // A flagged item or a file capture has no text, so the key is left out.
+        static string TextOf(JsonElement item) => item.TryGetProperty("text", out var text) ? text.GetString() ?? "" : "";
+
+        var whole = Assert.Single(items, i => TextOf(i).StartsWith($"Daily reflection {ns}", StringComparison.Ordinal));
+        Assert.True(reflection.Length > 5000);
+        Assert.Equal(reflection, whole.GetProperty("text").GetString());
+        Assert.False(whole.TryGetProperty("cut", out _));
+        var cut = Assert.Single(items, i => TextOf(i).StartsWith($"Long dictation {ns}", StringComparison.Ordinal));
+        Assert.Equal(PlanTools.MaxCaptureLength, cut.GetProperty("text").GetString()!.Length);
+        Assert.True(cut.GetProperty("cut").GetBoolean());
+    }
+
+    [Fact]
     public async Task A_bad_argument_is_an_error_the_agent_can_read()
     {
         await using var host = await StartAsync(postgres.ConnectionString);

@@ -14,8 +14,11 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
     /// <summary>The longest range <c>calendar</c> answers.</summary>
     public const int MaxCalendarDays = 92;
 
-    /// <summary>The longest capture text <c>inbox</c> passes whole.</summary>
-    public const int MaxCaptureLength = 1000;
+    /// <summary>
+    /// The longest capture text <c>inbox</c> passes whole: about twenty minutes of dictation, so the
+    /// vault agent can file a spoken reflection from it (notes plan N6). Longer text is cut and says so.
+    /// </summary>
+    public const int MaxCaptureLength = 20_000;
 
     /// <summary>The most items <c>people</c> lists under each person.</summary>
     public const int InvolvementLimit = 20;
@@ -103,7 +106,7 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
     }
 
     [McpServerTool(Name = "inbox", Title = "Inbox", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("Captures and flagged items waiting for Chris to triage, newest first. flagged_at is when each one came into the inbox.")]
+    [Description("Captures and flagged items waiting for Chris to triage, newest first. flagged_at is when each one came into the inbox. A capture's text is whole up to 20,000 characters; longer text is cut and has cut: true.")]
     public async Task<CallToolResult> Inbox(
         [Description("At most this many items (default 50, at most 200).")] int? limit = null,
         CancellationToken cancellationToken = default)
@@ -120,11 +123,14 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
                 Item = i.SubjectUrn is null ? null : new { Urn = i.SubjectUrn, Type = i.SubjectType, Title = i.SubjectTitle },
                 i.EventKind,
                 Text = i.EventContent is { Length: > MaxCaptureLength } c ? c[..MaxCaptureLength] : i.EventContent,
+                Cut = i.EventContent is { Length: > MaxCaptureLength } ? true : (bool?)null,
                 Tags = i.Tags.Length > 0 ? i.Tags : null,
             });
         var (items, truncated) = McpResults.Cap(rows, McpResults.Limit(limit));
+        // text_limit tells the vault agent this connector passes whole captures: an older one cut
+        // them at 1,000 characters without saying so, and the agent files nothing from that.
         return McpResults.Ok(stamp, $"{McpResults.Plural(items.Count, "item")} in the inbox{(truncated ? " (more not shown)" : "")}.",
-            new { Items = items, Truncated = truncated });
+            new { Items = items, Truncated = truncated, TextLimit = MaxCaptureLength });
     }
 
     [McpServerTool(Name = "people", Title = "People", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
