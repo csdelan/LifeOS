@@ -6,6 +6,9 @@
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
+Each full review also scores the code from 1 to 10 against `docs/agents/quality-scorecard.md`,
+which keeps the scores and measured numbers over time; the target is 7 to 8 in every area.
+
 On 2026-11-12 a full review of the repo, weighted toward maintainability, scalability and
 extendibility, produced 31 proposals in four tiers. Chris chose P0 to P2 (CR1 to CR26), one
 commit each, and skipped P3 (listed under the second review, so it isn't lost).
