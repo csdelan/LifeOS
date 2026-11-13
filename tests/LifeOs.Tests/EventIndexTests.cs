@@ -28,6 +28,19 @@ public sealed class EventIndexTests(PostgresFixture postgres)
         => Assert.Contains("event_kind_occurred_idx", await PlanAsync(
             "SELECT id FROM bsk.event WHERE kind = 'note' AND occurred_at >= now() - interval '7 days' ORDER BY occurred_at DESC LIMIT 20;"));
 
+    // Code review CR32 (migration 0059): the food views carry their partial indexes' condition.
+    [Theory]
+    [InlineData("SELECT * FROM bsk.v_meal;", "event_meal_idx")]
+    [InlineData("SELECT * FROM bsk.v_fast;", "event_fast_idx")]
+    [InlineData("SELECT * FROM bsk.v_fast;", "event_meal_idx")]
+    [InlineData("SELECT * FROM bsk.v_food_day;", "event_food_day_idx")]
+    public async Task The_food_views_read_through_their_indexes(string query, string index)
+        => Assert.Contains(index, await PlanAsync(query));
+
+    [Fact]
+    public async Task Fasts_count_their_meals_from_one_fold_of_the_food_log()
+        => Assert.Equal(1, (await PlanAsync("SELECT * FROM bsk.v_fast;")).Split("event_meal_idx").Length - 1);
+
     private async Task<string> PlanAsync(string query)
     {
         await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);

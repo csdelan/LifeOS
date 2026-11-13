@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0058 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0059 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -452,7 +452,7 @@ CREATE VIEW bsk.v_fast AS
             e.recorded_at,
             row_number() OVER (PARTITION BY ((e.payload -> 'fast'::text) ->> 'id'::text) ORDER BY e.recorded_at DESC, e.id DESC) AS rn
            FROM bsk.event e
-          WHERE e.kind = 'activity'::text AND jsonb_typeof(e.payload -> 'fast'::text) = 'object'::text AND ((e.payload -> 'fast'::text) ->> 'id'::text) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text
+          WHERE e.kind = 'activity'::text AND jsonb_exists(e.payload, 'fast'::text) AND jsonb_typeof(e.payload -> 'fast'::text) = 'object'::text AND ((e.payload -> 'fast'::text) ->> 'id'::text) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text
         ), live AS (
          SELECT v.fast_id,
             (v.f ->> 'started_at'::text)::timestamp with time zone AS started_at,
@@ -464,6 +464,10 @@ CREATE VIEW bsk.v_fast AS
             v.event_id
            FROM version v
           WHERE v.rn = 1 AND COALESCE(v.f ->> 'voided'::text, 'false'::text) <> 'true'::text AND jsonb_typeof(v.f -> 'started_at'::text) = 'string'::text
+        ), meal_time AS MATERIALIZED (
+         SELECT m.eaten_at
+           FROM bsk.v_meal m
+          WHERE m.calories > 0
         )
  SELECT fast_id,
     started_at,
@@ -481,8 +485,8 @@ CREATE VIEW bsk.v_fast AS
     (started_at AT TIME ZONE bsk.home_zone()) AS started_local,
     (ended_at AT TIME ZONE bsk.home_zone()) AS ended_local,
     (( SELECT count(*) AS count
-           FROM bsk.v_meal m
-          WHERE m.calories > 0 AND m.eaten_at > l.started_at AND m.eaten_at < COALESCE(l.ended_at, now())))::integer AS meals_during,
+           FROM meal_time m
+          WHERE m.eaten_at > l.started_at AND m.eaten_at < COALESCE(l.ended_at, now())))::integer AS meals_during,
     recorded_at,
     event_id
    FROM live l;
@@ -514,7 +518,7 @@ CREATE VIEW bsk.v_food_day AS
             min(e.occurred_at) AS closed_at,
             (array_agg(e.id ORDER BY e.occurred_at, e.id))[1] AS close_event_id
            FROM bsk.event e
-          WHERE e.kind = 'activity'::text AND jsonb_typeof(e.payload -> 'food_day'::text) = 'object'::text AND ((e.payload -> 'food_day'::text) ->> 'closed'::text) = 'true'::text
+          WHERE e.kind = 'activity'::text AND jsonb_exists(e.payload, 'food_day'::text) AND jsonb_typeof(e.payload -> 'food_day'::text) = 'object'::text AND ((e.payload -> 'food_day'::text) ->> 'closed'::text) = 'true'::text
           GROUP BY (bsk.try_to_date((e.payload -> 'food_day'::text) ->> 'on'::text))
         ), days AS (
          SELECT meal_day.day
@@ -836,7 +840,7 @@ CREATE VIEW bsk.v_meal AS
             count(*) OVER w_all AS versions,
             min(e.recorded_at) OVER w_all AS first_logged_at
            FROM bsk.event e
-          WHERE e.kind = 'measurement'::text AND jsonb_typeof(e.payload -> 'meal'::text) = 'object'::text AND ((e.payload -> 'meal'::text) ->> 'id'::text) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text
+          WHERE e.kind = 'measurement'::text AND jsonb_exists(e.payload, 'meal'::text) AND jsonb_typeof(e.payload -> 'meal'::text) = 'object'::text AND ((e.payload -> 'meal'::text) ->> 'id'::text) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text
           WINDOW w_all AS (PARTITION BY ((e.payload -> 'meal'::text) ->> 'id'::text)), w_desc AS (PARTITION BY ((e.payload -> 'meal'::text) ->> 'id'::text) ORDER BY e.recorded_at DESC, e.id DESC)
         )
  SELECT meal_id,
