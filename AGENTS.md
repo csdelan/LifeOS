@@ -71,6 +71,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - Files are `db/migrations/NNNN__name.sql`. `bsk migrate` is the only schema authority in every
   environment. Never use `supabase db push` or change the schema in the Supabase dashboard.
 - Never edit a migration that has been applied anywhere. Add a new one.
+- `db/schema/current.sql` is every table, index, view and function as the migrations leave them,
+  so read it to see what a view is now. After adding a migration, run
+  `./scripts/update-schema.ps1` and commit the file with it; a test fails while it's stale. Another
+  test checks that `SubjectTypes`, `EventKinds` and `Provenances` match the CHECK constraints.
 - `bsk migrate` takes a lock, and refuses a pending migration numbered below the highest one already
   applied (`--allow-out-of-order` overrides). `scripts/migrate-staging.ps1` runs only from a clean
   `origin/main`, and the Release workflow only from `main` or a `v*` tag.
