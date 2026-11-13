@@ -46,6 +46,7 @@ import {
 import { formatTimestamp } from "@/lib/dates";
 import { splitTags } from "@/lib/tag-suggest";
 import { cn } from "@/lib/utils";
+import { keyBelongsToFocus } from "@/lib/keyboard";
 import { saveView } from "@/lib/view-state";
 import { useIsDesktop } from "@/lib/media-query";
 import {
@@ -187,8 +188,8 @@ export function InboxPage() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (dropOpen) return;
+      // Enter on a button, and any key in a field, a Select or a dialog, is theirs.
+      if (keyBelongsToFocus(e) || dropOpen) return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         move(1);
@@ -198,9 +199,14 @@ export function InboxPage() {
         move(-1);
       }
       if (e.key === "Enter" && !resolvedView) {
-        e.preventDefault();
-        if (focusAction === "drop") setDropOpen(true);
-        if (focusAction === "dismiss" && selected) void dismiss(selected);
+        if (focusAction === "drop") {
+          e.preventDefault();
+          setDropOpen(true);
+        }
+        if (focusAction === "dismiss" && selected) {
+          e.preventDefault();
+          void dismiss(selected);
+        }
       }
     }
     window.addEventListener("keydown", onKey);
