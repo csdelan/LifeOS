@@ -2,7 +2,8 @@
 
 **Status:** CR1 to CR26 built (2026-11-12). CR27 to CR56, the second review's P0, P1 and P2, built
 (2026-11-13), and CR57 for its choice A; choices B and C wait for Chris
-([Second review](#second-review-2026-11-13)).
+([Second review](#second-review-2026-11-13)). The third review scored the code 6.1 of 10, and Chris
+chose its P0 and P1, CR58 to CR67 ([Third review](#third-review-2026-11-13)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
@@ -209,3 +210,74 @@ misses `.claude/`.
 - **B.** Stop maintaining the mock's copy of the reward economy, replacing each part with
   canned reads when its rule next changes, and check exact amounts in .NET.
 - **C.** A non-owner database role for the API, so it can't drop the append-only triggers.
+
+## Third review (2026-11-13)
+
+A third pass, with the same weighting, by six reviewers working side by side on one area each,
+produced 33 proposals in three tiers and a P3 list. It also made the first scores on the quality
+scorecard (`docs/agents/quality-scorecard.md`): 6.1 of 10, against Chris's target of 7 to 8 in every
+area. Nine of its proposals finish a CR that was left half done (CR9, CR14, CR17, CR18, CR21, CR38,
+CR42, CR44, CR51). Each was a rule kept by convention with nothing that fails when it's broken, while
+the CRs that came with such a check (CR29, CR52, CR55) held. So each fix below ships with the check
+that would have caught it. The numbers are the review's; a proposal gets a CR number when Chris
+chooses it.
+
+### P0 and P1: chosen (CR58 to CR67)
+
+| ID | Review # | Fix |
+|----|----------|-----|
+| CR58 | 1 | A page left open past midnight checks habits off on the home day it is now, not the day it loaded. |
+| CR59 | 2 | `bsk` and the migrate scripts can't reach staging through a connection string left in the environment without saying so; the docs stop telling Chris to keep one there. |
+| CR60 | 3 | The detail panel's Save and the Map's inline create run one write at a time. |
+| CR61 | 4 | "Every N months" repeats count from their start, so one that starts on the 31st doesn't drift to the 28th. |
+| CR62 | 5 | Renaming an appointment series, the domain fold and exception days take today from the home calendar. |
+| CR63 | 6 | A document or voice capture finishes filing once it's stored; `bsk journal` and the Pilot write an entry and its link in one call. |
+| CR64 | 7 | The Connected agents page says whether agents may write. |
+| CR65 | 8 | Making appointment occurrences is bounded, locked per series, and keyed so none is made twice. |
+| CR66 | 9 | A `bsk` older than the database it writes to refuses to write. |
+| CR67 | 10 | The Pilot's New item closes once the item exists, and says which follow-up failed. |
+
+### P2: proposed
+
+| Review # | Fix |
+|----------|-----|
+| 11 | Request idempotency moves into Application: the capture's text and event in one transaction, "already written" as a kernel result. Before agent access level `full`. |
+| 12 | System follow-ups (lab-visit range sync, a series' start) are recorded as derived, citing their cause; metric and space edits in one transaction each. |
+| 13 | `v_habit` reads `allows_partial` the way `AdherenceService` does, so one bad value can't break every habit read. |
+| 14 | `bsk` stores photos and reports in the database only on localhost without object storage. |
+| 15 | Space share, "a Value needs a statement" and the food-edit merge move out of the doors into Domain and Application. |
+| 16 | The measurement catalog and currency labels come from the API, not a copy. |
+| 17 | One `isOverdue`, so Browse's Overdue leaves finished items out. |
+| 18 | `usePersistedChoice` for the ten remembered view choices; a renamed option can't crash a render. |
+| 19 | `/api/subjects` filters by status and limit; Focus, Tasks, the palette and pickers read open items; Browse caps what it draws; Resolved loads older. |
+| 20 | `EventIndexTests` needs a read per index and checks the index is used for the lookup; the timer view, six newest-version views and the recap use their indexes. |
+| 21 | The Food and Activity paid reads are bounded by date in SQL, in one shared read. |
+| 22 | Oura sync fetches before it opens its transaction. |
+| 23 | Feature follow-ups on the generic verbs become required, then a hook per feature. |
+| 24 | Readers are built from a reader kernel through DI (CR18's read side). |
+| 25 | Every live call goes through `fits()`; the normalizers stop converting numbers (CR9, CR38). |
+| 26 | Generated types aliased in one line, with a ratchet; a folder per web feature; `decorateWrites` as a table of effects. |
+| 27 | The bundle: the graph and closed dialogs load lazily, mock-only code moves under `lib/mock`, unused packages go. |
+| 28 | A `ReadState` component with Retry. |
+| 29 | `DomainDailyChart` moves onto `DailyMetricChart`. |
+| 30 | Keyboard access for the Map outline, "+ child" and the resize handle. |
+| 31 | Test kernels in their database's zone; tests of a global fold get their own database; one UTC+14 test of every home-date column. |
+| 32 | `bsk --json` emits the API's DTOs. |
+| 33 | One image built per commit and deployed by digest; `/health/ready` checked after a deploy. |
+
+### P3: when working in that area
+
+One fold before and after a settle; consistency rules load their own inputs; one planner call per
+catch-up; habit reads in bounded windows; MCP areas from one list; the core endpoints and
+`SubjectReader` split by feature; refusal statuses in the OpenAPI document; `missed` on `/mcp`;
+drift checks for the alignment tree, the Pilot's vocabulary and the edge relations; one CLI action
+helper with its own exit code for refusals; the domain simulator's replay in Application; a migration
+test against a database that holds data; `McpServerTests` split; the design primitives used; one
+photo picker; a shared page-test harness; "in real money" from the daily read; one Fly config.
+
+### Evidence for Chris's open choices
+
+- **B:** the mock's copy of the reward economy is about 4,800 lines, and the live app uses only
+  `barText` from it. Of 34 commits to the kernel's rule files since October, 12 also had to edit the
+  web copies, and the Health and Environment fold rules have no shared cases.
+- **C:** unchanged.
