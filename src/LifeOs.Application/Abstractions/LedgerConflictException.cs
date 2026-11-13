@@ -6,7 +6,7 @@ namespace LifeOs.Application.Abstractions;
 /// reconciling again from the current record is always safe.
 /// </summary>
 public sealed class LedgerConflictException(string awardKey)
-    : Exception($"The award '{awardKey}' changed while it was being reconciled; reconcile again.")
+    : KernelRefusalException(RefusalKind.Conflict, $"The award '{awardKey}' changed while it was being reconciled; reconcile again.")
 {
     public string AwardKey { get; } = awardKey;
 }

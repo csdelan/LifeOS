@@ -24,7 +24,7 @@ public enum UnsplashFailure
 /// Access Key. Nothing stored has changed.
 /// </summary>
 public sealed class UnsplashException(UnsplashFailure failure, string message, Exception? innerException = null)
-    : Exception(message, innerException)
+    : KernelRefusalException(KindOf(failure), message, innerException)
 {
     /// <summary>Unsplash isn't set up on this server: the words the picker and the CLI show.</summary>
     public const string NotSetUpMessage =
@@ -33,4 +33,11 @@ public sealed class UnsplashException(UnsplashFailure failure, string message, E
     public UnsplashFailure Failure { get; } = failure;
 
     public static UnsplashException NotSetUp() => new(UnsplashFailure.NotSetUp, NotSetUpMessage);
+
+    private static RefusalKind KindOf(UnsplashFailure failure) => failure switch
+    {
+        UnsplashFailure.NotSetUp => RefusalKind.NotSetUp,
+        UnsplashFailure.NotFound => RefusalKind.NotFound,
+        _ => RefusalKind.Unavailable,
+    };
 }

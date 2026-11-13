@@ -6,7 +6,7 @@ namespace LifeOs.Application.Abstractions;
 /// and never carries a token. The API answers 409.
 /// </summary>
 public class OuraConnectionException(string message, Exception? innerException = null)
-    : Exception(message, innerException);
+    : KernelRefusalException(RefusalKind.NotSetUp, message, innerException);
 
 /// <summary>
 /// Oura's token endpoint refused a grant (an OAuth error such as <c>invalid_grant</c>).
@@ -46,7 +46,7 @@ public sealed class OuraAccessDeniedException(int status, string message, string
 /// changed, so the API answers 502.
 /// </summary>
 public sealed class OuraUnavailableException(string message, TimeSpan? retryAfter = null, Exception? innerException = null)
-    : Exception(message, innerException)
+    : KernelRefusalException(RefusalKind.Unavailable, message, innerException)
 {
     /// <summary>How long Oura asked LifeOS to wait (a 429's <c>Retry-After</c>), when it said.</summary>
     public TimeSpan? RetryAfter { get; } = retryAfter;

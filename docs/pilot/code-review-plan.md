@@ -1,7 +1,8 @@
 # Code review fixes plan
 
-**Status:** in progress. Each item is one commit whose message names it (`code review CR<n>`), so
-`git log --grep "code review CR"` shows what has landed.
+**Status:** built (2026-11-12). CR1 to CR26 are one commit each, whose message names it
+(`code review CR<n>`), so `git log --grep "code review CR"` shows them. They reach staging at the
+next push.
 
 On 2026-11-12 a full review of the repo, weighted toward maintainability, scalability and
 extendibility, produced 31 proposals in four tiers. Chris chose P0 to P2 (CR1 to CR26), one
@@ -44,6 +45,13 @@ commit each, and skipped P3.
   Application services, and `bsk`, the API and `/mcp` are doors into them. It said `bsk` was the
   only writer, which stopped being true when the API began to write. The ontology's Stage 1
   scope is marked as history, and its type and event-kind lists match the CHECK constraints.
+- **CR26:** the services keep refusing with a plain `ArgumentException` or
+  `InvalidOperationException` where they already do. Rewriting those hundreds of throws would
+  change nothing a caller sees. They count as refusals only when LifeOS's own code threw them, so
+  the same types from Npgsql or the framework are faults. The Application layer's own exceptions
+  derive from `KernelRefusalException`, which carries its kind. A food write that raced another is
+  now a 409, not a 400, like a timer's; a ledger race is a 409, not a 500. A fault's 500 no longer
+  repeats the exception's text.
 
 ## Items
 

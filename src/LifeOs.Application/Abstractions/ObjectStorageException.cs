@@ -6,4 +6,4 @@ namespace LifeOs.Application.Abstractions;
 /// the API answers 502.
 /// </summary>
 public sealed class ObjectStorageException(string message, Exception? innerException = null)
-    : Exception(message, innerException);
+    : KernelRefusalException(RefusalKind.Unavailable, message, innerException);

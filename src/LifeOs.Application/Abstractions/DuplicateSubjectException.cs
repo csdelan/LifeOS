@@ -7,7 +7,7 @@ namespace LifeOs.Application.Abstractions;
 /// can react without depending on any database-specific exception.
 /// </summary>
 public sealed class DuplicateSubjectException(string subjectType, string title, Exception? innerException = null)
-    : Exception($"A {subjectType} subject titled '{title}' already exists.", innerException)
+    : KernelRefusalException(RefusalKind.Conflict, $"A {subjectType} subject titled '{title}' already exists.", innerException)
 {
     public string SubjectType { get; } = subjectType;
 

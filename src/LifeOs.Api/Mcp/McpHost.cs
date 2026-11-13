@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using LifeOs.Api.Auth;
+using LifeOs.Api.Http;
 using LifeOs.Api.Mcp.Tools;
 using LifeOs.Api.Read;
 using LifeOs.Application.Abstractions;
@@ -100,11 +101,12 @@ public static class McpHost
                         tool, client, outcome, Elapsed(started));
                     return result;
                 }
-                catch (ArgumentException e)
+                catch (Exception e) when (KernelRefusals.Describe(e) is { } refusal)
                 {
-                    // A reader refusing an argument (a range too long, a malformed day) says why in words.
+                    // A refusal (a range too long, a malformed day, a balance too low, a write that
+                    // raced another) says why in words, the same words /api says (code review CR26).
                     logger?.LogInformation("MCP {Tool} for {ClientId}: refused in {Milliseconds} ms", tool, client, Elapsed(started));
-                    return McpResults.Error(e.Message);
+                    return McpResults.Error(refusal.Message);
                 }
                 catch (Exception e) when (e is not McpException and not OperationCanceledException)
                 {

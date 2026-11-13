@@ -11,7 +11,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - `db/migrations/`: the Postgres schema. The kernel is event-sourced, so the event log is
   append-only and is never edited or deleted.
 - `src/LifeOs.Application`: the services every write goes through. `bsk`, the API and `/mcp`
-  are doors into them and share them, so a rule lives there once, not in a door.
+  are doors into them and share them, so a rule lives there once, not in a door. A service
+  refuses with a `KernelRefusalException` of the right kind, or a plain `ArgumentException`.
+  `KernelRefusals` (API) is the one table from those to `/api` statuses and `/mcp` errors.
 - `src/LifeOs.Cli`: the `bsk` CLI, and the only door for `bsk migrate`. Run it with
   `dotnet run --project src/LifeOs.Cli -- <verb>` (`bsk` isn't on PATH). Outside programs that
   read (Python, BI, `psql`) use the `bsk_reader` role and the `v_*` views.

@@ -6,7 +6,8 @@ namespace LifeOs.Application.Abstractions;
 /// Nothing was written; reading the timer again and retrying is always safe.
 /// </summary>
 public sealed class TimerConflictException(string title, string expectedState, string actualState)
-    : Exception(
+    : KernelRefusalException(
+        RefusalKind.Conflict,
         $"The timer on '{title}' is now {actualState}, not {expectedState} — it was changed elsewhere. " +
         "Refresh and try again.")
 {

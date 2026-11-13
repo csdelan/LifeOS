@@ -1,10 +1,8 @@
-using LifeOs.Application.Abstractions;
-using LifeOs.Application.Subjects;
 using Microsoft.AspNetCore.Diagnostics;
 
 namespace LifeOs.Api.Http;
 
-/// <summary>Maps Application-layer exceptions to HTTP status codes.</summary>
+/// <summary>Answers an exception from a request with the status and words <see cref="KernelRefusals"/> gives it.</summary>
 public static class KernelExceptionHandler
 {
     public static void UseKernelExceptionHandler(this WebApplication app)
@@ -19,26 +17,9 @@ public static class KernelExceptionHandler
         }));
     }
 
-    private static (int Status, ApiError Body) Map(Exception? ex) => ex switch
-    {
-        SubjectNotFoundException notFound => (StatusCodes.Status404NotFound, new ApiError(notFound.Message)),
-        AmbiguousSubjectException ambiguous => (StatusCodes.Status409Conflict, new ApiError(
-            ambiguous.Message,
-            ambiguous.Candidates.Select(c => new { id = c.Id, urn = c.Urn, type = c.Type, title = c.Title }))),
-        DuplicateSubjectException duplicate => (StatusCodes.Status409Conflict, new ApiError(duplicate.Message)),
-        TimerConflictException conflict => (StatusCodes.Status409Conflict, new ApiError(conflict.Message)),
-        ObjectStorageException storage => (StatusCodes.Status502BadGateway, new ApiError(storage.Message)),
-        OuraUnavailableException oura => (StatusCodes.Status502BadGateway, new ApiError(oura.Message)),
-        OuraConnectionException oura => (StatusCodes.Status409Conflict, new ApiError(oura.Message)),
-        UnsplashException unsplash => (unsplash.Failure switch
-        {
-            UnsplashFailure.NotSetUp => StatusCodes.Status409Conflict,
-            UnsplashFailure.NotFound => StatusCodes.Status404NotFound,
-            _ => StatusCodes.Status502BadGateway,
-        }, new ApiError(unsplash.Message)),
-        BadHttpRequestException bad => (bad.StatusCode, new ApiError(bad.Message)),
-        ArgumentException or InvalidOperationException => (
-            StatusCodes.Status400BadRequest, new ApiError(ex.Message)),
-        _ => (StatusCodes.Status500InternalServerError, new ApiError(ex?.Message ?? "Unexpected error."))
-    };
+    /// <summary>The status and body for <paramref name="ex"/>: its refusal, or a 500 that doesn't repeat a fault's text.</summary>
+    public static (int Status, ApiError Body) Map(Exception? ex)
+        => KernelRefusals.Describe(ex) is { } refusal
+            ? (refusal.Status, new ApiError(refusal.Message, refusal.Candidates))
+            : (StatusCodes.Status500InternalServerError, new ApiError(KernelRefusals.FaultMessage));
 }

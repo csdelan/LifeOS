@@ -1,10 +1,11 @@
+using LifeOs.Application.Abstractions;
 using LifeOs.Domain;
 
 namespace LifeOs.Application.Subjects;
 
 /// <summary>Thrown when a subject reference (urn, short id, or title) matches nothing.</summary>
 public sealed class SubjectNotFoundException(string reference)
-    : Exception($"No subject matches '{reference}'.")
+    : KernelRefusalException(RefusalKind.NotFound, $"No subject matches '{reference}'.")
 {
     public string Reference { get; } = reference;
 }
@@ -14,7 +15,7 @@ public sealed class SubjectNotFoundException(string reference)
 /// candidates so the caller can show them rather than guess which was meant.
 /// </summary>
 public sealed class AmbiguousSubjectException(string reference, IReadOnlyList<SubjectRef> candidates)
-    : Exception(BuildMessage(reference, candidates))
+    : KernelRefusalException(RefusalKind.Conflict, BuildMessage(reference, candidates))
 {
     public string Reference { get; } = reference;
 
