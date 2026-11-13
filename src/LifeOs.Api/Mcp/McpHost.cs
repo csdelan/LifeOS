@@ -157,6 +157,7 @@ public static class McpHost
                 sp.GetRequiredService<IEventReader>(),
                 sp.GetRequiredService<ISubjectRepository>(),
                 sp.GetRequiredService<ISubjectEventRepository>(),
+                sp.GetRequiredService<IReviewRepository>(),
                 sp.GetRequiredService<StatusService>(),
                 sp.GetRequiredService<IHomeCalendar>(),
                 sp.GetRequiredService<IClock>(),

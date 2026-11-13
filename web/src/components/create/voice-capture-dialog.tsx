@@ -49,12 +49,19 @@ function pickRecorderMime(): string {
   return types.find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
 }
 
+/**
+ * Voice capture (CAP-2). With `about`, it's a dictation about one item, such as a review's
+ * reflection (reviews plan §4.1): a note that concerns the item, so the agent that files it knows
+ * what it answers.
+ */
 export function VoiceCaptureDialog({
   open,
   onOpenChange,
+  about,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  about?: { id: string; title: string; description: string };
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [kind, setKind] = useState<CaptureKind>("Note");
@@ -306,9 +313,10 @@ export function VoiceCaptureDialog({
       await writes.captureVoice({
         audioBlob: blob,
         transcript: text,
-        type: kind,
+        type: about ? "Note" : kind,
         keepAudio: keep,
         durationSeconds: durationRef.current || undefined,
+        concerning: about?.id,
       });
       resetLocal();
       onOpenChange(false);
@@ -342,13 +350,13 @@ export function VoiceCaptureDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>Voice capture</DialogTitle>
+          <DialogTitle>{about?.title ?? "Voice capture"}</DialogTitle>
           <DialogDescription>
             {recording
               ? "Recording. Enter or Stop to review. Escape discards."
               : reviewing
                 ? "Review the transcript, then capture. Escape discards."
-                : "Lands in Inbox. Escape discards."}
+                : (about?.description ?? "Lands in Inbox. Escape discards.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -404,7 +412,7 @@ export function VoiceCaptureDialog({
 
         {reviewing ? (
           <div className="space-y-3">
-            <CaptureKindTabs value={kind} onChange={setKind} disabled={pending} />
+            {about ? null : <CaptureKindTabs value={kind} onChange={setKind} disabled={pending} />}
             {playbackUrl ? (
               <audio
                 className="w-full"

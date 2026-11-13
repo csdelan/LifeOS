@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { ClipboardCheckIcon } from "lucide-react";
+import { ClipboardCheckIcon, MicIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { VoiceCaptureDialog } from "@/components/create/voice-capture-dialog";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { AdherenceButtons } from "@/components/habits/adherence-buttons";
@@ -29,6 +28,7 @@ import {
 } from "@/lib/dates";
 import type { RecapSection } from "@/lib/review-recap";
 import {
+  obsidianUrl,
   reviewDay,
   reviewHabitDays,
   reviewPeriod,
@@ -450,27 +450,21 @@ function ReviewEditor({
   onSave: (body: ReviewBody) => Promise<void>;
   onComplete: () => Promise<void>;
 }) {
-  const [workedWell, setWorkedWell] = useState(doc.workedWell);
-  const [differently, setDifferently] = useState(doc.differently);
-  const [planning, setPlanning] = useState(doc.planning);
+  // The page keys this by the review, so another review starts from its own choice.
   const [keepFocus, setKeepFocus] = useState(doc.keepFocus);
   const [busy, setBusy] = useState(false);
+  const [dictating, setDictating] = useState(false);
   const { data: dash } = useDashboard();
-  // The page keys this by the review, so another review starts from its own answers.
-  const answers = doc.canWriteAnswers;
 
-  const dirty =
-    workedWell !== doc.workedWell ||
-    differently !== doc.differently ||
-    planning !== doc.planning ||
-    keepFocus !== doc.keepFocus;
+  const dirty = keepFocus !== doc.keepFocus;
 
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
   }, [dirty, onDirty]);
 
-  const body: ReviewBody = { workedWell, differently, planning, keepFocus };
+  const body: ReviewBody = { keepFocus };
+  const name = `${doc.kind === "daily" ? "Daily" : "Weekly"} review, ${reviewDay(doc.date)}`;
 
   function run(steps: () => Promise<void>, failure: string) {
     setBusy(true);
@@ -482,35 +476,16 @@ function ReviewEditor({
 
   return (
     <div className="mt-8 space-y-8">
-      <section className="space-y-4">
-        <h2 className="font-heading text-xl">Reflection</h2>
-        {answers ? null : (
-          <p className="rounded-lg bg-muted/60 p-3 text-sm text-muted-foreground">
-            Answers aren't saved on the live site yet: they'll be kept in SuperJournal. Keep focus,
-            the habits and completing the review work now.
-          </p>
-        )}
-        <div className="space-y-1.5">
-          <Label htmlFor="review-worked-well">What worked well?</Label>
-          <Textarea
-            id="review-worked-well"
-            value={workedWell}
-            onChange={(e) => setWorkedWell(e.target.value)}
-            disabled={!answers}
-            rows={4}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="review-differently">What do I want to do differently?</Label>
-          <Textarea
-            id="review-differently"
-            value={differently}
-            onChange={(e) => setDifferently(e.target.value)}
-            disabled={!answers}
-            rows={4}
-          />
-        </div>
-      </section>
+      <ReviewReflectionSection doc={doc} onDictate={() => setDictating(true)} />
+      <VoiceCaptureDialog
+        open={dictating}
+        onOpenChange={setDictating}
+        about={{
+          id: doc.id,
+          title: "Dictate reflection",
+          description: `For the ${name}. The nightly sweep files it in your notes vault and links it here. Escape discards.`,
+        }}
+      />
 
       <section className="space-y-4">
         <h2 className="font-heading text-xl">Planning {reviewSpan(doc.planStart, doc.planEnd)}</h2>
@@ -537,17 +512,6 @@ function ReviewEditor({
             ))}
           </ul>
         ) : null}
-        <div className="space-y-1.5">
-          <Label htmlFor="review-planning">Next projects / tasks</Label>
-          <Textarea
-            id="review-planning"
-            value={planning}
-            onChange={(e) => setPlanning(e.target.value)}
-            disabled={!answers}
-            rows={5}
-            placeholder="Reassess objectives. List the next Projects and Tasks. Habits and appointments can live here too."
-          />
-        </div>
       </section>
 
       <div className="flex gap-2 pb-10">
@@ -576,6 +540,56 @@ function ReviewEditor({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The review's answers (reviews plan §4.1): Chris dictates them, an agent files them as a note in
+ * his notes vault and links it here. Once linked, its summary and a link that opens it in Obsidian.
+ */
+function ReviewReflectionSection({ doc, onDictate }: { doc: ReviewDoc; onDictate: () => void }) {
+  const reflection = doc.reflection;
+  const plan =
+    doc.kind === "daily"
+      ? `The plan for ${reviewDay(doc.planStart)}`
+      : `The plan for ${reviewSpan(doc.planStart, doc.planEnd)}: the next Projects and Tasks`;
+  return (
+    <section className="space-y-4" aria-labelledby="review-reflection">
+      <h2 id="review-reflection" className="font-heading text-xl">
+        Reflection
+      </h2>
+      {reflection ? (
+        <div className="space-y-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+          <p className="text-sm whitespace-pre-wrap">{reflection.summary}</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <a
+              href={obsidianUrl(reflection)}
+              className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline md:min-h-0"
+            >
+              Open in Obsidian
+            </a>
+            <span className="text-xs break-all text-muted-foreground">{reflection.path}</span>
+          </div>
+        </div>
+      ) : (
+        <p className="rounded-lg bg-muted/60 p-3 text-sm text-muted-foreground">
+          Dictate your reflection. The nightly sweep files it in your notes vault and links it here,
+          with its summary.
+        </p>
+      )}
+      <div className="text-sm">
+        <p className="text-muted-foreground">Talk about:</p>
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          <li>What worked well?</li>
+          <li>What do I want to do differently?</li>
+          <li>{plan}</li>
+        </ul>
+      </div>
+      <Button type="button" variant={reflection ? "outline" : "default"} onClick={onDictate}>
+        <MicIcon />
+        {reflection ? "Dictate more" : "Dictate reflection"}
+      </Button>
+    </section>
   );
 }
 

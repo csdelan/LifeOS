@@ -100,6 +100,9 @@ public static class CaptureEndpoints
     /// <c>type</c> and <c>title</c> as for a document. CAP-2's default keeps only the transcript, so
     /// the audio is stored only when <c>keepAudio</c> is true or there's no transcript to keep:
     /// then the audio is required, and a note with no transcript is marked as needing one.
+    /// <c>concerning</c>, an item's id or URN, makes the capture concern it: the Reviews page's
+    /// Dictate reflection sends its review, so the agent that files it knows which review it
+    /// answers (reviews plan §4.1).
     /// </summary>
     private static async Task<IResult> CaptureVoice(
         IFormFile? audio,
@@ -107,8 +110,10 @@ public static class CaptureEndpoints
         [FromForm] bool? keepAudio,
         [FromForm] string? type,
         [FromForm] string? title,
+        [FromForm] string? concerning,
         AttachmentService attachments,
         CaptureService capture,
+        SubjectReader reader,
         [AsParameters] CaptureFiling deps,
         CancellationToken cancellationToken)
     {
@@ -117,6 +122,33 @@ public static class CaptureEndpoints
             return Results.BadRequest(new ApiError(BadKind(type)));
         }
 
+        // Found before anything is written, so a bad id leaves no capture behind.
+        string? about = null;
+        if (Clean(concerning) is { } reference)
+        {
+            var detail = Guid.TryParse(reference, out var id) ? reader.GetSubject(id) : reader.GetSubjectByUrn(reference);
+            if (detail is null)
+            {
+                return Results.BadRequest(new ApiError($"concerning names no item: '{reference}'."));
+            }
+
+            about = detail.Urn;
+        }
+
+        var result = await CaptureVoiceAsync(audio, transcript, keepAudio, kind, title, attachments, capture, deps, cancellationToken);
+        if (about is not null && result.Row is { } row)
+        {
+            await deps.Relate.RelateAsync(row.EventId, about, SubjectEventRelations.Concerns, cancellationToken);
+        }
+
+        return result.Response;
+    }
+
+    private static async Task<(IResult Response, BinaryCaptureRow? Row)> CaptureVoiceAsync(
+        IFormFile? audio, string? transcript, bool? keepAudio, string kind, string? title,
+        AttachmentService attachments, CaptureService capture, CaptureFiling deps,
+        CancellationToken cancellationToken)
+    {
         var text = Clean(transcript);
         var needsTranscription = text is null;
         var keep = keepAudio == true || needsTranscription;
@@ -127,14 +159,15 @@ public static class CaptureEndpoints
         {
             var spoken = await capture.CaptureVoiceTranscriptAsync(text!, cancellationToken);
             var made = await FileAsync(kind, spoken.EventId, deduplicated: false, heading, body, deps, cancellationToken);
-            return Results.Ok(new BinaryCaptureRow { EventId = spoken.EventId, Kind = EventKinds.Voice, Subject = made });
+            var said = new BinaryCaptureRow { EventId = spoken.EventId, Kind = EventKinds.Voice, Subject = made };
+            return (Results.Ok(said), said);
         }
 
         if (audio is null)
         {
-            return Results.BadRequest(new ApiError(needsTranscription
+            return (Results.BadRequest(new ApiError(needsTranscription
                 ? "A voice note with no transcript needs its recording, in a field named audio."
-                : "Keep audio needs the recording, in a field named audio."));
+                : "Keep audio needs the recording, in a field named audio.")), null);
         }
 
         var bytes = await ReadAsync(audio, cancellationToken);
@@ -143,7 +176,7 @@ public static class CaptureEndpoints
             bytes, filename, audio.ContentType, text, cancellationToken);
         var subject = await FileAsync(kind, result.EventId, result.Deduplicated, heading, body, deps, cancellationToken);
 
-        return Results.Ok(new BinaryCaptureRow
+        var row = new BinaryCaptureRow
         {
             EventId = result.EventId,
             ArtifactId = result.ArtifactId,
@@ -155,7 +188,8 @@ public static class CaptureEndpoints
             Deduplicated = result.Deduplicated,
             Subject = subject,
             NeedsTranscription = needsTranscription
-        });
+        };
+        return (Results.Ok(row), row);
     }
 
     /// <summary>

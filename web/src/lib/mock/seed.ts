@@ -1664,11 +1664,14 @@ export function createSeed(): MockState {
       firstCompletedOn: yesterday,
       missed: false,
       completedLate: false,
-      canWriteAnswers: true,
-      workedWell: "Easy long-run pace. The graph and the outline stayed the same data.",
-      differently: "Phone was still on the nightstand. Park it before the kettle.",
-      planning: "Keep LifeOS as primary focus. Finish Map graph. Long run stays easy.",
       keepFocus: true,
+      reflection: {
+        path: `10 Reflections/${yesterday} Daily reflection.md`,
+        vault: "Chris2.0",
+        summary:
+          "An easy long run, and the graph and the outline stayed the same data. The phone was still on the nightstand: park it before the kettle.",
+        linkedAt: isoAgo(10),
+      },
     },
   ];
 

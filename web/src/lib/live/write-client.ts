@@ -554,15 +554,21 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       if (transcript) form.append("transcript", transcript);
       form.append("keepAudio", String(keep));
       form.append("type", req.type);
+      if (req.concerning) form.append("concerning", req.concerning);
       const result = normalizeBinaryCapture(
         await unwrap(
           api().POST("/api/capture/voice", {
-            body: form as unknown as { transcript?: string; keepAudio?: boolean; type?: string },
+            body: form as unknown as {
+              transcript?: string;
+              keepAudio?: boolean;
+              type?: string;
+              concerning?: string;
+            },
             bodySerializer: (body) => body as unknown as FormData,
           }),
         ),
       );
-      notify("Captured to Inbox");
+      notify(req.concerning ? "Dictated. The nightly sweep files it in your vault." : "Captured to Inbox");
       return result;
     },
 
@@ -610,7 +616,7 @@ export function createLiveWriteClient(): LifeOsWriteClient {
     },
 
     async saveReview(id, body) {
-      // Keep focus only: the answers have no home on the live site yet (reviews plan §4).
+      // Keep focus only: the answers are a vault note the review links to (reviews plan §4.1).
       await unwrap(
         api().POST("/api/reviews/{id}", {
           params: { path: { id } },

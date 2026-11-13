@@ -85,6 +85,38 @@ public sealed class McpReads(string readerConnectionString, string homeTimeZone,
                     .ToList());
     }
 
+    /// <summary>
+    /// The items each of <paramref name="eventIds"/> concerns, oldest edge first; an event that
+    /// concerns nothing isn't in the answer. The inbox shows them, so the vault agent knows which
+    /// review a capture dictated from the review answers (reviews plan §4.1).
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<McpItemRef>>> ConcernsAsync(
+        IReadOnlyCollection<Guid> eventIds, CancellationToken cancellationToken)
+    {
+        if (eventIds.Count == 0)
+        {
+            return new Dictionary<Guid, IReadOnlyList<McpItemRef>>();
+        }
+
+        await using var connection = new NpgsqlConnection(readerConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        var rows = await connection.QueryAsync<EarlierRow>(new CommandDefinition(
+            """
+            SELECT se.event_id AS id, '' AS kind, s.id AS subjectid, s.urn, s.type, s.title
+            FROM bsk.v_subject_event se
+            JOIN bsk.v_subject s ON s.id = se.subject_id
+            WHERE se.event_id = ANY(@ids) AND se.relation = 'concerns'
+            ORDER BY se.created_at;
+            """,
+            new { ids = eventIds.ToArray() },
+            cancellationToken: cancellationToken));
+        return rows
+            .GroupBy(r => r.Id)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<McpItemRef>)g.Select(r => new McpItemRef(r.SubjectId!.Value, r.Urn!, r.Type ?? "", r.Title ?? "")).ToList());
+    }
+
     private sealed class EarlierRow
     {
         public Guid Id { get; set; }

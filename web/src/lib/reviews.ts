@@ -5,6 +5,7 @@ import type {
   HabitRow,
   ReviewDoc,
   ReviewKind,
+  ReviewReflection,
   ReviewStatus,
 } from "@/lib/production-ui-types";
 
@@ -166,15 +167,32 @@ function tracksOn(habit: HabitRow, day: string): boolean {
 }
 
 /**
- * A review as the API sends it (`ReviewRow`, reviews plan §3.1), in the page's shape. The
- * answers aren't on the live site yet (reviews plan §4), so they read empty and can't be
- * written there.
+ * The `obsidian://` link that opens a reflection in Obsidian on a machine that has its vault
+ * (Notes Spec §4: from LifeOS, the note's path opened this way).
+ */
+export function obsidianUrl(reflection: Pick<ReviewReflection, "path" | "vault">): string {
+  return `obsidian://open?vault=${encodeURIComponent(reflection.vault)}&file=${encodeURIComponent(reflection.path)}`;
+}
+
+/**
+ * A review as the API sends it (`ReviewRow`, reviews plan §3.1), in the page's shape. Its
+ * answers are a vault note it links to (§4.1); a link missing a part reads as none.
  */
 export function normalizeReview(raw: unknown): ReviewDoc {
   const row = (raw ?? {}) as Record<string, unknown>;
   const text = (value: unknown) => (typeof value === "string" ? value : "");
   const date = text(row.date);
   const status = row.status === "Completed" || row.status === "Missed" ? row.status : "Open";
+  const linked = (row.reflection ?? null) as Record<string, unknown> | null;
+  const reflection: ReviewReflection | null =
+    linked && text(linked.path) && text(linked.vault)
+      ? {
+          path: text(linked.path),
+          vault: text(linked.vault),
+          summary: text(linked.summary),
+          linkedAt: text(linked.linkedAt),
+        }
+      : null;
   return {
     id: text(row.id),
     urn: text(row.urn) || undefined,
@@ -191,9 +209,6 @@ export function normalizeReview(raw: unknown): ReviewDoc {
     missed: row.missed === true,
     completedLate: row.completedLate === true,
     keepFocus: row.keepFocus !== false,
-    workedWell: "",
-    differently: "",
-    planning: "",
-    canWriteAnswers: false,
+    reflection,
   };
 }

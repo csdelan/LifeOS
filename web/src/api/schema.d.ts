@@ -3502,6 +3502,13 @@ export interface components {
             attachment?: null | components["schemas"]["ArtifactRecord"];
             needsTranscription?: boolean;
         };
+        ReviewReflectionRow: {
+            path?: string;
+            vault?: string;
+            summary?: string;
+            /** Format: date-time */
+            linkedAt?: string;
+        };
         ReviewRow: {
             /** Format: uuid */
             id?: string;
@@ -3529,6 +3536,7 @@ export interface components {
             archived?: boolean;
             /** Format: date-time */
             createdAt?: string;
+            reflection?: null | components["schemas"]["ReviewReflectionRow"];
         };
         RewardPriceBody: {
             reward?: string;
@@ -5111,6 +5119,8 @@ export interface operations {
                     type?: string;
                 } & {
                     title?: string;
+                } & {
+                    concerning?: string;
                 };
             };
         };

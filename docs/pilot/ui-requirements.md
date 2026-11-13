@@ -2317,8 +2317,12 @@ Build:      building
 reflections and have an agent format each into a note in his Obsidian vault, in the Notes
 Spec's review format; the review links to the note ([notes system plan](../notes-system-plan.md),
 [reviews plan](reviews-plan.md) §4). This replaces SuperJournal as the home of review answers
-(#29); the earlier updates below that name SuperJournal are history. Build stays `building`
-until R5 links reviews to their notes.
+(#29); the earlier updates below that name SuperJournal are history. R5 built it the same day
+(reviews plan §4.1, notes plan N8): the page's *Dictate reflection* records a voice capture tied
+to the review, the nightly sweep files it as a reflection note and links it with
+`link_reflection`, and the page then shows its summary and *Open in Obsidian*. The typed answer
+boxes are gone. Build stays `building` until a daily and a weekly review have been answered this
+way.
 
 **Workflow (Chris):**
 - A daily review should be created automatically at the start of every day and remain
@@ -2416,7 +2420,8 @@ Definition: active
 Build:      building
 
 **Update (2026-11-12 — answers move to the notes vault):** as REVIEW-1: the weekly
-reflection is dictated and filed as a vault note the review links to (reviews plan §4, R5).
+reflection is dictated and filed as a vault note the review links to (reviews plan §4, R5),
+built the same day (§4.1).
 
 **Workflow (Chris):**
 - The weekly review should be created on Sunday and should normally be completed on Sunday.
@@ -4840,7 +4845,7 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 
 **Still open:** **D6 focus storage** (TODAY-1), and where a **review's answers** live: the
 Review type, scheduling and missed shipped in migration 0052 (REVIEW-0 / D8), and the answers
-go to the notes vault (reviews plan §4, R5). The Oura integration (D14) and cover images (D15)
+are vault notes the review links to (reviews plan §4.1, R5, migration 0054). The Oura integration (D14) and cover images (D15)
 shipped. Everything else
 above has shipped, the rewards work included (R1–R7 in [rewards-plan.md](rewards-plan.md))
 and life-domain XP (X1–X7 in [xp-domains-plan.md](xp-domains-plan.md)), and the Food Log

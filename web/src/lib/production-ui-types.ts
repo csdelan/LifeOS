@@ -235,10 +235,20 @@ export type ReviewKind = "daily" | "weekly";
 /** What a review reads as today. Missed is worked out from its day, never written on a schedule. */
 export type ReviewStatus = "Open" | "Completed" | "Missed";
 export interface ReviewBody {
-  workedWell: string;
-  differently: string;
-  planning: string;
   keepFocus: boolean;
+}
+/**
+ * The vault note that answers a review (reviews plan §4.1): Chris dictates it, an agent files it
+ * in his notes vault and links it here. LifeOS holds where it is and its summary, never its text.
+ */
+export interface ReviewReflection {
+  /** The note's path in the vault, from its top folder. */
+  path: string;
+  /** The vault's name, as Obsidian knows it. */
+  vault: string;
+  summary: string;
+  /** When this link was recorded. */
+  linkedAt: string;
 }
 export interface ReviewDoc extends ReviewBody {
   id: string;
@@ -262,11 +272,8 @@ export interface ReviewDoc extends ReviewBody {
   missed: boolean;
   /** Completed, but only after its day. */
   completedLate: boolean;
-  /**
-   * Whether the answers can be written here. False on the live site until they have a home
-   * (reviews plan §4); the recap, the habit check-offs and completing still work.
-   */
-  canWriteAnswers: boolean;
+  /** Its reflection, once an agent has filed and linked one; null until then. */
+  reflection: ReviewReflection | null;
 }
 
 /** Inbox item kinds — an event (raw capture) or a subject (Idea/Problem flagged). */
@@ -605,6 +612,8 @@ export interface CaptureVoiceRequest {
   keepAudio: boolean;
   /** Elapsed recording time, used for the Inbox duration chip. */
   durationSeconds?: number;
+  /** An item's id the capture is about: a review, when it's dictated from the review (§4.1). */
+  concerning?: string;
 }
 
 /** Outcome of a document or voice capture (mirrors kernel `AttachmentResult` + D4). */

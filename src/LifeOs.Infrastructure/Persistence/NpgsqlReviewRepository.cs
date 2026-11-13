@@ -20,7 +20,9 @@ public sealed class NpgsqlReviewRepository(string connectionString) : IReviewRep
                keep_focus AS keepfocus, completed_at AS completedat,
                first_completed_at AS firstcompletedat,
                to_char(first_completed_on, 'YYYY-MM-DD') AS firstcompletedon,
-               archived, created_at AS createdat
+               archived, created_at AS createdat,
+               reflection_path AS reflectionpath, reflection_vault AS reflectionvault,
+               reflection_summary AS reflectionsummary, reflection_at AS reflectionat
         FROM bsk.v_review
         """;
 
@@ -80,6 +82,10 @@ public sealed class NpgsqlReviewRepository(string connectionString) : IReviewRep
         public string? FirstCompletedOn { get; set; }
         public bool Archived { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string? ReflectionPath { get; set; }
+        public string? ReflectionVault { get; set; }
+        public string? ReflectionSummary { get; set; }
+        public DateTime? ReflectionAt { get; set; }
 
         public Review ToReview() => new(
             Id, Urn, Title, Kind, ParseDay(Period), Status, KeepFocus,
@@ -87,6 +93,11 @@ public sealed class NpgsqlReviewRepository(string connectionString) : IReviewRep
             FirstCompletedAt is { } f ? Utc(f) : null,
             FirstCompletedOn is { } on ? ParseDay(on) : null,
             Archived,
-            Utc(CreatedAt));
+            Utc(CreatedAt),
+            // A link is whole or not there: one missing a part, written by hand, reads as none.
+            ReflectionPath is { Length: > 0 } path && ReflectionVault is { Length: > 0 } vault
+                && ReflectionSummary is { } summary && ReflectionAt is { } at
+                ? new ReviewReflection(path, vault, summary, Utc(at))
+                : null);
     }
 }

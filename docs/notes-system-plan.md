@@ -276,6 +276,18 @@ Started 2026-11-12, when Chris chose option A (Decisions, above): Phase 2's `cap
 
 Decided rather than asked: `add_journal_entry` is built because it's part of the `capture` level, but the sweep never calls it; `dismiss` takes no `request_id`, since dismissing a capture already out of the Inbox writes nothing. Not covered by tests: the skill's write path against the real connector, which can't list the write tools until Chris switches them on, so the first run after that should be read.
 
+### N8: reflections linked to their reviews
+
+Started 2026-11-12, when Chris said to do N8. It is the reviews plan's R5, designed in its §4.1. In this order:
+
+1. **Dictating from the review.** The Reviews page's answer boxes are gone: its Reflection section lists what to talk about and has *Dictate reflection*, which records a voice capture tied to that review (`concerning` on `POST /api/capture/voice`). The connector's `inbox` shows each capture's `concerns`, so the agent knows which review a dictation answers. Completing the review stays Chris's.
+2. **The link** (LifeOS; agent-access plan §5.2). `link_reflection(path, vault, summary, review? | kind + day)` at the `capture` level writes an `observation` event concerning the Review, holding the note's path, vault and a short summary; the newest wins, and the same link again writes nothing. Named by kind and day, it opens the review if Chris hasn't. It refuses a path outside the vault or not ending in `.md`, a future day and an item that isn't a Review, and never completes the review. Migration 0054 adds the link to `v_review`. **Built and tested 2026-11-12** (`McpWriteTests`).
+3. **The page shows it.** Once linked, the Reflection section shows the summary and an *Open in Obsidian* link (`obsidian://open?vault=...&file=...`), and the button reads *Dictate more*.
+4. **The vault agent links** (vault `7466e20`; the scheduled task's prompt updated the same day). A capture whose `concerns` names a Review is filed as that review's reflection (`kind` daily or weekly, its day the review's period). Before the filing commit the agent calls `link_reflection`, with a `request_id` from `captures key`, and writes the review's URN into the note's `review` field, so the commit holds both. The sweep also links each daily or weekly reflection added or changed since the last sweep, for periods from 2026-11-12 on; older reflections are left alone. Without the write tools, or when a link is refused, it files the note with no `review` and says so in its reply.
+5. **Done when:** a daily and a weekly review have been answered by dictation and show their summaries.
+
+Decided rather than asked: the link is an event concerning the Review, not a new kind of item, since the note lives in the vault and only its pointer belongs in LifeOS; the agent writes the summary, because Chris dictated the words and the note is the agent's filing of them.
+
 ## Status
 
 - [x] N0 — This plan
@@ -286,7 +298,7 @@ Decided rather than asked: `add_journal_entry` is built because it's part of the
 - [ ] N5 — Formatter skill, media sweep and related-links sweep (all built and installed 2026-11-12; waiting on the first nightly run)
 - [ ] N6 — Minimal dictation pipeline (built and on staging 2026-11-12; the first nightly run is 2026-11-13, then a week of use)
 - [ ] N7 — LifeOS agent writes at `capture` (built 2026-11-12, with `dismiss`, and switched on for staging that evening; waiting on the first sweep that writes, 2026-11-13)
-- [ ] N8 — Reviews R5: reflections linked to reviews
+- [ ] N8 — Reviews R5: reflections linked to reviews (built 2026-11-12; waiting on the push, then a daily and a weekly review answered by dictation)
 - [ ] N9 — Paperless search in `/mcp`
 
 ## Later

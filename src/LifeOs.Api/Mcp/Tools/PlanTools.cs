@@ -106,27 +106,32 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
     }
 
     [McpServerTool(Name = "inbox", Title = "Inbox", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("Captures and flagged items waiting for Chris to triage, newest first. flagged_at is when each one came into the inbox. A capture's text is whole up to 20,000 characters; longer text is cut and has cut: true.")]
+    [Description("Captures and flagged items waiting for Chris to triage, newest first. flagged_at is when each one came into the inbox. A capture's text is whole up to 20,000 characters; longer text is cut and has cut: true. concerns names the items a capture is about, such as the review Chris dictated it from.")]
     public async Task<CallToolResult> Inbox(
         [Description("At most this many items (default 50, at most 200).")] int? limit = null,
         CancellationToken cancellationToken = default)
     {
         var stamp = await reads.NowAsync(cancellationToken);
-        var rows = subjects.GetInbox()
-            .Where(i => i.SubjectType is null || options.AllowsType(i.SubjectType))
-            .Select(i => new
-            {
-                i.ItemId, i.ItemKind,
-                // The view names it triaged_at (its newest triage marker), but an item here is still
-                // waiting: say when it was flagged.
-                FlaggedAt = i.TriagedAt,
-                Item = i.SubjectUrn is null ? null : new { Urn = i.SubjectUrn, Type = i.SubjectType, Title = i.SubjectTitle },
-                i.EventKind,
-                Text = i.EventContent is { Length: > MaxCaptureLength } c ? c[..MaxCaptureLength] : i.EventContent,
-                Cut = i.EventContent is { Length: > MaxCaptureLength } ? true : (bool?)null,
-                Tags = i.Tags.Length > 0 ? i.Tags : null,
-            });
-        var (items, truncated) = McpResults.Cap(rows, McpResults.Limit(limit));
+        var (waiting, truncated) = McpResults.Cap(
+            subjects.GetInbox().Where(i => i.SubjectType is null || options.AllowsType(i.SubjectType)),
+            McpResults.Limit(limit));
+        var concerns = await reads.ConcernsAsync(
+            waiting.Where(i => i.ItemKind == "event").Select(i => i.ItemId).ToList(), cancellationToken);
+        var items = waiting.Select(i => new
+        {
+            i.ItemId, i.ItemKind,
+            // The view names it triaged_at (its newest triage marker), but an item here is still
+            // waiting: say when it was flagged.
+            FlaggedAt = i.TriagedAt,
+            Item = i.SubjectUrn is null ? null : new { Urn = i.SubjectUrn, Type = i.SubjectType, Title = i.SubjectTitle },
+            i.EventKind,
+            Text = i.EventContent is { Length: > MaxCaptureLength } c ? c[..MaxCaptureLength] : i.EventContent,
+            Cut = i.EventContent is { Length: > MaxCaptureLength } ? true : (bool?)null,
+            Tags = i.Tags.Length > 0 ? i.Tags : null,
+            Concerns = concerns.TryGetValue(i.ItemId, out var about)
+                ? about.Where(a => options.AllowsType(a.Type)).ToList() is { Count: > 0 } shown ? shown : null
+                : null,
+        }).ToList();
         // text_limit tells the vault agent this connector passes whole captures: an older one cut
         // them at 1,000 characters without saying so, and the agent files nothing from that.
         return McpResults.Ok(stamp, $"{McpResults.Plural(items.Count, "item")} in the inbox{(truncated ? " (more not shown)" : "")}.",

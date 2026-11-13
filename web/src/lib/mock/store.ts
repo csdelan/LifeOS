@@ -1045,6 +1045,8 @@ export function captureVoice(req: {
   sha256?: string | null;
   filename?: string;
   contentType?: string;
+  /** What it's about, such as a review. The mock has no agent to file it, so it isn't kept. */
+  concerning?: string;
 }): BinaryCaptureResult {
   const transcript = req.transcript.trim();
   const needsTranscription = !transcript;
@@ -1396,11 +1398,8 @@ export function openReviewDoc(kind: ReviewDoc["kind"], day: string): ReviewDoc {
       firstCompletedOn: null,
       missed: false,
       completedLate: false,
-      canWriteAnswers: true,
-      workedWell: "",
-      differently: "",
-      planning: "",
       keepFocus: true,
+      reflection: null,
     };
     state.reviews = [...state.reviews, found];
     emit();

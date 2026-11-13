@@ -274,7 +274,155 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         Assert.Equal(0, await AgentEventsAsync(db));
     }
 
+    [Fact]
+    public async Task Link_reflection_opens_the_review_links_the_newest_note_and_never_completes_it()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await StartAsync(db.ConnectionString);
+        var person = await ActAsAiPersonAsync(host, Writer);
+        await using var client = await McpServerTests.ConnectAsync(host, ApiTestHost.TokenFor(clientId: Writer));
+        const string Path = "10 Reflections/2026-11-09 Daily reflection.md";
+        Dictionary<string, object?> Link(string summary, string? requestId = null) => new()
+        {
+            ["path"] = Path, ["vault"] = "Chris2.0", ["summary"] = summary,
+            ["kind"] = "daily", ["day"] = "2026-11-09", ["request_id"] = requestId,
+        };
+
+        var first = await CallAsync(client, "link_reflection", Link("Shipped the shed plans."));
+        var same = await CallAsync(client, "link_reflection", Link("Shipped the shed plans."));
+        var edited = await CallAsync(client, "link_reflection", Link("Shipped the shed plans; slept badly."));
+        var retried = await CallAsync(client, "link_reflection", Link("Slept badly, then shipped.", "req-1"));
+        var again = await CallAsync(client, "link_reflection", Link("Slept badly, then shipped.", "req-1"));
+
+        // The first opens the past review, late, and links it; it stays Missed, not Completed.
+        var review = first.GetProperty("review");
+        Assert.True(review.GetProperty("opened").GetBoolean());
+        Assert.Equal("2026-11-09", review.GetProperty("period").GetString());
+        Assert.Equal(ReviewStatuses.Missed, review.GetProperty("status").GetString());
+        Assert.True(first.GetProperty("written").GetBoolean());
+        Assert.False(same.GetProperty("written").GetBoolean());
+        Assert.True(edited.GetProperty("written").GetBoolean());
+        Assert.True(retried.GetProperty("written").GetBoolean());
+        Assert.True(again.GetProperty("already_done").GetBoolean());
+        Assert.False(again.TryGetProperty("opened", out _));
+
+        // The page reads the newest link.
+        var row = Assert.Single(await ReviewsAsync(host, "daily", "2026-11-09"));
+        Assert.Equal(review.GetProperty("id").GetGuid(), row.GetProperty("id").GetGuid());
+        Assert.Equal(Path, row.GetProperty("reflection").GetProperty("path").GetString());
+        Assert.Equal("Chris2.0", row.GetProperty("reflection").GetProperty("vault").GetString());
+        Assert.Equal("Slept badly, then shipped.", row.GetProperty("reflection").GetProperty("summary").GetString());
+        Assert.NotEqual(ReviewStatuses.Completed, row.GetProperty("status").GetString());
+
+        // Three links were written, each the agent's, concerning the review.
+        await using var owner = new NpgsqlConnection(db.ConnectionString);
+        var links = (await owner.QueryAsync<(string Source, string Provenance, string? PersonId, Guid Review)>(new CommandDefinition(
+            """
+            SELECT e.source_id, e.provenance, e.payload->>'agent_person_id', se.subject_id
+            FROM bsk.event e JOIN bsk.subject_event se ON se.event_id = e.id AND se.relation = 'concerns'
+            WHERE e.kind = 'observation' AND e.payload ? 'reflection'
+            """, cancellationToken: Ct))).ToList();
+        Assert.Equal(3, links.Count);
+        Assert.All(links, l =>
+        {
+            Assert.Equal($"mcp:{Writer}", l.Source);
+            Assert.Equal(Provenances.Declared, l.Provenance);
+            Assert.Equal(person.ToString(), l.PersonId);
+            Assert.Equal(row.GetProperty("id").GetGuid(), l.Review);
+        });
+
+        // By URN it's the same review; a weekly by any day of its week is named by its Sunday.
+        var byUrn = await CallAsync(client, "link_reflection", new()
+        {
+            ["path"] = Path, ["vault"] = "Chris2.0", ["summary"] = "Slept badly, then shipped.",
+            ["review"] = review.GetProperty("urn").GetString(),
+        });
+        var weekly = await CallAsync(client, "link_reflection", new()
+        {
+            ["path"] = "10 Reflections/2026-11-08 Weekly reflection.md", ["vault"] = "Chris2.0",
+            ["summary"] = "A good week.", ["kind"] = "weekly", ["day"] = "2026-11-04",
+        });
+        Assert.False(byUrn.GetProperty("written").GetBoolean());
+        Assert.Equal("2026-11-08", weekly.GetProperty("review").GetProperty("period").GetString());
+    }
+
+    [Fact]
+    public async Task Link_reflection_refuses_a_bad_link_a_future_review_or_another_item_and_opens_nothing()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await StartAsync(db.ConnectionString);
+        await ActAsAiPersonAsync(host, Writer);
+        var (_, taskUrn) = await PostTaskAsync(host, $"Fix the gate {Guid.NewGuid():N}");
+        await using var client = await McpServerTests.ConnectAsync(host, ApiTestHost.TokenFor(clientId: Writer));
+        Dictionary<string, object?> Link(string path, string? day = "2026-11-09", string? review = null) => new()
+        {
+            ["path"] = path, ["vault"] = "Chris2.0", ["summary"] = "A day.",
+            ["kind"] = review is null && day is not null ? "daily" : null, ["day"] = day, ["review"] = review,
+        };
+
+        var refusals = new Dictionary<string, (Dictionary<string, object?> Args, string Says)>
+        {
+            ["outside the vault"] = (Link("../Elsewhere/note.md"), "inside the vault"),
+            ["a drive"] = (Link("C:/Vaults/note.md"), "inside the vault"),
+            ["not a note"] = (Link("10 Reflections/2026-11-09 Daily reflection.txt"), "ending in .md"),
+            ["no review"] = (Link("10 Reflections/a.md", day: null), "Name the review"),
+            ["the future"] = (Link("10 Reflections/a.md", day: "2099-01-05"), "opens that day"),
+            ["a Task"] = (Link("10 Reflections/a.md", day: null, review: taskUrn), "not a Review"),
+        };
+        foreach (var (why, (args, says)) in refusals)
+        {
+            var result = await client.CallToolAsync("link_reflection", args, cancellationToken: Ct);
+            Assert.True(result.IsError, $"{why} was linked");
+            Assert.Contains(says, Text(result), StringComparison.Ordinal);
+        }
+
+        Assert.Equal(0, await AgentEventsAsync(db));
+        await using var owner = new NpgsqlConnection(db.ConnectionString);
+        Assert.Equal(0, await owner.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject WHERE type = 'Review';", cancellationToken: Ct)));
+    }
+
+    [Fact]
+    public async Task A_capture_dictated_from_a_review_concerns_it_in_the_inbox()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await StartAsync(db.ConnectionString);
+        await ActAsAiPersonAsync(host, Writer);
+        using var opened = await host.Client.PostAsJsonAsync("api/reviews/open", new { kind = "daily", date = "2026-11-09" }, Ct);
+        var review = JsonDocument.Parse(await opened.Content.ReadAsStringAsync(Ct)).RootElement;
+        var ns = Guid.NewGuid().ToString("N")[..8];
+
+        using var dictated = await PostVoiceAsync(host, $"Today went well {ns}", review.GetProperty("id").GetGuid().ToString());
+        using var nowhere = await PostVoiceAsync(host, $"About nothing {ns}", "urn:bsk:review:nope-000000");
+
+        Assert.True(dictated.IsSuccessStatusCode, await dictated.Content.ReadAsStringAsync(Ct));
+        Assert.Equal(HttpStatusCode.BadRequest, nowhere.StatusCode);
+        await using var client = await McpServerTests.ConnectAsync(host, ApiTestHost.TokenFor(clientId: Writer));
+        var inbox = await InboxAsync(client);
+        var capture = Assert.Single(inbox, i => (i.TryGetProperty("text", out var t) ? t.GetString() : null)?.Contains(ns, StringComparison.Ordinal) == true);
+        var about = Assert.Single(capture.GetProperty("concerns").EnumerateArray());
+        Assert.Equal(review.GetProperty("urn").GetString(), about.GetProperty("urn").GetString());
+        Assert.Equal(SubjectTypes.Review, about.GetProperty("type").GetString());
+    }
+
     // ---- Helpers ----
+
+    private static async Task<List<JsonElement>> ReviewsAsync(ApiTestHost host, string kind, string day)
+    {
+        var text = await host.Client.GetStringAsync($"api/reviews?kind={kind}&from={day}&to={day}", Ct);
+        return JsonDocument.Parse(text).RootElement.Clone().EnumerateArray().ToList();
+    }
+
+    private static Task<HttpResponseMessage> PostVoiceAsync(ApiTestHost host, string transcript, string concerning)
+    {
+        var form = new MultipartFormDataContent
+        {
+            { new StringContent(transcript), "transcript" },
+            { new StringContent("false"), "keepAudio" },
+            { new StringContent(concerning), "concerning" },
+        };
+        return host.Client.PostAsync("api/capture/voice", form, Ct);
+    }
 
     private static Dictionary<string, string?> Settings(string? writes) => new()
     {

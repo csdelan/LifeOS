@@ -15,8 +15,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   `bsk_reader` role and the `v_*` views.
 - `src/LifeOs.Api`: the ASP.NET Core API. It serves the SPA in production and `/mcp`, the
   connector Chris's agents use. It reads only, unless `Mcp:Writes` is `capture`: then the clients
-  named in `Mcp:WriteClients` can capture to the Inbox, journal and dismiss raw captures, as
-  `mcp:<client_id>` (`docs/pilot/agent-access-plan.md` §5).
+  named in `Mcp:WriteClients` can capture to the Inbox, journal, dismiss raw captures and link a
+  review to its vault reflection, as `mcp:<client_id>` (`docs/pilot/agent-access-plan.md` §5).
 - `web/`: the React + Vite SPA. With no `VITE_API_BASE_URL` it runs in mock mode on an in-memory
   store.
 - `src/LifeOs.Pilot`: the original WinForms app. Chris still runs it, often against staging.

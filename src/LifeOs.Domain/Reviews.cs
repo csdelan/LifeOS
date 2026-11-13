@@ -39,6 +39,8 @@ public static class ReviewStatuses
 /// is when the current Completed was set (null unless Completed now);
 /// <paramref name="FirstCompletedAt"/> and <paramref name="FirstCompletedOn"/> are the first time
 /// it was ever completed and that instant's home-zone day, which decide whether it was missed.
+/// <paramref name="Reflection"/> is the vault note that answers it, once one is linked (migration
+/// 0054, reviews plan §4.1).
 /// </summary>
 public sealed record Review(
     Guid Id,
@@ -52,7 +54,8 @@ public sealed record Review(
     DateTimeOffset? FirstCompletedAt,
     DateOnly? FirstCompletedOn,
     bool Archived,
-    DateTimeOffset CreatedAt)
+    DateTimeOffset CreatedAt,
+    ReviewReflection? Reflection = null)
 {
     /// <summary>The day it's due: the end of its own day (D8). A weekly review is due on its Sunday.</summary>
     public DateOnly DueOn => Period;
@@ -142,4 +145,73 @@ public static class ReviewPeriods
 
     /// <summary>A day as reviews name it: "Sun Nov 8".</summary>
     public static string Day(DateOnly day) => day.ToString("ddd MMM d", CultureInfo.InvariantCulture);
+}
+
+/// <summary>
+/// The reflection that answers a review (reviews plan §4.1): a note in Chris's notes vault, by
+/// its path in the vault and the vault's name, with the summary an agent wrote.
+/// <paramref name="LinkedAt"/> is when this version of the link was recorded.
+/// </summary>
+public sealed record ReviewReflection(string Path, string Vault, string Summary, DateTimeOffset LinkedAt)
+{
+    /// <summary>Whether it points at the same note with the same summary.</summary>
+    public bool Same(ReviewReflection other)
+        => Path == other.Path && Vault == other.Vault && Summary == other.Summary;
+}
+
+/// <summary>
+/// The rules for linking a reflection to a review (reviews plan §4.1). The link is an
+/// <c>observation</c> event that concerns the review, <c>{"reflection": {path, vault, summary}}</c>;
+/// the newest by <c>recorded_at</c> wins.
+/// </summary>
+public static class ReviewReflections
+{
+    /// <summary>The payload key of a reflection link.</summary>
+    public const string PayloadKey = "reflection";
+
+    public const int MaxPathLength = 400;
+    public const int MaxVaultLength = 100;
+    public const int MaxSummaryLength = 2_000;
+
+    /// <summary>
+    /// The link as it's stored: the path with forward slashes, everything trimmed. Refused in
+    /// words when the path isn't a Markdown note's place inside a vault, or a part is missing or
+    /// too long. <paramref name="linkedAt"/> is when it's being linked.
+    /// </summary>
+    public static ReviewReflection Check(string? path, string? vault, string? summary, DateTimeOffset linkedAt)
+    {
+        var cleanPath = (path ?? "").Trim().Replace('\\', '/');
+        if (cleanPath.Length == 0)
+        {
+            throw new ArgumentException("path is the note's path in the vault, such as '10 Reflections/2026-11-12 Daily reflection.md'.");
+        }
+
+        if (cleanPath.StartsWith('/') || cleanPath.Contains(':', StringComparison.Ordinal)
+            || cleanPath.Split('/').Any(part => part is "" or "." or ".."))
+        {
+            throw new ArgumentException($"path is a path inside the vault, from its top folder, such as '10 Reflections/2026-11-12 Daily reflection.md'; '{path?.Trim()}' isn't one.");
+        }
+
+        if (!cleanPath.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"path is a note, ending in .md; '{cleanPath}' isn't.");
+        }
+
+        var cleanVault = (vault ?? "").Trim();
+        if (cleanVault.Length == 0 || cleanVault.IndexOfAny(['/', '\\']) >= 0)
+        {
+            throw new ArgumentException("vault is the vault's name as Obsidian shows it, such as 'Chris2.0'.");
+        }
+
+        var cleanSummary = (summary ?? "").Trim();
+        if (cleanSummary.Length == 0)
+        {
+            throw new ArgumentException("summary is the reflection's summary, as the note's summary field has it.");
+        }
+
+        return cleanPath.Length > MaxPathLength ? throw new ArgumentException($"path is at most {MaxPathLength} characters.")
+            : cleanVault.Length > MaxVaultLength ? throw new ArgumentException($"vault is at most {MaxVaultLength} characters.")
+            : cleanSummary.Length > MaxSummaryLength ? throw new ArgumentException($"summary is at most {MaxSummaryLength:N0} characters; it's the note's summary, not the reflection.")
+            : new ReviewReflection(cleanPath, cleanVault, cleanSummary, linkedAt);
+    }
 }

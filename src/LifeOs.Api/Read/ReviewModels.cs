@@ -44,6 +44,9 @@ public sealed class ReviewRow
     public bool Archived { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 
+    /// <summary>The vault note that answers it (reviews plan §4.1); null until an agent links one.</summary>
+    public ReviewReflectionRow? Reflection { get; set; }
+
     public static ReviewRow From(Review review, DateOnly today)
     {
         var weekEnd = ReviewPeriods.WeekSunday(review.Period);
@@ -67,8 +70,23 @@ public sealed class ReviewRow
             KeepFocus = review.KeepFocus,
             Archived = review.Archived,
             CreatedAt = review.CreatedAt,
+            Reflection = review.Reflection is { } r
+                ? new ReviewReflectionRow { Path = r.Path, Vault = r.Vault, Summary = r.Summary, LinkedAt = r.LinkedAt }
+                : null,
         };
     }
+}
+
+/// <summary>
+/// A review's reflection: the note's <see cref="Path"/> in the <see cref="Vault"/> (opened with an
+/// <c>obsidian://</c> link), the summary an agent wrote, and when this link was recorded.
+/// </summary>
+public sealed class ReviewReflectionRow
+{
+    public string Path { get; set; } = "";
+    public string Vault { get; set; } = "";
+    public string Summary { get; set; } = "";
+    public DateTimeOffset LinkedAt { get; set; }
 }
 
 /// <summary>

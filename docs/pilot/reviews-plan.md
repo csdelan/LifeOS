@@ -52,7 +52,7 @@ recap and the check-offs stay in LifeOS. §4 has the details.
 | Keep focus | A **"keep my Primary focus" switch** on each review, on unless turned off. |
 | The recap | **A read over `bsk`**: status changes, completed and overdue Tasks, repeating Tasks, habits, appointments and the Inbox for the days it looks back on. |
 | Habit check-offs | **The same buttons as Focus** (followed, partial, not followed) for each habit day the review looks back on, writing the same adherence events (REVIEW-5). |
-| Answers | **In the notes vault, as a dictated reflection an agent formats; the review links to the note** (Chris, 2026-11-12, §4). Until R5, not written on the live site. No interim store in LifeOS. |
+| Answers | **In the notes vault, as a dictated reflection an agent formats; the review links to the note** (Chris, 2026-11-12, §4). R5 built the link (§4.1): LifeOS holds the note's path and summary, never its text. |
 
 ## 2. The model
 
@@ -100,7 +100,7 @@ writes call `ReviewService`. Refusals are 400s in words; an unknown review is a 
 | `GET /api/reviews?kind=&from=&to=` | The reviews whose period is in the range (the four weeks to today by default, at most 400 days), daily first on a day. Each row has its `date` (the day, or the Sunday), `weekStart`–`weekEnd` (its Monday-to-Sunday week), `planStart`–`planEnd`, `dueOn`, `status` as of today (Open, Completed, Missed), `missed`, `completedLate`, `completedAt` and `keepFocus`. |
 | `POST /api/reviews/open {kind, date?}` | Open-or-create the review holding the day (today by default). A weekly review is the week's, named by its Sunday. Ahead of its day: 400. |
 | `POST /api/reviews/{id}/complete` | Completes it; again writes nothing. |
-| `POST /api/reviews/{id} {keepFocus?}` | Saves what's sent. The answers come with R5, from the notes vault (§4). |
+| `POST /api/reviews/{id} {keepFocus?}` | Saves what's sent. The answers are a vault note an agent links (§4.1); each row has its `reflection` (`path`, `vault`, `summary`, `linkedAt`), or null. |
 | `GET /api/reviews/recap?from=&to=&asOf=` | What was recorded over the days (at most 62): status changes (reviews' own left out), Tasks completed, Tasks open and due before `asOf` (the earlier of today and `to`), habit days, appointments, journal entries and what came into the Inbox. A repeating Task's series is left out; the web adds the repeating Tasks' own section, as it did before. |
 | `GET /api/habits/occurrences?from=&to=` | Gains a range, for a weekly review's check-offs (REVIEW-5). |
 
@@ -120,8 +120,8 @@ writes call `ReviewService`. Refusals are 400s in words; an unknown review is a 
   from its start (or the day it was made) to its end.
 - **The week:** a weekly review lists its seven daily reviews and where each stands; a daily one
   links to its week's review.
-- **Answers:** on the live site the questions show but can't be written until R5 (§4), and the
-  page says so. Its text still names SuperJournal; R5 changes it. Keep focus saves.
+- **Answers:** R5 replaced the answer boxes with the Reflection section (§4.1): what to talk
+  about, *Dictate reflection*, and once filed the summary and *Open in Obsidian*. Keep focus saves.
 - **Mock mode** follows the same rules: reading never makes a review, opening does, and its
   status is worked out on read.
 
@@ -140,9 +140,48 @@ Notes Spec and the dictation pipeline. For reviews it means:
   on Chris's machines, so the review holds the note's path and, at most, its summary.
 - **The open review is found by its URN or by its kind and period,** so the agent can file a
   reflection for the right day even when Chris dictates it the next morning.
-- **Still to design in R5:** how the link reaches LifeOS (an agent write at the `capture` level,
-  agent-access plan Phase 2, is the likely path), what the page shows (the summary and an
-  "Open in Obsidian" link), and the page's text, which still names SuperJournal.
+### 4.1 R5: how a reflection reaches its review (designed 2026-11-12, notes plan N8)
+
+1. **The link is an event.** The connector's `link_reflection` tool writes an `observation`
+   event that concerns the Review, with the payload
+   `{"reflection": {"path", "vault", "summary"}, "agent_person_id"}`. `path` is the note's path in
+   the vault (`10 Reflections/2026-11-12 Daily reflection.md`) and `vault` its vault's name
+   (`Chris2.0`). The source is `mcp:<client_id>` and the provenance `declared`, like every agent
+   write (agent-access plan §5.3). The newest by `recorded_at` wins, so linking again (after
+   Chris edits the summary, say) writes a new version and the log keeps every one. Migration 0054
+   adds `reflection_path`, `reflection_vault`, `reflection_summary` and `reflection_at` to
+   `bsk.v_review`; no new event kind is needed.
+2. **The tool** is at the `capture` level: `link_reflection(path, vault, summary, review?, kind?,
+   day?, request_id?)`. It names the review by id or URN, or by kind and a day (a weekly by any
+   day of its week). Named by kind and day, the review is opened if it isn't yet,
+   as opening the page would, and a future one is refused. It answers with the review, so the
+   agent can write its URN into the note's `review` field. It never completes the review.
+3. **Dictating from the review.** The Reviews page has *Dictate reflection*, the voice capture
+   tied to that review: `POST /api/capture/voice` takes an optional `concerning` (an item's id),
+   and the capture concerns it. The connector's `inbox` shows what each capture concerns, so the
+   agent knows which review a dictation answers. A capture dictated anywhere else is matched by
+   its words and the day it was recorded, and the agent asks in `00 Inbox` when it can't tell (a
+   Sunday's daily or weekly, say).
+4. **The page.** The Reflection section replaces the three answer boxes. It names what to talk
+   about (what worked well, what to do differently, the plan), has *Dictate reflection*, and once
+   the reflection is filed shows its summary and *Open in Obsidian*
+   (`obsidian://open?vault=<vault>&file=<path>`). Until then it says the nightly sweep files a
+   dictation into the vault and links it here. Mock mode does the same, so the answers in memory
+   and `canWriteAnswers` go. Keep focus, the recap, the check-offs and completing don't change.
+5. **Completing stays Chris's.** Linking never completes a review: the sweep files at 3 AM, after
+   the review's day, so completing then would make every review late, and a status change is
+   beyond the `capture` level. *Complete review* sits beside *Dictate reflection*, so dictating
+   and completing on time is one visit.
+6. **The vault agent** files the reflection, calls `link_reflection` (the review from the
+   capture's `concerns`, else its kind and day), writes the review's URN into the note's `review`
+   field and commits, then dismisses the capture. Its `request_id` is `captures key` over the
+   path and summary, so a re-run doesn't write again. When Chris edits a reflection's summary in
+   Obsidian, the next sweep links it again.
+
+Decided rather than asked, since each option wins on every count: an event rather than
+attributes (attributes keep no history and no source), a button tied to the review as well as
+matching plain captures (exact, and nothing is taken away), and completing left to Chris (point
+5). Later: unlinking a reflection that went to the wrong review.
 
 The rest of this section is the 2026-11-08 decision it replaces, kept for the history.
 
@@ -179,7 +218,7 @@ browser, is #28's and #29's design, so no port is built ahead of it.
 | **R2** | `/api/reviews`: list, open, complete, keep focus; the recap read; habit days for a range; `schema.d.ts` regenerated | — | After R1 |
 | **R3** | The live Reviews page: Monday-to-Sunday weeks named by their Sunday, open on view, Missed and late, the recap and the habit check-offs | — | After R2 |
 | **R4** | Where answers live until SuperJournal: decided, nothing to build (§4) | — | — |
-| **R5** | Answers in the notes vault (§4): the review links to its dictated, formatted reflection | To design | After the vault, the Notes Spec and agent writes at `capture` |
+| **R5** | Answers in the notes vault (§4.1): the review links to its dictated, formatted reflection | 0054 | After the vault, the Notes Spec and agent writes at `capture` |
 
 - **Migration numbers:** this plan takes 0052. Branch `claude/superjournal-connect-9e24c0` has
   `0049__journal_pointer.sql`, which must be renumbered above the highest number on `main` when
@@ -226,4 +265,5 @@ browser, is #28's and #29's design, so no port is built ahead of it.
 - [x] R2 — The reviews API
 - [x] R3 — The live Reviews page
 - [x] R4 — Answers until SuperJournal: Chris chose to wait, so nothing was built (§4)
-- [ ] R5 — Answers in the notes vault (after the vault, the Notes Spec and agent writes)
+- [ ] R5 — Answers in the notes vault (built 2026-11-12, migration 0054, §4.1; done when a daily
+  and a weekly review have been answered by dictation, notes plan N8)

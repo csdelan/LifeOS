@@ -1,11 +1,14 @@
+using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using LifeOs.Api.Auth;
 using LifeOs.Api.Http;
 using LifeOs.Api.Mcp.Tools;
 using LifeOs.Api.Read;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Capture;
+using LifeOs.Application.Reviews;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using ModelContextProtocol;
@@ -27,9 +30,9 @@ public sealed record McpAgent(string ClientId, Guid PersonId, string PersonName)
 /// </summary>
 public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http, AgentAccessStore? access)
 {
-    /// <summary>The write tools at the <c>capture</c> level (§5.2, notes plan N7).</summary>
+    /// <summary>The write tools at the <c>capture</c> level (§5.2, notes plans N7 and N8).</summary>
     public static readonly IReadOnlySet<string> Tools =
-        new HashSet<string>(StringComparer.Ordinal) { "capture", "add_journal_entry", "dismiss" };
+        new HashSet<string>(StringComparer.Ordinal) { "capture", "add_journal_entry", "dismiss", "link_reflection" };
 
     public const string Refusal =
         "This agent can't write to LifeOS. Chris allows an agent to write in LifeOS's settings: it's named in "
@@ -84,9 +87,10 @@ public sealed record McpWriteCheck(McpAgent? Agent, string? Why);
 /// The writes an agent can make at the <c>capture</c> level (agent-access plan §5.2, notes plan
 /// N7), through the same Application services the API's endpoints use, built for each agent so
 /// every event carries <c>mcp:&lt;client_id&gt;</c> and provenance <c>declared</c> (§5.3). A
-/// capture or journal entry also records the agent's Person in its payload. Nothing here
-/// changes or removes what's already there, except that <see cref="DismissAsync"/> clears a raw
-/// capture from the Inbox, which flagging it again undoes.
+/// capture, journal entry or reflection link also records the agent's Person in its payload.
+/// Nothing here changes or removes what's already there, except that <see cref="DismissAsync"/>
+/// clears a raw capture from the Inbox, which flagging it again undoes, and a newer reflection
+/// link replaces the older one (both stay in the log).
 /// </summary>
 public sealed class AgentWrites(
     IEventStore events,
@@ -94,6 +98,7 @@ public sealed class AgentWrites(
     IEventReader eventReader,
     ISubjectRepository subjectRepository,
     ISubjectEventRepository edges,
+    IReviewRepository reviews,
     StatusService status,
     IHomeCalendar calendar,
     IClock clock,
@@ -215,6 +220,82 @@ public sealed class AgentWrites(
         return new AgentDismissal(id, Dismissed: true);
     }
 
+    /// <summary>
+    /// Links a review to the vault note that answers it (reviews plan §4.1, notes plan N8). The
+    /// review is named by id or URN, or by kind and day, and then opened if it isn't yet. A link
+    /// that fails its checks opens nothing.
+    /// </summary>
+    public async Task<AgentReflection> LinkReflectionAsync(
+        McpAgent agent, string path, string vault, string summary, string? review, string? kind, string? day,
+        string? requestId, CancellationToken cancellationToken)
+    {
+        // Checked first, so a bad link doesn't open a review.
+        ReviewReflections.Check(path, vault, summary, clock.UtcNow);
+        var key = RequestKey(requestId);
+        var kernel = Kernel(agent);
+        var (target, opened) = await ReviewForAsync(kernel, review, kind, day, cancellationToken);
+        var today = await calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+
+        var earlier = key is null ? null : await EarlierAsync(agent, key, EventKinds.Observation, cancellationToken);
+        if (earlier is null)
+        {
+            try
+            {
+                var linked = await kernel.Reflections.LinkAsync(
+                    target.Id, path, vault, summary, key, Person(agent), cancellationToken);
+                return new AgentReflection(linked.Review, linked.Review.StatusAsOf(today), opened, linked.Written, AlreadyDone: false);
+            }
+            catch (PostgresException e) when (key is not null && e.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                earlier = await EarlierAsync(agent, key, EventKinds.Observation, cancellationToken) ?? throw new McpException(Busy);
+            }
+        }
+
+        if (earlier.Concerns.Count == 0)
+        {
+            // The first call wrote the link and stopped before it reached the review: finish it.
+            await kernel.Reflections.FinishAsync(earlier.EventId, target.Id, cancellationToken);
+        }
+        else if (earlier.Concerns[0].Id != target.Id)
+        {
+            throw new McpException($"request_id '{key}' already linked a reflection to {earlier.Concerns[0].Title}. Send a new UUID for each write.");
+        }
+
+        var now = await kernel.Reflections.MustGetAsync(target.Id, cancellationToken);
+        return new AgentReflection(now, now.StatusAsOf(today), opened, Written: false, AlreadyDone: true);
+    }
+
+    /// <summary>The review a link names, opened first when it's named by kind and day.</summary>
+    private async Task<(Review Review, bool Opened)> ReviewForAsync(
+        AgentKernel kernel, string? review, string? kind, string? day, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(review))
+        {
+            var item = Find(review, "review");
+            if (item.Type != SubjectTypes.Review)
+            {
+                throw new McpException($"review: {item.Title} is {Article(item.Type)} {item.Type}, not a Review.");
+            }
+
+            return (await kernel.Reflections.MustGetAsync(item.Id, cancellationToken), false);
+        }
+
+        if (string.IsNullOrWhiteSpace(kind) || string.IsNullOrWhiteSpace(day))
+        {
+            throw new McpException("Name the review: its id or URN as review, or kind (daily or weekly) and day (yyyy-MM-dd).");
+        }
+
+        if (!DateOnly.TryParseExact(day.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var on))
+        {
+            throw new McpException($"day is a day as yyyy-MM-dd; '{day}' isn't one.");
+        }
+
+        var result = await kernel.Reviews.OpenAsync(kind, on, cancellationToken);
+        return (result.Review, result.Created);
+    }
+
+    private static JsonObject Person(McpAgent agent) => new() { [PersonField] = agent.PersonId.ToString() };
+
     private static string Article(string word) => word.Length > 0 && "AEIOUaeiou".Contains(word[0]) ? "an" : "a";
 
     private const string Busy ="That request_id is being written right now. Wait a moment, then call again with the same request_id.";
@@ -272,7 +353,8 @@ public sealed class AgentWrites(
 
     /// <summary>
     /// The services for one agent, writing as its source. The host's <see cref="StatusService"/>
-    /// is only there for <see cref="TriageService.DropAsync"/>, which no write tool calls.
+    /// is only there for <see cref="TriageService.DropAsync"/> and for completing a review, which
+    /// no write tool calls.
     /// </summary>
     private AgentKernel Kernel(McpAgent agent)
     {
@@ -284,10 +366,14 @@ public sealed class AgentWrites(
             new CaptureService(events, artifacts, clock, source),
             relate,
             triage,
-            new CaptureFiling(subjects, relate, triage, calendar, clock));
+            new CaptureFiling(subjects, relate, triage, calendar, clock),
+            new ReviewService(subjects, subjectRepository, reviews, status, calendar, clock),
+            new ReflectionService(events, edges, reviews, clock, source));
     }
 
-    private sealed record AgentKernel(CaptureService Capture, RelateService Relate, TriageService Triage, CaptureFiling Filing);
+    private sealed record AgentKernel(
+        CaptureService Capture, RelateService Relate, TriageService Triage, CaptureFiling Filing,
+        ReviewService Reviews, ReflectionService Reflections);
 }
 
 /// <summary>
@@ -303,3 +389,9 @@ public sealed record AgentJournalEntry(Guid EntryId, McpItemRef Item, bool Alrea
 
 /// <summary>Whether <c>dismiss</c> cleared the capture, or found it already out of the Inbox.</summary>
 public sealed record AgentDismissal(Guid ItemId, bool Dismissed);
+
+/// <summary>
+/// What <c>link_reflection</c> did: the review as it reads now and its status today, whether the
+/// link opened it, whether a link was written, and whether this request_id had written it before.
+/// </summary>
+public sealed record AgentReflection(Review Review, string Status, bool Opened, bool Written, bool AlreadyDone);

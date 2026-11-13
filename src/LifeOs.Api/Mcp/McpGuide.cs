@@ -32,10 +32,11 @@ public sealed class McpGuide
     public const string WriteInstructions = Instructions + """
 
 
-        Writing: Chris may allow you to write. If capture, add_journal_entry and dismiss are in
-        your tools, you can add to his Inbox and his journals, and clear a raw capture you've dealt
-        with from the Inbox; nothing else changes. Write only what he asked for or agreed to. Send
-        a new UUID as request_id with each write you mean to make, and the same one if you retry it.
+        Writing: Chris may allow you to write. If capture, add_journal_entry, dismiss and
+        link_reflection are in your tools, you can add to his Inbox and his journals, clear a raw
+        capture you've dealt with from the Inbox, and link a review to the reflection note that
+        answers it; nothing else changes. Write only what he asked for or agreed to. Send a new
+        UUID as request_id with each write you mean to make, and the same one if you retry it.
         """;
 
     /// <summary>The guide's section on writing, added when <c>Mcp:Writes</c> is on.</summary>
@@ -44,14 +45,20 @@ public sealed class McpGuide
 
         ## Writing
 
-        When Chris has allowed your agent to write, three more tools are listed. Each one adds, or
-        clears a capture from the Inbox; none changes or removes anything else.
+        When Chris has allowed your agent to write, four more tools are listed. Each one adds,
+        clears a capture from the Inbox, or links a review to its reflection; none changes or
+        removes anything else.
 
         - capture: a note, idea or problem in his Inbox, for him to triage like his own captures.
           An idea or problem becomes an Idea or Problem item at once, titled by the first line.
         - add_journal_entry: an entry in an item's journal.
         - dismiss: clears one raw capture (item_kind event, a note or voice note) from the Inbox
           once you've dealt with it. The capture stays in LifeOS; flagging it again brings it back.
+        - link_reflection: links a daily or weekly review to the note in his notes vault that
+          answers it (its path, the vault's name and the note's summary), once you've filed the
+          note. A capture he dictated from a review concerns that review (inbox shows concerns);
+          otherwise name the review by kind and day, which opens it if it isn't yet. Linking again
+          replaces the link. It never completes the review: Chris does that.
 
         Everything you write is marked as your agent's and the Person it acts as. Send a new UUID
         as request_id with each write; a retry with the same one writes nothing new and answers

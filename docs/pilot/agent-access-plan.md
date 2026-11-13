@@ -983,6 +983,10 @@ lifeos-mz55-staging` shows it.
 | `capture(text, kind = note \| idea \| problem, concerning?)` | An Inbox capture (CAP-1), which Chris triages like any other. A note is the capture, flagged; an idea or problem is made at once, titled by the first line, and flagged, as a voice or document capture does (D4) | the service behind `POST /api/capture`, and `CaptureEndpoints.FileAsync` |
 | `add_journal_entry(item, text)` | Appends to an item's journal (JOURNAL-1) | `POST /api/journal` |
 | `dismiss(item_id)` | Clears a raw capture (a note or voice note) from the Inbox, attention-only: it stays in LifeOS, and flagging it again undoes it. Ideas, Problems and other items are refused, and one already out of the Inbox is left alone (notes plan N7) | `POST /api/dismiss`'s `TriageService` |
+| `link_reflection(path, vault, summary, review? \| kind + day, request_id?)` | Links a daily or weekly review to the vault note that answers it: an `observation` event concerning the Review, the newest winning. Named by kind and day, the review is opened if it isn't yet. It never completes the review (reviews plan §4.1, notes plan N8) | `ReflectionService`, and `ReviewService.OpenAsync` as `POST /api/reviews/open` calls it |
+
+The connector's `inbox` shows each capture's `concerns`, so the agent sees the review a
+dictation from the Reviews page answers.
 
 **`full`** adds these:
 
@@ -1020,9 +1024,9 @@ every rule and invariant holds. The API is still a door into `bsk`, the only wri
 
 **As built (2026-11-12):** the services aren't given a scoped source. `AgentWrites` builds the
 same Application services for each call with the agent's source, so every event it writes
-(captures, journal entries, Inbox flags, a dismiss's marker) has `source_id = mcp:<client_id>`
-and provenance `declared`. A capture or journal entry also has `agent_person_id` in its
-payload: the Person the client acted as when it wrote. For the other events, the source names
+(captures, journal entries, Inbox flags, a dismiss's marker, a reflection link and a review it
+opens) has `source_id = mcp:<client_id>` and provenance `declared`. A capture, journal entry or
+reflection link also has `agent_person_id` in its payload: the Person the client acted as when it wrote. For the other events, the source names
 the client and `bsk_ops.agent_client` its Person (a replaced client keeps its own link). The
 web's "via Claude" isn't built yet.
 
@@ -1054,6 +1058,9 @@ Tests show (all done for `capture`, 2026-11-12, in `McpWriteTests`):
 - A retried `request_id` writes once.
 - An agent token still can't reach `/api/*`.
 - `dismiss` clears a raw capture only, and flagging it brings it back.
+- `link_reflection` opens a review named by kind and day, links the newest note, writes nothing
+  for the same link again, never completes the review, and refuses a bad path, a future review
+  or an item that isn't a Review without writing anything.
 
 On staging (not yet): Chris captures to his Inbox by voice through Claude on his phone
 (CAP-3's first step) and triages it in LifeOS, and the vault's nightly sweep dismisses the
