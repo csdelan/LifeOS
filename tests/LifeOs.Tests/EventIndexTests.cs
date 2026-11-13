@@ -47,6 +47,14 @@ public sealed class EventIndexTests(PostgresFixture postgres)
         => Assert.Contains("event_artifact_idx", await PlanAsync(
             "SELECT * FROM bsk.v_artifact WHERE id = '00000000-0000-0000-0000-000000000001';"));
 
+    // Code review CR34 (migration 0061): the ledger is read by subject and by trigger by index.
+    [Theory]
+    [InlineData("SELECT * FROM bsk.v_ledger WHERE subject_id = '00000000-0000-0000-0000-000000000001';", "event_ledger_subject_uuid_idx")]
+    [InlineData("SELECT DISTINCT award_key FROM bsk.v_ledger WHERE trigger = 'domain_rank';", "event_ledger_trigger_idx")]
+    [InlineData("SELECT e.id FROM bsk.event e WHERE e.kind = 'ledger' AND e.payload->>'award_key' IS NOT NULL AND e.payload->>'trigger' = ANY('{food_day,food_meal}');", "event_ledger_trigger_idx")]
+    public async Task The_ledger_is_read_by_subject_and_trigger_by_index(string query, string index)
+        => Assert.Contains(index, await PlanAsync(query));
+
     private async Task<string> PlanAsync(string query)
     {
         await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);

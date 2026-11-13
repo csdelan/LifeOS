@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0060 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0061 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -233,6 +233,8 @@ CREATE INDEX event_lab_visit_idx ON bsk.event USING btree ((((payload -> 'lab_vi
 CREATE INDEX event_ledger_award_key_idx ON bsk.event USING btree (((payload ->> 'award_key'::text))) WHERE (kind = 'ledger'::text);
 CREATE INDEX event_ledger_occurred_idx ON bsk.event USING btree (occurred_at) WHERE (kind = 'ledger'::text);
 CREATE INDEX event_ledger_subject_idx ON bsk.event USING btree (((payload ->> 'subject_id'::text))) WHERE (kind = 'ledger'::text);
+CREATE INDEX event_ledger_subject_uuid_idx ON bsk.event USING btree (((NULLIF((payload ->> 'subject_id'::text), ''::text))::uuid)) WHERE (kind = 'ledger'::text);
+CREATE INDEX event_ledger_trigger_idx ON bsk.event USING btree (((payload ->> 'trigger'::text))) WHERE (kind = 'ledger'::text);
 CREATE INDEX event_meal_idx ON bsk.event USING btree ((((payload -> 'meal'::text) ->> 'id'::text)), recorded_at) WHERE ((kind = 'measurement'::text) AND jsonb_exists(payload, 'meal'::text));
 CREATE INDEX event_metric_reading_idx ON bsk.event USING btree ((((payload -> 'metric_reading'::text) ->> 'id'::text)), recorded_at) WHERE ((kind = 'measurement'::text) AND jsonb_exists(payload, 'metric_reading'::text));
 CREATE INDEX event_oura_activity_idx ON bsk.event USING btree ((((payload -> 'oura_activity'::text) ->> 'day'::text)), recorded_at) WHERE ((kind = 'measurement'::text) AND jsonb_exists(payload, 'oura_activity'::text));
