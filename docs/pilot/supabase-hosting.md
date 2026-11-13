@@ -66,8 +66,8 @@ Host=aws-0-<region>.pooler.supabase.com;Port=5432;Database=postgres;Username=pos
 
 ### 3. Apply the schema to staging for the first time
 
-From this repo, with the connection string set (either export
-`BSK_CONNECTION_STRING`, or copy `.env.example` to `.env` and fill it in):
+From this repo, with the connection string in `.env` (copy `.env.example` and
+fill it in):
 
 ```powershell
 ./scripts/migrate-staging.ps1
@@ -109,13 +109,20 @@ pilot (PowerShell, persistent):
 [Environment]::SetEnvironmentVariable('BSK_READER_CONNECTION_STRING', '<value>', 'User')
 ```
 
-To write from a machine (via `bsk`), set `BSK_CONNECTION_STRING` the same way
-with the `postgres.<ref>` string from step 2.
+Don't set `BSK_CONNECTION_STRING` that way. Every `bsk` reads it, so a staging
+string saved as a user variable turns each "dev" `bsk` call into a write to
+staging, where the log keeps it. To write to staging from a machine, pass the
+`postgres.<ref>` string from step 2 to one call with `bsk --connection`, or use
+`scripts/migrate-staging.ps1`, which reads `.env`. `bsk` says on stderr when
+the variable points it off the machine, and the script refuses when the
+variable and `.env` name different databases (code review CR59).
 
 ### 6. Wire GitHub Actions to promote on merge
 
-The workflow `.github/workflows/migrate-staging.yml` runs `bsk migrate` against
-staging whenever migration/CLI/infrastructure files land on `main`.
+`.github/workflows/deploy.yml` runs on every push to `main`: CI, then
+`bsk migrate` against staging (through `migrate.yml`), then the deploy.
+`.github/workflows/migrate-staging.yml` applies migrations to staging only when
+run by hand.
 
 1. In GitHub: **Settings → Environments → New environment → `staging`**.
    (Optionally add yourself as a required reviewer to gate applies.)
@@ -166,8 +173,8 @@ locally, commit, open a PR. On merge to `main`, CI applies it to staging.
 ./scripts/migrate-staging.ps1
 ```
 
-**Check staging matches source** (drift report, changes nothing): point
-`bsk rebuild --verify` at staging by setting `BSK_CONNECTION_STRING` first.
+**Check staging matches source** (drift report, changes nothing): run
+`bsk rebuild --verify --connection "<staging string>"`.
 
 ---
 

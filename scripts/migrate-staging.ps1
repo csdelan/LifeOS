@@ -6,8 +6,9 @@
 
 .DESCRIPTION
     Reads BSK_CONNECTION_STRING from a dotenv file (default: .env at the repo
-    root) unless it is already set in the environment, then builds and runs
-    `bsk migrate` against it. The connection string reaches `bsk migrate` only:
+    root), then builds and runs `bsk migrate` against it. A file named with
+    -EnvFile always wins; without one, a BSK_CONNECTION_STRING already in the
+    shell is used only if .env doesn't name a different database. The connection string reaches `bsk migrate` only:
     the caller's shell keeps whatever it had before, so a later `bsk` or
     `run.ps1` in the same terminal can't write to the remote database by
     accident.
@@ -60,31 +61,16 @@ if ($uncommitted) {
     throw "Uncommitted changes would be built into bsk:`n$($uncommitted -join "`n")"
 }
 
-# The connection string already in the environment wins (so CI's secret does);
-# otherwise it comes from the dotenv file. Only that one key is read, and it is
-# never written to this process's environment, which is the caller's shell.
-$conn = $env:BSK_CONNECTION_STRING
-$envPath = Join-Path $root $EnvFile
-if ([string]::IsNullOrWhiteSpace($conn) -and (Test-Path $envPath)) {
-    Write-Host "Reading BSK_CONNECTION_STRING from $EnvFile" -ForegroundColor Cyan
-    foreach ($line in Get-Content $envPath) {
-        $trimmed = $line.Trim()
-        if ($trimmed -eq '' -or $trimmed.StartsWith('#')) { continue }
-        $eq = $trimmed.IndexOf('=')
-        if ($eq -lt 1) { continue }
-        if ($trimmed.Substring(0, $eq).Trim() -eq 'BSK_CONNECTION_STRING') {
-            $conn = $trimmed.Substring($eq + 1).Trim().Trim('"')
-        }
-    }
-}
-if ([string]::IsNullOrWhiteSpace($conn)) {
-    throw "BSK_CONNECTION_STRING is not set. Put it in $EnvFile or export it before running this script."
-}
+# A dotenv file named with -EnvFile wins over BSK_CONNECTION_STRING in the shell, and the shell's
+# variable is refused when the default .env names a different database (code review CR59;
+# LifeOsConnection.psm1 says why). Only that one key is read, and it is never written to this
+# process's environment, which is the caller's shell.
+Import-Module (Join-Path $PSScriptRoot 'LifeOsConnection.psm1') -Force
+$conn = Resolve-MigrationConnection -EnvPath (Join-Path $root $EnvFile) -EnvFileName $EnvFile `
+    -EnvFileNamed:($PSBoundParameters.ContainsKey('EnvFile'))
 
-# Show the target host without leaking the password.
-if ($conn -match 'Host=([^;]+)') {
-    Write-Host "Migrating database at host: $($Matches[1])" -ForegroundColor Yellow
-}
+# Say which database without its password. The pooler host is shared, so the user is shown too.
+Write-Host "Migrating $(Get-ConnectionTarget $conn)" -ForegroundColor Yellow
 
 $cliProject = Join-Path $root 'src' 'LifeOs.Cli' 'LifeOs.Cli.csproj'
 $argList = @('migrate')

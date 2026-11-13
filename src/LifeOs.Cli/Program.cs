@@ -69,4 +69,13 @@ rootCommand.Subcommands.Add(TriageCommand.CreateDrop(connectionOption, jsonOptio
 rootCommand.Subcommands.Add(TriageCommand.CreateDismiss(connectionOption, jsonOption));
 rootCommand.Subcommands.Add(CheckCommand.Create(connectionOption, jsonOption));
 
-return await rootCommand.Parse(args).InvokeAsync();
+var parsed = rootCommand.Parse(args);
+// A connection string left in the environment says where it points before anything runs (code review CR59).
+if (KernelConnectionString.AmbientRemoteNotice(
+        parsed.GetValue(connectionOption),
+        Environment.GetEnvironmentVariable(KernelConnectionString.EnvironmentVariable)) is { } notice)
+{
+    Console.Error.WriteLine(notice);
+}
+
+return await parsed.InvokeAsync();
