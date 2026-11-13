@@ -14,37 +14,12 @@ namespace LifeOs.Tests;
 /// A clock set to a day by hand: noon UTC (the tests' home zone), a second later on every
 /// read so events written on one day still fold in the order they were written.
 /// </summary>
-internal sealed class DayClock : IClock
-{
-    private readonly Lock _gate = new();
-    private DateTimeOffset _now = DateTimeOffset.UtcNow;
-
-    public DateTimeOffset UtcNow
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _now = _now.AddSeconds(1);
-            }
-        }
-    }
-
-    public void On(DateOnly day)
-    {
-        lock (_gate)
-        {
-            _now = new DateTimeOffset(day.ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero);
-        }
-    }
-}
-
 /// <summary>
 /// TASKS-3 / D16 (migration 0042, recurring-tasks plan RT2): repeating Tasks. A series is a
 /// Task carrying a pattern; each repetition is an ordinary Task for one date.
 /// <para>
 /// The database is shared and a settle looks at every series, so the timelines run on a
-/// <see cref="DayClock"/> set weeks ahead of today, each series pays nothing (no ledger entries
+/// <see cref="TestClock"/> set weeks ahead of today, each series pays nothing (no ledger entries
 /// dated in the future), and each test leaves its series either stopped or with its latest
 /// repetition open, so a settle elsewhere has nothing to make for it. The tests that pay run
 /// on today's clock, since nothing earned before the wallet opened pays.
@@ -61,14 +36,14 @@ public sealed class TaskSeriesTests(PostgresFixture postgres)
     private static readonly DateOnly Monday = TaskSeries.WeekOf(RealToday).AddDays(70);
 
     private sealed record Kernel(
-        ServiceProvider Provider, DayClock Clock, SubjectService Subjects, StatusService Status,
+        ServiceProvider Provider, TestClock Clock, SubjectService Subjects, StatusService Status,
         RecurrenceService Recurrence, AttributeService Attributes, ArchiveService Archive, TagService Tags,
         RenameService Rename, RelationService Relations, BountyService Bounties, TimerService Timers,
         TaskSeriesService Series, ITaskSeriesRepository Store);
 
     private Kernel Build(DateOnly? on = null, bool realClock = false)
     {
-        var clock = new DayClock();
+        var clock = TestClock.Ticking();
         clock.On(on ?? Monday);
         var services = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString);
         if (!realClock)

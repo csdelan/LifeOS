@@ -92,7 +92,6 @@ public sealed class ReviewPeriodTests
 /// status change; an Open review past its day reads as missed, and completing it late keeps that.
 /// Each test has a database of its own (home zone UTC) and a clock set by hand.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class ReviewTests(PostgresFixture postgres)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -101,7 +100,7 @@ public sealed class ReviewTests(PostgresFixture postgres)
     private static readonly DateOnly Wednesday = new(2026, 11, 4);
     private static readonly DateOnly Sunday = new(2026, 11, 8);
 
-    private sealed record Kernel(ServiceProvider Provider, DayClock Clock, ReviewService Reviews) : IAsyncDisposable
+    private sealed record Kernel(ServiceProvider Provider, TestClock Clock, ReviewService Reviews) : IAsyncDisposable
     {
         public T Get<T>() where T : notnull => Provider.GetRequiredService<T>();
 
@@ -110,7 +109,7 @@ public sealed class ReviewTests(PostgresFixture postgres)
 
     private static Kernel Build(DomainTestDatabase db, DateOnly on)
     {
-        var clock = new DayClock();
+        var clock = TestClock.Ticking();
         clock.On(on);
         var provider = new ServiceCollection()
             .AddLifeOsKernel(db.ConnectionString, homeTimeZone: DomainTestDatabase.Zone)

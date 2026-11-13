@@ -183,7 +183,7 @@ public sealed class OuraConnectionTests(PostgresFixture postgres)
 {
     private static readonly Uri Redirect = new("https://lifeos.example/activity/connected");
     private readonly string service = $"t{Guid.NewGuid():N}";
-    private readonly TimerTestClock clock = new(new DateTimeOffset(2026, 10, 22, 12, 0, 0, TimeSpan.Zero));
+    private readonly TestClock clock = new(new DateTimeOffset(2026, 10, 22, 12, 0, 0, TimeSpan.Zero));
     private readonly TokenCipher cipher = new(RandomNumberGenerator.GetBytes(32));
 
     private CancellationToken Ct => TestContext.Current.CancellationToken;

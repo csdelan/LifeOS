@@ -43,6 +43,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - `./run.ps1` builds the solution. `./test.ps1` runs the .NET tests from the repo root (there is
   no `scripts/test.ps1`). The tests need Docker for Testcontainers. Run one class with
   `./test.ps1 --filter-class LifeOs.Tests.<Class>`.
+- A new database test takes a `DomainTestDatabase` (a copy of the migrated template) and no
+  `[Collection]`, so it runs alongside the others. `[Collection(PostgresCollection.Name)]` is for
+  the older tests that share one database and so run one at a time. Fake time with `TestClock`.
 - Web, from `web/`: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`. Playwright:
   `npm run test:e2e` and `npm run a11y`.
 - `TreatWarningsAsErrors` is on.

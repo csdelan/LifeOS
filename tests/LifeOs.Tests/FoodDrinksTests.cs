@@ -17,7 +17,6 @@ namespace LifeOs.Tests;
 /// and the drinks count read them back; a day's entries come oldest first. Each test has a
 /// database of its own (UTC), since a food write settles every food day in it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class FoodDrinksTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

@@ -21,7 +21,7 @@ internal sealed class OuraHarness : IAsyncDisposable
     public static readonly Uri Redirect = new("https://lifeos.example/activity/connected");
     public static readonly DateOnly Today = new(2026, 10, 22);
 
-    private OuraHarness(DomainTestDatabase db, TimerTestClock clock, FakeOuraClient oura, IOuraClient? client)
+    private OuraHarness(DomainTestDatabase db, TestClock clock, FakeOuraClient oura, IOuraClient? client)
     {
         Db = db;
         Clock = clock;
@@ -35,7 +35,7 @@ internal sealed class OuraHarness : IAsyncDisposable
     }
 
     public DomainTestDatabase Db { get; }
-    public TimerTestClock Clock { get; }
+    public TestClock Clock { get; }
     public FakeOuraClient Oura { get; }
     public NpgsqlIntegrationRepository Integrations { get; }
     public OuraConnectionService Connection { get; }
@@ -53,7 +53,7 @@ internal sealed class OuraHarness : IAsyncDisposable
         DateTimeOffset? start = null)
     {
         var db = await DomainTestDatabase.CreateAsync(postgres, ct);
-        var clock = new TimerTestClock(start ?? new DateTimeOffset(2026, 10, 22, 12, 0, 0, TimeSpan.Zero));
+        var clock = new TestClock(start ?? new DateTimeOffset(2026, 10, 22, 12, 0, 0, TimeSpan.Zero));
         var oura = new FakeOuraClient(clock);
         var harness = new OuraHarness(db, clock, oura, configured ? oura : null);
         if (connect)

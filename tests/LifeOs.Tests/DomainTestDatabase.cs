@@ -5,17 +5,17 @@ using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.DependencyInjection;
-using LifeOs.Infrastructure.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
 namespace LifeOs.Tests;
 
 /// <summary>
-/// A migrated database of its own for one life-domain test, dropped afterwards (xp-domains plan
-/// X4–X5). A wallet opens once and a rank pays once per database, and a domain's multiplier
-/// reads every Health day in it, so these tests can't share the fixture's database. Its days
-/// are in UTC, the home zone the kernel and the API are given here.
+/// A migrated database of its own for one test, copied from the fixture's template and dropped
+/// afterwards. A test that takes one sees only its own rows (a wallet opens once and a rank pays
+/// once per database, and a domain's multiplier reads every Health day in it), and its class
+/// needs no collection, so it runs alongside the others. Its days are in UTC, the home zone the
+/// kernel and the API are given here.
 /// </summary>
 internal sealed class DomainTestDatabase : IAsyncDisposable
 {
@@ -51,16 +51,8 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
     public static async Task<DomainTestDatabase> CreateAsync(PostgresFixture postgres, CancellationToken ct, string zone = Zone)
     {
         var name = $"domain_{Guid.NewGuid():N}";
-        await using (var admin = new NpgsqlConnection(postgres.ConnectionString))
-        {
-            await admin.OpenAsync(ct);
-            await admin.ExecuteAsync(new CommandDefinition($"CREATE DATABASE {name};", cancellationToken: ct));
-            await admin.ExecuteAsync(new CommandDefinition(
-                $"ALTER DATABASE {name} SET bsk.home_zone = '{zone}';", cancellationToken: ct));
-        }
-
-        var connectionString = new NpgsqlConnectionStringBuilder(postgres.ConnectionString) { Database = name }.ConnectionString;
-        await new MigrationRunner(connectionString).ApplyAsync(ct);
+        await PostgresFixture.CopyAsync(postgres.ConnectionString, name, zone, ct);
+        var connectionString = PostgresFixture.On(postgres.ConnectionString, name);
         return new DomainTestDatabase(postgres.ConnectionString, name, connectionString, zone, ct);
     }
 
@@ -140,7 +132,12 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await Kernel.DisposeAsync();
-        NpgsqlConnection.ClearAllPools();
+        await using (var pooled = new NpgsqlConnection(ConnectionString))
+        {
+            // Only this database's pool: the other tests' connections are in use alongside.
+            NpgsqlConnection.ClearPool(pooled);
+        }
+
         await using var admin = new NpgsqlConnection(adminConnectionString);
         await admin.OpenAsync();
         await admin.ExecuteAsync($"DROP DATABASE IF EXISTS {name} WITH (FORCE);");

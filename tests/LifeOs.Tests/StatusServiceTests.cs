@@ -10,21 +10,6 @@ using Npgsql;
 namespace LifeOs.Tests;
 
 /// <summary>A clock the test advances by hand, so event ordering is deterministic.</summary>
-file sealed class AdvancingClock(DateTimeOffset start) : IClock
-{
-    private DateTimeOffset _now = start;
-
-    public DateTimeOffset UtcNow
-    {
-        get
-        {
-            var current = _now;
-            _now = _now.AddSeconds(1);
-            return current;
-        }
-    }
-}
-
 /// <summary>
 /// <c>bsk status</c> (M3.2): a status change writes a <c>state_change</c> event and
 /// nothing more — the <c>subject_current</c> projection reflects it only after a
@@ -84,7 +69,7 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
         // ordered timestamps and "latest wins" is deterministic, not a race.
         var provider = new ServiceCollection()
             .AddLifeOsKernel(postgres.ConnectionString)
-            .AddSingleton<IClock>(new AdvancingClock(new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero)))
+            .AddSingleton<IClock>(TestClock.Ticking(new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero)))
             .BuildServiceProvider();
         var subjects = provider.GetRequiredService<SubjectService>();
         var status = provider.GetRequiredService<StatusService>();

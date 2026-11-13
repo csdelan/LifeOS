@@ -37,12 +37,12 @@ public sealed class ActivityEndpointTests(PostgresFixture postgres)
 
     private static DateOnly Day(int offset) => Today.AddDays(offset);
 
-    private sealed class Site(DomainTestDatabase db, ApiTestHost host, FakeOuraClient oura, TimerTestClock clock) : IAsyncDisposable
+    private sealed class Site(DomainTestDatabase db, ApiTestHost host, FakeOuraClient oura, TestClock clock) : IAsyncDisposable
     {
         public DomainTestDatabase Db { get; } = db;
         public HttpClient Client { get; } = host.Client;
         public FakeOuraClient Oura { get; } = oura;
-        public TimerTestClock Clock { get; } = clock;
+        public TestClock Clock { get; } = clock;
 
         public async ValueTask DisposeAsync()
         {
@@ -55,7 +55,7 @@ public sealed class ActivityEndpointTests(PostgresFixture postgres)
     private async Task<Site> StartAsync(Action<FakeOuraClient>? seed = null, bool connect = true)
     {
         var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
-        var clock = new TimerTestClock(Noon);
+        var clock = new TestClock(Noon);
         var oura = new FakeOuraClient(clock);
         seed?.Invoke(oura);
         var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, WithTokenKey, services =>

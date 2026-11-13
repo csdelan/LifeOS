@@ -320,7 +320,7 @@ public sealed class RewardHabitTests(PostgresFixture postgres)
             kernel.Provider.GetRequiredService<ISubjectRepository>(),
             kernel.Provider.GetRequiredService<IActivityWriter>(),
             kernel.Rewards,
-            new TimerTestClock(new DateTimeOffset(2000, 6, 1, 12, 0, 0, TimeSpan.Zero)),
+            new TestClock(new DateTimeOffset(2000, 6, 1, 12, 0, 0, TimeSpan.Zero)),
             kernel.Provider.GetRequiredService<IHomeCalendar>(),
             KernelSources.Cli);
 

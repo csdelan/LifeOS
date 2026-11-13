@@ -28,7 +28,7 @@ public sealed class OuraHttpClientTests
     private static (OuraHttpClient Client, StubHandler Handler) Create(params Func<HttpRequestMessage, HttpResponseMessage>[] answers)
     {
         var handler = new StubHandler(answers);
-        return (new OuraHttpClient(new HttpClient(handler), Options, new TimerTestClock(Now)), handler);
+        return (new OuraHttpClient(new HttpClient(handler), Options, new TestClock(Now)), handler);
     }
 
     private static Func<HttpRequestMessage, HttpResponseMessage> Json(HttpStatusCode status, string json)

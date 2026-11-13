@@ -9,11 +9,6 @@ using Npgsql;
 namespace LifeOs.Tests;
 
 /// <summary>A clock pinned to one instant, so "upcoming" is deterministic.</summary>
-file sealed class FixedClock(DateTimeOffset now) : IClock
-{
-    public DateTimeOffset UtcNow => now;
-}
-
 /// <summary>
 /// <c>bsk rename</c>'s service: changing a subject's title after creation. The title
 /// is a first-class column (not settable via <c>bsk set</c>); a rename changes only
@@ -147,7 +142,7 @@ public sealed class RenameServiceTests(PostgresFixture postgres)
             subjects,
             provider.GetRequiredService<ISubjectRepository>(),
             provider.GetRequiredService<IAppointmentRepository>(),
-            new FixedClock(new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero)));
+            new TestClock(new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero)));
         var ns = Guid.NewGuid().ToString("N");
 
         var series = await subjects.CreateAsync(

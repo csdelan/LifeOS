@@ -20,11 +20,11 @@ public sealed class ReviewEndpointTests(PostgresFixture postgres)
     private static readonly DateOnly Wednesday = new(2026, 11, 4);
     private static readonly DateOnly Sunday = new(2026, 11, 8);
 
-    private static async Task<(DomainTestDatabase Db, ApiTestHost Host, DayClock Clock)> StartAsync(
+    private static async Task<(DomainTestDatabase Db, ApiTestHost Host, TestClock Clock)> StartAsync(
         PostgresFixture postgres, DateOnly? on)
     {
         var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
-        var clock = new DayClock();
+        var clock = TestClock.Ticking();
         clock.On(on ?? DateOnly.FromDateTime(DateTime.UtcNow));
         var host = await ApiTestHost.StartAsync(
             db.ConnectionString, Ct, DomainTestDatabase.ApiZone,

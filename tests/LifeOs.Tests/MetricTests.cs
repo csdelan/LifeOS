@@ -19,7 +19,6 @@ namespace LifeOs.Tests;
 /// a database of its own (<see cref="DomainTestDatabase"/>, home zone UTC), since a metric's name is
 /// unique.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class MetricTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

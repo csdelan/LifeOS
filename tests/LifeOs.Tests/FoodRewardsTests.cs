@@ -13,7 +13,6 @@ namespace LifeOs.Tests;
 /// change. Each test has a database of its own (UTC): food days and the multiplier read
 /// everything in it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class FoodRewardsTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

@@ -15,7 +15,6 @@ namespace LifeOs.Tests;
 /// <see cref="FakeOuraClient"/>. Each test has a database of its own. No answer ever carries a
 /// token.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class OuraEndpointTests(PostgresFixture postgres)
 {
     private const string Redirect = "https://lifeos.example/activity/connected";

@@ -21,7 +21,6 @@ namespace LifeOs.Tests;
 /// (<see cref="DomainTestDatabase"/>), since marked days would reach every domain read in a
 /// shared one.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class ExceptionDayTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

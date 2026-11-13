@@ -19,7 +19,6 @@ namespace LifeOs.Tests;
 /// and may call them, what they write and as whom, that a retried request writes once, and that
 /// <c>dismiss</c> clears raw captures only.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class McpWriteTests(PostgresFixture postgres)
 {
     private const string Writer = "agent-writer-1";

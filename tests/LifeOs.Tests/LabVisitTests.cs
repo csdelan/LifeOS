@@ -17,7 +17,6 @@ namespace LifeOs.Tests;
 /// Each test runs in a database of its own (<see cref="DomainTestDatabase"/>, home zone UTC),
 /// since a test's name is unique.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class LabVisitTests(PostgresFixture postgres)
 {
     private static readonly byte[] Pdf = Encoding.ASCII.GetBytes("%PDF-1.7\n% a made-up lab report\n%%EOF\n");

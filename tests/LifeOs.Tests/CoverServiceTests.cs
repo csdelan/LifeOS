@@ -25,7 +25,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
     private ServiceProvider Provider(FakeUnsplashClient? unsplash)
     {
         var services = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString);
-        services.AddSingleton<IClock>(new TimerTestClock(Now));
+        services.AddSingleton<IClock>(new TestClock(Now));
         if (unsplash is not null)
         {
             services.AddSingleton<IUnsplashClient>(unsplash);

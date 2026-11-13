@@ -15,7 +15,6 @@ namespace LifeOs.Tests;
 /// byte for byte, survives an edit, comes off with Remove photo, and only JPEG, PNG and WebP
 /// of at most 5 MB are taken. Each test has a database of its own (UTC).
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class FoodPhotoTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

@@ -707,9 +707,9 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [InlineData("5000d", "2025-10-27T12:00:00Z")]
     public async Task Since_reads_instants_and_spans(string? since, string expected)
     {
-        var tools = new RecordTools(new McpReads("Host=unused", "UTC", new FixedClock()), McpOptions.From(Config()));
+        var tools = new RecordTools(new McpReads("Host=unused", "UTC", new TestClock(FixedNow)), McpOptions.From(Config()));
 
-        var from = await tools.SinceAsync(since, FixedClock.Now, Ct);
+        var from = await tools.SinceAsync(since, FixedNow, Ct);
 
         Assert.Equal(DateTimeOffset.Parse(expected, System.Globalization.CultureInfo.InvariantCulture), from);
     }
@@ -717,9 +717,9 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [Fact]
     public async Task Since_refuses_what_it_cannot_read()
     {
-        var tools = new RecordTools(new McpReads("Host=unused", "UTC", new FixedClock()), McpOptions.From(Config()));
+        var tools = new RecordTools(new McpReads("Host=unused", "UTC", new TestClock(FixedNow)), McpOptions.From(Config()));
 
-        await Assert.ThrowsAsync<McpException>(() => tools.SinceAsync("yesterday-ish", FixedClock.Now, Ct));
+        await Assert.ThrowsAsync<McpException>(() => tools.SinceAsync("yesterday-ish", FixedNow, Ct));
     }
 
     [Theory]
@@ -728,11 +728,11 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [InlineData("2026-10-27", "UTC", "2026-10-27T00:00:00Z")]
     public async Task A_day_since_starts_at_its_midnight_in_the_home_zone(string day, string zone, string expected)
     {
-        var reads = new McpReads(BskReader.ConnectionStringFrom(postgres.ConnectionString), zone, new FixedClock());
+        var reads = new McpReads(BskReader.ConnectionStringFrom(postgres.ConnectionString), zone, new TestClock(FixedNow));
         var tools = new RecordTools(reads, McpOptions.From(Config()));
 
         Assert.Equal(DateTimeOffset.Parse(expected, System.Globalization.CultureInfo.InvariantCulture),
-            await tools.SinceAsync(day, FixedClock.Now, Ct));
+            await tools.SinceAsync(day, FixedNow, Ct));
     }
 
     [Fact]
@@ -777,12 +777,8 @@ public sealed class McpServerTests(PostgresFixture postgres)
 
     // ---- Helpers ----
 
-    private sealed class FixedClock : IClock
-    {
-        public static readonly DateTimeOffset Now = new(2026, 10, 28, 12, 0, 0, TimeSpan.Zero);
-
-        public DateTimeOffset UtcNow => Now;
-    }
+    /// <summary>The instant the record-tool tests read as now.</summary>
+    private static readonly DateTimeOffset FixedNow = new(2026, 10, 28, 12, 0, 0, TimeSpan.Zero);
 
     private sealed record Created(Guid Id, string Urn);
 

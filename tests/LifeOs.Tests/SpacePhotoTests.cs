@@ -23,7 +23,6 @@ namespace LifeOs.Tests;
 /// <c>shots</c> attribute, written only by <see cref="SpaceService"/>. Each test runs in a
 /// database of its own (<see cref="DomainTestDatabase"/>).
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class SpacePhotoTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

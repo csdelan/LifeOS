@@ -12,7 +12,6 @@ namespace LifeOs.Tests;
 /// are 400s in words. Each test has a database of its own (UTC), since a food write settles
 /// every food day in it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class FoodEndpointTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

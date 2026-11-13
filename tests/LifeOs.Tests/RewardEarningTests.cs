@@ -247,7 +247,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
             kernel.Subjects,
             kernel.Provider.GetRequiredService<IEventStore>(),
             kernel.Rewards,
-            new TimerTestClock(new DateTimeOffset(2000, 6, 1, 12, 0, 0, TimeSpan.Zero)),
+            new TestClock(new DateTimeOffset(2000, 6, 1, 12, 0, 0, TimeSpan.Zero)),
             KernelSources.Cli);
         var completed = await backdated.ChangeStatusAsync(task.Urn, "Completed", Ct);
 

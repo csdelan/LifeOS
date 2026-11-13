@@ -1,20 +1,33 @@
+using Dapper;
 using LifeOs.Infrastructure.Migrations;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
+[assembly: AssemblyFixture(typeof(LifeOs.Tests.PostgresFixture))]
+
 namespace LifeOs.Tests;
 
 /// <summary>
-/// Spins up a real PostgreSQL instance in a container for the duration of the
-/// test run and applies every migration against it. Integration tests take a
-/// dependency on this fixture and share the one container.
+/// One PostgreSQL container for the whole test run. Every migration is applied once, to a
+/// template database; the shared database and each test's own database
+/// (<see cref="DomainTestDatabase"/>) are copies of it, which take a moment instead of a full
+/// migration each.
 /// </summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
+    /// <summary>The migrated database every other one is copied from. Nothing connects to it.</summary>
+    public const string TemplateDatabase = "lifeos_template";
+
+    private const string SharedDatabase = "lifeos_shared";
+
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:17-alpine")
         .Build();
 
-    /// <summary>Connection string for the running container's default database.</summary>
+    /// <summary>
+    /// The shared database, for the tests in <see cref="PostgresCollection"/>. They see each
+    /// other's rows, so a test whose answer depends on the whole database takes a
+    /// <see cref="DomainTestDatabase"/> instead.
+    /// </summary>
     public string ConnectionString { get; private set; } = string.Empty;
 
     /// <summary>
@@ -27,29 +40,52 @@ public sealed class PostgresFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         await _container.StartAsync();
-        ConnectionString = _container.GetConnectionString();
+        var server = _container.GetConnectionString();
 
-        // Before any connection is pooled: a database setting reaches new sessions only.
-        await using (var connection = new NpgsqlConnection(ConnectionString))
+        await using (var admin = new NpgsqlConnection(server))
         {
-            await connection.OpenAsync();
-            await using var command = new NpgsqlCommand(
-                $"DO $$ BEGIN EXECUTE format('ALTER DATABASE %I SET bsk.home_zone = %L', current_database(), '{HabitViewZone}'); END $$;",
-                connection);
-            await command.ExecuteNonQueryAsync();
+            await admin.OpenAsync();
+            await admin.ExecuteAsync($"CREATE DATABASE {TemplateDatabase};");
         }
 
+        await new MigrationRunner(On(server, TemplateDatabase)).ApplyAsync();
+
+        // A copy refuses to start while anything is connected to its template.
         NpgsqlConnection.ClearAllPools();
 
-        var runner = new MigrationRunner(ConnectionString);
-        await runner.ApplyAsync();
+        await CopyAsync(server, SharedDatabase, HabitViewZone, CancellationToken.None);
+        ConnectionString = On(server, SharedDatabase);
     }
+
+    /// <summary>
+    /// A new database copied from the template, with <paramref name="zone"/> as its home zone
+    /// (<c>bsk.home_zone</c>, which a copy doesn't inherit). Database settings reach new sessions
+    /// only, so this runs before anything connects to it.
+    /// </summary>
+    internal static async Task CopyAsync(string adminConnectionString, string name, string zone, CancellationToken ct)
+    {
+        await using var admin = new NpgsqlConnection(adminConnectionString);
+        await admin.OpenAsync(ct);
+        await admin.ExecuteAsync(new CommandDefinition(
+            $"CREATE DATABASE {name} TEMPLATE {TemplateDatabase};", cancellationToken: ct));
+        await admin.ExecuteAsync(new CommandDefinition(
+            $"ALTER DATABASE {name} SET bsk.home_zone = '{zone}';", cancellationToken: ct));
+    }
+
+    /// <summary><paramref name="connectionString"/> pointed at the database <paramref name="database"/>.</summary>
+    internal static string On(string connectionString, string database)
+        => new NpgsqlConnectionStringBuilder(connectionString) { Database = database }.ConnectionString;
 
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();
 }
 
+/// <summary>
+/// The tests that use the shared database. They run one at a time, because some count or list
+/// rows the others write. A new test that needs a database takes a
+/// <see cref="DomainTestDatabase"/> and stays out of this collection, so it runs alongside.
+/// </summary>
 [CollectionDefinition(Name)]
-public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>
+public sealed class PostgresCollection
 {
     public const string Name = "postgres";
 }

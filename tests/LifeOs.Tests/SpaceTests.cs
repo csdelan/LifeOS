@@ -19,7 +19,6 @@ namespace LifeOs.Tests;
 /// to delete. Each test runs in a database of its own (<see cref="DomainTestDatabase"/>), since a
 /// space's name is unique across the home.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class SpaceTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

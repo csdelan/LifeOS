@@ -18,11 +18,9 @@ public sealed class UnclosedLoopsDecorativeDiagnosticTests(PostgresFixture postg
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private DiagnosticRunner Runner => new(postgres.ConnectionString);
-
-    private async Task<NpgsqlConnection> OpenAsync()
+    private async Task<NpgsqlConnection> OpenAsync(string? connectionString = null)
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(connectionString ?? postgres.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }
@@ -62,9 +60,10 @@ public sealed class UnclosedLoopsDecorativeDiagnosticTests(PostgresFixture postg
             new { payload }, cancellationToken: Ct));
     }
 
-    private async Task<Finding?> FindAsync(string diagnostic, Guid subjectId)
+    private async Task<Finding?> FindAsync(string diagnostic, Guid subjectId, string? connectionString = null)
     {
-        var report = await Runner.RunAsync(only: diagnostic, cancellationToken: Ct);
+        var runner = new DiagnosticRunner(connectionString ?? postgres.ConnectionString);
+        var report = await runner.RunAsync(only: diagnostic, cancellationToken: Ct);
         var result = Assert.Single(report.Diagnostics);
         Assert.Equal(diagnostic, result.Name);
         return result.Findings.FirstOrDefault(f => f.Subject.Id == subjectId);
@@ -131,11 +130,13 @@ public sealed class UnclosedLoopsDecorativeDiagnosticTests(PostgresFixture postg
     [Fact]
     public async Task Decision_with_a_malformed_review_date_is_skipped()
     {
-        await using var connection = await OpenAsync();
+        // A database of its own: a review date that isn't one is a row no other test should meet.
+        await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var connection = await OpenAsync(database.ConnectionString);
         var ns = Guid.NewGuid().ToString("N");
         var decision = await InsertSubjectAsync(connection, "Decision", ns, new { next_review_at = "soon-ish" });
 
-        Assert.Null(await FindAsync("unclosed_loops", decision));
+        Assert.Null(await FindAsync("unclosed_loops", decision, database.ConnectionString));
     }
 
     [Fact]

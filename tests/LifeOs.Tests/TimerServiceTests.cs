@@ -10,14 +10,6 @@ using Npgsql;
 
 namespace LifeOs.Tests;
 
-/// <summary>A clock the test moves by hand, so segment lengths are exact.</summary>
-internal sealed class TimerTestClock(DateTimeOffset start) : IClock
-{
-    public DateTimeOffset UtcNow { get; private set; } = start;
-
-    public void Advance(TimeSpan by) => UtcNow = UtcNow.Add(by);
-}
-
 /// <summary>
 /// TASKS-2 (migration 0024): the optional Task timer. Every action is an append-only
 /// activity event with a concerns edge; state and recorded time are folded by
@@ -30,11 +22,11 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private (TimerService Timers, SubjectService Subjects, TimerTestClock Clock) Build()
+    private (TimerService Timers, SubjectService Subjects, TestClock Clock) Build()
     {
         var provider = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
         var subjects = provider.GetRequiredService<SubjectService>();
-        var clock = new TimerTestClock(DateTimeOffset.UtcNow);
+        var clock = new TestClock(DateTimeOffset.UtcNow);
         var timers = new TimerService(
             subjects,
             new NpgsqlTimerRepository(postgres.ConnectionString),
