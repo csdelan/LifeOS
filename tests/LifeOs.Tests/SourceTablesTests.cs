@@ -66,6 +66,29 @@ public sealed class SourceTablesTests(PostgresFixture postgres)
         Assert.Contains("append-only", ex.MessageText);
     }
 
+    // Plain TRUNCATE of bsk.event or bsk.artifact is refused anyway, since other tables reference
+    // them; CASCADE gets past that, and the blob and object stores have nothing referencing them.
+    [Theory]
+    [InlineData("bsk.event CASCADE")]
+    [InlineData("bsk.artifact CASCADE")]
+    [InlineData("bsk.artifact_blob")]
+    [InlineData("bsk.artifact_object")]
+    public async Task Truncating_an_append_only_table_is_denied_at_the_database(string table)
+    {
+        // A database of its own: if the refusal ever broke, it would empty the shared one.
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
+        await connection.OpenAsync(Ct);
+        await InsertEventAsync(connection);
+
+        var ex = await Assert.ThrowsAsync<PostgresException>(async () =>
+            await connection.ExecuteAsync(new CommandDefinition($"TRUNCATE {table};", cancellationToken: Ct)));
+
+        Assert.Contains("append-only", ex.MessageText);
+        Assert.Equal(PostgresErrorCodes.RestrictViolation, ex.SqlState);
+        Assert.Equal(1, await connection.ExecuteScalarAsync<int>(new CommandDefinition("SELECT count(*) FROM bsk.event;", cancellationToken: Ct)));
+    }
+
     [Fact]
     public async Task Duplicate_source_and_external_id_does_not_create_a_second_row()
     {

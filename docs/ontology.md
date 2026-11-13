@@ -99,8 +99,8 @@ The individual id references that wire rows together (`origin_event_id`, `artifa
 edge foreign keys) are summarized on the arrows rather than drawn per-row.*
 
 **Source** is the append-only truth: raw captured `artifact` content and the `event`
-stream that references it. It is never mutated — UPDATE and DELETE are denied by trigger at
-the database level. An artifact carries text `content` and, when the capture is binary
+stream that references it. It is never mutated — UPDATE, DELETE and TRUNCATE are denied by trigger
+at the database level. An artifact carries text `content` and, when the capture is binary
 (a voice recording, a PDF, an image), a **binary payload**: in `bsk.artifact_blob` (Postgres
 `bytea` + metadata, keyed 1:1 to the artifact), or, on a host with a Storage key, in a private
 Supabase Storage bucket with its key, size and sha256 in `bsk.artifact_object`. Either way the
@@ -233,7 +233,7 @@ migrations cite them by number.
 
 1. **Append-only source** (inv. 3, 5). `event`, `artifact`, `artifact_blob` (an
    artifact's binary payload) and `artifact_object` (where a payload in object storage
-   lives) reject UPDATE and DELETE via a database trigger. The past — text *and* bytes — is
+   lives) reject UPDATE, DELETE and TRUNCATE via a database trigger. The past — text *and* bytes — is
    physically un-rewritable; bytes in object storage are content-addressed, never
    overwritten by `bsk`, and checked against their sha256 on every read.
 2. **Every fact carries provenance** (inv. 4), and derived facts must cite their sources

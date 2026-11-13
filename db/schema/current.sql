@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0057 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0058 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -2143,12 +2143,16 @@ $function$;
 -- ---------------------------------------------------------------- triggers
 
 CREATE TRIGGER artifact_deny_delete BEFORE DELETE ON bsk.artifact FOR EACH ROW EXECUTE FUNCTION bsk.deny_mutation();
+CREATE TRIGGER artifact_deny_truncate BEFORE TRUNCATE ON bsk.artifact FOR EACH STATEMENT EXECUTE FUNCTION bsk.deny_mutation();
 CREATE TRIGGER artifact_deny_update BEFORE UPDATE ON bsk.artifact FOR EACH ROW EXECUTE FUNCTION bsk.deny_mutation();
 CREATE TRIGGER artifact_blob_deny_delete BEFORE DELETE ON bsk.artifact_blob FOR EACH ROW EXECUTE FUNCTION bsk.deny_mutation();
+CREATE TRIGGER artifact_blob_deny_truncate BEFORE TRUNCATE ON bsk.artifact_blob FOR EACH STATEMENT EXECUTE FUNCTION bsk.deny_mutation();
 CREATE TRIGGER artifact_blob_deny_update BEFORE UPDATE ON bsk.artifact_blob FOR EACH ROW EXECUTE FUNCTION bsk.deny_mutation();
 CREATE TRIGGER artifact_blob_one_place BEFORE INSERT ON bsk.artifact_blob FOR EACH ROW EXECUTE FUNCTION bsk.artifact_bytes_in_one_place();
 CREATE TRIGGER artifact_object_deny_delete BEFORE DELETE ON bsk.artifact_object FOR EACH ROW EXECUTE FUNCTION bsk.deny_mutation();
+CREATE TRIGGER artifact_object_deny_truncate BEFORE TRUNCATE ON bsk.artifact_object FOR EACH STATEMENT EXECUTE FUNCTION bsk.deny_mutation();
 CREATE TRIGGER artifact_object_deny_update BEFORE UPDATE ON bsk.artifact_object FOR EACH ROW EXECUTE FUNCTION bsk.deny_mutation();
 CREATE TRIGGER artifact_object_one_place BEFORE INSERT ON bsk.artifact_object FOR EACH ROW EXECUTE FUNCTION bsk.artifact_bytes_in_one_place();
 CREATE TRIGGER event_deny_delete BEFORE DELETE ON bsk.event FOR EACH ROW EXECUTE FUNCTION bsk.deny_mutation();
+CREATE TRIGGER event_deny_truncate BEFORE TRUNCATE ON bsk.event FOR EACH STATEMENT EXECUTE FUNCTION bsk.deny_mutation();
 CREATE TRIGGER event_deny_update BEFORE UPDATE ON bsk.event FOR EACH ROW EXECUTE FUNCTION bsk.deny_mutation();
