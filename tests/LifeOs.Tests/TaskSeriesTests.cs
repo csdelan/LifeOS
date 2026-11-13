@@ -331,6 +331,9 @@ public sealed class TaskSeriesTests(ClassDatabase classDb) : IClassFixture<Class
         Assert.Equal(
             new Dictionary<string, long> { [Currencies.Xp] = 3 },
             read.Lines.Single(l => l.Trigger == BountyTriggers.Completed).Amounts);
+        var prices = k.Provider.GetRequiredService<ItemPrices>();
+        var item = await k.Subjects.ResolveAsync(tomorrow.Urn, Ct);
+        Assert.True((await prices.ReadAsync(item, Ct)).FromSeries);
         var priced = await k.Bounties.SetAsync(
             tomorrow.Urn, BountyTriggers.Completed,
             new Dictionary<string, long> { [Currencies.Karma] = 1 }, cancellationToken: Ct);
@@ -340,6 +343,11 @@ public sealed class TaskSeriesTests(ClassDatabase classDb) : IClassFixture<Class
         await k.Bounties.SetAsync(
             tomorrow.Urn, BountyTriggers.Completed,
             new Dictionary<string, long> { [Currencies.Karma] = 0, [Currencies.Xp] = 7 }, cancellationToken: Ct);
+        var ownPrice = await prices.ReadAsync(item, Ct);
+        Assert.False(ownPrice.FromSeries);
+        Assert.Equal(
+            new Dictionary<string, long> { [Currencies.Xp] = 7 },
+            ownPrice.Stored[BountyTriggers.Completed]);
         var own = await k.Status.ChangeStatusAsync(tomorrow.Urn, "Completed", Ct);
         Assert.Equal(new Dictionary<string, long> { [Currencies.Xp] = 7 }, Assert.Single(own.Awards).Amounts);
 

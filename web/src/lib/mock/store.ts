@@ -2160,7 +2160,7 @@ function exceptionComment(comment: string): string {
   return text;
 }
 
-/** `RewardService.ChangeDomainInputsAsync`: folds before and after a change, then pays what it reached. */
+/** `RankUpService.AroundAsync`: folds before and after a change, then pays what it reached. */
 function changeDomainInputs(change: () => void): Earned {
   const before = foldNow();
   change();

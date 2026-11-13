@@ -15,7 +15,8 @@ namespace LifeOs.Application.Rewards;
 /// reconcile its own write runs.
 /// </para>
 /// </summary>
-public sealed class SettlementService(RewardService rewards, FoodRewards food, ActivityRewards activity)
+public sealed class SettlementService(
+    RewardService rewards, RankUpService rankUps, FoodRewards food, ActivityRewards activity)
 {
     /// <summary>Every entry written, and each domain whose level or rank moved.</summary>
     public async Task<Earned> SettleAsync(bool items = false, CancellationToken cancellationToken = default)
@@ -23,7 +24,7 @@ public sealed class SettlementService(RewardService rewards, FoodRewards food, A
         IReadOnlyList<Award> healed = items ? await rewards.ReconcileAllAsync(cancellationToken) : [];
         var fed = await food.SettleAsync(cancellationToken: cancellationToken);
         var moved = await activity.SettleAsync(cancellationToken);
-        var ranked = await rewards.SettleDomainsAsync(cancellationToken);
+        var ranked = await rankUps.SettleAsync(cancellationToken);
         return new Earned(
             [.. healed, .. fed.Awards, .. moved.Awards, .. ranked.Awards],
             [.. fed.Progress, .. moved.Progress, .. ranked.Progress]);

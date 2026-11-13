@@ -161,10 +161,12 @@ public static class ServiceCollectionExtensions
             settings.MaxArtifactBytes));
 
         // Rewards, domains and exception days (D11, D12, REWARD-8).
+        services.AddSingleton<RankUpService>();
+        services.AddSingleton<ItemPrices>();
         services.AddSingleton(sp => new RewardService(
             sp.GetRequiredService<ILedgerRepository>(),
-            sp.GetRequiredService<IDomainCreditReader>(),
-            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<RankUpService>(),
+            sp.GetRequiredService<ItemPrices>(),
             sp.GetRequiredService<IClock>(),
             sp.GetRequiredService<EventSource>(),
             settings.CoinValueUsd));

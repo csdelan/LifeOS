@@ -106,7 +106,7 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
         Assert.DoesNotContain(twelfth.Awards, a => a.Trigger == LifeDomains.RankTrigger);
         Assert.Equal([new DomainChange(Currencies.HealthXp, 10, 11, 1, 1, "Apprentice", 10, 11, 1, 1)], twelfth.Progress);
         Assert.DoesNotContain(await rewards.ReconcileAllAsync(Ct), a => a.Trigger == LifeDomains.RankTrigger);
-        Assert.Empty((await rewards.SettleDomainsAsync(Ct)).Awards);
+        Assert.Empty((await kernel.GetRequiredService<RankUpService>().SettleAsync(Ct)).Awards);
         Assert.Equal(
             ["rank:health_xp:10"],
             await kernel.GetRequiredService<ILedgerRepository>().GetPaidKeysAsync(LifeDomains.RankTrigger, Ct));
@@ -177,7 +177,7 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
         // Twelve active days of 200 from 25 days ago: Apprentice on the eleventh, 15 days ago.
         await database.CreditDaysAsync(today, fromAgo: 25, toAgo: 14, xp: 200);
 
-        Assert.Empty(await rewards.ReconcileDomainsAsync(Ct));
+        Assert.Empty(await kernel.GetRequiredService<RankUpService>().PayAsync(Ct));
         Assert.Empty(await rewards.ReconcileAllAsync(Ct));
         Assert.Empty(await kernel.GetRequiredService<ILedgerRepository>().GetPaidKeysAsync(LifeDomains.RankTrigger, Ct));
         var health = (await kernel.GetRequiredService<DomainService>().GetAsync(Ct)).Domains
@@ -214,7 +214,7 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
             Ct);
         await database.CreditDaysAsync(today, fromAgo: 13, toAgo: 3, xp: 200);
 
-        var settled = await rewards.SettleDomainsAsync(Ct);
+        var settled = await kernel.GetRequiredService<RankUpService>().SettleAsync(Ct);
 
         Assert.Equal("rank:health_xp:10", key);
         Assert.Empty(settled.Awards);
@@ -233,7 +233,7 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
         var today = await database.TodayAsync();
         await database.CreditDaysAsync(today, fromAgo: 13, toAgo: 3, xp: 200);
 
-        var settled = await kernel.GetRequiredService<RewardService>().SettleDomainsAsync(Ct);
+        var settled = await kernel.GetRequiredService<RankUpService>().SettleAsync(Ct);
 
         Assert.Empty(settled.Awards);
         Assert.Empty(settled.Progress);

@@ -220,7 +220,8 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             {
                 detail.Repeating = repeat.Read;
 
-                // A repetition without a price of its own pays its series' (D16).
+                // A repetition without a price of its own pays its series' (D16): the rule
+                // ItemPrices holds for the writes, read here on the reader connection.
                 if (!repeat.Read.IsSeries && bountyJson is null)
                 {
                     bountyJson = repeat.SeriesBountyJson;

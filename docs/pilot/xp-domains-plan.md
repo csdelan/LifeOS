@@ -476,7 +476,8 @@ series. Every progression number in the app comes from it.
 - Award key `rank:<domain>:<start level>` (for example `rank:health_xp:10`), trigger `rank`,
   priced from the domain's `RankUpGems`, not an item bounty. It's due when the fold says the
   rank is qualified on a day on or after the wallet's opening.
-- `RewardService.ReconcileDomainsAsync()` **earns only; it never reverses a rank award.**
+- `RankUpService.PayAsync()` (was `RewardService.ReconcileDomainsAsync`, code review CR48)
+  **earns only; it never reverses a rank award.**
   - The key is paid at most once, so losing and regaining a rank never pays twice.
   - It runs under the wallet lock with the expect-unpaid check, so two writers can't both pay
     it.
@@ -640,7 +641,7 @@ synthetic daily series. It's both a regression suite and Chris's calibration too
 | `GET /api/domains` | Per domain: key, label, total XP, and `configured`. Configured domains add the lifetime figures (level, raw level, rank, qualifiedOn, XP into the level and to the next, banked XP), the next rank (title, level, bar, window, consistency now, successful days and days needed, days old against the window) and the current figures (today's base XP against the rule, 30-day consistency, multiplier now, the next tier and what it needs). |
 | `GET /api/domains/{key}/days?from&to` | Per day: base, paid, succeeded. For the daily chart. |
 | `GET /api/domains/report?days=7\|30\|90\|180\|365` | Per configured domain: days counted (since its start, capped at the period) and the period length, successful days, consistency %, XP paid and base, average per day, level at the period's start and now, ranks reached in the period. Unconfigured domains: XP earned only. |
-| `POST /api/domains/settle` | Runs `ReconcileDomainsAsync`; answers `{ awards, progress }`. |
+| `POST /api/domains/settle` | Runs `SettlementService.SettleAsync` (code review CR46); answers `{ awards, progress }`. |
 | `bsk domains [<domain>]` | `GET /api/domains` in text. `--days N` prints the daily series, `--report 30` the period report, `simulate …` the simulator (§3.10). |
 
 Dates are local days in the home zone, not the viewer's zone.
@@ -1161,9 +1162,9 @@ or a food day's close. Nothing about it is managed over time, so it isn't a subj
       comment writes a new version.
   - `UnmarkAsync(DateOnly day)`: a day that isn't marked writes nothing.
   - `ListAsync(days)`: the marked days among the last N, newest first.
-  - Every write folds the configured domains before it. After it, `RewardService` pays any
+  - Every write folds the configured domains before it. After it, `RankUpService` pays any
     rank-up the change unlocks and answers `progress`, as `POST /api/domains/settle` does
-    (`RewardService.ChangeDomainInputsAsync`).
+    (`RankUpService.AroundAsync`, code review CR48).
 - **Reads for the fold:**
   - `ILedgerRepository.GetDomainDaysAsync` returns the marked days in `DomainCredit`, read
     from `v_exception_day` on the same connection, with `SettledThrough` and the passive

@@ -50,7 +50,7 @@ public sealed record RatingList(DateOnly Today, int Days, IReadOnlyList<SpaceRat
 /// </para>
 /// </summary>
 public sealed class SpaceRatingService(
-    ISpaceRepository spaces, SpaceService spaceService, RewardService rewards, IHomeCalendar calendar, IClock clock,
+    ISpaceRepository spaces, SpaceService spaceService, RankUpService rankUps, IHomeCalendar calendar, IClock clock,
     EventSource eventSource)
 {
     /// <summary>How far back a list reads by default.</summary>
@@ -131,7 +131,7 @@ public sealed class SpaceRatingService(
             .Select(p => new SpaceRatingWrite(
                 Declared(occurredAt, now, Payload(p.Id, p.Space.Id, on, p.T, p.C, p.A, p.Note)), p.Space.Id))
             .ToList();
-        var earned = await rewards.ChangeDomainInputsAsync(
+        var earned = await rankUps.AroundAsync(
             async ct => await spaces.AppendRatingsAsync(writes, ct), cancellationToken);
         return new RatingWriteResult(await ReadAsync(planned.Select(p => p.Id), cancellationToken), earned);
     }
@@ -161,7 +161,7 @@ public sealed class SpaceRatingService(
         var occurredAt = await OccurredAtAsync(on, today, now, cancellationToken);
         var write = new SpaceRatingWrite(
             Declared(occurredAt, now, Payload(rating.Id, space.Id, on, t, c, a, note)), space.Id);
-        var earned = await rewards.ChangeDomainInputsAsync(
+        var earned = await rankUps.AroundAsync(
             async ct => await spaces.AppendRatingsAsync([write], ct), cancellationToken);
         return new RatingWriteResult(await ReadAsync([rating.Id], cancellationToken), earned);
     }
@@ -176,7 +176,7 @@ public sealed class SpaceRatingService(
             [SpaceLimits.RatingKey] = new Dictionary<string, object> { ["id"] = rating.Id.ToString(), ["voided"] = true }
         });
         var write = new SpaceRatingWrite(Declared(now, now, payload), rating.SpaceId);
-        var earned = await rewards.ChangeDomainInputsAsync(
+        var earned = await rankUps.AroundAsync(
             async ct => await spaces.AppendRatingsAsync([write], ct), cancellationToken);
         return new RatingWriteResult([], earned);
     }

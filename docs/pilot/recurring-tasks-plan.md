@@ -168,7 +168,7 @@ well, and chores would move off the Tasks page.
 ## 6. Rewards: the same price every time
 
 - **The price lives on the series.** A repetition has no bounty of its own, so when it's
-  completed, `RewardService.ReadBountyAsync` falls back to the series' bounty (then to the
+  completed, `ItemPrices.ReadAsync` falls back to the series' bounty (then to the
   Task default, as today). Every repetition pays the same unless the series' price changes.
 - **Changing the series' price** changes the repetitions completed after the change. A past
   payment is never re-priced: the engine already freezes each earn at the moment it's paid.

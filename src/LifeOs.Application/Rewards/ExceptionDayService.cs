@@ -21,7 +21,7 @@ public sealed record ExceptionDays(DateOnly Today, int Days, IReadOnlyList<Excep
 /// words, with nothing written.
 /// </summary>
 public sealed class ExceptionDayService(
-    IDomainCreditReader ledger, IEventStore events, RewardService rewards, IHomeCalendar calendar, IClock clock,
+    IDomainCreditReader ledger, IEventStore events, RankUpService rankUps, IHomeCalendar calendar, IClock clock,
     EventSource eventSource)
 {
     /// <summary>The longest comment, in characters.</summary>
@@ -65,7 +65,7 @@ public sealed class ExceptionDayService(
             return new ExceptionDayChange(current, Earned.Nothing);
         }
 
-        var earned = await rewards.ChangeDomainInputsAsync(
+        var earned = await rankUps.AroundAsync(
             ct => AppendAsync(new { day = Text(on), comment = text }, ct), cancellationToken);
         return new ExceptionDayChange(await FindAsync(on, today, cancellationToken), earned);
     }
@@ -82,7 +82,7 @@ public sealed class ExceptionDayService(
             return new ExceptionDayChange(null, Earned.Nothing);
         }
 
-        var earned = await rewards.ChangeDomainInputsAsync(
+        var earned = await rankUps.AroundAsync(
             ct => AppendAsync(new { day = Text(day), voided = true }, ct), cancellationToken);
         return new ExceptionDayChange(null, earned);
     }
