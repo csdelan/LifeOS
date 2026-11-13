@@ -140,11 +140,16 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             splitOn: "bounty_json,cover_json").FirstOrDefault();
     }
 
-    public SubjectDetail? GetSubject(Guid id)
+    public SubjectDetail? GetSubject(Guid id) => Detail("s.id = @id", new { id });
+
+    public SubjectDetail? GetSubjectByUrn(string urn) => Detail("s.urn = @urn", new { urn });
+
+    /// <summary>One subject's detail, found by <paramref name="where"/>, with its series, price and cover.</summary>
+    private SubjectDetail? Detail(string where, object parameters)
     {
         using var db = Open();
         var detail = db.QueryFirstOrDefault<SubjectDetail>(
-            """
+            $"""
             SELECT s.id, s.urn, s.type, s.title,
                    c.status,
                    s.attributes->>'due' AS due,
@@ -155,13 +160,13 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             FROM bsk.v_subject s
             LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = s.id
             LEFT JOIN bsk.v_area a ON a.urn = s.area
-            WHERE s.id = @id
+            WHERE {where}
             """,
-            new { id });
+            parameters);
         if (detail is not null)
         {
             var bountyJson = MemberJsonOf(detail.Attributes, "bounty");
-            if (detail.Type == SubjectTypes.Task && Repeat(db, id) is { } repeat)
+            if (detail.Type == SubjectTypes.Task && Repeat(db, detail.Id) is { } repeat)
             {
                 detail.Repeating = repeat.Read;
 
@@ -360,32 +365,6 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     private sealed class CoverText
     {
         public string? CoverJson { get; set; }
-    }
-
-    public SubjectDetail? GetSubjectByUrn(string urn)
-    {
-        using var db = Open();
-        var detail = db.QueryFirstOrDefault<SubjectDetail>(
-            """
-            SELECT s.id, s.urn, s.type, s.title,
-                   c.status,
-                   s.attributes->>'due' AS due,
-                   s.attributes->>'target_date' AS target_date,
-                   s.expected_cadence, s.next_review_at, s.scope, s.statement, s.created_at,
-                   s.archived, s.area, a.name AS area_name,
-                   s.attributes::text AS attributes
-            FROM bsk.v_subject s
-            LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = s.id
-            LEFT JOIN bsk.v_area a ON a.urn = s.area
-            WHERE s.urn = @urn
-            """,
-            new { urn });
-        if (detail is not null)
-        {
-            detail.Cover = CoverOf(detail.Type, MemberJsonOf(detail.Attributes, Cover.AttributeKey));
-        }
-
-        return detail;
     }
 
     /// <summary>What this subject serves / results in (outgoing edges) — parents in the Map.</summary>

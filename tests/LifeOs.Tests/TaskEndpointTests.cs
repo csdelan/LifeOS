@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using LifeOs.Api.Read;
 using LifeOs.Domain;
 
 namespace LifeOs.Tests;
@@ -105,6 +106,12 @@ public sealed class TaskEndpointTests(PostgresFixture postgres)
         Assert.True(detail.GetProperty("bountyFromSeries").GetBoolean());
         var completedLine = detail.GetProperty("bounty").EnumerateArray().Single(l => l.GetProperty("trigger").GetString() == "completed");
         Assert.Equal(4, completedLine.GetProperty("amounts").GetProperty("xp").GetInt64());
+
+        // Found by URN, as the connector's get_item does, it reads the same.
+        var byUrn = new SubjectReader(postgres.ConnectionString).GetSubjectByUrn(detail.GetProperty("urn").GetString()!)!;
+        Assert.Equal(series, byUrn.Repeating!.SeriesId);
+        Assert.True(byUrn.BountyFromSeries);
+        Assert.Contains(byUrn.Bounty!, l => l.Trigger == "completed");
 
         var seriesDetail = await GetAsync(c, $"/api/subjects/{series}");
         Assert.True(seriesDetail.GetProperty("repeating").GetProperty("isSeries").GetBoolean());
