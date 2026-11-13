@@ -1,3 +1,4 @@
+import { isOverdue } from "@/lib/dates";
 import { isTerminal } from "@/lib/production-ui-types";
 import type { SubjectListItem } from "@/lib/production-ui-types";
 
@@ -21,10 +22,11 @@ export const TASK_GROUP_LABEL: Record<TaskGroup, string> = {
  * filter asks for it, goes under Closed whatever its dates: it isn't overdue.
  */
 export function taskGroup(task: SubjectListItem, today: string): TaskGroup {
-  if (isHiddenTaskStatus(task.status)) return "closed";
+  const closed = isHiddenTaskStatus(task.status);
+  if (closed) return "closed";
   const due = task.due ?? null;
   const scheduled = task.scheduled ?? null;
-  if (due && due < today) return "overdue";
+  if (isOverdue(due, closed, today)) return "overdue";
   if (due === today || (scheduled && scheduled <= today)) return "today";
   if ((due && due > today) || (scheduled && scheduled > today)) return "upcoming";
   return "unscheduled";

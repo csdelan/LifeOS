@@ -6,12 +6,13 @@
  * offer (a Decision status left picked after switching to Tasks) is ignored, not applied.
  */
 
-import { addDays, homeDayAt } from "@/lib/dates";
+import { addDays, homeDayAt, isOverdue } from "@/lib/dates";
 import { ALIGNMENT_TYPES } from "@/lib/subject-meta";
 import {
   CREATABLE_TYPES,
   STATUS_BY_TYPE,
   defaultStatus,
+  isTerminal,
   typeLabel,
   type SubjectListItem,
   type SubjectType,
@@ -293,7 +294,7 @@ export function matchesBrowse(item: SubjectListItem, filters: BrowseFilters, tod
     if (!filters.tags.some((t) => tags.includes(t))) return false;
   }
   const due = item.due ?? null;
-  if (filters.due === "overdue" && !(due && due < today)) return false;
+  if (filters.due === "overdue" && !isOverdue(due, isTerminal(statusOf(item)), today)) return false;
   if (filters.due === "today" && due !== today) return false;
   if (filters.due === "upcoming" && !(due && due > today)) return false;
   if (filters.due === "none" && due) return false;

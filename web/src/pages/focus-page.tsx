@@ -13,7 +13,8 @@ import { useTaskSettleOnOpen } from "@/components/tasks/use-task-settle-on-open"
 import { TodayAppointments } from "@/components/appointments/today-appointments";
 import { cn } from "@/lib/utils";
 import { useDashboard, useWrites } from "@/lib/queries";
-import { todayIso } from "@/lib/dates";
+import { isOverdue, todayIso } from "@/lib/dates";
+import { isTerminal } from "@/lib/production-ui-types";
 import { useWriteAction } from "@/lib/write-action";
 
 /** The width the focus card's strip is asked for: the card is at most about 600 px wide. */
@@ -52,7 +53,7 @@ export function FocusPage() {
 
   const today = todayIso();
   const focusCover = data.primaryFocus.cover ?? null;
-  const overdue = data.dueAndOverdue.filter((t) => t.due && t.due < today);
+  const overdue = data.dueAndOverdue.filter((t) => isOverdue(t.due, isTerminal(t.status), today));
   const dueToday = data.dueAndOverdue.filter((t) => !overdue.includes(t));
 
   return (

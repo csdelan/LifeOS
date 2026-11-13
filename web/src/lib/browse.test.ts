@@ -149,6 +149,14 @@ describe("Browse filters (BROWSE-2)", () => {
   it("filters by due date and by when an item was entered", () => {
     const due = (d: BrowseFilters["due"]) => titles(browseRows(items, "Task", filters({ due: d }), TODAY));
     expect(due("overdue")).toEqual(["Buy race shoes"]);
+    // A finished item isn't overdue (code review CR74).
+    const finished = [
+      item("t5", "Task", "Mail the form", { status: "Completed", due: "2026-10-20" }),
+      item("t6", "Task", "Book the hotel", { status: "Cancelled", due: "2026-10-21" }),
+    ];
+    expect(titles(browseRows([...items, ...finished], "Task", filters({ due: "overdue" }), TODAY))).toEqual([
+      "Buy race shoes",
+    ]);
     expect(due("today")).toEqual(["Call Mom"]);
     expect(due("upcoming")).toEqual(["Plan the week"]);
     expect(due("none")).toEqual(["Read a chapter"]);

@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { formatDay, relativeDayLabel, todayIso } from "@/lib/dates";
+import { formatDay, isOverdue, relativeDayLabel, todayIso } from "@/lib/dates";
 
 export function DateChip({
   date,
@@ -15,7 +15,7 @@ export function DateChip({
 }) {
   if (!date) return null;
   const today = todayIso();
-  const overdue = !closed && kind === "due" && date < today;
+  const overdue = kind === "due" && isOverdue(date, closed, today);
   const isToday = !closed && date === today;
   const when = closed ? formatDay(date) : relativeDayLabel(date, today);
   const label =

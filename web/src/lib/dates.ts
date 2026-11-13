@@ -91,6 +91,16 @@ export function formatTimestamp(iso: string): string {
   });
 }
 
+/**
+ * Whether an item due on `due` is overdue on `today` (both `yyyy-MM-dd`): its due date has passed
+ * and it isn't finished. `closed` is whether it is (`isTerminal` of its status): a Completed,
+ * Missed or Cancelled item's due date is just a day. The one rule for Browse's Overdue, the Tasks
+ * page's groups, Focus and every date chip (code review CR74).
+ */
+export function isOverdue(due: string | null | undefined, closed: boolean, today: string): boolean {
+  return !closed && !!due && due < today;
+}
+
 export function relativeDayLabel(iso: string, today = todayIso()): string {
   if (iso === today) return "Today";
   if (iso === addDays(today, -1)) return "Yesterday";

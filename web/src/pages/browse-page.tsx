@@ -833,13 +833,9 @@ function Cell({
       return status ? <StatusPill status={status} className="justify-self-start" /> : empty;
     }
     case "due":
-      // A finished item isn't overdue: its due date shows plain.
+      // A finished item isn't overdue: its due date shows plain, by the rule the Overdue filter uses.
       return item.due ? (
-        <DateChip
-          date={item.due}
-          kind={isTerminal(statusOf(item)) ? "plain" : "due"}
-          className="justify-self-start"
-        />
+        <DateChip date={item.due} kind="due" closed={isTerminal(statusOf(item))} className="justify-self-start" />
       ) : (
         empty
       );
