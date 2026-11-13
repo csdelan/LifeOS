@@ -82,6 +82,26 @@ commit each, and skipped P3 (listed under the second review, so it isn't lost).
   item (CR46). A catch-up that fails or runs past 20 seconds is logged and the API starts anyway;
   the pages still catch up when they open, for a machine that stayed up past midnight.
   `CatchUp:OnStart` false turns it off; test hosts start with it off.
+- **CR61:** every N months counts each date from the start: the k-th date is the start plus k×N
+  months, its day clamped to the month's last. A repeat started Jan 31 falls on Feb 28, Mar 31,
+  Apr 30. This is what `addMonthsClamped` meant, not a new choice: the SQL stepped from the
+  date before and stuck on the 28th, and the web copied it. A monthly day before the start no
+  longer counts either. A series already running on a drifted date (one started on the 29th to
+  31st, every N months, not from completion) gets its next dates on the true day, and a date
+  already made on the drifted day stays. Before the push that deploys migration 0063, this,
+  run in the Supabase SQL editor, lists any such series on staging:
+
+  ```sql
+  SELECT s.type, s.title, s.attributes->'recurrence' AS recurrence,
+         coalesce(s.attributes->>'start', s.attributes->>'start_date') AS start
+  FROM bsk.subject s
+  WHERE s.attributes->'recurrence'->>'freq' = 'interval'
+    AND s.attributes->'recurrence'->>'unit' = 'months'
+    AND s.attributes->'recurrence'->>'from' IS DISTINCT FROM 'completion'
+    AND extract(day FROM coalesce(bsk.try_to_date(s.attributes->>'start'),
+                                  bsk.try_to_date(s.attributes->>'start_date'),
+                                  (s.created_at AT TIME ZONE bsk.home_zone())::date)) >= 29;
+  ```
 
 ## Items
 

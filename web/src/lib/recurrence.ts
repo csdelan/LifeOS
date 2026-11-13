@@ -172,8 +172,10 @@ export function addMonthsClamped(iso: string, months: number): string {
 
 /**
  * Whether `iso` is one of the pattern's dates, the way `bsk.recurrence_occurrences` expands
- * it: an interval counts from `start`; a monthly day skips months without it; a cue, once
- * each week and an interval after the last completion have no dates of their own.
+ * it: nothing before `start` counts; an interval counts from `start`, every N months each
+ * counted from `start` itself (the 31st clamps to February's 28th and comes back in March);
+ * a monthly day skips months without it; a cue, once each week and an interval after the
+ * last completion have no dates of their own. `tests/rules/recurrence.json` holds the cases.
  */
 export function isOccurrenceDate(
   spec: RecurrenceSpec,
@@ -200,15 +202,18 @@ export function isOccurrenceDate(
       if (!start) return true;
       const every = Math.max(1, spec.every ?? 1);
       const unit = spec.unit ?? "days";
-      let cursor = start;
-      for (let guard = 0; cursor < iso && guard < 4000; guard += 1) {
-        cursor =
-          unit === "days"
-            ? addDays(cursor, every)
-            : unit === "weeks"
-              ? addDays(cursor, every * 7)
-              : addMonthsClamped(cursor, every);
+      if (unit === "months") {
+        // The k-th date is start plus k*N months, never the date before plus N (code review
+        // CR61): stepping on from a clamped date kept Jan 31's repeat on the 28th for good.
+        for (let k = 0; k < 4000; k += 1) {
+          const date = addMonthsClamped(start, k * every);
+          if (date >= iso) return date === iso;
+        }
+        return false;
       }
+      const step = unit === "weeks" ? every * 7 : every;
+      let cursor = start;
+      for (let guard = 0; cursor < iso && guard < 4000; guard += 1) cursor = addDays(cursor, step);
       return cursor === iso;
     }
   }

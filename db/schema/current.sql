@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0062 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0063 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -2043,7 +2043,7 @@ BEGIN
 END;
 $function$;
 
--- D8: expands a structured recurrence (attributes.recurrence) into occurrence dates within [win_start, win_end], anchored at the item start. Once each week (freq each, period week) gives each week's Monday for the weeks that overlap the window (D16). An every-N counted from the last completion, a trigger, and anything unknown yield nothing.
+-- D8: expands a structured recurrence (attributes.recurrence) into occurrence dates within [win_start, win_end], anchored at the item start: no date before the anchor counts, except that once each week names the anchor's week by its Monday. Every N months counts each date from the anchor, so the 31st clamps to a short month's last day and comes back (CR61). Once each week (freq each, period week) gives each week's Monday for the weeks that overlap the window (D16). An every-N counted from the last completion, a trigger, and anything unknown yield nothing.
 CREATE OR REPLACE FUNCTION bsk.recurrence_occurrences(recur jsonb, anchor date, win_start date, win_end date)
  RETURNS SETOF date
  LANGUAGE plpgsql
@@ -2086,20 +2086,32 @@ BEGIN
         IF every IS NULL OR every < 1 THEN
             RETURN;
         END IF;
-        step := CASE recur->>'unit'
-                    WHEN 'days'   THEN make_interval(days   => every)
-                    WHEN 'weeks'  THEN make_interval(weeks  => every)
-                    WHEN 'months' THEN make_interval(months => every)
-                    ELSE NULL
-                END;
-        IF step IS NULL THEN
-            RETURN;
+        IF recur->>'unit' = 'months' THEN
+            -- Each date is counted from the anchor, not from the one before (CR61), so a day the
+            -- short months clamp comes back in the long ones.
+            RETURN QUERY
+            SELECT occ
+            FROM generate_series(
+                     0,
+                     ((extract(year FROM win_end) - extract(year FROM anchor)) * 12
+                      + extract(month FROM win_end) - extract(month FROM anchor))::int / every) k,
+                 LATERAL (SELECT (anchor + make_interval(months => every * k))::date) AS x(occ)
+            WHERE occ BETWEEN win_start AND win_end;
+        ELSE
+            step := CASE recur->>'unit'
+                        WHEN 'days'  THEN make_interval(days  => every)
+                        WHEN 'weeks' THEN make_interval(weeks => every)
+                        ELSE NULL
+                    END;
+            IF step IS NULL THEN
+                RETURN;
+            END IF;
+            -- Phased from the anchor; keep only those inside the window.
+            RETURN QUERY
+            SELECT d::date
+            FROM generate_series(anchor::timestamp, win_end::timestamp, step) d
+            WHERE d::date >= win_start;
         END IF;
-        -- Phased from the anchor; keep only those inside the window.
-        RETURN QUERY
-        SELECT d::date
-        FROM generate_series(anchor::timestamp, win_end::timestamp, step) d
-        WHERE d::date >= win_start;
 
     ELSIF freq = 'monthly' THEN
         IF recur->>'on' = 'last' THEN
@@ -2109,7 +2121,8 @@ BEGIN
                      date_trunc('month', greatest(anchor, win_start))::timestamp,
                      win_end::timestamp, interval '1 month') m,
                  LATERAL (SELECT (date_trunc('month', m) + interval '1 month' - interval '1 day')::date) AS x(last_day)
-            WHERE last_day BETWEEN win_start AND win_end;
+            WHERE last_day BETWEEN win_start AND win_end
+              AND last_day >= anchor;
         ELSE
             day_n := (recur->>'day')::int;
             IF day_n IS NULL OR day_n < 1 OR day_n > 31 THEN
@@ -2122,6 +2135,7 @@ BEGIN
                      win_end::timestamp, interval '1 month') m,
                  LATERAL (SELECT (date_trunc('month', m) + make_interval(days => day_n - 1))::date) AS x(occ)
             WHERE occ BETWEEN win_start AND win_end
+              AND occ >= anchor
               -- Skip months that have no such day (e.g. day 31 in February).
               AND extract(month FROM occ) = extract(month FROM m);
         END IF;

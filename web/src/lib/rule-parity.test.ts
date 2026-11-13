@@ -7,6 +7,8 @@ import { fade, partDrag, partValue, ratingPoints, spaceScore } from "@/lib/home-
 import { STATUS_BY_TYPE, initialStatus, isTerminal } from "@/lib/production-ui-types";
 import type { HomePart, ReviewKind, SubjectType } from "@/lib/production-ui-types";
 import { reviewPeriod } from "@/lib/reviews";
+import { addDays } from "@/lib/dates";
+import { isOccurrenceDate, parseRecurrence } from "@/lib/recurrence";
 
 /**
  * The TypeScript copies of kernel rules give the kernel's answers (code review CR8). The cases
@@ -70,6 +72,19 @@ const rules: Record<string, Record<string, (...args: unknown[]) => unknown>> = {
     },
     mealType: (hour) => guessMealType(new Date(2026, 0, 5, n(hour), 30)),
   },
+  recurrence: {
+    // The kernel answers with bsk.recurrence_occurrences (RecurrenceTests); the web says day by
+    // day whether each date is one.
+    occurrences: (recur, anchor, from, to) => {
+      const spec = parseRecurrence(JSON.stringify(recur));
+      if (!spec) throw new Error(`tests/rules/recurrence.json has a pattern the web can't read: ${JSON.stringify(recur)}.`);
+      const dates: string[] = [];
+      for (let day = s(from); day <= s(to); day = addDays(day, 1)) {
+        if (isOccurrenceDate(spec, day, s(anchor))) dates.push(day);
+      }
+      return dates;
+    },
+  },
   statuses: {
     statuses: (type) => STATUS_BY_TYPE[s(type) as SubjectType] ?? [],
     initial: (type) => initialStatus(s(type) as SubjectType),
@@ -91,7 +106,7 @@ function answer(file: string, c: RuleCase): unknown {
 describe("the web's copies of kernel rules", () => {
   it("finds the shared cases", () => {
     expect(Object.keys(files).map((path) => path.split("/").pop()).sort()).toEqual(
-      ["activity.json", "diet.json", "home.json", "levels.json", "reviews.json", "statuses.json"],
+      ["activity.json", "diet.json", "home.json", "levels.json", "recurrence.json", "reviews.json", "statuses.json"],
     );
   });
 

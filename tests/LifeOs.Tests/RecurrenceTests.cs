@@ -1,3 +1,6 @@
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Dapper;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
@@ -37,6 +40,47 @@ public sealed class RecurrenceTests(ClassDatabase classDb) : IClassFixture<Class
                 """,
                 new { r = recurrenceJson, anchor, start, end }, cancellationToken: Ct)))
             .ToList();
+
+    /// <summary>
+    /// <c>tests/rules/recurrence.json</c>: the dates the web's <c>isOccurrenceDate</c> must agree
+    /// with (code review CR61). With <see cref="RuleParityTests.WriteVariable"/> set to 1 it writes
+    /// the expander's answers into the file instead, as <see cref="RuleParityTests"/> does.
+    /// </summary>
+    [Fact]
+    public async Task The_expander_gives_each_shared_case_its_answer()
+    {
+        var path = Path.Combine(RepoRoot.Path, "tests", "rules", "recurrence.json");
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(path, Ct))!;
+        await using var c = await OpenAsync();
+
+        var wrong = new List<string>();
+        foreach (var testCase in document["cases"]!.AsArray())
+        {
+            Assert.Equal("occurrences", testCase!["rule"]!.GetValue<string>());
+            var args = testCase["args"]!.AsArray();
+            var dates = await ExpandAsync(
+                c, args[0]!.ToJsonString(), args[1]!.GetValue<string>(), args[2]!.GetValue<string>(), args[3]!.GetValue<string>());
+            var actual = new JsonArray(dates.Select(d => (JsonNode?)JsonValue.Create(d)).ToArray());
+            if (!JsonNode.DeepEquals(actual, testCase["out"]))
+            {
+                wrong.Add($"occurrences({args.ToJsonString()}) is {actual.ToJsonString()}, not {testCase["out"]?.ToJsonString()}");
+                testCase["out"] = actual;
+            }
+        }
+
+        if (Environment.GetEnvironmentVariable(RuleParityTests.WriteVariable) == "1")
+        {
+            if (wrong.Count > 0)
+            {
+                var text = document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n") + "\n";
+                await File.WriteAllTextAsync(path, text, new UTF8Encoding(false), Ct);
+            }
+
+            return;
+        }
+
+        Assert.True(wrong.Count == 0, "tests/rules/recurrence.json:\n" + string.Join("\n", wrong));
+    }
 
     [Fact]
     public async Task Daily_expands_to_every_day_in_the_window()

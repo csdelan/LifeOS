@@ -90,15 +90,17 @@ describe("isOccurrenceDate", () => {
     expect(isOccurrenceDate({ freq: "trigger", cue: "after lunch" }, "2026-11-30")).toBe(false);
   });
 
-  it("counts an interval from the start date, months clamped the way Postgres adds them", () => {
+  it("counts an interval from the start date, each month from the start itself (code review CR61)", () => {
     const every3 = { freq: "interval", every: 3, unit: "days" } as const;
     expect(isOccurrenceDate(every3, "2026-10-07", "2026-10-01")).toBe(true);
     expect(isOccurrenceDate(every3, "2026-10-08", "2026-10-01")).toBe(false);
     expect(isOccurrenceDate({ freq: "interval", every: 2, unit: "weeks" }, "2026-10-15", "2026-10-01")).toBe(true);
     const monthly = { freq: "interval", every: 1, unit: "months" } as const;
+    // The 31st clamps to February's last day and comes back in March, not stuck on the 28th.
     expect(isOccurrenceDate(monthly, "2026-02-28", "2026-01-31")).toBe(true);
-    expect(isOccurrenceDate(monthly, "2026-03-28", "2026-01-31")).toBe(true);
-    expect(isOccurrenceDate(monthly, "2026-03-31", "2026-01-31")).toBe(false);
+    expect(isOccurrenceDate(monthly, "2026-03-28", "2026-01-31")).toBe(false);
+    expect(isOccurrenceDate(monthly, "2026-03-31", "2026-01-31")).toBe(true);
+    expect(isOccurrenceDate(monthly, "2026-04-30", "2026-01-31")).toBe(true);
   });
 
   it("keeps to the start and end dates", () => {
