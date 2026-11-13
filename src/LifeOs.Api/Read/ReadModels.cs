@@ -249,6 +249,9 @@ public sealed class HabitOccurrenceRow
     public DateOnly OccurrenceDate { get; set; }
     public string State { get; set; } = "";
     public bool AllowsPartial { get; set; }
+
+    /// <summary>The note recorded with the day's newest check-off, if it had one.</summary>
+    public string? Note { get; set; }
 }
 
 public sealed class AppointmentRow

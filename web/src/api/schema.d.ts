@@ -2933,6 +2933,7 @@ export interface components {
             occurrenceDate?: string;
             state?: string;
             allowsPartial?: boolean;
+            note?: null | string;
         };
         HabitRow: {
             /** Format: uuid */

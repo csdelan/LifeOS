@@ -1,4 +1,6 @@
 using Dapper;
+using LifeOs.Api.Read;
+using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.DependencyInjection;
@@ -57,6 +59,24 @@ public sealed class AdherenceServiceTests(PostgresFixture postgres)
         var (storedResult, relation) = await ReadAdherenceAsync(c, result.EventId);
         Assert.Equal("followed", storedResult);
         Assert.Equal(SubjectEventRelations.Evidences, relation);
+    }
+
+    [Fact]
+    public async Task The_days_note_reads_back_with_its_occurrence()
+    {
+        var provider = Provider();
+        var habit = await MakeHabitAsync(provider);
+        var adherence = provider.GetRequiredService<AdherenceService>();
+        var today = await provider.GetRequiredService<IHomeCalendar>().DateAtAsync(DateTimeOffset.UtcNow, Ct);
+        await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today, note: "  ran it early  ", cancellationToken: Ct);
+
+        var reader = new SubjectReader(postgres.ConnectionString);
+        var day = Assert.Single(reader.GetHabitOccurrences(habit.Id, on: today));
+        Assert.Equal("ran it early", day.Note);
+
+        // A correction without a note clears it: the newest check-off is the day's record.
+        await adherence.RecordAsync(habit.Urn, AdherenceResults.Missed, today, cancellationToken: Ct);
+        Assert.Null(Assert.Single(reader.GetHabitOccurrences(habit.Id, on: today)).Note);
     }
 
     [Fact]

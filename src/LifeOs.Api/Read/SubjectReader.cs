@@ -715,9 +715,11 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
         var rows = db.Query<HabitOccurrenceRow>(
             """
             SELECT o.habit_id, o.habit_urn, h.name AS habit_name,
-                   o.occurrence_date, o.state, h.allows_partial
+                   o.occurrence_date, o.state, h.allows_partial,
+                   nullif(btrim(ae.payload->>'note'), '') AS note
             FROM bsk.v_habit_occurrence o
             JOIN bsk.v_habit h ON h.id = o.habit_id
+            LEFT JOIN bsk.v_event ae ON ae.id = o.adherence_event_id
             WHERE (@habitId IS NULL OR o.habit_id = @habitId)
               AND (@onText IS NULL OR o.occurrence_date = @onText::date)
               AND (@fromText IS NULL OR o.occurrence_date >= @fromText::date)
