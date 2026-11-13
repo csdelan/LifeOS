@@ -12,7 +12,8 @@ namespace LifeOs.Infrastructure.Persistence;
 /// The rewards ledger (REWARD-1 / D11). Reads go through the <c>bsk.v_ledger</c> /
 /// <c>bsk.v_wallet</c> folds and <c>bsk.ledger_opened_at()</c> (migration 0025), and
 /// reconcile's reads through <c>bsk.v_reward_due</c> / <c>bsk.v_reward_trigger</c>
-/// (migration 0026), and the reward catalog through <c>bsk.v_reward</c> (migration 0028).
+/// (migration 0026). The catalog and the domain credit beside the ledger are read by
+/// <see cref="NpgsqlRewardCatalogReader"/> and <see cref="NpgsqlDomainCreditReader"/> (code review CR47).
 /// Every write takes one transaction-scoped advisory lock shared by
 /// all ledger writes, re-checks that each earn or reversal's award is still in the state
 /// reconcile saw, inserts each entry's event and edges, and — for a guarded entry (a
@@ -41,16 +42,6 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
         WHERE w.balance < 0
         GROUP BY w.currency, w.balance
         ORDER BY w.currency;
-        """;
-
-    // The catalog columns, aliased to CatalogRow's property names (no underscore
-    // matching in the CLI host). price is read as text and parsed leniently in C#.
-    private const string CatalogSql = """
-        SELECT id, urn, name, kind, price::text AS pricejson, target_usd AS targetusd,
-               redemptions, coins_redeemed AS coinsredeemed, dollars_redeemed AS dollarsredeemed,
-               last_redeemed_at AS lastredeemedat, percent_of_target AS percentoftarget,
-               remaining_usd AS remainingusd, description, archived
-        FROM bsk.v_reward
         """;
 
     // Whether an award key currently nets to non-zero in any currency — i.e. is paid.
@@ -222,99 +213,6 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
         }
     }
 
-    public async Task<DomainCredit> GetDomainDaysAsync(
-        IReadOnlyCollection<string> currencies, CancellationToken cancellationToken = default)
-    {
-        await using var connection = dataSource.CreateConnection();
-        await connection.OpenAsync(cancellationToken);
-
-        // Aliased to CreditRow's names (no underscore matching in the CLI host). A passive
-        // award's key starts with its trigger (sleep:2026-10-24, §7.4.2), and no item trigger
-        // shares a passive trigger's name, so the key's first part says which base is passive.
-        const string daysSql = """
-            SELECT c.currency,
-                   to_char(coalesce(c.credited_on, (c.occurred_at AT TIME ZONE @tz)::date), 'YYYY-MM-DD') AS day,
-                   sum(c.base)::bigint AS base,
-                   sum(c.paid)::bigint AS paid,
-                   coalesce(sum(c.base) FILTER (WHERE split_part(c.award_key, ':', 1) = ANY(@passive)), 0)::bigint AS passive
-            FROM bsk.v_award_credit c
-            WHERE c.currency = ANY(@currencies)
-            GROUP BY 1, 2
-            ORDER BY 1, 2;
-            """;
-
-        try
-        {
-            // The last settled day: yesterday once it's past the settle hour in the home zone,
-            // the day before until then.
-            var dates = await connection.QuerySingleAsync<DatesRow>(new CommandDefinition(
-                """
-                SELECT to_char((now() AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS today,
-                       to_char((bsk.ledger_opened_at() AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS openedon,
-                       to_char(((now() AT TIME ZONE @tz) - make_interval(hours => @settle))::date - 1, 'YYYY-MM-DD') AS settledthrough;
-                """,
-                new { tz = homeTimeZone, settle = LifeDomains.SettleHour }, cancellationToken: cancellationToken));
-            var rows = await connection.QueryAsync<CreditRow>(new CommandDefinition(
-                daysSql,
-                new { tz = homeTimeZone, currencies = currencies.ToArray(), passive = LifeDomains.PassiveTriggers.ToArray() },
-                cancellationToken: cancellationToken));
-            var exceptions = await connection.QueryAsync<ExceptionRow>(new CommandDefinition(
-                """
-                SELECT to_char(x.day, 'YYYY-MM-DD') AS day, x.comment, x.marked_at AS markedat
-                FROM bsk.v_exception_day x
-                ORDER BY x.day;
-                """,
-                cancellationToken: cancellationToken));
-            return new DomainCredit(
-                ParseDay(dates.Today),
-                rows.Select(r => new CreditDay(r.Currency, ParseDay(r.Day), r.Base, r.Paid, r.Passive)).ToList(),
-                dates.OpenedOn is { } openedOn ? ParseDay(openedOn) : null)
-            {
-                ExceptionDays = exceptions.Select(ToExceptionDay).ToList(),
-                SettledThrough = ParseDay(dates.SettledThrough),
-                Home = await NpgsqlSpaceRepository.ReadHomeAsync(connection, cancellationToken)
-            };
-        }
-        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
-        {
-            throw UnknownHomeZone(e);
-        }
-    }
-
-    public async Task<(DateOnly Today, IReadOnlyList<ExceptionDay> Days)> GetExceptionDaysAsync(
-        int days, CancellationToken cancellationToken = default)
-    {
-        await using var connection = dataSource.CreateConnection();
-        await connection.OpenAsync(cancellationToken);
-        try
-        {
-            var today = ParseDay(await connection.QuerySingleAsync<string>(new CommandDefinition(
-                "SELECT to_char((now() AT TIME ZONE @tz)::date, 'YYYY-MM-DD');",
-                new { tz = homeTimeZone }, cancellationToken: cancellationToken)));
-            var rows = await connection.QueryAsync<ExceptionRow>(new CommandDefinition(
-                """
-                SELECT to_char(x.day, 'YYYY-MM-DD') AS day, x.comment, x.marked_at AS markedat
-                FROM bsk.v_exception_day x
-                WHERE x.day BETWEEN @from::date AND @to::date
-                ORDER BY x.day DESC;
-                """,
-                new
-                {
-                    from = today.AddDays(1 - days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                    to = today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                },
-                cancellationToken: cancellationToken));
-            return (today, rows.Select(ToExceptionDay).ToList());
-        }
-        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
-        {
-            throw UnknownHomeZone(e);
-        }
-    }
-
-    private static ExceptionDay ToExceptionDay(ExceptionRow row)
-        => new(ParseDay(row.Day), row.Comment, new DateTimeOffset(DateTime.SpecifyKind(row.MarkedAt, DateTimeKind.Utc)));
-
     public async Task<IReadOnlySet<string>> GetPaidKeysAsync(
         string trigger, CancellationToken cancellationToken = default)
     {
@@ -330,31 +228,6 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
             """,
             new { trigger }, cancellationToken: cancellationToken));
         return keys.ToHashSet(StringComparer.Ordinal);
-    }
-
-    public async Task<Guid?> GetLatestCreditEventAsync(
-        string currency, DateOnly day, CancellationToken cancellationToken = default)
-    {
-        await using var connection = dataSource.CreateConnection();
-        await connection.OpenAsync(cancellationToken);
-        try
-        {
-            return await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition(
-                """
-                SELECT c.event_id
-                FROM bsk.v_award_credit c
-                CROSS JOIN LATERAL (SELECT coalesce(c.credited_on, (c.occurred_at AT TIME ZONE @tz)::date) AS day) d
-                WHERE c.currency = @currency AND d.day <= @day::date
-                ORDER BY d.day DESC, c.occurred_at DESC, c.event_id DESC
-                LIMIT 1;
-                """,
-                new { tz = homeTimeZone, currency, day = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
-                cancellationToken: cancellationToken));
-        }
-        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
-        {
-            throw UnknownHomeZone(e);
-        }
     }
 
     public async Task<DateTimeOffset?> GetOpenedAtAsync(CancellationToken cancellationToken = default)
@@ -531,36 +404,6 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
             """,
             new { subjectId },
             cancellationToken: cancellationToken));
-    }
-
-    public async Task<IReadOnlyList<CatalogReward>> GetCatalogAsync(
-        bool includeArchived, CancellationToken cancellationToken = default)
-    {
-        await using var connection = dataSource.CreateConnection();
-        await connection.OpenAsync(cancellationToken);
-        var rows = await connection.QueryAsync<CatalogRow>(new CommandDefinition(
-            $"""
-            {CatalogSql}
-            WHERE @includeArchived OR NOT archived
-            ORDER BY lower(name), urn;
-            """,
-            new { includeArchived },
-            cancellationToken: cancellationToken));
-        return rows.Select(ToCatalogReward).ToList();
-    }
-
-    public async Task<CatalogReward?> GetCatalogRewardAsync(Guid rewardId, CancellationToken cancellationToken = default)
-    {
-        await using var connection = dataSource.CreateConnection();
-        await connection.OpenAsync(cancellationToken);
-        var row = await connection.QuerySingleOrDefaultAsync<CatalogRow>(new CommandDefinition(
-            $"""
-            {CatalogSql}
-            WHERE id = @rewardId;
-            """,
-            new { rewardId },
-            cancellationToken: cancellationToken));
-        return row is null ? null : ToCatalogReward(row);
     }
 
     private async Task<IReadOnlyList<DueAward>> GetAwardsAsync(
@@ -751,21 +594,6 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
             first.CoinRate);
     }
 
-    private static CatalogReward ToCatalogReward(CatalogRow row)
-        => new(
-            new SubjectRef(row.Id, row.Urn, SubjectTypes.Reward, row.Name),
-            row.Kind,
-            RewardPrice.Parse(row.PriceJson),
-            row.TargetUsd,
-            row.Redemptions,
-            row.CoinsRedeemed,
-            row.DollarsRedeemed,
-            AsUtc(row.LastRedeemedAt),
-            row.PercentOfTarget,
-            row.RemainingUsd,
-            row.Description,
-            row.Archived);
-
     private static int DisplayOrder(string currency)
     {
         for (var i = 0; i < Currencies.All.Count; i++)
@@ -827,29 +655,6 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
         public string CreditedOn { get; set; } = "";
     }
 
-    private sealed class DatesRow
-    {
-        public string Today { get; set; } = "";
-        public string? OpenedOn { get; set; }
-        public string SettledThrough { get; set; } = "";
-    }
-
-    private sealed class CreditRow
-    {
-        public string Currency { get; set; } = "";
-        public string Day { get; set; } = "";
-        public long Base { get; set; }
-        public long Paid { get; set; }
-        public long Passive { get; set; }
-    }
-
-    private sealed class ExceptionRow
-    {
-        public string Day { get; set; } = "";
-        public string Comment { get; set; } = "";
-        public DateTime MarkedAt { get; set; }
-    }
-
     private sealed class PaidRow
     {
         public Guid EventId { get; set; }
@@ -867,24 +672,6 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
         public string Urn { get; set; } = "";
         public string Type { get; set; } = "";
         public string Title { get; set; } = "";
-    }
-
-    private sealed class CatalogRow
-    {
-        public Guid Id { get; set; }
-        public string Urn { get; set; } = "";
-        public string Name { get; set; } = "";
-        public string Kind { get; set; } = "";
-        public string? PriceJson { get; set; }
-        public decimal? TargetUsd { get; set; }
-        public long Redemptions { get; set; }
-        public long CoinsRedeemed { get; set; }
-        public decimal DollarsRedeemed { get; set; }
-        public DateTime? LastRedeemedAt { get; set; }
-        public decimal? PercentOfTarget { get; set; }
-        public decimal? RemainingUsd { get; set; }
-        public string? Description { get; set; }
-        public bool Archived { get; set; }
     }
 
     private sealed class KeyedRow

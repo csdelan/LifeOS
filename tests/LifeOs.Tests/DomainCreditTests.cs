@@ -13,7 +13,7 @@ namespace LifeOs.Tests;
 
 /// <summary>
 /// REWARD-6 / REWARD-7, D12 (xp-domains plan X3, migration 0032): each life domain's daily
-/// credit — <c>bsk.v_award_credit</c>, <c>ILedgerRepository.GetDomainDaysAsync</c> and
+/// credit — <c>bsk.v_award_credit</c>, <c>IDomainCreditReader.GetDomainDaysAsync</c> and
 /// <c>DomainService</c>. A day holds what the ledger pays now for the awards credited to it,
 /// so a reversal takes its credit away and earning again files it on the new day.
 /// <para>
@@ -34,7 +34,7 @@ public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<Cla
 
     private sealed record Kernel(
         SubjectService Subjects, StatusService Status, AdherenceService Adherence, BountyService Bounties,
-        ILedgerRepository Ledger, DomainService Domains);
+        IDomainCreditReader Ledger, DomainService Domains);
 
     private Kernel Build(string homeTimeZone = "UTC")
     {
@@ -46,7 +46,7 @@ public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<Cla
             provider.GetRequiredService<StatusService>(),
             provider.GetRequiredService<AdherenceService>(),
             provider.GetRequiredService<BountyService>(),
-            provider.GetRequiredService<ILedgerRepository>(),
+            provider.GetRequiredService<IDomainCreditReader>(),
             provider.GetRequiredService<DomainService>());
     }
 

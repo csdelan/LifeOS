@@ -50,7 +50,7 @@ public sealed class FoodDrinksTests(PostgresFixture postgres)
 
     private async Task<(long Base, long Paid)> CreditAsync(DomainTestDatabase db, DateOnly day)
     {
-        var credit = await db.Get<ILedgerRepository>().GetDomainDaysAsync([Currencies.HealthXp], Ct);
+        var credit = await db.Get<IDomainCreditReader>().GetDomainDaysAsync([Currencies.HealthXp], Ct);
         var row = credit.Days.Where(d => d.Day == day).ToList();
         return (row.Sum(d => d.Base), row.Sum(d => d.Paid));
     }

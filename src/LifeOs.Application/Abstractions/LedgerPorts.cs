@@ -11,7 +11,7 @@ namespace LifeOs.Application.Abstractions;
 /// wallet-wide lock, so a balance check and the redemption it guards cannot interleave
 /// with another write.
 /// </summary>
-public interface ILedgerRepository : IRewardCatalogReader, IDomainCreditReader
+public interface ILedgerRepository
 {
     /// <summary>The totals of every currency the ledger has touched; untouched currencies have no row.</summary>
     Task<IReadOnlyList<WalletBalance>> GetBalancesAsync(CancellationToken cancellationToken = default);

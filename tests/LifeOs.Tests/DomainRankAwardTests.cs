@@ -96,7 +96,7 @@ public sealed class DomainRankAwardTests(PostgresFixture postgres)
         Assert.Equal(today.AddDays(-3).ToString("yyyy-MM-dd"), payload.GetProperty("credited_on").GetString());
         Assert.Equal(Currencies.HealthXp, payload.GetProperty("domain").GetString());
         Assert.False(payload.TryGetProperty("subject_id", out _));
-        var reachedOn = await kernel.GetRequiredService<ILedgerRepository>()
+        var reachedOn = await kernel.GetRequiredService<IDomainCreditReader>()
             .GetLatestCreditEventAsync(Currencies.HealthXp, today.AddDays(-3), Ct);
         Assert.Equal(reachedOn, entry.GetProperty("derivedFrom")[0].GetGuid());
 

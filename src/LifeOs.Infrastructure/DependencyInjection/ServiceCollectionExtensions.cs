@@ -98,9 +98,10 @@ public static class ServiceCollectionExtensions
             new NpgsqlLedgerRepository(sp.GetRequiredService<NpgsqlDataSource>(), settings.HomeTimeZone));
         services.AddSingleton<IHomeCalendar>(sp =>
             new NpgsqlHomeCalendar(sp.GetRequiredService<NpgsqlDataSource>(), sp.GetRequiredService<IClock>(), settings.HomeTimeZone));
-        // The ledger's narrower reads (code review CR19) are the same repository.
-        services.AddSingleton<IRewardCatalogReader>(sp => sp.GetRequiredService<ILedgerRepository>());
-        services.AddSingleton<IDomainCreditReader>(sp => sp.GetRequiredService<ILedgerRepository>());
+        // The reads beside the ledger (code review CR19, CR47): the catalog and the domain credit.
+        services.AddSingleton<IRewardCatalogReader, NpgsqlRewardCatalogReader>();
+        services.AddSingleton<IDomainCreditReader>(sp =>
+            new NpgsqlDomainCreditReader(sp.GetRequiredService<NpgsqlDataSource>(), settings.HomeTimeZone));
         services.AddSingleton<IIntegrationRepository>(sp =>
             new NpgsqlIntegrationRepository(sp.GetRequiredService<NpgsqlDataSource>(), settings.Integrations?.TokenCipher));
 
@@ -162,6 +163,7 @@ public static class ServiceCollectionExtensions
         // Rewards, domains and exception days (D11, D12, REWARD-8).
         services.AddSingleton(sp => new RewardService(
             sp.GetRequiredService<ILedgerRepository>(),
+            sp.GetRequiredService<IDomainCreditReader>(),
             sp.GetRequiredService<ISubjectRepository>(),
             sp.GetRequiredService<IClock>(),
             sp.GetRequiredService<EventSource>(),

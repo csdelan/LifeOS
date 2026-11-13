@@ -20,7 +20,8 @@ namespace LifeOs.Application.Rewards;
 /// </para>
 /// </summary>
 public sealed class RedemptionService(
-    ILedgerRepository ledger, SubjectService resolver, RewardService wallet, IClock clock, EventSource eventSource)
+    ILedgerRepository ledger, IRewardCatalogReader catalog, SubjectService resolver, RewardService wallet,
+    IClock clock, EventSource eventSource)
 {
     private static readonly JsonSerializerOptions OmitNulls = new()
     {
@@ -80,7 +81,7 @@ public sealed class RedemptionService(
                 $"'{subject.Title}' is a {subject.Type}, not a Reward; redeem against a Reward, or give a note instead.");
         }
 
-        var item = await ledger.GetCatalogRewardAsync(subject.Id, cancellationToken)
+        var item = await catalog.GetCatalogRewardAsync(subject.Id, cancellationToken)
                    ?? throw new SubjectNotFoundException(subject.Urn);
         if (item.Archived)
         {
@@ -130,7 +131,7 @@ public sealed class RedemptionService(
         var ids = await ledger.AppendAsync(
             [new LedgerWrite(redeemEvent, edges, GuardBalance: true)], cancellationToken);
 
-        var item = reward is null ? null : await ledger.GetCatalogRewardAsync(reward.Id, cancellationToken);
+        var item = reward is null ? null : await catalog.GetCatalogRewardAsync(reward.Id, cancellationToken);
         return new Redemption(
             ids[0], spend, note, dollars, rate, item, await wallet.GetWalletAsync(cancellationToken));
     }

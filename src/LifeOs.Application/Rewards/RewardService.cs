@@ -23,7 +23,7 @@ namespace LifeOs.Application.Rewards;
 /// </para>
 /// </summary>
 public sealed class RewardService(
-    ILedgerRepository ledger, ISubjectRepository subjects, IClock clock,
+    ILedgerRepository ledger, IDomainCreditReader credit, ISubjectRepository subjects, IClock clock,
     EventSource eventSource, decimal coinValueUsd = CoinRates.DefaultUsd)
 {
     // A reconcile that loses a race on an award re-reads and tries again; two retries
@@ -331,7 +331,7 @@ public sealed class RewardService(
 
             // A rank needs XP, so the domain has credit on or before the day it qualified; if a
             // racing reversal just took it, the next reconcile pays the rank instead.
-            if (await ledger.GetLatestCreditEventAsync(rules.Currency, reached.QualifiedOn, cancellationToken)
+            if (await credit.GetLatestCreditEventAsync(rules.Currency, reached.QualifiedOn, cancellationToken)
                 is not { } cause)
             {
                 continue;
@@ -401,7 +401,7 @@ public sealed class RewardService(
     }
 
     private Task<DomainCredit> ReadDomainsAsync(CancellationToken cancellationToken)
-        => ledger.GetDomainDaysAsync(LifeDomains.Configured.Select(r => r.Currency).ToList(), cancellationToken);
+        => credit.GetDomainDaysAsync(LifeDomains.Configured.Select(r => r.Currency).ToList(), cancellationToken);
 
     private static IReadOnlyList<DomainProgress> Fold(DomainCredit credit)
         => LifeDomains.Configured.Select(r => DomainService.Fold(r, credit)).ToList();

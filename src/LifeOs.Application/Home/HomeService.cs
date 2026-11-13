@@ -45,7 +45,7 @@ public sealed record HomeSeries(
 /// <summary>
 /// Reads the Home Score (HOME-3, D18, environment plan §4.4, §4.7) behind <c>bsk home</c> and
 /// <c>GET /api/environment</c>: the spaces, ratings, exception days and today, read together
-/// with the life-domain credit (<see cref="ILedgerRepository.GetDomainDaysAsync"/>), so the
+/// with the life-domain credit (<see cref="IDomainCreditReader.GetDomainDaysAsync"/>), so the
 /// Home Score shown is the one Environment's level is held by. Nothing is stored.
 /// </summary>
 public sealed class HomeService(IDomainCreditReader ledger)

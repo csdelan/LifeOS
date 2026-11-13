@@ -81,7 +81,7 @@ public sealed class ActivityRewardsTests(PostgresFixture postgres)
     /// <summary>The Health XP credited to <paramref name="day"/> (<c>bsk.v_award_credit</c>): base and paid.</summary>
     private async Task<(long Base, long Paid)> CreditAsync(World w, DateOnly day)
     {
-        var credit = await w.Db.Get<ILedgerRepository>().GetDomainDaysAsync([Currencies.HealthXp], Ct);
+        var credit = await w.Db.Get<IDomainCreditReader>().GetDomainDaysAsync([Currencies.HealthXp], Ct);
         var rows = credit.Days.Where(d => d.Day == day).ToList();
         return (rows.Sum(d => d.Base), rows.Sum(d => d.Paid));
     }

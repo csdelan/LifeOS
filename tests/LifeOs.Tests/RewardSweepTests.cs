@@ -34,16 +34,16 @@ public sealed class RewardSweepTests(PostgresFixture postgres)
 
         var services = new ServiceCollection().AddLifeOsKernel(db.ConnectionString, homeTimeZone: DomainTestDatabase.Zone);
         var counter = new CallCounter();
-        var real = services.Single(d => d.ServiceType == typeof(ILedgerRepository));
+        var real = services.Single(d => d.ServiceType == typeof(IDomainCreditReader));
         services.Remove(real);
-        services.AddSingleton(sp => CountingProxy<ILedgerRepository>.Wrap((ILedgerRepository)real.ImplementationFactory!(sp), counter));
+        services.AddSingleton(sp => CountingProxy<IDomainCreditReader>.Wrap((IDomainCreditReader)real.ImplementationFactory!(sp), counter));
         await using var kernel = services.BuildServiceProvider();
 
         var awards = await kernel.GetRequiredService<RewardService>().ReconcileAllAsync(Ct);
 
         Assert.Equal(3, awards.Count(a => habits.Any(h => h.Id == a.Subject?.Id) && a.Amounts.ContainsKey(Currencies.HealthXp)));
         // One fold to price each of the three, then one to pay rank-ups: four, not seven.
-        Assert.Equal(4, counter.Count(nameof(ILedgerRepository.GetDomainDaysAsync)));
+        Assert.Equal(4, counter.Count(nameof(IDomainCreditReader.GetDomainDaysAsync)));
     }
 
     // Code review CR46: the Character page and bsk rewards reconcile settle through one method. The

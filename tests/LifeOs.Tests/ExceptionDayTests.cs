@@ -167,7 +167,7 @@ public sealed class ExceptionDayTests(PostgresFixture postgres)
         {
             var zone = offset == 0 ? "Etc/GMT" : $"Etc/GMT{(offset > 0 ? "-" : "+")}{Math.Abs(offset)}";
             var early = Expected(DateTimeOffset.UtcNow, offset);
-            var credit = await new NpgsqlLedgerRepository(KernelDataSource.For(db.ConnectionString), zone).GetDomainDaysAsync([Currencies.HealthXp], Ct);
+            var credit = await new NpgsqlDomainCreditReader(KernelDataSource.For(db.ConnectionString), zone).GetDomainDaysAsync([Currencies.HealthXp], Ct);
             var late = Expected(DateTimeOffset.UtcNow, offset);
             Assert.True(credit.SettledThrough == early || credit.SettledThrough == late,
                 $"{zone}: settled through {credit.SettledThrough}, expected {early}");
@@ -239,7 +239,7 @@ public sealed class ExceptionDayTests(PostgresFixture postgres)
     }
 
     private Task<DomainCredit> Credit(DomainTestDatabase db)
-        => db.Get<ILedgerRepository>().GetDomainDaysAsync([Currencies.HealthXp], Ct);
+        => db.Get<IDomainCreditReader>().GetDomainDaysAsync([Currencies.HealthXp], Ct);
 
     private async Task<long> ExceptionEventCountAsync(DomainTestDatabase db)
     {

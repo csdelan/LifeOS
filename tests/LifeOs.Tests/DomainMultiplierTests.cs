@@ -145,7 +145,7 @@ public sealed class DomainMultiplierTests(PostgresFixture postgres)
         // The sweep leaves the run's 40 alone; Monday pays 70 on a base of 65.
         Assert.Empty(await database.Get<RewardService>().ReconcileAllAsync(Ct));
         Assert.Equal(40, Assert.Single(await database.Get<ILedgerRepository>().GetPaidAsync(run.Id, Ct)).Net[Currencies.HealthXp]);
-        var day = (await database.Get<ILedgerRepository>().GetDomainDaysAsync([Currencies.HealthXp], Ct)).Days
+        var day = (await database.Get<IDomainCreditReader>().GetDomainDaysAsync([Currencies.HealthXp], Ct)).Days
             .Single(d => d.Day == monday);
         Assert.Equal((65L, 70L), (day.Base, day.Paid));
     }

@@ -12,8 +12,8 @@ namespace LifeOs.Infrastructure.Persistence;
 /// The home's spaces, their ratings and their photos (HOME-1, HOME-2, HOME-4, environment plan
 /// E1, E6). Reads go through <c>bsk.v_space</c>, <c>bsk.v_space_rating</c> (migration 0044) and
 /// <c>bsk.v_space_photo</c> (0045); a rating or photo version write inserts each event and its
-/// <c>concerns</c> edge to the space in one transaction, since the stream is append-only. The ledger repository reads the same views through <see cref="ReadHomeAsync"/>,
-/// on its own connection, so every life-domain fold sees the spaces and ratings beside the
+/// <c>concerns</c> edge to the space in one transaction, since the stream is append-only. The domain-credit read (<see cref="NpgsqlDomainCreditReader"/>) reads the same views through <see cref="ReadHomeAsync"/>,
+/// in the credit's own snapshot, so every life-domain fold sees the spaces and ratings beside the
 /// credit (environment plan §4.6).
 /// </summary>
 public sealed class NpgsqlSpaceRepository(NpgsqlDataSource dataSource) : ISpaceRepository

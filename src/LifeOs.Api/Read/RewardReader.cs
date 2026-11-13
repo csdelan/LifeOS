@@ -7,7 +7,7 @@ namespace LifeOs.Api.Read;
 /// <summary>
 /// The rewards reads (REWARD-1 / REWARD-3 / REWARD-5) on the <c>bsk_reader</c> connection,
 /// like every other API read. It reuses the ledger repository's folds of
-/// <c>bsk.v_wallet</c>, <c>bsk.v_ledger</c> and <c>bsk.v_reward</c> — only their SELECTs,
+/// <c>bsk.v_wallet</c> and <c>bsk.v_ledger</c>, and the catalog reader's <c>bsk.v_reward</c> — only their SELECTs,
 /// which the reader role is granted — so the wallet, the history and the catalog read
 /// exactly as <c>bsk wallet</c>, <c>bsk ledger</c> and <c>bsk rewards list</c> do. No
 /// writes live here; redeeming goes through <see cref="RewardService"/>.
@@ -20,6 +20,8 @@ namespace LifeOs.Api.Read;
 public sealed class RewardReader(string readerConnectionString, decimal coinValueUsd, string homeTimeZone = HomeZone.Default)
 {
     private readonly NpgsqlLedgerRepository ledger = new(KernelDataSource.For(readerConnectionString), homeTimeZone);
+    private readonly NpgsqlRewardCatalogReader catalog = new(KernelDataSource.For(readerConnectionString));
+    private readonly NpgsqlDomainCreditReader credit = new(KernelDataSource.For(readerConnectionString), homeTimeZone);
 
     public async Task<WalletSummary> GetWalletAsync(CancellationToken cancellationToken = default)
     {
@@ -55,11 +57,11 @@ public sealed class RewardReader(string readerConnectionString, decimal coinValu
 
     public async Task<IReadOnlyList<RewardRow>> GetRewardsAsync(
         bool includeArchived, CancellationToken cancellationToken = default)
-        => (await ledger.GetCatalogAsync(includeArchived, cancellationToken)).Select(RewardRows.From).ToList();
+        => (await catalog.GetCatalogAsync(includeArchived, cancellationToken)).Select(RewardRows.From).ToList();
 
     /// <summary>Every life domain as it reads now (<c>GET /api/domains</c>).</summary>
     public async Task<DomainsRead> GetDomainsAsync(CancellationToken cancellationToken = default)
-        => DomainRows.From(await new DomainService(ledger).GetAsync(cancellationToken));
+        => DomainRows.From(await new DomainService(credit).GetAsync(cancellationToken));
 
     /// <summary>
     /// One life domain's last <paramref name="days"/> days, today included
@@ -75,7 +77,7 @@ public sealed class RewardReader(string readerConnectionString, decimal coinValu
             throw new ArgumentException($"Ask for at most {DomainRows.MaxDays} days; got {days}.");
         }
 
-        return DomainRows.From(await new DomainService(ledger).GetDaysAsync(domain, days, cancellationToken));
+        return DomainRows.From(await new DomainService(credit).GetDaysAsync(domain, days, cancellationToken));
     }
 
     /// <summary>
@@ -87,7 +89,7 @@ public sealed class RewardReader(string readerConnectionString, decimal coinValu
     public async Task<ExceptionDaysRead> GetExceptionDaysAsync(int days, CancellationToken cancellationToken = default)
     {
         ExceptionDayService.Check(days);
-        var (today, marked) = await ledger.GetExceptionDaysAsync(days, cancellationToken);
+        var (today, marked) = await credit.GetExceptionDaysAsync(days, cancellationToken);
         return DomainRows.From(new ExceptionDays(today, days, marked));
     }
 
@@ -102,6 +104,6 @@ public sealed class RewardReader(string readerConnectionString, decimal coinValu
             throw new ArgumentException($"Ask for at most {DomainRows.MaxDays} days; got {days}.");
         }
 
-        return DomainRows.From(await new DomainService(ledger).GetReportAsync(days, cancellationToken));
+        return DomainRows.From(await new DomainService(credit).GetReportAsync(days, cancellationToken));
     }
 }
