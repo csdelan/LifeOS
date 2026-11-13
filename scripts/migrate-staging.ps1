@@ -11,7 +11,11 @@
 
     `bsk migrate` is the single source of truth for schema and is safe to
     re-run: already-applied migrations are skipped, and one whose SQL changed
-    after it was applied is rejected rather than silently re-run. Use this to
+    after it was applied is rejected rather than silently re-run. It builds bsk
+    from this working tree, so it refuses unless HEAD is origin/main and nothing
+    under db/ or src/ is uncommitted: staging gets a migration only from main,
+    and a branch's migration that later changes or is renumbered breaks every
+    later deploy. Use this to
     promote schema to staging by hand (e.g. the very first apply, or from a
     machine that isn't CI). GitHub Actions runs the same command on merge to
     main — see .github/workflows/deploy.yml. For production, use
@@ -39,6 +43,19 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+
+git -C $root fetch --quiet origin
+if ($LASTEXITCODE -ne 0) { throw 'git fetch failed.' }
+$head = (git -C $root rev-parse HEAD).Trim()
+$main = (git -C $root rev-parse origin/main).Trim()
+if ($head -ne $main) {
+    throw "HEAD ($($head.Substring(0, 7))) isn't origin/main ($($main.Substring(0, 7))). " +
+        'Migrate from a checkout of origin/main: a remote database gets only what main has.'
+}
+$uncommitted = git -C $root status --porcelain -- db src
+if ($uncommitted) {
+    throw "Uncommitted changes under db/ or src/ would be built into bsk:`n$($uncommitted -join "`n")"
+}
 
 # Load KEY=VALUE lines from the dotenv file into the process environment, but
 # never clobber a variable already set in the environment (so CI's secret wins).

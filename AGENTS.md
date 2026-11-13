@@ -67,6 +67,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - Files are `db/migrations/NNNN__name.sql`. `bsk migrate` is the only schema authority in every
   environment. Never use `supabase db push` or change the schema in the Supabase dashboard.
 - Never edit a migration that has been applied anywhere. Add a new one.
+- `bsk migrate` takes a lock, and refuses a pending migration numbered below the highest one already
+  applied (`--allow-out-of-order` overrides). `scripts/migrate-staging.ps1` runs only from a clean
+  `origin/main`, and the Release workflow only from `main` or a `v*` tag.
 - **Find the next number by looking, not from memory.** Take the highest number in
   `db/migrations` plus one, and check unmerged branches too (`git log --all --stat -- db/migrations`).
   For example, branch `claude/superjournal-connect-9e24c0` has a `0049__journal_pointer.sql` that

@@ -6,8 +6,8 @@ namespace LifeOs.Infrastructure.Migrations;
 /// <summary>
 /// Applies versioned SQL migrations in order and records which have run, so the
 /// runner is safe to invoke repeatedly. Already-applied migrations are skipped;
-/// an already-applied migration whose SQL has since changed is treated as an
-/// error rather than silently re-run.
+/// an already-applied migration whose SQL has since changed, or a pending one
+/// numbered below the highest applied, is treated as an error rather than run.
 /// </summary>
 public sealed class MigrationRunner
 {
@@ -25,41 +25,94 @@ public sealed class MigrationRunner
         _source = source ?? new EmbeddedMigrationSource();
     }
 
+    /// <summary>How long one migration waits for a table lock before it gives up.</summary>
+    /// <remarks>
+    /// A migration that waits on a long read also blocks every query queued behind it, which
+    /// stalls the API. Failing fast leaves the database as it was, and the run can be retried.
+    /// </remarks>
+    public static readonly TimeSpan LockTimeout = TimeSpan.FromSeconds(15);
+
     /// <summary>
     /// Applies every migration that has not yet been recorded, in version order.
     /// Returns the migrations applied by this call (empty when already current).
     /// </summary>
-    public async Task<IReadOnlyList<MigrationScript>> ApplyAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<MigrationScript>> ApplyAsync(CancellationToken cancellationToken = default)
+        => ApplyAsync(allowOutOfOrder: false, cancellationToken);
+
+    /// <summary>
+    /// Applies every migration that has not yet been recorded, in version order, holding a
+    /// session advisory lock so two runners (a deploy and a manual run, say) take turns.
+    /// Nothing is applied when any applied migration has changed, or, unless
+    /// <paramref name="allowOutOfOrder"/>, when a pending migration is numbered below the
+    /// highest applied one: that is a migration renumbered or merged after a later one ran.
+    /// </summary>
+    public async Task<IReadOnlyList<MigrationScript>> ApplyAsync(
+        bool allowOutOfOrder, CancellationToken cancellationToken = default)
     {
         var scripts = _source.Load();
 
         await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
 
-        await EnsureHistoryTableAsync(connection, cancellationToken);
-        var applied = await LoadAppliedAsync(connection, cancellationToken);
+        // Advisory locks are per database, so test databases on one server don't wait on each other.
+        await connection.ExecuteAsync(new CommandDefinition(
+            "SELECT pg_advisory_lock(hashtextextended('bsk.migrate', 0));", cancellationToken: cancellationToken));
+        try
+        {
+            await EnsureHistoryTableAsync(connection, cancellationToken);
+            var applied = await LoadAppliedAsync(connection, cancellationToken);
+            var pending = Pending(scripts, applied, allowOutOfOrder);
 
-        var runNow = new List<MigrationScript>();
+            foreach (var script in pending)
+            {
+                await ApplyOneAsync(connection, script, cancellationToken);
+            }
 
+            return pending;
+        }
+        finally
+        {
+            await connection.ExecuteAsync(new CommandDefinition(
+                "SELECT pg_advisory_unlock(hashtextextended('bsk.migrate', 0));", cancellationToken: CancellationToken.None));
+        }
+    }
+
+    /// <summary>The scripts to apply, after checking the applied ones are unchanged and in order.</summary>
+    private static List<MigrationScript> Pending(
+        IReadOnlyList<MigrationScript> scripts, Dictionary<long, string> applied, bool allowOutOfOrder)
+    {
+        var pending = new List<MigrationScript>();
         foreach (var script in scripts)
         {
-            if (applied.TryGetValue(script.Version, out var existingChecksum))
+            if (!applied.TryGetValue(script.Version, out var existingChecksum))
             {
-                if (!string.Equals(existingChecksum, script.Checksum, StringComparison.Ordinal))
-                {
-                    throw new InvalidOperationException(
-                        $"Migration {script.Version:D4} ('{script.Name}') has already been applied but its " +
-                        "contents have changed. Migrations are immutable once applied; add a new migration instead.");
-                }
-
+                pending.Add(script);
                 continue;
             }
 
-            await ApplyOneAsync(connection, script, cancellationToken);
-            runNow.Add(script);
+            if (!string.Equals(existingChecksum, script.Checksum, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Migration {script.Version:D4} ('{script.Name}') has already been applied but its " +
+                    "contents have changed. Migrations are immutable once applied; add a new migration instead.");
+            }
         }
 
-        return runNow;
+        if (!allowOutOfOrder && applied.Count > 0)
+        {
+            var highest = applied.Keys.Max();
+            var early = pending.FirstOrDefault(s => s.Version < highest);
+            if (early is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Migration {early.Version:D4} ('{early.Name}') is numbered below {highest:D4}, the highest " +
+                    "migration already applied, so it was probably renumbered or merged after a later one ran. " +
+                    $"Renumber it above {highest:D4}, or run `bsk migrate --allow-out-of-order` if applying it " +
+                    "out of order is intended. Nothing was applied.");
+            }
+        }
+
+        return pending;
     }
 
     /// <summary>
@@ -109,6 +162,10 @@ public sealed class MigrationRunner
         NpgsqlConnection connection, MigrationScript script, CancellationToken cancellationToken)
     {
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            $"SET LOCAL lock_timeout = '{(int)LockTimeout.TotalMilliseconds}ms';",
+            transaction: transaction, cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(new CommandDefinition(
             script.Sql, transaction: transaction, cancellationToken: cancellationToken));

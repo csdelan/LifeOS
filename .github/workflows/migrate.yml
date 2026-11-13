@@ -59,6 +59,16 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
+      - name: Refuse a ref that isn't main or a release tag
+        run: |
+          case "$GITHUB_REF" in
+            refs/heads/main|refs/tags/v*) ;;
+            *)
+              echo "::error::${{ inputs.environment }} gets migrations only from main (or a v* tag), not $GITHUB_REF. A branch's migration that later changes or is renumbered breaks every later deploy."
+              exit 1
+              ;;
+          esac
+
       - name: Set up .NET (from global.json)
         uses: actions/setup-dotnet@v4
         with:

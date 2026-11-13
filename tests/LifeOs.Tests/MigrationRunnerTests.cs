@@ -81,4 +81,78 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
 
         Assert.Empty(applied);
     }
+
+    [Fact]
+    public async Task A_pending_migration_numbered_below_an_applied_one_is_refused()
+    {
+        await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await ForgetAsync(database.ConnectionString, 10);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new MigrationRunner(database.ConnectionString).ApplyAsync(Ct));
+
+        Assert.Contains("0010", error.Message);
+        Assert.Contains("--allow-out-of-order", error.Message);
+        Assert.False(await RecordedAsync(database.ConnectionString, 10));
+    }
+
+    [Fact]
+    public async Task A_changed_migration_is_refused_before_anything_is_applied()
+    {
+        await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await ForgetAsync(database.ConnectionString, 53);
+        await using (var connection = new NpgsqlConnection(database.ConnectionString))
+        {
+            await connection.ExecuteAsync(new CommandDefinition(
+                "UPDATE public.schema_migrations SET checksum = 'edited' WHERE version = 1;", cancellationToken: Ct));
+        }
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new MigrationRunner(database.ConnectionString).ApplyAsync(Ct));
+
+        Assert.False(await RecordedAsync(database.ConnectionString, 53));
+    }
+
+    [Fact]
+    public async Task Two_runners_on_an_empty_database_take_turns()
+    {
+        var name = $"migrate_{Guid.NewGuid():N}";
+        await using (var admin = new NpgsqlConnection(postgres.ConnectionString))
+        {
+            await admin.ExecuteAsync(new CommandDefinition($"CREATE DATABASE {name};", cancellationToken: Ct));
+        }
+
+        try
+        {
+            var connectionString = new NpgsqlConnectionStringBuilder(postgres.ConnectionString) { Database = name }.ConnectionString;
+            var runs = await Task.WhenAll(
+                new MigrationRunner(connectionString).ApplyAsync(Ct),
+                new MigrationRunner(connectionString).ApplyAsync(Ct));
+
+            var all = new EmbeddedMigrationSource().Load().Count;
+            Assert.Equal([0, all], runs.Select(r => r.Count).Order());
+        }
+        finally
+        {
+            NpgsqlConnection.ClearAllPools();
+            await using var admin = new NpgsqlConnection(postgres.ConnectionString);
+            await admin.ExecuteAsync(new CommandDefinition($"DROP DATABASE {name} WITH (FORCE);", cancellationToken: CancellationToken.None));
+        }
+    }
+
+    /// <summary>Deletes a migration's history row, as if it had never been applied.</summary>
+    private async Task ForgetAsync(string connectionString, long version)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM public.schema_migrations WHERE version = @version;", new { version }, cancellationToken: Ct));
+    }
+
+    private async Task<bool> RecordedAsync(string connectionString, long version)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            "SELECT EXISTS (SELECT 1 FROM public.schema_migrations WHERE version = @version);",
+            new { version }, cancellationToken: Ct));
+    }
 }
