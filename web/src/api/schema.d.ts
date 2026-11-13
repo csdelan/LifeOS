@@ -692,6 +692,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/series/due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ListTaskRepetitionsDue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/settle": {
         parameters: {
             query?: never;
@@ -3581,6 +3597,16 @@ export interface components {
         SaveReviewBody: {
             keepFocus?: null | boolean;
         };
+        SeriesRepetitionDue: {
+            /** Format: uuid */
+            seriesId: string;
+            seriesTitle: string;
+            /** Format: uuid */
+            id: string;
+            due: string;
+            status?: null | string;
+            archived: boolean;
+        };
         SetAttributesBody: {
             subject?: string;
             attrs?: {
@@ -4174,7 +4200,9 @@ export interface operations {
     };
     GetJournal: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+            };
             header?: never;
             path: {
                 id: string;
@@ -4196,7 +4224,9 @@ export interface operations {
     };
     GetHistory: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+            };
             header?: never;
             path: {
                 id: string;
@@ -5271,6 +5301,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    ListTaskRepetitionsDue: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesRepetitionDue"][];
+                };
             };
         };
     };

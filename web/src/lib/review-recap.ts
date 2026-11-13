@@ -3,9 +3,9 @@ import { periodReading, seriesInPeriod } from "@/lib/task-series";
 import type {
   HabitOccurrenceRow,
   InboxItem,
+  SeriesRepetitions,
   StatusHistoryEntry,
   SubjectListItem,
-  TaskSeriesHistory,
 } from "@/lib/production-ui-types";
 
 export interface RecapItem {
@@ -24,7 +24,7 @@ export interface RecapSection {
 
 /** The review's section for repeating Tasks (TASKS-3): each one's repetitions due in the period. */
 export function repeatingSection(
-  histories: TaskSeriesHistory[],
+  histories: SeriesRepetitions[],
   start: string,
   end: string,
   asOf: string,
@@ -51,7 +51,7 @@ export function composeRecap(input: {
   occurrences: HabitOccurrenceRow[];
   inbox: InboxItem[];
   /** Each repeating Task with its repetitions, for "Take out trash: 3 of 4 done". */
-  series?: TaskSeriesHistory[];
+  series?: SeriesRepetitions[];
 }): RecapSection[] {
   const { start, end, asOf, subjects, history, occurrences, inbox } = input;
   const byId = new Map(subjects.map((s) => [s.id, s]));

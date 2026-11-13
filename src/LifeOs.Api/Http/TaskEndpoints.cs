@@ -20,6 +20,8 @@ public static class TaskEndpoints
             .Produces<IReadOnlyList<TaskSeriesRow>>();
         api.MapGet("/series/{id:guid}", GetSeries).WithName("GetTaskSeries")
             .Produces<TaskSeriesHistory>().Produces(StatusCodes.Status404NotFound);
+        api.MapGet("/series/due", ListDue).WithName("ListTaskRepetitionsDue")
+            .Produces<IReadOnlyList<SeriesRepetitionDue>>();
         api.MapPost("/settle", Settle).WithName("SettleTasks")
             .Produces<TaskSettleRead>();
     }
@@ -32,6 +34,15 @@ public static class TaskEndpoints
     /// <summary>A repeating Task (by the series' id) and its repetitions, latest first.</summary>
     private static async Task<IResult> GetSeries(Guid id, SubjectReader reader, CancellationToken cancellationToken)
         => await reader.GetTaskSeriesHistoryAsync(id, cancellationToken) is { } history ? Results.Ok(history) : Results.NotFound();
+
+    /// <summary>
+    /// Every repetition of an unarchived repeating Task due from <c>from</c> to <c>to</c>
+    /// (yyyy-MM-dd), with its series: what a review's "Repeating tasks" reads (code review CR54).
+    /// </summary>
+    private static async Task<IResult> ListDue(DateOnly from, DateOnly to, SubjectReader reader, CancellationToken cancellationToken)
+        => to < from
+            ? throw new ArgumentException($"to ({to:yyyy-MM-dd}) is before from ({from:yyyy-MM-dd}).")
+            : Results.Ok(await reader.GetRepetitionsDueAsync(from, to, cancellationToken));
 
     /// <summary>
     /// Makes the repetitions every repeating Task is owed by today: a calendar date that passed

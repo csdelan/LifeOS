@@ -421,6 +421,25 @@ export interface TaskSeriesHistory {
   repetitions: TaskRepetitionRow[];
 }
 
+/** One repetition due in a period, with its series (`GET /api/tasks/series/due`). */
+export interface SeriesRepetitionDue {
+  seriesId: string;
+  seriesTitle: string;
+  id: string;
+  due: string;
+  status?: string | null;
+  archived: boolean;
+}
+
+/**
+ * A repeating Task with the repetitions a review counts, only as much of each as it reads: what
+ * `GET /api/tasks/series/due` answers for a period, and what a whole history also fits.
+ */
+export interface SeriesRepetitions {
+  series: Pick<TaskSeriesRow, "id" | "title">;
+  repetitions: Pick<TaskRepetitionRow, "due" | "status" | "archived">[];
+}
+
 /** What a settle made (`POST /api/tasks/settle`): how many series it looked at, and the repetitions. */
 export interface TaskSettleResult {
   series: number;

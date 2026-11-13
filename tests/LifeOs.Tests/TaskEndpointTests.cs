@@ -190,6 +190,42 @@ public sealed class TaskEndpointTests(ClassDatabase classDb) : IClassFixture<Cla
     }
 
     [Fact]
+    public async Task The_repetitions_due_in_a_period_are_one_read_with_their_series()
+    {
+        // A review's "Repeating tasks" reads them in one call, not each series' whole history
+        // (code review CR54); an archived series is left out, as the series list leaves it out.
+        await using var host = await StartAsync();
+        var c = host.Client;
+        var title = Unique("Water plants");
+        var series = await NewTaskAsync(c, title, new Dictionary<string, string>
+        {
+            ["recurrence"] = """{"freq":"daily"}""",
+            ["start"] = Iso(Today.AddDays(-2))
+        });
+        var yesterday = (await GetAsync(c, $"/api/tasks/series/{series}")).GetProperty("repetitions").EnumerateArray()
+            .Single(r => r.GetProperty("occurrence").GetString() == Iso(Today.AddDays(-1)));
+        await PostAsync(c, "/api/status", new { subject = yesterday.GetProperty("id").GetGuid().ToString(), status = "Completed" });
+
+        async Task<List<JsonElement>> DueAsync()
+            => (await GetAsync(c, $"/api/tasks/series/due?from={Iso(Today.AddDays(-1))}&to={Iso(Today)}")).EnumerateArray()
+                .Where(r => r.GetProperty("seriesId").GetGuid() == series).ToList();
+
+        var due = await DueAsync();
+        Assert.Equal([Iso(Today.AddDays(-1)), Iso(Today)], due.Select(r => r.GetProperty("due").GetString()));
+        Assert.All(due, r => Assert.Equal(title, r.GetProperty("seriesTitle").GetString()));
+        Assert.Equal("Completed", due[0].GetProperty("status").GetString());
+        Assert.NotEqual("Completed", due[1].GetProperty("status").GetString());
+        Assert.Equal(yesterday.GetProperty("id").GetGuid(), due[0].GetProperty("id").GetGuid());
+
+        var backwards = await c.GetAsync($"/api/tasks/series/due?from={Iso(Today)}&to={Iso(Today.AddDays(-1))}", Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, backwards.StatusCode);
+
+        await PostAsync(c, "/api/status", new { subject = series.ToString(), status = "Cancelled" });
+        Assert.True((await c.PostAsJsonAsync("/api/archive", new { subject = series.ToString() }, Ct)).IsSuccessStatusCode);
+        Assert.Empty(await DueAsync());
+    }
+
+    [Fact]
     public async Task A_Task_made_with_a_pattern_starts_repeating_and_settle_answers()
     {
         await using var host = await StartAsync();

@@ -39,17 +39,17 @@ public sealed class ChangeReader(string readerConnectionString)
     /// in the same order.</item>
     /// </list>
     /// </summary>
-    public IReadOnlyList<ChangeRow> GetChanges(
+    public async Task<IReadOnlyList<ChangeRow>> GetChangesAsync(
         DateTimeOffset since, IReadOnlyCollection<string>? kinds, IReadOnlySet<string> excluded, int limit,
-        bool byOccurred = false, ChangeCursor? before = null)
+        bool byOccurred = false, ChangeCursor? before = null, CancellationToken cancellationToken = default)
     {
         // A column name from a bool, never input.
         var at = byOccurred ? "occurred_at" : "recorded_at";
         var off = McpAreas.All.Where(a => excluded.Contains(a.Name)).ToList();
         var on = McpAreas.All.Except(off).ToList();
-        using var db = new NpgsqlConnection(readerConnectionString);
-        db.Open();
-        return db.Query<ChangeRow>(
+        await using var db = new NpgsqlConnection(readerConnectionString);
+        await db.OpenAsync(cancellationToken);
+        return (await db.QueryAsync<ChangeRow>(new CommandDefinition(
             $"""
             WITH matched AS (
                 SELECT e.id, e.kind, e.source_id, e.provenance, e.occurred_at, e.recorded_at,
@@ -128,7 +128,8 @@ public sealed class ChangeReader(string readerConnectionString)
                 beforeAt = before?.At,
                 beforeId = before?.Id,
                 take = limit + 1,
-            }).AsList();
+            },
+            cancellationToken: cancellationToken))).AsList();
     }
 
     /// <summary>

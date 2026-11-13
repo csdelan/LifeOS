@@ -87,11 +87,18 @@ public static class ReadEndpoints
     private static async Task<IResult> GetTags(Guid id, SubjectReader reader, CancellationToken cancellationToken)
         => Results.Ok((await reader.GetTagsAsync(id, cancellationToken: cancellationToken)));
 
-    private static async Task<IResult> GetJournal(Guid id, SubjectReader reader, CancellationToken cancellationToken)
-        => Results.Ok((await reader.GetJournalAsync(id, cancellationToken: cancellationToken)));
+    /// <summary>The item's journal, oldest first; with <c>limit</c>, only the newest that many (code review CR54).</summary>
+    private static async Task<IResult> GetJournal(Guid id, int? limit, SubjectReader reader, CancellationToken cancellationToken)
+        => Results.Ok((await reader.GetJournalAsync(id, HistoryLimit(limit), cancellationToken)));
 
-    private static async Task<IResult> GetHistory(Guid id, SubjectReader reader, CancellationToken cancellationToken)
-        => Results.Ok((await reader.GetStatusHistoryAsync(id, cancellationToken: cancellationToken)));
+    /// <summary>The item's status changes, newest first; with <c>limit</c>, at most that many (code review CR54).</summary>
+    private static async Task<IResult> GetHistory(Guid id, int? limit, SubjectReader reader, CancellationToken cancellationToken)
+        => Results.Ok((await reader.GetStatusHistoryAsync(id, HistoryLimit(limit), cancellationToken)));
+
+    private static int? HistoryLimit(int? limit)
+        => limit is null or (>= 1 and <= 1000)
+            ? limit
+            : throw new ArgumentException($"limit is a whole number from 1 to 1000, not {limit}.");
 
     private static async Task<IResult> GetFiles(Guid id, SubjectReader reader, CancellationToken cancellationToken)
         => Results.Ok((await reader.GetSubjectFilesAsync(id, cancellationToken: cancellationToken)));

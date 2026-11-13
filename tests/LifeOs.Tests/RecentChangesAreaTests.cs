@@ -47,8 +47,8 @@ public sealed class RecentChangesAreaTests(PostgresFixture postgres)
         await db.Get<ActivityService>().LogAsync(new ActivityInput("Walked the dog"), Ct);
 
         var reader = new ChangeReader(db.ConnectionString);
-        var everything = reader.GetChanges(since, null, NoneOff, 500);
-        var core = reader.GetChanges(since, null, AllOff, 500);
+        var everything = (await reader.GetChangesAsync(since, null, NoneOff, 500, cancellationToken: Ct));
+        var core = (await reader.GetChangesAsync(since, null, AllOff, 500, cancellationToken: Ct));
 
         Assert.Equal(
             ["activity", "archive_change", "attribute_change", "idea_session", "journal", "note", "state_change", "triage", "voice"],
@@ -98,28 +98,28 @@ public sealed class RecentChangesAreaTests(PostgresFixture postgres)
         }
 
         var reader = new ChangeReader(db.ConnectionString);
-        var everything = Ids(reader.GetChanges(since, null, NoneOff, 500));
+        var everything = Ids((await reader.GetChangesAsync(since, null, NoneOff, 500, cancellationToken: Ct)));
         Assert.Contains(unplaced, everything);
         Assert.All(byArea.Values.SelectMany(ids => ids), id => Assert.Contains(id, everything));
 
         foreach (var area in McpAreas.All)
         {
-            var shown = Ids(reader.GetChanges(since, null, new HashSet<string> { area.Name }, 500));
+            var shown = Ids((await reader.GetChangesAsync(since, null, new HashSet<string> { area.Name }, 500, cancellationToken: Ct)));
             Assert.All(byArea[area.Name], id => Assert.DoesNotContain(id, shown));
             Assert.All(byArea.Where(a => a.Key != area.Name).SelectMany(a => a.Value), id => Assert.Contains(id, shown));
             Assert.DoesNotContain(unplaced, shown);
         }
 
-        var homeOff = reader.GetChanges(since, null, new HashSet<string> { McpDomains.Home }, 500);
+        var homeOff = (await reader.GetChangesAsync(since, null, new HashSet<string> { McpDomains.Home }, 500, cancellationToken: Ct));
         Assert.DoesNotContain(homeOff, r => r.SubjectId == space.Id);
-        Assert.Contains(reader.GetChanges(since, null, NoneOff, 500), r => r.SubjectId == space.Id && r.Kind == "archive_change");
+        Assert.Contains((await reader.GetChangesAsync(since, null, NoneOff, 500, cancellationToken: Ct)), r => r.SubjectId == space.Id && r.Kind == "archive_change");
 
         // The rewards area claims a whole kind: the ledger.
         await db.OpenWalletAsync(1);
         var ledger = new[] { "ledger" };
-        Assert.NotEmpty(reader.GetChanges(since, ledger, NoneOff, 500));
-        Assert.Empty(reader.GetChanges(since, ledger, new HashSet<string> { McpDomains.Rewards }, 500));
-        Assert.NotEmpty(reader.GetChanges(since, ledger, new HashSet<string> { McpDomains.Health }, 500));
+        Assert.NotEmpty((await reader.GetChangesAsync(since, ledger, NoneOff, 500, cancellationToken: Ct)));
+        Assert.Empty((await reader.GetChangesAsync(since, ledger, new HashSet<string> { McpDomains.Rewards }, 500, cancellationToken: Ct)));
+        Assert.NotEmpty((await reader.GetChangesAsync(since, ledger, new HashSet<string> { McpDomains.Health }, 500, cancellationToken: Ct)));
     }
 
     private static HashSet<Guid> Ids(IEnumerable<ChangeRow> rows) => rows.Select(r => r.Id).ToHashSet();

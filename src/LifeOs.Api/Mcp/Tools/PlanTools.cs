@@ -117,9 +117,11 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
         CancellationToken cancellationToken = default)
     {
         var stamp = await reads.NowAsync(cancellationToken);
+        // One more than asked for, so the answer can say it was cut (code review CR54).
+        var take = McpResults.Limit(limit);
         var (waiting, truncated) = McpResults.Cap(
-            (await subjects.GetInboxAsync(cancellationToken: cancellationToken)).Where(i => i.SubjectType is null || options.AllowsType(i.SubjectType)),
-            McpResults.Limit(limit));
+            await subjects.GetInboxAsync(take + 1, hiddenTypes: options.HiddenTypes, cancellationToken: cancellationToken),
+            take);
         var concerns = await reads.ConcernsAsync(
             waiting.Where(i => i.ItemKind == "event").Select(i => i.ItemId).ToList(), cancellationToken);
         var items = waiting.Select(i => new

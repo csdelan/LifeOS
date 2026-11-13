@@ -60,7 +60,7 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
 
         var take = McpResults.Limit(limit);
         var before = cursor is null ? null : ReadCursor(cursor, byOccurred);
-        var rows = reads.Changes.GetChanges(from, kinds, options.Excluded, take, byOccurred, before);
+        var rows = await reads.Changes.GetChangesAsync(from, kinds, options.Excluded, take, byOccurred, before, cancellationToken);
         var (kept, truncated) = McpResults.Cap(rows, take);
         var events = kept.Select(e => new
         {

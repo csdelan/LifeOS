@@ -9,6 +9,7 @@ import {
   periodReading,
   repeatKind,
   repeatLabel,
+  seriesFromDue,
   seriesInPeriod,
   seriesTally,
   shownStatus,
@@ -174,6 +175,19 @@ describe("a review's repeating tasks (TASKS-3)", () => {
     };
     const [row] = seriesInPeriod([week], "2026-10-12", "2026-10-31", "2026-10-29");
     expect(periodReading(row)).toBe("None closed yet · 1 still to do · 1 skipped");
+  });
+
+  it("counts the same from the period's due repetitions as from each series' whole history (CR54)", () => {
+    // What GET /api/tasks/series/due answers for October: only the repetitions due in it.
+    const due = trash.repetitions
+      .filter((r) => r.due! >= "2026-10-01" && r.due! <= "2026-10-31")
+      .map((r) => ({ seriesId: "trash", seriesTitle: "Take out trash", id: r.id, due: r.due!, status: r.status, archived: r.archived }));
+    const grouped = seriesFromDue(due);
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].series).toEqual({ id: "trash", title: "Take out trash" });
+    expect(seriesInPeriod(grouped, "2026-10-01", "2026-10-31", "2026-10-29")).toEqual(
+      seriesInPeriod([trash], "2026-10-01", "2026-10-31", "2026-10-29"),
+    );
   });
 
   it("lists only the ones with a repetition due in the period, by title", () => {

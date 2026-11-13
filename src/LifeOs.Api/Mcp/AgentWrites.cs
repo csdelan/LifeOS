@@ -242,7 +242,7 @@ public sealed class AgentWrites(
             throw new McpException($"item_id is a capture's item_id from inbox, a GUID; '{itemId}' isn't one.");
         }
 
-        var waiting = (await reader.GetInboxAsync(cancellationToken: cancellationToken)).FirstOrDefault(i => i.ItemId == id);
+        var waiting = (await reader.GetInboxAsync(itemId: id, cancellationToken: cancellationToken)).FirstOrDefault();
         if (waiting is null)
         {
             return new AgentDismissal(id, Dismissed: false);

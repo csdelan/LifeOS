@@ -28,11 +28,10 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
         var today = McpResults.Day(stamp.Today);
         var truncated = new List<string>();
 
-        var all = (await subjects.QuerySubjectsAsync(null, cancellationToken: cancellationToken)).Where(s => options.AllowsType(s.Type)).ToList();
-        var byId = all.ToDictionary(s => s.Id);
-        var serves = (await subjects.GetAlignmentEdgesAsync(cancellationToken: cancellationToken))
-            .Where(e => AlignmentForest.Relations.Contains(e.Relation) && byId.ContainsKey(e.ToId))
-            .ToLookup(e => e.FromId);
+        // Only what's open, in SQL (code review CR54): a finished item, such as each repetition
+        // of a daily chore Chris has done, never shows here, so it isn't read either.
+        var all = await subjects.ListSubjectsAsync(
+            new SubjectFilter { Status = SubjectFilter.Open, HiddenTypes = options.HiddenTypes }, cancellationToken);
 
         IReadOnlyList<T> Section<T>(string name, IEnumerable<T> rows)
         {
@@ -45,11 +44,12 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
             return kept;
         }
 
+        ILookup<Guid, AlignmentTarget> serves = Enumerable.Empty<AlignmentTarget>().ToLookup(t => t.FromId);
         object WithServes(SubjectListItem s) => new
         {
             s.Id, s.Urn, s.Type, s.Title, s.Status, s.TargetDate,
             Area = s.AreaName ?? s.Area,
-            Serves = serves[s.Id].Select(e => new { byId[e.ToId].Id, byId[e.ToId].Type, byId[e.ToId].Title }).ToList(),
+            Serves = serves[s.Id].Select(t => new { t.Id, t.Type, t.Title }).ToList(),
         };
 
         // Open as list_items status=open counts it: anything not Completed or Abandoned, a goal or
@@ -60,6 +60,11 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
             .ThenBy(s => s.TargetDate ?? "9999", StringComparer.Ordinal)
             .ThenBy(s => s.Title, StringComparer.OrdinalIgnoreCase);
         var openGoals = Open(SubjectTypes.Goal).ToList();
+        var openProjects = Open(SubjectTypes.Project).ToList();
+        serves = (await subjects.GetAlignmentTargetsAsync(
+                [.. openGoals.Select(s => s.Id), .. openProjects.Select(s => s.Id)], AlignmentForest.Relations, cancellationToken))
+            .Where(t => options.AllowsType(t.Type))
+            .ToLookup(t => t.FromId);
 
         var openTasks = all.Where(s => s.Type == SubjectTypes.Task && !StatusVocabulary.IsTerminal(s.Status)).ToList();
         var due = openTasks
@@ -80,10 +85,7 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
             .Select(h => new { h.Id, h.Urn, h.Name, Today = todayStates.GetValueOrDefault(h.Id) });
 
         var weekEnd = McpResults.Day(stamp.Today.AddDays(6));
-        var appointments = (await subjects.GetAppointmentsAsync(cancellationToken: cancellationToken))
-            .Where(a => a.Date is { } d
-                        && string.CompareOrdinal(d, today) >= 0
-                        && string.CompareOrdinal(d, weekEnd) <= 0)
+        var appointments = (await subjects.GetAppointmentsBetweenAsync(today, weekEnd, cancellationToken))
             .Select(a => new { a.Id, a.Urn, a.Title, a.Date, a.StartTime, a.EndTime, a.Location, a.Status });
 
         var timers = (await subjects.GetTimersAsync(cancellationToken: cancellationToken))
@@ -112,13 +114,17 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
             .Where(x => options.AllowsType(x.Finding.Subject.Type))
             .ToList();
 
+        // Every unarchived value, whatever its status, as before: there are only a few.
+        var values = options.AllowsType(SubjectTypes.Value)
+            ? await subjects.QuerySubjectsAsync(SubjectTypes.Value, cancellationToken: cancellationToken)
+            : [];
+
         var body = new
         {
-            IdentityStatements = Section("identity_statements",
-                all.Where(s => s.Type == SubjectTypes.Value).Select(s => new { s.Id, s.Urn, s.Title })),
+            IdentityStatements = Section("identity_statements", values.Select(s => new { s.Id, s.Urn, s.Title })),
             Areas = Section("areas", (await subjects.GetAreasAsync(cancellationToken: cancellationToken)).Select(a => new { a.Id, a.Urn, a.Name })),
             OpenGoals = Section("open_goals", openGoals.Select(WithServes)),
-            OpenProjects = Section("open_projects", Open(SubjectTypes.Project).Select(WithServes)),
+            OpenProjects = Section("open_projects", openProjects.Select(WithServes)),
             DueAndOverdue = Section("due_and_overdue", due.Select(s => ItemRef.From(s) with
             {
                 Overdue = string.CompareOrdinal(s.Due ?? s.Scheduled, today) < 0 ? true : null,

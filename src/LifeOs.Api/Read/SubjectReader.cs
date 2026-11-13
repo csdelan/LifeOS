@@ -335,6 +335,26 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
         return new TaskSeriesHistory { Series = series, Repetitions = repetitions };
     }
 
+    /// <summary>
+    /// Every repetition due from <paramref name="from"/> to <paramref name="to"/> (yyyy-MM-dd) of
+    /// an unarchived repeating Task, with its series, in one read (code review CR54): a review's
+    /// "Repeating tasks" read each series' whole history before.
+    /// </summary>
+    public async Task<IReadOnlyList<SeriesRepetitionDue>> GetRepetitionsDueAsync(
+        DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<SeriesRepetitionDue>(new CommandDefinition("""
+            SELECT r.series_id, s.title AS series_title, r.id,
+                   to_char(r.due, 'YYYY-MM-DD') AS due, r.status, r.archived
+            FROM bsk.v_task_repetition r
+            JOIN bsk.v_subject s ON s.id = r.series_id
+            WHERE NOT s.archived AND r.due BETWEEN @from::date AND @to::date
+            ORDER BY s.title, r.due
+            """, new { from = from.ToString("yyyy-MM-dd"), to = to.ToString("yyyy-MM-dd") },
+            cancellationToken: cancellationToken))).AsList();
+    }
+
     private static async Task<List<TaskSeriesRow>> QuerySeriesAsync(
         NpgsqlConnection db, bool includeArchived, Guid? id, CancellationToken cancellationToken)
         => (await db.QueryAsync<TaskSeriesRow, BountyText, TaskSeriesRow>(new CommandDefinition("""
@@ -440,6 +460,29 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             """, new { id }, cancellationToken: cancellationToken))).AsList();
     }
 
+    /// <summary>
+    /// The unarchived items <paramref name="fromIds"/> point at by an edge of
+    /// <paramref name="relations"/>: for a few items' "serves" without reading every edge
+    /// (code review CR54).
+    /// </summary>
+    public async Task<IReadOnlyList<AlignmentTarget>> GetAlignmentTargetsAsync(
+        IReadOnlyCollection<Guid> fromIds, IReadOnlyCollection<string> relations, CancellationToken cancellationToken = default)
+    {
+        if (fromIds.Count == 0)
+        {
+            return [];
+        }
+
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<AlignmentTarget>(new CommandDefinition("""
+            SELECT r.from_subject AS from_id, t.id, t.type, t.title
+            FROM bsk.v_subject_relation r
+            JOIN bsk.v_subject t ON t.id = r.to_subject
+            WHERE r.from_subject = ANY(@fromIds) AND r.relation = ANY(@relations) AND NOT t.archived
+            ORDER BY t.title
+            """, new { fromIds = fromIds.ToArray(), relations = relations.ToArray() }, cancellationToken: cancellationToken))).AsList();
+    }
+
     public async Task<IReadOnlyList<AlignmentEdge>> GetAlignmentEdgesAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
     {
         await using var db = await OpenAsync(cancellationToken);
@@ -465,20 +508,36 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             """, new { id }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public async Task<IReadOnlyList<JournalEntry>> GetJournalAsync(Guid id, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The item's journal entries, oldest first; with <paramref name="limit"/>, only the newest
+    /// that many, cut in SQL (code review CR54), so an item written about daily reads the same.
+    /// </summary>
+    public async Task<IReadOnlyList<JournalEntry>> GetJournalAsync(
+        Guid id, int? limit = null, CancellationToken cancellationToken = default)
     {
         await using var db = await OpenAsync(cancellationToken);
         return (await db.QueryAsync<JournalEntry>(new CommandDefinition("""
-            SELECT se.event_id, e.occurred_at, coalesce(a.content, '') AS content
-            FROM bsk.v_subject_event se
-            JOIN bsk.v_event e ON e.id = se.event_id
-            LEFT JOIN bsk.artifact a ON a.id = e.artifact_id
-            WHERE se.subject_id = @id AND se.relation = 'concerns' AND e.kind = 'journal'
-            ORDER BY e.occurred_at ASC
-            """, new { id }, cancellationToken: cancellationToken))).AsList();
+            SELECT * FROM (
+                SELECT se.event_id, e.occurred_at, coalesce(a.content, '') AS content
+                FROM bsk.v_subject_event se
+                JOIN bsk.v_event e ON e.id = se.event_id
+                LEFT JOIN bsk.artifact a ON a.id = e.artifact_id
+                WHERE se.subject_id = @id AND se.relation = 'concerns' AND e.kind = 'journal'
+                ORDER BY e.occurred_at DESC
+                LIMIT @limit
+            ) newest
+            ORDER BY occurred_at ASC
+            """, new { id, limit }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public async Task<IReadOnlyList<InboxItem>> GetInboxAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// What waits in the Inbox, newest first, cut in SQL (code review CR54): at most
+    /// <paramref name="limit"/> items, only <paramref name="itemId"/> when given, and none of a
+    /// type in <paramref name="hiddenTypes"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<InboxItem>> GetInboxAsync(
+        int? limit = null, Guid? itemId = null, IReadOnlyCollection<string>? hiddenTypes = null,
+        CancellationToken cancellationToken = default)
     {
         await using var db = await OpenAsync(cancellationToken);
         return (await db.QueryAsync<InboxItem, ArtifactRecord?, InboxItem>(new CommandDefinition($"""
@@ -491,8 +550,11 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
                    {AttachmentColumns}
             FROM bsk.v_inbox i
             {AttachmentJoin("i")}
+            WHERE (@itemId::uuid IS NULL OR i.item_id = @itemId)
+              AND (i.subject_type IS NULL OR NOT (i.subject_type = ANY(@hidden)))
             ORDER BY i.triaged_at DESC
-            """, null, cancellationToken: cancellationToken),
+            LIMIT @limit
+            """, new { limit, itemId, hidden = (hiddenTypes ?? []).ToArray() }, cancellationToken: cancellationToken),
             WithAttachment,
             splitOn: "id")).AsList();
     }
@@ -617,7 +679,9 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
         return await db.ExecuteScalarAsync<int>(new CommandDefinition("SELECT count(*) FROM bsk.v_inbox", cancellationToken: cancellationToken));
     }
 
-    public async Task<IReadOnlyList<StatusHistoryEntry>> GetStatusHistoryAsync(Guid id, CancellationToken cancellationToken = default)
+    /// <summary>The item's status changes, newest first; at most <paramref name="limit"/> when given (code review CR54).</summary>
+    public async Task<IReadOnlyList<StatusHistoryEntry>> GetStatusHistoryAsync(
+        Guid id, int? limit = null, CancellationToken cancellationToken = default)
     {
         await using var db = await OpenAsync(cancellationToken);
         return (await db.QueryAsync<StatusHistoryEntry>(new CommandDefinition("""
@@ -625,7 +689,8 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             FROM bsk.v_event
             WHERE kind = 'state_change' AND subject_id = @id
             ORDER BY occurred_at DESC
-            """, new { id = id.ToString() }, cancellationToken: cancellationToken))).AsList();
+            LIMIT @limit
+            """, new { id = id.ToString(), limit }, cancellationToken: cancellationToken))).AsList();
     }
 
     public async Task<IReadOnlyList<string>> GetTagsAsync(Guid subjectId, CancellationToken cancellationToken = default)

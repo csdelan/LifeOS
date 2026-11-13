@@ -18,7 +18,7 @@ import {
 import type { LifeOsReads } from "@/lib/reads";
 import { normalizeDomainDays, normalizeDomainReport, normalizeDomains, normalizeExceptionDays } from "@/lib/domains";
 import { normalizeFoodDay, normalizeFoodDays, normalizeMeal } from "@/lib/food";
-import { normalizeRepeat, normalizeSeriesRow } from "@/lib/task-series";
+import { normalizeRepeat, normalizeSeriesRow, seriesFromDue } from "@/lib/task-series";
 import {
   normalizeActivityDays,
   normalizeDayDetail,
@@ -58,6 +58,7 @@ import type {
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
+  SeriesRepetitionDue,
   TaskRepetitionRow,
   TaskSeriesHistory,
   TaskSeriesRow,
@@ -440,19 +441,21 @@ export const liveReads: LifeOsReads = {
   },
 
   async recap(opts) {
-    // The server reads the recorded days in one call; the repeating Tasks' section is made
-    // here from their histories (TASKS-3), after the overdue Tasks, as the mock places it.
-    const [sections, series] = await Promise.all([
+    // The server reads the recorded days in one call, and the repetitions due in the period in
+    // another (code review CR54: not every series' whole history); the repeating Tasks' section is
+    // made here from those (TASKS-3), after the overdue Tasks, as the mock places it.
+    const [sections, due] = await Promise.all([
       unwrap(
         api().GET("/api/reviews/recap", {
           params: { query: { from: opts.start, to: opts.end, asOf: opts.asOf } },
         }),
       ),
-      this.taskSeries({}),
+      unwrap(
+        api().GET("/api/tasks/series/due", { params: { query: { from: opts.start, to: opts.end } } }),
+      ),
     ]);
-    const histories = await Promise.all(series.map((row) => this.taskSeriesHistory(row.id)));
     const repeating = repeatingSection(
-      histories.filter((h): h is TaskSeriesHistory => h !== null),
+      seriesFromDue(fits<SeriesRepetitionDue[]>()(due)),
       opts.start,
       opts.end,
       opts.asOf,

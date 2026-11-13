@@ -4,10 +4,11 @@ import { normalizeAmounts } from "@/lib/rewards";
 import { defaultStatus } from "@/lib/production-ui-types";
 import type {
   RecurrenceSpec,
+  SeriesRepetitionDue,
+  SeriesRepetitions,
   SubjectListItem,
   TaskRepeat,
   TaskSeriesCounts,
-  TaskSeriesHistory,
   TaskSeriesRow,
 } from "@/lib/production-ui-types";
 
@@ -121,6 +122,20 @@ export interface SeriesPeriod {
   skippedCount: number;
 }
 
+/** The rows `GET /api/tasks/series/due` answers, gathered by their series, as `seriesInPeriod` reads them. */
+export function seriesFromDue(rows: SeriesRepetitionDue[]): SeriesRepetitions[] {
+  const bySeries = new Map<string, SeriesRepetitions>();
+  for (const row of rows) {
+    let group = bySeries.get(row.seriesId);
+    if (!group) {
+      group = { series: { id: row.seriesId, title: row.seriesTitle }, repetitions: [] };
+      bySeries.set(row.seriesId, group);
+    }
+    group.repetitions.push({ due: row.due, status: row.status, archived: row.archived });
+  }
+  return [...bySeries.values()];
+}
+
 /**
  * Each repeating Task's repetitions due from `start` to `end`, counted for a review ("Take out
  * trash: 3 of 4 done"). A repetition belongs to the period its due date falls in, so a late
@@ -128,7 +143,7 @@ export interface SeriesPeriod {
  * the repeating Tasks with a repetition due in the period are listed, by title.
  */
 export function seriesInPeriod(
-  histories: TaskSeriesHistory[],
+  histories: SeriesRepetitions[],
   start: string,
   end: string,
   asOf: string,

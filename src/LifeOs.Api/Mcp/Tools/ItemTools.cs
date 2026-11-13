@@ -104,9 +104,9 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
         var stamp = await reads.NowAsync(cancellationToken);
         var detail = await FindAsync(id, cancellationToken);
 
-        var journal = (await subjects.GetJournalAsync(detail.Id, cancellationToken: cancellationToken))
+        // The newest few of each, cut in SQL (code review CR54).
+        var journal = (await subjects.GetJournalAsync(detail.Id, HistoryLimit, cancellationToken))
             .OrderByDescending(j => j.OccurredAt)
-            .Take(HistoryLimit)
             .Select(j => new
             {
                 j.EventId,
@@ -115,9 +115,7 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
                 Cut = j.Content.Length > MaxEntryLength ? true : (bool?)null,
             })
             .ToList();
-        var history = (await subjects.GetStatusHistoryAsync(detail.Id, cancellationToken: cancellationToken))
-            .OrderByDescending(h => h.OccurredAt)
-            .Take(HistoryLimit)
+        var history = (await subjects.GetStatusHistoryAsync(detail.Id, HistoryLimit, cancellationToken))
             .Select(h => new { h.Status, h.OccurredAt })
             .ToList();
 
@@ -131,8 +129,7 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
         if (detail.Type == SubjectTypes.Habit)
         {
             var since = stamp.Today.AddDays(-13);
-            habit = (await subjects.GetHabitOccurrencesAsync(habitId: detail.Id, cancellationToken: cancellationToken))
-                .Where(o => o.OccurrenceDate >= since)
+            habit = (await subjects.GetHabitOccurrencesAsync(habitId: detail.Id, from: since, cancellationToken: cancellationToken))
                 .Select(o => new { Day = McpResults.Day(o.OccurrenceDate), o.State })
                 .ToList();
         }

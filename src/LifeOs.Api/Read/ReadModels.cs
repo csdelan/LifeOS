@@ -108,6 +108,15 @@ public sealed class AlignmentEdge
     public string Relation { get; set; } = "";
 }
 
+/// <summary>An item an edge from <see cref="FromId"/> points at.</summary>
+public sealed class AlignmentTarget
+{
+    public Guid FromId { get; set; }
+    public Guid Id { get; set; }
+    public string Type { get; set; } = "";
+    public string Title { get; set; } = "";
+}
+
 public sealed class SubjectRelationsResponse
 {
     public IReadOnlyList<RelationEdge> Parents { get; set; } = [];

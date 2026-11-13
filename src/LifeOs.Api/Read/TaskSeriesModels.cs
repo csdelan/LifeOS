@@ -99,6 +99,26 @@ public sealed class TaskSeriesHistory
     public IReadOnlyList<TaskRepetitionRow> Repetitions { get; set; } = [];
 }
 
+/// <summary>
+/// <c>GET /api/tasks/series/due</c>: one repetition due in the period asked for, with its series,
+/// as a review's "Repeating tasks" reads them all in one call (code review CR54).
+/// </summary>
+public sealed class SeriesRepetitionDue
+{
+    public Guid SeriesId { get; set; }
+
+    public string SeriesTitle { get; set; } = "";
+
+    public Guid Id { get; set; }
+
+    /// <summary>yyyy-MM-dd.</summary>
+    public string Due { get; set; } = "";
+
+    public string? Status { get; set; }
+
+    public bool Archived { get; set; }
+}
+
 /// <summary><c>POST /api/tasks/settle</c>: how many repeating Tasks it looked at and the repetitions it made.</summary>
 public sealed class TaskSettleRead
 {
