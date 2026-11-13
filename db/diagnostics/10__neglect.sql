@@ -31,7 +31,7 @@ WITH active_season AS (
       -- A Season with no end date, or one that is missing/malformed/out-of-range
       -- (bsk.try_to_date yields NULL for all of those), is treated as open-ended
       -- and therefore still active. A well-formed past date makes it inactive.
-      AND coalesce(bsk.try_to_date(s.attributes->>'ends') >= current_date, true)
+      AND coalesce(bsk.try_to_date(s.attributes->>'ends') >= bsk.home_today(), true)
 ),
 cadenced AS (
     SELECT

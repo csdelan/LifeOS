@@ -46,19 +46,20 @@ SELECT
     format(
         'Open loop — review was due %s (%s day(s) ago) and no outcome has been recorded.',
         to_char(d.review_date, 'YYYY-MM-DD'),
-        (current_date - d.review_date)
+        (bsk.home_today() - d.review_date)
     ) AS summary,
     jsonb_build_array(
         jsonb_build_object(
             'kind', 'review',
             'next_review_at', d.review_text,
             'review_date', to_char(d.review_date, 'YYYY-MM-DD'),
-            'days_overdue', (current_date - d.review_date),
+            'days_overdue', (bsk.home_today() - d.review_date),
             'status', d.status
         )
     ) AS evidence
 FROM decisions d
 WHERE d.review_date IS NOT NULL
-  -- Strictly before today: a review due today is not yet overdue; a future date is not a loop.
-  AND d.review_date < current_date
+  -- Strictly before today, in the home zone (not the database's UTC date): a review due today is
+  -- not yet overdue; a future date is not a loop.
+  AND d.review_date < bsk.home_today()
 ORDER BY d.review_date, d.urn;

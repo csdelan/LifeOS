@@ -93,6 +93,28 @@ public sealed class UnclosedLoopsDecorativeDiagnosticTests(PostgresFixture postg
     }
 
     [Fact]
+    public async Task Overdue_counts_days_in_the_home_zone_not_utc()
+    {
+        // A home zone whose date isn't UTC's right now: Kiritimati (UTC+14) is a day ahead from
+        // 10:00 UTC, Pago Pago (UTC-11) a day behind until 11:00 UTC.
+        var zone = DateTime.UtcNow.Hour >= 10 ? "Pacific/Kiritimati" : "Pacific/Pago_Pago";
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct, zone);
+        var today = await db.TodayAsync();
+        Assert.NotEqual(DateOnly.FromDateTime(DateTime.UtcNow), today);
+        await using var connection = await OpenAsync(db.ConnectionString);
+        var dueYesterday = await InsertSubjectAsync(
+            connection, "Decision", Guid.NewGuid().ToString("N"), new { next_review_at = today.AddDays(-1).ToString("yyyy-MM-dd") });
+        var dueToday = await InsertSubjectAsync(
+            connection, "Decision", Guid.NewGuid().ToString("N"), new { next_review_at = today.ToString("yyyy-MM-dd") });
+
+        var overdue = await FindAsync("unclosed_loops", dueYesterday, db.ConnectionString);
+
+        Assert.NotNull(overdue);
+        Assert.Equal(1, Assert.Single(overdue!.Evidence.EnumerateArray()).GetProperty("days_overdue").GetInt32());
+        Assert.Null(await FindAsync("unclosed_loops", dueToday, db.ConnectionString));
+    }
+
+    [Fact]
     public async Task Decision_with_a_future_review_date_is_not_an_open_loop()
     {
         await using var connection = await OpenAsync();
