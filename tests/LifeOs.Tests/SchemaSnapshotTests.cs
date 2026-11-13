@@ -50,6 +50,18 @@ public sealed partial class SchemaSnapshotTests(PostgresFixture postgres)
         Assert.Equal(Constants(typeof(Provenances)), await AllowedAsync(connection, "bsk.event", "provenance"));
     }
 
+    // The lists the doors read hold every constant once, so a new type or kind reaches them all
+    // (code review CR41).
+    [Fact]
+    public void The_type_and_kind_lists_hold_every_constant()
+    {
+        Assert.Equal(Constants(typeof(SubjectTypes)), new SortedSet<string>(SubjectTypes.All, StringComparer.Ordinal));
+        Assert.Equal(SubjectTypes.All.Count, SubjectTypes.All.Distinct().Count());
+        Assert.Equal(Constants(typeof(EventKinds)), new SortedSet<string>(EventKinds.All, StringComparer.Ordinal));
+        Assert.Equal(EventKinds.All.Count, EventKinds.All.Distinct().Count());
+        Assert.All(SubjectTypes.All, type => Assert.Contains(type, LifeOs.Api.Mcp.Tools.ItemTools.TypeHelp));
+    }
+
     /// <summary>The values a column's CHECK constraint allows, from <c>column IN (...)</c>.</summary>
     private async Task<SortedSet<string>> AllowedAsync(NpgsqlConnection connection, string table, string column)
     {

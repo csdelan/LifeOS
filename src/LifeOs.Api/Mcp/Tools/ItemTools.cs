@@ -20,9 +20,10 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
     /// <summary>The most nodes one <c>alignment</c> answer carries.</summary>
     public const int MaxTreeNodes = 400;
 
-    private const string TypeHelp =
+    /// <summary>The tools' help for a type. An attribute takes only a constant, so a test checks it names every one of <see cref="SubjectTypes.All"/>.</summary>
+    public const string TypeHelp =
         "Item type: Value (an identity statement), Area, Goal, Project, Task, Habit, Commitment, Appointment, "
-        + "Decision, Problem, Idea, Person, Constraint, Season, Reward or Space.";
+        + "Decision, Problem, Idea, Person, Constraint, Season, Reward, Space, Metric or Review.";
 
     [McpServerTool(Name = "find_items", Title = "Find items", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
     [Description("Items whose title or one of whose tags contains the words given, ignoring case. Titles that start with them come first.")]

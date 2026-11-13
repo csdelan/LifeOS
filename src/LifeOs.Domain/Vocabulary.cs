@@ -30,6 +30,13 @@ public static class EventKinds
     /// as the change (code review CR24, migration 0057). The views still read the subject row.
     /// </summary>
     public const string AttributeChange = "attribute_change";
+
+    /// <summary>Every kind, as the CHECK on <c>bsk.event.kind</c> allows them; a test keeps the two equal.</summary>
+    public static readonly IReadOnlyList<string> All =
+    [
+        Journal, Note, Voice, IdeaSession, Observation, Activity, Measurement, Interaction, StateChange,
+        ArchiveChange, Triage, Ledger, AttributeChange,
+    ];
 }
 
 /// <summary>
@@ -109,6 +116,41 @@ public static class SubjectTypes
     /// period are attributes the review service writes (migration 0052).
     /// </summary>
     public const string Review = "Review";
+
+    /// <summary>
+    /// Every type, as the CHECK on <c>bsk.subject.type</c> allows them (a test keeps the two
+    /// equal), in the order a list of them reads best: the alignment ladder first.
+    /// </summary>
+    public static readonly IReadOnlyList<string> All =
+    [
+        Value, Area, Goal, Project, Task, Habit, Commitment, Appointment, Decision, Problem, Idea,
+        Person, Constraint, Season, Reward, Space, Metric, Review,
+    ];
+
+    /// <summary>
+    /// The types any door can make as a plain item (<c>bsk new</c>, <c>POST /api/subjects</c>).
+    /// A Space, Metric or Review is made only by its own service, which writes what it needs
+    /// with it (a Space's rating scale, a Metric's unit, a Review's period).
+    /// </summary>
+    public static readonly IReadOnlyList<string> Creatable = [.. All.Where(t => t is not (Space or Metric or Review))];
+
+    /// <summary>The type <paramref name="type"/> names, ignoring case, in the form the schema stores; null when it names none.</summary>
+    public static string? Canonical(string? type)
+        => All.FirstOrDefault(t => string.Equals(t, type?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The creatable type <paramref name="type"/> names, ignoring case. Throws
+    /// <see cref="ArgumentException"/> for a name that isn't a type, or one made only by its own service.
+    /// </summary>
+    public static string ParseCreatable(string? type)
+    {
+        var canonical = Canonical(type)
+            ?? throw new ArgumentException($"Unknown subject type '{type}'. Expected one of: {string.Join(", ", Creatable)}.");
+        return Creatable.Contains(canonical)
+            ? canonical
+            : throw new ArgumentException(
+                $"A {canonical} isn't made as a plain item: it has its own page and command, which write what it needs with it.");
+    }
 }
 
 /// <summary>

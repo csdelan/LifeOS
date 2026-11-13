@@ -41,6 +41,7 @@ public sealed class PromotionService(
     public async Task<PromotionResult> PromoteAsync(
         Guid eventId, string type, string title, CancellationToken cancellationToken = default)
     {
+        type = SubjectTypes.ParseCreatable(type);
         var source = await events.FindAsync(eventId, cancellationToken)
             ?? throw new InvalidOperationException($"No event found with id '{eventId}'.");
 
@@ -64,6 +65,7 @@ public sealed class PromotionService(
         string sourceReference, string targetType, string targetTitle,
         CancellationToken cancellationToken = default)
     {
+        targetType = SubjectTypes.ParseCreatable(targetType);
         var source = await subjects.ResolveAsync(sourceReference, cancellationToken);
 
         var (target, edgeId) = await subjects.CreateWithIncomingEdgeAsync(

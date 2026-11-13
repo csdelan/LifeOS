@@ -20,13 +20,6 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
     /// <summary>The furthest back <c>recent_changes</c> looks.</summary>
     public static readonly TimeSpan MaxWindow = TimeSpan.FromDays(366);
 
-    public static readonly IReadOnlyList<string> EventKindNames =
-    [
-        EventKinds.Journal, EventKinds.Note, EventKinds.Voice, EventKinds.IdeaSession, EventKinds.Observation,
-        EventKinds.Activity, EventKinds.Measurement, EventKinds.Interaction, EventKinds.StateChange,
-        EventKinds.ArchiveChange, EventKinds.Triage, EventKinds.Ledger, EventKinds.AttributeChange,
-    ];
-
     [McpServerTool(Name = "recent_changes", Title = "Recent changes", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
     [Description("""
         What was recorded since a time, newest first: status changes, captures, notes and journal
@@ -59,10 +52,10 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
         var stamp = await reads.NowAsync(cancellationToken);
         var from = await SinceAsync(since, stamp.AsOf, cancellationToken);
         var kinds = types?.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim().ToLowerInvariant()).Distinct().ToList();
-        var unknown = kinds?.Where(k => !EventKindNames.Contains(k)).ToList();
+        var unknown = kinds?.Where(k => !EventKinds.All.Contains(k)).ToList();
         if (unknown is { Count: > 0 })
         {
-            throw new McpException($"'{string.Join("', '", unknown)}' isn't an event kind. Use any of: {string.Join(", ", EventKindNames)}.");
+            throw new McpException($"'{string.Join("', '", unknown)}' isn't an event kind. Use any of: {string.Join(", ", EventKinds.All)}.");
         }
 
         var take = McpResults.Limit(limit);

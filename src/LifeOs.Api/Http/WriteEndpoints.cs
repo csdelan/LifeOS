@@ -16,14 +16,6 @@ namespace LifeOs.Api.Http;
 /// </summary>
 public static class WriteEndpoints
 {
-    private static readonly string[] SubjectTypesList =
-    [
-        SubjectTypes.Value, SubjectTypes.Goal, SubjectTypes.Problem, SubjectTypes.Project,
-        SubjectTypes.Task, SubjectTypes.Commitment, SubjectTypes.Decision, SubjectTypes.Idea,
-        SubjectTypes.Person, SubjectTypes.Constraint, SubjectTypes.Season, SubjectTypes.Area,
-        SubjectTypes.Habit, SubjectTypes.Appointment, SubjectTypes.Reward
-    ];
-
     public static void MapWriteEndpoints(this WebApplication app)
     {
         var api = app.MapGroup("/api")
@@ -85,7 +77,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("type and title are required."));
         }
 
-        var canonicalType = ResolveType(body.Type);
+        var canonicalType = SubjectTypes.ParseCreatable(body.Type);
         var attributes = BuildCreateAttributes(body);
 
         if (canonicalType == SubjectTypes.Value
@@ -502,10 +494,6 @@ public static class WriteEndpoints
         return Results.Ok();
     }
 
-    private static string ResolveType(string type)
-        => SubjectTypesList.FirstOrDefault(t => string.Equals(t, type, StringComparison.OrdinalIgnoreCase))
-           ?? throw new ArgumentException(
-               $"Unknown subject type '{type}'. Expected one of: {string.Join(", ", SubjectTypesList)}.");
 
     private static JsonObject BuildCreateAttributes(NewSubjectBody body)
     {

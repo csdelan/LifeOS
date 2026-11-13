@@ -8,21 +8,13 @@ using Microsoft.Extensions.DependencyInjection;
 namespace LifeOs.Cli.Commands;
 
 /// <summary>
-/// <c>bsk new &lt;type&gt; "title"</c> — create any of the eleven subject types with
+/// <c>bsk new &lt;type&gt; "title"</c> — create any creatable subject type (<see cref="SubjectTypes.Creatable"/>) with
 /// its relevant attributes and no DDL change. Cross-cutting flags (<c>--cadence</c>,
 /// <c>--review-at</c>) apply to any subject; the rest are per-type conveniences that
 /// simply land in the subject's <c>attributes</c> jsonb.
 /// </summary>
 internal static class NewCommand
 {
-    private static readonly string[] Types =
-    [
-        SubjectTypes.Value, SubjectTypes.Goal, SubjectTypes.Problem, SubjectTypes.Project,
-        SubjectTypes.Task, SubjectTypes.Commitment, SubjectTypes.Decision, SubjectTypes.Idea,
-        SubjectTypes.Person, SubjectTypes.Constraint, SubjectTypes.Season, SubjectTypes.Area,
-        SubjectTypes.Habit, SubjectTypes.Appointment, SubjectTypes.Reward
-    ];
-
     public static Command Create(Option<string?> connectionOption, Option<bool> jsonOption)
     {
         var typeArgument = new Argument<string>("type")
@@ -108,7 +100,7 @@ internal static class NewCommand
 
             return Cli.RunAsync(asJson, async () =>
             {
-                var canonicalType = ResolveType(type);
+                var canonicalType = SubjectTypes.ParseCreatable(type);
 
                 // A Value is an identity statement: the title is its short handle, and a
                 // full statement is required (enforced by the kernel; checked here so the
@@ -191,13 +183,6 @@ internal static class NewCommand
 
         return command;
     }
-
-    // Accept the type case-insensitively but persist the canonical PascalCase form
-    // the schema's CHECK constraint expects.
-    private static string ResolveType(string type)
-        => Types.FirstOrDefault(t => string.Equals(t, type, StringComparison.OrdinalIgnoreCase))
-           ?? throw new ArgumentException(
-               $"Unknown subject type '{type}'. Expected one of: {string.Join(", ", Types)}.");
 
     private static void Set(JsonObject target, string key, string? value)
     {

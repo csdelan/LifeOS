@@ -17,7 +17,7 @@ namespace LifeOs.Application.Subjects;
 public sealed class SubjectCreationService(
     SubjectService subjects, ChildCreationService children, TriageService triage, TaskSeriesService taskSeries)
 {
-    /// <param name="type">The canonical type (e.g. <c>Task</c>).</param>
+    /// <param name="type">A creatable type (<see cref="SubjectTypes.Creatable"/>), in any case.</param>
     /// <param name="title">The item's title.</param>
     /// <param name="attributesJson">The item's attributes, as a JSON object.</param>
     /// <param name="parent">The item to make it under, as a reference <see cref="SubjectService.ResolveAsync"/> reads.</param>
@@ -27,6 +27,7 @@ public sealed class SubjectCreationService(
         string type, string title, string attributesJson, string? parent = null, string? relation = null,
         CancellationToken cancellationToken = default)
     {
+        type = SubjectTypes.ParseCreatable(type);
         SubjectRef created;
         ChildCreationResult? link = null;
         var reused = false;

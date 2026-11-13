@@ -233,17 +233,9 @@ public static class McpResults
             return SubjectTypes.Value;
         }
 
-        return SubjectTypeNames.FirstOrDefault(t => string.Equals(t, wanted, StringComparison.OrdinalIgnoreCase))
-               ?? throw new McpException($"'{type}' isn't a type. Use one of: {string.Join(", ", SubjectTypeNames)}.");
+        return SubjectTypes.Canonical(wanted)
+               ?? throw new McpException($"'{type}' isn't a type. Use one of: {string.Join(", ", SubjectTypes.All)}.");
     }
-
-    public static readonly IReadOnlyList<string> SubjectTypeNames =
-    [
-        SubjectTypes.Value, SubjectTypes.Area, SubjectTypes.Goal, SubjectTypes.Project, SubjectTypes.Task,
-        SubjectTypes.Habit, SubjectTypes.Commitment, SubjectTypes.Appointment, SubjectTypes.Decision,
-        SubjectTypes.Problem, SubjectTypes.Idea, SubjectTypes.Person, SubjectTypes.Constraint,
-        SubjectTypes.Season, SubjectTypes.Reward, SubjectTypes.Space, SubjectTypes.Metric, SubjectTypes.Review,
-    ];
 
     /// <summary>A JSON document stored as text, as JSON; null when there's none or it's malformed.</summary>
     public static JsonNode? ParseJson(string? text)
