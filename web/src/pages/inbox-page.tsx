@@ -28,6 +28,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/primitives/empty-state";
+import { SubjectCombobox } from "@/components/subject-combobox";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { Tag } from "@/components/primitives/tag";
 import { TagInput } from "@/components/primitives/tag-input";
@@ -604,18 +605,14 @@ function InboxPreview({
           hint="File against an existing subject — still a resolution"
         >
           <div className="flex gap-2">
-            <Select value={relateTo} onValueChange={setRelateTo}>
-              <SelectTrigger className="flex-1" aria-label="Relate to subject">
-                <SelectValue placeholder="Subject…" />
-              </SelectTrigger>
-              <SelectContent>
-                {(subjects ?? []).slice(0, 30).map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SubjectCombobox
+              className="flex-1"
+              options={subjects ?? []}
+              value={relateTo}
+              onChange={setRelateTo}
+              ariaLabel="Relate to subject"
+              placeholder="Subject…"
+            />
             <Button
               size="sm"
               variant="outline"

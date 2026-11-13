@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Resolver } from "react-hook-form";
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SubjectCombobox } from "@/components/subject-combobox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -647,9 +648,14 @@ function RelationshipsTab({
     if (to && !options.some((s) => s.id === to)) setTo("");
   }, [to, options]);
 
+  const typed = targetType !== "any";
+  const targetLabel = useCallback(
+    (s: SubjectListItem) => linkTargetLabel(s, typed, includeArchived),
+    [typed, includeArchived],
+  );
+
   if (isLoading) return <ListSkeleton rows={4} />;
 
-  const typed = targetType !== "any";
   const subjectPlaceholder = typed
     ? `Choose ${typeLabel(targetType)}…`
     : "Choose an existing item…";
@@ -772,24 +778,15 @@ function RelationshipsTab({
               ))}
             </SelectContent>
           </Select>
-          <Select value={to} onValueChange={setTo}>
-            <SelectTrigger className="min-w-48 flex-1" aria-label="Target subject">
-              <SelectValue placeholder={subjectPlaceholder} />
-            </SelectTrigger>
-            <SelectContent>
-              {options.length === 0 ? (
-                <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                  No matching items.
-                </div>
-              ) : (
-                options.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {linkTargetLabel(s, typed, includeArchived)}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+          <SubjectCombobox
+            className="min-w-48 flex-1"
+            options={options}
+            value={to}
+            onChange={setTo}
+            ariaLabel="Target subject"
+            placeholder={subjectPlaceholder}
+            label={targetLabel}
+          />
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Checkbox
               checked={includeArchived}

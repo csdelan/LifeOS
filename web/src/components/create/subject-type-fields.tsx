@@ -1,5 +1,6 @@
 import type { UseFormReturn } from "react-hook-form";
 import { Input } from "@/components/ui/input";
+import { SubjectCombobox } from "@/components/subject-combobox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -160,24 +161,20 @@ function FieldBlock({
     return (
       <Field label={field.label} required={field.required} error={error} hint={field.hint}>
         {editing ? (
-          <Select
-            value={parent || NONE}
-            onValueChange={(v) => form.setValue("parent", v === NONE ? "" : v, { shouldDirty: true })}
-          >
-            <SelectTrigger aria-label={field.label}>
-              <SelectValue placeholder="Optional" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>{field.required ? "Choose…" : "None"}</SelectItem>
-              {options.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {field.parentTypes && field.parentTypes.length > 1
-                    ? `${typeLabel(s.type)}: ${s.title}`
-                    : s.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SubjectCombobox
+            className="w-full"
+            options={options}
+            value={parent ?? ""}
+            onChange={(v) => form.setValue("parent", v, { shouldDirty: true })}
+            ariaLabel={field.label}
+            placeholder={field.required ? "Choose…" : "Optional"}
+            noneLabel={field.required ? undefined : "None"}
+            label={
+              field.parentTypes && field.parentTypes.length > 1
+                ? (s) => `${typeLabel(s.type)}: ${s.title}`
+                : undefined
+            }
+          />
         ) : (
           <p className="text-sm">{selected?.title || "—"}</p>
         )}
