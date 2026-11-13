@@ -58,7 +58,7 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Refuse a ref that isn't main or a release tag
         run: |
@@ -71,7 +71,7 @@ jobs:
           esac
 
       - name: Set up .NET (from global.json)
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
