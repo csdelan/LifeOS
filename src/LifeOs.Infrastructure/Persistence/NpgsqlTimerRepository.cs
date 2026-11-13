@@ -13,10 +13,6 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlTimerRepository(NpgsqlDataSource dataSource) : ITimerRepository
 {
-    // One lock for all timer writes: starting a timer can pause another, so writes
-    // to different tasks must serialize too. The key is arbitrary but fixed.
-    private const long TimerLockKey = 0x7469_6D65_7273; // "timers"
-
     // Aliased to the row's property names: the CLI host does not turn on Dapper's
     // underscore matching, and Dapper matches the rest case-insensitively.
     private const string SelectSql = """
@@ -24,21 +20,6 @@ public sealed class NpgsqlTimerRepository(NpgsqlDataSource dataSource) : ITimerR
                subject_title AS subjecttitle, state, running_since AS runningsince,
                total_seconds AS totalseconds, session_seconds AS sessionseconds
         FROM bsk.v_task_timer
-        """;
-
-    private const string InsertEventSql = """
-        INSERT INTO bsk.event
-            (kind, provenance, occurred_at, recorded_at, source_id, external_id,
-             payload, derived_from, artifact_id)
-        VALUES
-            (@Kind, @Provenance, @OccurredAt, @RecordedAt, @SourceId, @ExternalId,
-             @Payload::jsonb, @DerivedFrom, @ArtifactId)
-        RETURNING id;
-        """;
-
-    private const string InsertEdgeSql = """
-        INSERT INTO bsk.subject_event (event_id, relation, subject_id, provenance)
-        VALUES (@EventId, @Relation, @SubjectId, @Provenance);
         """;
 
     public async Task<TimerSnapshot?> GetAsync(Guid subjectId, CancellationToken cancellationToken = default)
@@ -84,11 +65,7 @@ public sealed class NpgsqlTimerRepository(NpgsqlDataSource dataSource) : ITimerR
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        await connection.ExecuteAsync(new CommandDefinition(
-            "SELECT pg_advisory_xact_lock(@key);",
-            new { key = TimerLockKey },
-            transaction: transaction,
-            cancellationToken: cancellationToken));
+        await AdvisoryLocks.TakeAsync(connection, transaction, AdvisoryLocks.Timers, cancellationToken);
 
         foreach (var write in writes)
         {
@@ -108,25 +85,10 @@ public sealed class NpgsqlTimerRepository(NpgsqlDataSource dataSource) : ITimerR
         foreach (var write in writes)
         {
             var timerEvent = write.Event;
-            var eventId = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
-                InsertEventSql,
-                new
-                {
-                    timerEvent.Kind,
-                    timerEvent.Provenance,
-                    timerEvent.OccurredAt,
-                    timerEvent.RecordedAt,
-                    timerEvent.SourceId,
-                    timerEvent.ExternalId,
-                    Payload = timerEvent.PayloadJson,
-                    DerivedFrom = (timerEvent.DerivedFrom ?? []).ToArray(),
-                    timerEvent.ArtifactId
-                },
-                transaction: transaction,
-                cancellationToken: cancellationToken));
+            var eventId = await EventSql.InsertAsync(connection, timerEvent, transaction, cancellationToken);
 
             await connection.ExecuteAsync(new CommandDefinition(
-                InsertEdgeSql,
+                EventSql.InsertEdgeSql,
                 new
                 {
                     EventId = eventId,

@@ -47,21 +47,6 @@ public sealed class NpgsqlMetricRepository(NpgsqlDataSource dataSource) : IMetri
 
     private const string VisitOrder = " ORDER BY collected_at DESC, id DESC";
 
-    private const string InsertEventSql = """
-        INSERT INTO bsk.event
-            (kind, provenance, occurred_at, recorded_at, source_id, external_id,
-             payload, derived_from, artifact_id)
-        VALUES
-            (@Kind, @Provenance, @OccurredAt, @RecordedAt, @SourceId, @ExternalId,
-             @Payload::jsonb, @DerivedFrom, @ArtifactId)
-        RETURNING id;
-        """;
-
-    private const string InsertEdgeSql = """
-        INSERT INTO bsk.subject_event (event_id, relation, subject_id, provenance)
-        VALUES (@EventId, @Relation, @SubjectId, @Provenance);
-        """;
-
     public async Task<IReadOnlyList<Metric>> GetMetricsAsync(CancellationToken cancellationToken = default)
         => (await QueryAsync<MetricRow>(MetricSql + " ORDER BY lower(name), id", null, cancellationToken))
             .Select(r => r.ToMetric()).ToList();
@@ -146,27 +131,12 @@ public sealed class NpgsqlMetricRepository(NpgsqlDataSource dataSource) : IMetri
         foreach (var write in writes)
         {
             var e = write.Event;
-            var eventId = await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
-                InsertEventSql,
-                new
-                {
-                    e.Kind,
-                    e.Provenance,
-                    e.OccurredAt,
-                    e.RecordedAt,
-                    e.SourceId,
-                    e.ExternalId,
-                    Payload = e.PayloadJson,
-                    DerivedFrom = (e.DerivedFrom ?? []).ToArray(),
-                    e.ArtifactId
-                },
-                transaction: transaction,
-                cancellationToken: cancellationToken));
+            var eventId = await EventSql.InsertAsync(connection, e, transaction, cancellationToken);
 
             if (write.MetricId is { } metricId)
             {
                 await connection.ExecuteAsync(new CommandDefinition(
-                    InsertEdgeSql,
+                    EventSql.InsertEdgeSql,
                     new
                     {
                         EventId = eventId,

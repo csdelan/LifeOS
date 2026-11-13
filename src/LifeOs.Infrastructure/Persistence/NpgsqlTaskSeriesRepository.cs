@@ -305,9 +305,7 @@ public sealed class NpgsqlTaskSeriesRepository(NpgsqlDataSource dataSource) : IT
 
     private static Task LockAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction, Guid seriesId, CancellationToken cancellationToken)
-        => connection.ExecuteAsync(new CommandDefinition(
-            "SELECT pg_advisory_xact_lock(hashtextextended('bsk.task_series:' || @seriesId::text, 0));",
-            new { seriesId }, transaction, cancellationToken: cancellationToken));
+        => AdvisoryLocks.TakeAsync(connection, transaction, $"bsk.task_series:{seriesId}", cancellationToken);
 
     private static string Iso(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 

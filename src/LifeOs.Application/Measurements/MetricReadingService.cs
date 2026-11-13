@@ -174,28 +174,9 @@ public sealed class MetricReadingService(
     }
 
     /// <summary>A live reading named by its id or the start of it (at least 4 hex digits).</summary>
-    public async Task<MetricReading> ResolveAsync(string reference, CancellationToken cancellationToken = default)
-    {
-        var wanted = reference?.Trim() ?? "";
-        if (Guid.TryParse(wanted, out var id))
-        {
-            return await metrics.GetReadingAsync(id, cancellationToken)
-                   ?? throw new InvalidOperationException($"No reading has the id {id} (it may have been deleted).");
-        }
-
-        if (wanted.Length < 4 || !wanted.All(ch => Uri.IsHexDigit(ch) || ch == '-'))
-        {
-            throw new ArgumentException($"'{reference}' isn't a reading's id: give at least its first 4 hex digits.");
-        }
-
-        var matches = await metrics.FindReadingsAsync(wanted, cancellationToken);
-        return matches.Count switch
-        {
-            0 => throw new InvalidOperationException($"No reading's id starts with '{wanted}'."),
-            1 => matches[0],
-            _ => throw new InvalidOperationException($"'{wanted}' starts {matches.Count} readings' ids: give more of the id.")
-        };
-    }
+    public Task<MetricReading> ResolveAsync(string reference, CancellationToken cancellationToken = default)
+        => EntryRefs.ResolveAsync(
+            reference, "reading", "readings", metrics.GetReadingAsync, metrics.FindReadingsAsync, cancellationToken);
 
     /// <summary>Today in the home zone.</summary>
     public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default)

@@ -29,25 +29,6 @@ namespace LifeOs.Infrastructure.Persistence;
 public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string homeTimeZone = HomeZone.Default)
     : ILedgerRepository
 {
-    // One lock for every ledger write: a balance check is only sound if nothing else
-    // can land between the check and the commit. The key is arbitrary but fixed.
-    private const long WalletLockKey = 0x7761_6C6C_6574; // "wallet"
-
-    private const string InsertEventSql = """
-        INSERT INTO bsk.event
-            (kind, provenance, occurred_at, recorded_at, source_id, external_id,
-             payload, derived_from, artifact_id)
-        VALUES
-            (@Kind, @Provenance, @OccurredAt, @RecordedAt, @SourceId, @ExternalId,
-             @Payload::jsonb, @DerivedFrom, @ArtifactId)
-        RETURNING id;
-        """;
-
-    private const string InsertEdgeSql = """
-        INSERT INTO bsk.subject_event (event_id, relation, subject_id, provenance)
-        VALUES (@EventId, @Relation, @SubjectId, @Provenance);
-        """;
-
     // Each currency a guarded entry touched that is now below zero, with the entries'
     // own (negative) amount in it, so the refusal can say what the balance was.
     private const string OverdrawnSql = """
@@ -431,14 +412,7 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
         {
             await CheckAwardAsync(connection, transaction, write, cancellationToken);
             var eventId = await InsertEventAsync(connection, transaction, write.Event, cancellationToken);
-            foreach (var edge in write.Edges)
-            {
-                await connection.ExecuteAsync(new CommandDefinition(
-                    InsertEdgeSql,
-                    new { EventId = eventId, edge.Relation, edge.SubjectId, edge.Provenance },
-                    transaction: transaction,
-                    cancellationToken: cancellationToken));
-            }
+            await EventSql.InsertEdgesAsync(connection, eventId, write.Edges, transaction, cancellationToken);
 
             ids.Add(eventId);
             if (write.GuardBalance)
@@ -740,31 +714,12 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
 
     private static Task LockAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken cancellationToken)
-        => connection.ExecuteAsync(new CommandDefinition(
-            "SELECT pg_advisory_xact_lock(@key);",
-            new { key = WalletLockKey },
-            transaction: transaction,
-            cancellationToken: cancellationToken));
+        => AdvisoryLocks.TakeAsync(connection, transaction, AdvisoryLocks.Wallet, cancellationToken);
 
     private static Task<Guid> InsertEventAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction, NewEvent newEvent,
         CancellationToken cancellationToken)
-        => connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
-            InsertEventSql,
-            new
-            {
-                newEvent.Kind,
-                newEvent.Provenance,
-                OccurredAt = newEvent.OccurredAt.ToUniversalTime(),
-                RecordedAt = newEvent.RecordedAt.ToUniversalTime(),
-                newEvent.SourceId,
-                newEvent.ExternalId,
-                Payload = newEvent.PayloadJson,
-                DerivedFrom = (newEvent.DerivedFrom ?? []).ToArray(),
-                newEvent.ArtifactId
-            },
-            transaction: transaction,
-            cancellationToken: cancellationToken));
+        => EventSql.InsertAsync(connection, newEvent, transaction, cancellationToken);
 
     private static DateTimeOffset? AsUtc(DateTime? value)
         => value is { } at ? new DateTimeOffset(DateTime.SpecifyKind(at, DateTimeKind.Utc)) : null;

@@ -483,28 +483,9 @@ public sealed class LabVisitReads(IMetricRepository metrics, IHomeCalendar calen
     }
 
     /// <summary>A live visit named by its id or the start of it (at least 4 hex digits).</summary>
-    public async Task<LabVisit> ResolveAsync(string reference, CancellationToken cancellationToken = default)
-    {
-        var wanted = reference?.Trim() ?? "";
-        if (Guid.TryParse(wanted, out var id))
-        {
-            return await metrics.GetVisitAsync(id, cancellationToken)
-                   ?? throw new InvalidOperationException($"No lab visit has the id {id} (it may have been deleted).");
-        }
-
-        if (wanted.Length < 4 || !wanted.All(ch => Uri.IsHexDigit(ch) || ch == '-'))
-        {
-            throw new ArgumentException($"'{reference}' isn't a lab visit's id: give at least its first 4 hex digits.");
-        }
-
-        var matches = await metrics.FindVisitsAsync(wanted, cancellationToken);
-        return matches.Count switch
-        {
-            0 => throw new InvalidOperationException($"No lab visit's id starts with '{wanted}'."),
-            1 => matches[0],
-            _ => throw new InvalidOperationException($"'{wanted}' starts {matches.Count} lab visits' ids: give more of the id.")
-        };
-    }
+    public Task<LabVisit> ResolveAsync(string reference, CancellationToken cancellationToken = default)
+        => EntryRefs.ResolveAsync(
+            reference, "lab visit", "lab visits", metrics.GetVisitAsync, metrics.FindVisitsAsync, cancellationToken);
 
     private static LabVisitRead Read(LabVisit visit, IEnumerable<MetricReading> results, IReadOnlyList<Metric> all)
     {

@@ -357,46 +357,18 @@ public sealed class FoodLogService(
     public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default) => food.TodayAsync(cancellationToken);
 
     /// <summary>A live food entry named by its id or the start of it (at least 4 hex digits).</summary>
-    public async Task<Meal> ResolveMealAsync(string reference, CancellationToken cancellationToken = default)
-    {
-        if (Guid.TryParse(reference, out var id))
-        {
-            return await food.GetMealAsync(id, cancellationToken)
-                   ?? throw new InvalidOperationException($"No food entry has the id {id} (it may have been deleted).");
-        }
-
-        var matches = await food.FindMealsAsync(CheckPrefix(reference), cancellationToken);
-        return matches.Count switch
-        {
-            0 => throw new InvalidOperationException($"No food entry's id starts with '{reference}'."),
-            1 => matches[0],
-            _ => throw new InvalidOperationException(
-                $"'{reference}' starts {matches.Count} food entries' ids: " +
-                string.Join("; ", matches.Take(5).Select(m => $"{Short(m.Id)} {m.Name} ({FoodText.When(m.EatenLocal)})")) +
-                ". Give more of the id.")
-        };
-    }
+    public Task<Meal> ResolveMealAsync(string reference, CancellationToken cancellationToken = default)
+        => EntryRefs.ResolveAsync(
+            reference, "food entry", "food entries", food.GetMealAsync, food.FindMealsAsync, cancellationToken,
+            describe: m => $"{Short(m.Id)} {m.Name} ({FoodText.When(m.EatenLocal)})",
+            tooShort: TooShort(reference));
 
     /// <summary>A live fast named by its id or the start of it (at least 4 hex digits).</summary>
-    public async Task<Fast> ResolveFastAsync(string reference, CancellationToken cancellationToken = default)
-    {
-        if (Guid.TryParse(reference, out var id))
-        {
-            return await food.GetFastAsync(id, cancellationToken)
-                   ?? throw new InvalidOperationException($"No fast has the id {id} (it may have been deleted).");
-        }
-
-        var matches = await food.FindFastsAsync(CheckPrefix(reference), cancellationToken);
-        return matches.Count switch
-        {
-            0 => throw new InvalidOperationException($"No fast's id starts with '{reference}'."),
-            1 => matches[0],
-            _ => throw new InvalidOperationException(
-                $"'{reference}' starts {matches.Count} fasts' ids: " +
-                string.Join("; ", matches.Take(5).Select(f => $"{Short(f.Id)} {FoodText.Span(f)}")) +
-                ". Give more of the id.")
-        };
-    }
+    public Task<Fast> ResolveFastAsync(string reference, CancellationToken cancellationToken = default)
+        => EntryRefs.ResolveAsync(
+            reference, "fast", "fasts", food.GetFastAsync, food.FindFastsAsync, cancellationToken,
+            describe: f => $"{Short(f.Id)} {FoodText.Span(f)}",
+            tooShort: TooShort(reference));
 
     /// <summary>The first 8 characters of an id, as the CLI prints it.</summary>
     public static string Short(Guid id) => id.ToString("N")[..8];
@@ -497,16 +469,9 @@ public sealed class FoodLogService(
         return (from, to);
     }
 
-    private static string CheckPrefix(string reference)
-    {
-        var trimmed = (reference ?? "").Trim();
-        if (trimmed.Length < 4 || !trimmed.All(c => Uri.IsHexDigit(c) || c == '-'))
-        {
-            throw new ArgumentException($"'{reference}' isn't an id: give its first 8 characters, as the list shows them.");
-        }
-
-        return trimmed;
-    }
+    /// <summary>The Food Log's lists show 8 characters of each id, so a too-short start says so.</summary>
+    private static string TooShort(string? reference)
+        => $"'{reference}' isn't an id: give its first 8 characters, as the list shows them.";
 
     private async Task RefuseOverlapAsync(FastSpan span, CancellationToken cancellationToken)
     {

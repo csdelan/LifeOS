@@ -38,11 +38,6 @@ public sealed class FoodRewards(
 {
     private static readonly DateOnly Earliest = new(2000, 1, 1);
 
-    private static readonly JsonSerializerOptions OmitNulls = new()
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     /// <summary>The diet rules days are scored with.</summary>
     public DietRules Rules { get; } = DietRules.Default;
 
@@ -87,14 +82,7 @@ public sealed class FoodRewards(
     }
 
     /// <summary>
-    /// The entries that bring the ledger in line with every food day. For each key that could
-    /// pay or is paid:
-    /// <list type="bullet">
-    /// <item>paid, and its day still reads the events it was scored from: nothing</item>
-    /// <item>paid at the base due now: nothing</item>
-    /// <item>paid otherwise: a reversal of what it pays, then an earn at the base due (if any)</item>
-    /// <item>unpaid with a base due: an earn</item>
-    /// </list>
+    /// The entries that bring the ledger in line with every food day (<see cref="DayAwardPlanner"/>).
     /// A base is due when it's above 0 and its trigger came on or after the wallet opened.
     /// </summary>
     private async Task<IReadOnlyList<PlannedAward>> PlanAsync(
@@ -102,44 +90,14 @@ public sealed class FoodRewards(
         CancellationToken cancellationToken)
     {
         var today = await food.TodayAsync(cancellationToken);
-        var candidates = (await CandidatesAsync(Earliest, today, cancellationToken))
-            .ToDictionary(c => c.Key, StringComparer.Ordinal);
-        var held = (await ledger.GetKeyedAwardsAsync(FoodAwards.Triggers, cancellationToken))
-            .ToDictionary(k => k.AwardKey, StringComparer.Ordinal);
-
-        var now = clock.UtcNow;
-        var planned = new List<PlannedAward>();
-        var keys = candidates.Keys.Union(held.Values.Where(h => h.Paid).Select(h => h.AwardKey)).Order(StringComparer.Ordinal);
-        foreach (var key in keys)
-        {
-            candidates.TryGetValue(key, out var candidate);
-            held.TryGetValue(key, out var paid);
-            var due = candidate is { Base: > 0 } && candidate.TriggeredAt >= openedAt ? candidate : null;
-            var earnAt = now;
-            if (paid is { Paid: true })
-            {
-                if (candidate is not null && candidate.Sources.ToHashSet().SetEquals(paid.LatestSources))
-                {
-                    continue;
-                }
-
-                if (due is not null && paid.LatestBase.GetValueOrDefault(Rules.Currency) == due.Base)
-                {
-                    continue;
-                }
-
-                // The new earn follows the reversal, so the ledger reads them in that order.
-                planned.Add(Reversal(paid, causeEventId, now));
-                earnAt = now.AddMilliseconds(1);
-            }
-
-            if (due is not null)
-            {
-                planned.Add(Earn(due, paid, earnAt, await domains()));
-            }
-        }
-
-        return planned;
+        var candidates = await CandidatesAsync(Earliest, today, cancellationToken);
+        var held = await ledger.GetKeyedAwardsAsync(FoodAwards.Triggers, cancellationToken);
+        var policy = new DayAwardPolicy(
+            Rules.Currency, eventSource.Id, causeEventId,
+            IsDue: award => award.TriggeredAt >= openedAt,
+            FirstEarnAt: award => award.TriggeredAt,
+            ReversalNote: key => FoodAwards.DayOf(key) is { } day ? Note(AwardKeys.TriggerOf(key), day) : null);
+        return await DayAwardPlanner.PlanAsync(policy, candidates, held, clock.UtcNow, domains);
     }
 
     /// <summary>
@@ -148,7 +106,7 @@ public sealed class FoodRewards(
     /// each with its base (0 included), the instant it became due, and the events it's scored
     /// from.
     /// </summary>
-    private async Task<IReadOnlyList<DueFood>> CandidatesAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<DayAward>> CandidatesAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken)
     {
         var days = await food.GetDaysAsync(from, to, cancellationToken);
         var fastDays = days.Where(d => d.LongestFastId is not null).Select(d => d.Day).ToList();
@@ -156,7 +114,7 @@ public sealed class FoodRewards(
             ? new Dictionary<Guid, Fast>()
             : (await food.GetFastsEndedAsync(fastDays.Min(), fastDays.Max(), cancellationToken)).ToDictionary(f => f.Id);
 
-        var due = new List<DueFood>();
+        var due = new List<DayAward>();
         foreach (var day in days)
         {
             var score = Rules.Score(day.Facts);
@@ -171,7 +129,7 @@ public sealed class FoodRewards(
                 IReadOnlyList<Guid> sources = day is { Closed: true, Drinks: > 0 }
                     ? [fastEvent, .. day.DrinkVersions, .. day.CloseEventId is { } closeEvent ? [closeEvent] : Array.Empty<Guid>()]
                     : [fastEvent];
-                due.Add(new DueFood(
+                due.Add(new DayAward(
                     FoodAwards.FastKey(day.Day), FoodAwards.FastTrigger, day.Day,
                     day.Closed ? score.FastAward : score.FastAwardUncut, endedAt,
                     sources, $"{Note(FoodAwards.FastTrigger, day.Day)} ({FoodText.Duration(fast.Seconds ?? 0)})"));
@@ -181,7 +139,7 @@ public sealed class FoodRewards(
                 && (day.ClosedByHand ? day.ClosedAt : day.LastRecordedAt) is { } closedAt)
             {
                 IReadOnlyList<Guid> sources = day.CloseEventId is { } close ? [.. day.FoodEventIds, close] : day.FoodEventIds;
-                due.Add(new DueFood(
+                due.Add(new DayAward(
                     FoodAwards.DietKey(day.Day), FoodAwards.DietTrigger, day.Day, score.FoodAward, closedAt,
                     sources, Note(FoodAwards.DietTrigger, day.Day)));
             }
@@ -190,81 +148,11 @@ public sealed class FoodRewards(
         return due;
     }
 
-    /// <summary>
-    /// An earn of <paramref name="award"/> at its day's multiplier: dated at its trigger the
-    /// first time the key pays, at the change that re-scored it after that, and always after
-    /// the key's previous earn.
-    /// </summary>
-    private PlannedAward Earn(
-        DueFood award, KeyedAward? previous, DateTimeOffset now, IReadOnlyList<DomainProgress> domains)
-    {
-        var earn = DomainPricing.Price(new Dictionary<string, long> { [Rules.Currency] = award.Base }, award.Day, domains);
-        var at = previous?.LatestEarnAt is null ? award.TriggeredAt : now;
-        if (previous?.LatestEarnAt is { } last && at <= last)
-        {
-            at = last.AddMilliseconds(1);
-        }
-
-        var payload = JsonSerializer.Serialize(
-            new
-            {
-                entry = LedgerEntries.Earn,
-                amounts = earn.Amounts,
-                award_key = award.Key,
-                trigger = award.Trigger,
-                credited_on = award.Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                @base = earn.Base,
-                multipliers = earn.Multipliers,
-                note = award.Note
-            },
-            OmitNulls);
-        var newEvent = new NewEvent(
-            EventKinds.Ledger, Provenances.Derived, at, now, eventSource.Id, PayloadJson: payload, DerivedFrom: award.Sources);
-        return new PlannedAward(
-            new LedgerWrite(newEvent, [], GuardBalance: false, AwardKey: award.Key, ExpectPaid: false),
-            new Award(
-                Guid.Empty, null, LedgerEntries.Earn, award.Trigger, award.Key, earn.Amounts, award.Note,
-                earn.Base, earn.Multipliers));
-    }
-
-    /// <summary>
-    /// A reversal of everything <paramref name="paid"/> pays, citing the write that prompted it
-    /// (else the key's newest entry), guarded on the latest earn it read.
-    /// </summary>
-    private PlannedAward Reversal(KeyedAward paid, Guid? causeEventId, DateTimeOffset now)
-    {
-        var amounts = paid.Net.Where(kv => kv.Value != 0).ToDictionary(kv => kv.Key, kv => -kv.Value);
-        var trigger = AwardKeys.TriggerOf(paid.AwardKey);
-        var note = FoodAwards.DayOf(paid.AwardKey) is { } day ? Note(trigger, day) : null;
-        var payload = JsonSerializer.Serialize(
-            new
-            {
-                entry = LedgerEntries.Reversal,
-                amounts,
-                award_key = paid.AwardKey,
-                trigger,
-                note
-            },
-            OmitNulls);
-        var newEvent = new NewEvent(
-            EventKinds.Ledger, Provenances.Derived, now, now, eventSource.Id, PayloadJson: payload,
-            DerivedFrom: [causeEventId ?? paid.LastEventId]);
-        return new PlannedAward(
-            new LedgerWrite(
-                newEvent, [], GuardBalance: false, AwardKey: paid.AwardKey, ExpectPaid: true,
-                ExpectLatestEarn: paid.LatestEarnId),
-            new Award(Guid.Empty, null, LedgerEntries.Reversal, trigger, paid.AwardKey, amounts, note));
-    }
-
     /// <summary>What a food award is for, in words: "Food day Tue Oct 20", "Fast ending Tue Oct 20".</summary>
     public static string Note(string trigger, DateOnly day)
         => (trigger == FoodAwards.FastTrigger ? "Fast ending " : "Food day ")
            + day.ToString("ddd MMM d", CultureInfo.InvariantCulture);
 
-    /// <summary>A food award a day could pay: its key, trigger, day, base, when it became due, the events it's scored from, and its note.</summary>
-    private sealed record DueFood(
-        string Key, string Trigger, DateOnly Day, long Base, DateTimeOffset TriggeredAt,
-        IReadOnlyList<Guid> Sources, string Note);
 }
 
 /// <summary>What the ledger pays for one food award: its base, what it paid, and the multiplier (null at 1.0).</summary>

@@ -48,11 +48,6 @@ public sealed class ActivityRewards(
     EventSource eventSource,
     ActivityRules? rules = null)
 {
-    private static readonly JsonSerializerOptions OmitNulls = new()
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     /// <summary>The activity rules days are scored with.</summary>
     public ActivityRules Rules { get; } = rules ?? ActivityRules.Default;
 
@@ -79,57 +74,24 @@ public sealed class ActivityRewards(
         => calendar.DateAtAsync(instant.AddHours(-ActivityAwards.DayStartHour), cancellationToken);
 
     /// <summary>
-    /// The entries that bring the ledger in line with every activity day. For each key that
-    /// could pay or is paid:
-    /// <list type="bullet">
-    /// <item>paid, and its day still reads the events it was priced from: nothing</item>
-    /// <item>paid at the base due now: nothing</item>
-    /// <item>paid otherwise: a reversal of what it pays, then an earn at the base due (if any)</item>
-    /// <item>unpaid with a base due: an earn</item>
-    /// </list>
+    /// The entries that bring the ledger in line with every activity day (<see cref="DayAwardPlanner"/>).
     /// A base is due when it's above 0 and its Oura day is on or after the one the wallet opened on.
+    /// A key's first earn is dated at its trigger, or at the opening for a trigger earlier on the
+    /// day the wallet opened.
     /// </summary>
     private async Task<IReadOnlyList<PlannedAward>> PlanAsync(
         DateTimeOffset openedAt, Func<Task<IReadOnlyList<DomainProgress>>> domains, CancellationToken cancellationToken)
     {
         var now = clock.UtcNow;
         var openedOn = await OuraDayAtAsync(openedAt, cancellationToken);
-        var candidates = (await CandidatesAsync(now, cancellationToken)).ToDictionary(c => c.Key, StringComparer.Ordinal);
-        var held = (await ledger.GetKeyedAwardsAsync(ActivityAwards.Triggers, cancellationToken))
-            .ToDictionary(k => k.AwardKey, StringComparer.Ordinal);
-
-        var planned = new List<PlannedAward>();
-        var keys = candidates.Keys.Union(held.Values.Where(h => h.Paid).Select(h => h.AwardKey)).Order(StringComparer.Ordinal);
-        foreach (var key in keys)
-        {
-            candidates.TryGetValue(key, out var candidate);
-            held.TryGetValue(key, out var paid);
-            var due = candidate is { Base: > 0 } && candidate.Day >= openedOn ? candidate : null;
-            var earnAt = now;
-            if (paid is { Paid: true })
-            {
-                if (candidate is not null && candidate.Sources.ToHashSet().SetEquals(paid.LatestSources))
-                {
-                    continue;
-                }
-
-                if (due is not null && paid.LatestBase.GetValueOrDefault(Rules.Currency) == due.Base)
-                {
-                    continue;
-                }
-
-                // The new earn follows the reversal, so the ledger reads them in that order.
-                planned.Add(Reversal(paid, now));
-                earnAt = now.AddMilliseconds(1);
-            }
-
-            if (due is not null)
-            {
-                planned.Add(Earn(due, paid, earnAt, openedAt, await domains()));
-            }
-        }
-
-        return planned;
+        var candidates = await CandidatesAsync(now, cancellationToken);
+        var held = await ledger.GetKeyedAwardsAsync(ActivityAwards.Triggers, cancellationToken);
+        var policy = new DayAwardPolicy(
+            Rules.Currency, eventSource.Id, CauseEventId: null,
+            IsDue: award => award.Day >= openedOn,
+            FirstEarnAt: award => award.TriggeredAt < openedAt ? openedAt : award.TriggeredAt,
+            ReversalNote: key => ActivityAwards.DayOf(key) is { } day ? Note(AwardKeys.TriggerOf(key), day) : null);
+        return await DayAwardPlanner.PlanAsync(policy, candidates, held, now, domains);
     }
 
     /// <summary>
@@ -138,7 +100,7 @@ public sealed class ActivityRewards(
     /// priced from: steps and exercise for each day Oura has finished, sleep for each day with
     /// a score.
     /// </summary>
-    private async Task<IReadOnlyList<DueActivity>> CandidatesAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<DayAward>> CandidatesAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
         var today = await calendar.DateAtAsync(now, cancellationToken);
         var from = Rules.XpFrom;
@@ -148,15 +110,15 @@ public sealed class ActivityRewards(
         }
 
         var ouraToday = await OuraDayAtAsync(now, cancellationToken);
-        var due = new List<DueActivity>();
+        var due = new List<DayAward>();
 
         foreach (var day in await activity.GetActivityDaysAsync(from, today, cancellationToken))
         {
             if (day.Day < ouraToday && day.Steps is { } steps)
             {
-                due.Add(new DueActivity(
+                due.Add(new DayAward(
                     ActivityAwards.StepsKey(day.Day), ActivityAwards.StepsTrigger, day.Day, Rules.StepsXp(steps),
-                    day.SyncedAt, [day.EventId]));
+                    day.SyncedAt, [day.EventId], Note(ActivityAwards.StepsTrigger, day.Day)));
             }
         }
 
@@ -166,89 +128,23 @@ public sealed class ActivityRewards(
         foreach (var workouts in counted)
         {
             var seconds = ActivityRules.ExerciseSeconds(workouts);
-            due.Add(new DueActivity(
+            due.Add(new DayAward(
                 ActivityAwards.ExerciseKey(workouts.Key), ActivityAwards.ExerciseTrigger, workouts.Key, Rules.ExerciseXp(seconds),
-                workouts.Max(w => w.EndedAt), [.. workouts.Select(w => w.EventId)]));
+                workouts.Max(w => w.EndedAt), [.. workouts.Select(w => w.EventId)],
+                Note(ActivityAwards.ExerciseTrigger, workouts.Key)));
         }
 
         foreach (var sleep in await activity.GetSleepDaysAsync(from, today, cancellationToken))
         {
             if (sleep is { Score: { } score, ScoreEventId: { } scoreEvent })
             {
-                due.Add(new DueActivity(
+                due.Add(new DayAward(
                     ActivityAwards.SleepKey(sleep.Day), ActivityAwards.SleepTrigger, sleep.Day, Rules.SleepXp(score),
-                    sleep.WokeAt ?? sleep.SyncedAt, [scoreEvent]));
+                    sleep.WokeAt ?? sleep.SyncedAt, [scoreEvent], Note(ActivityAwards.SleepTrigger, sleep.Day)));
             }
         }
 
         return due;
-    }
-
-    /// <summary>
-    /// An earn of <paramref name="award"/> at its day's multiplier: dated at its trigger the
-    /// first time the key pays (at the opening, for a trigger earlier on the day the wallet
-    /// opened), at the change that re-priced it after that, and always after the key's previous
-    /// earn.
-    /// </summary>
-    private PlannedAward Earn(
-        DueActivity award, KeyedAward? previous, DateTimeOffset now, DateTimeOffset openedAt,
-        IReadOnlyList<DomainProgress> domains)
-    {
-        var earn = DomainPricing.Price(new Dictionary<string, long> { [Rules.Currency] = award.Base }, award.Day, domains);
-        var at = previous?.LatestEarnAt is null
-            ? (award.TriggeredAt < openedAt ? openedAt : award.TriggeredAt)
-            : now;
-        if (previous?.LatestEarnAt is { } last && at <= last)
-        {
-            at = last.AddMilliseconds(1);
-        }
-
-        var payload = JsonSerializer.Serialize(
-            new
-            {
-                entry = LedgerEntries.Earn,
-                amounts = earn.Amounts,
-                award_key = award.Key,
-                trigger = award.Trigger,
-                credited_on = award.Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                @base = earn.Base,
-                multipliers = earn.Multipliers,
-                note = award.Note
-            },
-            OmitNulls);
-        var newEvent = new NewEvent(
-            EventKinds.Ledger, Provenances.Derived, at, now, eventSource.Id, PayloadJson: payload, DerivedFrom: award.Sources);
-        return new PlannedAward(
-            new LedgerWrite(newEvent, [], GuardBalance: false, AwardKey: award.Key, ExpectPaid: false),
-            new Award(
-                Guid.Empty, null, LedgerEntries.Earn, award.Trigger, award.Key, earn.Amounts, award.Note,
-                earn.Base, earn.Multipliers));
-    }
-
-    /// <summary>A reversal of everything <paramref name="paid"/> pays, citing the key's newest entry, guarded on the latest earn it read.</summary>
-    private PlannedAward Reversal(KeyedAward paid, DateTimeOffset now)
-    {
-        var amounts = paid.Net.Where(kv => kv.Value != 0).ToDictionary(kv => kv.Key, kv => -kv.Value);
-        var trigger = AwardKeys.TriggerOf(paid.AwardKey);
-        var note = ActivityAwards.DayOf(paid.AwardKey) is { } day ? Note(trigger, day) : null;
-        var payload = JsonSerializer.Serialize(
-            new
-            {
-                entry = LedgerEntries.Reversal,
-                amounts,
-                award_key = paid.AwardKey,
-                trigger,
-                note
-            },
-            OmitNulls);
-        var newEvent = new NewEvent(
-            EventKinds.Ledger, Provenances.Derived, now, now, eventSource.Id, PayloadJson: payload,
-            DerivedFrom: [paid.LastEventId]);
-        return new PlannedAward(
-            new LedgerWrite(
-                newEvent, [], GuardBalance: false, AwardKey: paid.AwardKey, ExpectPaid: true,
-                ExpectLatestEarn: paid.LatestEarnId),
-            new Award(Guid.Empty, null, LedgerEntries.Reversal, trigger, paid.AwardKey, amounts, note));
     }
 
     /// <summary>What an activity award is for, in words: "Steps Thu Oct 22", "Exercise Thu Oct 22", "Sleep Thu Oct 22".</summary>
@@ -261,15 +157,4 @@ public sealed class ActivityRewards(
         }
         + day.ToString("ddd MMM d", CultureInfo.InvariantCulture);
 
-    /// <summary>
-    /// An activity award a day could pay: its key, trigger, day, base, when it became due, and
-    /// the events it's priced from. Its note names the part and the day only: Oura's numbers
-    /// stay out of the append-only ledger, so purging Oura's data (activity plan §7) never has
-    /// to touch it.
-    /// </summary>
-    private sealed record DueActivity(
-        string Key, string Trigger, DateOnly Day, long Base, DateTimeOffset TriggeredAt, IReadOnlyList<Guid> Sources)
-    {
-        public string Note => ActivityRewards.Note(Trigger, Day);
-    }
 }

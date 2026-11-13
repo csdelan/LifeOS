@@ -16,9 +16,6 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFoodLogRepository
 {
-    // One lock for all food writes: a fast's overlap check reads every fast. Arbitrary but fixed.
-    private const long FoodLockKey = 0x666F_6F64_6C6F_67; // "foodlog"
-
     // Aliased to the row's property names (the CLI host doesn't turn on underscore matching);
     // dates as text, since Dapper has no DateOnly mapping in every host.
     private const string MealSql = """
@@ -53,16 +50,6 @@ public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFood
            AND started_at < coalesce(@to::timestamptz, now())
            AND @from::timestamptz < coalesce(ended_at, now())
          ORDER BY started_at
-        """;
-
-    private const string InsertEventSql = """
-        INSERT INTO bsk.event
-            (kind, provenance, occurred_at, recorded_at, source_id, external_id,
-             payload, derived_from, artifact_id)
-        VALUES
-            (@Kind, @Provenance, @OccurredAt, @RecordedAt, @SourceId, @ExternalId,
-             @Payload::jsonb, @DerivedFrom, @ArtifactId)
-        RETURNING id;
         """;
 
     public async Task<Meal?> GetMealAsync(Guid mealId, CancellationToken cancellationToken = default)
@@ -192,33 +179,14 @@ public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFood
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        await connection.ExecuteAsync(new CommandDefinition(
-            "SELECT pg_advisory_xact_lock(@key);",
-            new { key = FoodLockKey },
-            transaction: transaction,
-            cancellationToken: cancellationToken));
+        await AdvisoryLocks.TakeAsync(connection, transaction, AdvisoryLocks.FoodLog, cancellationToken);
 
         await CheckAsync(connection, transaction, guard, cancellationToken);
 
         var ids = new List<Guid>(events.Count);
         foreach (var e in events)
         {
-            ids.Add(await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
-                InsertEventSql,
-                new
-                {
-                    e.Kind,
-                    e.Provenance,
-                    e.OccurredAt,
-                    e.RecordedAt,
-                    e.SourceId,
-                    e.ExternalId,
-                    Payload = e.PayloadJson,
-                    DerivedFrom = (e.DerivedFrom ?? []).ToArray(),
-                    e.ArtifactId
-                },
-                transaction: transaction,
-                cancellationToken: cancellationToken)));
+            ids.Add(await EventSql.InsertAsync(connection, e, transaction, cancellationToken));
         }
 
         await transaction.CommitAsync(cancellationToken);

@@ -198,29 +198,9 @@ public sealed class SpaceRatingService(
     }
 
     /// <summary>A live rating named by its id or the start of it (at least 4 hex digits).</summary>
-    public async Task<SpaceRating> ResolveAsync(string reference, CancellationToken cancellationToken = default)
-    {
-        var wanted = reference?.Trim() ?? "";
-        if (Guid.TryParse(wanted, out var id))
-        {
-            return await spaces.GetRatingAsync(id, cancellationToken)
-                   ?? throw new InvalidOperationException($"No rating has the id {id} (it may have been deleted).");
-        }
-
-        if (wanted.Length < 4 || !wanted.All(ch => Uri.IsHexDigit(ch) || ch == '-'))
-        {
-            throw new ArgumentException($"'{reference}' isn't a rating's id: give at least its first 4 hex digits.");
-        }
-
-        var matches = await spaces.FindRatingsAsync(wanted, cancellationToken);
-        return matches.Count switch
-        {
-            0 => throw new InvalidOperationException($"No rating's id starts with '{wanted}'."),
-            1 => matches[0],
-            _ => throw new InvalidOperationException(
-                $"'{wanted}' starts {matches.Count} ratings' ids: give more of the id.")
-        };
-    }
+    public Task<SpaceRating> ResolveAsync(string reference, CancellationToken cancellationToken = default)
+        => EntryRefs.ResolveAsync(
+            reference, "rating", "ratings", spaces.GetRatingAsync, spaces.FindRatingsAsync, cancellationToken);
 
     /// <summary>Throws <see cref="ArgumentException"/> for a day count outside 1 to <see cref="MaxDays"/>.</summary>
     public static void Check(int days)

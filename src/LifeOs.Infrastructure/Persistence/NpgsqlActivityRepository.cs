@@ -17,9 +17,6 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlActivityRepository(NpgsqlDataSource dataSource) : IActivityRepository
 {
-    // One lock for every Oura sync. Arbitrary but fixed.
-    private const long SyncLockKey = 0x6F75_7261_7379_6E63; // "ourasync"
-
     // Aliased to the row's property names (the CLI host doesn't turn on underscore matching);
     // dates as text, since Dapper has no DateOnly mapping in every host.
     private const string ActivityDaySql = """
@@ -81,11 +78,7 @@ public sealed class NpgsqlActivityRepository(NpgsqlDataSource dataSource) : IAct
         {
             await connection.OpenAsync(cancellationToken);
             transaction = await connection.BeginTransactionAsync(cancellationToken);
-            await connection.ExecuteAsync(new CommandDefinition(
-                "SELECT pg_advisory_xact_lock(@key);",
-                new { key = SyncLockKey },
-                transaction,
-                cancellationToken: cancellationToken));
+            await AdvisoryLocks.TakeAsync(connection, transaction, AdvisoryLocks.OuraSync, cancellationToken);
             return new SyncLock(connection, transaction);
         }
         catch
