@@ -1,12 +1,13 @@
 # Code review fixes plan
 
-**Status:** built (2026-11-12). CR1 to CR26 are one commit each, whose message names it
-(`code review CR<n>`), so `git log --grep "code review CR"` shows them. They reach staging at the
-next push.
+**Status:** CR1 to CR26 built (2026-11-12). CR27 to CR31, the second review's P0, in progress
+(2026-11-13); its other tiers wait for Chris's choice ([Second review](#second-review-2026-11-13)).
+Each CR is one commit whose message names it (`code review CR<n>`), so
+`git log --grep "code review CR"` shows them. They reach staging at the next push.
 
 On 2026-11-12 a full review of the repo, weighted toward maintainability, scalability and
 extendibility, produced 31 proposals in four tiers. Chris chose P0 to P2 (CR1 to CR26), one
-commit each, and skipped P3.
+commit each, and skipped P3 (listed under the second review, so it isn't lost).
 
 ## Decisions
 
@@ -99,3 +100,83 @@ Defects the fixes turned up, each fixed in a commit of its own that says where i
   pin the clock with a local time such as `new Date("2026-11-07T08:30:00")`, which the test
   runner read in UTC while the page ran in Pacific, eight hours apart. `playwright.config.ts` now
   runs the runner in Pacific too. The deploy was skipped, so staging didn't change.
+
+## First review's skipped P3
+
+For the record, since they weren't written down when Chris skipped them:
+
+- Adding a web screen means editing four lists (router, nav, palette, a11y spec), and the
+  list-plus-detail wiring is repeated per page.
+- Eight or more day parsers with different strictness (a bad `from=` silently returns something).
+- `v_subject_current` reads a table that lags until `bsk rebuild`; the Pilot still reads it.
+- The Pilot has no retirement trigger, and its 25 SQL reader methods are untested.
+- Hygiene: unused `@radix-ui` packages and an unpinned `openapi-typescript`.
+
+## Second review (2026-11-13)
+
+A second pass looked for what the first missed or left half done, with the same weighting. It
+produced 30 proposals in three tiers, a P3 list and three choices for Chris. Chris chose P0
+first, one commit each. The numbers below are the review's; a proposal gets a CR number when
+Chris chooses it.
+
+### P0: chosen (CR27 to CR31)
+
+| ID | Fix |
+|----|-----|
+| CR27 | `migrate-staging.ps1` no longer leaves the staging connection string (or any `.env` key) in the caller's shell; `seed.ps1` needs a throwaway database on localhost. |
+| CR28 | `recent_changes` leaves a switched-off area out by one table (`McpAreas`), and fails closed: an event no area claims shows while an area is off only when its payload is the core's. Food photos were leaking. |
+| CR29 | `/mcp` refuses a write tool in its call filter, not only in each tool, so a new write tool can't forget. |
+| CR30 | `TRUNCATE` is refused on the append-only tables, as UPDATE and DELETE are. |
+| CR31 | The diagnostics count days in the home zone, not UTC. |
+
+### P1: proposed
+
+| # | Fix |
+|---|-----|
+| 6 | The food views filter the way their indexes are built, and `v_fast` folds meals once instead of once per fast. |
+| 7 | An index on `bsk.event.artifact_id`; split the `OR` in the artifact lookup. |
+| 8 | Ledger reads by subject and trigger use matching expression indexes; `award_key = ANY(@keys)`. |
+| 9 | CHECK constraints on the payload keys views cast (`archived`, `item_id`, `occurrence`, ledger amounts). |
+| 10 | Finish CR12: 14 test files that use only their own database leave the serial collection; then a database per class for the rest. |
+| 11 | The web checks responses against the generated types and retires `production-ui-types.ts` feature by feature. |
+| 12 | The palette and New dialog stop loading every subject on every page; the dashboard and forest come from cached reads. |
+| 13 | Named cache-invalidation groups; Archive and Restore refresh Habits. |
+| 14 | `scripts/live-check.ps1` and committed fakes for the throwaway-database check. |
+
+### P2: proposed
+
+| # | Fix |
+|---|-----|
+| 15 | One Application "settle everything" method (the API and CLI chains differ today). |
+| 16 | `AgentWrites` builds each agent's services from `AddLifeOsKernel`, not by hand. |
+| 17 | CR7 leftovers: capture filing and journal append in Application, atomic. |
+| 18 | `SubjectService.ResolveAsync` takes a GUID; `ResolveWriteRefAsync` and its copies go. |
+| 19 | CR19 leftovers: the ledger repository really split; the credit read in one snapshot. |
+| 20 | Domain progression out of `RewardService`; one place prices a repeating Task (D16). |
+| 21 | Reserved attribute keys as one table (`establish_target` and `bounty` are unguarded). |
+| 22 | One source of "today" for the kernel. |
+| 23 | `DomainProgress` says today's rule level, so the API and `bsk domains --json` agree. |
+| 24 | `SubjectTypes.All/Creatable/Parse` and `EventKinds.All` replace the copied lists. |
+| 25 | Rule-parity cases for the diet rules and the status vocabulary. |
+| 26 | Reads that still grow with history: MCP snapshot and item tools, journal and history limits, the live review recap. |
+| 27 | Success toasts in one place, not in both write clients. |
+| 28 | The golden-path and a11y specs split by feature; two workers. |
+| 29 | `ReaderRoleTests` checks every view from the catalog. |
+| 30 | CR24 leftovers: redating and following a repetition's attributes leave events. |
+
+### P3: when working in that area
+
+Health range reads and `try_to_date`'s subtransactions; one `bsk.record_key()`; a cached
+domain-credit read if 8 isn't enough; drop two unused GIN indexes; a longer migration command
+timeout and `NOT VALID` CHECK widening; CR17 leftovers in ten components; small repeats left after
+CR20; Infrastructure faults answered as refusals; test classes that fix "today" at load; pin the
+SDK and Docker image; CI builds the Pilot; `migrate.yml`'s default Fly config; `.dockerignore`
+misses `.claude/`.
+
+### For Chris to decide
+
+- **A.** Run the catch-up jobs (repeating Tasks, food days, rank-ups, the item sweep) when the
+  API starts, reversing the recurring-tasks plan's "no background job"; or document the gap.
+- **B.** Stop maintaining the mock's copy of the reward economy, replacing each part with
+  canned reads when its rule next changes, and check exact amounts in .NET.
+- **C.** A non-owner database role for the API, so it can't drop the append-only triggers.
