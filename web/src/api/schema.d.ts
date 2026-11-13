@@ -1994,185 +1994,185 @@ export interface components {
     schemas: {
         ActivityAwardPaidRow: {
             /** Format: int64 */
-            base?: number | string;
+            base?: number;
             /** Format: int64 */
-            paid?: number | string;
+            paid?: number;
             /** Format: double */
-            multiplier?: null | number | string;
+            multiplier?: null | number;
         };
         ActivityDayDetailRead: {
-            day?: string;
-            today?: string;
+            day: string;
+            today: string;
             /** Format: int32 */
-            minimumSteps?: number | string;
+            minimumSteps: number;
             /** Format: int32 */
-            goalSteps?: number | string;
-            summary?: components["schemas"]["ActivityDayRow"];
-            sleepContributors?: {
-                [key: string]: null | number | string;
+            goalSteps: number;
+            summary: components["schemas"]["ActivityDayRow"];
+            sleepContributors: {
+                [key: string]: null | number;
             };
-            readinessContributors?: {
-                [key: string]: null | number | string;
+            readinessContributors: {
+                [key: string]: null | number;
             };
             /** Format: double */
-            temperatureDeviation?: null | number | string;
+            temperatureDeviation?: null | number;
             /** Format: double */
-            temperatureTrendDeviation?: null | number | string;
+            temperatureTrendDeviation?: null | number;
             night?: null | components["schemas"]["SleepPeriodRow"];
-            naps?: components["schemas"]["SleepPeriodRow"][];
-            workouts?: components["schemas"]["WorkoutRow"][];
-            tags?: components["schemas"]["ActivityTagRow"][];
+            naps: components["schemas"]["SleepPeriodRow"][];
+            workouts: components["schemas"]["WorkoutRow"][];
+            tags: components["schemas"]["ActivityTagRow"][];
         };
         ActivityDayRow: {
-            day?: string;
+            day: string;
             /** Format: int32 */
-            steps?: null | number | string;
+            steps?: null | number;
             band?: null | string;
             /** Format: int32 */
-            activeCalories?: null | number | string;
+            activeCalories?: null | number;
             /** Format: int32 */
-            totalCalories?: null | number | string;
+            totalCalories?: null | number;
             /** Format: int32 */
-            walkingM?: null | number | string;
+            walkingM?: null | number;
             /** Format: int32 */
-            highS?: null | number | string;
+            highS?: null | number;
             /** Format: int32 */
-            mediumS?: null | number | string;
+            mediumS?: null | number;
             /** Format: int32 */
-            lowS?: null | number | string;
+            lowS?: null | number;
             /** Format: int32 */
-            nonWearS?: null | number | string;
+            nonWearS?: null | number;
             /** Format: int32 */
-            activityScore?: null | number | string;
+            activityScore?: null | number;
             /** Format: int32 */
-            sleepScore?: null | number | string;
+            sleepScore?: null | number;
             /** Format: int32 */
-            readinessScore?: null | number | string;
+            readinessScore?: null | number;
             /** Format: int32 */
-            asleepS?: null | number | string;
+            asleepS?: null | number;
             /** Format: int32 */
-            inBedS?: null | number | string;
+            inBedS?: null | number;
             /** Format: date-time */
             bedAt?: null | string;
             /** Format: date-time */
             wokeAt?: null | string;
             /** Format: int32 */
-            napCount?: number | string;
+            napCount: number;
             /** Format: int32 */
-            napAsleepS?: number | string;
-            paid?: components["schemas"]["ActivityPaidRow"];
+            napAsleepS: number;
+            paid: components["schemas"]["ActivityPaidRow"];
         };
         ActivityDaysRead: {
-            from?: string;
-            to?: string;
-            today?: string;
+            from: string;
+            to: string;
+            today: string;
             /** Format: int32 */
-            minimumSteps?: number | string;
+            minimumSteps: number;
             /** Format: int32 */
-            goalSteps?: number | string;
-            days?: components["schemas"]["ActivityDayRow"][];
+            goalSteps: number;
+            days: components["schemas"]["ActivityDayRow"][];
         };
         ActivityPaidRow: {
             steps?: null | components["schemas"]["ActivityAwardPaidRow"];
             exercise?: null | components["schemas"]["ActivityAwardPaidRow"];
             sleep?: null | components["schemas"]["ActivityAwardPaidRow"];
             /** Format: int64 */
-            total?: number | string;
+            total?: number;
             /** Format: int64 */
-            baseTotal?: number | string;
+            baseTotal?: number;
         };
         ActivitySummaryRead: {
-            today?: string;
+            today: string;
             /** Format: int32 */
-            minimumSteps?: number | string;
+            minimumSteps: number;
             /** Format: int32 */
-            goalSteps?: number | string;
-            todaySoFar?: components["schemas"]["ActivityDayRow"];
-            todayWorkouts?: components["schemas"]["WorkoutRow"][];
-            thisWeek?: components["schemas"]["ActivityWeekRow"];
-            lastWeek?: components["schemas"]["ActivityWeekRow"];
-            oura?: components["schemas"]["OuraStatusRead"];
+            goalSteps: number;
+            todaySoFar: components["schemas"]["ActivityDayRow"];
+            todayWorkouts: components["schemas"]["WorkoutRow"][];
+            thisWeek: components["schemas"]["ActivityWeekRow"];
+            lastWeek: components["schemas"]["ActivityWeekRow"];
+            oura: components["schemas"]["OuraStatusRead"];
         };
         ActivitySyncBody: {
             force?: null | boolean;
         };
         ActivitySyncRead: {
-            ran?: boolean;
-            changed?: boolean;
+            ran: boolean;
+            changed: boolean;
             from?: null | string;
             to?: null | string;
             /** Format: int32 */
-            records?: number | string;
+            records: number;
             /** Format: int32 */
-            written?: number | string;
+            written: number;
             /** Format: int32 */
-            voided?: number | string;
+            voided: number;
             historyFrom?: null | string;
-            historyDone?: boolean;
+            historyDone: boolean;
             /** Format: date-time */
             lastSyncedAt?: null | string;
-            awards?: components["schemas"]["AwardRow"][];
-            progress?: components["schemas"]["DomainChangeRow"][];
+            awards: components["schemas"]["AwardRow"][];
+            progress: components["schemas"]["DomainChangeRow"][];
         };
         ActivityTagRow: {
-            id?: string;
-            day?: string;
+            id: string;
+            day: string;
             endDay?: null | string;
             typeCode?: null | string;
             customName?: null | string;
-            name?: string;
+            name: string;
             /** Format: date-time */
-            startedAt?: string;
+            startedAt: string;
             /** Format: date-time */
             endedAt?: null | string;
             /** Format: int32 */
-            seconds?: null | number | string;
+            seconds?: null | number;
             comment?: null | string;
             /** Format: date-time */
-            syncedAt?: string;
+            syncedAt: string;
         };
         ActivityTagsRead: {
-            from?: string;
-            to?: string;
-            today?: string;
-            tags?: components["schemas"]["ActivityTagRow"][];
+            from: string;
+            to: string;
+            today: string;
+            tags: components["schemas"]["ActivityTagRow"][];
         };
         ActivityWeekRow: {
             from?: string;
             to?: string;
             /** Format: int32 */
-            averageSteps?: null | number | string;
+            averageSteps?: null | number;
             /** Format: int32 */
-            stepDays?: number | string;
+            stepDays?: number;
             /** Format: int32 */
-            goalDays?: number | string;
+            goalDays?: number;
             /** Format: int32 */
-            underDays?: number | string;
+            underDays?: number;
             /** Format: int32 */
-            sessions?: number | string;
+            sessions?: number;
             /** Format: int32 */
-            exerciseSeconds?: number | string;
+            exerciseSeconds?: number;
             /** Format: int32 */
-            exerciseCalories?: number | string;
+            exerciseCalories?: number;
             /** Format: int32 */
-            averageSleep?: null | number | string;
+            averageSleep?: null | number;
             /** Format: int32 */
-            averageReadiness?: null | number | string;
+            averageReadiness?: null | number;
         };
         ActivityWorkoutsRead: {
-            from?: string;
-            to?: string;
-            today?: string;
-            workouts?: components["schemas"]["WorkoutRow"][];
+            from: string;
+            to: string;
+            today: string;
+            workouts: components["schemas"]["WorkoutRow"][];
         };
         AddRewardBody: {
             title?: string;
             kind?: null | string;
             price?: null | {
-                [key: string]: number | string;
+                [key: string]: number;
             };
             /** Format: double */
-            targetUsd?: null | number | string;
+            targetUsd?: null | number;
             description?: null | string;
         };
         AdhereBody: {
@@ -2183,27 +2183,27 @@ export interface components {
         };
         AgentCall: {
             /** Format: int64 */
-            id?: number | string;
+            id: number;
             /** Format: date-time */
-            calledAt?: string;
-            clientId?: string;
+            calledAt: string;
+            clientId: string;
             tool?: null | string;
             arguments?: null | string;
-            outcome?: string;
+            outcome: string;
             /** Format: int32 */
-            items?: null | number | string;
+            items?: null | number;
             /** Format: int32 */
-            durationMs?: number | string;
+            durationMs: number;
         };
         AgentCallsRead: {
-            calls?: components["schemas"]["AgentCall"][];
+            calls: components["schemas"]["AgentCall"][];
         };
         AgentClient: {
-            clientId?: string;
+            clientId: string;
             name?: null | string;
             clientUri?: null | string;
             redirectUri?: null | string;
-            allowed?: boolean;
+            allowed: boolean;
             /** Format: date-time */
             allowedAt?: null | string;
             /** Format: date-time */
@@ -2215,23 +2215,23 @@ export interface components {
             /** Format: date-time */
             lastCallAt?: null | string;
             /** Format: int32 */
-            callsThisWeek?: number | string;
+            callsThisWeek: number;
             /** Format: date-time */
             lastRefusedAt?: null | string;
             /** Format: int32 */
-            refusedThisWeek?: number | string;
+            refusedThisWeek: number;
         };
         AgentsRead: {
-            mcpEnabled?: boolean;
-            writes?: string;
-            agents?: components["schemas"]["AgentClient"][];
+            mcpEnabled: boolean;
+            writes: string;
+            agents: components["schemas"]["AgentClient"][];
         };
         AlignmentEdge: {
             /** Format: uuid */
-            fromId?: string;
+            fromId: string;
             /** Format: uuid */
-            toId?: string;
-            relation?: string;
+            toId: string;
+            relation: string;
         };
         AllowAgentBody: {
             name?: null | string;
@@ -2245,9 +2245,9 @@ export interface components {
         };
         AppointmentRow: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            title?: string;
+            id: string;
+            urn: string;
+            title: string;
             date?: null | string;
             startTime?: null | string;
             endTime?: null | string;
@@ -2257,97 +2257,97 @@ export interface components {
             area?: null | string;
             seriesUrn?: null | string;
             recurrence?: null | string;
-            status?: string;
-            archived?: boolean;
+            status: string;
+            archived: boolean;
             /** Format: date-time */
-            createdAt?: string;
+            createdAt: string;
         };
         AreaRow: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            name?: string;
+            id: string;
+            urn: string;
+            name: string;
             description?: null | string;
             notes?: null | string;
             /** Format: date-time */
-            createdAt?: string;
+            createdAt: string;
         };
         ArtifactRecord: {
             /** Format: uuid */
-            id?: string;
+            id: string;
             /** Format: uuid */
-            eventId?: string;
-            eventKind?: string;
+            eventId: string;
+            eventKind: string;
             filename?: null | string;
-            contentType?: string;
+            contentType: string;
             /** Format: int64 */
-            byteSize?: number | string;
+            byteSize: number;
             sha256?: null | string;
-            hasBytes?: boolean;
+            hasBytes: boolean;
         };
         AwardRow: {
             /** Format: uuid */
-            id?: string;
-            entry?: string;
-            trigger?: string;
-            awardKey?: string;
+            id: string;
+            entry: string;
+            trigger: string;
+            awardKey: string;
             subject?: null | components["schemas"]["CreatedSubject"];
-            amounts?: {
-                [key: string]: number | string;
+            amounts: {
+                [key: string]: number;
             };
             note?: null | string;
             base?: null | {
-                [key: string]: number | string;
+                [key: string]: number;
             };
             multipliers?: null | {
-                [key: string]: number | string;
+                [key: string]: number;
             };
         };
         BinaryCaptureRow: {
             /** Format: uuid */
-            eventId?: string;
+            eventId: string;
             /** Format: uuid */
             artifactId?: null | string;
-            kind?: string;
+            kind: string;
             filename?: null | string;
             contentType?: null | string;
             /** Format: int64 */
-            byteSize?: null | number | string;
+            byteSize?: null | number;
             sha256?: null | string;
-            deduplicated?: boolean;
+            deduplicated: boolean;
             subject?: null | components["schemas"]["CreatedSubject"];
-            needsTranscription?: boolean;
+            needsTranscription: boolean;
         };
         BountyBody: {
             subject?: string;
             trigger?: null | string;
             amounts?: null | {
-                [key: string]: number | string;
+                [key: string]: number;
             };
             nothing?: boolean;
             clear?: boolean;
             /** Format: int32 */
-            everyMinutes?: null | number | string;
+            everyMinutes?: null | number;
         };
         BountyLineRow: {
-            trigger?: string;
-            amounts?: {
-                [key: string]: number | string;
+            trigger: string;
+            amounts: {
+                [key: string]: number;
             };
-            isCustom?: boolean;
-            default?: {
-                [key: string]: number | string;
+            isCustom: boolean;
+            default: {
+                [key: string]: number;
             };
             /** Format: int32 */
-            everyMinutes?: null | number | string;
+            everyMinutes?: null | number;
         };
         BountyResult: {
-            subject?: components["schemas"]["CreatedSubject"];
-            lines?: components["schemas"]["BountyLineRow"][];
+            subject: components["schemas"]["CreatedSubject"];
+            lines: components["schemas"]["BountyLineRow"][];
         };
         BountyTypeDefaults: {
-            type?: string;
-            lines?: components["schemas"]["BountyLineRow"][];
+            type: string;
+            lines: components["schemas"]["BountyLineRow"][];
         };
         CaptureBody: {
             text?: string;
@@ -2356,31 +2356,31 @@ export interface components {
             subject?: string;
             photoId?: string;
             /** Format: int32 */
-            positionY?: null | number | string;
+            positionY?: null | number;
         };
         CoverClearBody: {
             subject?: string;
         };
         CoverClearedRead: {
-            subject?: components["schemas"]["CreatedSubject"];
-            removed?: boolean;
+            subject: components["schemas"]["CreatedSubject"];
+            removed: boolean;
         };
         CoverPhotoRead: {
-            id?: string;
-            thumbUrl?: string;
-            color?: string;
+            id: string;
+            thumbUrl: string;
+            color: string;
             alt?: null | string;
             /** Format: int32 */
-            width?: number | string;
+            width: number;
             /** Format: int32 */
-            height?: number | string;
-            photographer?: string;
-            photographerLink?: string;
+            height: number;
+            photographer: string;
+            photographerLink: string;
         };
         CoverPositionBody: {
             subject?: string;
             /** Format: int32 */
-            positionY?: null | number | string;
+            positionY?: null | number;
         };
         CoverRead: {
             source?: string;
@@ -2388,302 +2388,302 @@ export interface components {
             url?: string;
             color?: string;
             /** Format: int32 */
-            width?: number | string;
+            width?: number;
             /** Format: int32 */
-            height?: number | string;
+            height?: number;
             alt?: null | string;
             photographer?: string;
             photographerLink?: string;
             photoLink?: string;
             unsplashLink?: string;
             /** Format: int32 */
-            positionY?: number | string;
+            positionY?: number;
             /** Format: date-time */
             setAt?: string;
         };
         CoverResult: {
-            subject?: components["schemas"]["CreatedSubject"];
-            cover?: components["schemas"]["CoverRead"];
-            downloadCounted?: boolean;
+            subject: components["schemas"]["CreatedSubject"];
+            cover: components["schemas"]["CoverRead"];
+            downloadCounted: boolean;
             downloadProblem?: null | string;
         };
         CoverSearchRead: {
-            configured?: boolean;
-            query?: string;
+            configured: boolean;
+            query: string;
             /** Format: int32 */
-            page?: number | string;
+            page: number;
             /** Format: int32 */
-            total?: number | string;
+            total: number;
             /** Format: int32 */
-            totalPages?: number | string;
-            unsplashLink?: string;
-            photos?: components["schemas"]["CoverPhotoRead"][];
+            totalPages: number;
+            unsplashLink: string;
+            photos: components["schemas"]["CoverPhotoRead"][];
         };
         CreatedSubject: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            type?: string;
-            title?: string;
+            id: string;
+            urn: string;
+            type: string;
+            title: string;
         };
         DomainBackOnTrack: {
             /** Format: int32 */
-            days?: number | string;
+            days?: number;
             /** Format: int32 */
-            average?: number | string;
+            average?: number;
             /** Format: int32 */
-            activeMinimum?: number | string;
+            activeMinimum?: number;
             /** Format: int32 */
-            activeDays?: number | string;
+            activeDays?: number;
             /** Format: double */
-            bar?: null | number | string;
+            bar?: null | number;
         };
         DomainBest: {
             /** Format: int32 */
-            level?: number | string;
+            level?: number;
             levelOn?: null | string;
             /** Format: int32 */
-            rank?: number | string;
+            rank?: number;
             rankTitle?: string;
             rankOn?: null | string;
         };
         DomainChangeRow: {
-            domain?: string;
+            domain: string;
             /** Format: int32 */
-            levelFrom?: number | string;
+            levelFrom: number;
             /** Format: int32 */
-            levelTo?: number | string;
+            levelTo: number;
             /** Format: int32 */
-            rankFrom?: number | string;
+            rankFrom: number;
             /** Format: int32 */
-            rankTo?: number | string;
-            rankTitle?: string;
+            rankTo: number;
+            rankTitle: string;
             /** Format: int32 */
-            bestLevelFrom?: number | string;
+            bestLevelFrom: number;
             /** Format: int32 */
-            bestLevelTo?: number | string;
+            bestLevelTo: number;
             /** Format: int32 */
-            bestRankFrom?: number | string;
+            bestRankFrom: number;
             /** Format: int32 */
-            bestRankTo?: number | string;
+            bestRankTo: number;
         };
         DomainConsistency: {
             kind?: string;
             /** Format: int32 */
-            level?: number | string;
+            level?: number;
             /** Format: int32 */
-            windowDays?: number | string;
+            windowDays?: number;
             from?: null | string;
             to?: null | string;
             /** Format: double */
-            averageBase?: number | string;
+            averageBase?: number;
             /** Format: double */
-            averageHomeScore?: null | number | string;
+            averageHomeScore?: null | number;
             held?: null | components["schemas"]["DomainConsistencyNeed"];
             next?: null | components["schemas"]["DomainConsistencyNeed"];
         };
         DomainConsistencyNeed: {
             /** Format: int32 */
-            level?: number | string;
+            level?: number;
             /** Format: int32 */
-            windowDays?: number | string;
+            windowDays?: number;
             /** Format: int32 */
-            average?: number | string;
+            average?: number;
             /** Format: double */
-            averageNow?: number | string;
+            averageNow?: number;
             averageMet?: boolean;
             /** Format: int32 */
-            activeMinimum?: number | string;
+            activeMinimum?: number;
             /** Format: int32 */
-            activeDaysNeeded?: number | string;
+            activeDaysNeeded?: number;
             /** Format: int32 */
-            activeDays?: number | string;
+            activeDays?: number;
             activeDaysMet?: boolean;
             /** Format: int32 */
-            ageNeeded?: number | string;
+            ageNeeded?: number;
             /** Format: int32 */
-            age?: number | string;
+            age?: number;
             ageMet?: boolean;
             /** Format: double */
-            bar?: null | number | string;
+            bar?: null | number;
         };
         DomainCurrent: {
             /** Format: int64 */
-            todayBase?: number | string;
+            todayBase?: number;
             /** Format: int64 */
-            todayAction?: number | string;
+            todayAction?: number;
             /** Format: int32 */
-            activeMinimum?: number | string;
+            activeMinimum?: number;
             /** Format: double */
-            todayHomeScore?: null | number | string;
+            todayHomeScore?: null | number;
             /** Format: double */
-            bar?: null | number | string;
+            bar?: null | number;
             todayActive?: boolean;
             todayException?: boolean;
             rule?: string;
             /** Format: double */
-            activeShare?: number | string;
+            activeShare?: number;
             /** Format: int32 */
-            activeDays?: number | string;
+            activeDays?: number;
             /** Format: int32 */
-            windowDays?: number | string;
+            windowDays?: number;
             /** Format: double */
-            multiplier?: number | string;
+            multiplier?: number;
             nextTier?: null | components["schemas"]["DomainTierRow"];
             settledThrough?: string;
         };
         DomainDayRow: {
-            day?: string;
+            day: string;
             /** Format: int64 */
-            base?: number | string;
+            base: number;
             /** Format: int64 */
-            action?: number | string;
+            action: number;
             /** Format: int64 */
-            passive?: number | string;
+            passive: number;
             /** Format: int64 */
-            paid?: number | string;
+            paid: number;
             exception?: null | string;
             counted?: null | boolean;
             active?: null | boolean;
             /** Format: int32 */
-            activeMinimum?: null | number | string;
+            activeMinimum?: null | number;
             /** Format: int32 */
-            lifetimeLevel?: null | number | string;
+            lifetimeLevel?: null | number;
             /** Format: int32 */
-            consistencyLevel?: null | number | string;
+            consistencyLevel?: null | number;
             /** Format: int32 */
-            level?: null | number | string;
+            level?: null | number;
             /** Format: int32 */
-            rank?: null | number | string;
+            rank?: null | number;
             /** Format: double */
-            homeScore?: null | number | string;
+            homeScore?: null | number;
             /** Format: double */
-            bar?: null | number | string;
+            bar?: null | number;
         };
         DomainDaysRead: {
-            key?: string;
-            label?: string;
-            name?: string;
-            configured?: boolean;
+            key: string;
+            label: string;
+            name: string;
+            configured: boolean;
             kind?: null | string;
-            today?: string;
+            today: string;
             settledThrough?: null | string;
-            days?: components["schemas"]["DomainDayRow"][];
+            days: components["schemas"]["DomainDayRow"][];
         };
         DomainLevelChange: {
             day?: string;
             /** Format: int32 */
-            from?: number | string;
+            from?: number;
             /** Format: int32 */
-            to?: number | string;
+            to?: number;
         };
         DomainLifetime: {
             start?: null | string;
             /** Format: int32 */
-            level?: number | string;
+            level?: number;
             /** Format: int64 */
-            levelXp?: number | string;
+            levelXp?: number;
             /** Format: int64 */
-            xpIntoLevel?: number | string;
+            xpIntoLevel?: number;
             /** Format: int64 */
-            xpToNext?: number | string;
+            xpToNext?: number;
         };
         DomainRankReachedRow: {
             /** Format: int32 */
-            rank?: number | string;
-            title?: string;
-            qualifiedOn?: string;
+            rank: number;
+            title: string;
+            qualifiedOn: string;
         };
         DomainRankRow: {
             /** Format: int32 */
-            rank?: number | string;
-            title?: string;
+            rank: number;
+            title: string;
             /** Format: int32 */
-            level?: number | string;
+            level: number;
             /** Format: int32 */
-            lastLevel?: number | string;
+            lastLevel: number;
             /** Format: int32 */
-            average?: null | number | string;
+            average?: null | number;
             /** Format: int32 */
-            activeMinimum?: null | number | string;
+            activeMinimum?: null | number;
             /** Format: int32 */
-            activeDays?: null | number | string;
+            activeDays?: null | number;
             /** Format: double */
-            bar?: null | number | string;
+            bar?: null | number;
             /** Format: int32 */
-            windowDays?: number | string;
+            windowDays: number;
             /** Format: int64 */
-            totalXp?: number | string;
+            totalXp: number;
             /** Format: int32 */
-            gems?: number | string;
+            gems: number;
             reachedOn?: null | string;
         };
         DomainReportDayRow: {
-            day?: string;
+            day: string;
             /** Format: int32 */
-            level?: number | string;
+            level: number;
             /** Format: int32 */
-            rank?: number | string;
+            rank: number;
             /** Format: int32 */
-            bestRank?: number | string;
-            exception?: boolean;
+            bestRank: number;
+            exception: boolean;
         };
         DomainReportRead: {
-            today?: string;
+            today: string;
             /** Format: int32 */
-            days?: number | string;
-            domains?: components["schemas"]["DomainReportRow"][];
+            days: number;
+            domains: components["schemas"]["DomainReportRow"][];
         };
         DomainReportRow: {
-            key?: string;
-            label?: string;
-            name?: string;
-            configured?: boolean;
-            from?: string;
-            to?: string;
+            key: string;
+            label: string;
+            name: string;
+            configured: boolean;
+            from: string;
+            to: string;
             /** Format: int64 */
-            base?: number | string;
+            base: number;
             /** Format: int64 */
-            paid?: number | string;
+            paid: number;
             /** Format: int32 */
-            daysCounted?: null | number | string;
+            daysCounted?: null | number;
             /** Format: int32 */
-            exceptionDays?: null | number | string;
+            exceptionDays?: null | number;
             /** Format: int32 */
-            activeDays?: null | number | string;
+            activeDays?: null | number;
             /** Format: double */
-            activeShare?: null | number | string;
+            activeShare?: null | number;
             /** Format: double */
-            averageBase?: null | number | string;
+            averageBase?: null | number;
             kind?: null | string;
             /** Format: double */
-            averageHomeScore?: null | number | string;
+            averageHomeScore?: null | number;
             /** Format: int32 */
-            levelFrom?: null | number | string;
+            levelFrom?: null | number;
             /** Format: int32 */
-            levelTo?: null | number | string;
+            levelTo?: null | number;
             /** Format: int32 */
-            rankFrom?: null | number | string;
+            rankFrom?: null | number;
             /** Format: int32 */
-            rankTo?: null | number | string;
+            rankTo?: null | number;
             rankTitle?: null | string;
             /** Format: int32 */
-            bestLevelFrom?: null | number | string;
+            bestLevelFrom?: null | number;
             /** Format: int32 */
-            bestLevelTo?: null | number | string;
+            bestLevelTo?: null | number;
             /** Format: int32 */
-            bestRank?: null | number | string;
+            bestRank?: null | number;
             bestRankTitle?: null | string;
             ranksReached?: null | components["schemas"]["DomainRankReachedRow"][];
             ranks?: null | components["schemas"]["DomainReportDayRow"][];
         };
         DomainRow: {
-            key?: string;
-            label?: string;
-            name?: string;
+            key: string;
+            label: string;
+            name: string;
             /** Format: int64 */
-            totalXp?: number | string;
-            configured?: boolean;
+            totalXp: number;
+            configured: boolean;
             lifetime?: null | components["schemas"]["DomainLifetime"];
             consistency?: null | components["schemas"]["DomainConsistency"];
             shown?: null | components["schemas"]["DomainShown"];
@@ -2693,50 +2693,50 @@ export interface components {
         };
         DomainShown: {
             /** Format: int32 */
-            level?: number | string;
+            level?: number;
             /** Format: double */
-            exact?: number | string;
+            exact?: number;
             /** Format: int32 */
-            target?: number | string;
+            target?: number;
             /** Format: int32 */
-            rank?: number | string;
+            rank?: number;
             rankTitle?: string;
             limitedBy?: null | string;
             falling?: boolean;
             paused?: boolean;
             fallingSince?: null | string;
             /** Format: int32 */
-            fallingFrom?: null | number | string;
+            fallingFrom?: null | number;
             /** Format: double */
-            percentPerDay?: number | string;
+            percentPerDay?: number;
             lastChange?: null | components["schemas"]["DomainLevelChange"];
             backOnTrack?: null | components["schemas"]["DomainBackOnTrack"];
             /** Format: double */
-            bar?: null | number | string;
+            bar?: null | number;
         };
         DomainTierRow: {
             /** Format: double */
-            minShare?: number | string;
+            minShare?: number;
             /** Format: double */
-            multiplier?: number | string;
+            multiplier?: number;
             /** Format: int32 */
-            daysNeeded?: number | string;
+            daysNeeded?: number;
         };
         DomainsRead: {
-            today?: string;
-            domains?: components["schemas"]["DomainRow"][];
+            today: string;
+            domains: components["schemas"]["DomainRow"][];
         };
         EarnResult: {
-            awards?: components["schemas"]["AwardRow"][];
-            progress?: components["schemas"]["DomainChangeRow"][];
+            awards: components["schemas"]["AwardRow"][];
+            progress: components["schemas"]["DomainChangeRow"][];
         };
         EnvironmentRead: {
-            today?: string;
-            settledThrough?: string;
+            today: string;
+            settledThrough: string;
             /** Format: double */
-            homeScore?: null | number | string;
-            spaces?: components["schemas"]["HomeSpaceRow"][];
-            fixNext?: components["schemas"]["FixNextRow"][];
+            homeScore?: null | number;
+            spaces: components["schemas"]["HomeSpaceRow"][];
+            fixNext: components["schemas"]["FixNextRow"][];
         };
         ExceptionDayBody: {
             day?: null | string;
@@ -2744,134 +2744,134 @@ export interface components {
         };
         ExceptionDayResult: {
             exception?: null | components["schemas"]["ExceptionDayRow"];
-            awards?: components["schemas"]["AwardRow"][];
-            progress?: components["schemas"]["DomainChangeRow"][];
+            awards: components["schemas"]["AwardRow"][];
+            progress: components["schemas"]["DomainChangeRow"][];
         };
         ExceptionDayRow: {
-            day?: string;
-            comment?: string;
+            day: string;
+            comment: string;
             /** Format: date-time */
-            markedAt?: string;
+            markedAt: string;
         };
         ExceptionDaysRead: {
-            today?: string;
-            from?: string;
-            exceptions?: components["schemas"]["ExceptionDayRow"][];
+            today: string;
+            from: string;
+            exceptions: components["schemas"]["ExceptionDayRow"][];
         };
         FastRow: {
             /** Format: uuid */
-            id?: string;
+            id: string;
             /** Format: date-time */
-            startedAt?: string;
+            startedAt: string;
             /** Format: date-time */
             endedAt?: null | string;
-            startedOn?: string;
+            startedOn: string;
             endedOn?: null | string;
-            running?: boolean;
+            running: boolean;
             /** Format: int64 */
-            seconds?: null | number | string;
+            seconds?: null | number;
             /** Format: int32 */
-            mealsDuring?: number | string;
+            mealsDuring: number;
         };
         FixNextRow: {
             /** Format: uuid */
-            spaceId?: string;
-            space?: string;
-            part?: string;
+            spaceId: string;
+            space: string;
+            part: string;
             /** Format: double */
-            drag?: number | string;
+            drag: number;
         };
         FoodAwardPaidRow: {
             /** Format: int64 */
-            base?: number | string;
+            base?: number;
             /** Format: int64 */
-            paid?: number | string;
+            paid?: number;
             /** Format: double */
-            multiplier?: null | number | string;
+            multiplier?: null | number;
         };
         FoodCloseBody: {
             /** Format: date */
             date?: null | string;
         };
         FoodDayRead: {
-            day?: string;
-            today?: string;
-            meals?: components["schemas"]["MealRow"][];
-            fasts?: components["schemas"]["FastRow"][];
+            day: string;
+            today: string;
+            meals: components["schemas"]["MealRow"][];
+            fasts: components["schemas"]["FastRow"][];
             running?: null | components["schemas"]["FastRow"];
             lastMeal?: null | components["schemas"]["MealRow"];
-            summary?: components["schemas"]["FoodDaySummaryRow"];
+            summary: components["schemas"]["FoodDaySummaryRow"];
             sobriety?: null | components["schemas"]["SobrietyRow"];
         };
         FoodDaySummaryRow: {
             day?: string;
             /** Format: int32 */
-            meals?: number | string;
+            meals?: number;
             /** Format: int64 */
-            calories?: number | string;
+            calories?: number;
             /** Format: double */
-            averageScore?: null | number | string;
+            averageScore?: null | number;
             /** Format: int64 */
-            longestFastSeconds?: null | number | string;
+            longestFastSeconds?: null | number;
             closed?: boolean;
             closedByHand?: boolean;
             /** Format: date-time */
             closedAt?: null | string;
             /** Format: double */
-            quality?: number | string;
+            quality?: number;
             /** Format: double */
-            caloriesPart?: number | string;
+            caloriesPart?: number;
             /** Format: double */
-            fasting?: number | string;
+            fasting?: number;
             /** Format: int64 */
-            foodAward?: number | string;
+            foodAward?: number;
             /** Format: int64 */
-            fastAward?: number | string;
+            fastAward?: number;
             /** Format: int64 */
-            total?: number | string;
+            total?: number;
             /** Format: int32 */
-            cap?: number | string;
+            cap?: number;
             /** Format: int32 */
-            drinks?: number | string;
+            drinks?: number;
             /** Format: double */
-            drinkFactor?: number | string;
+            drinkFactor?: number;
             paid?: components["schemas"]["FoodPaidRow"];
         };
         FoodDaysRead: {
-            from?: string;
-            to?: string;
-            today?: string;
-            days?: components["schemas"]["FoodDaySummaryRow"][];
+            from: string;
+            to: string;
+            today: string;
+            days: components["schemas"]["FoodDaySummaryRow"][];
             sobriety?: null | components["schemas"]["SobrietyRow"];
         };
         FoodDrinksRead: {
             /** Format: date-time */
-            from?: string;
+            from: string;
             /** Format: date-time */
-            to?: string;
+            to: string;
             /** Format: int32 */
-            drinks?: number | string;
+            drinks: number;
             /** Format: int32 */
-            drinkDays?: number | string;
+            drinkDays: number;
             /** Format: int32 */
-            mostInADay?: number | string;
+            mostInADay: number;
             mostOn?: null | string;
         };
         FoodEntryBody: {
             name?: null | string;
             /** Format: double */
-            score?: null | number | string;
+            score?: null | number;
             /** Format: int32 */
-            calories?: null | number | string;
+            calories?: null | number;
             /** Format: date-time */
             eatenAt?: null | string;
             mealType?: null | string;
             /** Format: int32 */
-            proteinG?: null | number | string;
+            proteinG?: null | number;
             /** Format: int32 */
-            carbsG?: null | number | string;
+            carbsG?: null | number;
             /** Format: int32 */
-            fatG?: null | number | string;
+            fatG?: null | number;
             alcoholic?: null | boolean;
             endFast?: boolean;
             /** Format: uuid */
@@ -2891,119 +2891,119 @@ export interface components {
             fast?: null | components["schemas"]["FoodAwardPaidRow"];
             diet?: null | components["schemas"]["FoodAwardPaidRow"];
             /** Format: int64 */
-            total?: number | string;
+            total?: number;
             /** Format: int64 */
-            baseTotal?: number | string;
+            baseTotal?: number;
         };
         FoodWriteResultRow: {
-            action?: string;
+            action: string;
             meal?: null | components["schemas"]["MealRow"];
             fast?: null | components["schemas"]["FastRow"];
             day?: null | string;
-            days?: string[];
-            awards?: components["schemas"]["AwardRow"][];
-            progress?: components["schemas"]["DomainChangeRow"][];
+            days: string[];
+            awards: components["schemas"]["AwardRow"][];
+            progress: components["schemas"]["DomainChangeRow"][];
         };
         HabitEstablishment: {
             /** Format: double */
-            minAdherence?: number | string;
+            minAdherence?: number;
             /** Format: int32 */
-            windowDays?: number | string;
+            windowDays?: number;
             windowStart?: string;
             /** Format: int64 */
-            followed?: number | string;
+            followed?: number;
             /** Format: int64 */
-            partial?: number | string;
+            partial?: number;
             /** Format: int64 */
-            missed?: number | string;
+            missed?: number;
             /** Format: int64 */
-            concluded?: number | string;
+            concluded?: number;
             /** Format: double */
-            adherence?: null | number | string;
+            adherence?: null | number;
             /** Format: int32 */
-            ageDays?: number | string;
+            ageDays?: number;
             targetMet?: boolean;
         };
         HabitOccurrenceRow: {
             /** Format: uuid */
-            habitId?: string;
-            habitUrn?: string;
-            habitName?: string;
+            habitId: string;
+            habitUrn: string;
+            habitName: string;
             /** Format: date */
-            occurrenceDate?: string;
-            state?: string;
-            allowsPartial?: boolean;
+            occurrenceDate: string;
+            state: string;
+            allowsPartial: boolean;
             note?: null | string;
         };
         HabitRow: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            name?: string;
+            id: string;
+            urn: string;
+            name: string;
             cue?: null | string;
             routine?: null | string;
             reward?: null | string;
             startDate?: null | string;
             endDate?: null | string;
-            allowsPartial?: boolean;
+            allowsPartial: boolean;
             recurrence?: null | string;
-            archived?: boolean;
+            archived: boolean;
             /** Format: date-time */
-            createdAt?: string;
+            createdAt: string;
             /** Format: int32 */
-            currentStreak?: number | string;
+            currentStreak: number;
             lastState?: null | string;
             status?: null | string;
             bounty?: null | {
-                [key: string]: number | string;
+                [key: string]: number;
             };
             establishment?: null | components["schemas"]["HabitEstablishment"];
         };
         HabitTargetBody: {
             habit?: string;
             /** Format: double */
-            minAdherence?: null | number | string;
+            minAdherence?: null | number;
             /** Format: int32 */
-            windowDays?: null | number | string;
+            windowDays?: null | number;
             clear?: boolean;
         };
         HabitTargetResult: {
-            habit?: components["schemas"]["CreatedSubject"];
+            habit: components["schemas"]["CreatedSubject"];
             /** Format: double */
-            minAdherence?: number | string;
+            minAdherence: number;
             /** Format: int32 */
-            windowDays?: number | string;
-            adherenceIsCustom?: boolean;
-            windowIsCustom?: boolean;
+            windowDays: number;
+            adherenceIsCustom: boolean;
+            windowIsCustom: boolean;
         };
         HomeDayRow: {
-            day?: string;
+            day: string;
             /** Format: double */
-            homeScore?: null | number | string;
+            homeScore?: null | number;
             exception?: null | string;
-            spaces?: components["schemas"]["HomeDaySpaceRow"][];
+            spaces: components["schemas"]["HomeDaySpaceRow"][];
         };
         HomeDaySpaceRow: {
             /** Format: uuid */
-            spaceId?: string;
+            spaceId: string;
             /** Format: double */
-            score?: null | number | string;
+            score?: null | number;
         };
         HomeDaysRead: {
-            today?: string;
-            settledThrough?: string;
-            from?: string;
-            spaces?: components["schemas"]["SpaceRow"][];
-            days?: components["schemas"]["HomeDayRow"][];
+            today: string;
+            settledThrough: string;
+            from: string;
+            spaces: components["schemas"]["SpaceRow"][];
+            days: components["schemas"]["HomeDayRow"][];
         };
         HomePartRow: {
             /** Format: double */
-            rated?: null | number | string;
+            rated?: null | number;
             ratedOn?: null | string;
             /** Format: double */
-            now?: null | number | string;
+            now?: null | number;
             /** Format: double */
-            drag?: number | string;
+            drag?: number;
         };
         HomePartsRow: {
             tidiness?: components["schemas"]["HomePartRow"];
@@ -3012,36 +3012,36 @@ export interface components {
         };
         HomeSpaceRow: {
             /** Format: uuid */
-            id?: string;
-            name?: string;
+            id: string;
+            name: string;
             /** Format: int32 */
-            weight?: number | string;
+            weight: number;
             /** Format: int32 */
-            pace?: number | string;
+            pace: number;
             /** Format: double */
-            share?: null | number | string;
+            share?: null | number;
             /** Format: double */
-            score?: null | number | string;
+            score?: null | number;
             lastRatedOn?: null | string;
-            parts?: components["schemas"]["HomePartsRow"];
-            shots?: components["schemas"]["SpaceShotRow"][];
+            parts: components["schemas"]["HomePartsRow"];
+            shots: components["schemas"]["SpaceShotRow"][];
         };
         /** Format: binary */
         IFormFile: string;
         InboxItem: {
             /** Format: uuid */
-            itemId?: string;
-            itemKind?: string;
+            itemId: string;
+            itemKind: string;
             /** Format: date-time */
-            triagedAt?: string;
+            triagedAt: string;
             subjectUrn?: null | string;
             subjectType?: null | string;
             subjectTitle?: null | string;
             eventKind?: null | string;
             eventContent?: null | string;
-            tags?: string[];
+            tags: string[];
             attachment?: null | components["schemas"]["ArtifactRecord"];
-            needsTranscription?: boolean;
+            needsTranscription: boolean;
         };
         InvolveBody: {
             subject?: string;
@@ -3058,10 +3058,10 @@ export interface components {
         };
         JournalEntry: {
             /** Format: uuid */
-            eventId?: string;
+            eventId: string;
             /** Format: date-time */
-            occurredAt?: string;
-            content?: string;
+            occurredAt: string;
+            content: string;
         };
         LabReportRow: {
             /** Format: uuid */
@@ -3069,16 +3069,16 @@ export interface components {
             filename?: null | string;
             contentType?: string;
             /** Format: int64 */
-            byteSize?: number | string;
+            byteSize?: number;
         };
         LabResultBody: {
             metric?: null | string;
             /** Format: double */
-            value?: null | number | string;
+            value?: null | number;
             /** Format: double */
-            low?: null | number | string;
+            low?: null | number;
             /** Format: double */
-            high?: null | number | string;
+            high?: null | number;
             note?: null | string;
             unit?: null | string;
             reading?: null | string;
@@ -3095,59 +3095,59 @@ export interface components {
         };
         LabVisitRow: {
             /** Format: uuid */
-            id?: string;
+            id: string;
             lab?: null | string;
             note?: null | string;
             /** Format: date-time */
-            collectedAt?: string;
-            collectedOn?: string;
-            collectedLocal?: string;
+            collectedAt: string;
+            collectedOn: string;
+            collectedLocal: string;
             report?: null | components["schemas"]["LabReportRow"];
-            results?: components["schemas"]["MetricReadingRow"][];
+            results: components["schemas"]["MetricReadingRow"][];
             /** Format: int32 */
-            outside?: number | string;
+            outside: number;
             /** Format: date-time */
-            loggedAt?: string;
+            loggedAt: string;
             /** Format: int32 */
-            versions?: number | string;
+            versions: number;
         };
         LabVisitsRead: {
-            today?: string;
-            visits?: components["schemas"]["LabVisitRow"][];
+            today: string;
+            visits: components["schemas"]["LabVisitRow"][];
         };
         LedgerDayRow: {
-            date?: string;
-            earned?: {
-                [key: string]: number | string;
+            date: string;
+            earned: {
+                [key: string]: number;
             };
-            reversed?: {
-                [key: string]: number | string;
+            reversed: {
+                [key: string]: number;
             };
-            spent?: {
-                [key: string]: number | string;
+            spent: {
+                [key: string]: number;
             };
-            net?: {
-                [key: string]: number | string;
+            net: {
+                [key: string]: number;
             };
         };
         LedgerRow: {
             /** Format: uuid */
-            id?: string;
+            id: string;
             /** Format: date-time */
-            occurredAt?: string;
-            entry?: string;
-            provenance?: string;
-            amounts?: {
-                [key: string]: number | string;
+            occurredAt: string;
+            entry: string;
+            provenance: string;
+            amounts: {
+                [key: string]: number;
             };
             trigger?: null | string;
             awardKey?: null | string;
             subject?: null | components["schemas"]["CreatedSubject"];
             note?: null | string;
             /** Format: double */
-            dollars?: null | number | string;
+            dollars?: null | number;
             /** Format: double */
-            coinRate?: null | number | string;
+            coinRate?: null | number;
         };
         LinkAgentPersonBody: {
             /** Format: uuid */
@@ -3162,90 +3162,90 @@ export interface components {
             through?: null | string;
         };
         MaterializeRow: {
-            series?: components["schemas"]["CreatedSubject"];
-            created?: components["schemas"]["CreatedSubject"][];
+            series: components["schemas"]["CreatedSubject"];
+            created: components["schemas"]["CreatedSubject"][];
         };
         MeResponse: {
             email: string;
         };
         MealRow: {
             /** Format: uuid */
-            id?: string;
-            name?: string;
+            id: string;
+            name: string;
             /** Format: double */
-            score?: number | string;
+            score: number;
             /** Format: int32 */
-            calories?: number | string;
-            alcoholic?: boolean;
+            calories: number;
+            alcoholic: boolean;
             /** Format: int32 */
-            proteinG?: null | number | string;
+            proteinG?: null | number;
             /** Format: int32 */
-            carbsG?: null | number | string;
+            carbsG?: null | number;
             /** Format: int32 */
-            fatG?: null | number | string;
-            mealType?: string;
+            fatG?: null | number;
+            mealType: string;
             /** Format: date-time */
-            eatenAt?: string;
-            eatenOn?: string;
+            eatenAt: string;
+            eatenOn: string;
             /** Format: uuid */
             photoArtifactId?: null | string;
             /** Format: uuid */
             duringFast?: null | string;
             /** Format: date-time */
-            firstLoggedAt?: string;
+            firstLoggedAt: string;
             /** Format: date-time */
-            loggedAt?: string;
+            loggedAt: string;
             /** Format: int32 */
-            versions?: number | string;
+            versions: number;
         };
         MetricBody: {
             name?: null | string;
             unit?: null | string;
             /** Format: int32 */
-            decimals?: null | number | string;
+            decimals?: null | number;
             /** Format: double */
-            target?: null | number | string;
+            target?: null | number;
             clearTarget?: null | boolean;
             better?: null | string;
             /** Format: double */
-            low?: null | number | string;
+            low?: null | number;
             clearLow?: null | boolean;
             /** Format: double */
-            high?: null | number | string;
+            high?: null | number;
             clearHigh?: null | boolean;
         };
         MetricDayRow: {
-            day?: string;
+            day: string;
             /** Format: double */
-            value?: number | string;
+            value: number;
             /** Format: double */
-            trend?: number | string;
+            trend: number;
             /** Format: uuid */
-            readingId?: string;
+            readingId: string;
         };
         MetricDetailRead: {
-            today?: string;
+            today: string;
             from?: null | string;
-            metric?: components["schemas"]["MetricRow"];
-            readings?: components["schemas"]["MetricReadingRow"][];
-            days?: components["schemas"]["MetricDayRow"][];
-            goal?: components["schemas"]["MetricGoalRow"];
+            metric: components["schemas"]["MetricRow"];
+            readings: components["schemas"]["MetricReadingRow"][];
+            days: components["schemas"]["MetricDayRow"][];
+            goal: components["schemas"]["MetricGoalRow"];
         };
         MetricGoalBasis: {
             /** Format: int32 */
-            days?: number | string;
+            days?: number;
             from?: null | string;
             to?: null | string;
         };
         MetricGoalRow: {
             status?: string;
             /** Format: double */
-            target?: null | number | string;
+            target?: null | number;
             direction?: null | string;
             /** Format: double */
-            now?: null | number | string;
+            now?: null | number;
             /** Format: double */
-            ratePerWeek?: null | number | string;
+            ratePerWeek?: null | number;
             reachedBy?: null | string;
             basis?: components["schemas"]["MetricGoalBasis"];
         };
@@ -3258,14 +3258,14 @@ export interface components {
         MetricReadingBody: {
             metric?: null | string;
             /** Format: double */
-            value?: null | number | string;
+            value?: null | number;
             /** Format: date-time */
             takenAt?: null | string;
             note?: null | string;
         };
         MetricReadingEditBody: {
             /** Format: double */
-            value?: null | number | string;
+            value?: null | number;
             /** Format: date-time */
             takenAt?: null | string;
             note?: null | string;
@@ -3273,7 +3273,7 @@ export interface components {
         MetricReadingEntryBody: {
             metric?: null | string;
             /** Format: double */
-            value?: null | number | string;
+            value?: null | number;
         };
         MetricReadingResult: {
             reading?: null | components["schemas"]["MetricReadingRow"];
@@ -3284,7 +3284,7 @@ export interface components {
             /** Format: uuid */
             metricId?: string;
             /** Format: double */
-            value?: number | string;
+            value?: number;
             unit?: string;
             note?: null | string;
             /** Format: date-time */
@@ -3294,40 +3294,40 @@ export interface components {
             /** Format: date-time */
             loggedAt?: string;
             /** Format: int32 */
-            versions?: number | string;
+            versions?: number;
             flag?: null | string;
             /** Format: uuid */
             visitId?: null | string;
             /** Format: double */
-            low?: null | number | string;
+            low?: null | number;
             /** Format: double */
-            high?: null | number | string;
+            high?: null | number;
         };
         MetricReadingsResult: {
-            readings?: components["schemas"]["MetricReadingRow"][];
+            readings: components["schemas"]["MetricReadingRow"][];
         };
         MetricRow: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            name?: string;
-            unit?: string;
+            id: string;
+            urn: string;
+            name: string;
+            unit: string;
             /** Format: int32 */
-            decimals?: number | string;
+            decimals: number;
             /** Format: double */
-            target?: null | number | string;
+            target?: null | number;
             better?: null | string;
             catalog?: null | string;
             /** Format: date-time */
             archivedAt?: null | string;
             archivedOn?: null | string;
             /** Format: double */
-            low?: null | number | string;
+            low?: null | number;
             /** Format: double */
-            high?: null | number | string;
+            high?: null | number;
             panel?: null | string;
             /** Format: int32 */
-            readings?: number | string;
+            readings: number;
             lastReading?: null | components["schemas"]["MetricReadingRow"];
         };
         NewSubjectBody: {
@@ -3348,38 +3348,38 @@ export interface components {
             redirectUri?: null | string;
         };
         OuraAuthorizeRead: {
-            authorizeUrl?: string;
+            authorizeUrl: string;
         };
         OuraConnectBody: {
             code?: null | string;
             state?: null | string;
         };
         OuraStatusRead: {
-            state?: string;
-            configured?: boolean;
-            connected?: boolean;
-            needsReconnect?: boolean;
+            state: string;
+            configured: boolean;
+            connected: boolean;
+            needsReconnect: boolean;
             reconnectReason?: null | string;
             /** Format: date-time */
             connectedAt?: null | string;
             /** Format: date-time */
             expiresAt?: null | string;
-            scopes?: string[];
-            missingScopes?: string[];
+            scopes: string[];
+            missingScopes: string[];
             /** Format: date-time */
             lastSyncedAt?: null | string;
             lastSyncError?: null | string;
             historyFrom?: null | string;
-            historyDone?: boolean;
+            historyDone: boolean;
         };
         PersonRow: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            title?: string;
+            id: string;
+            urn: string;
+            title: string;
             personKind?: null | string;
             role?: null | string;
-            archived?: boolean;
+            archived: boolean;
         };
         PromoteBody: {
             source?: string;
@@ -3387,17 +3387,17 @@ export interface components {
             title?: string;
         };
         RecapItemRow: {
-            kind?: string;
-            at?: string;
-            title?: string;
+            kind: string;
+            at: string;
+            title: string;
             detail?: null | string;
             /** Format: uuid */
             subjectId?: null | string;
         };
         RecapSectionRow: {
-            id?: string;
-            label?: string;
-            items?: components["schemas"]["RecapItemRow"][];
+            id: string;
+            label: string;
+            items: components["schemas"]["RecapItemRow"][];
         };
         RecurBody: {
             subject?: string;
@@ -3406,19 +3406,19 @@ export interface components {
         };
         RecurResult: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
+            id: string;
+            urn: string;
             recurrence?: null | string;
-            made?: components["schemas"]["CreatedSubject"][];
+            made: components["schemas"]["CreatedSubject"][];
         };
         RecurrenceBody: {
             freq?: string;
             on?: null | string[];
             /** Format: int32 */
-            every?: null | number | string;
+            every?: null | number;
             unit?: null | string;
             /** Format: int32 */
-            day?: null | number | string;
+            day?: null | number;
             cue?: null | string;
             period?: null | string;
             from?: null | string;
@@ -3426,23 +3426,23 @@ export interface components {
         RedeemBody: {
             reward?: null | string;
             amounts?: null | {
-                [key: string]: number | string;
+                [key: string]: number;
             };
             note?: null | string;
         };
         RedemptionResult: {
             /** Format: uuid */
-            id?: string;
-            amounts?: {
-                [key: string]: number | string;
+            id: string;
+            amounts: {
+                [key: string]: number;
             };
             note?: null | string;
             /** Format: double */
-            dollars?: null | number | string;
+            dollars?: null | number;
             /** Format: double */
-            coinRate?: null | number | string;
+            coinRate?: null | number;
             reward?: null | components["schemas"]["RewardRow"];
-            wallet?: components["schemas"]["WalletSummary"];
+            wallet: components["schemas"]["WalletSummary"];
         };
         RelateBody: {
             /** Format: uuid */
@@ -3451,11 +3451,11 @@ export interface components {
             as?: null | string;
         };
         RelationEdge: {
-            relation?: string;
-            urn?: string;
-            type?: string;
+            relation: string;
+            urn: string;
+            type: string;
             /** Format: uuid */
-            subjectId?: string;
+            subjectId: string;
             title?: null | string;
         };
         RenameBody: {
@@ -3468,40 +3468,40 @@ export interface components {
         };
         RenamedSubject: {
             /** Format: uuid */
-            id?: string;
-            title?: string;
-            previousTitle?: string;
-            changed?: boolean;
+            id: string;
+            title: string;
+            previousTitle: string;
+            changed: boolean;
             /** Format: int32 */
-            occurrencesRenamed?: number | string;
+            occurrencesRenamed: number;
         };
         RenamedTag: {
-            from?: string;
-            to?: string;
+            from: string;
+            to: string;
             /** Format: int32 */
-            renamed?: number | string;
+            renamed: number;
             /** Format: int32 */
-            merged?: number | string;
+            merged: number;
         };
         ResolvedInboxItem: {
             /** Format: uuid */
-            itemId?: string;
-            itemKind?: string;
+            itemId: string;
+            itemKind: string;
             /** Format: date-time */
-            triagedAt?: string;
-            resolution?: string;
+            triagedAt: string;
+            resolution: string;
             /** Format: date-time */
-            resolvedAt?: string;
+            resolvedAt: string;
             subjectStatus?: null | string;
-            subjectStatusTerminal?: boolean;
+            subjectStatusTerminal: boolean;
             subjectUrn?: null | string;
             subjectType?: null | string;
             subjectTitle?: null | string;
             eventKind?: null | string;
             eventContent?: null | string;
-            tags?: string[];
+            tags: string[];
             attachment?: null | components["schemas"]["ArtifactRecord"];
-            needsTranscription?: boolean;
+            needsTranscription: boolean;
         };
         ReviewReflectionRow: {
             path?: string;
@@ -3512,69 +3512,69 @@ export interface components {
         };
         ReviewRow: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            title?: string;
-            kind?: string;
+            id: string;
+            urn: string;
+            title: string;
+            kind: string;
             /** Format: date */
-            date?: string;
+            date: string;
             /** Format: date */
-            weekStart?: string;
+            weekStart: string;
             /** Format: date */
-            weekEnd?: string;
+            weekEnd: string;
             /** Format: date */
-            planStart?: string;
+            planStart: string;
             /** Format: date */
-            planEnd?: string;
+            planEnd: string;
             /** Format: date */
-            dueOn?: string;
-            status?: string;
-            missed?: boolean;
-            completedLate?: boolean;
+            dueOn: string;
+            status: string;
+            missed: boolean;
+            completedLate: boolean;
             /** Format: date-time */
             completedAt?: null | string;
-            keepFocus?: boolean;
-            archived?: boolean;
+            keepFocus: boolean;
+            archived: boolean;
             /** Format: date-time */
-            createdAt?: string;
+            createdAt: string;
             reflection?: null | components["schemas"]["ReviewReflectionRow"];
         };
         RewardPriceBody: {
             reward?: string;
             price?: {
-                [key: string]: number | string;
+                [key: string]: number;
             };
         };
         RewardRow: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            name?: string;
-            kind?: string;
-            price?: {
-                [key: string]: number | string;
+            id: string;
+            urn: string;
+            name: string;
+            kind: string;
+            price: {
+                [key: string]: number;
             };
             /** Format: double */
-            targetUsd?: null | number | string;
+            targetUsd?: null | number;
             /** Format: int64 */
-            redemptions?: number | string;
+            redemptions: number;
             /** Format: int64 */
-            coinsRedeemed?: number | string;
+            coinsRedeemed: number;
             /** Format: double */
-            dollarsRedeemed?: number | string;
+            dollarsRedeemed: number;
             /** Format: date-time */
             lastRedeemedAt?: null | string;
             /** Format: double */
-            percentOfTarget?: null | number | string;
+            percentOfTarget?: null | number;
             /** Format: double */
-            remainingUsd?: null | number | string;
+            remainingUsd?: null | number;
             description?: null | string;
-            archived?: boolean;
+            archived: boolean;
         };
         RewardTargetBody: {
             reward?: string;
             /** Format: double */
-            targetUsd?: null | number | string;
+            targetUsd?: null | number;
         };
         SaveReviewBody: {
             keepFocus?: null | boolean;
@@ -3593,34 +3593,34 @@ export interface components {
             /** Format: date-time */
             endedAt?: string;
             /** Format: int32 */
-            inBedS?: null | number | string;
+            inBedS?: null | number;
             /** Format: int32 */
-            asleepS?: null | number | string;
+            asleepS?: null | number;
             /** Format: int32 */
-            deepS?: null | number | string;
+            deepS?: null | number;
             /** Format: int32 */
-            lightS?: null | number | string;
+            lightS?: null | number;
             /** Format: int32 */
-            remS?: null | number | string;
+            remS?: null | number;
             /** Format: int32 */
-            awakeS?: null | number | string;
+            awakeS?: null | number;
             /** Format: int32 */
-            latencyS?: null | number | string;
+            latencyS?: null | number;
             /** Format: int32 */
-            efficiency?: null | number | string;
+            efficiency?: null | number;
             /** Format: int32 */
-            averageHrv?: null | number | string;
+            averageHrv?: null | number;
             /** Format: double */
-            averageHr?: null | number | string;
+            averageHr?: null | number;
             /** Format: int32 */
-            lowestHr?: null | number | string;
+            lowestHr?: null | number;
         };
         SobrietyRow: {
             asOf?: string;
             /** Format: int32 */
-            days?: number | string;
+            days?: number;
             /** Format: int32 */
-            bestDays?: number | string;
+            bestDays?: number;
             since?: string;
             lastDrinkOn?: null | string;
             firstDay?: string;
@@ -3628,9 +3628,9 @@ export interface components {
         SpaceBody: {
             name?: null | string;
             /** Format: int32 */
-            weight?: null | number | string;
+            weight?: null | number;
             /** Format: int32 */
-            pace?: null | number | string;
+            pace?: null | number;
         };
         SpacePhotoChangeBody: {
             day?: null | string;
@@ -3639,8 +3639,8 @@ export interface components {
         SpacePhotoResult: {
             photo?: null | components["schemas"]["SpacePhotoRow"];
             /** Format: uuid */
-            spaceId?: string;
-            shots?: components["schemas"]["SpaceShotRow"][];
+            spaceId: string;
+            shots: components["schemas"]["SpaceShotRow"][];
         };
         SpacePhotoRow: {
             /** Format: uuid */
@@ -3657,79 +3657,79 @@ export interface components {
             addedAt?: string;
             baseline?: boolean;
             /** Format: double */
-            score?: null | number | string;
+            score?: null | number;
             parts?: components["schemas"]["HomePartsRow"];
         };
         SpacePhotosRead: {
             /** Format: uuid */
-            spaceId?: string;
-            space?: string;
-            shots?: components["schemas"]["SpaceShotRow"][];
-            photos?: components["schemas"]["SpacePhotoRow"][];
+            spaceId: string;
+            space: string;
+            shots: components["schemas"]["SpaceShotRow"][];
+            photos: components["schemas"]["SpacePhotoRow"][];
         };
         SpaceRatingBody: {
             space?: null | string;
             /** Format: double */
-            tidiness?: null | number | string;
+            tidiness?: null | number;
             /** Format: double */
-            cleanliness?: null | number | string;
+            cleanliness?: null | number;
             /** Format: double */
-            aesthetics?: null | number | string;
+            aesthetics?: null | number;
             note?: null | string;
             same?: null | boolean;
         };
         SpaceRatingEditBody: {
             day?: null | string;
             /** Format: double */
-            tidiness?: null | number | string;
+            tidiness?: null | number;
             /** Format: double */
-            cleanliness?: null | number | string;
+            cleanliness?: null | number;
             /** Format: double */
-            aesthetics?: null | number | string;
+            aesthetics?: null | number;
             note?: null | string;
         };
         SpaceRatingResult: {
-            ratings?: components["schemas"]["SpaceRatingRow"][];
-            awards?: components["schemas"]["AwardRow"][];
-            progress?: components["schemas"]["DomainChangeRow"][];
+            ratings: components["schemas"]["SpaceRatingRow"][];
+            awards: components["schemas"]["AwardRow"][];
+            progress: components["schemas"]["DomainChangeRow"][];
         };
         SpaceRatingRow: {
             /** Format: uuid */
-            id?: string;
+            id: string;
             /** Format: uuid */
-            spaceId?: string;
-            space?: string;
-            day?: string;
+            spaceId: string;
+            space: string;
+            day: string;
             /** Format: double */
-            tidiness?: null | number | string;
+            tidiness?: null | number;
             /** Format: double */
-            cleanliness?: null | number | string;
+            cleanliness?: null | number;
             /** Format: double */
-            aesthetics?: null | number | string;
+            aesthetics?: null | number;
             note?: null | string;
             /** Format: date-time */
-            ratedAt?: string;
+            ratedAt: string;
         };
         SpaceRatingsBody: {
             day?: null | string;
             ratings?: components["schemas"]["SpaceRatingBody"][];
         };
         SpaceRatingsRead: {
-            today?: string;
-            from?: string;
-            ratings?: components["schemas"]["SpaceRatingRow"][];
+            today: string;
+            from: string;
+            ratings: components["schemas"]["SpaceRatingRow"][];
         };
         SpaceRow: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            name?: string;
+            id: string;
+            urn: string;
+            name: string;
             /** Format: int32 */
-            weight?: number | string;
+            weight: number;
             /** Format: int32 */
-            pace?: number | string;
+            pace: number;
             /** Format: double */
-            share?: null | number | string;
+            share?: null | number;
             /** Format: date-time */
             archivedAt?: null | string;
             archivedOn?: null | string;
@@ -3738,10 +3738,10 @@ export interface components {
             name?: null | string;
         };
         SpaceShotRow: {
-            id?: string;
-            name?: string;
+            id: string;
+            name: string;
             /** Format: int32 */
-            photos?: number | string;
+            photos: number;
             baseline?: null | components["schemas"]["SpacePhotoRow"];
             newest?: null | components["schemas"]["SpacePhotoRow"];
         };
@@ -3750,11 +3750,11 @@ export interface components {
             status?: string;
         };
         StatusHistoryEntry: {
-            status?: string;
+            status: string;
             /** Format: date-time */
-            occurredAt?: string;
+            occurredAt: string;
             /** Format: uuid */
-            id?: string;
+            id: string;
         };
         /** Format: binary */
         Stream: string;
@@ -3763,10 +3763,10 @@ export interface components {
         };
         SubjectDetail: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            type?: string;
-            title?: string;
+            id: string;
+            urn: string;
+            type: string;
+            title: string;
             status?: null | string;
             due?: null | string;
             targetDate?: null | string;
@@ -3776,22 +3776,22 @@ export interface components {
             scope?: null | string;
             statement?: null | string;
             /** Format: date-time */
-            createdAt?: string;
-            archived?: boolean;
+            createdAt: string;
+            archived: boolean;
             area?: null | string;
             areaName?: null | string;
             attributes?: null | string;
             bounty?: null | components["schemas"]["BountyLineRow"][];
-            bountyFromSeries?: boolean;
+            bountyFromSeries: boolean;
             repeating?: null | components["schemas"]["TaskRepeatRead"];
             cover?: null | components["schemas"]["CoverRead"];
         };
         SubjectListItem: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            type?: string;
-            title?: string;
+            id: string;
+            urn: string;
+            type: string;
+            title: string;
             status?: null | string;
             due?: null | string;
             scheduled?: null | string;
@@ -3799,28 +3799,28 @@ export interface components {
             area?: null | string;
             areaName?: null | string;
             tags?: null | string;
-            archived?: boolean;
+            archived: boolean;
             /** Format: date-time */
-            createdAt?: string;
+            createdAt: string;
             expectedCadence?: null | string;
             /** Format: date-time */
             nextReviewAt?: null | string;
             personKind?: null | string;
             /** Format: int32 */
-            visionOrder?: null | number | string;
-            isSeries?: boolean;
+            visionOrder?: null | number;
+            isSeries: boolean;
             /** Format: uuid */
             seriesId?: null | string;
             occurrence?: null | string;
             repeat?: null | string;
             bounty?: null | {
-                [key: string]: number | string;
+                [key: string]: number;
             };
             cover?: null | components["schemas"]["CoverRead"];
         };
         SubjectRelationsResponse: {
-            parents?: components["schemas"]["RelationEdge"][];
-            children?: components["schemas"]["RelationEdge"][];
+            parents: components["schemas"]["RelationEdge"][];
+            children: components["schemas"]["RelationEdge"][];
         };
         TagBody: {
             item?: string;
@@ -3828,9 +3828,9 @@ export interface components {
             remove?: null | string[];
         };
         TagUniverseItem: {
-            tag?: string;
+            tag: string;
             /** Format: int64 */
-            itemCount?: number | string;
+            itemCount: number;
         };
         TaskRepeatRead: {
             isSeries?: boolean;
@@ -3844,143 +3844,143 @@ export interface components {
             stopped?: boolean;
             occurrence?: null | string;
             /** Format: int64 */
-            openCount?: number | string;
+            openCount?: number;
             /** Format: int64 */
-            completedCount?: number | string;
+            completedCount?: number;
             /** Format: int64 */
-            missedCount?: number | string;
+            missedCount?: number;
             /** Format: int64 */
-            cancelledCount?: number | string;
+            cancelledCount?: number;
             lastCompletedOn?: null | string;
             nextDue?: null | string;
             latestOccurrence?: null | string;
         };
         TaskRepetitionRow: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            title?: string;
+            id: string;
+            urn: string;
+            title: string;
             occurrence?: null | string;
             due?: null | string;
             scheduled?: null | string;
             status?: null | string;
-            closed?: boolean;
+            closed: boolean;
             closedOn?: null | string;
-            archived?: boolean;
+            archived: boolean;
         };
         TaskSeriesHistory: {
-            series?: components["schemas"]["TaskSeriesRow"];
-            repetitions?: components["schemas"]["TaskRepetitionRow"][];
+            series: components["schemas"]["TaskSeriesRow"];
+            repetitions: components["schemas"]["TaskRepetitionRow"][];
         };
         TaskSeriesRow: {
             /** Format: uuid */
-            id?: string;
-            urn?: string;
-            title?: string;
-            recurrence?: string;
+            id: string;
+            urn: string;
+            title: string;
+            recurrence: string;
             start?: null | string;
             status?: null | string;
-            archived?: boolean;
-            stopped?: boolean;
+            archived: boolean;
+            stopped: boolean;
             area?: null | string;
             areaName?: null | string;
             /** Format: int64 */
-            openCount?: number | string;
+            openCount: number;
             /** Format: int64 */
-            completedCount?: number | string;
+            completedCount: number;
             /** Format: int64 */
-            missedCount?: number | string;
+            missedCount: number;
             /** Format: int64 */
-            cancelledCount?: number | string;
+            cancelledCount: number;
             lastCompletedOn?: null | string;
             nextDue?: null | string;
             latestOccurrence?: null | string;
             bounty?: null | {
-                [key: string]: number | string;
+                [key: string]: number;
             };
         };
         TaskSettleRead: {
             /** Format: int32 */
-            series?: number | string;
-            made?: components["schemas"]["CreatedSubject"][];
+            series: number;
+            made: components["schemas"]["CreatedSubject"][];
         };
         TaskTimer: {
             /** Format: uuid */
-            subjectId?: string;
-            subjectUrn?: string;
-            subjectTitle?: string;
-            state?: string;
+            subjectId: string;
+            subjectUrn: string;
+            subjectTitle: string;
+            state: string;
             /** Format: date-time */
             runningSince?: null | string;
             /** Format: int64 */
-            totalSeconds?: number | string;
+            totalSeconds: number;
             /** Format: int64 */
-            sessionSeconds?: number | string;
+            sessionSeconds: number;
             /** Format: date-time */
             sessionStartedAt?: null | string;
             /** Format: int64 */
-            sessions?: number | string;
+            sessions: number;
             /** Format: date-time */
-            lastChangedAt?: string;
+            lastChangedAt: string;
         };
         TimerActionResult: {
-            timer?: components["schemas"]["TaskTimer"];
-            paused?: components["schemas"]["CreatedSubject"][];
-            completed?: boolean;
-            awards?: components["schemas"]["AwardRow"][];
-            progress?: components["schemas"]["DomainChangeRow"][];
+            timer: components["schemas"]["TaskTimer"];
+            paused: components["schemas"]["CreatedSubject"][];
+            completed: boolean;
+            awards: components["schemas"]["AwardRow"][];
+            progress: components["schemas"]["DomainChangeRow"][];
         };
         TimerBody: {
             task?: string;
             action?: string;
         };
         WalletCurrencyLine: {
-            currency?: string;
-            label?: string;
-            spendable?: boolean;
+            currency: string;
+            label: string;
+            spendable: boolean;
             /** Format: int64 */
-            earned?: number | string;
+            earned: number;
             /** Format: int64 */
-            reversed?: number | string;
+            reversed: number;
             /** Format: int64 */
-            spent?: number | string;
+            spent: number;
             /** Format: int64 */
-            balance?: number | string;
+            balance: number;
         };
         WalletSummary: {
             /** Format: date-time */
             openedAt?: null | string;
             /** Format: double */
-            coinValueUsd?: number | string;
-            balances?: components["schemas"]["WalletCurrencyLine"][];
+            coinValueUsd: number;
+            balances: components["schemas"]["WalletCurrencyLine"][];
         };
         WorkoutNoteBody: {
             text?: null | string;
         };
         WorkoutRow: {
-            id?: string;
-            day?: string;
-            activity?: string;
+            id: string;
+            day: string;
+            activity: string;
             label?: null | string;
             /** Format: date-time */
-            startedAt?: string;
+            startedAt: string;
             /** Format: date-time */
-            endedAt?: string;
+            endedAt: string;
             /** Format: int32 */
-            seconds?: number | string;
+            seconds: number;
             /** Format: int32 */
-            calories?: null | number | string;
+            calories?: null | number;
             /** Format: int32 */
-            distanceM?: null | number | string;
+            distanceM?: null | number;
             intensity?: null | string;
-            source?: string;
-            counted?: boolean;
+            source: string;
+            counted: boolean;
             reason?: null | string;
             note?: null | string;
             /** Format: date-time */
             noteAt?: null | string;
             /** Format: date-time */
-            syncedAt?: string;
+            syncedAt: string;
         };
     };
     responses: never;
@@ -4279,7 +4279,7 @@ export interface operations {
     GetResolvedInbox: {
         parameters: {
             query?: {
-                limit?: number | string;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -5317,7 +5317,7 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
-                limit?: number | string;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -5641,7 +5641,7 @@ export interface operations {
     GetDomainDays: {
         parameters: {
             query?: {
-                days?: number | string;
+                days?: number;
             };
             header?: never;
             path: {
@@ -5665,7 +5665,7 @@ export interface operations {
     GetDomainReport: {
         parameters: {
             query?: {
-                days?: number | string;
+                days?: number;
             };
             header?: never;
             path?: never;
@@ -5707,7 +5707,7 @@ export interface operations {
     GetExceptionDays: {
         parameters: {
             query?: {
-                days?: number | string;
+                days?: number;
             };
             header?: never;
             path?: never;
@@ -5838,7 +5838,7 @@ export interface operations {
     GetRecentFood: {
         parameters: {
             query?: {
-                limit?: number | string;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -6183,7 +6183,7 @@ export interface operations {
     GetHomeDays: {
         parameters: {
             query?: {
-                days?: number | string;
+                days?: number;
             };
             header?: never;
             path?: never;
@@ -6303,7 +6303,7 @@ export interface operations {
         parameters: {
             query?: {
                 space?: string;
-                days?: number | string;
+                days?: number;
             };
             header?: never;
             path?: never;
@@ -6814,7 +6814,7 @@ export interface operations {
     GetMetric: {
         parameters: {
             query?: {
-                days?: number | string;
+                days?: number;
             };
             header?: never;
             path: {
@@ -7926,7 +7926,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: string;
-                page?: number | string;
+                page?: number;
             };
             header?: never;
             path?: never;
@@ -8131,7 +8131,7 @@ export interface operations {
         parameters: {
             query?: {
                 clientId?: string;
-                limit?: number | string;
+                limit?: number;
             };
             header?: never;
             path?: never;

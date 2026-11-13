@@ -48,6 +48,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   the older tests that share one database and so run one at a time. Fake time with `TestClock`.
 - Web, from `web/`: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`. Playwright:
   `npm run test:e2e` and `npm run a11y`.
+- After changing an endpoint or a read model, run `./scripts/generate-web-client.ps1` and commit
+  `web/src/api/openapi.json` and `schema.d.ts`: a .NET test checks the first and CI the second.
+  It needs no running API, so the "Regenerating the web API types" steps in `verifying.md` are
+  no longer needed.
 - `TreatWarningsAsErrors` is on.
 - CI (`.github/workflows/ci.yml`) runs all of this on Linux: the .NET and unit tests in **UTC**,
   Playwright in Pacific (`timezoneId` in `web/playwright.config.ts`). A test that depends on the

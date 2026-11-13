@@ -110,7 +110,7 @@ public static class ApiHost
             options.IncludeSubDomains = true;
         });
 
-        builder.Services.AddOpenApi();
+        builder.Services.AddOpenApi(WebClientDocument.Configure);
         builder.Services.AddProblemDetails();
 
         var spaOrigins = SpaCors.ResolveOrigins(builder.Configuration);

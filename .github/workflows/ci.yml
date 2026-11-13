@@ -61,6 +61,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # schema.d.ts is generated from openapi.json, which a .NET test keeps current.
+      - name: API types match openapi.json
+        run: npm run check:api
+
       - name: Unit tests
         run: npm test
 
