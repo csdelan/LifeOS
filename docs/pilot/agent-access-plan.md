@@ -959,7 +959,9 @@ listed and works only when all three hold:
 - the client is linked to an AI-agent Person (§4.5).
 
 Otherwise the tool isn't even listed, so agents don't see it, and it's refused if called
-anyway.
+anyway. The server's call filter refuses it, for every tool in `McpWriteAccess.Tools`, before
+the tool runs, so a new write tool is covered without remembering a check of its own (code review
+CR29).
 
 ```bash
 fly secrets set Mcp__Writes=capture Mcp__WriteClients=<client id> -a lifeos-mz55-staging

@@ -77,6 +77,14 @@ public sealed class McpWriteTests(PostgresFixture postgres)
             var refused = await client.CallToolAsync("capture", new Dictionary<string, object?> { ["text"] = "Hello" }, cancellationToken: Ct);
             Assert.True(refused.IsError, $"{clientId} could capture");
             Assert.Contains("can't write", Text(refused), StringComparison.Ordinal);
+
+            // Every write tool is refused before it runs, even called with nothing (code review CR29).
+            foreach (var tool in McpWriteAccess.Tools)
+            {
+                var call = await client.CallToolAsync(tool, new Dictionary<string, object?>(), cancellationToken: Ct);
+                Assert.True(call.IsError, $"{clientId} could call {tool}");
+                Assert.Contains("can't write", Text(call), StringComparison.Ordinal);
+            }
             Assert.NotEmpty((await CallAsync(client, "inbox")).GetProperty("as_of").GetString()!);
         }
 

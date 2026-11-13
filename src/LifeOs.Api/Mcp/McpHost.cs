@@ -93,6 +93,16 @@ public static class McpHost
                 int? items = null;
                 try
                 {
+                    // A write tool runs only for an agent that may write (§5.1), checked here for
+                    // every one of them, so a new write tool can't forget to (code review CR29).
+                    if (McpWriteAccess.Tools.Contains(tool)
+                        && (context.Services?.GetService<McpWriteAccess>() is not { } writers
+                            || (await writers.CheckAsync(context.User, cancellationToken)).Agent is null))
+                    {
+                        logger?.LogInformation("MCP {Tool} for {ClientId}: refused, it may not write", tool, client);
+                        return McpResults.Error(McpWriteAccess.Refusal);
+                    }
+
                     var result = await next(context, cancellationToken);
                     outcome = result.IsError == true ? AgentAccessStore.Error : AgentAccessStore.Ok;
                     items = result.IsError == true ? null : McpCallLog.CountItems(result);
@@ -146,8 +156,8 @@ public static class McpHost
             server.WithTools<HomeTools>();
         }
 
-        // Writes (§5), only when Mcp:Writes is on. Each write checks its agent again, so a call
-        // from an agent that wasn't listed them is refused.
+        // Writes (§5), only when Mcp:Writes is on. The call filter above refuses a write tool to an
+        // agent that may not write, whether or not it was listed them.
         if (options.WritesOn)
         {
             services.AddHttpContextAccessor();
