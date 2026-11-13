@@ -530,13 +530,24 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     /// </summary>
     public async Task<ArtifactRecord?> GetArtifactAsync(Guid id, CancellationToken cancellationToken = default)
     {
+        // Two keyed lookups rather than one OR: `va.id = @id OR va.event_id = @id` can use neither
+        // key, so it read every artifact and the first event of each (code review CR33).
         await using var db = await OpenAsync(cancellationToken);
         return await db.QueryFirstOrDefaultAsync<ArtifactRecord>(new CommandDefinition("""
-            SELECT va.id, va.event_id, va.kind AS event_kind, va.filename, va.content_type,
-                   va.byte_size, va.sha256, va.has_bytes
-            FROM bsk.v_artifact va
-            WHERE va.has_bytes AND (va.id = @id OR va.event_id = @id)
-            ORDER BY (va.id = @id) DESC
+            SELECT id, event_id, event_kind, filename, content_type, byte_size, sha256, has_bytes
+            FROM (
+                SELECT 0 AS pick, va.id, va.event_id, va.kind AS event_kind, va.filename,
+                       va.content_type, va.byte_size, va.sha256, va.has_bytes
+                FROM bsk.v_artifact va
+                WHERE va.id = @id AND va.has_bytes
+                UNION ALL
+                SELECT 1, va.id, va.event_id, va.kind, va.filename,
+                       va.content_type, va.byte_size, va.sha256, va.has_bytes
+                FROM bsk.event e
+                JOIN bsk.v_artifact va ON va.id = e.artifact_id
+                WHERE e.id = @id AND va.event_id = @id AND va.has_bytes
+            ) found
+            ORDER BY pick
             LIMIT 1
             """, new { id }, cancellationToken: cancellationToken));
     }

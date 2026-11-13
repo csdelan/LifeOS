@@ -4,7 +4,7 @@ using Npgsql;
 namespace LifeOs.Tests;
 
 /// <summary>
-/// The event-log indexes of migration 0056 are ones the planner can use for the reads they were
+/// The event-log indexes (migration 0056 and later) are ones the planner can use for the reads they were
 /// made for. An expression index whose expression differs from the query's by a cast or an
 /// operator is silently never used, so each read is planned with sequential scans off and its
 /// plan must name the index.
@@ -40,6 +40,12 @@ public sealed class EventIndexTests(PostgresFixture postgres)
     [Fact]
     public async Task Fasts_count_their_meals_from_one_fold_of_the_food_log()
         => Assert.Equal(1, (await PlanAsync("SELECT * FROM bsk.v_fast;")).Split("event_meal_idx").Length - 1);
+
+    // Code review CR33 (migration 0060): the event that carries a stored file is found by index.
+    [Fact]
+    public async Task A_stored_files_event_is_looked_up_by_index()
+        => Assert.Contains("event_artifact_idx", await PlanAsync(
+            "SELECT * FROM bsk.v_artifact WHERE id = '00000000-0000-0000-0000-000000000001';"));
 
     private async Task<string> PlanAsync(string query)
     {

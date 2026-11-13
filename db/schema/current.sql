@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0059 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0060 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -224,6 +224,7 @@ CREATE INDEX artifact_blob_sha256 ON bsk.artifact_blob USING btree (sha256);
 CREATE INDEX artifact_object_sha256 ON bsk.artifact_object USING btree (sha256);
 CREATE INDEX event_activity_occurrence_idx ON bsk.event USING btree (((payload ->> 'subject_id'::text)), ((payload ->> 'occurrence'::text)), occurred_at DESC, recorded_at DESC, id DESC) WHERE (kind = 'activity'::text);
 CREATE INDEX event_archive_change_subject ON bsk.event USING btree (((payload ->> 'subject_id'::text)), occurred_at DESC) WHERE (kind = 'archive_change'::text);
+CREATE INDEX event_artifact_idx ON bsk.event USING btree (artifact_id, recorded_at, id) WHERE (artifact_id IS NOT NULL);
 CREATE INDEX event_exception_day_idx ON bsk.event USING btree ((((payload -> 'exception_day'::text) ->> 'day'::text)), recorded_at) WHERE ((kind = 'note'::text) AND jsonb_exists(payload, 'exception_day'::text));
 CREATE INDEX event_fast_idx ON bsk.event USING btree ((((payload -> 'fast'::text) ->> 'id'::text)), recorded_at) WHERE ((kind = 'activity'::text) AND jsonb_exists(payload, 'fast'::text));
 CREATE INDEX event_food_day_idx ON bsk.event USING btree ((((payload -> 'food_day'::text) ->> 'on'::text))) WHERE ((kind = 'activity'::text) AND jsonb_exists(payload, 'food_day'::text));
