@@ -57,8 +57,9 @@ public static class ApiHost
         // America/Los_Angeles) decides which day an earn counts on; a malformed one fails too.
         var homeZone = KernelSettings.ParseHomeTimeZone(builder.Configuration[HomeZone.ConfigurationKey]);
         // Artifact bytes (food photos) go to Supabase Storage when Storage:SupabaseSecretKey is
-        // set; a malformed setting fails startup. Outside Development, photos without it are
-        // refused rather than kept in the database (Supabase's free plan holds 500 MB).
+        // set; a malformed setting fails startup. Without it, photos are kept in the database only
+        // when it's on this machine, and refused otherwise (Supabase's free plan holds 500 MB), as
+        // bsk does (code review CR71).
         var storage = SupabaseStorageOptions.Resolve(key => builder.Configuration[key]);
         // Oura (activity plan §3.1) is optional: without Oura:ClientId the Activity page says it
         // isn't set up. A client id without Integrations:TokenKey, or a malformed one, fails startup.
@@ -70,7 +71,6 @@ public static class ApiHost
             KernelSettings.ParseCoinValueUsd(builder.Configuration[CoinRates.ConfigurationKey]),
             homeZone,
             storage,
-            allowPhotosInDatabase: builder.Environment.IsDevelopment(),
             integrations: integrations));
         // The zone must be the database's own bsk.home_zone too; startup fails when it isn't.
         builder.Services.AddHostedService(sp => new HomeZoneStartupCheck(

@@ -42,9 +42,11 @@ public sealed record KernelSettings(string ConnectionString)
 
     /// <summary>
     /// False refuses food, space and lab-report bytes when there is no object storage, so they
-    /// never fill a small hosted database.
+    /// never fill a small hosted database. By default only a database on this machine keeps them
+    /// (<see cref="KernelConnectionString.IsLocal"/>), whichever door writes: <c>bsk</c> pointed at
+    /// staging without object storage refuses a photo as the API does (code review CR71).
     /// </summary>
-    public bool AllowPhotosInDatabase { get; init; } = true;
+    public bool AllowPhotosInDatabase { get; init; } = KernelConnectionString.IsLocal(ConnectionString);
 
     /// <summary>
     /// Outside services (activity plan §3.1): with an Oura app the kernel registers
@@ -66,7 +68,7 @@ public sealed record KernelSettings(string ConnectionString)
     public static KernelSettings Resolve(
         string connectionString, string sourceId = KernelSources.Cli,
         decimal? coinValueUsd = null, string? homeTimeZone = null,
-        SupabaseStorageOptions? objectStorage = null, bool allowPhotosInDatabase = true,
+        SupabaseStorageOptions? objectStorage = null, bool? allowPhotosInDatabase = null,
         IntegrationSettings? integrations = null)
         => new(connectionString)
         {
@@ -74,7 +76,7 @@ public sealed record KernelSettings(string ConnectionString)
             CoinValueUsd = coinValueUsd ?? ParseCoinValueUsd(Environment.GetEnvironmentVariable(CoinValueVariable)),
             HomeTimeZone = ParseHomeTimeZone(homeTimeZone ?? Environment.GetEnvironmentVariable(HomeTimeZoneVariable)),
             ObjectStorage = objectStorage,
-            AllowPhotosInDatabase = allowPhotosInDatabase,
+            AllowPhotosInDatabase = allowPhotosInDatabase ?? KernelConnectionString.IsLocal(connectionString),
             Integrations = integrations,
             MaxArtifactBytes = ParseMaxArtifactBytes(Environment.GetEnvironmentVariable(MaxArtifactBytesVariable)),
         };

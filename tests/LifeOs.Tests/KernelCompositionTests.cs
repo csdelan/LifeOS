@@ -1,5 +1,7 @@
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Food;
+using LifeOs.Application.Home;
+using LifeOs.Application.Measurements;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
@@ -69,6 +71,35 @@ public sealed class KernelCompositionTests
         Assert.Equal(2.5m, provider.GetRequiredService<RewardService>().CoinValueUsd);
         Assert.False(provider.GetRequiredService<FoodPhotoService>().Enabled);
         Assert.Same(KernelDataSource.For(NoDatabase), provider.GetRequiredService<NpgsqlDataSource>());
+    }
+
+    // Code review CR71: bsk kept food, space and lab-report bytes in any database it was pointed
+    // at, staging's included, since the setting defaulted to true; only the API refused them, and
+    // only outside Development. Now both keep them only in a database on this machine, unless
+    // object storage is set up or the host says otherwise.
+    [Theory]
+    [InlineData("Host=localhost;Database=lifeos;Username=lifeos", true)]
+    [InlineData("Host=127.0.0.1;Port=55432;Database=lifeos_test", true)]
+    [InlineData("Host=aws-0-us-west-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.ref", false)]
+    [InlineData("Host=localhost,db.example.com;Database=lifeos", false)]
+    public void Photos_are_kept_in_the_database_only_when_it_is_on_this_machine(string connectionString, bool kept)
+    {
+        Assert.Equal(kept, new KernelSettings(connectionString).AllowPhotosInDatabase);
+        Assert.Equal(kept, KernelSettings.Resolve(connectionString, homeTimeZone: "UTC").AllowPhotosInDatabase);
+
+        // bsk as it's built, unless this shell sets up object storage, which keeps photos anywhere.
+        if (LifeOs.Infrastructure.Storage.SupabaseStorageOptions.FromEnvironment() is null)
+        {
+            using var bsk = LifeOs.Cli.Cli.BuildServices(connectionString);
+            Assert.Equal(kept, bsk.GetRequiredService<FoodPhotoService>().Enabled);
+            Assert.Equal(kept, bsk.GetRequiredService<SpacePhotoService>().Enabled);
+            Assert.Equal(kept, bsk.GetRequiredService<LabVisitService>().ReportsEnabled);
+        }
+
+        using var allowed = new ServiceCollection()
+            .AddLifeOsKernel(connectionString, homeTimeZone: "UTC", allowPhotosInDatabase: true)
+            .BuildServiceProvider();
+        Assert.True(allowed.GetRequiredService<FoodPhotoService>().Enabled);
     }
 
     [Fact]

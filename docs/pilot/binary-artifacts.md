@@ -150,9 +150,11 @@ owner, with `Cache-Control: private, max-age=31536000, immutable` and the sha256
 (`If-None-Match` answers 304 before any download). A non-image is served sandboxed, as a
 download.
 
-**Without a key**, the API refuses food photos outside Development rather than filling the
-database. The CLI (`bsk attach`, `bsk voice`, `bsk food photo`) reads the same `Storage__*`
-environment variables; without them its bytes go to `bytea` as before.
+**Without a key**, the API and the CLI keep food photos, space photos and lab reports in the
+database only when it's on the same machine, and refuse them otherwise rather than filling a hosted
+database (code review CR71; `KernelSettings.AllowPhotosInDatabase`). The CLI (`bsk attach`,
+`bsk voice`, `bsk food photo`) reads the same `Storage__*` environment variables. Captures and
+voice notes, which aren't photos, still go to `bytea` without a key.
 
 ## Out of scope
 

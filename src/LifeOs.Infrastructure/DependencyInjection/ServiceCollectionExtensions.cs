@@ -40,7 +40,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddLifeOsKernel(
         this IServiceCollection services, string connectionString, string sourceId = KernelSources.Cli,
         decimal? coinValueUsd = null, string? homeTimeZone = null,
-        SupabaseStorageOptions? objectStorage = null, bool allowPhotosInDatabase = true,
+        SupabaseStorageOptions? objectStorage = null, bool? allowPhotosInDatabase = null,
         IntegrationSettings? integrations = null)
         => services.AddLifeOsKernel(KernelSettings.Resolve(
             connectionString, sourceId, coinValueUsd, homeTimeZone, objectStorage, allowPhotosInDatabase, integrations));
