@@ -2062,6 +2062,23 @@ export interface MetricReadingRow {
 }
 
 /** One metric (MEASURE-1), with its normal range (MEASURE-3), how many readings it has and its newest one. */
+/**
+ * A metric on the starter list (measurements plan §2.1, `GET /api/measurements/catalog`): what
+ * making one by that name fills in. `better` is which way is good (most lab tests have none);
+ * `low` and `high` the normal range it starts with (blood pressure's, §4.8, and the lab tests'
+ * common adult ones, §4.9); `panel` the lab panel a test is on, null for a body metric.
+ */
+export interface MetricTemplate {
+  key: string;
+  name: string;
+  unit: string;
+  decimals: number;
+  better: MetricBetter | null;
+  low: number | null;
+  high: number | null;
+  panel: LabPanel | null;
+}
+
 export interface MetricRow {
   id: string;
   urn: string;

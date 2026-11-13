@@ -253,9 +253,36 @@ public sealed class LabVisitBody
     public IReadOnlyList<LabResultBody>? Results { get; set; }
 }
 
+/// <summary>
+/// A metric on the starter list (<see cref="MetricCatalog"/>, measurements plan §2.1): what making
+/// one by that name fills in. <see cref="Panel"/> is the lab panel a test is on, null for a body
+/// metric; <see cref="Low"/> and <see cref="High"/> the normal range it starts with, when it has one.
+/// The web reads the list here rather than keeping a copy (code review CR73).
+/// </summary>
+public sealed class MetricTemplateRow
+{
+    public string Key { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Unit { get; set; } = "";
+    public int Decimals { get; set; }
+    public string? Better { get; set; }
+    public decimal? Low { get; set; }
+    public decimal? High { get; set; }
+    public string? Panel { get; set; }
+}
+
 /// <summary>Builds the measurement rows from the kernel's records.</summary>
 public static class MeasurementRows
 {
+    /// <summary>The starter list in its order: the body metrics, then the lab tests as reports print them.</summary>
+    public static IReadOnlyList<MetricTemplateRow> Catalog() => MetricCatalog.All
+        .Select(t => new MetricTemplateRow
+        {
+            Key = t.Key, Name = t.Name, Unit = t.Unit, Decimals = t.Decimals, Better = t.Better,
+            Low = t.Low, High = t.High, Panel = t.Panel
+        })
+        .ToList();
+
     public static LabVisitRow Visit(LabVisitRead read) => new()
     {
         Id = read.Visit.Id,

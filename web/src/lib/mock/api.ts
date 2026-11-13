@@ -51,6 +51,7 @@ import type {
   LabVisitsRead,
   MetricDetailRead,
   MetricRow,
+  MetricTemplate,
   HomeDaysRead,
   SpacePhotosRead,
   SpaceRatingsRead,
@@ -110,6 +111,7 @@ import {
   mockMetricDetail,
   mockMetrics,
 } from "@/lib/mock/measurements-store";
+import { METRIC_CATALOG } from "@/lib/mock/metric-catalog";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 
@@ -403,6 +405,11 @@ export const mockReads: LifeOsReads = {
   async spacePhotos(space: string, shot?: string): Promise<SpacePhotosRead> {
     await wait();
     return mockSpacePhotos(space, shot, storeState().exceptionDays);
+  },
+
+  async metricCatalog(): Promise<MetricTemplate[]> {
+    await wait();
+    return METRIC_CATALOG.map((t) => ({ ...t }));
   },
 
   async metrics(): Promise<MetricRow[]> {

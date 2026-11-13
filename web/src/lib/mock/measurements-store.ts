@@ -15,27 +15,30 @@
  */
 import { dataUrlFor, objectUrlFor } from "@/lib/artifacts";
 import { addDays, nowIso, todayIso } from "@/lib/dates";
-import { LAB_MAX, REPORT_TYPES, byReportOrder, lineProblem, reportProblem } from "@/lib/labs";
+import { LAB_MAX, REPORT_TYPES, lineProblem, reportOrder, reportProblem } from "@/lib/labs";
 import {
-  A1C,
-  CMP_TESTS,
   DECIMALS_MAX,
-  LIPID_TESTS,
-  DIASTOLIC,
   MAX_DAYS,
   NAME_MAX,
   NOTE_MAX,
   SKEW_MS,
-  SYSTOLIC,
   UNIT_MAX,
   VALUE_MAX,
-  WAIST,
-  WEIGHT,
-  findTemplate,
   flagOf,
   formatValue,
   type MetricTemplate,
 } from "@/lib/measurements";
+import {
+  A1C,
+  CMP_TESTS,
+  DIASTOLIC,
+  LIPID_TESTS,
+  METRIC_CATALOG,
+  SYSTOLIC,
+  WAIST,
+  WEIGHT,
+  findTemplate,
+} from "@/lib/mock/metric-catalog";
 import { dayValues, goal, roundAway, trend } from "@/lib/metric-trend";
 import type {
   LabPanel,
@@ -199,9 +202,9 @@ function seededMetric(n: number, template: MetricTemplate, urn: string, target: 
     catalog: template.key,
     archivedAt: null,
     archivedOn: null,
-    low: template.low ?? null,
-    high: template.high ?? null,
-    panel: template.panel ?? null,
+    low: template.low,
+    high: template.high,
+    panel: template.panel,
   };
 }
 
@@ -726,7 +729,7 @@ function visitRow(visit: MockVisit): LabVisitRow {
   const results = resultsOf(visit.id)
     .map((r) => ({ r, m: metrics.find((m) => m.id === r.metricId) }))
     .filter((x): x is { r: MockReading; m: MockMetric } => x.m != null)
-    .sort((a, b) => byReportOrder(a.m, b.m))
+    .sort((a, b) => reportOrder(METRIC_CATALOG)(a.m, b.m))
     .map(({ r, m }) => readingRow(r, m));
   return { ...visit, results, outside: results.filter((r) => r.flag != null).length };
 }

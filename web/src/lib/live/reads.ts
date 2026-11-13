@@ -72,6 +72,7 @@ import type {
   LabVisitsRead,
   MetricDetailRead,
   MetricRow,
+  MetricTemplate,
 } from "@/lib/production-ui-types";
 import {
   normalizeEnvironment,
@@ -370,6 +371,10 @@ export const liveReads: LifeOsReads = {
       api().GET("/api/environment/spaces/{id}/photos", { params: { path: { id: space }, query: { shot } } }),
     );
     return normalizeSpacePhotos(fits<SpacePhotosRead>()(data));
+  },
+
+  async metricCatalog() {
+    return fits<MetricTemplate[]>()(await unwrap(api().GET("/api/measurements/catalog")));
   },
 
   async metrics() {

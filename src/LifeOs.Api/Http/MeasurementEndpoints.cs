@@ -27,6 +27,8 @@ public static class MeasurementEndpoints
             .WithTags("Measurements")
             .RequireAuthorization(AuthServiceCollectionExtensions.AllowlistedUserPolicy);
 
+        api.MapGet("/catalog", GetCatalog).WithName("GetMetricCatalog")
+            .Produces<IReadOnlyList<MetricTemplateRow>>();
         api.MapGet("/metrics", GetMetrics).WithName("GetMetrics")
             .Produces<IReadOnlyList<MetricRow>>();
         api.MapPost("/metrics", AddMetric).WithName("AddMetric")
@@ -173,6 +175,13 @@ public static class MeasurementEndpoints
     }
 
     /// <summary>Every metric, archived ones included, by name, with its count and newest reading.</summary>
+    /// <summary>
+    /// The starter list (measurements plan §2.1): each metric and lab test with the unit, decimals,
+    /// direction and normal range making it fills in. Add a metric and the lab visit sheet read it
+    /// here, so a retuned range reaches them with no web change (code review CR73).
+    /// </summary>
+    private static IResult GetCatalog() => Results.Ok(MeasurementRows.Catalog());
+
     private static async Task<IResult> GetMetrics(MeasurementReader measurements, CancellationToken cancellationToken)
         => Results.Ok(await measurements.GetMetricsAsync(cancellationToken));
 

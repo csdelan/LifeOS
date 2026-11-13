@@ -1,6 +1,6 @@
 /**
  * The Measurements page's words and the API's shapes (MEASURE-1 to MEASURE-4, D20, measurements
- * plan §2–§4.9): the kernel's limits and starter list, how a value, a reading's time, the goal
+ * plan §2–§4.9): the kernel's limits, the starter list's keys (the list is the API's, CR73), how a value, a reading's time, the goal
  * date and the normal range read, the checks a typed value goes through (in the kernel's words),
  * how the page groups metrics (blood pressure's two are one), and the live API's numbers
  * (`number | string`) as numbers. The trend itself is `lib/metric-trend.ts`.
@@ -18,6 +18,7 @@ import type {
   MetricReadingRow,
   MetricReadingsResult,
   MetricRow,
+  MetricTemplate,
 } from "@/lib/production-ui-types";
 
 /** The kernel's `MetricLimits`. */
@@ -31,110 +32,21 @@ export const MAX_DAYS = 3660;
 /** How far ahead of now a reading's time may be, for clock skew. */
 export const SKEW_MS = 60_000;
 
-/** A metric on the starter list (§2.1): what making one by that name fills in. */
-export interface MetricTemplate {
-  key: string;
-  name: string;
-  unit: string;
-  decimals: number;
-  /** Which way is better; most lab tests have none. */
-  better: MetricBetter | null;
-  /** The normal range it comes with: blood pressure's (§4.8) and the lab tests' common adult ones (§4.9). */
-  low?: number;
-  high?: number;
-  /** The lab panel a lab test is on (§4.9); a metric that isn't a lab test has none. */
-  panel?: LabPanel;
-}
+export type { MetricTemplate } from "@/lib/production-ui-types";
 
 /**
- * The starter list, as the kernel's `MetricCatalog`: Weight (M1), then the body metrics (M3).
- * Blood pressure is two metrics logged together, paired by their keys. Only it comes with a
- * normal range (the American Heart Association's "normal"); the others depend on age and sex.
+ * The starter-list keys the page names: Weight has a card of its own, and blood pressure's two
+ * are paired by theirs. The list itself is the kernel's `MetricCatalog`, read from
+ * `GET /api/measurements/catalog` (code review CR73), so a retuned range reaches Add a metric and
+ * the lab visit sheet with no web change; `tests/rules/catalogs.json` checks these keys are on it.
  */
-export const WEIGHT: MetricTemplate = { key: "weight", name: "Weight", unit: "lb", decimals: 1, better: "lower" };
-export const BODY_FAT: MetricTemplate = { key: "body_fat", name: "Body fat", unit: "%", decimals: 1, better: "lower" };
-export const WAIST: MetricTemplate = { key: "waist", name: "Waist", unit: "in", decimals: 1, better: "lower" };
-export const SYSTOLIC: MetricTemplate = {
-  key: "bp_systolic",
-  name: "Systolic BP",
-  unit: "mmHg",
-  decimals: 0,
-  better: "lower",
-  low: 90,
-  high: 119,
-};
-export const DIASTOLIC: MetricTemplate = {
-  key: "bp_diastolic",
-  name: "Diastolic BP",
-  unit: "mmHg",
-  decimals: 0,
-  better: "lower",
-  low: 60,
-  high: 79,
-};
-export const VO2MAX_LAB: MetricTemplate = {
-  key: "vo2max_lab",
-  name: "VO2 max (lab)",
-  unit: "mL/kg/min",
-  decimals: 1,
-  better: "higher",
-};
+export const WEIGHT_KEY = "weight";
+export const SYSTOLIC_KEY = "bp_systolic";
+export const DIASTOLIC_KEY = "bp_diastolic";
 
-/** A lab test on the starter list (M4, §4.9), with the common adult range a first visit starts from. */
-function lab(
-  key: string,
-  name: string,
-  unit: string,
-  decimals: number,
-  better: MetricBetter | null,
-  low: number | null,
-  high: number | null,
-  panel: LabPanel,
-): MetricTemplate {
-  return { key, name, unit, decimals, better, panel, ...(low == null ? {} : { low }), ...(high == null ? {} : { high }) };
-}
-
-/** The comprehensive metabolic panel's 14 tests and eGFR, as the kernel's `MetricCatalog.Cmp`. */
-export const CMP_TESTS: readonly MetricTemplate[] = [
-  lab("glucose", "Glucose", "mg/dL", 0, null, 70, 100, "cmp"),
-  lab("bun", "BUN", "mg/dL", 0, null, 6, 20, "cmp"),
-  lab("creatinine", "Creatinine", "mg/dL", 2, null, 0.6, 1.3, "cmp"),
-  lab("egfr", "eGFR", "mL/min/1.73m2", 0, "higher", 60, null, "cmp"),
-  lab("sodium", "Sodium", "mmol/L", 0, null, 135, 145, "cmp"),
-  lab("potassium", "Potassium", "mmol/L", 1, null, 3.7, 5.2, "cmp"),
-  lab("chloride", "Chloride", "mmol/L", 0, null, 96, 106, "cmp"),
-  lab("co2", "CO2", "mmol/L", 0, null, 23, 29, "cmp"),
-  lab("calcium", "Calcium", "mg/dL", 1, null, 8.5, 10.2, "cmp"),
-  lab("total_protein", "Total protein", "g/dL", 1, null, 6.0, 8.3, "cmp"),
-  lab("albumin", "Albumin", "g/dL", 1, null, 3.4, 5.4, "cmp"),
-  lab("bilirubin", "Total bilirubin", "mg/dL", 1, null, 0.1, 1.2, "cmp"),
-  lab("alp", "Alkaline phosphatase", "U/L", 0, null, 20, 130, "cmp"),
-  lab("ast", "AST", "U/L", 0, null, 8, 33, "cmp"),
-  lab("alt", "ALT", "U/L", 0, null, 4, 36, "cmp"),
-];
-
-/** The lipid panel, as `MetricCatalog.Lipids`. HDL's range depends on sex, so it has none. */
-export const LIPID_TESTS: readonly MetricTemplate[] = [
-  lab("cholesterol", "Total cholesterol", "mg/dL", 0, "lower", null, 199, "lipids"),
-  lab("hdl", "HDL", "mg/dL", 0, "higher", null, null, "lipids"),
-  lab("triglycerides", "Triglycerides", "mg/dL", 0, "lower", null, 149, "lipids"),
-  lab("ldl", "LDL", "mg/dL", 0, "lower", null, 99, "lipids"),
-  lab("non_hdl", "Non-HDL cholesterol", "mg/dL", 0, "lower", null, 129, "lipids"),
-];
-
-/** Hemoglobin A1c, as `MetricCatalog.A1c`. */
-export const A1C: MetricTemplate = lab("a1c", "A1c", "%", 1, "lower", null, 5.6, "a1c");
-
-/** Every lab test on the starter list, in the order a report prints them. */
-export const LAB_TESTS: readonly MetricTemplate[] = [...CMP_TESTS, ...LIPID_TESTS, A1C];
-
-/** The whole starter list, as `MetricCatalog.All`: the body metrics, then the lab tests. */
-export const CATALOG: readonly MetricTemplate[] = [WEIGHT, BODY_FAT, WAIST, SYSTOLIC, DIASTOLIC, VO2MAX_LAB, ...LAB_TESTS];
-
-/** The starter-list template a metric named `name` is made from, in any case. */
-export function findTemplate(name: string): MetricTemplate | undefined {
-  const wanted = name.trim().toLowerCase();
-  return CATALOG.find((t) => t.name.toLowerCase() === wanted);
+/** The starter list's template with `key`, when the list has it. */
+export function templateOf(catalog: readonly MetricTemplate[], key: string): MetricTemplate | undefined {
+  return catalog.find((t) => t.key === key);
 }
 
 /** The chart's ranges: 30 days, 90 days, a year, and all of history. */
@@ -187,7 +99,7 @@ export function singleGroup(metric: MetricRow): MetricGroup {
   return {
     key: metric.catalog ?? metric.id,
     name: metric.name,
-    noun: metric.catalog === WEIGHT.key ? "weigh-in" : "reading",
+    noun: metric.catalog === WEIGHT_KEY ? "weigh-in" : "reading",
     labels: [metric.name],
     metrics: [metric],
   };
@@ -218,24 +130,24 @@ export function groupRangeText(group: Pick<MetricGroup, "metrics" | "labels">): 
 }
 
 /** Where a group sits: the starter list's order (blood pressure at systolic's place), then his own. */
-function catalogRank(group: MetricGroup): number {
-  const key = group.key === BLOOD_PRESSURE.key ? SYSTOLIC.key : group.metrics[0].catalog;
-  const i = CATALOG.findIndex((t) => t.key === key);
-  return i < 0 ? CATALOG.length : i;
+function catalogRank(group: MetricGroup, catalog: readonly MetricTemplate[]): number {
+  const key = group.key === BLOOD_PRESSURE.key ? SYSTOLIC_KEY : group.metrics[0].catalog;
+  const i = catalog.findIndex((t) => t.key === key);
+  return i < 0 ? catalog.length : i;
 }
 
 /**
  * `metrics` as the page's rows (§4.8): blood pressure's two paired into one when both are there,
- * in starter-list order, then his own by name. Pass the live ones or the archived ones; a half of
+ * in `catalog`'s order, then his own by name. Pass the live ones or the archived ones; a half of
  * blood pressure without its pair is a row of its own.
  */
-export function groupMetrics(metrics: readonly MetricRow[]): MetricGroup[] {
-  const systolic = metrics.find((m) => m.catalog === SYSTOLIC.key);
-  const diastolic = metrics.find((m) => m.catalog === DIASTOLIC.key);
+export function groupMetrics(metrics: readonly MetricRow[], catalog: readonly MetricTemplate[]): MetricGroup[] {
+  const systolic = metrics.find((m) => m.catalog === SYSTOLIC_KEY);
+  const diastolic = metrics.find((m) => m.catalog === DIASTOLIC_KEY);
   const paired: MetricRow[] = systolic && diastolic ? [systolic, diastolic] : [];
   const groups: MetricGroup[] = metrics.filter((m) => !paired.includes(m)).map(singleGroup);
   if (paired.length === 2) groups.push({ ...BLOOD_PRESSURE, metrics: paired });
-  return groups.sort((a, b) => catalogRank(a) - catalogRank(b) || a.name.localeCompare(b.name));
+  return groups.sort((a, b) => catalogRank(a, catalog) - catalogRank(b, catalog) || a.name.localeCompare(b.name));
 }
 
 /** A group's values as they read: "192.4 lb", "122/78 mmHg"; a missing half is "—". */
@@ -296,17 +208,19 @@ export interface StarterChoice {
 }
 
 /**
- * The starter metrics not tracked yet (§2.1, §4.8), in the list's order: blood pressure is one
- * choice (its two), and Weight has its own card at the top. Lab tests come from a lab visit (§4.9).
+ * The starter metrics on `catalog` not tracked yet (§2.1, §4.8), in the list's order: blood
+ * pressure is one choice (its two), and Weight has its own card at the top. Lab tests come from a
+ * lab visit (§4.9).
  */
-export function starterChoices(metrics: readonly MetricRow[]): StarterChoice[] {
+export function starterChoices(metrics: readonly MetricRow[], catalog: readonly MetricTemplate[]): StarterChoice[] {
   const tracked = new Set(metrics.filter((m) => m.archivedAt == null).map((m) => m.catalog));
+  const diastolic = templateOf(catalog, DIASTOLIC_KEY);
   const choices: StarterChoice[] = [];
-  for (const t of CATALOG) {
-    if (t.key === WEIGHT.key || t.key === DIASTOLIC.key || t.panel != null) continue;
-    if (t.key === SYSTOLIC.key) {
-      if (!tracked.has(SYSTOLIC.key) || !tracked.has(DIASTOLIC.key)) {
-        choices.push({ key: BLOOD_PRESSURE.key, name: BLOOD_PRESSURE.name, templates: [SYSTOLIC, DIASTOLIC] });
+  for (const t of catalog) {
+    if (t.key === WEIGHT_KEY || t.key === DIASTOLIC_KEY || t.panel != null) continue;
+    if (t.key === SYSTOLIC_KEY && diastolic) {
+      if (!tracked.has(SYSTOLIC_KEY) || !tracked.has(DIASTOLIC_KEY)) {
+        choices.push({ key: BLOOD_PRESSURE.key, name: BLOOD_PRESSURE.name, templates: [t, diastolic] });
       }
       continue;
     }
@@ -319,7 +233,7 @@ export function starterChoices(metrics: readonly MetricRow[]): StarterChoice[] {
 export function starterText(choice: StarterChoice): string {
   const [t] = choice.templates;
   const ranges = choice.templates
-    .map((x) => rangeText({ low: x.low ?? null, high: x.high ?? null, unit: "", decimals: x.decimals }))
+    .map((x) => rangeText({ low: x.low, high: x.high, unit: "", decimals: x.decimals }))
     .filter((r): r is string => r != null);
   return [t.unit, t.better ? `${t.better} is better` : null, ranges.length > 0 ? `normal ${ranges.join(" / ")}` : null]
     .filter((p): p is string => p != null)

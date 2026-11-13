@@ -15,6 +15,7 @@ import type {
   AreaRow,
   ArtifactRecord,
   BountyTypeDefaults,
+  MetricTemplate,
   CoverSearchRead,
   DomainDaysRead,
   DomainReportRead,
@@ -153,6 +154,11 @@ export interface LifeOsReads {
    * shot (its id or name) when given, each with the space's score on its day; its shots too.
    */
   spacePhotos(space: string, shot?: string): Promise<SpacePhotosRead>;
+  /**
+   * The starter list (measurements plan §2.1, `GET /api/measurements/catalog`): what making each
+   * metric and lab test by its name fills in, in the list's order (code review CR73).
+   */
+  metricCatalog(): Promise<MetricTemplate[]>;
   /** Every metric (MEASURE-1, `GET /api/measurements/metrics`), archived ones included, by name. */
   metrics(): Promise<MetricRow[]>;
   /**

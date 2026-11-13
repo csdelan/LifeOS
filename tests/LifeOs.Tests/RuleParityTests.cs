@@ -20,7 +20,7 @@ public sealed class RuleParityTests
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    public static TheoryData<string> Files => new(["activity", "home", "reviews", "levels", "diet", "statuses"]);
+    public static TheoryData<string> Files => new(["activity", "home", "reviews", "levels", "diet", "statuses", "catalogs"]);
 
     [Theory]
     [MemberData(nameof(Files))]
@@ -100,6 +100,12 @@ public sealed class RuleParityTests
         ("statuses", "statuses") => StatusVocabulary.For(Text(a[0])!),
         ("statuses", "initial") => StatusVocabulary.InitialStatusFor(Text(a[0])!) ?? StatusVocabulary.For(Text(a[0])!).FirstOrDefault() ?? "",
         ("statuses", "terminal") => StatusVocabulary.IsTerminal(Text(a[0])),
+
+        ("catalogs", "currencies") => Currencies.All.Select(c => new { key = c.Key, label = c.Label, spendable = c.Spendable, lifeDomain = c.LifeDomain }),
+        ("catalogs", "metricCatalog") => MetricCatalog.All.Select(t => new
+        {
+            key = t.Key, name = t.Name, unit = t.Unit, decimals = t.Decimals, better = t.Better, low = t.Low, high = t.High, panel = t.Panel,
+        }),
 
         _ => throw new InvalidOperationException($"tests/rules/{file}.json names a rule this test doesn't know: {rule}."),
     };

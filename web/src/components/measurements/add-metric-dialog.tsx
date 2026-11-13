@@ -21,7 +21,7 @@ import {
   starterText,
   type StarterChoice,
 } from "@/lib/measurements";
-import type { MetricBetter, MetricRow } from "@/lib/production-ui-types";
+import type { MetricBetter, MetricRow, MetricTemplate } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
 import { useWriteAction } from "@/lib/write-action";
 
@@ -35,11 +35,14 @@ export function AddMetricDialog({
   open,
   onOpenChange,
   metrics,
+  catalog,
   onAdded,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   metrics: readonly MetricRow[];
+  /** The starter list (`GET /api/measurements/catalog`). */
+  catalog: readonly MetricTemplate[];
   /** The added group's key, so the page can open its row. */
   onAdded: (key: string) => void;
 }) {
@@ -53,6 +56,7 @@ export function AddMetricDialog({
         {open ? (
           <AddForm
             metrics={metrics}
+            catalog={catalog}
             onDone={(key) => {
               onOpenChange(false);
               if (key) onAdded(key);
@@ -64,10 +68,18 @@ export function AddMetricDialog({
   );
 }
 
-function AddForm({ metrics, onDone }: { metrics: readonly MetricRow[]; onDone: (key: string | null) => void }) {
+function AddForm({
+  metrics,
+  catalog,
+  onDone,
+}: {
+  metrics: readonly MetricRow[];
+  catalog: readonly MetricTemplate[];
+  onDone: (key: string | null) => void;
+}) {
   const writes = useWrites();
   const id = useId();
-  const choices = starterChoices(metrics);
+  const choices = starterChoices(metrics, catalog);
   const { run, pending, error } = useWriteAction();
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("");

@@ -3,22 +3,22 @@ import { WeightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { WEIGHT, parseValue } from "@/lib/measurements";
+import { parseValue, type MetricTemplate } from "@/lib/measurements";
 import { useWrites } from "@/lib/queries";
 import { errorText } from "@/lib/write-action";
 
 /**
  * Before there's a Weight metric (MEASURE-1, measurements plan §4.7): Start tracking weight
- * makes it from the starter list (lb, 1 decimal place, lower is better) and asks for a goal,
- * which can be left for later.
+ * makes it from the starter list's `weight` (lb, 1 decimal place, lower is better) and asks for a
+ * goal, which can be left for later.
  */
-export function StartTrackingCard() {
+export function StartTrackingCard({ weight }: { weight: MetricTemplate }) {
   const writes = useWrites();
   const id = useId();
   const [goal, setGoal] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const parsed = goal.trim() === "" ? null : parseValue(goal, WEIGHT.decimals, "The goal");
+  const parsed = goal.trim() === "" ? null : parseValue(goal, weight.decimals, "The goal");
   const problem = parsed && "problem" in parsed ? parsed.problem : null;
 
   async function start() {
@@ -26,7 +26,7 @@ export function StartTrackingCard() {
     setError(null);
     setPending(true);
     try {
-      await writes.addMetric({ name: WEIGHT.name, target: parsed && "value" in parsed ? parsed.value : undefined });
+      await writes.addMetric({ name: weight.name, target: parsed && "value" in parsed ? parsed.value : undefined });
     } catch (e) {
       setError(errorText(e, "That didn't save. Nothing was written."));
     } finally {
@@ -58,7 +58,7 @@ export function StartTrackingCard() {
         }}
       >
         <div className="max-w-xs space-y-1.5">
-          <Label htmlFor={`${id}-goal`}>Goal weight ({WEIGHT.unit}, optional)</Label>
+          <Label htmlFor={`${id}-goal`}>Goal weight ({weight.unit}, optional)</Label>
           <Input
             id={`${id}-goal`}
             type="text"

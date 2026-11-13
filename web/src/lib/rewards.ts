@@ -40,7 +40,11 @@ export interface CurrencyDef {
   hint: string;
 }
 
-/** Display order, as the Domain lists them. */
+/**
+ * Display order, as the Domain's `Currencies.All` lists them, with the web's own symbol and hint.
+ * The keys, labels and order are the kernel's: `tests/rules/catalogs.json` checks them, and the
+ * wallet card reads each label from the wallet itself (code review CR73).
+ */
 export const CURRENCIES: readonly CurrencyDef[] = [
   { key: "coins", label: "Coins", spendable: true, group: "spend", symbol: "🪙", hint: "Real money, into savings" },
   { key: "freedom", label: "Freedom", spendable: true, group: "spend", symbol: "⏳", hint: "1 Freedom = 1 minute of fun" },

@@ -9,6 +9,9 @@ import type { HomePart, ReviewKind, SubjectType } from "@/lib/production-ui-type
 import { reviewPeriod } from "@/lib/reviews";
 import { addDays } from "@/lib/dates";
 import { isOccurrenceDate, parseRecurrence } from "@/lib/recurrence";
+import { DIASTOLIC_KEY, SYSTOLIC_KEY, WEIGHT_KEY } from "@/lib/measurements";
+import { METRIC_CATALOG } from "@/lib/mock/metric-catalog";
+import { CURRENCIES } from "@/lib/rewards";
 
 /**
  * The TypeScript copies of kernel rules give the kernel's answers (code review CR8). The cases
@@ -85,6 +88,23 @@ const rules: Record<string, Record<string, (...args: unknown[]) => unknown>> = {
       return dates;
     },
   },
+  catalogs: {
+    // The keys, labels and order the web copies; the symbols and hints are its own.
+    currencies: () =>
+      CURRENCIES.map((c) => ({ key: c.key, label: c.label, spendable: c.spendable, lifeDomain: c.group === "domain" })),
+    // The mock's copy: the live app reads the kernel's from GET /api/measurements/catalog.
+    metricCatalog: () =>
+      METRIC_CATALOG.map((t) => ({
+        key: t.key,
+        name: t.name,
+        unit: t.unit,
+        decimals: t.decimals,
+        better: t.better,
+        low: t.low,
+        high: t.high,
+        panel: t.panel,
+      })),
+  },
   statuses: {
     statuses: (type) => STATUS_BY_TYPE[s(type) as SubjectType] ?? [],
     initial: (type) => initialStatus(s(type) as SubjectType),
@@ -106,8 +126,23 @@ function answer(file: string, c: RuleCase): unknown {
 describe("the web's copies of kernel rules", () => {
   it("finds the shared cases", () => {
     expect(Object.keys(files).map((path) => path.split("/").pop()).sort()).toEqual(
-      ["activity.json", "diet.json", "home.json", "levels.json", "recurrence.json", "reviews.json", "statuses.json"],
+      [
+        "activity.json",
+        "catalogs.json",
+        "diet.json",
+        "home.json",
+        "levels.json",
+        "recurrence.json",
+        "reviews.json",
+        "statuses.json",
+      ],
     );
+  });
+
+  it("names only keys on the kernel's starter list", () => {
+    const doc = Object.entries(files).find(([path]) => path.endsWith("/catalogs.json"))![1];
+    const kernel = doc.cases.find((c) => c.rule === "metricCatalog")!.out as { key: string }[];
+    expect([WEIGHT_KEY, SYSTOLIC_KEY, DIASTOLIC_KEY].filter((key) => !kernel.some((t) => t.key === key))).toEqual([]);
   });
 
   for (const [path, doc] of Object.entries(files)) {

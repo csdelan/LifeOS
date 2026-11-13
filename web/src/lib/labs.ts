@@ -1,16 +1,13 @@
 /**
  * Lab results (MEASURE-4, D20, measurements plan §4.9): the panels, how a visit and its results
  * read, the visit sheet's rows and its checks (in the kernel's words), and the live API's visits
- * with their numbers as numbers. The tests themselves are metrics, on the starter list in
- * `lib/measurements.ts`; a test's range follows its newest report.
+ * with their numbers as numbers. The tests themselves are metrics, on the starter list the API
+ * serves (`GET /api/measurements/catalog`, code review CR73); a test's range follows its newest
+ * report.
  */
 import { formatDay } from "@/lib/dates";
 import {
-  A1C,
-  CMP_TESTS,
   DECIMALS_MAX,
-  LAB_TESTS,
-  LIPID_TESTS,
   NAME_MAX,
   NOTE_MAX,
   UNIT_MAX,
@@ -41,20 +38,24 @@ export const MAX_RESULTS = 50;
 /** What a report may be: a PDF, or a photo of the paper. */
 export const REPORT_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"] as const;
 
-/** A panel: its key, its heading, and its tests on the starter list. */
+/** A panel: its key and its heading. Its tests on the starter list are `panelTests`'. */
 export interface PanelInfo {
   key: LabPanel;
   name: string;
-  tests: readonly MetricTemplate[];
 }
 
 /** The panels in the order a report prints them, as the kernel's `LabPanels`. */
 export const PANELS: readonly PanelInfo[] = [
-  { key: "cmp", name: "CMP", tests: CMP_TESTS },
-  { key: "lipids", name: "Lipid panel", tests: LIPID_TESTS },
-  { key: "a1c", name: "A1c", tests: [A1C] },
-  { key: "other", name: "Other tests", tests: [] },
+  { key: "cmp", name: "CMP" },
+  { key: "lipids", name: "Lipid panel" },
+  { key: "a1c", name: "A1c" },
+  { key: "other", name: "Other tests" },
 ];
+
+/** The starter list's tests on `panel`, in the order its report prints them (none on Other tests). */
+export function panelTests(catalog: readonly MetricTemplate[], panel: LabPanel): MetricTemplate[] {
+  return catalog.filter((t) => t.panel === panel && panel !== "other");
+}
 
 /** The starter list's three panels, which a first visit starts with. */
 export const STARTER_PANELS: readonly LabPanel[] = ["cmp", "lipids", "a1c"];
@@ -69,27 +70,28 @@ function panelOrder(key: LabPanel | null): number {
   return i < 0 ? PANELS.length : i;
 }
 
-/** Where a starter-list test sits among the lab tests; past the end for one of his own. */
-function testIndex(catalog: string | null): number {
-  const i = LAB_TESTS.findIndex((t) => t.key === catalog);
-  return i < 0 ? LAB_TESTS.length : i;
-}
-
 export function isLabTest(metric: Pick<MetricRow, "panel">): boolean {
   return metric.panel != null;
 }
 
-/** The report's order: by panel, then the starter list's order, then by name. As the kernel orders a visit's results. */
-export function byReportOrder(
-  a: Pick<MetricRow, "panel" | "catalog" | "name">,
-  b: Pick<MetricRow, "panel" | "catalog" | "name">,
-): number {
-  return panelOrder(a.panel) - panelOrder(b.panel) || testIndex(a.catalog) - testIndex(b.catalog) || a.name.localeCompare(b.name);
+type Ordered = Pick<MetricRow, "panel" | "catalog" | "name">;
+
+/**
+ * The report's order: by panel, then `catalog`'s order, then by name. As the kernel orders a
+ * visit's results.
+ */
+export function reportOrder(catalog: readonly MetricTemplate[]): (a: Ordered, b: Ordered) => number {
+  const index = new Map(catalog.map((t, i) => [t.key, i]));
+  const at = (key: string | null) => (key == null ? undefined : index.get(key)) ?? catalog.length;
+  return (a, b) => panelOrder(a.panel) - panelOrder(b.panel) || at(a.catalog) - at(b.catalog) || a.name.localeCompare(b.name);
 }
 
 /** The lab tests not archived, as rows under their panel's heading (§4.9). A panel with none is left out. */
-export function testsByPanel(metrics: readonly MetricRow[]): { panel: PanelInfo; groups: MetricGroup[] }[] {
-  const tests = metrics.filter((m) => m.panel != null && m.archivedAt == null).sort(byReportOrder);
+export function testsByPanel(
+  metrics: readonly MetricRow[],
+  catalog: readonly MetricTemplate[],
+): { panel: PanelInfo; groups: MetricGroup[] }[] {
+  const tests = metrics.filter((m) => m.panel != null && m.archivedAt == null).sort(reportOrder(catalog));
   return PANELS.map((panel) => ({
     panel,
     groups: tests.filter((m) => m.panel === panel.key).map((m) => ({ ...singleGroup(m), noun: "result" })),
@@ -142,12 +144,14 @@ export function resultRange(reading: Pick<MetricReadingRow, "low" | "high" | "un
 export function resultsByPanel(
   visit: Pick<LabVisitRow, "results">,
   metrics: readonly MetricRow[],
+  catalog: readonly MetricTemplate[],
 ): { panel: PanelInfo; results: { reading: MetricReadingRow; metric: MetricRow }[] }[] {
   const byId = new Map(metrics.map((m) => [m.id, m]));
+  const order = reportOrder(catalog);
   const rows = visit.results
     .map((reading) => ({ reading, metric: byId.get(reading.metricId) }))
     .filter((r): r is { reading: MetricReadingRow; metric: MetricRow } => r.metric != null)
-    .sort((a, b) => byReportOrder(a.metric, b.metric));
+    .sort((a, b) => order(a.metric, b.metric));
   return PANELS.map((panel) => ({ panel, results: rows.filter((r) => panelOf(r.metric.panel).key === panel.key) })).filter(
     (p) => p.results.length > 0,
   );
@@ -225,12 +229,17 @@ function typed(value: number | null | undefined, decimals: number): string {
 }
 
 /**
- * The sheet's rows (§4.9): each panel's starter tests (as tracked, when they are), then his own
- * tests on that panel, then Other tests; in an edit, every test the visit has a result for. Each
- * is filled in from the visit's result, else with the test's range now (its newest report's),
- * else with the starter list's. A test archived since is left out unless the visit has it.
+ * The sheet's rows (§4.9): each panel's starter tests on `catalog` (as tracked, when they are),
+ * then his own tests on that panel, then Other tests; in an edit, every test the visit has a
+ * result for. Each is filled in from the visit's result, else with the test's range now (its
+ * newest report's), else with the starter list's. A test archived since is left out unless the
+ * visit has it.
  */
-export function visitRows(metrics: readonly MetricRow[], visit: Pick<LabVisitRow, "results"> | null): VisitTestRow[] {
+export function visitRows(
+  metrics: readonly MetricRow[],
+  visit: Pick<LabVisitRow, "results"> | null,
+  catalog: readonly MetricTemplate[],
+): VisitTestRow[] {
   const results = new Map((visit?.results ?? []).map((r) => [r.metricId, r]));
   const rows: VisitTestRow[] = [];
   const used = new Set<string>();
@@ -255,18 +264,19 @@ export function visitRows(metrics: readonly MetricRow[], visit: Pick<LabVisitRow
       added: false,
     });
   };
-  const tests = [...metrics].sort(byReportOrder);
+  const tests = [...metrics].sort(reportOrder(catalog));
   // The live one first, as the kernel resolves a name.
   const tracked = (key: string) =>
     tests.find((m) => m.catalog === key && (m.archivedAt == null || results.has(m.id))) ?? undefined;
   for (const panel of PANELS) {
-    for (const template of panel.tests) {
+    const templates = panelTests(catalog, panel.key);
+    for (const template of templates) {
       const metric = tracked(template.key);
       // Archived and not on this visit: he stopped tracking it, so the sheet doesn't offer it.
       if (!metric && tests.some((m) => m.catalog === template.key)) continue;
       row(panel.key, metric, template);
     }
-    for (const m of tests.filter((m) => m.panel === panel.key && !panel.tests.some((t) => t.key === m.catalog))) {
+    for (const m of tests.filter((m) => m.panel === panel.key && !templates.some((t) => t.key === m.catalog))) {
       row(panel.key, m);
     }
   }

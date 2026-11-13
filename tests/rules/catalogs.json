@@ -1,0 +1,347 @@
+{
+  "about": "Lists the web keeps a copy of (code review CR73): Currencies.All in C#, CURRENCIES in the web\u0027s lib/rewards.ts, whose symbols and hints are the web\u0027s own; and MetricCatalog.All, which the live app reads from GET /api/measurements/catalog and the mock copies in lib/mock/metric-catalog.ts.",
+  "cases": [
+    {
+      "rule": "currencies",
+      "args": [],
+      "out": [
+        {
+          "key": "coins",
+          "label": "Coins",
+          "spendable": true,
+          "lifeDomain": false
+        },
+        {
+          "key": "freedom",
+          "label": "Freedom",
+          "spendable": true,
+          "lifeDomain": false
+        },
+        {
+          "key": "gems",
+          "label": "Gems",
+          "spendable": true,
+          "lifeDomain": false
+        },
+        {
+          "key": "karma",
+          "label": "Karma",
+          "spendable": true,
+          "lifeDomain": false
+        },
+        {
+          "key": "xp",
+          "label": "Life XP",
+          "spendable": false,
+          "lifeDomain": false
+        },
+        {
+          "key": "resolve",
+          "label": "Resolve",
+          "spendable": false,
+          "lifeDomain": false
+        },
+        {
+          "key": "health_xp",
+          "label": "Health XP",
+          "spendable": false,
+          "lifeDomain": true
+        },
+        {
+          "key": "social_xp",
+          "label": "Social XP",
+          "spendable": false,
+          "lifeDomain": true
+        },
+        {
+          "key": "environment_xp",
+          "label": "Environment XP",
+          "spendable": false,
+          "lifeDomain": true
+        },
+        {
+          "key": "finance_xp",
+          "label": "Finance XP",
+          "spendable": false,
+          "lifeDomain": true
+        }
+      ]
+    },
+    {
+      "rule": "metricCatalog",
+      "args": [],
+      "out": [
+        {
+          "key": "weight",
+          "name": "Weight",
+          "unit": "lb",
+          "decimals": 1,
+          "better": "lower",
+          "low": null,
+          "high": null,
+          "panel": null
+        },
+        {
+          "key": "body_fat",
+          "name": "Body fat",
+          "unit": "%",
+          "decimals": 1,
+          "better": "lower",
+          "low": null,
+          "high": null,
+          "panel": null
+        },
+        {
+          "key": "waist",
+          "name": "Waist",
+          "unit": "in",
+          "decimals": 1,
+          "better": "lower",
+          "low": null,
+          "high": null,
+          "panel": null
+        },
+        {
+          "key": "bp_systolic",
+          "name": "Systolic BP",
+          "unit": "mmHg",
+          "decimals": 0,
+          "better": "lower",
+          "low": 90,
+          "high": 119,
+          "panel": null
+        },
+        {
+          "key": "bp_diastolic",
+          "name": "Diastolic BP",
+          "unit": "mmHg",
+          "decimals": 0,
+          "better": "lower",
+          "low": 60,
+          "high": 79,
+          "panel": null
+        },
+        {
+          "key": "vo2max_lab",
+          "name": "VO2 max (lab)",
+          "unit": "mL/kg/min",
+          "decimals": 1,
+          "better": "higher",
+          "low": null,
+          "high": null,
+          "panel": null
+        },
+        {
+          "key": "glucose",
+          "name": "Glucose",
+          "unit": "mg/dL",
+          "decimals": 0,
+          "better": null,
+          "low": 70,
+          "high": 100,
+          "panel": "cmp"
+        },
+        {
+          "key": "bun",
+          "name": "BUN",
+          "unit": "mg/dL",
+          "decimals": 0,
+          "better": null,
+          "low": 6,
+          "high": 20,
+          "panel": "cmp"
+        },
+        {
+          "key": "creatinine",
+          "name": "Creatinine",
+          "unit": "mg/dL",
+          "decimals": 2,
+          "better": null,
+          "low": 0.6,
+          "high": 1.3,
+          "panel": "cmp"
+        },
+        {
+          "key": "egfr",
+          "name": "eGFR",
+          "unit": "mL/min/1.73m2",
+          "decimals": 0,
+          "better": "higher",
+          "low": 60,
+          "high": null,
+          "panel": "cmp"
+        },
+        {
+          "key": "sodium",
+          "name": "Sodium",
+          "unit": "mmol/L",
+          "decimals": 0,
+          "better": null,
+          "low": 135,
+          "high": 145,
+          "panel": "cmp"
+        },
+        {
+          "key": "potassium",
+          "name": "Potassium",
+          "unit": "mmol/L",
+          "decimals": 1,
+          "better": null,
+          "low": 3.7,
+          "high": 5.2,
+          "panel": "cmp"
+        },
+        {
+          "key": "chloride",
+          "name": "Chloride",
+          "unit": "mmol/L",
+          "decimals": 0,
+          "better": null,
+          "low": 96,
+          "high": 106,
+          "panel": "cmp"
+        },
+        {
+          "key": "co2",
+          "name": "CO2",
+          "unit": "mmol/L",
+          "decimals": 0,
+          "better": null,
+          "low": 23,
+          "high": 29,
+          "panel": "cmp"
+        },
+        {
+          "key": "calcium",
+          "name": "Calcium",
+          "unit": "mg/dL",
+          "decimals": 1,
+          "better": null,
+          "low": 8.5,
+          "high": 10.2,
+          "panel": "cmp"
+        },
+        {
+          "key": "total_protein",
+          "name": "Total protein",
+          "unit": "g/dL",
+          "decimals": 1,
+          "better": null,
+          "low": 6.0,
+          "high": 8.3,
+          "panel": "cmp"
+        },
+        {
+          "key": "albumin",
+          "name": "Albumin",
+          "unit": "g/dL",
+          "decimals": 1,
+          "better": null,
+          "low": 3.4,
+          "high": 5.4,
+          "panel": "cmp"
+        },
+        {
+          "key": "bilirubin",
+          "name": "Total bilirubin",
+          "unit": "mg/dL",
+          "decimals": 1,
+          "better": null,
+          "low": 0.1,
+          "high": 1.2,
+          "panel": "cmp"
+        },
+        {
+          "key": "alp",
+          "name": "Alkaline phosphatase",
+          "unit": "U/L",
+          "decimals": 0,
+          "better": null,
+          "low": 20,
+          "high": 130,
+          "panel": "cmp"
+        },
+        {
+          "key": "ast",
+          "name": "AST",
+          "unit": "U/L",
+          "decimals": 0,
+          "better": null,
+          "low": 8,
+          "high": 33,
+          "panel": "cmp"
+        },
+        {
+          "key": "alt",
+          "name": "ALT",
+          "unit": "U/L",
+          "decimals": 0,
+          "better": null,
+          "low": 4,
+          "high": 36,
+          "panel": "cmp"
+        },
+        {
+          "key": "cholesterol",
+          "name": "Total cholesterol",
+          "unit": "mg/dL",
+          "decimals": 0,
+          "better": "lower",
+          "low": null,
+          "high": 199,
+          "panel": "lipids"
+        },
+        {
+          "key": "hdl",
+          "name": "HDL",
+          "unit": "mg/dL",
+          "decimals": 0,
+          "better": "higher",
+          "low": null,
+          "high": null,
+          "panel": "lipids"
+        },
+        {
+          "key": "triglycerides",
+          "name": "Triglycerides",
+          "unit": "mg/dL",
+          "decimals": 0,
+          "better": "lower",
+          "low": null,
+          "high": 149,
+          "panel": "lipids"
+        },
+        {
+          "key": "ldl",
+          "name": "LDL",
+          "unit": "mg/dL",
+          "decimals": 0,
+          "better": "lower",
+          "low": null,
+          "high": 99,
+          "panel": "lipids"
+        },
+        {
+          "key": "non_hdl",
+          "name": "Non-HDL cholesterol",
+          "unit": "mg/dL",
+          "decimals": 0,
+          "better": "lower",
+          "low": null,
+          "high": 129,
+          "panel": "lipids"
+        },
+        {
+          "key": "a1c",
+          "name": "A1c",
+          "unit": "%",
+          "decimals": 1,
+          "better": "lower",
+          "low": null,
+          "high": 5.6,
+          "panel": "a1c"
+        }
+      ]
+    }
+  ]
+}

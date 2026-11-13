@@ -399,6 +399,28 @@ public sealed class MetricTests(PostgresFixture postgres)
         Assert.Contains("above its high end", await upsideDown.Content.ReadAsStringAsync(Ct));
     }
 
+    /// <summary>
+    /// Code review CR73: Add a metric and the lab visit sheet fill in what the kernel's starter list
+    /// says, read from the API, so a retuned range reaches them with no web change.
+    /// </summary>
+    [Fact]
+    public async Task The_api_serves_the_kernels_starter_list_in_its_order()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
+
+        var catalog = await JsonAsync(await host.Client.GetAsync("/api/measurements/catalog", Ct));
+
+        static decimal? Number(JsonElement row, string name)
+            => row.GetProperty(name).ValueKind == JsonValueKind.Null ? null : row.GetProperty(name).GetDecimal();
+        Assert.Equal(
+            MetricCatalog.All.Select(t => (t.Key, t.Name, t.Unit, t.Decimals, t.Better, t.Low, t.High, t.Panel)),
+            catalog.EnumerateArray().Select(r => (
+                r.GetProperty("key").GetString()!, r.GetProperty("name").GetString()!, r.GetProperty("unit").GetString()!,
+                r.GetProperty("decimals").GetInt32(), r.GetProperty("better").GetString(), Number(r, "low"), Number(r, "high"),
+                r.GetProperty("panel").GetString())));
+    }
+
     private async Task<JsonElement> JsonAsync(HttpResponseMessage response)
     {
         var text = await response.Content.ReadAsStringAsync(Ct);

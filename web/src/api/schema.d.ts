@@ -1396,6 +1396,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/measurements/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetMetricCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/measurements/metrics": {
         parameters: {
             query?: never;
@@ -3350,6 +3366,19 @@ export interface components {
             /** Format: int32 */
             readings: number;
             lastReading?: null | components["schemas"]["MetricReadingRow"];
+        };
+        MetricTemplateRow: {
+            key: string;
+            name: string;
+            unit: string;
+            /** Format: int32 */
+            decimals: number;
+            better?: null | string;
+            /** Format: double */
+            low?: null | number;
+            /** Format: double */
+            high?: null | number;
+            panel?: null | string;
         };
         NewSubjectBody: {
             type?: string;
@@ -6812,6 +6841,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    GetMetricCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTemplateRow"][];
                 };
             };
         };

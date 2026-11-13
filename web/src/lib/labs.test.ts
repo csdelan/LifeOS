@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   addedRow,
-  byReportOrder,
   checkRows,
   collectedInstant,
   initialPanels,
   labsUsed,
   lineProblem,
   normalizeLabVisit,
+  reportOrder,
   reportProblem,
   resultRange,
   resultsByPanel,
@@ -19,6 +19,7 @@ import {
   visitTitle,
   type VisitTestRow,
 } from "@/lib/labs";
+import { METRIC_CATALOG } from "@/lib/mock/metric-catalog";
 import type { LabPanel, LabVisitRow, MetricReadingRow, MetricRow } from "@/lib/production-ui-types";
 
 function test(name: string, panel: LabPanel | null, catalog: string | null, more: Partial<MetricRow> = {}): MetricRow {
@@ -144,19 +145,19 @@ describe("when a visit's sample was collected", () => {
 describe("lab tests by panel (measurements plan §4.9)", () => {
   it("lists the tests under their panels in the report's order, his own by name, archived ones and metrics left out", () => {
     const archived = test("Sodium", "cmp", "sodium", { archivedAt: "2026-10-01T00:00:00Z", archivedOn: "2026-10-01" });
-    const panels = testsByPanel([tsh, ldl, weight, bun, ferritin, archived, glucose]);
+    const panels = testsByPanel([tsh, ldl, weight, bun, ferritin, archived, glucose], METRIC_CATALOG);
     expect(panels.map((p) => [p.panel.name, p.groups.map((g) => g.name)])).toEqual([
       ["CMP", ["Glucose", "BUN"]],
       ["Lipid panel", ["LDL"]],
       ["Other tests", ["Ferritin", "TSH"]],
     ]);
     expect(panels[0].groups[0].noun).toBe("result");
-    expect([tsh, glucose, ldl].sort(byReportOrder).map((m) => m.name)).toEqual(["Glucose", "LDL", "TSH"]);
+    expect([tsh, glucose, ldl].sort(reportOrder(METRIC_CATALOG)).map((m) => m.name)).toEqual(["Glucose", "LDL", "TSH"]);
   });
 
   it("lays out a visit's results as its report does, by panel", () => {
     const visit = { results: [result(tsh, 2.15, 0.45, 4.5), result(ldl, 131, null, 99), result(glucose, 104, 65, 99)] };
-    const panels = resultsByPanel(visit, [glucose, ldl, tsh]);
+    const panels = resultsByPanel(visit, [glucose, ldl, tsh], METRIC_CATALOG);
     expect(panels.map((p) => [p.panel.name, p.results.map((r) => r.metric.name)])).toEqual([
       ["CMP", ["Glucose"]],
       ["Lipid panel", ["LDL"]],
@@ -167,7 +168,7 @@ describe("lab tests by panel (measurements plan §4.9)", () => {
 
 describe("the lab visit sheet's rows (measurements plan §4.9)", () => {
   it("starts a first visit with the starter list's three panels and their common adult ranges", () => {
-    const rows = visitRows([], null);
+    const rows = visitRows([], null, METRIC_CATALOG);
     expect(rows).toHaveLength(21);
     expect(rows[0]).toMatchObject({ key: "glucose", name: "Glucose", unit: "mg/dL", metricId: null, low: "70", high: "100" });
     expect(rows.find((r) => r.name === "Creatinine")).toMatchObject({ low: "0.60", high: "1.30", decimals: 2 });
@@ -177,7 +178,7 @@ describe("the lab visit sheet's rows (measurements plan §4.9)", () => {
 
   it("fills a tracked test with its newest report's range, adds his own, and drops one he stopped tracking", () => {
     const stopped = test("BUN", "cmp", "bun", { archivedAt: "2026-10-01T00:00:00Z", archivedOn: "2026-10-01" });
-    const rows = visitRows([glucose, stopped, tsh], null);
+    const rows = visitRows([glucose, stopped, tsh], null, METRIC_CATALOG);
     expect(rows[0]).toMatchObject({ key: glucose.id, metricId: glucose.id, low: "65", high: "99", value: "" });
     expect(rows.some((r) => r.name === "BUN")).toBe(false);
     expect(rows.at(-1)).toMatchObject({ name: "TSH", panel: "other", metricId: tsh.id, unit: "mIU/L" });
@@ -187,13 +188,13 @@ describe("the lab visit sheet's rows (measurements plan §4.9)", () => {
     // The test's range has moved on since; the visit keeps the one printed beside its result.
     const now = { ...glucose, low: 70, high: 110 };
     const visit = { results: [result(now, 104, 65, 99), result(tsh, 2.15, 0.45, 4.5)] };
-    const rows = visitRows([now, tsh], visit);
+    const rows = visitRows([now, tsh], visit, METRIC_CATALOG);
     expect(rows[0]).toMatchObject({ metricId: now.id, readingId: "r-Glucose", value: "104", low: "65", high: "99" });
     expect(rows.find((r) => r.name === "TSH")).toMatchObject({ value: "2.15", low: "0.45", high: "4.50" });
     expect([...initialPanels(rows, true, null, [now, tsh])].sort()).toEqual(["cmp", "other"]);
 
     // A new visit opens the panels the newest one had.
-    expect([...initialPanels(visitRows([now, tsh], null), false, visit, [now, tsh])].sort()).toEqual(["cmp", "other"]);
+    expect([...initialPanels(visitRows([now, tsh], null, METRIC_CATALOG), false, visit, [now, tsh])].sort()).toEqual(["cmp", "other"]);
   });
 });
 

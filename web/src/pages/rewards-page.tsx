@@ -20,7 +20,6 @@ import {
   canAfford,
   coinsToUsd,
   currency,
-  CURRENCIES,
   formatAmounts,
   formatUsd,
   ledgerLabel,
@@ -289,24 +288,26 @@ function WalletSection({
       ) : null}
       {wallet ? (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-          {CURRENCIES.map((c) => {
-            const line = wallet.balances.find((b) => b.currency === c.key);
-            const balance = line?.balance ?? 0;
+          {/* Every currency the kernel has, in its order, with its label: the web adds only the
+              symbol and hint, so a new currency shows here with no web change (code review CR73). */}
+          {wallet.balances.map((line) => {
+            const look = currency(line.currency);
+            const balance = line.balance;
             return (
               <li
-                key={c.key}
+                key={line.currency}
                 className="rounded-xl px-3 py-3 ring-1 ring-foreground/10"
-                aria-label={`${c.label}: ${balance.toLocaleString()}`}
+                aria-label={`${line.label}: ${balance.toLocaleString()}`}
               >
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span aria-hidden>{c.symbol}</span> {c.label}
-                  {c.spendable ? null : (
+                  {look ? <span aria-hidden>{look.symbol}</span> : null} {line.label}
+                  {line.spendable ? null : (
                     <span className="ml-auto rounded-full bg-muted px-1.5 text-[0.625rem]">Tracked</span>
                   )}
                 </p>
                 <p className="font-heading text-2xl tabular-nums">{balance.toLocaleString()}</p>
                 <p className="text-[0.6875rem] text-muted-foreground">
-                  {c.key === "coins" ? `≈ ${formatUsd(coinsToUsd(balance, wallet.coinValueUsd))}` : c.hint}
+                  {line.currency === "coins" ? `≈ ${formatUsd(coinsToUsd(balance, wallet.coinValueUsd))}` : look?.hint}
                 </p>
               </li>
             );

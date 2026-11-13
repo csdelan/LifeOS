@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { openArtifactUrl } from "@/lib/artifacts";
 import { resultRange, resultsByPanel, testsByPanel, visitSummary, visitTitle } from "@/lib/labs";
 import { flagWord, formatValue, type MetricGroup, type ReadingSet } from "@/lib/measurements";
-import type { LabVisitRow, MetricRow } from "@/lib/production-ui-types";
+import type { LabVisitRow, MetricRow, MetricTemplate } from "@/lib/production-ui-types";
 import { useArtifactBytesUrl, useLabVisits } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
@@ -24,12 +24,15 @@ function visitKey(id: string): string {
  */
 export function LabResults({
   metrics,
+  catalog,
   isOpen,
   onToggle,
   onNewVisit,
   onEditVisit,
 }: {
   metrics: readonly MetricRow[];
+  /** The starter list (`GET /api/measurements/catalog`), whose order a report prints its tests in. */
+  catalog: readonly MetricTemplate[];
   isOpen: (key: string) => boolean;
   onToggle: (key: string) => void;
   onNewVisit: () => void;
@@ -39,7 +42,7 @@ export function LabResults({
   const visitsId = useId();
   const read = useLabVisits();
   const visits = read.data?.visits ?? [];
-  const panels = testsByPanel(metrics);
+  const panels = testsByPanel(metrics, catalog);
 
   const changeResult = (set: ReadingSet) => {
     const visit = visits.find((v) => v.id === set.find((r) => r != null)?.visitId);
@@ -84,6 +87,7 @@ export function LabResults({
                 key={visit.id}
                 visit={visit}
                 metrics={metrics}
+                catalog={catalog}
                 open={isOpen(visitKey(visit.id))}
                 onToggle={() => onToggle(visitKey(visit.id))}
                 onEdit={() => onEditVisit(visit)}
@@ -155,12 +159,14 @@ function PanelTests({
 function LabVisitItem({
   visit,
   metrics,
+  catalog,
   open,
   onToggle,
   onEdit,
 }: {
   visit: LabVisitRow;
   metrics: readonly MetricRow[];
+  catalog: readonly MetricTemplate[];
   open: boolean;
   onToggle: () => void;
   onEdit: () => void;
@@ -197,7 +203,7 @@ function LabVisitItem({
         <div id={bodyId} className="space-y-3 border-t px-4 py-4">
           {visit.note ? <p className="text-sm text-muted-foreground">{visit.note}</p> : null}
           {visit.results.length > 0 ? (
-            <VisitResultsTable visit={visit} title={title} metrics={metrics} />
+            <VisitResultsTable visit={visit} title={title} metrics={metrics} catalog={catalog} />
           ) : (
             <p className="text-sm text-muted-foreground">No results yet: add them with Edit visit when they come back.</p>
           )}
@@ -219,12 +225,14 @@ function VisitResultsTable({
   visit,
   title,
   metrics,
+  catalog,
 }: {
   visit: LabVisitRow;
   title: string;
   metrics: readonly MetricRow[];
+  catalog: readonly MetricTemplate[];
 }) {
-  const panels = resultsByPanel(visit, metrics);
+  const panels = resultsByPanel(visit, metrics, catalog);
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm" data-testid="lab-visit-results">

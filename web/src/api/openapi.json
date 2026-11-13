@@ -3710,6 +3710,29 @@
         }
       }
     },
+    "/api/measurements/catalog": {
+      "get": {
+        "tags": [
+          "Measurements"
+        ],
+        "operationId": "GetMetricCatalog",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MetricTemplateRow"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/measurements/metrics": {
       "get": {
         "tags": [
@@ -10555,6 +10578,56 @@
               {
                 "$ref": "#/components/schemas/MetricReadingRow"
               }
+            ]
+          }
+        }
+      },
+      "MetricTemplateRow": {
+        "required": [
+          "key",
+          "name",
+          "unit",
+          "decimals"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "decimals": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "better": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "low": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "high": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "panel": {
+            "type": [
+              "null",
+              "string"
             ]
           }
         }

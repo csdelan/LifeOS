@@ -150,8 +150,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   by `occurred_at`.
 - Rewards and XP progression is a pure fold over events and is never stored.
 - The web copies some kernel rules (activity XP, the diet score, Home Score parts, review periods,
-  level curves, the status vocabulary, and a repeat pattern's dates, which the kernel works out in
-  SQL, `bsk.recurrence_occurrences`).
+  level curves, the status vocabulary, the currency list, the mock's measurement starter list, and
+  a repeat pattern's dates, which the kernel works out in SQL, `bsk.recurrence_occurrences`). The
+  live app reads the starter list from `GET /api/measurements/catalog` and the bounty defaults
+  from `GET /api/bounty/defaults`; prefer an endpoint like these to a new copy.
   Their cases live in `tests/rules/*.json`, which `RuleParityTests` (`RecurrenceTests` for
   `recurrence.json`) and `rule-parity.test.ts` both check. To change one on purpose, change the
   C# or SQL, run those tests with `LIFEOS_WRITE_RULES=1`, then the TypeScript until its test

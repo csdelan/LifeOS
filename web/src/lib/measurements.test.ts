@@ -11,6 +11,7 @@ import {
   readingSets,
   starterChoices,
 } from "@/lib/measurements";
+import { METRIC_CATALOG } from "@/lib/mock/metric-catalog";
 import type { MetricReadingRow, MetricRow } from "@/lib/production-ui-types";
 
 function metric(name: string, catalog: string | null, more: Partial<MetricRow> = {}): MetricRow {
@@ -61,7 +62,7 @@ describe("measurements words and groups (measurements plan §4.8)", () => {
       metric("Ferritin", null),
       metric("Systolic BP", "bp_systolic"),
       metric("Waist", "waist"),
-    ]);
+    ], METRIC_CATALOG);
     expect(groups.map((g) => [g.key, g.name, g.metrics.map((m) => m.name)])).toEqual([
       ["waist", "Waist", ["Waist"]],
       ["bp", "Blood pressure", ["Systolic BP", "Diastolic BP"]],
@@ -69,14 +70,14 @@ describe("measurements words and groups (measurements plan §4.8)", () => {
       ["id-Resting heart rate", "Resting heart rate", ["Resting heart rate"]],
     ]);
     // Half a pair is a row of its own.
-    expect(groupMetrics([metric("Diastolic BP", "bp_diastolic")]).map((g) => g.name)).toEqual(["Diastolic BP"]);
+    expect(groupMetrics([metric("Diastolic BP", "bp_diastolic")], METRIC_CATALOG).map((g) => g.name)).toEqual(["Diastolic BP"]);
   });
 
   it("reads a pair's values and range together", () => {
     const [bp] = groupMetrics([
       metric("Systolic BP", "bp_systolic", { low: 90, high: 119 }),
       metric("Diastolic BP", "bp_diastolic", { low: 60, high: 79 }),
-    ]);
+    ], METRIC_CATALOG);
     expect(groupValue(bp, [122, 78])).toBe("122/78 mmHg");
     expect(groupValue(bp, [122, null])).toBe("122/— mmHg");
     expect(groupRangeText(bp)).toBe("Normal: systolic 90–119, diastolic 60–79 mmHg");
@@ -119,7 +120,7 @@ describe("measurements words and groups (measurements plan §4.8)", () => {
   });
 
   it("offers the starter metrics not tracked yet, blood pressure while either half is missing", () => {
-    const names = (metrics: MetricRow[]) => starterChoices(metrics).map((c) => c.name);
+    const names = (metrics: MetricRow[]) => starterChoices(metrics, METRIC_CATALOG).map((c) => c.name);
     expect(names([])).toEqual(["Body fat", "Waist", "Blood pressure", "VO2 max (lab)"]);
     expect(names([metric("Waist", "waist"), metric("Systolic BP", "bp_systolic")])).toEqual([
       "Body fat",

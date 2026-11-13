@@ -35,7 +35,7 @@ import {
 } from "@/lib/labs";
 import { NAME_MAX, NOTE_MAX, SKEW_MS, UNIT_MAX } from "@/lib/measurements";
 import { useIsDesktop } from "@/lib/media-query";
-import type { LabPanel, LabVisitRequest, LabVisitRow, MetricRow } from "@/lib/production-ui-types";
+import type { LabPanel, LabVisitRequest, LabVisitRow, MetricRow, MetricTemplate } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { errorText, useWriteAction } from "@/lib/write-action";
@@ -56,6 +56,7 @@ export function LabVisitSheet({
   visit,
   visits,
   metrics,
+  catalog,
   today,
 }: {
   open: boolean;
@@ -65,6 +66,8 @@ export function LabVisitSheet({
   /** Every visit, newest first: the labs to suggest, and the panels a new visit starts with. */
   visits: readonly LabVisitRow[];
   metrics: readonly MetricRow[];
+  /** The starter list (`GET /api/measurements/catalog`): each panel's tests and the ranges a first visit starts from. */
+  catalog: readonly MetricTemplate[];
   today: string;
 }) {
   const desktop = useIsDesktop();
@@ -80,6 +83,7 @@ export function LabVisitSheet({
             visit={visit}
             visits={visits}
             metrics={metrics}
+            catalog={catalog}
             today={today}
             onDone={() => onOpenChange(false)}
           />
@@ -95,12 +99,14 @@ function VisitForm({
   visit,
   visits,
   metrics,
+  catalog,
   today,
   onDone,
 }: {
   visit: LabVisitRow | null;
   visits: readonly LabVisitRow[];
   metrics: readonly MetricRow[];
+  catalog: readonly MetricTemplate[];
   today: string;
   onDone: () => void;
 }) {
@@ -113,7 +119,7 @@ function VisitForm({
   const [time, setTime] = useState(startTime);
   const [lab, setLab] = useState(visit?.lab ?? "");
   const [note, setNote] = useState(visit?.note ?? "");
-  const [rows, setRows] = useState<VisitTestRow[]>(() => visitRows(metrics, visit));
+  const [rows, setRows] = useState<VisitTestRow[]>(() => visitRows(metrics, visit, catalog));
   const [panels, setPanels] = useState<Set<LabPanel>>(() =>
     initialPanels(rows, visit != null, visits.find((v) => v.id !== visit?.id) ?? null, metrics),
   );

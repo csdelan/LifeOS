@@ -107,6 +107,8 @@ export const qk = {
   ledger: ["ledger"] as const,
   rewards: ["rewards"] as const,
   bountyDefaults: ["bounty-defaults"] as const,
+  // Outside ["measurements"]: the starter list is the kernel's, so no write changes it.
+  metricCatalog: ["metric-catalog"] as const,
   coverSearch: (query: string) => ["cover-search", query] as const,
   reviews: ["reviews"] as const,
   recap: ["recap"] as const,
@@ -1345,6 +1347,15 @@ export function useSpacePhotos(space: string | null, shot: string | null = null,
     queryKey: qk.spacePhotos(space ?? "", shot ?? ""),
     queryFn: () => reads().spacePhotos(space!, shot ?? undefined),
     enabled: enabled && space != null,
+  });
+}
+
+/** The starter list, from the kernel (code review CR73): fixed while the app runs. */
+export function useMetricCatalog() {
+  return useQuery({
+    queryKey: qk.metricCatalog,
+    queryFn: () => reads().metricCatalog(),
+    staleTime: Infinity,
   });
 }
 

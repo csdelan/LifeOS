@@ -12,15 +12,16 @@ import { CardSkeleton } from "@/components/primitives/skeletons";
 import { Button } from "@/components/ui/button";
 import { todayIso } from "@/lib/dates";
 import {
-  WEIGHT,
+  WEIGHT_KEY,
   findCatalog,
   groupMetrics,
   singleGroup,
+  templateOf,
   type MetricGroup,
   type ReadingSet,
 } from "@/lib/measurements";
 import type { LabVisitRow } from "@/lib/production-ui-types";
-import { useLabVisits, useMetrics } from "@/lib/queries";
+import { useLabVisits, useMetricCatalog, useMetrics } from "@/lib/queries";
 import { loadView, saveView } from "@/lib/view-state";
 
 const OPEN_VIEW = "measurements.open";
@@ -33,10 +34,13 @@ const OPEN_VIEW = "measurements.open";
  * name, blood pressure's two as one; a row opens its card in place and has its own Log. Add a
  * metric starts another. Lab results follow (§4.9): the visits and the lab tests by panel, which
  * stay out of Your metrics. Archived metrics wait at the foot with Restore. An archived Weight
- * shows as not tracked: Start tracking makes a new one.
+ * shows as not tracked: Start tracking makes a new one. The starter list comes from the API (code
+ * review CR73), and the page waits for it with the metrics: it orders the rows, fills in Add a
+ * metric and the lab visit sheet, and names Weight's unit.
  */
 export function MeasurementsPage() {
   const metrics = useMetrics();
+  const catalog = useMetricCatalog();
   const visits = useLabVisits();
   const yoursId = useId();
   const [sheet, setSheet] = useState<{ group: MetricGroup; readings: ReadingSet | null } | null>(null);
@@ -49,11 +53,20 @@ export function MeasurementsPage() {
   );
 
   const all = metrics.data ?? [];
-  const weight = findCatalog(all, WEIGHT.key);
+  const templates = catalog.data ?? [];
+  const ready = metrics.data != null && catalog.data != null;
+  const weightTemplate = templateOf(templates, WEIGHT_KEY);
+  const weight = findCatalog(all, WEIGHT_KEY);
   const tracking = weight != null && weight.archivedAt == null;
   const weightGroup = tracking ? singleGroup(weight) : null;
-  const groups = groupMetrics(all.filter((m) => m.archivedAt == null && m.id !== weight?.id && m.panel == null));
-  const archived = groupMetrics(all.filter((m) => m.archivedAt != null));
+  const groups = groupMetrics(
+    all.filter((m) => m.archivedAt == null && m.id !== weight?.id && m.panel == null),
+    templates,
+  );
+  const archived = groupMetrics(
+    all.filter((m) => m.archivedAt != null),
+    templates,
+  );
 
   const log = (group: MetricGroup, readings: ReadingSet | null = null) => {
     setSheet({ group, readings });
@@ -94,8 +107,8 @@ export function MeasurementsPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
         <div className="mx-auto max-w-4xl space-y-6">
-          {metrics.isLoading ? <CardSkeleton /> : null}
-          {metrics.isError ? (
+          {metrics.isLoading || catalog.isLoading ? <CardSkeleton /> : null}
+          {metrics.isError || catalog.isError ? (
             <EmptyState
               tone="error"
               icon={WeightIcon}
@@ -103,7 +116,7 @@ export function MeasurementsPage() {
               description="This is not an empty list — the reader never returned."
             />
           ) : null}
-          {metrics.data && !tracking ? <StartTrackingCard /> : null}
+          {ready && !tracking && weightTemplate ? <StartTrackingCard weight={weightTemplate} /> : null}
           {weightGroup ? (
             <MetricCard
               group={weightGroup}
@@ -113,7 +126,7 @@ export function MeasurementsPage() {
             />
           ) : null}
 
-          {metrics.data ? (
+          {ready ? (
             <section aria-labelledby={yoursId} className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 id={yoursId} className="font-heading text-xl">
@@ -146,9 +159,10 @@ export function MeasurementsPage() {
             </section>
           ) : null}
 
-          {metrics.data ? (
+          {ready ? (
             <LabResults
               metrics={all}
+              catalog={templates}
               isOpen={(key) => open.has(key)}
               onToggle={(key) => setOpen(key, !open.has(key))}
               onNewVisit={() => openVisit(null)}
@@ -185,6 +199,7 @@ export function MeasurementsPage() {
           visit={visitSheet.visit}
           visits={visits.data?.visits ?? []}
           metrics={all}
+          catalog={templates}
           today={visits.data?.today ?? todayIso()}
         />
       ) : null}
@@ -192,6 +207,7 @@ export function MeasurementsPage() {
         open={adding}
         onOpenChange={setAdding}
         metrics={all}
+        catalog={templates}
         onAdded={(key) => setOpen(key, true)}
       />
     </div>
