@@ -10,6 +10,9 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:5177",
     trace: "on-first-retry",
+    // Chris's home zone and locale, on every machine: CI runs in UTC otherwise.
+    timezoneId: "America/Los_Angeles",
+    locale: "en-US",
   },
   webServer: {
     command: "npx vite --host 127.0.0.1 --port 5177 --strictPort",

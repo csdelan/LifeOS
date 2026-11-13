@@ -1,0 +1,35 @@
+# Monthly update PRs, grouped so each ecosystem opens one. They run CI (ci.yml) and deploy
+# nothing until merged to main.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    ignore:
+      # Pinned to a master commit by hand; see migrate.yml.
+      - dependency-name: "superfly/flyctl-actions*"
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      # TipTap's packages pin each other's exact version, so they move together.
+      tiptap:
+        patterns: ["@tiptap/*"]
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

@@ -54,6 +54,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: ${{ inputs.environment }}
     steps:
       - name: Check out
@@ -86,7 +87,10 @@ jobs:
 
       - name: Set up flyctl
         if: ${{ inputs.deploy }}
-        uses: superfly/flyctl-actions/setup-flyctl@master
+        # A commit on master, pinned by hand (Dependabot leaves it alone): the last release,
+        # 1.5, still runs on Node 20, which GitHub is retiring. Bump it to a newer commit or a
+        # release on Node 24.
+        uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master, 2026-10-30
 
       - name: Deploy to Fly
         if: ${{ inputs.deploy }}

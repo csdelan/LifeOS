@@ -1,8 +1,12 @@
 name: CI
 
-# PR gate: test the kernel, build the SPA, build the deployable image (no push).
-# Does not migrate and does not deploy. The image does not need Supabase
-# public values at build time; those are runtime env / Fly secrets.
+# PR gate, and the first job of Deploy: test the kernel, check and build the SPA, run the
+# Playwright golden paths and accessibility checks, and build the deployable image (no push).
+# Does not migrate and does not deploy. The image does not need Supabase public values at
+# build time; those are runtime env / Fly secrets.
+#
+# The .NET and unit tests run in UTC; Playwright runs in Chris's zone (playwright.config.ts
+# sets timezoneId), so a date bug shows up in one or the other.
 
 on:
   pull_request:
@@ -15,6 +19,7 @@ jobs:
   dotnet:
     name: .NET test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -32,6 +37,7 @@ jobs:
   web:
     name: Web build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: web
@@ -61,9 +67,49 @@ jobs:
       - name: Build
         run: npm run build
 
+  e2e:
+    name: Web golden paths and accessibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Golden paths
+        run: npm run test:e2e
+
+      - name: Accessibility
+        if: ${{ !cancelled() }}
+        run: npm run a11y
+
+      - name: Keep the traces of a failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: web/test-results/
+          retention-days: 7
+
   docker:
     name: Docker build (no push)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out
         uses: actions/checkout@v4
