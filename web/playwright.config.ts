@@ -8,8 +8,11 @@ process.env.TZ = "America/Los_Angeles";
 
 export default defineConfig({
   testDir: "./e2e",
+  // The specs are split by feature (e2e/golden, e2e/a11y), and two workers run the files side by
+  // side, each file's tests in order (code review CR56). Each test opens its own page and the mock
+  // store lives in the page, so no test sees another's writes.
   fullyParallel: false,
-  workers: 1,
+  workers: 2,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",

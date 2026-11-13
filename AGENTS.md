@@ -62,7 +62,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   its class takes `IClassFixture<ClassDatabase>`, one copy its tests share. There's no serial
   collection: every class runs alongside the others. Fake time with `TestClock`.
 - Web, from `web/`: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`. Playwright:
-  `npm run test:e2e` and `npm run a11y`.
+  `npm run test:e2e` and `npm run a11y`, one spec per feature in `web/e2e/golden` and
+  `web/e2e/a11y` (a new page's route goes in `a11y/pages.spec.ts`), helpers in `e2e/support.ts`.
 - After changing an endpoint or a read model, run `./scripts/generate-web-client.ps1` and commit
   `web/src/api/openapi.json` and `schema.d.ts`: a .NET test checks the first and CI the second.
   It needs no running API, so the "Regenerating the web API types" steps in `verifying.md` are
