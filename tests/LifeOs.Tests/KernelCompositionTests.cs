@@ -1,6 +1,7 @@
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Food;
 using LifeOs.Application.Rewards;
+using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Persistence;
@@ -32,6 +33,25 @@ public sealed class KernelCompositionTests
         {
             Assert.NotNull(provider.GetRequiredService(descriptor.ServiceType));
         }
+    }
+
+    // Code review CR45: a service the kernel doesn't register can only be built by hand, so a kernel
+    // built for another source, such as an agent's (SourceKernels), can't reach it. A *Reads class
+    // may be built on the API's reader connection instead, so only services are checked.
+    [Fact]
+    public void Every_application_service_is_registered()
+    {
+        var registered = new ServiceCollection().AddLifeOsKernel(new KernelSettings(NoDatabase))
+            .Select(d => d.ServiceType).ToHashSet();
+
+        var missing = typeof(SubjectService).Assembly.GetExportedTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && t.Name.EndsWith("Service", StringComparison.Ordinal))
+            .Where(t => !registered.Contains(t))
+            .Select(t => t.Name)
+            .Order()
+            .ToList();
+
+        Assert.Empty(missing);
     }
 
     [Fact]

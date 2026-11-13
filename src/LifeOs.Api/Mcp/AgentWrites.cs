@@ -11,6 +11,7 @@ using LifeOs.Application.Capture;
 using LifeOs.Application.Reviews;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
+using LifeOs.Infrastructure.DependencyInjection;
 using ModelContextProtocol;
 using Npgsql;
 
@@ -85,22 +86,16 @@ public sealed record McpWriteCheck(McpAgent? Agent, string? Why);
 
 /// <summary>
 /// The writes an agent can make at the <c>capture</c> level (agent-access plan §5.2, notes plan
-/// N7), through the same Application services the API's endpoints use, built for each agent so
-/// every event carries <c>mcp:&lt;client_id&gt;</c> and provenance <c>declared</c> (§5.3). A
+/// N7), through the same Application services the API's endpoints use, from a kernel of the
+/// agent's own (<see cref="SourceKernels"/>), so every event carries <c>mcp:&lt;client_id&gt;</c>
+/// and provenance <c>declared</c> (§5.3). A
 /// capture, journal entry or reflection link also records the agent's Person in its payload.
 /// Nothing here changes or removes what's already there, except that <see cref="DismissAsync"/>
 /// clears a raw capture from the Inbox, which flagging it again undoes, and a newer reflection
 /// link replaces the older one (both stay in the log).
 /// </summary>
 public sealed class AgentWrites(
-    IEventStore events,
-    IArtifactStore artifacts,
-    IActivityWriter activityWriter,
-    IEventReader eventReader,
-    ISubjectRepository subjectRepository,
-    ISubjectEventRepository edges,
-    IReviewRepository reviews,
-    StatusService status,
+    SourceKernels kernels,
     IHomeCalendar calendar,
     IClock clock,
     SubjectReader reader,
@@ -392,25 +387,17 @@ public sealed class AgentWrites(
             : throw new McpException($"{name}: no item has the id or URN '{reference}'. Find one with find_items or list_items.");
     }
 
-    /// <summary>
-    /// The services for one agent, writing as its source. The host's <see cref="StatusService"/>
-    /// is only there for <see cref="TriageService.DropAsync"/> and for completing a review, which
-    /// no write tool calls.
-    /// </summary>
+    /// <summary>The services for one agent, from its own kernel, writing as its source.</summary>
     private AgentKernel Kernel(McpAgent agent)
     {
-        var source = new EventSource(agent.SourceId);
-        var subjects = new SubjectService(subjectRepository, clock, source);
-        var relate = new RelateService(subjects, eventReader, edges);
-        var triage = new TriageService(subjects, eventReader, events, clock, source, status);
-        var capture = new CaptureService(events, artifacts, clock, source);
+        var kernel = kernels.For(agent.SourceId);
         return new AgentKernel(
-            relate,
-            triage,
-            new InboxFilingService(capture, subjects, relate, triage, calendar),
-            new JournalService(subjects, artifacts, activityWriter, clock, source),
-            new ReviewService(subjects, subjectRepository, reviews, status, calendar),
-            new ReflectionService(events, edges, reviews, clock, source));
+            kernel.GetRequiredService<RelateService>(),
+            kernel.GetRequiredService<TriageService>(),
+            kernel.GetRequiredService<InboxFilingService>(),
+            kernel.GetRequiredService<JournalService>(),
+            kernel.GetRequiredService<ReviewService>(),
+            kernel.GetRequiredService<ReflectionService>());
     }
 
     private sealed record AgentKernel(

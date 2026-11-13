@@ -210,8 +210,9 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<EventSource>(),
             reportsEnabled: StoresPhotos(sp, settings)));
 
-        // Daily and weekly reviews (REVIEW-1, REVIEW-2).
+        // Daily and weekly reviews (REVIEW-1, REVIEW-2) and their vault reflections (§4.1).
         services.AddSingleton<ReviewService>();
+        services.AddSingleton<ReflectionService>();
 
         // Covers (D15) and Oura (D14): each takes an outside client that may not be set up.
         services.AddSingleton(sp => new CoverService(

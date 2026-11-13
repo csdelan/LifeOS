@@ -5,6 +5,7 @@ using LifeOs.Api.Mcp.Tools;
 using LifeOs.Api.Read;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
+using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using ModelContextProtocol;
@@ -163,15 +164,9 @@ public static class McpHost
             services.AddHttpContextAccessor();
             services.AddSingleton(sp => new McpWriteAccess(
                 options, sp.GetRequiredService<IHttpContextAccessor>(), sp.GetService<AgentAccessStore>()));
+            services.AddSingleton<SourceKernels>();
             services.AddSingleton(sp => new AgentWrites(
-                sp.GetRequiredService<IEventStore>(),
-                sp.GetRequiredService<IArtifactStore>(),
-                sp.GetRequiredService<IActivityWriter>(),
-                sp.GetRequiredService<IEventReader>(),
-                sp.GetRequiredService<ISubjectRepository>(),
-                sp.GetRequiredService<ISubjectEventRepository>(),
-                sp.GetRequiredService<IReviewRepository>(),
-                sp.GetRequiredService<StatusService>(),
+                sp.GetRequiredService<SourceKernels>(),
                 sp.GetRequiredService<IHomeCalendar>(),
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<SubjectReader>(),

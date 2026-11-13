@@ -1030,8 +1030,9 @@ every rule and invariant holds. The API is still a door into `bsk`, the only wri
 - The event records the agent's Person, so the web can show "via Claude" on inbox items,
   journal entries and history rows.
 
-**As built (2026-11-12):** the services aren't given a scoped source. `AgentWrites` builds the
-same Application services for each call with the agent's source, so every event it writes
+**As built (2026-11-12):** the services aren't given a scoped source. `AgentWrites` takes its
+services from a kernel of the agent's own (`SourceKernels`: the host's `AddLifeOsKernel` settings
+and clock with only the source changed, code review CR45), so every event it writes
 (captures, journal entries, Inbox flags, a dismiss's marker, a reflection link and a review it
 opens) has `source_id = mcp:<client_id>` and provenance `declared`. A capture, journal entry or
 reflection link also has `agent_person_id` in its payload: the Person the client acted as when it wrote. For the other events, the source names
