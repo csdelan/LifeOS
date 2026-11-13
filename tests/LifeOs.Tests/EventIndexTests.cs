@@ -62,6 +62,14 @@ public sealed class EventIndexTests(PostgresFixture postgres)
         => Assert.Contains("event_triage_item", await PlanAsync(
             NpgsqlEventReader.EverTriagedSql.Replace("@item", "'00000000-0000-0000-0000-000000000001'", StringComparison.Ordinal)));
 
+    // Code review CR68: a retried request finds its first write by source and request id, by index.
+    [Fact]
+    public async Task A_retried_requests_first_write_is_found_by_index()
+        => Assert.Contains("event_source_external_key", await PlanAsync(
+            NpgsqlEventReader.FindWriteSql
+                .Replace("@sourceId", "'mcp:agent'", StringComparison.Ordinal)
+                .Replace("@externalId", "'request-1'", StringComparison.Ordinal)));
+
     private async Task<string> PlanAsync(string query)
     {
         await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);

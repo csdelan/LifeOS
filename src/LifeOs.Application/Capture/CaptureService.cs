@@ -6,12 +6,12 @@ namespace LifeOs.Application.Capture;
 
 /// <summary>
 /// The lowest-ceremony write path: turn a body of text into one immutable event
-/// whose content is stored as an artifact. Transport-neutral — it knows nothing
-/// of the CLI. A capture may concern nothing, forever; nothing is required of it
+/// whose content is stored as an artifact, the two in one transaction. Transport-neutral — it
+/// knows nothing of the CLI. A capture may concern nothing, forever; nothing is required of it
 /// beyond its text.
 /// </summary>
 public sealed class CaptureService(
-    IEventStore events, IArtifactStore artifacts, IClock clock, EventSource eventSource)
+    IEventStore events, IActivityWriter writer, IClock clock, EventSource eventSource)
 {
     /// <summary>Captures a free-text note as one <c>note</c> event.</summary>
     public Task<CaptureResult> CaptureNoteAsync(string text, CancellationToken cancellationToken = default)
@@ -33,7 +33,9 @@ public sealed class CaptureService(
     /// Captures a note or a journal entry for a door that says more about where it came from
     /// (an agent, agent-access plan §5.3): <paramref name="externalId"/> makes a retried request
     /// the same event, since the store keeps one event per source and external id (invariant 5),
-    /// and <paramref name="payloadJson"/> is what the door records with it.
+    /// and <paramref name="payloadJson"/> is what the door records with it. A retry writes
+    /// nothing and answers the first write, <see cref="CaptureResult.AlreadyWritten"/>; one whose
+    /// id named another kind of write is refused (code review CR68).
     /// </summary>
     public Task<CaptureResult> CaptureFromAsync(
         string kind, string text, string? externalId, string payloadJson,
@@ -91,8 +93,6 @@ public sealed class CaptureService(
             throw new ArgumentException("Capture text must not be empty.", nameof(text));
         }
 
-        var artifactId = await artifacts.AddAsync(text, cancellationToken);
-
         // occurred_at and recorded_at are the same for a direct capture: it
         // happened when we recorded it.
         var now = clock.UtcNow;
@@ -103,16 +103,21 @@ public sealed class CaptureService(
             RecordedAt: now,
             SourceId: eventSource.Id,
             ExternalId: externalId,
-            PayloadJson: payloadJson,
-            ArtifactId: artifactId);
+            PayloadJson: payloadJson);
 
-        var eventId = await events.AppendAsync(newEvent, cancellationToken);
-        return new CaptureResult(eventId, artifactId);
+        // The text and its event in one transaction: a retry that races its first call writes
+        // neither, rather than text nothing names (code review CR68).
+        var written = await writer.WriteOnceAsync(newEvent, text, [], cancellationToken);
+        RequestReusedException.ThrowIfOtherKind(written.Kind, kind, externalId);
+        return new CaptureResult(written.EventId, written.ArtifactId.GetValueOrDefault(), written.AlreadyWritten);
     }
 }
 
-/// <summary>The outcome of a capture: the event written and the artifact it references.</summary>
-public sealed record CaptureResult(Guid EventId, Guid ArtifactId);
+/// <summary>
+/// The outcome of a capture: the event written and the artifact it references. A retried request
+/// is <paramref name="AlreadyWritten"/>, and these are its first write's.
+/// </summary>
+public sealed record CaptureResult(Guid EventId, Guid ArtifactId, bool AlreadyWritten = false);
 
 /// <summary>The outcome of an idea session: the one event written and its idea count.</summary>
 public sealed record IdeaSessionResult(Guid EventId, Guid ProblemId, int IdeaCount);

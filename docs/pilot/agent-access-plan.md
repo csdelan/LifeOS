@@ -1050,7 +1050,12 @@ web's "via Claude" isn't built yet.
   the event's `external_id` under `mcp:<client_id>`, so a retried call writes once
   (invariant 5). Built: a retry answers with what the first call wrote and
   `already_done: true`, and the same id for a different kind of write is refused. `dismiss`
-  takes none: dismissing a capture that's already out of the Inbox writes nothing.
+  takes none: dismissing a capture that's already out of the Inbox writes nothing. The kernel
+  answers a retry, not the door (code review CR68): `IActivityWriter.WriteOnceAsync` writes the
+  text, the event and its edges in one transaction that inserts nothing when the id is already
+  there, and the capture, journal and reflection services finish and answer the first write
+  (`RequestRetryTests`). A retry racing its first call can still file a second Idea or Problem,
+  since filing runs after the capture commits.
 - **Undo** works the kernel's normal way: set a status back, or dismiss a capture in
   triage. Nothing an agent can do deletes anything.
 - **Records.** The access log records writes like reads, and the event store keeps them

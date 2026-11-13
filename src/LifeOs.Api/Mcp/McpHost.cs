@@ -170,7 +170,6 @@ public static class McpHost
                 sp.GetRequiredService<IHomeCalendar>(),
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<SubjectReader>(),
-                sp.GetRequiredService<McpReads>(),
                 options));
             server.WithTools<CaptureTools>();
         }

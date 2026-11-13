@@ -17,7 +17,7 @@ namespace LifeOs.Application.Capture;
 /// </summary>
 public sealed class InboxFilingService(
     CaptureService capture, AttachmentService attachments, SubjectService subjects, RelateService relate,
-    TriageService triage, IHomeCalendar calendar)
+    TriageService triage, IHomeCalendar calendar, IEventReader events, EventSource eventSource)
 {
     /// <summary>The capture kind that stays an event (D4); Idea and Problem are subject types.</summary>
     public const string Note = "Note";
@@ -39,22 +39,69 @@ public sealed class InboxFilingService(
 
     /// <summary>
     /// Captures <paramref name="text"/> as a note event and files it as <paramref name="type"/>
-    /// (Note when none is given; an Idea or a Problem is titled by its first line). Once the note is
-    /// written, filing it runs to the end even if the caller has gone: a capture that's never
-    /// flagged never reaches the Inbox. <paramref name="externalId"/> and
-    /// <paramref name="payloadJson"/> are for a door that says more about where the capture came
-    /// from (<see cref="CaptureService.CaptureFromAsync"/>).
+    /// (Note when none is given; an Idea or a Problem is titled by its first line), concerning
+    /// <paramref name="concerning"/> (an item's reference) when given. Once the note is written,
+    /// filing it runs to the end even if the caller has gone: a capture that's never flagged never
+    /// reaches the Inbox. <paramref name="externalId"/> and <paramref name="payloadJson"/> are for a
+    /// door that says more about where the capture came from
+    /// (<see cref="CaptureService.CaptureFromAsync"/>): a retried request finishes what its first
+    /// call stopped before and answers as that call would have (code review CR68).
     /// </summary>
     public async Task<InboxCapture> CaptureAsync(
         string text, string? type = null, string? externalId = null, string payloadJson = "{}",
-        CancellationToken cancellationToken = default)
+        string? concerning = null, CancellationToken cancellationToken = default)
     {
         var kind = ParseKind(type);
         var body = text?.Trim() ?? "";
+        var title = FirstLine(body) ?? "Capture";
+        var about = concerning is null ? null : await subjects.ResolveAsync(concerning, cancellationToken);
         var captured = await capture.CaptureFromAsync(EventKinds.Note, body, externalId, payloadJson, cancellationToken);
-        var item = await FileAsync(
-            kind, captured.EventId, deduplicated: false, FirstLine(body) ?? "Capture", body, CancellationToken.None);
-        return new InboxCapture(captured.EventId, captured.ArtifactId, kind, item);
+        if (captured.AlreadyWritten)
+        {
+            return await FinishRetryAsync(kind, captured, externalId!, title, body, about);
+        }
+
+        var item = await FinishAsync(kind, captured.EventId, deduplicated: false, title, body, about?.Urn);
+        return new InboxCapture(captured.EventId, captured.ArtifactId, kind, item, about is null ? [] : [about], AlreadyWritten: false);
+    }
+
+    /// <summary>
+    /// A retried capture: does whatever the first call stopped before (flagging the note, making
+    /// the Idea or Problem, relating the item it concerns), then answers as the first call would
+    /// have. A capture flagged once and since cleared by Chris stays cleared.
+    /// </summary>
+    private async Task<InboxCapture> FinishRetryAsync(
+        string kind, CaptureResult captured, string externalId, string title, string body, SubjectRef? about)
+    {
+        var earlier = await events.FindWriteAsync(eventSource.Id, externalId, CancellationToken.None)
+            ?? throw new InvalidOperationException($"The capture for request_id '{externalId}' is gone.");
+        var concerns = earlier.Concerns.ToList();
+        SubjectRef? item = null;
+        if (kind == Note)
+        {
+            await triage.FlagIfNeverTriagedAsync(isEvent: true, captured.EventId, CancellationToken.None);
+        }
+        else
+        {
+            item = concerns.FirstOrDefault(c => c.Type == kind && c.Id != about?.Id);
+            if (item is null)
+            {
+                item = await FileAsync(kind, captured.EventId, deduplicated: false, title, body, CancellationToken.None);
+            }
+            else
+            {
+                await triage.FlagIfNeverTriagedAsync(isEvent: false, item.Id, CancellationToken.None);
+            }
+        }
+
+        if (about is not null && concerns.All(c => c.Id != about.Id))
+        {
+            await relate.RelateAsync(captured.EventId, about.Urn, SubjectEventRelations.Concerns, CancellationToken.None);
+            concerns.Add(about);
+        }
+
+        return new InboxCapture(
+            captured.EventId, captured.ArtifactId, kind, item, concerns.Where(c => c.Id != item?.Id).ToList(), AlreadyWritten: true);
     }
 
     /// <summary>
@@ -190,9 +237,12 @@ public sealed class InboxFilingService(
 
 /// <summary>
 /// What <see cref="InboxFilingService.CaptureAsync"/> wrote: the note event and its text, the kind
-/// it was filed as (Note, Idea or Problem), and the Idea or Problem made from it.
+/// it was filed as (Note, Idea or Problem), the Idea or Problem made from it, and the other items
+/// it concerns. A retried request is <paramref name="AlreadyWritten"/>, and these are its first
+/// capture's.
 /// </summary>
-public sealed record InboxCapture(Guid EventId, Guid ArtifactId, string Kind, SubjectRef? Item);
+public sealed record InboxCapture(
+    Guid EventId, Guid ArtifactId, string Kind, SubjectRef? Item, IReadOnlyList<SubjectRef> Concerns, bool AlreadyWritten);
 
 /// <summary>A file a capture carries: its bytes, its name and its type (guessed from the name when null).</summary>
 public sealed record CaptureFile(byte[] Bytes, string? Filename = null, string? ContentType = null);

@@ -45,4 +45,14 @@ public interface IEventReader
 
     /// <summary>Whether any <c>triage</c> event names <paramref name="itemId"/>: it was flagged or cleared at least once.</summary>
     Task<bool> EverTriagedAsync(Guid itemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The event <paramref name="sourceId"/> wrote for <paramref name="externalId"/>, with the items
+    /// it concerns, oldest edge first; null when there's none. A retried request finishes from
+    /// this what its first call stopped before (code review CR68).
+    /// </summary>
+    Task<EarlierWrite?> FindWriteAsync(string sourceId, string externalId, CancellationToken cancellationToken = default);
 }
+
+/// <summary>An event a source already wrote for a request: its id, kind, text and the items it concerns.</summary>
+public sealed record EarlierWrite(Guid EventId, string Kind, Guid? ArtifactId, IReadOnlyList<SubjectRef> Concerns);

@@ -75,7 +75,6 @@ public static class ServiceCollectionExtensions
                 new SupabaseObjectStorage(SupabaseObjectStorage.CreateHttpClient(), storage));
         }
 
-        services.AddSingleton<IArtifactStore, NpgsqlArtifactStore>();
         services.AddSingleton<IArtifactBlobStore, NpgsqlArtifactBlobStore>();
         services.AddSingleton<IEventStore, NpgsqlEventStore>();
         services.AddSingleton<IEventReader, NpgsqlEventReader>();

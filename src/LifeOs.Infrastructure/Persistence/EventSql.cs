@@ -18,8 +18,11 @@ internal static class EventSql
         VALUES
             (@Kind, @Provenance, @OccurredAt, @RecordedAt, @SourceId, @ExternalId,
              @Payload::jsonb, @DerivedFrom, @ArtifactId)
-        RETURNING id;
         """;
+
+    // A source's external id is unique (event_source_external_key, invariant 5). A second insert
+    // of one waits for the first to commit or roll back, then inserts nothing.
+    private const string OnceSql = " ON CONFLICT (source_id, external_id) WHERE external_id IS NOT NULL DO NOTHING";
 
     /// <summary>An edge from an event to a subject: <c>@EventId</c>, <c>@Relation</c>, <c>@SubjectId</c>, <c>@Provenance</c>.</summary>
     public const string InsertEdgeSql = """
@@ -31,8 +34,21 @@ internal static class EventSql
     public static Task<Guid> InsertAsync(
         NpgsqlConnection connection, NewEvent newEvent, NpgsqlTransaction? transaction,
         CancellationToken cancellationToken)
-        => connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
-            InsertSql,
+        => connection.ExecuteScalarAsync<Guid>(Command(InsertSql + " RETURNING id;", newEvent, transaction, cancellationToken));
+
+    /// <summary>
+    /// Appends <paramref name="newEvent"/> unless its source already wrote its external id, and
+    /// answers its id, or null when it wrote nothing (code review CR68).
+    /// </summary>
+    public static Task<Guid?> InsertOnceAsync(
+        NpgsqlConnection connection, NewEvent newEvent, NpgsqlTransaction transaction,
+        CancellationToken cancellationToken)
+        => connection.ExecuteScalarAsync<Guid?>(Command(InsertSql + OnceSql + " RETURNING id;", newEvent, transaction, cancellationToken));
+
+    private static CommandDefinition Command(
+        string sql, NewEvent newEvent, NpgsqlTransaction? transaction, CancellationToken cancellationToken)
+        => new(
+            sql,
             new
             {
                 newEvent.Kind,
@@ -46,7 +62,7 @@ internal static class EventSql
                 newEvent.ArtifactId
             },
             transaction,
-            cancellationToken: cancellationToken));
+            cancellationToken: cancellationToken);
 
     /// <summary>Links <paramref name="eventId"/> to each edge's subject.</summary>
     public static async Task InsertEdgesAsync(

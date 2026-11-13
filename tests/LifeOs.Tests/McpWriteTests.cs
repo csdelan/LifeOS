@@ -276,7 +276,7 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         await using var client = await McpServerTests.ConnectAsync(host, ApiTestHost.TokenFor(clientId: Writer));
 
         // As if the first call wrote the capture and was cancelled before it filed it.
-        var interrupted = new CaptureService(db.Get<IEventStore>(), db.Get<IArtifactStore>(), db.Get<IClock>(), new EventSource($"mcp:{Writer}"));
+        var interrupted = new CaptureService(db.Get<IEventStore>(), db.Get<IActivityWriter>(), db.Get<IClock>(), new EventSource($"mcp:{Writer}"));
         var noteKey = Guid.NewGuid().ToString();
         var ideaKey = Guid.NewGuid().ToString();
         await interrupted.CaptureFromAsync(EventKinds.Note, $"Sand the deck {ns}", noteKey, "{}", Ct);

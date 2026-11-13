@@ -13,7 +13,6 @@ using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.DependencyInjection;
 using ModelContextProtocol;
-using Npgsql;
 
 namespace LifeOs.Api.Mcp;
 
@@ -110,7 +109,6 @@ public sealed class AgentWrites(
     IHomeCalendar calendar,
     IClock clock,
     SubjectReader reader,
-    McpReads reads,
     McpOptions options)
 {
     /// <summary>The longest request id kept as an event's external id.</summary>
@@ -134,78 +132,13 @@ public sealed class AgentWrites(
         }
 
         var about = string.IsNullOrWhiteSpace(concerning) ? null : await FindAsync(concerning, "concerning", cancellationToken);
-        var key = RequestKey(requestId);
-        if (key is not null && await EarlierAsync(agent, key, EventKinds.Note, cancellationToken) is { } earlier)
-        {
-            return await FinishCaptureAsync(agent, earlier, type, body, about);
-        }
 
-        var kernel = Kernel(agent);
-        InboxCapture captured;
-        try
-        {
-            // Once the capture is written, filing it runs to the end even if the agent hangs up.
-            captured = await kernel.Filing.CaptureAsync(body, type, key, Payload(agent), cancellationToken);
-        }
-        catch (PostgresException e) when (key is not null && e.SqlState == PostgresErrorCodes.UniqueViolation)
-        {
-            // The same request, retried while the first was still writing.
-            var first = await EarlierAsync(agent, key, EventKinds.Note, cancellationToken) ?? throw new McpException(Busy);
-            return await FinishCaptureAsync(agent, first, type, body, about);
-        }
-
-        if (about is not null)
-        {
-            await kernel.Relate.RelateAsync(captured.EventId, about.Urn, SubjectEventRelations.Concerns, CancellationToken.None);
-        }
-
-        var made = captured.Item;
-        var item = made is null ? null : new McpItemRef(made.Id, made.Urn, made.Type, made.Title);
-        return new AgentCapture(captured.EventId, type, item, about is null ? [] : [about], AlreadyDone: false);
-    }
-
-    /// <summary>
-    /// A retried capture: does whatever the first call stopped before (flagging the note, making
-    /// the idea or problem, relating the item it concerns), then answers as the first call would
-    /// have. A capture flagged once and since cleared by Chris stays cleared.
-    /// </summary>
-    private async Task<AgentCapture> FinishCaptureAsync(
-        McpAgent agent, McpEarlierWrite earlier, string type, string body, McpItemRef? about)
-    {
-        var kernel = Kernel(agent);
-        var concerns = earlier.Concerns.ToList();
-        McpItemRef? item = null;
-        if (type == InboxFilingService.Note)
-        {
-            if (!await reads.EverTriagedAsync(earlier.EventId, CancellationToken.None))
-            {
-                await kernel.Triage.FlagItemAsync(isEvent: true, earlier.EventId, CancellationToken.None);
-            }
-        }
-        else
-        {
-            item = concerns.FirstOrDefault(c => c.Type == type && c.Id != about?.Id);
-            if (item is null)
-            {
-                var made = await kernel.Filing.FileAsync(
-                    type, earlier.EventId, deduplicated: false, InboxFilingService.FirstLine(body) ?? "Capture", body,
-                    CancellationToken.None);
-                item = new McpItemRef(made!.Id, made.Urn, made.Type, made.Title);
-            }
-            else if (!await reads.EverTriagedAsync(item.Id, CancellationToken.None))
-            {
-                await kernel.Triage.FlagItemAsync(isEvent: false, item.Id, CancellationToken.None);
-            }
-        }
-
-        if (about is not null && concerns.All(c => c.Id != about.Id))
-        {
-            await kernel.Relate.RelateAsync(earlier.EventId, about.Urn, SubjectEventRelations.Concerns, CancellationToken.None);
-            concerns.Add(about);
-        }
-
-        return new AgentCapture(
-            earlier.EventId, type, item, concerns.Where(c => c.Id != item?.Id).ToList(), AlreadyDone: true);
+        // A retried request id finishes and answers its first capture (code review CR68). Once
+        // the capture is written, filing it runs to the end even if the agent hangs up.
+        var captured = await Kernel(agent).Filing.CaptureAsync(
+            body, type, RequestKey(requestId), Payload(agent), about?.Urn, cancellationToken);
+        var item = captured.Item is { } made ? Ref(made) : null;
+        return new AgentCapture(captured.EventId, type, item, captured.Concerns.Select(Ref).ToList(), captured.AlreadyWritten);
     }
 
     /// <summary>Adds an entry to an item's journal (JOURNAL-1), as <c>POST /api/journal</c> does.</summary>
@@ -214,31 +147,8 @@ public sealed class AgentWrites(
     {
         var body = Body(text);
         var subject = await FindAsync(item, "item", cancellationToken);
-        var key = RequestKey(requestId);
-        var kernel = Kernel(agent);
-        var earlier = key is null ? null : await EarlierAsync(agent, key, EventKinds.Journal, cancellationToken);
-        if (earlier is null)
-        {
-            try
-            {
-                var entry = await kernel.Journal.AppendAsync(subject.Urn, body, key, Payload(agent), cancellationToken);
-                return new AgentJournalEntry(entry.EventId, subject, AlreadyDone: false);
-            }
-            catch (PostgresException e) when (key is not null && e.SqlState == PostgresErrorCodes.UniqueViolation)
-            {
-                earlier = await EarlierAsync(agent, key, EventKinds.Journal, cancellationToken) ?? throw new McpException(Busy);
-            }
-        }
-
-        if (earlier.Concerns.Count == 0)
-        {
-            // An entry written before the entry and its edge were one transaction (code review
-            // CR44), whose first call stopped before it reached the item: finish it.
-            await kernel.Relate.RelateAsync(earlier.EventId, subject.Urn, SubjectEventRelations.Concerns, cancellationToken);
-            return new AgentJournalEntry(earlier.EventId, subject, AlreadyDone: true);
-        }
-
-        return new AgentJournalEntry(earlier.EventId, earlier.Concerns[0], AlreadyDone: true);
+        var entry = await Kernel(agent).Journal.AppendAsync(subject.Urn, body, RequestKey(requestId), Payload(agent), cancellationToken);
+        return new AgentJournalEntry(entry.EventId, Ref(entry.Subject), entry.AlreadyWritten);
     }
 
     /// <summary>
@@ -285,34 +195,8 @@ public sealed class AgentWrites(
         var kernel = Kernel(agent);
         var (target, opened) = await ReviewForAsync(kernel, review, kind, day, cancellationToken);
         var today = await calendar.TodayAsync(cancellationToken);
-
-        var earlier = key is null ? null : await EarlierAsync(agent, key, EventKinds.Observation, cancellationToken);
-        if (earlier is null)
-        {
-            try
-            {
-                var linked = await kernel.Reflections.LinkAsync(
-                    target.Id, path, vault, summary, key, Person(agent), cancellationToken);
-                return new AgentReflection(linked.Review, linked.Review.StatusAsOf(today), opened, linked.Written, AlreadyDone: false);
-            }
-            catch (PostgresException e) when (key is not null && e.SqlState == PostgresErrorCodes.UniqueViolation)
-            {
-                earlier = await EarlierAsync(agent, key, EventKinds.Observation, cancellationToken) ?? throw new McpException(Busy);
-            }
-        }
-
-        if (earlier.Concerns.Count == 0)
-        {
-            // The first call wrote the link and stopped before it reached the review: finish it.
-            await kernel.Reflections.FinishAsync(earlier.EventId, target.Id, cancellationToken);
-        }
-        else if (earlier.Concerns[0].Id != target.Id)
-        {
-            throw new McpException($"request_id '{key}' already linked a reflection to {earlier.Concerns[0].Title}. Send a new UUID for each write.");
-        }
-
-        var now = await kernel.Reflections.MustGetAsync(target.Id, cancellationToken);
-        return new AgentReflection(now, now.StatusAsOf(today), opened, Written: false, AlreadyDone: true);
+        var linked = await kernel.Reflections.LinkAsync(target.Id, path, vault, summary, key, Person(agent), cancellationToken);
+        return new AgentReflection(linked.Review, linked.Review.StatusAsOf(today), opened, linked.Written, linked.AlreadyWritten);
     }
 
     /// <summary>The review a link names, opened first when it's named by kind and day.</summary>
@@ -348,8 +232,6 @@ public sealed class AgentWrites(
 
     private static string Article(string word) => word.Length > 0 && "AEIOUaeiou".Contains(word[0]) ? "an" : "a";
 
-    private const string Busy ="That request_id is being written right now. Wait a moment, then call again with the same request_id.";
-
     private static string Body(string text)
     {
         var body = text?.Trim();
@@ -380,14 +262,7 @@ public sealed class AgentWrites(
     private static string Payload(McpAgent agent)
         => JsonSerializer.Serialize(new Dictionary<string, Guid> { [PersonField] = agent.PersonId });
 
-    private async Task<McpEarlierWrite?> EarlierAsync(
-        McpAgent agent, string key, string kind, CancellationToken cancellationToken)
-    {
-        var earlier = await reads.FindWriteAsync(agent.SourceId, key, cancellationToken);
-        return earlier is null || earlier.Kind == kind
-            ? earlier
-            : throw new McpException($"request_id '{key}' was already used for a different write. Send a new UUID for each write.");
-    }
+    private static McpItemRef Ref(SubjectRef subject) => new(subject.Id, subject.Urn, subject.Type, subject.Title);
 
     /// <summary>The item an id or URN names, as <c>get_item</c> finds it, or a refusal the agent can act on.</summary>
     private async Task<McpItemRef> FindAsync(string reference, string name, CancellationToken cancellationToken)
@@ -403,7 +278,6 @@ public sealed class AgentWrites(
     {
         var kernel = kernels.For(agent.SourceId);
         return new AgentKernel(
-            kernel.GetRequiredService<RelateService>(),
             kernel.GetRequiredService<TriageService>(),
             kernel.GetRequiredService<InboxFilingService>(),
             kernel.GetRequiredService<JournalService>(),
@@ -412,7 +286,7 @@ public sealed class AgentWrites(
     }
 
     private sealed record AgentKernel(
-        RelateService Relate, TriageService Triage, InboxFilingService Filing, JournalService Journal,
+        TriageService Triage, InboxFilingService Filing, JournalService Journal,
         ReviewService Reviews, ReflectionService Reflections);
 }
 

@@ -5,15 +5,6 @@ namespace LifeOs.Application.Abstractions;
 // Captured bytes: artifacts in the database and in object storage.
 
 /// <summary>
-/// Stores raw captured content. Stage 1 is text-only; the store returns the id
-/// events reference. Content is immutable once written.
-/// </summary>
-public interface IArtifactStore
-{
-    Task<Guid> AddAsync(string content, CancellationToken cancellationToken = default);
-}
-
-/// <summary>
 /// Stores and retrieves an artifact's <em>binary</em> payload — the swap seam for
 /// where the bytes physically live. Without object storage the adapter stores them as
 /// Postgres <c>bytea</c> and writes the event + artifact + blob as one transaction, so the

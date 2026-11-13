@@ -146,7 +146,23 @@ public interface IActivityWriter
     Task<Guid> WriteAsync(
         NewEvent activityEvent, IReadOnlyList<SubjectEventEdge> edges,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes <paramref name="text"/> as the event's artifact (when given), the event and its edges
+    /// as one transaction (code review CR68). When the event's source already wrote its external id
+    /// (invariant 5), nothing is written, not even the text, and the answer is the earlier event,
+    /// <see cref="EventWrite.AlreadyWritten"/>. A retry that races its first call waits for it.
+    /// </summary>
+    Task<EventWrite> WriteOnceAsync(
+        NewEvent newEvent, string? text, IReadOnlyList<SubjectEventEdge> edges,
+        CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// What <see cref="IActivityWriter.WriteOnceAsync"/> did: the event and its text, and its kind.
+/// When <paramref name="AlreadyWritten"/> they're the earlier event's, whose kind may differ.
+/// </summary>
+public sealed record EventWrite(Guid EventId, Guid? ArtifactId, string Kind, bool AlreadyWritten);
 
 /// <summary>
 /// Reads and appends Task timer actions (TASKS-2). Nothing about a timer is stored

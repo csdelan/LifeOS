@@ -57,50 +57,6 @@ public sealed class McpReads(string readerConnectionString, string homeTimeZone,
     }
 
     /// <summary>
-    /// The event an agent already wrote for a request id (agent-access plan §5.4), with the items
-    /// it concerns; null when there's none. A retried write answers with this rather than writing again.
-    /// </summary>
-    public async Task<McpEarlierWrite?> FindWriteAsync(string sourceId, string externalId, CancellationToken cancellationToken)
-    {
-        await using var connection = new NpgsqlConnection(readerConnectionString);
-        await connection.OpenAsync(cancellationToken);
-        var rows = (await connection.QueryAsync<EarlierRow>(new CommandDefinition(
-            """
-            SELECT e.id, e.kind, se.subject_id AS subjectid, s.urn, s.type, s.title
-            FROM bsk.v_event e
-            LEFT JOIN bsk.v_subject_event se ON se.event_id = e.id AND se.relation = 'concerns'
-            LEFT JOIN bsk.v_subject s ON s.id = se.subject_id
-            WHERE e.source_id = @sourceId AND e.external_id = @externalId
-            ORDER BY se.created_at;
-            """,
-            new { sourceId, externalId },
-            cancellationToken: cancellationToken))).AsList();
-        return rows.Count == 0
-            ? null
-            : new McpEarlierWrite(
-                rows[0].Id,
-                rows[0].Kind,
-                rows.Where(r => r.SubjectId is not null && r.Urn is not null)
-                    .Select(r => new McpItemRef(r.SubjectId!.Value, r.Urn!, r.Type ?? "", r.Title ?? ""))
-                    .ToList());
-    }
-
-    /// <summary>
-    /// True when the item has ever had a triage marker (flagged, dismissed, promoted…). A retried
-    /// write uses it to tell "never flagged" from "flagged, then cleared by Chris", which must stay
-    /// cleared.
-    /// </summary>
-    public async Task<bool> EverTriagedAsync(Guid itemId, CancellationToken cancellationToken)
-    {
-        await using var connection = new NpgsqlConnection(readerConnectionString);
-        await connection.OpenAsync(cancellationToken);
-        return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
-            "SELECT EXISTS (SELECT 1 FROM bsk.v_event WHERE kind = 'triage' AND payload->>'item_id' = @item);",
-            new { item = itemId.ToString() },
-            cancellationToken: cancellationToken));
-    }
-
-    /// <summary>
     /// The items each of <paramref name="eventIds"/> concerns, oldest edge first; an event that
     /// concerns nothing isn't in the answer. The inbox shows them, so the vault agent knows which
     /// review a capture dictated from the review answers (reviews plan §4.1).
@@ -142,9 +98,6 @@ public sealed class McpReads(string readerConnectionString, string homeTimeZone,
         public string? Title { get; set; }
     }
 }
-
-/// <summary>An event an agent wrote before for the same request id, and the items it concerns.</summary>
-public sealed record McpEarlierWrite(Guid EventId, string Kind, IReadOnlyList<McpItemRef> Concerns);
 
 /// <summary>An item as a write tool names it in its answer.</summary>
 public sealed record McpItemRef(Guid Id, string Urn, string Type, string Title);
