@@ -5,6 +5,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { ThemeProvider } from "next-themes";
 import { AuthGate } from "@/components/auth/auth-gate";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { HomeDayRollover } from "@/components/shell/home-day-rollover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { ApiRequestError } from "@/lib/live/http";
@@ -36,6 +37,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
       <QueryClientProvider client={queryClient}>
+        <HomeDayRollover />
         <AuthProvider>
           <TooltipProvider delayDuration={200}>
             {/* An agent's sign-in request stands outside the app and its gate (agent-access plan §4.4). */}

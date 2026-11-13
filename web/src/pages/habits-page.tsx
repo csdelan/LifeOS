@@ -14,7 +14,7 @@ import { PeekPanel } from "@/components/shell/panels";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
 import { useHabits, useOccurrencesOn, useSubjects, useWrites } from "@/lib/queries";
 import { maintainingHabitRows, todayHabitRows } from "@/lib/derive";
-import { todayIso } from "@/lib/dates";
+import { useHomeToday } from "@/lib/home-day";
 import { habitStage, isMaintainedToday, isReadyToEstablish, maintainedDayLabel } from "@/lib/establish";
 import type { CoverRead, HabitOccurrenceRow, HabitRow } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,9 @@ export function HabitsPage() {
   const navigate = useNavigate({ from: "/habits" });
   const selected = search.selected;
   const { data, isLoading, isError } = useHabits();
-  const today = todayIso();
+  // The day it is now, not the day the page opened, so a check-off after midnight lands on the new
+  // day (code review CR58).
+  const today = useHomeToday();
   // Today's rows come from the habits and the day's occurrences, not the whole dashboard, which
   // would read every subject and edge to find them (code review CR37).
   const { data: dayRows } = useOccurrencesOn(today);

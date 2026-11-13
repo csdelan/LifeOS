@@ -136,7 +136,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - The zone is set twice, `Rewards:HomeTimeZone` and the database's `bsk.home_zone`, and the API
   won't start, nor the calendar answer, while they disagree (`HomeZoneCheck`). A test kernel on
   another zone needs a `DomainTestDatabase` made in that zone. The web's `todayIso()` counts in
-  the zone `public-config.js` names, or the browser's own in mock mode.
+  the zone `public-config.js` names, or the browser's own in mock mode. A page that writes with
+  today's date takes it from `useHomeToday()` (`lib/home-day.ts`), which turns at midnight, and
+  `HomeDayRollover` resets every cached read when the day turns, so a page left open overnight
+  can't write to yesterday.
 - Weeks run Monday to Sunday (`startOfWeekMonday` in `web/src/lib/dates.ts`). Sunday is review
   day: a weekly review is named by its Sunday, reviews the week ending that day and plans the
   next one. On the web, `reviewPeriod` in `web/src/lib/reviews.ts` and `ReviewPeriods` in

@@ -95,4 +95,23 @@ test.describe("golden paths: habits and rewards", () => {
     await expect(page).toHaveURL(/selected=habit-inbox/);
     await expect(page.getByRole("heading", { name: /Inbox Zero pass/ }).last()).toBeVisible({ timeout: 10_000 });
   });
+
+  test("a habit checked off after midnight, on a page left open, lands on the new day", async ({ page }) => {
+    // Code review CR58: Focus kept the day it loaded, so a morning tap went to yesterday.
+    await page.clock.install({ time: new Date("2026-11-12T23:58:00") });
+    await page.goto("/");
+    const row = page.getByRole("listitem").filter({ hasText: "Inbox Zero pass" });
+    await expect(row.getByText("Unrecorded")).toBeVisible({ timeout: 10_000 });
+
+    await page.clock.runFor(5 * 60_000);
+    await row.getByRole("button", { name: "Followed", exact: true }).click();
+    await expect(page.getByText("Earned +5 Freedom +5 Life XP")).toBeVisible({ timeout: 10_000 });
+
+    // In-app navigation keeps the mock's state: Habits reads the new day and finds it followed.
+    await page.getByRole("link", { name: "Habits" }).first().click();
+    const inbox = page.getByRole("list", { name: "Building" }).getByRole("listitem").filter({ hasText: "Inbox Zero pass" });
+    await expect(inbox.getByRole("button", { name: "Followed", exact: true })).toHaveAttribute("aria-pressed", "true", {
+      timeout: 10_000,
+    });
+  });
 });
