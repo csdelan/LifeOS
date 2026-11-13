@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Resolver } from "react-hook-form";
@@ -10,96 +10,48 @@ import {
   LayoutListIcon,
   Link2Icon,
   PaperclipIcon,
-  PlayIcon,
   PlusIcon,
   RepeatIcon,
   TagIcon,
   XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { SubjectCombobox } from "@/components/subject-combobox";
+import { applyRelationshipWrites, relationshipWrites } from "@/lib/subject-save";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { DateChip } from "@/components/primitives/date-chip";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { StatusPill } from "@/components/primitives/status-pill";
-import { Tag } from "@/components/primitives/tag";
-import { TagInput } from "@/components/primitives/tag-input";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { SubjectTypeFields } from "@/components/create/subject-type-fields";
 import { useCreateActions } from "@/components/create/create-context";
 import { AttachmentChip } from "@/components/artifacts/attachment-chip";
 import { StreakGrid } from "@/components/habits/streak-grid";
-import { ReadyToEstablish } from "@/components/habits/establish-dialog";
 import { BountyChip } from "@/components/rewards/bounty-chip";
 import { BountySection } from "@/components/rewards/bounty-editor";
 import { TaskTimerPanel } from "@/components/timer/task-timer";
 import { MaterializePanel } from "@/components/appointments/materialize-panel";
 import { RepeatPanel } from "@/components/tasks/repeat-panel";
-import { JournalEditor } from "@/components/journal/journal-editor";
-import { looksLikeHtml, sanitizeJournalHtml } from "@/components/journal/journal-html";
 import { CoverBanner } from "@/components/cover/cover-banner";
 import { CoverPicker } from "@/components/cover/cover-picker";
 import { canHaveCover } from "@/lib/cover";
-import {
-  DecisionActions,
-  DecisionRelationships,
-  RecordDecisionAction,
-} from "@/components/detail/decision-relationships";
-import {
-  DECISION_LINK_GROUPS,
-  canStartDecisionFrom,
-  decisionLinkWrite,
-  type DecisionLinkGroup,
-  type LinkedItem,
-} from "@/lib/decisions";
+import { DecisionActions, RecordDecisionAction } from "@/components/detail/decision-relationships";
+import { canStartDecisionFrom, type LinkedItem } from "@/lib/decisions";
 import {
   useHabits,
-  useHistory,
-  useJournal,
   useListItem,
   useOccurrences,
   useRelations,
   useSubject,
   useSubjectFiles,
   useSubjectTags,
-  useSubjects,
-  useTagUniverse,
   useWrites,
 } from "@/lib/queries";
-import {
-  LINK_TARGET_TYPES,
-  childTypesFor,
-  defaultStatus,
-  inferChildRelation,
-  isTerminal,
-  shortIdOf,
-  typeLabel,
-} from "@/lib/production-ui-types";
-import type { HabitRow, Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
-import { formatTimestamp } from "@/lib/dates";
+import { childTypesFor, defaultStatus, isTerminal, shortIdOf } from "@/lib/production-ui-types";
 import { bountyDirty, bountyProblem, bountyWrites, type BountyDraft } from "@/lib/bounty";
-import {
-  establishmentProgress,
-  habitStage,
-  isReadyToEstablish,
-  targetDirty,
-  targetFields,
-  targetProblem,
-  targetWrite,
-  type TargetDraft,
-} from "@/lib/establish";
-import { splitTags } from "@/lib/tag-suggest";
+import { habitStage, targetDirty, targetProblem, targetWrite, type TargetDraft } from "@/lib/establish";
 import { parseRecurrence, sameRecurrence } from "@/lib/recurrence";
 import { repeatLabel } from "@/lib/task-series";
 import {
@@ -114,6 +66,11 @@ import {
   subjectFormSchema,
   type SubjectFormValues,
 } from "@/lib/subject-forms";
+import { RelationshipsTab } from "./relationships-tab";
+import { TagsTab } from "./tags-tab";
+import { JournalTab } from "./journal-tab";
+import { HistoryTab } from "./history-tab";
+import { EstablishmentPanel } from "./establishment-panel";
 
 export function SubjectDetail({
   subjectId,
@@ -277,22 +234,21 @@ export function SubjectDetail({
         return;
       }
     }
-    if (subject.type === "Habit") {
-      const existing = new Set((rels?.parents ?? []).map((p) => p.subjectId));
-      for (const pid of selectedParentIds(values)) {
-        if (existing.has(pid)) continue;
-        await writes.link(subject.id, "serves", pid);
-      }
-    }
-    if (subject.type === "Goal" && values.parent) {
-      const existing = new Set((rels?.parents ?? []).map((p) => p.subjectId));
-      if (!existing.has(values.parent)) {
-        await writes.link(subject.id, inferChildRelation("Goal", "Value") ?? "serves", values.parent);
-      }
-    }
-    if (subject.type === "Commitment" && values.person) {
-      await writes.involve(subject.id, values.person, "involves");
-    }
+    // Parents and people as the form now has them, against what it showed: a new item's create
+    // makes the same writes (lib/subject-save.ts). An Appointment's attendees are involved, and a
+    // Goal's old identity statement is let go.
+    const shown = form.formState.defaultValues as SubjectFormValues | undefined;
+    await applyRelationshipWrites(
+      relationshipWrites(
+        subject.type,
+        subject.id,
+        values,
+        shown
+          ? { values: shown, edges: (rels?.parents ?? []).map((p) => ({ subjectId: p.subjectId, relation: p.relation })) }
+          : null,
+      ),
+      writes,
+    );
     setEditing(false);
   }
 
@@ -613,490 +569,6 @@ export function SubjectDetail({
         </div>
       </Tabs>
     </div>
-  );
-}
-
-function RelationshipsTab({
-  subjectId,
-  type,
-  onOpenSubject,
-}: {
-  subjectId: string;
-  type: SubjectType;
-  onOpenSubject?: (id: string) => void;
-}) {
-  const { data, isLoading } = useRelations(subjectId);
-  const [rel, setRel] = useState<Relation>("serves");
-  // A Decision adds to its groups instead of naming a relation (GEN-13).
-  const decision = type === "Decision";
-  const [group, setGroup] = useState<DecisionLinkGroup>("context");
-  const [targetType, setTargetType] = useState<SubjectType | "any">("any");
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const [to, setTo] = useState("");
-  const { data: subjects } = useSubjects(
-    targetType === "any" ? undefined : targetType,
-    includeArchived,
-  );
-  const writes = useWrites();
-
-  const options = useMemo(
-    () => (subjects ?? []).filter((s) => s.id !== subjectId),
-    [subjects, subjectId],
-  );
-
-  useEffect(() => {
-    if (to && !options.some((s) => s.id === to)) setTo("");
-  }, [to, options]);
-
-  const typed = targetType !== "any";
-  const targetLabel = useCallback(
-    (s: SubjectListItem) => linkTargetLabel(s, typed, includeArchived),
-    [typed, includeArchived],
-  );
-
-  if (isLoading) return <ListSkeleton rows={4} />;
-
-  const subjectPlaceholder = typed
-    ? `Choose ${typeLabel(targetType)}…`
-    : "Choose an existing item…";
-
-  const grouped = groupByType(data?.children ?? []);
-
-  function addLink() {
-    const edge = decision ? decisionLinkWrite(group, subjectId, to) : { from: subjectId, relation: rel, to };
-    void writes.link(edge.from, edge.relation, edge.to);
-    setTo("");
-  }
-
-  return (
-    <div className="space-y-6">
-      {decision ? (
-        <DecisionRelationships rels={data} onOpenSubject={onOpenSubject} />
-      ) : (
-        <>
-          <section className="rounded-xl bg-muted/40 p-3">
-            <h3 className="type-scale-section text-muted-foreground">Parents</h3>
-            <p className="mt-1 mb-2 text-xs text-muted-foreground">
-              Alignment edges — this is structure, not tagging.
-            </p>
-            {data?.parents.length ? (
-              <ul className="space-y-1">
-                {data.parents.map((e) => (
-                  <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
-                    <TypeBadge type={e.type} />
-                    <span>{e.title}</span>
-                    <span className="text-[0.6875rem] text-muted-foreground">{e.relation}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">No parents — unaligned for now.</p>
-            )}
-          </section>
-          <section className="rounded-xl bg-muted/40 p-3">
-            <h3 className="type-scale-section text-muted-foreground">Children</h3>
-            {data?.children.length ? (
-              <div className="mt-2 space-y-3">
-                {Object.entries(grouped).map(([type, rows]) => (
-                  <div key={type}>
-                    <p className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">
-                      {typeLabel(type as SubjectType)}
-                    </p>
-                    <ul className="space-y-1">
-                      {rows.map((e) => (
-                        <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
-                          <TypeBadge type={e.type} />
-                          <span>{e.title}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">No children yet.</p>
-            )}
-          </section>
-        </>
-      )}
-      <section>
-        <h3 className="type-scale-section text-muted-foreground">Add relationship</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {decision
-            ? "Add an existing item to Context (what prompted it), Resulting work (what carries it out) or Replaces (an earlier Decision this one reversed). "
-            : null}
-          Choose a type to filter, then pick an existing item. Archived items are
-          hidden unless you check Archived. This is a link between two items, not a
-          tag.
-        </p>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {decision ? (
-            <>
-              <span className="text-xs text-muted-foreground">Add to</span>
-              <Select value={group} onValueChange={(v) => setGroup(v as DecisionLinkGroup)}>
-                <SelectTrigger className="w-40" aria-label="Group">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DECISION_LINK_GROUPS.map((g) => (
-                    <SelectItem key={g.value} value={g.value}>
-                      {g.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </>
-          ) : (
-            <>
-              <span className="text-xs text-muted-foreground">This item</span>
-              <Select value={rel} onValueChange={(v) => setRel(v as Relation)}>
-                <SelectTrigger className="w-32" aria-label="Relation">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="serves">serves</SelectItem>
-                  <SelectItem value="results_in">results_in</SelectItem>
-                  <SelectItem value="supersedes">supersedes</SelectItem>
-                </SelectContent>
-              </Select>
-            </>
-          )}
-          <span className="text-xs text-muted-foreground">this existing</span>
-          <Select
-            value={targetType}
-            onValueChange={(v) => setTargetType(v as SubjectType | "any")}
-          >
-            <SelectTrigger className="w-44" aria-label="Target type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="any">item</SelectItem>
-              {LINK_TARGET_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {typeLabel(t)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <SubjectCombobox
-            className="min-w-48 flex-1"
-            options={options}
-            value={to}
-            onChange={setTo}
-            ariaLabel="Target subject"
-            placeholder={subjectPlaceholder}
-            label={targetLabel}
-          />
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Checkbox
-              checked={includeArchived}
-              onCheckedChange={(v) => setIncludeArchived(v === true)}
-            />
-            Archived
-          </label>
-          <Button size="sm" disabled={!to} onClick={addLink}>
-            Link
-          </Button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function groupByType<T extends { type: SubjectType }>(rows: T[]): Record<string, T[]> {
-  const out: Record<string, T[]> = {};
-  for (const row of rows) {
-    (out[row.type] ??= []).push(row);
-  }
-  return out;
-}
-
-function linkTargetLabel(item: SubjectListItem, typed: boolean, includeArchived: boolean) {
-  const label = typed ? item.title : `${typeLabel(item.type)}: ${item.title}`;
-  return includeArchived && item.archived ? `${label} (archived)` : label;
-}
-
-function TagsTab({ subjectId }: { subjectId: string }) {
-  const { data: tags } = useSubjectTags(subjectId);
-  const { data: universe } = useTagUniverse();
-  const writes = useWrites();
-  const [draft, setDraft] = useState("");
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState("");
-  const usedOn = (universe ?? []).find((u) => u.tag === renaming)?.itemCount;
-
-  function addTags(add: string[]) {
-    if (add.length === 0) return;
-    void writes.tag(subjectId, { add });
-    setDraft("");
-  }
-
-  async function submitRename() {
-    if (!renaming) return;
-    const next = renameDraft.trim();
-    if (!next || next.toLowerCase() === renaming) {
-      setRenaming(null);
-      return;
-    }
-    try {
-      await writes.renameTag(renaming, next);
-      setRenaming(null);
-    } catch (err) {
-      toast.error(err instanceof Error && err.message ? err.message : "Could not rename the tag.");
-    }
-  }
-
-  return (
-    <div className="space-y-4 rounded-xl border border-dashed border-border p-3">
-      <div>
-        <h3 className="type-scale-section text-muted-foreground">Tags</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Classification, not structure. Relationships live on the other tab (GEN-1).
-        </p>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {(tags ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">No tags yet.</p>
-        ) : (
-          (tags ?? []).map((t) => (
-            <Tag
-              key={t}
-              onRename={() => {
-                setRenaming(t);
-                setRenameDraft(t);
-              }}
-              onRemove={() => void writes.tag(subjectId, { remove: [t] })}
-            >
-              {t}
-            </Tag>
-          ))
-        )}
-      </div>
-      {renaming ? (
-        <form
-          className="space-y-2 rounded-lg border border-border p-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submitRename();
-          }}
-        >
-          <p className="text-sm">
-            Rename <span className="font-medium">#{renaming}</span> everywhere it's used
-            {usedOn ? ` (${usedOn} item${usedOn === 1 ? "" : "s"})` : ""}.
-          </p>
-          <div className="flex gap-2">
-            <TagInput
-              autoFocus
-              value={renameDraft}
-              onValueChange={setRenameDraft}
-              exclude={[renaming]}
-              fillOnPick
-              placeholder="New tag name"
-              aria-label="New tag name"
-            />
-            <Button type="submit" size="sm">
-              Rename
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setRenaming(null)}>
-              Cancel
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            If the new name is already a tag, the two merge into one.
-          </p>
-        </form>
-      ) : null}
-      <div className="flex gap-2">
-        <TagInput
-          value={draft}
-          onValueChange={setDraft}
-          exclude={tags ?? []}
-          onCommit={addTags}
-          placeholder="Add a tag"
-          aria-label="Add a tag"
-        />
-        <Button type="button" size="sm" disabled={!splitTags(draft).length} onClick={() => addTags(splitTags(draft))}>
-          Add
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function JournalTab({ subjectId }: { subjectId: string }) {
-  const { data, isLoading } = useJournal(subjectId);
-  const writes = useWrites();
-  const [composing, setComposing] = useState(false);
-
-  return (
-    <div className="space-y-4">
-      {isLoading ? <ListSkeleton rows={3} /> : null}
-      {!isLoading && (data ?? []).length === 0 ? (
-        <EmptyState title="No journal yet" description="Entries are append-only. A correction is a new entry." />
-      ) : !isLoading ? (
-        <ol className="space-y-3">
-          {[...(data ?? [])].reverse().map((e) => (
-            <li key={e.eventId} className="rounded-lg bg-muted/50 px-3 py-2">
-              <p className="text-[0.6875rem] text-muted-foreground">
-                {formatTimestamp(e.occurredAt)}
-              </p>
-              {looksLikeHtml(e.content) ? (
-                <div
-                  className="journal-prose mt-1 text-sm"
-                  dangerouslySetInnerHTML={{ __html: sanitizeJournalHtml(e.content) }}
-                />
-              ) : (
-                <p className="mt-1 whitespace-pre-wrap text-sm">{e.content}</p>
-              )}
-            </li>
-          ))}
-        </ol>
-      ) : null}
-      <Separator />
-      {composing ? (
-        <JournalEditor
-          onAppend={async (html) => {
-            await writes.appendJournal(subjectId, html);
-            setComposing(false);
-          }}
-        />
-      ) : (
-        <Button variant="outline" size="sm" onClick={() => setComposing(true)}>
-          Append
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function HistoryTab({ subjectId }: { subjectId: string }) {
-  const { data } = useHistory(subjectId);
-  if (!data?.length) {
-    return (
-      <EmptyState
-        title="No status history"
-        description="Status moves only by event. Changes will appear here."
-      />
-    );
-  }
-  return (
-    <ol className="relative ml-2 space-y-0 border-l border-border">
-      {data.map((e) => (
-        <li key={e.id} className="relative py-2 pl-4">
-          <span className="absolute top-3.5 -left-1 size-2 rounded-full bg-primary" />
-          <StatusPill status={e.status} />
-          <p className="mt-1 text-[0.6875rem] text-muted-foreground">
-            {formatTimestamp(e.occurredAt)}
-          </p>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-/**
- * Where a habit stands on its way to graduating, and the Establish suggestion; while editing a
- * Building habit, its target too — "Establish when followed 80 % over 60 days" — pre-filled
- * with what it is now.
- */
-function EstablishmentPanel({
-  habit,
-  editing,
-  draft,
-  onChange,
-}: {
-  habit: HabitRow;
-  editing: boolean;
-  draft: TargetDraft;
-  onChange: (next: TargetDraft) => void;
-}) {
-  const stage = habitStage(habit);
-  if (stage === "abandoned") return null;
-  const establishment = habit.establishment;
-  const fields = establishment ? targetFields(establishment) : null;
-  const problem = editing ? targetProblem(draft) : null;
-  return (
-    <section className="rounded-xl bg-muted/40 p-3">
-      <p className="type-scale-section text-muted-foreground">Establishing</p>
-      {stage === "planned" ? (
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm">
-            Planned — not tracked yet, so no day is scheduled or missed. Its days count from the
-            day you start tracking it.
-          </p>
-          {editing ? null : <StartTracking habit={habit} />}
-        </div>
-      ) : stage === "established" ? (
-        <p className="mt-1 text-sm">
-          Established — graduated from daily tracking. Each day you check it off under
-          Maintaining still pays; move it back to Building to track it daily again.
-        </p>
-      ) : establishment ? (
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm">{establishmentProgress(establishment)}</p>
-          {isReadyToEstablish(habit) ? <ReadyToEstablish habit={habit} /> : null}
-        </div>
-      ) : null}
-      {editing && stage === "building" && fields ? (
-        <div className="mt-2 space-y-1">
-          <div
-            role="group"
-            aria-label="Establish target"
-            className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"
-          >
-            <span>Establish when followed</span>
-            <Input
-              aria-label="Target percent of days followed"
-              type="number"
-              inputMode="decimal"
-              min={1}
-              max={100}
-              step="any"
-              className="h-7 w-16"
-              value={draft.percent ?? fields.percent}
-              onChange={(e) => onChange({ ...draft, percent: e.target.value })}
-            />
-            <span>% over</span>
-            <Input
-              aria-label="Target window in days"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={3650}
-              step={1}
-              className="h-7 w-20"
-              value={draft.days ?? fields.days}
-              onChange={(e) => onChange({ ...draft, days: e.target.value })}
-            />
-            <span>days</span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            A partial day counts half. Establishing is always your call.
-          </p>
-          {problem ? (
-            <p role="alert" className="text-xs text-destructive">
-              {problem}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-/** Moves a Planned habit to Building: tracking starts today. */
-function StartTracking({ habit }: { habit: HabitRow }) {
-  const writes = useWrites();
-  return (
-    <Button
-      type="button"
-      size="xs"
-      variant="outline"
-      aria-label={`Start tracking ${habit.name}`}
-      onClick={() => void writes.setStatus(habit.id, "Building")}
-    >
-      <PlayIcon aria-hidden /> Start tracking
-    </Button>
   );
 }
 

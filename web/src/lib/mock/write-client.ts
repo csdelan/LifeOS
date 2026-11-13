@@ -12,6 +12,7 @@ import { foodWriteMessage } from "@/lib/food";
 import { exceptionMarkedMessage, exceptionUnmarkedMessage } from "@/lib/domains";
 import {
   addEdge,
+  removeEdge,
   earnDay,
   earnStatus,
   mockHomeWrite,
@@ -190,12 +191,15 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       return renamed;
     },
 
-    async link(from, relation, to) {
+    async link(from, relation, to, remove) {
       await wait();
       const a = byRef(from);
       const b = byRef(to);
-      if (a && b) addEdge(a.id, relation, b.id);
-      notify("Linked");
+      if (a && b) {
+        if (remove) removeEdge(a.id, relation, b.id);
+        else addEdge(a.id, relation, b.id);
+      }
+      notify(remove ? "Unlinked" : "Linked");
       bump();
     },
 

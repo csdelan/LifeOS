@@ -273,8 +273,8 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       return renamed;
     },
 
-    async link(from, relation, to) {
-      await client.link(from, relation, to);
+    async link(from, relation, to, remove) {
+      await (remove ? client.link(from, relation, to, true) : client.link(from, relation, to));
       await invalidate(qc, [
         qk.relations(from),
         qk.relations(to),

@@ -324,6 +324,12 @@ export function addEdge(fromId: string, relation: Relation, toId: string) {
   state.edges = [...state.edges, { fromId, relation, toId }];
 }
 
+export function removeEdge(fromId: string, relation: Relation, toId: string) {
+  state.edges = state.edges.filter(
+    (e) => !(e.fromId === fromId && e.toId === toId && e.relation === relation),
+  );
+}
+
 export function applyAttrs(subjectId: string, attrs: Record<string, string>) {
   if (Object.keys(attrs).some((key) => key.trim().toLowerCase() === "cover")) {
     throw new Error("Cover is set with `bsk cover` (a photo from Unsplash), not `bsk set`.");

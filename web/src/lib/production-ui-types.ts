@@ -2244,7 +2244,8 @@ export interface LifeOsWriteClient {
   tag(item: string, opts: { add?: string[]; remove?: string[] }): Promise<void>;
   /** Rename a tag on every item; renaming onto an existing tag merges the two. */
   renameTag(from: string, to: string): Promise<RenamedTag>;
-  link(from: string, relation: Relation, to: string): Promise<void>;            // subject→subject
+  /** subject→subject; with `remove`, takes the edge away (`bsk unlink`). */
+  link(from: string, relation: Relation, to: string, remove?: boolean): Promise<void>;
   relate(eventId: string, subject: string, as?: EventRelation): Promise<void>;  // event→subject
   flag(item: string): Promise<void>;                                            // (re-)enter inbox
   dismiss(item: string): Promise<void>;                                         // attention-only clear

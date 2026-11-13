@@ -43,6 +43,27 @@ public sealed class WriteEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task A_goal_moved_to_another_identity_statement_no_longer_serves_the_old_one()
+    {
+        // Code review CR16: the web's edit form takes the old link away when the statement changes.
+        await using var host = await StartAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var statement = new Dictionary<string, string> { ["statement"] = "I am someone who ships." };
+        var first = await PostSubjectAsync(host.Client, new { type = SubjectTypes.Value, title = $"first {ns}", attrs = statement });
+        var second = await PostSubjectAsync(host.Client, new { type = SubjectTypes.Value, title = $"second {ns}", attrs = statement });
+        var goal = await PostSubjectAsync(host.Client, new
+        {
+            type = SubjectTypes.Goal, title = $"goal {ns}", parent = first.Id.ToString(), relation = SubjectRelations.Serves,
+        });
+
+        await PostOkAsync(host.Client, "/api/link", new { from = goal.Id.ToString(), relation = SubjectRelations.Serves, to = second.Id.ToString() });
+        await PostOkAsync(host.Client, "/api/link", new { from = goal.Id.ToString(), relation = SubjectRelations.Serves, to = first.Id.ToString(), remove = true });
+
+        Assert.True(await EdgeExistsAsync(goal.Id, SubjectRelations.Serves, second.Id));
+        Assert.False(await EdgeExistsAsync(goal.Id, SubjectRelations.Serves, first.Id));
+    }
+
+    [Fact]
     public async Task Habit_created_under_a_goal_named_by_id_serves_it()
     {
         await using var host = await StartAsync();

@@ -127,9 +127,9 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       return renamed;
     },
 
-    async link(from, relation, to) {
-      await unwrap(api().POST("/api/link", { body: { from, relation, to } }));
-      notify("Linked");
+    async link(from, relation, to, remove) {
+      await unwrap(api().POST("/api/link", { body: { from, relation, to, remove } }));
+      notify(remove ? "Unlinked" : "Linked");
     },
 
     async relate(eventId, subject, as) {

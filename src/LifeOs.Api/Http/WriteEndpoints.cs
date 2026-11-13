@@ -300,11 +300,18 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("from, relation, and to are required."));
         }
 
-        await relations.LinkAsync(
-            await ResolveWriteRefAsync(body.From, reader, cancellationToken),
-            body.Relation,
-            await ResolveWriteRefAsync(body.To, reader, cancellationToken),
-            cancellationToken);
+        var from = await ResolveWriteRefAsync(body.From, reader, cancellationToken);
+        var to = await ResolveWriteRefAsync(body.To, reader, cancellationToken);
+        if (body.Remove)
+        {
+            // What an edit form takes away: a Goal's old identity statement, an unticked parent.
+            await relations.UnlinkAsync(from, body.Relation, to, cancellationToken);
+        }
+        else
+        {
+            await relations.LinkAsync(from, body.Relation, to, cancellationToken);
+        }
+
         return Results.Ok();
     }
 
@@ -680,6 +687,8 @@ public sealed class LinkBody
     public string From { get; set; } = "";
     public string Relation { get; set; } = "";
     public string To { get; set; } = "";
+    /// <summary>Removes the edge instead, as <c>bsk unlink</c> does.</summary>
+    public bool Remove { get; set; }
 }
 
 public sealed class RelateBody

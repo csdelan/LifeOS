@@ -9845,6 +9845,9 @@
           },
           "to": {
             "type": "string"
+          },
+          "remove": {
+            "type": "boolean"
           }
         }
       },

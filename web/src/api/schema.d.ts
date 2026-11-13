@@ -3157,6 +3157,7 @@ export interface components {
             from?: string;
             relation?: string;
             to?: string;
+            remove?: boolean;
         };
         MaterializeBody: {
             through?: null | string;

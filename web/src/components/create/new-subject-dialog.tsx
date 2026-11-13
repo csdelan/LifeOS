@@ -35,6 +35,7 @@ import {
   typeLabel,
 } from "@/lib/production-ui-types";
 import type { CreatedSubject, NewSubjectRequest, SubjectType } from "@/lib/production-ui-types";
+import { applyRelationshipWrites, relationshipWrites } from "@/lib/subject-save";
 import { parseRecurrence } from "@/lib/recurrence";
 import {
   pendingLinkParent,
@@ -158,7 +159,7 @@ export function NewSubjectDialog({
     // or a second Save would create a duplicate.
     try {
       await applyLink(created, carriesLink);
-      await applyFollowUps(created, values, t, attrs, parents, primaryParent);
+      await applyFollowUps(created, values, t, primaryParent);
     } catch (err) {
       toast.error(`Created ${created.title}, but not every detail saved: ${errorMessage(err, "unknown error")}`);
     }
@@ -182,8 +183,6 @@ export function NewSubjectDialog({
     created: CreatedSubject,
     values: SubjectFormValues,
     t: SubjectType,
-    attrs: Record<string, string>,
-    parents: string[],
     primaryParent: string | undefined,
   ) {
     // Priced before any status change, so creating it Completed pays the new bounty.
@@ -212,21 +211,9 @@ export function NewSubjectDialog({
       const tags = splitTags(values.tags);
       if (tags.length) await writes.tag(created.id, { add: tags });
     }
-    if (t === "Habit") {
-      for (const pid of parents) {
-        if (pid === primaryParent) continue;
-        const other = inferChildRelation(t, "Goal") ?? "serves";
-        await writes.link(created.id, other, pid);
-      }
-    }
-    if (t === "Commitment" && values.person) {
-      await writes.involve(created.id, values.person, "involves");
-    }
-    if (t === "Appointment" && attrs.attendees) {
-      for (const pid of attrs.attendees.split(",").map((x) => x.trim()).filter(Boolean)) {
-        await writes.involve(created.id, pid, "attendee");
-      }
-    }
+    // A Habit's other parents, a Commitment's person, an Appointment's attendees: as an edit
+    // saves them (lib/subject-save.ts), less the parent the create linked.
+    await applyRelationshipWrites(relationshipWrites(t, created.id, values, null, primaryParent), writes);
   }
 
   return (
