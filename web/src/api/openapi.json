@@ -6481,6 +6481,8 @@
         "required": [
           "clientId",
           "allowed",
+          "actsAsAgentPerson",
+          "mayWrite",
           "callsThisWeek",
           "refusedThisWeek"
         ],
@@ -6538,6 +6540,18 @@
             "format": "uuid"
           },
           "personName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "actsAsAgentPerson": {
+            "type": "boolean"
+          },
+          "mayWrite": {
+            "type": "boolean"
+          },
+          "readOnlyBecause": {
             "type": [
               "null",
               "string"

@@ -3,10 +3,15 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectedAgents } from "@/components/people/connected-agents";
-import { CLAUDE_CALLBACK, mockAgentsClient, resetMockAgents } from "@/lib/agents";
+import { CLAUDE_CALLBACK, mockAgentsClient, resetMockAgents, type AgentRecord } from "@/lib/agents";
 
 const { overrides } = vi.hoisted(() => ({
-  overrides: { mcpEnabled: true, grantsError: null as Error | null },
+  overrides: {
+    mcpEnabled: true,
+    grantsError: null as Error | null,
+    writes: "off",
+    claude: {} as Partial<AgentRecord>,
+  },
 }));
 
 // The mock agents, with the MCP switch and Supabase's answer under the test's control.
@@ -18,7 +23,15 @@ vi.mock("@/lib/agents", async (importOriginal) => {
       const client = real.mockAgentsClient();
       return {
         ...client,
-        overview: async () => ({ ...(await client.overview()), mcpEnabled: overrides.mcpEnabled }),
+        overview: async () => {
+          const real = await client.overview();
+          return {
+            ...real,
+            mcpEnabled: overrides.mcpEnabled,
+            writes: overrides.writes,
+            agents: real.agents.map((a) => (a.name === "Claude" ? { ...a, ...overrides.claude } : a)),
+          };
+        },
         grants: async () => {
           if (overrides.grantsError) throw overrides.grantsError;
           return client.grants();
@@ -46,6 +59,8 @@ describe("ConnectedAgents", () => {
     resetMockAgents();
     overrides.mcpEnabled = true;
     overrides.grantsError = null;
+    overrides.writes = "off";
+    overrides.claude = {};
   });
 
   it("shows each agent, whether LifeOS lets it in, and that agents only read", async () => {
@@ -129,6 +144,29 @@ describe("ConnectedAgents", () => {
     expect(lines[0]).toContain("life_snapshot");
     expect(lines[1]).toContain('{"query":"shed"}');
     expect(lines[2]).toContain("error");
+  });
+
+  // Code review CR64: the page said read-only while agents were capturing to the Inbox.
+  it("says agents may write when writes are on, and which one does as whom", async () => {
+    overrides.writes = "capture";
+    overrides.claude = { mayWrite: true, readOnlyBecause: null, personId: "p-1", personName: "Claude agent" };
+    renderSection();
+    expect(await screen.findByText(/Agents you let write can capture to the Inbox and the journal/)).toBeInTheDocument();
+    expect(screen.queryByText(/Read-only/)).not.toBeInTheDocument();
+    expect(
+      within(card("Claude")).getByText(/It can read LifeOS and capture to the Inbox and the journal as Claude agent\./),
+    ).toBeInTheDocument();
+  });
+
+  it("says why an allowed agent only reads while writes are on", async () => {
+    overrides.writes = "capture";
+    overrides.claude = { mayWrite: false, readOnlyBecause: "Mcp:WriteClients doesn't name it" };
+    renderSection();
+    expect(
+      await within(await screen.findByRole("article", { name: "Claude" })).findByText(
+        /It can read LifeOS, but not write: Mcp:WriteClients doesn't name it\./,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("says when the MCP server is off", async () => {

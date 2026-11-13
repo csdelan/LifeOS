@@ -348,6 +348,8 @@ public sealed partial class AgentAccessStore(string ownerConnectionString, strin
                    c.allowed_at IS NOT NULL AND c.revoked_at IS NULL AS allowed,
                    c.allowed_at AS allowedat, c.revoked_at AS revokedat, c.replaced_by AS replacedby,
                    c.person_id AS personid, p.title AS personname,
+                   coalesce(p.type = 'Person' AND NOT p.archived
+                            AND lower(coalesce(p.attributes->>'person_kind', 'human')) = 'ai', false) AS actsasagentperson,
                    k.last_call_at AS lastcallat, coalesce(k.calls_this_week, 0)::int AS callsthisweek,
                    k.last_refused_at AS lastrefusedat, coalesce(k.refused_this_week, 0)::int AS refusedthisweek
             FROM clients c
@@ -428,6 +430,21 @@ public sealed class AgentClient
     public Guid? PersonId { get; set; }
 
     public string? PersonName { get; set; }
+
+    /// <summary>
+    /// Its Person is an AI agent in use (a Person whose kind is AI, not archived), the Person an
+    /// agent must act as to write (agent-access plan §5.1).
+    /// </summary>
+    public bool ActsAsAgentPerson { get; set; }
+
+    /// <summary>
+    /// Whether <c>/mcp</c> lets it write at <c>Mcp:Writes</c>'s level, by the rule each call is
+    /// checked against (<see cref="McpWriteAccess.ReadOnlyBecause"/>). Filled by <c>GET /api/agents</c>.
+    /// </summary>
+    public bool MayWrite { get; set; }
+
+    /// <summary>Why it can only read, in the server log's words; null when it may write.</summary>
+    public string? ReadOnlyBecause { get; set; }
 
     public DateTime? LastCallAt { get; set; }
     public int CallsThisWeek { get; set; }

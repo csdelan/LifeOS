@@ -15,7 +15,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { agentRows, type AgentCallRow, type AgentRow, type AgentStatus } from "@/lib/agents";
+import {
+  accessText,
+  agentRows,
+  writesText,
+  type AgentCallRow,
+  type AgentRow,
+  type AgentStatus,
+} from "@/lib/agents";
 import { formatTimestamp } from "@/lib/dates";
 import { hostOf } from "@/lib/oauth-consent";
 import {
@@ -79,11 +86,7 @@ export function ConnectedAgents() {
               The MCP server is off (Mcp:Enabled), so no agent can call LifeOS right now.
             </li>
           ) : null}
-          <li>
-            {overview.data.writes === "off"
-              ? "Read-only: agents can't change anything in LifeOS."
-              : `Agents may write: ${overview.data.writes}.`}
-          </li>
+          <li>{writesText(overview.data.writes)}</li>
         </ul>
       ) : null}
 
@@ -122,6 +125,7 @@ export function ConnectedAgents() {
           <li key={row.clientId}>
             <AgentCard
               row={row}
+              writes={overview.data?.writes ?? "off"}
               aiPeople={aiPeople}
               busy={action.isPending}
               onAsk={setPending}
@@ -157,12 +161,14 @@ export function ConnectedAgents() {
 
 function AgentCard({
   row,
+  writes,
   aiPeople,
   busy,
   onAsk,
   onLink,
 }: {
   row: AgentRow;
+  writes: string;
   aiPeople: { id: string; title: string }[];
   busy: boolean;
   onAsk: (pending: Pending) => void;
@@ -199,7 +205,7 @@ function AgentCard({
         </Badge>
       </div>
 
-      <StatusText row={row} />
+      <StatusText row={row} writes={writes} />
 
       {record && (record.lastCallAt || record.callsThisWeek > 0 || row.status === "connected") ? (
         <p className="mt-2 text-sm text-muted-foreground">
@@ -257,7 +263,7 @@ function AgentCard({
   );
 }
 
-function StatusText({ row }: { row: AgentRow }) {
+function StatusText({ row, writes }: { row: AgentRow; writes: string }) {
   const record = row.record;
   const refused =
     record && record.lastRefusedAt
@@ -267,7 +273,7 @@ function StatusText({ row }: { row: AgentRow }) {
     case "connected":
       return (
         <p className="mt-2 text-sm text-muted-foreground">
-          Allowed {record?.allowedAt ? formatTimestamp(record.allowedAt) : ""}. It can read LifeOS.
+          Allowed {record?.allowedAt ? formatTimestamp(record.allowedAt) : ""}. {accessText(writes, record)}
         </p>
       );
     case "not-allowed":

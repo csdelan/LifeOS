@@ -2228,6 +2228,9 @@ export interface components {
             /** Format: uuid */
             personId?: null | string;
             personName?: null | string;
+            actsAsAgentPerson: boolean;
+            mayWrite: boolean;
+            readOnlyBecause?: null | string;
             /** Format: date-time */
             lastCallAt?: null | string;
             /** Format: int32 */

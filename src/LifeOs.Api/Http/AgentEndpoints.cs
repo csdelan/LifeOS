@@ -41,11 +41,18 @@ public static class AgentEndpoints
 
     private static async Task<IResult> List(
         AgentAccessStore access, McpOptions mcp, CancellationToken cancellationToken)
-        => Results.Ok(new AgentsRead
+    {
+        var agents = await access.ListAsync(cancellationToken);
+        foreach (var agent in agents)
         {
-            McpEnabled = mcp.Enabled,
-            Agents = await access.ListAsync(cancellationToken),
-        });
+            agent.ReadOnlyBecause = McpWriteAccess.ReadOnlyBecause(mcp, agent);
+            agent.MayWrite = agent.ReadOnlyBecause is null;
+        }
+
+        // Writes and each agent's say come from the settings /mcp runs on, so the page can't call
+        // agents read-only while they write (code review CR64).
+        return Results.Ok(new AgentsRead { McpEnabled = mcp.Enabled, Writes = mcp.Writes, Agents = agents });
+    }
 
     private static async Task<IResult> Calls(
         AgentAccessStore access, string? clientId, int? limit, CancellationToken cancellationToken)
@@ -167,8 +174,11 @@ public sealed class AgentsRead
     /// <summary>Whether <c>/mcp</c> is on (<c>Mcp:Enabled</c>); off, no agent can call.</summary>
     public bool McpEnabled { get; set; }
 
-    /// <summary>What agents may change: <c>off</c> (read-only) until Phase 2 builds writes.</summary>
-    public string Writes { get; set; } = "off";
+    /// <summary>
+    /// What agents may change (<c>Mcp:Writes</c>): <c>off</c>, read-only, or <c>capture</c>, the
+    /// Inbox and journal writes of agent-access plan §5.2, for the agents whose <c>MayWrite</c> is true.
+    /// </summary>
+    public string Writes { get; set; } = McpWrites.Off;
 
     public IReadOnlyList<AgentClient> Agents { get; set; } = [];
 }

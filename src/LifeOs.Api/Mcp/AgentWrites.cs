@@ -55,14 +55,9 @@ public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http
             return new McpWriteCheck(null, "the token names no agent client");
         }
 
-        if (!options.WritesOn)
+        if (SettingsRefuse(options, clientId) is { } why)
         {
-            return new McpWriteCheck(null, $"{McpOptions.WritesKey} is off");
-        }
-
-        if (!options.NamesWriter(clientId))
-        {
-            return new McpWriteCheck(null, $"{McpOptions.WriteClientsKey} doesn't name it");
+            return new McpWriteCheck(null, why);
         }
 
         if (access is null)
@@ -72,9 +67,25 @@ public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http
 
         var person = await access.WriterAsync(clientId, cancellationToken);
         return person is null
-            ? new McpWriteCheck(null, "it acts as no AI-agent Person in use (Connected agents)")
+            ? new McpWriteCheck(null, NoPerson)
             : new McpWriteCheck(new McpAgent(clientId, person.Id, person.Name), null);
     }
+
+    /// <summary>
+    /// Why <paramref name="agent"/> can't write, as the Connected agents page shows it, or null when
+    /// it may: the rule <see cref="CheckAsync"/> applies on each call, read from the list instead of
+    /// a token (code review CR64), so the page and <c>/mcp</c> can't disagree about who writes.
+    /// </summary>
+    public static string? ReadOnlyBecause(McpOptions options, AgentClient agent)
+        => !agent.Allowed ? "LifeOS doesn't allow it"
+            : SettingsRefuse(options, agent.ClientId) ?? (agent.ActsAsAgentPerson ? null : NoPerson);
+
+    private const string NoPerson = "it acts as no AI-agent Person in use (Connected agents)";
+
+    private static string? SettingsRefuse(McpOptions options, string clientId)
+        => !options.WritesOn ? $"{McpOptions.WritesKey} is off"
+            : !options.NamesWriter(clientId) ? $"{McpOptions.WriteClientsKey} doesn't name it"
+            : null;
 
     /// <summary>The agent making this call, or a refusal it can read.</summary>
     public async Task<McpAgent> CurrentAsync(CancellationToken cancellationToken)

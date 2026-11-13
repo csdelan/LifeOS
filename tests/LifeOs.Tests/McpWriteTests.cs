@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Dapper;
+using LifeOs.Api.Http;
 using LifeOs.Api.Mcp;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Capture;
@@ -94,6 +95,54 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         Assert.Contains($"MCP write tools hidden from {Other}: Mcp:WriteClients doesn't name it", hidden);
         Assert.Contains($"MCP write tools hidden from {Writer}: it acts as no AI-agent Person in use (Connected agents)", hidden);
         Assert.DoesNotContain(hidden, m => m.Contains("listed", StringComparison.Ordinal));
+    }
+
+    // Code review CR64: Connected agents said "read-only" while agents were capturing.
+    [Fact]
+    public async Task Connected_agents_says_writes_are_on_and_which_agents_may_write_as_mcp_decides()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await StartAsync(db.ConnectionString);
+        await ActAsAiPersonAsync(host, Writer);
+        await ActAsAiPersonAsync(host, Other);
+
+        var read = await AgentsAsync(host);
+
+        Assert.Equal(McpWrites.Capture, read.Writes);
+        var writer = Assert.Single(read.Agents, a => a.ClientId == Writer);
+        Assert.True(writer.MayWrite);
+        Assert.True(writer.ActsAsAgentPerson);
+        Assert.Null(writer.ReadOnlyBecause);
+        var other = Assert.Single(read.Agents, a => a.ClientId == Other);
+        Assert.False(other.MayWrite);
+        Assert.Equal("Mcp:WriteClients doesn't name it", other.ReadOnlyBecause);
+        // /mcp lists the write tools to exactly the agents the page says may write.
+        foreach (var agent in new[] { writer, other })
+        {
+            await using var client = await McpServerTests.ConnectAsync(host, ApiTestHost.TokenFor(clientId: agent.ClientId));
+            Assert.Equal(agent.MayWrite, (await NamesAsync(client)).Intersect(McpWriteAccess.Tools).Any());
+        }
+
+        using var unlink = await host.Client.PutAsJsonAsync($"api/agents/{Writer}/person", new { personId = (Guid?)null }, Ct);
+        Assert.True(unlink.IsSuccessStatusCode);
+        var unlinked = Assert.Single((await AgentsAsync(host)).Agents, a => a.ClientId == Writer);
+        Assert.False(unlinked.MayWrite);
+        Assert.Equal("it acts as no AI-agent Person in use (Connected agents)", unlinked.ReadOnlyBecause);
+    }
+
+    [Fact]
+    public async Task With_writes_off_connected_agents_says_every_agent_reads_only()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await StartAsync(db.ConnectionString, writes: null);
+        await ActAsAiPersonAsync(host, Writer);
+
+        var read = await AgentsAsync(host);
+
+        Assert.Equal(McpWrites.Off, read.Writes);
+        var writer = Assert.Single(read.Agents, a => a.ClientId == Writer);
+        Assert.False(writer.MayWrite);
+        Assert.Equal("Mcp:Writes is off", writer.ReadOnlyBecause);
     }
 
     [Fact]
@@ -472,6 +521,14 @@ public sealed class McpWriteTests(PostgresFixture postgres)
 
     private static Task<ApiTestHost> StartAsync(string connectionString, string? writes = McpWrites.Capture)
         => ApiTestHost.StartAsync(connectionString, Ct, Settings(writes));
+
+    private static async Task<AgentsRead> AgentsAsync(ApiTestHost host)
+    {
+        using var response = await host.Client.GetAsync("api/agents", Ct);
+        var text = await response.Content.ReadAsStringAsync(Ct);
+        Assert.True(response.IsSuccessStatusCode, $"GET /api/agents → {(int)response.StatusCode}: {text}");
+        return JsonSerializer.Deserialize<AgentsRead>(text, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+    }
 
     /// <summary>Allows <paramref name="clientId"/> and links it to a new AI-agent Person, as Connected agents does.</summary>
     private static async Task<Guid> ActAsAiPersonAsync(ApiTestHost host, string clientId)

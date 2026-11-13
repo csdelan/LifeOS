@@ -30,6 +30,12 @@ export type AgentRecord = {
   /** The AI-agent Person it acts as (GEN-15). */
   personId: string | null;
   personName: string | null;
+  /** Its Person is an AI agent in use: the Person an agent must act as to write. */
+  actsAsAgentPerson: boolean;
+  /** `/mcp` lets it write at `Mcp:Writes`'s level, by the rule each call is checked against. */
+  mayWrite: boolean;
+  /** Why it can only read, in the server log's words; null when it may write. */
+  readOnlyBecause: string | null;
   lastCallAt: string | null;
   callsThisWeek: number;
   lastRefusedAt: string | null;
@@ -39,10 +45,39 @@ export type AgentRecord = {
 export type AgentsOverview = {
   /** `Mcp:Enabled`: off, no agent can call LifeOS. */
   mcpEnabled: boolean;
-  /** `Mcp:Writes`: "off" (read-only) until Phase 2. */
+  /** `Mcp:Writes`: "off" (read-only) or "capture" (Inbox and journal writes, agent-access plan §5.2). */
   writes: string;
   agents: AgentRecord[];
 };
+
+/** What each `Mcp:Writes` level lets an agent do, in Chris's words. */
+const WRITE_LEVELS: Record<string, string> = {
+  capture: "capture to the Inbox and the journal",
+};
+
+function writeLevel(writes: string): string {
+  return WRITE_LEVELS[writes] ?? `write (Mcp:Writes is ${writes})`;
+}
+
+/**
+ * What agents may change, as Connected agents says it: read-only only when `Mcp:Writes` is off
+ * (code review CR64; it used to say read-only while agents were writing).
+ */
+export function writesText(writes: string): string {
+  return writes === "off"
+    ? "Read-only: agents can't change anything in LifeOS."
+    : `Agents you let write can ${writeLevel(writes)}; the rest only read. An agent writes when Mcp:WriteClients names it and it acts as an AI-agent Person.`;
+}
+
+/** What one allowed agent may do, as its card says it. */
+export function accessText(writes: string, record: AgentRecord | null): string {
+  if (record?.mayWrite) {
+    return `It can read LifeOS and ${writeLevel(writes)} as ${record.personName ?? "its Person"}.`;
+  }
+  return writes === "off" || !record?.readOnlyBecause
+    ? "It can read LifeOS."
+    : `It can read LifeOS, but not write: ${record.readOnlyBecause}.`;
+}
 
 export type AgentCallOutcome = "ok" | "error" | "refused";
 
@@ -204,6 +239,9 @@ export function normalizeAgent(raw: unknown): AgentRecord {
     replacedBy: str(r.replacedBy),
     personId: str(r.personId),
     personName: str(r.personName),
+    actsAsAgentPerson: r.actsAsAgentPerson === true,
+    mayWrite: r.mayWrite === true,
+    readOnlyBecause: str(r.readOnlyBecause),
     lastCallAt: str(r.lastCallAt),
     callsThisWeek: num(r.callsThisWeek),
     lastRefusedAt: str(r.lastRefusedAt),
@@ -325,6 +363,9 @@ function seedState(): MockState {
     replacedBy: null,
     personId: null,
     personName: null,
+    actsAsAgentPerson: false,
+    mayWrite: false,
+    readOnlyBecause: null,
     lastCallAt: null,
     callsThisWeek: 0,
     lastRefusedAt: null,
@@ -368,6 +409,9 @@ function mockRecords(): AgentRecord[] {
       replacedBy: null,
       personId: null,
       personName: null,
+      actsAsAgentPerson: false,
+      mayWrite: false,
+      readOnlyBecause: null,
       lastCallAt: null,
       callsThisWeek: 0,
       lastRefusedAt: null,
@@ -380,6 +424,9 @@ function mockRecords(): AgentRecord[] {
     const latest = (rows: AgentCallRow[]) => rows.map((c) => c.calledAt).sort().at(-1) ?? null;
     return {
       ...base,
+      actsAsAgentPerson: base.personId !== null,
+      mayWrite: false,
+      readOnlyBecause: base.allowed ? "Mcp:Writes is off" : "LifeOS doesn't allow it",
       lastCallAt: latest(tools),
       callsThisWeek: thisWeek(tools),
       lastRefusedAt: latest(refused),
@@ -487,6 +534,9 @@ function mockRecordShell(clientId: string): AgentRecord {
     replacedBy: null,
     personId: null,
     personName: null,
+    actsAsAgentPerson: false,
+    mayWrite: false,
+    readOnlyBecause: null,
     lastCallAt: null,
     callsThisWeek: 0,
     lastRefusedAt: null,
