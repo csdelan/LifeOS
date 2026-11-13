@@ -43,8 +43,10 @@
     scope=interaction rows are policy the diagnostic ignores by design.
 
 .PARAMETER Connection
-    PostgreSQL connection string. Omitted -> bsk's own resolution (the
-    BSK_CONNECTION_STRING env var, then the local-development default).
+    PostgreSQL connection string, required. The seed is placeholder data and
+    the event log is append-only, so it must name a throwaway database on this
+    machine: the script refuses the development database (lifeos) and any
+    host other than localhost, so it can't reach staging.
 
 .PARAMETER Migrate
     Run `bsk migrate` before seeding. Use this to seed a brand-new database in
@@ -54,11 +56,7 @@
     Skip building the CLI; assume src/LifeOs.Cli is already built.
 
 .EXAMPLE
-    # Seed the local development database (docker compose up -d; already migrated)
-    ./scripts/seed.ps1
-
-.EXAMPLE
-    # Replay against a fresh throwaway database in one step
+    # Seed a fresh throwaway database in one step (create it first)
     ./scripts/seed.ps1 -Connection 'Host=localhost;Port=5432;Database=lifeos_fresh;Username=lifeos;Password=lifeos' -Migrate
 
 .NOTES
@@ -69,12 +67,28 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $Connection,
+    [Parameter(Mandatory)] [string] $Connection,
     [switch] $Migrate,
     [switch] $NoBuild
 )
 
 $ErrorActionPreference = 'Stop'
+
+# A throwaway database on this machine only: never the dev database's real log, never staging.
+$keywords = @{}
+foreach ($pair in $Connection -split ';') {
+    $eq = $pair.IndexOf('=')
+    if ($eq -gt 0) { $keywords[$pair.Substring(0, $eq).Trim()] = $pair.Substring($eq + 1).Trim() }
+}
+$targetHost = $keywords['Host'] ?? $keywords['Server']
+$database = $keywords['Database'] ?? $keywords['DB']
+if ($targetHost -notin @('localhost', '127.0.0.1', '::1')) {
+    throw "The seed goes only into a database on localhost, not '$targetHost'."
+}
+if ([string]::IsNullOrWhiteSpace($database) -or $database -eq 'lifeos') {
+    throw "Name a throwaway database (Database=lifeos_fresh, say). 'lifeos' holds your own dev data."
+}
+
 $root = Split-Path -Parent $PSScriptRoot
 $cliProject = Join-Path $root 'src' 'LifeOs.Cli' 'LifeOs.Cli.csproj'
 $dll = Join-Path $root 'src' 'LifeOs.Cli' 'bin' 'Debug' 'net10.0' 'bsk.dll'
@@ -89,9 +103,9 @@ if (-not (Test-Path $dll)) {
 }
 
 # --- bsk plumbing ------------------------------------------------------------
-# Every call threads --connection through when one was supplied, and stops the
-# whole seed on the first failure rather than leaving a half-built graph.
-$connArgs = if ($Connection) { @('--connection', $Connection) } else { @() }
+# Every call threads --connection through, and stops the whole seed on the
+# first failure rather than leaving a half-built graph.
+$connArgs = @('--connection', $Connection)
 
 function Invoke-Bsk {
     param([Parameter(ValueFromRemainingArguments = $true)] [string[]] $BskArgs)

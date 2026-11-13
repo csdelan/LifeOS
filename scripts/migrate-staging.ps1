@@ -5,9 +5,12 @@
     Applies the Life Kernel migrations to a remote (e.g. Supabase) database.
 
 .DESCRIPTION
-    Loads BSK_CONNECTION_STRING from a dotenv file (default: .env at the repo
+    Reads BSK_CONNECTION_STRING from a dotenv file (default: .env at the repo
     root) unless it is already set in the environment, then builds and runs
-    `bsk migrate` against it.
+    `bsk migrate` against it. The connection string reaches `bsk migrate` only:
+    the caller's shell keeps whatever it had before, so a later `bsk` or
+    `run.ps1` in the same terminal can't write to the remote database by
+    accident.
 
     `bsk migrate` is the single source of truth for schema and is safe to
     re-run: already-applied migrations are skipped, and one whose SQL changed
@@ -52,30 +55,28 @@ if ($head -ne $main) {
     throw "HEAD ($($head.Substring(0, 7))) isn't origin/main ($($main.Substring(0, 7))). " +
         'Migrate from a checkout of origin/main: a remote database gets only what main has.'
 }
-$uncommitted = git -C $root status --porcelain -- db src
+$uncommitted = git -C $root status --porcelain -- db src Directory.Build.props Directory.Packages.props global.json
 if ($uncommitted) {
-    throw "Uncommitted changes under db/ or src/ would be built into bsk:`n$($uncommitted -join "`n")"
+    throw "Uncommitted changes would be built into bsk:`n$($uncommitted -join "`n")"
 }
 
-# Load KEY=VALUE lines from the dotenv file into the process environment, but
-# never clobber a variable already set in the environment (so CI's secret wins).
+# The connection string already in the environment wins (so CI's secret does);
+# otherwise it comes from the dotenv file. Only that one key is read, and it is
+# never written to this process's environment, which is the caller's shell.
+$conn = $env:BSK_CONNECTION_STRING
 $envPath = Join-Path $root $EnvFile
-if (Test-Path $envPath) {
-    Write-Host "Loading environment from $EnvFile" -ForegroundColor Cyan
+if ([string]::IsNullOrWhiteSpace($conn) -and (Test-Path $envPath)) {
+    Write-Host "Reading BSK_CONNECTION_STRING from $EnvFile" -ForegroundColor Cyan
     foreach ($line in Get-Content $envPath) {
         $trimmed = $line.Trim()
         if ($trimmed -eq '' -or $trimmed.StartsWith('#')) { continue }
         $eq = $trimmed.IndexOf('=')
         if ($eq -lt 1) { continue }
-        $key = $trimmed.Substring(0, $eq).Trim()
-        $value = $trimmed.Substring($eq + 1).Trim().Trim('"')
-        if ([string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($key))) {
-            [Environment]::SetEnvironmentVariable($key, $value)
+        if ($trimmed.Substring(0, $eq).Trim() -eq 'BSK_CONNECTION_STRING') {
+            $conn = $trimmed.Substring($eq + 1).Trim().Trim('"')
         }
     }
 }
-
-$conn = [Environment]::GetEnvironmentVariable('BSK_CONNECTION_STRING')
 if ([string]::IsNullOrWhiteSpace($conn)) {
     throw "BSK_CONNECTION_STRING is not set. Put it in $EnvFile or export it before running this script."
 }
@@ -90,5 +91,15 @@ $argList = @('migrate')
 if ($MigrateArgs) { $argList += $MigrateArgs }
 
 Write-Host "Running: bsk $($argList -join ' ')" -ForegroundColor Cyan
-dotnet run --project $cliProject --configuration Release -- @argList
-exit $LASTEXITCODE
+# bsk reads the variable, so set it for the run and put the caller's value back after.
+$before = $env:BSK_CONNECTION_STRING
+$env:BSK_CONNECTION_STRING = $conn
+try {
+    dotnet run --project $cliProject --configuration Release -- @argList
+    $code = $LASTEXITCODE
+}
+finally {
+    if ($null -eq $before) { Remove-Item Env:BSK_CONNECTION_STRING -ErrorAction SilentlyContinue }
+    else { $env:BSK_CONNECTION_STRING = $before }
+}
+exit $code
