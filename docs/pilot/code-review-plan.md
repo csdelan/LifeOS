@@ -32,6 +32,12 @@ commit each, and skipped P3.
   and the CLI's field names (`homeScore`, `averageHomeScore`) stay, since the web reads them.
   The Home simulator and the CLI's written Home reading still name `HomeConditionRule`: they
   are the home's own.
+- **CR22:** the database stays one of two places the home zone is set, rather than the only
+  one: making it the only source would change every reader that takes a zone. Instead the API
+  refuses to start, and the calendar to answer, while `Rewards:HomeTimeZone` and `bsk.home_zone`
+  disagree. The web counts "today" in the zone `public-config.js` names, so a check-off or
+  capture made while travelling lands on the home day; the ledger's chart stays in the viewer's
+  zone (REWARD-5).
 - **CR24:** a rename or attribute change appends an `attribute_change` event in the same
   transaction, so "what was this habit's recurrence on a date" can be answered later.
 

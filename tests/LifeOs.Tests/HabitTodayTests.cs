@@ -107,8 +107,10 @@ public sealed class HabitTodayTests(PostgresFixture postgres)
         var (aheadToday, behindToday) = (await ahead.TodayAsync(Ct), await behind.TodayAsync(Ct));
         Assert.InRange(aheadToday.DayNumber - behindToday.DayNumber, 1, 2);
 
-        // The views and the app's calendar (which dates check-offs) agree on the day.
-        var calendar = new NpgsqlHomeCalendar(KernelDataSource.For(postgres.ConnectionString), Kiritimati);
+        // The views and the app's calendar (which dates check-offs) agree on the day, in a
+        // database whose home zone is Kiritimati's.
+        await using var kiritimati = await DomainTestDatabase.CreateAsync(postgres, Ct, Kiritimati);
+        var calendar = kiritimati.Get<IHomeCalendar>();
         Assert.Contains(aheadToday, new[]
         {
             await calendar.DateAtAsync(DateTimeOffset.UtcNow.AddMinutes(-1), Ct),

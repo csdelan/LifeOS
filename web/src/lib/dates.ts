@@ -1,11 +1,44 @@
 /** Date helpers matching kernel conventions: `YYYY-MM-DD` and ISO timestamps. */
 
+import { homeTimeZone } from "@/lib/public-config";
+
+const homeFormats = new Map<string, Intl.DateTimeFormat | null>();
+
+function homeFormat(timeZone: string): Intl.DateTimeFormat | null {
+  if (!homeFormats.has(timeZone)) {
+    try {
+      homeFormats.set(
+        timeZone,
+        new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }),
+      );
+    } catch {
+      // A zone this browser doesn't know: its own clock's day, as before the home zone.
+      homeFormats.set(timeZone, null);
+    }
+  }
+  return homeFormats.get(timeZone) ?? null;
+}
+
+/**
+ * The day `instant` falls on in the home zone (code review CR22): the day the kernel files a
+ * check-off or a capture under, whatever zone the browser is in. `timeZone` defaults to the API's.
+ */
+export function homeDayAt(instant: Date, timeZone: string = homeTimeZone()): string {
+  const format = homeFormat(timeZone);
+  if (!format) {
+    const y = instant.getFullYear();
+    const m = String(instant.getMonth() + 1).padStart(2, "0");
+    const d = String(instant.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    format.formatToParts(instant).find((p) => p.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+/** Today in the home zone, `YYYY-MM-DD`. */
 export function todayIso(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return homeDayAt(new Date());
 }
 
 export function addDays(isoDate: string, days: number): string {

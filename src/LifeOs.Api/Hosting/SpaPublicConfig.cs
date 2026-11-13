@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LifeOs.Domain;
 
 namespace LifeOs.Api.Hosting;
 
@@ -35,11 +36,16 @@ public static class SpaPublicConfig
         return (apiBaseUrl, supabaseUrl, supabaseAnonKey);
     }
 
+    /// <summary>
+    /// Writes <see cref="FileName"/> into <paramref name="webRoot"/>, with the home zone
+    /// (<paramref name="homeTimeZone"/>) so the web counts "today" as the kernel does (code review CR22).
+    /// </summary>
     public static void Write(
         string? webRoot,
         string apiBaseUrl,
         string supabaseUrl,
-        string supabaseAnonKey)
+        string supabaseAnonKey,
+        string homeTimeZone = HomeZone.Default)
     {
         if (string.IsNullOrEmpty(webRoot) || !Directory.Exists(webRoot))
         {
@@ -51,6 +57,7 @@ public static class SpaPublicConfig
             apiBaseUrl,
             supabaseUrl,
             supabaseAnonKey,
+            homeTimeZone,
         });
         File.WriteAllText(
             Path.Combine(webRoot, FileName),

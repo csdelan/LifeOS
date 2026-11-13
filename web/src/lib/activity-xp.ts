@@ -20,7 +20,7 @@ import {
   stepsXp,
   type ExerciseSpan,
 } from "@/lib/activity-score";
-import { formatDayFull } from "@/lib/dates";
+import { formatDayFull, homeDayAt } from "@/lib/dates";
 import type { ActivityAwardPaid, ActivityDayRow } from "@/lib/production-ui-types";
 
 /** Oura's day ends at 4 a.m. the next morning. */
@@ -62,14 +62,9 @@ export interface DayXp {
   total: number;
 }
 
-/** "2026-10-22": the local date an instant falls on. */
-function localDay(at: Date): string {
-  return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
-}
-
-/** The Oura day it is at `now`: the local date 4 hours earlier. */
+/** The Oura day it is at `now`: the home zone's date 4 hours earlier, as the kernel reads it. */
 export function ouraDayAt(now: Date): string {
-  return localDay(new Date(now.getTime() - DAY_START_HOUR * 3_600_000));
+  return homeDayAt(new Date(now.getTime() - DAY_START_HOUR * 3_600_000));
 }
 
 /** Whether Oura's `day` is over at `now`, so its steps and exercise can pay. */

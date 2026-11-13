@@ -2,6 +2,8 @@ export type PublicConfig = {
   apiBaseUrl?: string;
   supabaseUrl?: string;
   supabaseAnonKey?: string;
+  /** The API's home zone (`Rewards:HomeTimeZone`), an IANA name. */
+  homeTimeZone?: string;
 };
 
 declare global {
@@ -24,6 +26,15 @@ export function supabaseUrl(): string {
 
 export function supabaseAnonKey(): string {
   return readPublicConfig().supabaseAnonKey || import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+}
+
+/**
+ * The home zone (an IANA name) whose days the kernel counts, from the API's runtime config.
+ * Without one (mock mode, an API from before it said), the browser's own zone, which is what the
+ * mock store counts days in.
+ */
+export function homeTimeZone(): string {
+  return readPublicConfig().homeTimeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
 export function runtimeApiBase(): string {

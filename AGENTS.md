@@ -111,6 +111,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - Dates are days in Chris's home time zone (Pacific). `InvariantGlobalization` is on, so .NET
   can't resolve IANA zones on Windows. Do zone math in Postgres (`McpReads.StartOfDayAsync` is an
   example).
+- The zone is set twice, `Rewards:HomeTimeZone` and the database's `bsk.home_zone`, and the API
+  won't start, nor the calendar answer, while they disagree (`HomeZoneCheck`). A test kernel on
+  another zone needs a `DomainTestDatabase` made in that zone. The web's `todayIso()` counts in
+  the zone `public-config.js` names, or the browser's own in mock mode.
 - Weeks run Monday to Sunday (`startOfWeekMonday` in `web/src/lib/dates.ts`). Sunday is review
   day: a weekly review is named by its Sunday, reviews the week ending that day and plans the
   next one. On the web, `reviewPeriod` in `web/src/lib/reviews.ts` and `ReviewPeriods` in

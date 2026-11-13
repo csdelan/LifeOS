@@ -6,7 +6,7 @@
  * offer (a Decision status left picked after switching to Tasks) is ignored, not applied.
  */
 
-import { addDays } from "@/lib/dates";
+import { addDays, homeDayAt } from "@/lib/dates";
 import { ALIGNMENT_TYPES } from "@/lib/subject-meta";
 import {
   CREATABLE_TYPES,
@@ -144,13 +144,11 @@ export function tagsOf(item: SubjectListItem): string[] {
     .filter(Boolean);
 }
 
-/** The local calendar day an ISO timestamp falls on. */
+/** The home-zone day an ISO timestamp falls on, as "today" is (`todayIso`). */
 export function localDay(timestamp: string): string {
   const d = new Date(timestamp);
   if (Number.isNaN(d.getTime())) return "";
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
+  return homeDayAt(d);
 }
 
 export interface TypeCount {

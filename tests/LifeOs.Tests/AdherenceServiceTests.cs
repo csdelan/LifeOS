@@ -22,7 +22,7 @@ public sealed class AdherenceServiceTests(PostgresFixture postgres)
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone).BuildServiceProvider();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {

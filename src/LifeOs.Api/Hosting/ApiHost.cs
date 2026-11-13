@@ -72,6 +72,9 @@ public static class ApiHost
             storage,
             allowPhotosInDatabase: builder.Environment.IsDevelopment(),
             integrations: integrations));
+        // The zone must be the database's own bsk.home_zone too; startup fails when it isn't.
+        builder.Services.AddHostedService(sp => new HomeZoneStartupCheck(
+            KernelDataSource.For(owner), homeZone, sp.GetRequiredService<ILogger<HomeZoneStartupCheck>>()));
         builder.Services.AddSingleton(new SubjectReader(
             reader, integrations.Unsplash?.AppName ?? Cover.DefaultAppName));
         builder.Services.AddSingleton(sp => new RewardReader(
@@ -140,7 +143,9 @@ public static class ApiHost
 
         app.UseSecurityHeaders();
         var spaPublic = SpaPublicConfig.Resolve(app.Configuration, app.Environment);
-        SpaPublicConfig.Write(app.Environment.WebRootPath, spaPublic.ApiBaseUrl, spaPublic.SupabaseUrl, spaPublic.SupabaseAnonKey);
+        SpaPublicConfig.Write(
+            app.Environment.WebRootPath, spaPublic.ApiBaseUrl, spaPublic.SupabaseUrl, spaPublic.SupabaseAnonKey,
+            KernelSettings.ParseHomeTimeZone(app.Configuration[HomeZone.ConfigurationKey]));
         app.UseSpaStaticFiles();
 
         var spaOrigins = SpaCors.ResolveOrigins(app.Configuration);

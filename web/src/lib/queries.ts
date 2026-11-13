@@ -15,6 +15,7 @@ import { useMemo } from "react";
 import { getAgentsClient } from "@/lib/agents";
 import { isLiveApi } from "@/lib/api-base";
 import { createWriteClient, getReads } from "@/lib/client";
+import { todayIso } from "@/lib/dates";
 import { mapForestStatus, type DashboardRead, type MapLens } from "@/lib/derive";
 import { announceEarned } from "@/lib/earn-feedback";
 import { nextCoverPage } from "@/lib/cover";
@@ -794,11 +795,7 @@ function optimisticAdhere(
   state: Exclude<AdherenceState, "unrecorded">,
   on?: string,
 ) {
-  const today = new Date();
-  const y = today.getFullYear();
-  const m = String(today.getMonth() + 1).padStart(2, "0");
-  const d = String(today.getDate()).padStart(2, "0");
-  const date = on ?? `${y}-${m}-${d}`;
+  const date = on ?? todayIso();
   qc.setQueryData<DashboardRead>(qk.dashboard, (old) => {
     if (!old) return old;
     const mark = (h: HabitOccurrenceRow) =>

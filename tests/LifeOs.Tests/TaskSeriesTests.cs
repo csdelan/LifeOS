@@ -41,7 +41,7 @@ public sealed class TaskSeriesTests(PostgresFixture postgres)
     {
         var clock = TestClock.Ticking();
         clock.On(on ?? Monday);
-        var services = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString);
+        var services = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone);
         if (!realClock)
         {
             services.AddSingleton<IClock>(clock);

@@ -9,7 +9,9 @@ namespace LifeOs.Infrastructure.Persistence;
 /// <summary>
 /// The home-zone calendar (<see cref="IHomeCalendar"/>): Postgres reads an instant in
 /// <paramref name="homeTimeZone"/> (an IANA name, <see cref="HomeZone"/>), since .NET runs
-/// with invariant globalization and can't. A zone the database doesn't know fails loudly.
+/// with invariant globalization and can't. A zone the database doesn't know fails loudly, and so
+/// does one that isn't the database's own <c>bsk.home_zone</c> (<see cref="HomeZoneCheck"/>),
+/// read in the same round trip.
 /// </summary>
 public sealed class NpgsqlHomeCalendar(NpgsqlDataSource dataSource, string homeTimeZone = HomeZone.Default) : IHomeCalendar
 {
@@ -20,11 +22,12 @@ public sealed class NpgsqlHomeCalendar(NpgsqlDataSource dataSource, string homeT
         try
         {
             // Text, not a date: Dapper has no DateOnly mapping in every host.
-            var day = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
-                "SELECT to_char((@instant AT TIME ZONE @tz)::date, 'YYYY-MM-DD');",
+            var row = await connection.QuerySingleAsync<(string Day, string Zone)>(new CommandDefinition(
+                "SELECT to_char((@instant AT TIME ZONE @tz)::date, 'YYYY-MM-DD'), bsk.home_zone();",
                 new { instant = instant.ToUniversalTime(), tz = homeTimeZone },
                 cancellationToken: cancellationToken));
-            return DateOnly.ParseExact(day!, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+            HomeZoneCheck.Ensure(homeTimeZone, row.Zone);
+            return DateOnly.ParseExact(row.Day, "yyyy-MM-dd", CultureInfo.InvariantCulture);
         }
         catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
         {

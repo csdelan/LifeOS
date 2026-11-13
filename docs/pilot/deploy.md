@@ -70,7 +70,7 @@ only — never commit real values.
 | `Storage__SupabaseSecretKey` | Optional. A Supabase **secret** key (`sb_secret_…`, Project Settings → API Keys → Secret keys). Food photos and other artifact bytes then go to Supabase Storage instead of the database (migration 0035). Server-only: it bypasses row-level security, so never a `VITE_` value. Without it the API refuses photos outside Development. |
 | `Storage__SupabaseUrl` | Optional. Defaults to `VITE_SUPABASE_URL`. |
 | `Storage__Bucket` | Optional. Defaults to `lifeos-artifacts`, created **private** on the first upload. |
-| `Rewards__HomeTimeZone` | Optional. The IANA zone whose dates rewards and check-offs use (default `America/Los_Angeles`). If you change it, also run `ALTER DATABASE postgres SET bsk.home_zone = '<zone>'`, so the habit views agree (migration 0033). |
+| `Rewards__HomeTimeZone` | Optional. The IANA zone whose dates rewards and check-offs use (default `America/Los_Angeles`). If you change it, also run `ALTER DATABASE postgres SET bsk.home_zone = '<zone>'`, so the habit views agree (migration 0033): the API won't start while the two disagree. |
 
 Same-origin API base is `/` (the client uses `window.location.origin`). Optional Docker build-arg `VITE_API_BASE_URL=/` is already the image default.
 

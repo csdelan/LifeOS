@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using Dapper;
 using LifeOs.Api.Hosting;
+using LifeOs.Domain;
 using LifeOs.Infrastructure;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 
 namespace LifeOs.Tests;
 
@@ -58,6 +60,15 @@ internal sealed class ApiTestHost(WebApplication app, HttpClient client) : IAsyn
         foreach (var (key, value) in configuration ?? new Dictionary<string, string?>())
         {
             settings[key] = value;
+        }
+
+        // The API refuses a home zone that isn't the database's own (code review CR22), so a test
+        // that doesn't name one gets the database's.
+        if (!settings.ContainsKey(HomeZone.ConfigurationKey))
+        {
+            await using var connection = new NpgsqlConnection(connectionString);
+            settings[HomeZone.ConfigurationKey] = await connection.ExecuteScalarAsync<string>(
+                new CommandDefinition("SELECT bsk.home_zone();", cancellationToken: cancellationToken));
         }
 
         builder.Configuration.AddInMemoryCollection(settings);

@@ -33,6 +33,9 @@ public sealed class HomeCalendarTests(PostgresFixture postgres)
             .AddLifeOsKernel(postgres.ConnectionString, homeTimeZone: homeTimeZone)
             .BuildServiceProvider();
 
+    /// <summary>A database whose home zone is <paramref name="zone"/>, with a kernel in the same zone.</summary>
+    private Task<DomainTestDatabase> DatabaseAsync(string zone) => DomainTestDatabase.CreateAsync(postgres, Ct, zone);
+
     private Task<SubjectRef> HabitAsync(ServiceProvider kernel)
     {
         var start = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-5);
@@ -60,10 +63,10 @@ public sealed class HomeCalendarTests(PostgresFixture postgres)
     [InlineData(PagoPago, "2003-02-14")]
     public async Task The_calendar_reads_an_instant_on_the_home_zones_date(string zone, string expected)
     {
-        await using var kernel = Kernel(zone);
+        await using var db = await DatabaseAsync(zone);
 
         // 06:30 UTC on 15 February 2003: 10:30 pm on the 14th in Pacific time.
-        var day = await kernel.GetRequiredService<IHomeCalendar>()
+        var day = await db.Get<IHomeCalendar>()
             .DateAtAsync(new DateTimeOffset(2003, 2, 15, 6, 30, 0, TimeSpan.Zero), Ct);
 
         Assert.Equal(DateOnly.Parse(expected), day);
@@ -82,16 +85,40 @@ public sealed class HomeCalendarTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task A_zone_that_isnt_the_databases_own_is_refused()
+    {
+        // The test database's bsk.home_zone is UTC.
+        await using var kernel = Kernel(Kiritimati);
+
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => kernel.GetRequiredService<IHomeCalendar>().DateAtAsync(DateTimeOffset.UtcNow, Ct));
+
+        Assert.Contains($"{HomeZone.ConfigurationKey} is '{Kiritimati}'", refused.Message);
+        Assert.Contains($"bsk.home_zone is '{PostgresFixture.HabitViewZone}'", refused.Message);
+    }
+
+    [Fact]
+    public async Task The_api_wont_start_with_a_zone_that_isnt_the_databases_own()
+    {
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => ApiTestHost.StartAsync(
+            postgres.ConnectionString, Ct, new Dictionary<string, string?> { [HomeZone.ConfigurationKey] = Kiritimati }));
+
+        Assert.Contains("bsk.home_zone", refused.Message);
+    }
+
+    [Fact]
     public async Task A_check_off_without_a_date_lands_on_today_in_the_home_zone()
     {
-        await using var ahead = Kernel(Kiritimati);
-        await using var behind = Kernel(PagoPago);
-        var habit = await HabitAsync(ahead);
+        await using var aheadDb = await DatabaseAsync(Kiritimati);
+        await using var behindDb = await DatabaseAsync(PagoPago);
+        var (ahead, behind) = (aheadDb.Kernel, behindDb.Kernel);
+        var aheadHabit = await HabitAsync(ahead);
+        var behindHabit = await HabitAsync(behind);
 
         var (aheadDay, aheadToday) = await AroundAsync(ahead, () => ahead.GetRequiredService<AdherenceService>()
-            .RecordAsync(habit.Urn, AdherenceResults.Followed, cancellationToken: Ct), Ct);
+            .RecordAsync(aheadHabit.Urn, AdherenceResults.Followed, cancellationToken: Ct), Ct);
         var (behindDay, behindToday) = await AroundAsync(behind, () => behind.GetRequiredService<AdherenceService>()
-            .RecordAsync(habit.Urn, AdherenceResults.Followed, cancellationToken: Ct), Ct);
+            .RecordAsync(behindHabit.Urn, AdherenceResults.Followed, cancellationToken: Ct), Ct);
 
         Assert.Contains(aheadDay.Occurrence, aheadToday);
         Assert.Contains(behindDay.Occurrence, behindToday);
@@ -114,16 +141,17 @@ public sealed class HomeCalendarTests(PostgresFixture postgres)
     [Fact]
     public async Task The_api_leaves_an_omitted_date_to_the_home_zone()
     {
+        await using var db = await DatabaseAsync(Kiritimati);
         await using var host = await ApiTestHost.StartAsync(
-            postgres.ConnectionString, Ct, new Dictionary<string, string?> { [HomeZone.ConfigurationKey] = Kiritimati });
-        await using var kernel = Kernel(Kiritimati);
+            db.ConnectionString, Ct, new Dictionary<string, string?> { [HomeZone.ConfigurationKey] = Kiritimati });
+        var kernel = db.Kernel;
         var habit = await HabitAsync(kernel);
 
         var (response, today) = await AroundAsync(kernel, () => host.Client.PostAsJsonAsync(
             "/api/adhere", new { habit = habit.Id.ToString(), state = "followed" }, Ct), Ct);
 
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(Ct));
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
         await connection.OpenAsync(Ct);
         var occurrence = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
             """

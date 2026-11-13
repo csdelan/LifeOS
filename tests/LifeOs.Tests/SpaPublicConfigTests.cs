@@ -33,11 +33,13 @@ public sealed class SpaPublicConfigTests
         Directory.CreateDirectory(dir);
         try
         {
-            SpaPublicConfig.Write(dir, "/", "https://abc.supabase.co", "anon-key");
+            SpaPublicConfig.Write(dir, "/", "https://abc.supabase.co", "anon-key", "America/Chicago");
             var body = File.ReadAllText(Path.Combine(dir, SpaPublicConfig.FileName));
             Assert.StartsWith("window.__LIFEOS_PUBLIC_CONFIG__=", body, StringComparison.Ordinal);
             Assert.Contains("https://abc.supabase.co", body, StringComparison.Ordinal);
             Assert.Contains("anon-key", body, StringComparison.Ordinal);
+            // The web counts "today" in the kernel's home zone (code review CR22).
+            Assert.Contains("\"homeTimeZone\":\"America/Chicago\"", body, StringComparison.Ordinal);
             Assert.DoesNotContain("BSK_CONNECTION_STRING", body, StringComparison.Ordinal);
             Assert.DoesNotContain("service_role", body, StringComparison.Ordinal);
         }
