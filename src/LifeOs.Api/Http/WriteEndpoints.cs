@@ -488,8 +488,9 @@ public static class WriteEndpoints
 
         foreach (var (key, value) in body.Attrs)
         {
-            // Status moves only by state_change; title is a first-class column.
-            if (key is "status" or "title" || string.IsNullOrWhiteSpace(key))
+            // A key with a verb of its own (status, title, ...) is refused by the creation
+            // service, as bsk new --attr's is.
+            if (string.IsNullOrWhiteSpace(key))
             {
                 continue;
             }

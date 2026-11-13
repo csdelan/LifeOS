@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using LifeOs.Domain;
 
 namespace LifeOs.Application.Subjects;
@@ -11,8 +12,9 @@ namespace LifeOs.Application.Subjects;
 ///   <item>a Problem or an Idea is a capture-like item and goes to the Inbox (GEN-14, CAP-6);</item>
 ///   <item>a repeating Task gets its first repetition at once, from its start (D16).</item>
 /// </list>
-/// Checking the door's own arguments (a Value's statement, a relation without a parent) stays
-/// with the door, which knows what its options are called.
+/// An attribute with a verb of its own (a status, a bounty, ...) is refused, as an edit refuses it
+/// (<see cref="ReservedAttributes"/>). Checking the door's own arguments (a Value's statement, a
+/// relation without a parent) stays with the door, which knows what its options are called.
 /// </summary>
 public sealed class SubjectCreationService(
     SubjectService subjects, ChildCreationService children, TriageService triage, TaskSeriesService taskSeries)
@@ -28,6 +30,11 @@ public sealed class SubjectCreationService(
         CancellationToken cancellationToken = default)
     {
         type = SubjectTypes.ParseCreatable(type);
+        if (JsonNode.Parse(attributesJson) is JsonObject attributes)
+        {
+            ReservedAttributes.Check(type, attributes.Select(pair => pair.Key));
+        }
+
         SubjectRef created;
         ChildCreationResult? link = null;
         var reused = false;

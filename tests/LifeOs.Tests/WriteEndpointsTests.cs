@@ -98,6 +98,24 @@ public sealed class WriteEndpointsTests(ClassDatabase classDb) : IClassFixture<C
     }
 
     [Fact]
+    public async Task A_status_sent_as_an_attribute_is_refused_not_dropped()
+    {
+        // Code review CR49: the API dropped it while bsk new --attr stored it.
+        await using var host = await StartAsync();
+
+        var response = await host.Client.PostAsJsonAsync("/api/subjects", new
+        {
+            type = SubjectTypes.Task,
+            title = $"status by the side door {Guid.NewGuid():N}",
+            attrs = new Dictionary<string, string> { ["status"] = "Completed" },
+        }, Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        Assert.Contains("Status is not an attribute", body.GetProperty("error").GetString());
+    }
+
+    [Fact]
     public async Task A_captured_note_shows_its_tags_and_comes_back_from_resolved()
     {
         // The web Inbox's round trip: capture → tag (read back on the inbox row) →

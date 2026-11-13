@@ -164,8 +164,9 @@ public sealed class RewardEarningTests(ClassDatabase classDb) : IClassFixture<Cl
     {
         var kernel = Build();
         var task = await CreateAsync(kernel, SubjectTypes.Task);
-        await kernel.Provider.GetRequiredService<AttributeService>().SetAsync(
-            task.Urn, [new AttributeAssignment(Bounty.AttributeKey, "lots please")], Ct);
+        // bsk set refuses a bounty now (code review CR49), but one stored before it still reads.
+        await kernel.Provider.GetRequiredService<ISubjectRepository>().UpdateAttributesAsync(
+            task.Id, """{"bounty":"lots please"}""", [], Ct);
 
         var completed = await kernel.Status.ChangeStatusAsync(task.Urn, "Completed", Ct);
 

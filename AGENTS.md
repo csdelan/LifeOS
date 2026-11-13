@@ -14,6 +14,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   are doors into them and share them, so a rule lives there once, not in a door. A service
   refuses with a `KernelRefusalException` of the right kind, or a plain `ArgumentException`.
   `KernelRefusals` (API) is the one table from those to `/api` statuses and `/mcp` errors.
+  An attribute key that only its own verb may write goes in `ReservedAttributes`, which `bsk set`,
+  `bsk new --attr` and the API's create and edit all check.
 - `src/LifeOs.Cli`: the `bsk` CLI, and the only door for `bsk migrate`. Run it with
   `dotnet run --project src/LifeOs.Cli -- <verb>` (`bsk` isn't on PATH). Outside programs that
   read (Python, BI, `psql`) use the `bsk_reader` role and the `v_*` views.

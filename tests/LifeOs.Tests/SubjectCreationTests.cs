@@ -63,4 +63,36 @@ public sealed class SubjectCreationTests(PostgresFixture postgres)
         Assert.Equal(project.Subject.Id, task.Link.Parent.Id);
         Assert.Equal(task.Subject.Id, task.Link.Child.Id);
     }
+
+    [Theory]
+    [InlineData("status", "Status is not an attribute")]
+    [InlineData("title", "bsk rename")]
+    [InlineData("bounty", "bsk bounty")]
+    [InlineData("establish_target", "bsk habit target")]
+    [InlineData("series", "repeating task")]
+    public async Task A_key_with_a_verb_of_its_own_is_refused_at_create_and_at_set_and_nothing_is_written(
+        string key, string refusal)
+    {
+        // Code review CR49: POST /api/subjects dropped status and title, bsk new --attr stored
+        // them, and no door guarded bounty or establish_target. Every door now reads one table.
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var creation = db.Get<SubjectCreationService>();
+        var attributes = $$"""{"{{key}}":"x"}""";
+
+        var refused = await Assert.ThrowsAsync<ArgumentException>(() =>
+            creation.CreateAsync(SubjectTypes.Task, "Sweep the porch", attributes, cancellationToken: Ct));
+        Assert.Contains(refusal, refused.Message);
+
+        var task = await creation.CreateAsync(SubjectTypes.Task, "Sweep the porch", "{}", cancellationToken: Ct);
+        var set = await Assert.ThrowsAsync<ArgumentException>(() =>
+            db.Get<AttributeService>().SetAsync(task.Subject.Urn, [new AttributeAssignment(key.ToUpperInvariant(), "x")], Ct));
+        Assert.Contains(refusal, set.Message);
+
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
+        Assert.Equal(1, await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject WHERE title = 'Sweep the porch';", cancellationToken: Ct)));
+        Assert.False(await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            "SELECT jsonb_exists(attributes, @key) FROM bsk.subject WHERE id = @id;",
+            new { key, id = task.Subject.Id }, cancellationToken: Ct)));
+    }
 }

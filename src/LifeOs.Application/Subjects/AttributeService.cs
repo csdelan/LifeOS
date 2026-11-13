@@ -17,6 +17,10 @@ namespace LifeOs.Application.Subjects;
 /// (<see cref="TaskSeriesService"/>). A repetition's <c>series</c> and <c>occurrence</c> are
 /// the series' to set.
 /// </para>
+/// <para>
+/// A key with a verb of its own (a title, a status, a cover, a bounty, ...) is refused, from the
+/// one table every generic write reads (<see cref="ReservedAttributes"/>).
+/// </para>
 /// </summary>
 public sealed class AttributeService(
     SubjectService subjects, ISubjectRepository repository, TaskSeriesService? taskSeries = null)
@@ -31,22 +35,21 @@ public sealed class AttributeService(
     {
         if (assignments.Count == 0)
         {
-            throw new ArgumentException("At least one key=value assignment is required.", nameof(assignments));
+            throw new ArgumentException("At least one key=value assignment is required.");
         }
 
         var subject = await subjects.ResolveAsync(reference, cancellationToken);
 
+        if (assignments.Any(a => a.Key.Trim().Length == 0))
+        {
+            throw new ArgumentException("An attribute key must not be blank.");
+        }
+
+        // A key with a verb of its own is refused before anything is written (code review CR49).
+        ReservedAttributes.Check(subject.Type, assignments.Select(a => a.Key));
+
         if (subject.Type == SubjectTypes.Task)
         {
-            var reserved = assignments.FirstOrDefault(a =>
-                string.Equals(a.Key.Trim(), TaskSeries.SeriesKey, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(a.Key.Trim(), TaskSeries.OccurrenceKey, StringComparison.OrdinalIgnoreCase));
-            if (reserved is not null)
-            {
-                throw new ArgumentException(
-                    $"A Task's '{reserved.Key.Trim()}' is set by its repeating task, not `bsk set`.", nameof(assignments));
-            }
-
             var pattern = assignments.FirstOrDefault(a =>
                 string.Equals(a.Key.Trim(), Recurrence.AttributeKey, StringComparison.OrdinalIgnoreCase));
             if (pattern is not null && taskSeries is not null)
@@ -65,70 +68,6 @@ public sealed class AttributeService(
         foreach (var assignment in assignments)
         {
             var key = assignment.Key.Trim();
-            if (key.Length == 0)
-            {
-                throw new ArgumentException("An attribute key must not be blank.", nameof(assignments));
-            }
-
-            // `title` is a first-class column, not an attribute. Writing it here would
-            // silently create a shadow `title` key that is never read, so redirect to
-            // the verb that actually changes it (keeps `set` = attributes only).
-            if (string.Equals(key, "title", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new ArgumentException(
-                    "Title is not an attribute — use `bsk rename` to change a subject's title.",
-                    nameof(assignments));
-            }
-
-            // A cover is a checked Unsplash reference with one writer (D15). Written here it
-            // would be a string no page can show, so point at the verb that sets it.
-            if (string.Equals(key, Cover.AttributeKey, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new ArgumentException(
-                    "Cover is set with `bsk cover` (a photo from Unsplash), not `bsk set`.",
-                    nameof(assignments));
-            }
-
-            // A space's weight and pace are checked whole numbers the Home Score reads (HOME-1),
-            // with one writer; written here they'd be text the score ignores.
-            if (subject.Type == SubjectTypes.Space
-                && (string.Equals(key, SpaceLimits.WeightKey, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(key, SpaceLimits.PaceKey, StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new ArgumentException(
-                    "A space's weight and pace are set with `bsk space set`, not `bsk set`.",
-                    nameof(assignments));
-            }
-
-            // A space's shots and their baselines (HOME-4) are checked JSON with one writer.
-            if (subject.Type == SubjectTypes.Space
-                && string.Equals(key, SpaceLimits.ShotsKey, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new ArgumentException(
-                    "A space's shots are set with `bsk space shot` and `bsk space baseline`, not `bsk set`.",
-                    nameof(assignments));
-            }
-
-            // A metric's unit, decimals, target, direction and starter-list key are checked values
-            // the trend and goal read (MEASURE-1), with one writer.
-            if (subject.Type == SubjectTypes.Metric
-                && MetricLimits.Keys.Any(k => string.Equals(key, k, StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new ArgumentException(
-                    "A metric's unit, decimals, target and which way is better are set with `bsk metric set`, not `bsk set`.",
-                    nameof(assignments));
-            }
-
-            // A review's kind and period say which review it is (one per kind and period,
-            // migration 0052), set once when it's opened.
-            if (subject.Type == SubjectTypes.Review
-                && ReviewPeriods.ReservedKeys.Any(k => string.Equals(key, k, StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new ArgumentException(
-                    "A review's kind and period are set when it's opened (`bsk review open`), not with `bsk set`.",
-                    nameof(assignments));
-            }
-
             if (string.IsNullOrWhiteSpace(assignment.Value))
             {
                 removed.Add(key);
