@@ -1,8 +1,8 @@
 import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { journalExtensions } from "./journal-html";
 
 export function JournalEditor({
   onAppend,
@@ -13,10 +13,7 @@ export function JournalEditor({
 }) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [2, 3] },
-        link: { openOnClick: false },
-      }),
+      ...journalExtensions,
       Placeholder.configure({
         placeholder: "Headings, lists, bold, italic, links. A correction is a new entry.",
       }),
@@ -139,8 +136,4 @@ function MarkBtn({
       {children}
     </button>
   );
-}
-
-export function looksLikeHtml(content: string): boolean {
-  return /<\/?[a-z][\s\S]*>/i.test(content);
 }

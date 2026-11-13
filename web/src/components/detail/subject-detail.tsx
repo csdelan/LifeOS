@@ -45,7 +45,8 @@ import { BountySection } from "@/components/rewards/bounty-editor";
 import { TaskTimerPanel } from "@/components/timer/task-timer";
 import { MaterializePanel } from "@/components/appointments/materialize-panel";
 import { RepeatPanel } from "@/components/tasks/repeat-panel";
-import { JournalEditor, looksLikeHtml } from "@/components/journal/journal-editor";
+import { JournalEditor } from "@/components/journal/journal-editor";
+import { looksLikeHtml, sanitizeJournalHtml } from "@/components/journal/journal-html";
 import { CoverBanner } from "@/components/cover/cover-banner";
 import { CoverPicker } from "@/components/cover/cover-picker";
 import { canHaveCover } from "@/lib/cover";
@@ -945,7 +946,7 @@ function JournalTab({ subjectId }: { subjectId: string }) {
               {looksLikeHtml(e.content) ? (
                 <div
                   className="journal-prose mt-1 text-sm"
-                  dangerouslySetInnerHTML={{ __html: e.content }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeJournalHtml(e.content) }}
                 />
               ) : (
                 <p className="mt-1 whitespace-pre-wrap text-sm">{e.content}</p>
