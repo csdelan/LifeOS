@@ -425,8 +425,8 @@ only the allow list and the access log touch the owner connection, and they writ
 | `Mcp__Enabled` | `false` | Off: `/mcp` and its metadata return 404. This is the kill switch |
 | `Mcp__Domains` | `health,food,rewards,home` | The optional areas exposed besides the core (§4.3) |
 | `Mcp__BlockedClients` | empty | Client ids refused immediately, even with a token that hasn't expired |
-| `Mcp__Writes` | `off` | Phase 2 (§5.1) |
-| `Mcp__WriteClients` | empty | Phase 2 (§5.1) |
+| `Mcp__Writes` | `off` | `off` or `capture` (Phase 2, §5.1). `full` isn't built yet and fails startup |
+| `Mcp__WriteClients` | empty | The client ids that may write when writes are on, comma-separated (§5.1) |
 
 - An unknown value fails startup, like the other settings.
 - To change one: `fly secrets set <key>=<value> -a <app>`. The machine restarts with the
@@ -937,6 +937,12 @@ claude mcp add --transport http lifeos https://lifeos-mz55-staging.fly.dev/mcp
 
 ## 5. Phase 2: writes behind a switch
 
+**Status, 2026-11-12:** the `capture` level is built, with `dismiss` added so the vault agent
+can clear the captures it files (notes plan N7, Chris's choice A). It's off on staging until
+Chris sets `Mcp__Writes=capture` and `Mcp__WriteClients`. `full` isn't built. The code:
+`src/LifeOs.Api/Mcp/AgentWrites.cs` and `Mcp/Tools/CaptureTools.cs`; the tests:
+`tests/LifeOs.Tests/McpWriteTests.cs`.
+
 ### 5.1 The switch
 
 `Mcp__Writes` has three levels: `off` (the default), `capture` and `full`. A write tool is
@@ -949,10 +955,13 @@ Otherwise the tool isn't even listed, so agents don't see it, and it's refused i
 anyway.
 
 ```bash
-fly secrets set Mcp__Writes=capture -a lifeos-mz55-staging
+fly secrets set Mcp__Writes=capture Mcp__WriteClients=<client id> -a lifeos-mz55-staging
 ```
 
-Setting it back to `off` the same way turns writes off again.
+Setting it back to `off` the same way turns writes off again. The client id is on the
+Connected agents page; Claude registers a new one each time it connects again, so the new
+one must be named too. The allow list and the Person link are read on every call, so revoking
+the client or unlinking its Person stops its writes at once.
 
 **Rollout:**
 1. `capture` on staging for a week or two;
@@ -965,8 +974,9 @@ Setting it back to `off` the same way turns writes off again.
 
 | Tool | Does | Calls |
 |---|---|---|
-| `capture(text, kind = note \| idea \| problem, concerning?)` | An Inbox capture (CAP-1), which Chris triages like any other | the service behind `POST /api/capture` |
+| `capture(text, kind = note \| idea \| problem, concerning?)` | An Inbox capture (CAP-1), which Chris triages like any other. A note is the capture, flagged; an idea or problem is made at once, titled by the first line, and flagged, as a voice or document capture does (D4) | the service behind `POST /api/capture`, and `CaptureEndpoints.FileAsync` |
 | `add_journal_entry(item, text)` | Appends to an item's journal (JOURNAL-1) | `POST /api/journal` |
+| `dismiss(item_id)` | Clears a raw capture (a note or voice note) from the Inbox, attention-only: it stays in LifeOS, and flagging it again undoes it. Ideas, Problems and other items are refused, and one already out of the Inbox is left alone (notes plan N7) | `POST /api/dismiss`'s `TriageService` |
 
 **`full`** adds these:
 
@@ -1000,8 +1010,15 @@ every rule and invariant holds. The API is still a door into `bsk`, the only wri
   defaults to the host's. Add `KernelSources.Mcp` as the prefix.
 - Provenance is `declared` (decision 4 in §2).
 - The event records the agent's Person, so the web can show "via Claude" on inbox items,
-  journal entries and history rows. Where that reference lives is settled when building
-  2.1.
+  journal entries and history rows.
+
+**As built (2026-11-12):** the services aren't given a scoped source. `AgentWrites` builds the
+same Application services for each call with the agent's source, so every event it writes
+(captures, journal entries, Inbox flags, a dismiss's marker) has `source_id = mcp:<client_id>`
+and provenance `declared`. A capture or journal entry also has `agent_person_id` in its
+payload: the Person the client acted as when it wrote. For the other events, the source names
+the client and `bsk_ops.agent_client` its Person (a replaced client keeps its own link). The
+web's "via Claude" isn't built yet.
 
 ### 5.4 Safety details
 
@@ -1012,7 +1029,9 @@ every rule and invariant holds. The API is still a door into `bsk`, the only wri
 - **Retries.** Each write tool takes an optional `request_id`, and the server
   instructions tell agents to send a new UUID for each write they intend. The id becomes
   the event's `external_id` under `mcp:<client_id>`, so a retried call writes once
-  (invariant 5).
+  (invariant 5). Built: a retry answers with what the first call wrote and
+  `already_done: true`, and the same id for a different kind of write is refused. `dismiss`
+  takes none: dismissing a capture that's already out of the Inbox writes nothing.
 - **Undo** works the kernel's normal way: set a status back, or dismiss a capture in
   triage. Nothing an agent can do deletes anything.
 - **Records.** The access log records writes like reads, and the event store keeps them
@@ -1020,16 +1039,19 @@ every rule and invariant holds. The API is still a door into `bsk`, the only wri
 
 ### 5.5 Done when
 
-Tests show:
+Tests show (all done for `capture`, 2026-11-12, in `McpWriteTests`):
 - With writes off, no write tool is listed, and a call to one is refused.
 - At `capture`, only the capture tools are listed.
-- A client that isn't in `Mcp__WriteClients` stays read-only.
+- A client that isn't in `Mcp__WriteClients` stays read-only, and so does one named there
+  that acts as no AI-agent Person.
 - Events carry the source and provenance from §5.3.
 - A retried `request_id` writes once.
 - An agent token still can't reach `/api/*`.
+- `dismiss` clears a raw capture only, and flagging it brings it back.
 
-On staging: Chris captures to his Inbox by voice through Claude on his phone (CAP-3's first
-step) and triages it in LifeOS.
+On staging (not yet): Chris captures to his Inbox by voice through Claude on his phone
+(CAP-3's first step) and triages it in LifeOS, and the vault's nightly sweep dismisses the
+captures it files.
 
 ## 6. Phase 3: an assistant that works on its own
 

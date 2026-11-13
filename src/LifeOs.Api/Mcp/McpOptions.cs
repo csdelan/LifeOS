@@ -11,6 +11,7 @@ public sealed class McpOptions
     public const string DomainsKey = "Mcp:Domains";
     public const string BlockedClientsKey = "Mcp:BlockedClients";
     public const string WritesKey = "Mcp:Writes";
+    public const string WriteClientsKey = "Mcp:WriteClients";
 
     /// <summary>The optional areas, besides the core that's always on (§4.3).</summary>
     public static readonly IReadOnlyList<string> AllDomains = [McpDomains.Health, McpDomains.Food, McpDomains.Rewards, McpDomains.Home];
@@ -23,6 +24,24 @@ public sealed class McpOptions
 
     /// <summary>Client ids refused at once, even with a token that hasn't expired.</summary>
     public IReadOnlySet<string> BlockedClients { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// What agents may write (§5.1): <see cref="McpWrites.Off"/>, the default, or
+    /// <see cref="McpWrites.Capture"/>, which adds to the Inbox and journals and clears raw
+    /// captures from the Inbox. <c>full</c> isn't built yet.
+    /// </summary>
+    public string Writes { get; init; } = McpWrites.Off;
+
+    /// <summary>
+    /// The clients that may write when writes are on. A client must also be on LifeOS's list and
+    /// act as an AI-agent Person (§5.1); every other client stays read-only.
+    /// </summary>
+    public IReadOnlySet<string> WriteClients { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+
+    public bool WritesOn => Writes != McpWrites.Off;
+
+    /// <summary>Whether writes are on and <paramref name="clientId"/> is named in <c>Mcp:WriteClients</c>.</summary>
+    public bool NamesWriter(string clientId) => WritesOn && WriteClients.Contains(clientId.Trim());
 
     public bool Allows(string domain) => Domains.Contains(domain);
 
@@ -48,7 +67,7 @@ public sealed class McpOptions
 
     /// <summary>
     /// Reads the settings. <c>Mcp:Domains</c> unset means every area, <c>none</c> means the core
-    /// only; <c>Mcp:Writes</c> must be <c>off</c> until Phase 2 builds writes.
+    /// only; <c>Mcp:Writes</c> unset means off.
     /// </summary>
     public static McpOptions From(IConfiguration configuration)
     {
@@ -60,19 +79,32 @@ public sealed class McpOptions
             _ => throw new InvalidOperationException($"{EnabledKey} must be true or false, got '{enabled}'.")
         };
 
-        var writes = configuration[WritesKey]?.Trim();
-        if (!string.IsNullOrEmpty(writes) && !string.Equals(writes, "off", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"{WritesKey} is '{writes}', but agents can't write yet (agent-access plan Phase 2). Leave it off.");
-        }
-
         return new McpOptions
         {
             Enabled = on,
             Domains = ParseDomains(configuration[DomainsKey]),
             BlockedClients = Split(configuration[BlockedClientsKey]).ToHashSet(StringComparer.Ordinal),
+            Writes = ParseWrites(configuration[WritesKey]),
+            WriteClients = Split(configuration[WriteClientsKey]).ToHashSet(StringComparer.Ordinal),
         };
+    }
+
+    private static string ParseWrites(string? text)
+    {
+        var writes = text?.Trim();
+        if (string.IsNullOrEmpty(writes) || string.Equals(writes, McpWrites.Off, StringComparison.OrdinalIgnoreCase))
+        {
+            return McpWrites.Off;
+        }
+
+        if (string.Equals(writes, McpWrites.Capture, StringComparison.OrdinalIgnoreCase))
+        {
+            return McpWrites.Capture;
+        }
+
+        throw new InvalidOperationException(string.Equals(writes, "full", StringComparison.OrdinalIgnoreCase)
+            ? $"{WritesKey} is full, which isn't built yet (agent-access plan §5.2). Use off or capture."
+            : $"{WritesKey} must be off or capture, got '{writes}'.");
     }
 
     private static HashSet<string> ParseDomains(string? text)
@@ -104,6 +136,18 @@ public sealed class McpOptions
 
     private static IEnumerable<string> Split(string? text)
         => (text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
+
+/// <summary>The levels of <c>Mcp:Writes</c> (agent-access plan §5.1).</summary>
+public static class McpWrites
+{
+    public const string Off = "off";
+
+    /// <summary>
+    /// <c>capture</c>, <c>add_journal_entry</c> and <c>dismiss</c>: they add, and clear a raw
+    /// capture from the Inbox, and change nothing else (§5.2, notes plan N7).
+    /// </summary>
+    public const string Capture = "capture";
 }
 
 /// <summary>The optional areas' names, as <c>Mcp:Domains</c> spells them.</summary>

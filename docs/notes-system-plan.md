@@ -129,6 +129,7 @@ Live with that for a few weeks before designing the rest.
   - **Blue Skies** belongs to the Trader Area, every note of it.
   - **The 4 projects with no LifeOS item:** Chris creates a LifeOS Project for each before the cutover, and the agent links them.
 - **2026-11-12: Chris dictates into LifeOS's voice capture (N6, option A).** The other option was Obsidian on his phone, dictating into `00 Inbox`: nothing to build in LifeOS and nothing to clear, but Obsidian on another device and two places to speak into. LifeOS is the one inbox the plan was built around, and N7 later lets the agent clear what it filed.
+- **2026-11-12: N7 is option A, capture plus dismiss.** Agents get Phase 2's `capture` level (`capture` and `add_journal_entry`) and a `dismiss` that clears only a raw capture from the Inbox, attention-only, so flagging it again undoes it; never a Task, an Idea or any other item. The vault agent dismisses the captures it files and puts its LifeOS list in the Inbox as captures, instead of the For LifeOS note. Linking a reflection to its review waits for N8.
 - **2026-11-12: stricter related links (spec v0.6).** The first backfill linked by topic and made the graph "a big web where everything is related to everything else". Chris accepted the recommendation as it stood: each link names its kind (part of, continues, answers, same thing), at most two per note, one direction, and the graph hides the maps, Home and tags.
 
 ## The vault today (surveyed 2026-11-12)
@@ -152,7 +153,7 @@ Live with that for a few weeks before designing the rest.
 | **N4** | Freeze and cut over: the spec frozen and moved into the vault, the manifest re-run on the live vault, Git started there, the videos moved to `Vault Media`, the dropped plugins removed | The live vault matches the copy and the validator passes |
 | **N5** | The formatter skill (the spec packaged so every Claude surface writes conforming notes), the media sweep and the nightly related-links sweep (spec §4) | A dictated sample becomes a valid note of each type with its related links, older notes it fits link to it the next night, and a dropped video gets its note |
 | **N6** | The minimal dictation pipeline: dictate, the agent files clear notes and commits, anything unclear comes back as a needs-input item | A week of real use |
-| **N7** | LifeOS agent writes at the `capture` level (agent-access plan Phase 2), so the agent can mark a capture handled, file Tasks and Ideas, and link a reflection to its review | The agent-access plan's Phase 2 tests |
+| **N7** | LifeOS agent writes at the `capture` level (agent-access plan Phase 2), with a `dismiss` for raw captures, so the agent can clear a capture it filed and put Tasks and Ideas in LifeOS's Inbox. Linking a reflection to its review waits for N8 (Chris's choice A) | The agent-access plan's Phase 2 tests, then a night's sweep on staging that dismisses what it filed |
 | **N8** | Reviews R5: the review links to its reflection note, and the page shows its summary and an "Open in Obsidian" link | A daily and a weekly review answered by dictation |
 | **N9** | Paperless search in `/mcp` | An agent finds a document by asking |
 
@@ -264,6 +265,17 @@ Started 2026-11-12. Chris dictates into LifeOS's voice capture, the mic button t
 
 Chris chose where to dictate on 2026-11-12 (below). Decided rather than asked: the agent files in the 3 AM sweep and whenever Chris asks a Claude Code session on PICARD to file his captures, with no extra task; the sweep's reply is the daily digest, since the 4 AM daily report is switched off.
 
+### N7: agent writes at `capture`
+
+Started 2026-11-12, when Chris chose option A (Decisions, above): Phase 2's `capture` level, plus a `dismiss` that clears only a raw capture from the Inbox. In this order:
+
+1. **The write tools** (LifeOS; agent-access plan §5): `capture(text, kind, concerning?)`, `add_journal_entry(item, text)` and `dismiss(item_id)`, each through the Application services the API uses, with an optional `request_id` so a retry writes once. `Mcp:Writes` is `off` or `capture`; `Mcp:WriteClients` names the clients that may write, and each must also act as an AI-agent Person. Anyone else isn't listed the tools, and a call is refused. Every event an agent writes has source `mcp:<client_id>` and provenance `declared`, and a capture or journal entry names the Person in its payload. **Built and tested 2026-11-12** (`McpWriteTests`, and the full .NET suite); not pushed.
+2. **The vault agent writes** (vault `bffdefa`; the scheduled task's prompt updated the same day). After a capture's filing commit it calls `dismiss`, and `captures check` says to dismiss one filed earlier that's still in the Inbox. The LifeOS list goes to LifeOS's Inbox through `capture` (an idea as kind `idea`, the rest as notes), each with a fixed `request_id` from `captures key`. Each note it sends is logged `sent`, so the next run doesn't take it for one of Chris's. Without the write tools (writes off, or its client not named) it keeps the For LifeOS note, as in N6.
+3. **Chris switches it on:** the push, `Mcp__Writes=capture` and `Mcp__WriteClients=<the claude.ai connector's client id>` on staging, and the client acting as his AI Person on Connected agents.
+4. **Done when:** a night's sweep on staging dismisses the captures it filed and sends its LifeOS list, and Chris triages those in LifeOS.
+
+Decided rather than asked: `add_journal_entry` is built because it's part of the `capture` level, but the sweep never calls it; `dismiss` takes no `request_id`, since dismissing a capture already out of the Inbox writes nothing. Not covered by tests: the skill's write path against the real connector, which can't list the write tools until Chris switches them on, so the first run after that should be read.
+
 ## Status
 
 - [x] N0 — This plan
@@ -273,7 +285,7 @@ Chris chose where to dictate on 2026-11-12 (below). Decided rather than asked: t
 - [x] N4 — Freeze the spec and cut over (2026-11-12, synced to PICARD and Jupiter; Chris deletes HOLD when he's ready)
 - [ ] N5 — Formatter skill, media sweep and related-links sweep (all built and installed 2026-11-12; waiting on the first nightly run)
 - [ ] N6 — Minimal dictation pipeline (built and on staging 2026-11-12; the first nightly run is 2026-11-13, then a week of use)
-- [ ] N7 — LifeOS agent writes at `capture`
+- [ ] N7 — LifeOS agent writes at `capture` (built and tested 2026-11-12, with `dismiss`; waiting on the push and Chris switching writes on)
 - [ ] N8 — Reviews R5: reflections linked to reviews
 - [ ] N9 — Paperless search in `/mcp`
 

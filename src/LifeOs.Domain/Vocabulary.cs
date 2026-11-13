@@ -217,4 +217,13 @@ public static class KernelSources
     /// the CLI and the API dedupe against each other.
     /// </summary>
     public const string Oura = "oura";
+
+    /// <summary>
+    /// The prefix for events an agent wrote through <c>/mcp</c> (agent-access plan §5.3). Each
+    /// agent writes as <see cref="Agent"/>, so a retried request id dedupes within its own writes.
+    /// </summary>
+    public const string Mcp = "mcp";
+
+    /// <summary>An agent's source: <c>mcp:&lt;client_id&gt;</c>.</summary>
+    public static string Agent(string clientId) => $"{Mcp}:{clientId}";
 }

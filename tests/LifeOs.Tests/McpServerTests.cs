@@ -176,10 +176,27 @@ public sealed class McpServerTests(PostgresFixture postgres)
         Assert.False(none.AllowsType(SubjectTypes.Metric));
     }
 
+    [Fact]
+    public void Settings_read_writes_and_the_clients_that_may_write()
+    {
+        var off = McpOptions.From(Config((McpOptions.WriteClientsKey, "claude")));
+        var capture = McpOptions.From(Config((McpOptions.WritesKey, " Capture "), (McpOptions.WriteClientsKey, " claude , other")));
+
+        Assert.Equal(McpWrites.Off, McpOptions.From(Config()).Writes);
+        Assert.False(off.WritesOn);
+        Assert.False(off.NamesWriter("claude"));
+        Assert.Equal(McpWrites.Capture, capture.Writes);
+        Assert.True(capture.NamesWriter("claude"));
+        Assert.True(capture.NamesWriter("other"));
+        Assert.False(capture.NamesWriter("someone"));
+    }
+
     [Theory]
     [InlineData(McpOptions.EnabledKey, "yes")]
     [InlineData(McpOptions.DomainsKey, "health,finance")]
-    [InlineData(McpOptions.WritesKey, "capture")]
+    // full (agent-access plan §5.2) isn't built yet.
+    [InlineData(McpOptions.WritesKey, "full")]
+    [InlineData(McpOptions.WritesKey, "everything")]
     public void A_bad_setting_fails_startup(string key, string value)
         => Assert.Throws<InvalidOperationException>(() => McpOptions.From(Config((key, value))));
 
@@ -635,12 +652,12 @@ public sealed class McpServerTests(PostgresFixture postgres)
         Assert.Contains("\"shots\":[{\"name\":\"Counter\",\"photos\":3,\"then\":{\"day\":\"2026-10-01\",\"score\":40}", json, StringComparison.Ordinal);
     }
 
-    // ---- The tools read only (§4.1) ----
+    // ---- The tools read only (§4.1), but for the write tools (§5) ----
 
     [Fact]
-    public void Tools_are_built_from_the_readers_only()
+    public void Tools_are_built_from_the_readers_only_and_write_only_through_the_agent_writes()
     {
-        var allowed = new HashSet<Type>
+        var readers = new HashSet<Type>
         {
             typeof(SubjectReader), typeof(RewardReader), typeof(FoodReader), typeof(EnvironmentReader),
             typeof(ActivityReader), typeof(McpReads), typeof(McpOptions),
@@ -649,12 +666,23 @@ public sealed class McpServerTests(PostgresFixture postgres)
             .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null)
             .ToList();
 
-        Assert.Equal(8, toolTypes.Count);
+        Assert.Equal(9, toolTypes.Count);
         foreach (var type in toolTypes)
         {
+            // The write tools (§5.2) also take who's writing and the writes they can make, nothing else.
+            HashSet<Type> allowed = type == typeof(CaptureTools)
+                ? [.. readers, typeof(McpWriteAccess), typeof(AgentWrites)]
+                : readers;
             var parameters = type.GetConstructors().Single().GetParameters();
             Assert.All(parameters, p => Assert.True(allowed.Contains(p.ParameterType), $"{type.Name} takes {p.ParameterType.Name}"));
         }
+
+        var writeTools = typeof(CaptureTools).GetMethods()
+            .Select(m => m.GetCustomAttribute<McpServerToolAttribute>())
+            .OfType<McpServerToolAttribute>()
+            .ToList();
+        Assert.Equal(McpWriteAccess.Tools.Order(), writeTools.Select(t => t.Name!).Order());
+        Assert.All(writeTools, t => Assert.False(t.Destructive, $"{t.Name} is marked destructive"));
     }
 
     [Fact]

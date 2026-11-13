@@ -19,7 +19,8 @@ public readonly record struct McpStamp(DateTimeOffset AsOf, DateOnly Today);
 
 /// <summary>
 /// Everything the tools read through besides the API's own readers, all on the
-/// <c>bsk_reader</c> connection: no tool can write (agent-access plan §4.1). The kernel's own
+/// <c>bsk_reader</c> connection: the read tools can't write (agent-access plan §4.1), and the
+/// write tools write only through <see cref="AgentWrites"/> (§5). The kernel's own
 /// <see cref="DiagnosticRunner"/> runs as the owner, so the tools get their own.
 /// </summary>
 public sealed class McpReads(string readerConnectionString, string homeTimeZone, IClock clock)
@@ -54,7 +55,52 @@ public sealed class McpReads(string readerConnectionString, string homeTimeZone,
             cancellationToken: cancellationToken));
         return new DateTimeOffset(DateTime.SpecifyKind(start, DateTimeKind.Utc));
     }
+
+    /// <summary>
+    /// The event an agent already wrote for a request id (agent-access plan §5.4), with the items
+    /// it concerns; null when there's none. A retried write answers with this rather than writing again.
+    /// </summary>
+    public async Task<McpEarlierWrite?> FindWriteAsync(string sourceId, string externalId, CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(readerConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        var rows = (await connection.QueryAsync<EarlierRow>(new CommandDefinition(
+            """
+            SELECT e.id, e.kind, se.subject_id AS subjectid, s.urn, s.type, s.title
+            FROM bsk.v_event e
+            LEFT JOIN bsk.v_subject_event se ON se.event_id = e.id AND se.relation = 'concerns'
+            LEFT JOIN bsk.v_subject s ON s.id = se.subject_id
+            WHERE e.source_id = @sourceId AND e.external_id = @externalId
+            ORDER BY se.created_at;
+            """,
+            new { sourceId, externalId },
+            cancellationToken: cancellationToken))).AsList();
+        return rows.Count == 0
+            ? null
+            : new McpEarlierWrite(
+                rows[0].Id,
+                rows[0].Kind,
+                rows.Where(r => r.SubjectId is not null && r.Urn is not null)
+                    .Select(r => new McpItemRef(r.SubjectId!.Value, r.Urn!, r.Type ?? "", r.Title ?? ""))
+                    .ToList());
+    }
+
+    private sealed class EarlierRow
+    {
+        public Guid Id { get; set; }
+        public string Kind { get; set; } = "";
+        public Guid? SubjectId { get; set; }
+        public string? Urn { get; set; }
+        public string? Type { get; set; }
+        public string? Title { get; set; }
+    }
 }
+
+/// <summary>An event an agent wrote before for the same request id, and the items it concerns.</summary>
+public sealed record McpEarlierWrite(Guid EventId, string Kind, IReadOnlyList<McpItemRef> Concerns);
+
+/// <summary>An item as a write tool names it in its answer.</summary>
+public sealed record McpItemRef(Guid Id, string Urn, string Type, string Title);
 
 /// <summary>
 /// A tool's answer (agent-access plan §4.3): one line of summary, then the JSON, as text for any

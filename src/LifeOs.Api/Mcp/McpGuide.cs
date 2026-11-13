@@ -28,12 +28,42 @@ public sealed class McpGuide
         - Read lifeos://guide for the types, statuses and how to read the answers.
         """;
 
+    /// <summary>The instructions when <c>Mcp:Writes</c> is on (agent-access plan §5).</summary>
+    public const string WriteInstructions = Instructions + """
+
+
+        Writing: Chris may allow you to write. If capture, add_journal_entry and dismiss are in
+        your tools, you can add to his Inbox and his journals, and clear a raw capture you've dealt
+        with from the Inbox; nothing else changes. Write only what he asked for or agreed to. Send
+        a new UUID as request_id with each write you mean to make, and the same one if you retry it.
+        """;
+
+    /// <summary>The guide's section on writing, added when <c>Mcp:Writes</c> is on.</summary>
+    public const string WriteGuide = """
+
+
+        ## Writing
+
+        When Chris has allowed your agent to write, three more tools are listed. Each one adds, or
+        clears a capture from the Inbox; none changes or removes anything else.
+
+        - capture: a note, idea or problem in his Inbox, for him to triage like his own captures.
+          An idea or problem becomes an Idea or Problem item at once, titled by the first line.
+        - add_journal_entry: an entry in an item's journal.
+        - dismiss: clears one raw capture (item_kind event, a note or voice note) from the Inbox
+          once you've dealt with it. The capture stays in LifeOS; flagging it again brings it back.
+
+        Everything you write is marked as your agent's and the Person it acts as. Send a new UUID
+        as request_id with each write; a retry with the same one writes nothing new and answers
+        already_done.
+        """;
+
     public const string Guide = """
         # LifeOS: a guide for agents
 
         LifeOS is Chris's own record of his life, kept so that what he does lines up with who
-        he's chosen to be. You're reading it through a read-only connection: no tool changes
-        anything.
+        he's chosen to be. You're reading it through a connection whose tools read only, unless
+        Chris has allowed your agent to write (see Writing, when it's there).
 
         ## Start here
 
@@ -113,5 +143,6 @@ public sealed class McpGuide
 
     [McpServerResource(UriTemplate = GuideUri, Name = "guide", Title = "LifeOS guide for agents", MimeType = "text/markdown")]
     [Description("What LifeOS is, its item types and statuses, alignment, time, events, and how to read the tools' answers.")]
-    public static string Read() => Guide;
+    public static string Read(IServiceProvider services)
+        => services.GetService<McpOptions>() is { WritesOn: true } ? Guide + WriteGuide : Guide;
 }

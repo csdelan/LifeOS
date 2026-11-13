@@ -14,7 +14,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   `dotnet run --project src/LifeOs.Cli -- <verb>` (`bsk` isn't on PATH). Readers use the
   `bsk_reader` role and the `v_*` views.
 - `src/LifeOs.Api`: the ASP.NET Core API. It serves the SPA in production and `/mcp`, the
-  read-only connector Chris's agents use.
+  connector Chris's agents use. It reads only, unless `Mcp:Writes` is `capture`: then the clients
+  named in `Mcp:WriteClients` can capture to the Inbox, journal and dismiss raw captures, as
+  `mcp:<client_id>` (`docs/pilot/agent-access-plan.md` §5).
 - `web/`: the React + Vite SPA. With no `VITE_API_BASE_URL` it runs in mock mode on an in-memory
   store.
 - `src/LifeOs.Pilot`: the original WinForms app. Chris still runs it, often against staging.
@@ -115,8 +117,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - The plan docs record his decisions. Don't ask again about anything a plan's decisions section
   already settled.
 - His fix queue is open LifeOS Tasks tagged `lifeos`. Read them, summarize each with any choice it
-  needs, wait for his go-ahead, then make one commit per Task. The connector is read-only, so he
-  closes the Tasks himself.
+  needs, wait for his go-ahead, then make one commit per Task. The connector can't change a
+  Task's status, so he closes the Tasks himself.
 - Settings that a scheduled task or another program reads go under `%USERPROFILE%\.lifeos\`,
   never under AppData. The Claude desktop app redirects its own AppData writes, so other programs
   can't see them.

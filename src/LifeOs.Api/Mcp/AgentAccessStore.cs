@@ -8,7 +8,7 @@ namespace LifeOs.Api.Mcp;
 /// <summary>
 /// The agents Chris allowed in LifeOS and what each one called (migrations 0047 and 0048, agent-access plan
 /// §4.5). It's on the owner connection: <c>bsk_ops</c> is never granted to <c>bsk_reader</c>, and
-/// the MCP tools never see this class.
+/// the MCP tools never see this class; the write tools ask <see cref="McpWriteAccess"/> who's writing.
 /// </summary>
 /// <remarks>
 /// The allow list is read on every <c>/mcp</c> request, not cached, so a revoke takes effect on the
@@ -46,6 +46,26 @@ public sealed partial class AgentAccessStore(string ownerConnectionString, strin
         await using var connection = await OpenAsync(cancellationToken);
         return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
             "SELECT EXISTS (SELECT 1 FROM bsk_ops.agent_client WHERE client_id = @clientId AND revoked_at IS NULL);",
+            new { clientId },
+            cancellationToken: cancellationToken));
+    }
+
+    /// <summary>
+    /// The AI-agent Person an allowed client acts as, when it may write (agent-access plan §5.1):
+    /// on the list, not revoked, and linked to a Person whose kind is AI and that isn't archived.
+    /// Null otherwise. Read on every write, like the allow list, so an unlink takes effect at once.
+    /// </summary>
+    public async Task<AgentPerson?> WriterAsync(string clientId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return await connection.QueryFirstOrDefaultAsync<AgentPerson>(new CommandDefinition(
+            """
+            SELECT p.id, p.title AS name
+            FROM bsk_ops.agent_client c
+            JOIN bsk.v_subject p ON p.id = c.person_id AND p.type = 'Person' AND NOT p.archived
+                                AND lower(coalesce(p.attributes->>'person_kind', 'human')) = 'ai'
+            WHERE c.client_id = @clientId AND c.revoked_at IS NULL;
+            """,
             new { clientId },
             cancellationToken: cancellationToken));
     }
@@ -413,6 +433,13 @@ public sealed class AgentClient
     public int CallsThisWeek { get; set; }
     public DateTime? LastRefusedAt { get; set; }
     public int RefusedThisWeek { get; set; }
+}
+
+/// <summary>The AI-agent Person a client writes as.</summary>
+public sealed class AgentPerson
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
 }
 
 /// <summary>One row of the call log.</summary>

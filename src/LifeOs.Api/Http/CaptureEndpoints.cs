@@ -23,7 +23,7 @@ public static class CaptureEndpoints
     private const int RequestOverhead = 256 * 1024;
 
     // The capture kind that stays an event (D4); Idea and Problem are subject types.
-    private const string Note = "Note";
+    internal const string Note = "Note";
 
     public static void MapCaptureEndpoints(this WebApplication app)
     {
@@ -162,8 +162,9 @@ public static class CaptureEndpoints
     /// Puts a capture in the Inbox (D4). A Note flags the event itself, unless it's a file already
     /// captured (that one is already there, or was dealt with). An Idea or a Problem is made now,
     /// as a typed capture makes it, with the event concerning it; the subject is what's flagged.
+    /// An agent's <c>capture</c> files the same way (agent-access plan §5.2).
     /// </summary>
-    private static async Task<CreatedSubject?> FileAsync(
+    internal static async Task<CreatedSubject?> FileAsync(
         string kind, Guid eventId, bool deduplicated, string title, string description,
         CaptureFiling deps, CancellationToken cancellationToken)
     {
@@ -205,7 +206,7 @@ public static class CaptureEndpoints
         return buffer.ToArray();
     }
 
-    private static bool TryKind(string? type, out string kind)
+    internal static bool TryKind(string? type, out string kind)
     {
         var wanted = string.IsNullOrWhiteSpace(type) ? Note : type.Trim();
         kind = new[] { Note, SubjectTypes.Idea, SubjectTypes.Problem }
@@ -218,7 +219,7 @@ public static class CaptureEndpoints
     private static string? Clean(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
     /// <summary>The first line, cut to 80 characters with an ellipsis, as the web's deriveTitle does.</summary>
-    private static string? FirstLine(string? text)
+    internal static string? FirstLine(string? text)
     {
         var line = text?.Split('\n')[0].Trim();
         if (string.IsNullOrEmpty(line))

@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using LifeOs.Api.Auth;
 using LifeOs.Api.Mcp.Tools;
+using LifeOs.Api.Read;
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Subjects;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using ModelContextProtocol;
@@ -12,9 +14,9 @@ using ModelContextProtocol.Protocol;
 namespace LifeOs.Api.Mcp;
 
 /// <summary>
-/// The read-only MCP server at <c>/mcp</c> (agent-access plan §4): the tools, the server
-/// instructions, and sign-in. Off unless <c>Mcp:Enabled</c> is true; off, nothing is registered
-/// and <c>/mcp</c> and its metadata answer 404.
+/// The MCP server at <c>/mcp</c> (agent-access plan §4): the tools, the server instructions, and
+/// sign-in. Off unless <c>Mcp:Enabled</c> is true; off, nothing is registered and <c>/mcp</c> and
+/// its metadata answer 404. It reads only, unless <c>Mcp:Writes</c> adds the write tools (§5).
 /// </summary>
 public static class McpHost
 {
@@ -45,7 +47,7 @@ public static class McpHost
                     Title = "LifeOS",
                     Version = typeof(McpHost).Assembly.GetName().Version?.ToString(3) ?? "1.0.0",
                 };
-                o.ServerInstructions = McpGuide.Instructions;
+                o.ServerInstructions = options.WritesOn ? McpGuide.WriteInstructions : McpGuide.Instructions;
             })
             .WithHttpTransport(o => o.Stateless = true)
             .WithTools<SnapshotTools>()
@@ -53,6 +55,19 @@ public static class McpHost
             .WithTools<RecordTools>()
             .WithTools<PlanTools>()
             .WithResources<McpGuide>()
+            .WithRequestFilters(filters => filters.AddListToolsFilter(next => async (context, cancellationToken) =>
+            {
+                // The write tools are listed only to an agent that may write (§5.1).
+                var result = await next(context, cancellationToken);
+                if (options.WritesOn
+                    && (context.Services?.GetService<McpWriteAccess>() is not { } writers
+                        || await writers.WriterAsync(context.User, cancellationToken) is null))
+                {
+                    result.Tools = result.Tools.Where(t => !McpWriteAccess.Tools.Contains(t.Name)).ToList();
+                }
+
+                return result;
+            }))
             .WithRequestFilters(filters => filters.AddCallToolFilter(next => async (context, cancellationToken) =>
             {
                 var started = Stopwatch.GetTimestamp();
@@ -113,6 +128,28 @@ public static class McpHost
         if (options.Allows(McpDomains.Home))
         {
             server.WithTools<HomeTools>();
+        }
+
+        // Writes (§5), only when Mcp:Writes is on. Each write checks its agent again, so a call
+        // from an agent that wasn't listed them is refused.
+        if (options.WritesOn)
+        {
+            services.AddHttpContextAccessor();
+            services.AddSingleton(sp => new McpWriteAccess(
+                options, sp.GetRequiredService<IHttpContextAccessor>(), sp.GetService<AgentAccessStore>()));
+            services.AddSingleton(sp => new AgentWrites(
+                sp.GetRequiredService<IEventStore>(),
+                sp.GetRequiredService<IArtifactStore>(),
+                sp.GetRequiredService<IEventReader>(),
+                sp.GetRequiredService<ISubjectRepository>(),
+                sp.GetRequiredService<ISubjectEventRepository>(),
+                sp.GetRequiredService<StatusService>(),
+                sp.GetRequiredService<IHomeCalendar>(),
+                sp.GetRequiredService<IClock>(),
+                sp.GetRequiredService<SubjectReader>(),
+                sp.GetRequiredService<McpReads>(),
+                options));
+            server.WithTools<CaptureTools>();
         }
 
         // Protected resource metadata (RFC 9728) at /.well-known/oauth-protected-resource/mcp,

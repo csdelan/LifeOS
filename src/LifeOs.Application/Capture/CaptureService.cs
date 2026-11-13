@@ -30,6 +30,24 @@ public sealed class CaptureService(
         => CaptureBodyAsync(EventKinds.Voice, transcript, cancellationToken);
 
     /// <summary>
+    /// Captures a note or a journal entry for a door that says more about where it came from
+    /// (an agent, agent-access plan §5.3): <paramref name="externalId"/> makes a retried request
+    /// the same event, since the store keeps one event per source and external id (invariant 5),
+    /// and <paramref name="payloadJson"/> is what the door records with it.
+    /// </summary>
+    public Task<CaptureResult> CaptureFromAsync(
+        string kind, string text, string? externalId, string payloadJson,
+        CancellationToken cancellationToken = default)
+    {
+        if (kind != EventKinds.Note && kind != EventKinds.Journal)
+        {
+            throw new ArgumentException($"A capture from elsewhere is a note or a journal entry, not '{kind}'.", nameof(kind));
+        }
+
+        return CaptureBodyAsync(kind, text, cancellationToken, externalId, payloadJson);
+    }
+
+    /// <summary>
     /// Records an idea session — a problem statement and all its ideas — as ONE
     /// immutable <c>idea_session</c> event that references the Problem subject.
     /// The ideas are stored verbatim; no rating or judgement happens here, and no
@@ -65,7 +83,8 @@ public sealed class CaptureService(
     }
 
     private async Task<CaptureResult> CaptureBodyAsync(
-        string kind, string text, CancellationToken cancellationToken)
+        string kind, string text, CancellationToken cancellationToken,
+        string? externalId = null, string payloadJson = "{}")
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -83,6 +102,8 @@ public sealed class CaptureService(
             OccurredAt: now,
             RecordedAt: now,
             SourceId: sourceId,
+            ExternalId: externalId,
+            PayloadJson: payloadJson,
             ArtifactId: artifactId);
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);
