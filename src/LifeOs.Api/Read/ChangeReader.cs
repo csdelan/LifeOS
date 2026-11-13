@@ -1,4 +1,5 @@
 using Dapper;
+using LifeOs.Api.Mcp;
 using Npgsql;
 
 namespace LifeOs.Api.Read;
@@ -20,8 +21,9 @@ public sealed class ChangeReader(string readerConnectionString)
     /// <summary>
     /// Events at or after <paramref name="since"/>, newest first, of the <paramref name="kinds"/>
     /// given, leaving out the areas in <paramref name="excluded"/> (<c>health</c>, <c>food</c>,
-    /// <c>rewards</c>, <c>home</c>). One more row than <paramref name="limit"/> may come back, so
-    /// the caller can say it was cut.
+    /// <c>rewards</c>, <c>home</c>) as <see cref="McpAreas"/> says: with any area off, an event
+    /// no area claims shows only if its payload is the core's. One more row than
+    /// <paramref name="limit"/> may come back, so the caller can say it was cut.
     /// <list type="bullet">
     /// <item><paramref name="byOccurred"/> picks which time counts: when it happened, or (the
     /// default) when LifeOS recorded it. An Oura backfill is recent by the second, not the first.</item>
@@ -43,6 +45,8 @@ public sealed class ChangeReader(string readerConnectionString)
     {
         // A column name from a bool, never input.
         var at = byOccurred ? "occurred_at" : "recorded_at";
+        var off = McpAreas.All.Where(a => excluded.Contains(a.Name)).ToList();
+        var on = McpAreas.All.Except(off).ToList();
         using var db = new NpgsqlConnection(readerConnectionString);
         db.Open();
         return db.Query<ChangeRow>(
@@ -63,14 +67,17 @@ public sealed class ChangeReader(string readerConnectionString)
                 LEFT JOIN bsk.v_subject s ON s.id::text = coalesce(e.subject_id, about.subject_id::text)
                 WHERE e.{at} >= @since
                   AND ((@kinds::text[] IS NULL AND e.kind <> 'ledger') OR e.kind = ANY(@kinds::text[]))
-                  AND NOT (@noHealth AND (e.source_id = 'oura'
-                                          OR jsonb_exists_any(e.payload, ARRAY['workout_note', 'metric_reading', 'lab_visit'])
-                                          OR s.type IS NOT DISTINCT FROM 'Metric'))
-                  AND NOT (@noFood AND jsonb_exists_any(e.payload, ARRAY['meal', 'fast', 'food_day']))
-                  AND NOT (@noRewards AND (e.kind = 'ledger' OR jsonb_exists(e.payload, 'exception_day')
-                                           OR s.type IS NOT DISTINCT FROM 'Reward'))
-                  AND NOT (@noHome AND (jsonb_exists_any(e.payload, ARRAY['space_rating', 'space_photo'])
-                                        OR s.type IS NOT DISTINCT FROM 'Space'))
+                  -- With an area off (McpAreas): nothing of that area, and nothing no area claims
+                  -- unless every key in its payload is a core one. An event no one placed stays out.
+                  AND (NOT @anyOff OR (
+                      NOT (jsonb_exists_any(e.payload, @offKeys::text[]) OR e.kind = ANY(@offKinds::text[])
+                           OR e.source_id = ANY(@offSources::text[]) OR coalesce(s.type = ANY(@offTypes::text[]), false))
+                      AND (jsonb_exists_any(e.payload, @onKeys::text[]) OR e.kind = ANY(@onKinds::text[])
+                           OR e.source_id = ANY(@onSources::text[]) OR coalesce(s.type = ANY(@onTypes::text[]), false)
+                           OR CASE WHEN jsonb_typeof(e.payload) = 'object'
+                                   THEN NOT EXISTS (SELECT 1 FROM jsonb_object_keys(e.payload) k
+                                                    WHERE k <> ALL(@coreKeys::text[]))
+                                   ELSE false END)))
             ),
             -- The newest version of each versioned record in the window, wherever its time falls.
             -- A newer version is never recorded before an older one, so looking from the earliest
@@ -106,10 +113,16 @@ public sealed class ChangeReader(string readerConnectionString)
             {
                 since,
                 kinds = kinds is { Count: > 0 } ? kinds.ToArray() : null,
-                noHealth = excluded.Contains("health"),
-                noFood = excluded.Contains("food"),
-                noRewards = excluded.Contains("rewards"),
-                noHome = excluded.Contains("home"),
+                anyOff = off.Count > 0,
+                offKeys = off.SelectMany(a => a.PayloadKeys).ToArray(),
+                offKinds = off.SelectMany(a => a.Kinds).ToArray(),
+                offSources = off.SelectMany(a => a.Sources).ToArray(),
+                offTypes = off.SelectMany(a => a.Types).ToArray(),
+                onKeys = on.SelectMany(a => a.PayloadKeys).ToArray(),
+                onKinds = on.SelectMany(a => a.Kinds).ToArray(),
+                onSources = on.SelectMany(a => a.Sources).ToArray(),
+                onTypes = on.SelectMany(a => a.Types).ToArray(),
+                coreKeys = McpAreas.CorePayloadKeys.ToArray(),
                 maxText = MaxTextLength,
                 maxPayload = MaxPayloadLength,
                 beforeAt = before?.At,

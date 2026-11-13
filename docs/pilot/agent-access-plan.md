@@ -779,6 +779,11 @@ using it.
 - Choices made while building, for 1.3 onward to keep in mind:
   - A Reward is in the rewards area and a Space in the home area: with the area off, those
     items drop out of every tool, not only the area's own tool.
+  - `McpAreas` (`src/LifeOs.Api/Mcp/McpOptions.cs`) is the one table of what each area holds:
+    payload keys, item types, sources and event kinds. `recent_changes` fails closed by it
+    (code review CR28): while any area is off, an event no area claims shows only when every key
+    in its payload is a core one. A feature that writes events adds its payload keys there, or
+    agents with an area off won't see them.
   - `recent_changes` takes `since` as an ISO instant, a home-zone day, or a span back from
     now (`24h`, `3d`, `2w`, `P3D`), defaulting to 7 days and reaching back at most a year.
   - `life_snapshot`'s lists stop at 25 rows each; the other lists take `limit` (default 50,

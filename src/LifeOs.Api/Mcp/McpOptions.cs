@@ -1,3 +1,6 @@
+using LifeOs.Application.Rewards;
+using LifeOs.Domain;
+
 namespace LifeOs.Api.Mcp;
 
 /// <summary>
@@ -55,18 +58,11 @@ public sealed class McpOptions
     /// when its area is off.
     /// </summary>
     public bool AllowsType(string type)
-        => type switch
-        {
-            Domain.SubjectTypes.Reward => Allows(McpDomains.Rewards),
-            Domain.SubjectTypes.Space => Allows(McpDomains.Home),
-            Domain.SubjectTypes.Metric => Allows(McpDomains.Health),
-            _ => true,
-        };
+        => !HiddenTypes.Contains(type, StringComparer.Ordinal);
 
     /// <summary>The item types <see cref="AllowsType"/> leaves out, for reads that filter in SQL.</summary>
     public IReadOnlyCollection<string> HiddenTypes
-        => new[] { Domain.SubjectTypes.Reward, Domain.SubjectTypes.Space, Domain.SubjectTypes.Metric }
-            .Where(t => !AllowsType(t)).ToList();
+        => McpAreas.All.Where(a => !Allows(a.Name)).SelectMany(a => a.Types).ToList();
 
     public bool IsBlocked(string clientId) => BlockedClients.Contains(clientId.Trim());
 
@@ -163,4 +159,53 @@ public static class McpDomains
     public const string Food = "food";
     public const string Rewards = "rewards";
     public const string Home = "home";
+}
+
+/// <summary>
+/// What belongs to one optional area. An event is the area's when its payload holds one of
+/// <see cref="PayloadKeys"/>, it's about an item of one of <see cref="Types"/>, it came from one
+/// of <see cref="Sources"/> or it's one of <see cref="Kinds"/>.
+/// </summary>
+public sealed record McpArea(
+    string Name,
+    IReadOnlyList<string> PayloadKeys,
+    IReadOnlyList<string> Types,
+    IReadOnlyList<string> Sources,
+    IReadOnlyList<string> Kinds);
+
+/// <summary>
+/// The one table of what each optional area holds (§4.3), which every read that leaves a
+/// switched-off area out goes by. Leaving out fails closed: while any area is off, an event that
+/// belongs to no area shows only when every key in its payload is one of
+/// <see cref="CorePayloadKeys"/>. So a new feature's events stay hidden from agents until its
+/// keys are added here, rather than showing in an area Chris switched off.
+/// </summary>
+public static class McpAreas
+{
+    public static readonly McpArea Health = new(
+        McpDomains.Health,
+        [MetricLimits.ReadingKey, LabLimits.VisitKey, "workout_note", .. OuraCollections.All.Select(c => c.PayloadKey)],
+        [SubjectTypes.Metric],
+        [KernelSources.Oura],
+        []);
+
+    public static readonly McpArea Food = new(McpDomains.Food, ["meal", "fast", "food_day", "food_photo"], [], [], []);
+
+    public static readonly McpArea Rewards = new(
+        McpDomains.Rewards, [ExceptionDayService.PayloadKey], [SubjectTypes.Reward], [], [EventKinds.Ledger]);
+
+    public static readonly McpArea Home = new(McpDomains.Home, [SpaceLimits.RatingKey, SpaceLimits.PhotoKey], [SubjectTypes.Space], [], []);
+
+    public static readonly IReadOnlyList<McpArea> All = [Health, Food, Rewards, Home];
+
+    /// <summary>
+    /// Every payload key the core's own writes use: status, archive, triage and attribute changes,
+    /// timers, habit check-offs, activity text, idea sessions, review reflections and an agent's
+    /// Person. A capture's payload is empty.
+    /// </summary>
+    public static readonly IReadOnlyList<string> CorePayloadKeys =
+    [
+        "subject_id", "status", "archived", "timer", "item_kind", "item_id", "state", "title", "attributes",
+        "occurrence", "result", "note", "text", "problem", "ideas", ReviewReflections.PayloadKey, AgentWrites.PersonField,
+    ];
 }
