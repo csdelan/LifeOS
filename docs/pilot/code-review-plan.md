@@ -91,3 +91,7 @@ Defects the fixes turned up, each fixed in a commit of its own that says where i
 - **While doing CR12:** one Decision whose review date isn't a date ("soon-ish") made every read
   of `bsk.v_subject` raise, so the subject list, search and detail all failed. Migration 0055
   reads such a date as none.
+- **During the final checks:** the golden path "quick capture lands in Inbox" failed about one run
+  in three, on `main` too. The Inbox opens its newest item on a desktop, so the new capture could
+  show in the detail pane as well as its row, and the test's text match found three. It now takes
+  the first.

@@ -258,7 +258,9 @@ test.describe("golden paths", () => {
     await expect(note).toHaveValue("Standing desk trial this week.");
     await dialog.getByRole("button", { name: "Capture" }).click();
     await expect(page.getByText("Captured to Inbox")).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText("Standing desk trial this week.")).toBeVisible({
+    // On a desktop the Inbox opens its newest item, so the capture can show in the detail pane
+    // too: its row in the list is the first match.
+    await expect(page.getByText("Standing desk trial this week.").first()).toBeVisible({
       timeout: 10_000,
     });
   });
