@@ -1,0 +1,434 @@
+{
+  "about": "Activity XP (activity plan \u00A73.8): ActivityRules.Default and ExerciseRules in C#, lib/activity-score.ts and lib/exercise-rules.ts in the web.",
+  "cases": [
+    {
+      "rule": "stepsXp",
+      "args": [
+        0
+      ],
+      "out": 0
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        1
+      ],
+      "out": 0
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        1000
+      ],
+      "out": 2
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        2499
+      ],
+      "out": 5
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        2500
+      ],
+      "out": 5
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        4999
+      ],
+      "out": 12
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        5000
+      ],
+      "out": 12
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        6250
+      ],
+      "out": 16
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        7500
+      ],
+      "out": 20
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        8999
+      ],
+      "out": 23
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        9999
+      ],
+      "out": 25
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        10000
+      ],
+      "out": 25
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        12500
+      ],
+      "out": 25
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        15000
+      ],
+      "out": 25
+    },
+    {
+      "rule": "stepsXp",
+      "args": [
+        30000
+      ],
+      "out": 25
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        0
+      ],
+      "out": 0
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        40
+      ],
+      "out": 0
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        59
+      ],
+      "out": 5
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        60
+      ],
+      "out": 5
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        65
+      ],
+      "out": 8
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        69
+      ],
+      "out": 10
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        70
+      ],
+      "out": 10
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        74
+      ],
+      "out": 12
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        75
+      ],
+      "out": 13
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        80
+      ],
+      "out": 15
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        85
+      ],
+      "out": 20
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        90
+      ],
+      "out": 20
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        95
+      ],
+      "out": 20
+    },
+    {
+      "rule": "sleepXp",
+      "args": [
+        100
+      ],
+      "out": 20
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        0
+      ],
+      "out": 0
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        1
+      ],
+      "out": 0
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        599
+      ],
+      "out": 0
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        600
+      ],
+      "out": 8
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        899
+      ],
+      "out": 8
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        900
+      ],
+      "out": 8
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        1199
+      ],
+      "out": 8
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        1200
+      ],
+      "out": 15
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        1799
+      ],
+      "out": 15
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        1800
+      ],
+      "out": 25
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        2700
+      ],
+      "out": 35
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        3600
+      ],
+      "out": 35
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        5400
+      ],
+      "out": 35
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        7200
+      ],
+      "out": 35
+    },
+    {
+      "rule": "exerciseXp",
+      "args": [
+        36000
+      ],
+      "out": 35
+    },
+    {
+      "rule": "exerciseVerdict",
+      "args": [
+        null,
+        null
+      ],
+      "out": {
+        "counted": false,
+        "reason": "Unknown source"
+      }
+    },
+    {
+      "rule": "exerciseVerdict",
+      "args": [
+        "manual",
+        "running"
+      ],
+      "out": {
+        "counted": true,
+        "reason": null
+      }
+    },
+    {
+      "rule": "exerciseVerdict",
+      "args": [
+        "Manual ",
+        "Running"
+      ],
+      "out": {
+        "counted": true,
+        "reason": null
+      }
+    },
+    {
+      "rule": "exerciseVerdict",
+      "args": [
+        "manual",
+        "walking"
+      ],
+      "out": {
+        "counted": false,
+        "reason": "A walk: it\u0027s in your steps"
+      }
+    },
+    {
+      "rule": "exerciseVerdict",
+      "args": [
+        "autodetected",
+        "walking"
+      ],
+      "out": {
+        "counted": false,
+        "reason": "A walk: it\u0027s in your steps"
+      }
+    },
+    {
+      "rule": "exerciseVerdict",
+      "args": [
+        "autodetected",
+        "cycling"
+      ],
+      "out": {
+        "counted": false,
+        "reason": "Detected by Oura"
+      }
+    },
+    {
+      "rule": "exerciseVerdict",
+      "args": [
+        "confirmed",
+        "yoga"
+      ],
+      "out": {
+        "counted": false,
+        "reason": "Detected by Oura"
+      }
+    },
+    {
+      "rule": "exerciseVerdict",
+      "args": [
+        "workout_heart_rate",
+        "strength_training"
+      ],
+      "out": {
+        "counted": true,
+        "reason": null
+      }
+    },
+    {
+      "rule": "exerciseVerdict",
+      "args": [
+        "",
+        "hiit"
+      ],
+      "out": {
+        "counted": false,
+        "reason": "Unknown source"
+      }
+    },
+    {
+      "rule": "exerciseVerdict",
+      "args": [
+        "someone_else",
+        "rowing"
+      ],
+      "out": {
+        "counted": false,
+        "reason": "Unknown source"
+      }
+    },
+    {
+      "rule": "exerciseVerdict",
+      "args": [
+        null,
+        " Walking "
+      ],
+      "out": {
+        "counted": false,
+        "reason": "A walk: it\u0027s in your steps"
+      }
+    }
+  ]
+}

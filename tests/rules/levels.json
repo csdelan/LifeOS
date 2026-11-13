@@ -1,0 +1,357 @@
+{
+  "about": "Level curves (xp-domains plan): CubicCurve on LifeDomains.Health and .Environment in C#, totalFor and levelFor with HEALTH and ENVIRONMENT in lib/domain-fold.ts.",
+  "cases": [
+    {
+      "rule": "totalFor",
+      "args": [
+        "health",
+        1
+      ],
+      "out": 0
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "health",
+        2
+      ],
+      "out": 60
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "health",
+        3
+      ],
+      "out": 144
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "health",
+        4
+      ],
+      "out": 253
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "health",
+        10
+      ],
+      "out": 1476
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "health",
+        25
+      ],
+      "out": 9785
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "health",
+        50
+      ],
+      "out": 46825
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "health",
+        99
+      ],
+      "out": 249234
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "health",
+        100
+      ],
+      "out": 255686
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        0
+      ],
+      "out": 1
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        1
+      ],
+      "out": 1
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        59
+      ],
+      "out": 1
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        60
+      ],
+      "out": 2
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        61
+      ],
+      "out": 2
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        1475
+      ],
+      "out": 9
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        1476
+      ],
+      "out": 10
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        1477
+      ],
+      "out": 10
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        10000
+      ],
+      "out": 25
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        100000
+      ],
+      "out": 68
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        255685
+      ],
+      "out": 99
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        255686
+      ],
+      "out": 100
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "health",
+        10000000
+      ],
+      "out": 100
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "environment",
+        1
+      ],
+      "out": 0
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "environment",
+        2
+      ],
+      "out": 15
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "environment",
+        3
+      ],
+      "out": 36
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "environment",
+        4
+      ],
+      "out": 64
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "environment",
+        10
+      ],
+      "out": 369
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "environment",
+        25
+      ],
+      "out": 2447
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "environment",
+        50
+      ],
+      "out": 11707
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "environment",
+        99
+      ],
+      "out": 62309
+    },
+    {
+      "rule": "totalFor",
+      "args": [
+        "environment",
+        100
+      ],
+      "out": 63922
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        0
+      ],
+      "out": 1
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        1
+      ],
+      "out": 1
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        59
+      ],
+      "out": 3
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        60
+      ],
+      "out": 3
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        61
+      ],
+      "out": 3
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        1475
+      ],
+      "out": 19
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        1476
+      ],
+      "out": 19
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        1477
+      ],
+      "out": 19
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        10000
+      ],
+      "out": 46
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        100000
+      ],
+      "out": 100
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        255685
+      ],
+      "out": 100
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        255686
+      ],
+      "out": 100
+    },
+    {
+      "rule": "levelFor",
+      "args": [
+        "environment",
+        10000000
+      ],
+      "out": 100
+    }
+  ]
+}

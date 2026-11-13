@@ -112,10 +112,14 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - Weeks run Monday to Sunday (`startOfWeekMonday` in `web/src/lib/dates.ts`). Sunday is review
   day: a weekly review is named by its Sunday, reviews the week ending that day and plans the
   next one. On the web, `reviewPeriod` in `web/src/lib/reviews.ts` and `ReviewPeriods` in
-  `src/LifeOs.Domain/Reviews.cs` hold that rule; keep them the same.
+  `src/LifeOs.Domain/Reviews.cs` hold that rule; `tests/rules/reviews.json` checks both.
 - Versioned entries (meals, fasts, room ratings, photos): the newest by `recorded_at` wins, never
   by `occurred_at`.
 - Rewards and XP progression is a pure fold over events and is never stored.
+- The web copies some kernel rules (activity XP, Home Score parts, review periods, level curves).
+  Their cases live in `tests/rules/*.json`, which `RuleParityTests` and `rule-parity.test.ts`
+  both check. To change one on purpose, change the C#, run `RuleParityTests` with
+  `LIFEOS_WRITE_RULES=1`, then the TypeScript until its test passes. A new copied rule gets cases.
 
 ## Checking a change works
 

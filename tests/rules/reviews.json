@@ -1,0 +1,257 @@
+{
+  "about": "Review periods (reviews plan; weeks run Monday to Sunday and a weekly review is named by its Sunday): ReviewPeriods in C#, reviewPeriod in lib/reviews.ts.",
+  "cases": [
+    {
+      "rule": "period",
+      "args": [
+        "daily",
+        "2026-11-01"
+      ],
+      "out": {
+        "date": "2026-11-01",
+        "start": "2026-11-01",
+        "end": "2026-11-01",
+        "planStart": "2026-11-02",
+        "planEnd": "2026-11-02"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "daily",
+        "2026-11-02"
+      ],
+      "out": {
+        "date": "2026-11-02",
+        "start": "2026-11-02",
+        "end": "2026-11-02",
+        "planStart": "2026-11-03",
+        "planEnd": "2026-11-03"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "daily",
+        "2026-11-04"
+      ],
+      "out": {
+        "date": "2026-11-04",
+        "start": "2026-11-04",
+        "end": "2026-11-04",
+        "planStart": "2026-11-05",
+        "planEnd": "2026-11-05"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "daily",
+        "2026-11-07"
+      ],
+      "out": {
+        "date": "2026-11-07",
+        "start": "2026-11-07",
+        "end": "2026-11-07",
+        "planStart": "2026-11-08",
+        "planEnd": "2026-11-08"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "daily",
+        "2026-11-08"
+      ],
+      "out": {
+        "date": "2026-11-08",
+        "start": "2026-11-08",
+        "end": "2026-11-08",
+        "planStart": "2026-11-09",
+        "planEnd": "2026-11-09"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "daily",
+        "2026-11-09"
+      ],
+      "out": {
+        "date": "2026-11-09",
+        "start": "2026-11-09",
+        "end": "2026-11-09",
+        "planStart": "2026-11-10",
+        "planEnd": "2026-11-10"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "daily",
+        "2026-12-31"
+      ],
+      "out": {
+        "date": "2026-12-31",
+        "start": "2026-12-31",
+        "end": "2026-12-31",
+        "planStart": "2027-01-01",
+        "planEnd": "2027-01-01"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "daily",
+        "2027-01-01"
+      ],
+      "out": {
+        "date": "2027-01-01",
+        "start": "2027-01-01",
+        "end": "2027-01-01",
+        "planStart": "2027-01-02",
+        "planEnd": "2027-01-02"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "daily",
+        "2028-02-29"
+      ],
+      "out": {
+        "date": "2028-02-29",
+        "start": "2028-02-29",
+        "end": "2028-02-29",
+        "planStart": "2028-03-01",
+        "planEnd": "2028-03-01"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "weekly",
+        "2026-11-01"
+      ],
+      "out": {
+        "date": "2026-11-01",
+        "start": "2026-10-26",
+        "end": "2026-11-01",
+        "planStart": "2026-11-02",
+        "planEnd": "2026-11-08"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "weekly",
+        "2026-11-02"
+      ],
+      "out": {
+        "date": "2026-11-08",
+        "start": "2026-11-02",
+        "end": "2026-11-08",
+        "planStart": "2026-11-09",
+        "planEnd": "2026-11-15"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "weekly",
+        "2026-11-04"
+      ],
+      "out": {
+        "date": "2026-11-08",
+        "start": "2026-11-02",
+        "end": "2026-11-08",
+        "planStart": "2026-11-09",
+        "planEnd": "2026-11-15"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "weekly",
+        "2026-11-07"
+      ],
+      "out": {
+        "date": "2026-11-08",
+        "start": "2026-11-02",
+        "end": "2026-11-08",
+        "planStart": "2026-11-09",
+        "planEnd": "2026-11-15"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "weekly",
+        "2026-11-08"
+      ],
+      "out": {
+        "date": "2026-11-08",
+        "start": "2026-11-02",
+        "end": "2026-11-08",
+        "planStart": "2026-11-09",
+        "planEnd": "2026-11-15"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "weekly",
+        "2026-11-09"
+      ],
+      "out": {
+        "date": "2026-11-15",
+        "start": "2026-11-09",
+        "end": "2026-11-15",
+        "planStart": "2026-11-16",
+        "planEnd": "2026-11-22"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "weekly",
+        "2026-12-31"
+      ],
+      "out": {
+        "date": "2027-01-03",
+        "start": "2026-12-28",
+        "end": "2027-01-03",
+        "planStart": "2027-01-04",
+        "planEnd": "2027-01-10"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "weekly",
+        "2027-01-01"
+      ],
+      "out": {
+        "date": "2027-01-03",
+        "start": "2026-12-28",
+        "end": "2027-01-03",
+        "planStart": "2027-01-04",
+        "planEnd": "2027-01-10"
+      }
+    },
+    {
+      "rule": "period",
+      "args": [
+        "weekly",
+        "2028-02-29"
+      ],
+      "out": {
+        "date": "2028-03-05",
+        "start": "2028-02-28",
+        "end": "2028-03-05",
+        "planStart": "2028-03-06",
+        "planEnd": "2028-03-12"
+      }
+    }
+  ]
+}
