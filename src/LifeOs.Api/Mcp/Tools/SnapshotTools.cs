@@ -28,9 +28,9 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
         var today = McpResults.Day(stamp.Today);
         var truncated = new List<string>();
 
-        var all = subjects.QuerySubjects(null).Where(s => options.AllowsType(s.Type)).ToList();
+        var all = (await subjects.QuerySubjectsAsync(null, cancellationToken: cancellationToken)).Where(s => options.AllowsType(s.Type)).ToList();
         var byId = all.ToDictionary(s => s.Id);
-        var serves = subjects.GetAlignmentEdges()
+        var serves = (await subjects.GetAlignmentEdgesAsync(cancellationToken: cancellationToken))
             .Where(e => AlignmentForest.Relations.Contains(e.Relation) && byId.ContainsKey(e.ToId))
             .ToLookup(e => e.FromId);
 
@@ -69,8 +69,8 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
         var dueIds = due.Select(s => s.Id).ToHashSet();
         var inProgress = openTasks.Where(s => !dueIds.Contains(s.Id) && Is(s.Status, "In progress"));
 
-        var habits = subjects.GetHabits().ToList();
-        var todayStates = subjects.GetHabitOccurrences(on: stamp.Today).ToDictionary(o => o.HabitId, o => o.State);
+        var habits = (await subjects.GetHabitsAsync(cancellationToken: cancellationToken)).ToList();
+        var todayStates = (await subjects.GetHabitOccurrencesAsync(on: stamp.Today, cancellationToken: cancellationToken)).ToDictionary(o => o.HabitId, o => o.State);
         var building = habits
             .Where(h => !StatusVocabulary.IsTerminal(h.Status) && !StatusVocabulary.IsPlanned(h.Status)
                         && todayStates.ContainsKey(h.Id))
@@ -80,13 +80,13 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
             .Select(h => new { h.Id, h.Urn, h.Name, Today = todayStates.GetValueOrDefault(h.Id) });
 
         var weekEnd = McpResults.Day(stamp.Today.AddDays(6));
-        var appointments = subjects.GetAppointments()
+        var appointments = (await subjects.GetAppointmentsAsync(cancellationToken: cancellationToken))
             .Where(a => a.Date is { } d
                         && string.CompareOrdinal(d, today) >= 0
                         && string.CompareOrdinal(d, weekEnd) <= 0)
             .Select(a => new { a.Id, a.Urn, a.Title, a.Date, a.StartTime, a.EndTime, a.Location, a.Status });
 
-        var timers = subjects.GetTimers()
+        var timers = (await subjects.GetTimersAsync(cancellationToken: cancellationToken))
             .Where(t => t.State is "running" or "paused")
             .Select(t => new { t.SubjectId, t.SubjectUrn, t.SubjectTitle, t.State, t.RunningSince, t.TotalSeconds });
 
@@ -116,7 +116,7 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
         {
             IdentityStatements = Section("identity_statements",
                 all.Where(s => s.Type == SubjectTypes.Value).Select(s => new { s.Id, s.Urn, s.Title })),
-            Areas = Section("areas", subjects.GetAreas().Select(a => new { a.Id, a.Urn, a.Name })),
+            Areas = Section("areas", (await subjects.GetAreasAsync(cancellationToken: cancellationToken)).Select(a => new { a.Id, a.Urn, a.Name })),
             OpenGoals = Section("open_goals", openGoals.Select(WithServes)),
             OpenProjects = Section("open_projects", Open(SubjectTypes.Project).Select(WithServes)),
             DueAndOverdue = Section("due_and_overdue", due.Select(s => ItemRef.From(s) with
@@ -127,7 +127,7 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
             HabitsToday = Section("habits_today", building),
             HabitsMaintained = Section("habits_maintained", maintained),
             AppointmentsNext7Days = Section("appointments_next_7_days", appointments),
-            InboxCount = subjects.GetInboxCount(),
+            InboxCount = (await subjects.GetInboxCountAsync(cancellationToken: cancellationToken)),
             RunningTimers = Section("running_timers", timers),
             DomainXp = domains,
             Diagnostics = new

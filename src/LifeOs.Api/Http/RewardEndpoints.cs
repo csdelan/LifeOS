@@ -86,7 +86,7 @@ public static class RewardEndpoints
     {
         var reward = string.IsNullOrWhiteSpace(body.Reward)
             ? null
-            : WriteEndpoints.ResolveWriteRef(body.Reward, reader);
+            : await WriteEndpoints.ResolveWriteRefAsync(body.Reward, reader, cancellationToken);
         var redemption = await rewards.RedeemAsync(
             reward, body.Amounts is { Count: > 0 } amounts ? amounts : null, body.Note, cancellationToken);
         return Results.Ok(RewardRows.From(redemption));
@@ -119,7 +119,7 @@ public static class RewardEndpoints
         }
 
         var reward = await catalog.SetPriceAsync(
-            WriteEndpoints.ResolveWriteRef(body.Reward, reader), body.Price, cancellationToken);
+            await WriteEndpoints.ResolveWriteRefAsync(body.Reward, reader, cancellationToken), body.Price, cancellationToken);
         return Results.Ok(RewardRows.From(reward));
     }
 
@@ -135,7 +135,7 @@ public static class RewardEndpoints
         }
 
         var reward = await catalog.SetTargetAsync(
-            WriteEndpoints.ResolveWriteRef(body.Reward, reader), body.TargetUsd, cancellationToken);
+            await WriteEndpoints.ResolveWriteRefAsync(body.Reward, reader, cancellationToken), body.TargetUsd, cancellationToken);
         return Results.Ok(RewardRows.From(reward));
     }
 
@@ -159,7 +159,7 @@ public static class RewardEndpoints
             return Results.BadRequest(new ApiError("Send one of amounts, nothing or clear (everyMinutes may come alone, with amounts or with nothing)."));
         }
 
-        var subject = WriteEndpoints.ResolveWriteRef(body.Subject, reader);
+        var subject = await WriteEndpoints.ResolveWriteRefAsync(body.Subject, reader, cancellationToken);
         var view = body.Clear
             ? await bounties.ClearAsync(subject, body.Trigger, cancellationToken)
             : body.Nothing
@@ -185,7 +185,7 @@ public static class RewardEndpoints
             return Results.BadRequest(new ApiError("Send minAdherence and/or windowDays, or clear — one of them."));
         }
 
-        var habit = WriteEndpoints.ResolveWriteRef(body.Habit, reader);
+        var habit = await WriteEndpoints.ResolveWriteRefAsync(body.Habit, reader, cancellationToken);
         var view = body.Clear
             ? await targets.ClearAsync(habit, cancellationToken)
             : await targets.SetAsync(habit, body.MinAdherence, body.WindowDays, cancellationToken);

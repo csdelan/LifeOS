@@ -63,6 +63,11 @@ public sealed class McpOptions
             _ => true,
         };
 
+    /// <summary>The item types <see cref="AllowsType"/> leaves out, for reads that filter in SQL.</summary>
+    public IReadOnlyCollection<string> HiddenTypes
+        => new[] { Domain.SubjectTypes.Reward, Domain.SubjectTypes.Space, Domain.SubjectTypes.Metric }
+            .Where(t => !AllowsType(t)).ToList();
+
     public bool IsBlocked(string clientId) => BlockedClients.Contains(clientId.Trim());
 
     /// <summary>

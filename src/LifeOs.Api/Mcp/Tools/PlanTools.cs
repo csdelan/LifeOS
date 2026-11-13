@@ -37,11 +37,10 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
     {
         var stamp = await reads.NowAsync(cancellationToken);
         var day = McpResults.ParseDay(on, "on") ?? stamp.Today;
-        var week = Enumerable.Range(0, 7).Select(i => day.AddDays(-i)).ToList();
-        var states = week
-            .SelectMany(d => subjects.GetHabitOccurrences(on: d))
+        var states = (await subjects.GetHabitOccurrencesAsync(
+                from: day.AddDays(-6), to: day, cancellationToken: cancellationToken))
             .ToLookup(o => o.HabitId);
-        var habits = subjects.GetHabits(include_archived).Select(h => new
+        var habits = (await subjects.GetHabitsAsync(include_archived, cancellationToken: cancellationToken)).Select(h => new
         {
             h.Id, h.Urn, h.Name, Status = h.Status ?? "Building", h.Cue, h.Routine, h.Reward,
             h.StartDate, h.EndDate, h.AllowsPartial,
@@ -85,8 +84,7 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
         var last = McpResults.Day(end);
         bool InRange(string? d) => d is not null && string.CompareOrdinal(d, first) >= 0 && string.CompareOrdinal(d, last) <= 0;
 
-        var appointments = subjects.GetAppointments()
-            .Where(a => InRange(a.Date))
+        var appointments = (await subjects.GetAppointmentsBetweenAsync(first, last, cancellationToken))
             .Select(a => new
             {
                 a.Id, a.Urn, a.Title, a.Date, a.StartTime, a.EndTime,
@@ -94,8 +92,15 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
                 a.Location, a.MeetingLink, a.Status, a.SeriesUrn,
             })
             .ToList();
-        var tasks = subjects.QuerySubjects(SubjectTypes.Task)
-            .Where(s => !StatusVocabulary.IsTerminal(s.Status) && (InRange(s.Due) || InRange(s.Scheduled)))
+        var tasks = (await subjects.ListSubjectsAsync(
+                new SubjectFilter
+                {
+                    Type = SubjectTypes.Task,
+                    Status = SubjectFilter.Open,
+                    DueOrScheduledFrom = first,
+                    DueOrScheduledTo = last,
+                },
+                cancellationToken))
             .OrderBy(s => InRange(s.Due) ? s.Due : s.Scheduled, StringComparer.Ordinal)
             .ThenBy(s => s.Title, StringComparer.CurrentCultureIgnoreCase)
             .Select(ItemRef.From)
@@ -113,7 +118,7 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
     {
         var stamp = await reads.NowAsync(cancellationToken);
         var (waiting, truncated) = McpResults.Cap(
-            subjects.GetInbox().Where(i => i.SubjectType is null || options.AllowsType(i.SubjectType)),
+            (await subjects.GetInboxAsync(cancellationToken: cancellationToken)).Where(i => i.SubjectType is null || options.AllowsType(i.SubjectType)),
             McpResults.Limit(limit));
         var concerns = await reads.ConcernsAsync(
             waiting.Where(i => i.ItemKind == "event").Select(i => i.ItemId).ToList(), cancellationToken);
@@ -147,11 +152,16 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
     {
         var stamp = await reads.NowAsync(cancellationToken);
         var take = McpResults.Limit(limit);
-        var (kept, truncated) = McpResults.Cap(subjects.GetPeople(kind: string.IsNullOrWhiteSpace(kind) ? null : kind.Trim()), take);
+        var (kept, truncated) = McpResults.Cap(
+            await subjects.GetPeopleAsync(
+                kind: string.IsNullOrWhiteSpace(kind) ? null : kind.Trim(), limit: take + 1,
+                cancellationToken: cancellationToken),
+            take);
+        var involvements = await subjects.GetInvolvementsAsync(kept.Select(p => p.Id).ToList(), cancellationToken);
         var people = kept.Select(p => new
         {
             p.Id, p.Urn, Name = p.Title, Kind = p.PersonKind ?? "human", p.Role,
-            On = subjects.GetInvolvements(p.Id)
+            On = involvements[p.Id]
                 .Where(i => options.AllowsType(i.SubjectType))
                 .Take(InvolvementLimit)
                 .Select(i => new { i.SubjectId, i.SubjectType, i.SubjectTitle, i.Role })

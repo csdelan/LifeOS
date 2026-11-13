@@ -100,7 +100,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("relation only applies with parent."));
         }
 
-        var parent = string.IsNullOrWhiteSpace(body.Parent) ? null : ResolveWriteRef(body.Parent, reader);
+        var parent = string.IsNullOrWhiteSpace(body.Parent) ? null : await ResolveWriteRefAsync(body.Parent, reader, cancellationToken);
         var made = await creation.CreateAsync(
             canonicalType, body.Title, attributes.ToJsonString(), parent, body.Relation, cancellationToken);
         return Results.Ok(ToCreated(made.Subject));
@@ -120,7 +120,7 @@ public static class WriteEndpoints
 
         // A capture event's id stays as it is; an item's id becomes its URN.
         var promoted = await promotion.PromoteFromInboxAsync(
-            ResolveWriteRef(body.Source, reader), body.Type, body.Title, cancellationToken);
+            await ResolveWriteRefAsync(body.Source, reader, cancellationToken), body.Type, body.Title, cancellationToken);
         return Results.Ok(ToCreated(promoted.Subject));
     }
 
@@ -138,7 +138,7 @@ public static class WriteEndpoints
         var assignments = body.Attrs
             .Select(pair => new AttributeAssignment(pair.Key, pair.Value))
             .ToList();
-        await attributes.SetAsync(ResolveWriteRef(body.Subject, reader), assignments, cancellationToken);
+        await attributes.SetAsync(await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), assignments, cancellationToken);
         return Results.Ok();
     }
 
@@ -153,7 +153,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject and title are required."));
         }
 
-        var result = await rename.RenameAsync(ResolveWriteRef(body.Subject, reader), body.Title, cancellationToken);
+        var result = await rename.RenameAsync(await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), body.Title, cancellationToken);
         return Results.Ok(new RenamedSubject
         {
             Id = result.Subject.Id,
@@ -177,7 +177,7 @@ public static class WriteEndpoints
 
         // The reconcile's earns and reversals ride back for REWARD-4's feedback.
         var result = await status.ChangeStatusAsync(
-            ResolveWriteRef(body.Subject, reader), body.Status, cancellationToken);
+            await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), body.Status, cancellationToken);
         return Results.Ok(RewardRows.Earned(result.Awards, result.Progress));
     }
 
@@ -199,7 +199,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject is required."));
         }
 
-        var subjectRef = ResolveWriteRef(body.Subject, reader);
+        var subjectRef = await ResolveWriteRefAsync(body.Subject, reader, cancellationToken);
         if (body.Recurrence is not { } pattern)
         {
             var cleared = await recurrence.ClearAsync(subjectRef, cancellationToken);
@@ -230,7 +230,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject is required."));
         }
 
-        await archive.ArchiveAsync(ResolveWriteRef(body.Subject, reader), cancellationToken);
+        await archive.ArchiveAsync(await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), cancellationToken);
         return Results.Ok();
     }
 
@@ -245,7 +245,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject is required."));
         }
 
-        await archive.RestoreAsync(ResolveWriteRef(body.Subject, reader), cancellationToken);
+        await archive.RestoreAsync(await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), cancellationToken);
         return Results.Ok();
     }
 
@@ -261,7 +261,7 @@ public static class WriteEndpoints
         }
 
         await tags.ApplyAsync(
-            ResolveWriteRef(body.Item, reader),
+            await ResolveWriteRefAsync(body.Item, reader, cancellationToken),
             body.Add ?? [],
             body.Remove ?? [],
             cancellationToken);
@@ -301,9 +301,9 @@ public static class WriteEndpoints
         }
 
         await relations.LinkAsync(
-            ResolveWriteRef(body.From, reader),
+            await ResolveWriteRefAsync(body.From, reader, cancellationToken),
             body.Relation,
-            ResolveWriteRef(body.To, reader),
+            await ResolveWriteRefAsync(body.To, reader, cancellationToken),
             cancellationToken);
         return Results.Ok();
     }
@@ -323,7 +323,7 @@ public static class WriteEndpoints
             ? SubjectEventRelations.Concerns
             : body.As;
         await relate.RelateAsync(
-            body.EventId, ResolveWriteRef(body.Subject, reader), relation, cancellationToken);
+            body.EventId, await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), relation, cancellationToken);
         return Results.Ok();
     }
 
@@ -338,7 +338,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("item is required."));
         }
 
-        await triage.FlagAsync(ResolveWriteRef(body.Item, reader), cancellationToken);
+        await triage.FlagAsync(await ResolveWriteRefAsync(body.Item, reader, cancellationToken), cancellationToken);
         return Results.Ok();
     }
 
@@ -353,7 +353,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("item is required."));
         }
 
-        await triage.DismissAsync(ResolveWriteRef(body.Item, reader), cancellationToken);
+        await triage.DismissAsync(await ResolveWriteRefAsync(body.Item, reader, cancellationToken), cancellationToken);
         return Results.Ok();
     }
 
@@ -368,7 +368,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("item is required."));
         }
 
-        await triage.DropAsync(ResolveWriteRef(body.Item, reader), cancellationToken);
+        await triage.DropAsync(await ResolveWriteRefAsync(body.Item, reader, cancellationToken), cancellationToken);
         return Results.Ok();
     }
 
@@ -390,7 +390,7 @@ public static class WriteEndpoints
         };
         var occurrence = ParseOccurrence(body.On);
         var recorded = await adherence.RecordAsync(
-            ResolveWriteRef(body.Habit, reader), result, occurrence, body.Note, cancellationToken);
+            await ResolveWriteRefAsync(body.Habit, reader, cancellationToken), result, occurrence, body.Note, cancellationToken);
         return Results.Ok(RewardRows.Earned(recorded.Awards, recorded.Progress));
     }
 
@@ -406,14 +406,14 @@ public static class WriteEndpoints
         }
 
         var action = body.Action.Trim().ToLowerInvariant();
-        var task = ResolveWriteRef(body.Task, reader);
+        var task = await ResolveWriteRefAsync(body.Task, reader, cancellationToken);
         var result = action == "complete"
             ? await timers.CompleteAsync(task, cancellationToken)
             : await timers.ApplyAsync(task, action, cancellationToken);
 
         // Read back through the reader view so the response has the same shape (and
         // the same session fields) as GET /api/timers.
-        var timer = reader.GetTimer(result.Task.Id) ?? new TaskTimer
+        var timer = (await reader.GetTimerAsync(result.Task.Id, cancellationToken: cancellationToken)) ?? new TaskTimer
         {
             SubjectId = result.Task.Id,
             SubjectUrn = result.Task.Urn,
@@ -442,8 +442,8 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject, person, and role are required."));
         }
 
-        var subject = ResolveWriteRef(body.Subject, reader);
-        var person = ResolveWriteRef(body.Person, reader);
+        var subject = await ResolveWriteRefAsync(body.Subject, reader, cancellationToken);
+        var person = await ResolveWriteRefAsync(body.Person, reader, cancellationToken);
         if (body.Remove)
         {
             await people.RemoveAsync(subject, person, body.Role, cancellationToken);
@@ -473,7 +473,7 @@ public static class WriteEndpoints
         var captured = await capture.CaptureJournalAsync(body.Text, cancellationToken);
         await relate.RelateAsync(
             captured.EventId,
-            ResolveWriteRef(body.Subject, reader),
+            await ResolveWriteRefAsync(body.Subject, reader, cancellationToken),
             SubjectEventRelations.Concerns,
             cancellationToken);
         return Results.Ok();
@@ -537,14 +537,15 @@ public static class WriteEndpoints
     /// title. When the reference is a uuid that names a subject, substitute its urn.
     /// Event ids (promote / tag / triage of a capture) are left as the guid string.
     /// </summary>
-    internal static string ResolveWriteRef(string reference, SubjectReader reader)
+    internal static async Task<string> ResolveWriteRefAsync(
+        string reference, SubjectReader reader, CancellationToken cancellationToken)
     {
         if (!Guid.TryParse(reference.Trim(), out var id))
         {
             return reference;
         }
 
-        var subject = reader.GetSubject(id);
+        var subject = await reader.GetSubjectAsync(id, cancellationToken);
         return subject?.Urn ?? reference;
     }
 

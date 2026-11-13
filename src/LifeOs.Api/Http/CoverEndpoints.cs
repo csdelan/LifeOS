@@ -82,7 +82,7 @@ public static class CoverEndpoints
         }
 
         var change = await covers.SetFromUnsplashAsync(
-            WriteEndpoints.ResolveWriteRef(body.Subject, reader), body.PhotoId, body.PositionY, cancellationToken);
+            await WriteEndpoints.ResolveWriteRefAsync(body.Subject, reader, cancellationToken), body.PhotoId, body.PositionY, cancellationToken);
         return Results.Ok(CoverResult.From(change, covers.AppName));
     }
 
@@ -95,7 +95,7 @@ public static class CoverEndpoints
         }
 
         var change = await covers.MoveAsync(
-            WriteEndpoints.ResolveWriteRef(body.Subject, reader), position, cancellationToken);
+            await WriteEndpoints.ResolveWriteRefAsync(body.Subject, reader, cancellationToken), position, cancellationToken);
         return Results.Ok(CoverResult.From(change, covers.AppName));
     }
 
@@ -107,7 +107,7 @@ public static class CoverEndpoints
             return Results.BadRequest(new ApiError("subject is required."));
         }
 
-        var cleared = await covers.ClearAsync(WriteEndpoints.ResolveWriteRef(body.Subject, reader), cancellationToken);
+        var cleared = await covers.ClearAsync(await WriteEndpoints.ResolveWriteRefAsync(body.Subject, reader, cancellationToken), cancellationToken);
         return Results.Ok(CoverClearedRead.From(cleared));
     }
 }

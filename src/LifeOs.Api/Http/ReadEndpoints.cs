@@ -53,78 +53,78 @@ public static class ReadEndpoints
             .Produces<IReadOnlyList<TaskTimer>>();
     }
 
-    private static IResult GetTimers(SubjectReader reader)
-        => Results.Ok(reader.GetTimers());
+    private static async Task<IResult> GetTimers(SubjectReader reader, CancellationToken cancellationToken)
+        => Results.Ok((await reader.GetTimersAsync(cancellationToken: cancellationToken)));
 
     /// <summary>
     /// Subjects of a type, or every type. A repeating Task's series is left out unless
     /// <paramref name="includeSeries"/>: its repetitions are the Tasks to do (D16).
     /// </summary>
-    private static IResult ListSubjects(
-        SubjectReader reader, string? type, bool includeArchived = false, bool includeSeries = false)
-        => Results.Ok(reader.QuerySubjects(type, includeArchived, includeSeries));
+    private static async Task<IResult> ListSubjects(
+        SubjectReader reader, CancellationToken cancellationToken, string? type, bool includeArchived = false, bool includeSeries = false)
+        => Results.Ok((await reader.QuerySubjectsAsync(type, includeArchived, includeSeries, cancellationToken: cancellationToken)));
 
-    private static IResult GetSubject(Guid id, SubjectReader reader)
+    private static async Task<IResult> GetSubject(Guid id, SubjectReader reader, CancellationToken cancellationToken)
     {
-        var subject = reader.GetSubject(id);
+        var subject = await reader.GetSubjectAsync(id, cancellationToken: cancellationToken);
         return subject is null ? Results.NotFound() : Results.Ok(subject);
     }
 
-    private static IResult GetListItem(Guid id, SubjectReader reader)
+    private static async Task<IResult> GetListItem(Guid id, SubjectReader reader, CancellationToken cancellationToken)
     {
-        var item = reader.GetListItem(id);
+        var item = await reader.GetListItemAsync(id, cancellationToken: cancellationToken);
         return item is null ? Results.NotFound() : Results.Ok(item);
     }
 
-    private static IResult GetRelations(Guid id, SubjectReader reader)
+    private static async Task<IResult> GetRelations(Guid id, SubjectReader reader, CancellationToken cancellationToken)
         => Results.Ok(new SubjectRelationsResponse
         {
-            Parents = reader.GetServes(id),
-            Children = reader.GetServedBy(id)
+            Parents = (await reader.GetServesAsync(id, cancellationToken: cancellationToken)),
+            Children = (await reader.GetServedByAsync(id, cancellationToken: cancellationToken))
         });
 
-    private static IResult GetTags(Guid id, SubjectReader reader)
-        => Results.Ok(reader.GetTags(id));
+    private static async Task<IResult> GetTags(Guid id, SubjectReader reader, CancellationToken cancellationToken)
+        => Results.Ok((await reader.GetTagsAsync(id, cancellationToken: cancellationToken)));
 
-    private static IResult GetJournal(Guid id, SubjectReader reader)
-        => Results.Ok(reader.GetJournal(id));
+    private static async Task<IResult> GetJournal(Guid id, SubjectReader reader, CancellationToken cancellationToken)
+        => Results.Ok((await reader.GetJournalAsync(id, cancellationToken: cancellationToken)));
 
-    private static IResult GetHistory(Guid id, SubjectReader reader)
-        => Results.Ok(reader.GetStatusHistory(id));
+    private static async Task<IResult> GetHistory(Guid id, SubjectReader reader, CancellationToken cancellationToken)
+        => Results.Ok((await reader.GetStatusHistoryAsync(id, cancellationToken: cancellationToken)));
 
-    private static IResult GetFiles(Guid id, SubjectReader reader)
-        => Results.Ok(reader.GetSubjectFiles(id));
+    private static async Task<IResult> GetFiles(Guid id, SubjectReader reader, CancellationToken cancellationToken)
+        => Results.Ok((await reader.GetSubjectFilesAsync(id, cancellationToken: cancellationToken)));
 
-    private static IResult GetTagUniverse(SubjectReader reader)
-        => Results.Ok(reader.GetTagUniverse());
+    private static async Task<IResult> GetTagUniverse(SubjectReader reader, CancellationToken cancellationToken)
+        => Results.Ok((await reader.GetTagUniverseAsync(cancellationToken: cancellationToken)));
 
-    private static IResult GetInbox(SubjectReader reader)
-        => Results.Ok(reader.GetInbox());
+    private static async Task<IResult> GetInbox(SubjectReader reader, CancellationToken cancellationToken)
+        => Results.Ok((await reader.GetInboxAsync(cancellationToken: cancellationToken)));
 
-    private static IResult GetResolvedInbox(SubjectReader reader, int limit = 50)
-        => Results.Ok(reader.GetResolvedInbox(Math.Clamp(limit, 1, 200)));
+    private static async Task<IResult> GetResolvedInbox(SubjectReader reader, CancellationToken cancellationToken, int limit = 50)
+        => Results.Ok((await reader.GetResolvedInboxAsync(Math.Clamp(limit, 1, 200), cancellationToken: cancellationToken)));
 
-    private static IResult GetAreas(SubjectReader reader)
-        => Results.Ok(reader.GetAreas());
+    private static async Task<IResult> GetAreas(SubjectReader reader, CancellationToken cancellationToken)
+        => Results.Ok((await reader.GetAreasAsync(cancellationToken: cancellationToken)));
 
-    private static IResult GetPeople(SubjectReader reader, bool includeArchived = false, string? kind = null)
-        => Results.Ok(reader.GetPeople(includeArchived, kind));
+    private static async Task<IResult> GetPeople(SubjectReader reader, CancellationToken cancellationToken, bool includeArchived = false, string? kind = null)
+        => Results.Ok((await reader.GetPeopleAsync(includeArchived, kind, cancellationToken: cancellationToken)));
 
-    private static IResult GetHabits(SubjectReader reader, bool includeArchived = false)
-        => Results.Ok(reader.GetHabits(includeArchived));
+    private static async Task<IResult> GetHabits(SubjectReader reader, CancellationToken cancellationToken, bool includeArchived = false)
+        => Results.Ok((await reader.GetHabitsAsync(includeArchived, cancellationToken: cancellationToken)));
 
     /// <summary>
     /// Habit days: one habit's or every habit's, on one day (<paramref name="on"/>) or from
     /// <paramref name="from"/> to <paramref name="to"/> (each end optional; a review's days,
     /// REVIEW-5). A day that doesn't parse is ignored.
     /// </summary>
-    private static IResult GetOccurrences(
-        SubjectReader reader, Guid? habitId = null, string? on = null, string? from = null, string? to = null)
-        => Results.Ok(reader.GetHabitOccurrences(habitId, Day(on), Day(from), Day(to)));
+    private static async Task<IResult> GetOccurrences(
+        SubjectReader reader, CancellationToken cancellationToken, Guid? habitId = null, string? on = null, string? from = null, string? to = null)
+        => Results.Ok((await reader.GetHabitOccurrencesAsync(habitId, Day(on), Day(from), Day(to), cancellationToken: cancellationToken)));
 
     private static DateOnly? Day(string? text)
         => !string.IsNullOrWhiteSpace(text) && DateOnly.TryParse(text, out var parsed) ? parsed : null;
 
-    private static IResult GetEdges(SubjectReader reader, bool includeArchived = false)
-        => Results.Ok(reader.GetAlignmentEdges(includeArchived));
+    private static async Task<IResult> GetEdges(SubjectReader reader, CancellationToken cancellationToken, bool includeArchived = false)
+        => Results.Ok((await reader.GetAlignmentEdgesAsync(includeArchived, cancellationToken: cancellationToken)));
 }

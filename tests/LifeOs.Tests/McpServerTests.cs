@@ -203,6 +203,76 @@ public sealed class McpServerTests(PostgresFixture postgres)
     // ---- What the tools answer (step 1.1) ----
 
     [Fact]
+    public async Task The_lists_filter_in_the_database_and_read_a_week_or_everyone_at_once()
+    {
+        // Code review CR14: list_items and calendar filter in SQL, habits reads its week in one
+        // query and people everyone's items in one; the answers are as before.
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await StartAsync(db.ConnectionString);
+        var ns = Guid.NewGuid().ToString("N")[..8];
+        var today = await db.TodayAsync();
+        string Day(int offset) => today.AddDays(offset).ToString("yyyy-MM-dd");
+
+        var garden = await PostSubjectAsync(host, new { type = SubjectTypes.Area, title = $"Garden {ns}" });
+        var weed = await PostSubjectAsync(host, new
+        {
+            type = SubjectTypes.Task, title = $"Weed the beds {ns}",
+            attrs = new Dictionary<string, string> { ["due"] = Day(3), ["area"] = garden.Urn },
+        });
+        var water = await PostSubjectAsync(host, new
+        {
+            type = SubjectTypes.Task, title = $"Water {ns}",
+            attrs = new Dictionary<string, string> { ["scheduled"] = Day(1) },
+        });
+        var later = await PostSubjectAsync(host, new
+        {
+            type = SubjectTypes.Task, title = $"Prune {ns}",
+            attrs = new Dictionary<string, string> { ["due"] = Day(30) },
+        });
+        await PostOkAsync(host, "api/status", new { subject = water.Id.ToString(), status = "In progress" });
+        await PostOkAsync(host, "api/tag", new { item = later.Id.ToString(), add = new[] { $"Winter-{ns}" } });
+
+        var habit = await db.HabitAsync(today, startOffset: 10, healthXp: 1);
+        await PostOkAsync(host, "api/adhere", new { habit = habit.Id.ToString(), state = "followed", on = Day(0) });
+        await PostOkAsync(host, "api/adhere", new { habit = habit.Id.ToString(), state = "missed", on = Day(-2) });
+        var person = await PostSubjectAsync(host, new { type = SubjectTypes.Person, title = $"Sam {ns}" });
+        await PostOkAsync(host, "api/involve", new { subject = weed.Id.ToString(), person = person.Id.ToString(), role = "assignee" });
+
+        await using var client = await ConnectAsync(host, ApiTestHost.TokenFor(clientId: Agent));
+
+        // By area (its name, in any case), by tag (in any case), by an exact status, from a due date.
+        Assert.Equal([weed.Id], Ids((await CallAsync(client, "list_items", new() { ["area"] = $"garden {ns}" })).GetProperty("items")));
+        Assert.Equal([later.Id], Ids((await CallAsync(client, "list_items", new() { ["tag"] = $"winter-{ns}" })).GetProperty("items")));
+        var inProgress = Ids((await CallAsync(client, "list_items", new() { ["type"] = "Task", ["status"] = "in progress" })).GetProperty("items"));
+        Assert.Contains(water.Id, inProgress);
+        Assert.DoesNotContain(weed.Id, inProgress);
+        var dueSoon = await CallAsync(client, "list_items", new() { ["type"] = "Task", ["due_after"] = Day(2) });
+        Assert.Equal([weed.Id, later.Id], Ids(dueSoon.GetProperty("items")));
+        var capped = await CallAsync(client, "list_items", new() { ["type"] = "Task", ["due_after"] = Day(2), ["limit"] = 1 });
+        Assert.Equal([weed.Id], Ids(capped.GetProperty("items")));
+        Assert.True(capped.GetProperty("truncated").GetBoolean());
+
+        // The calendar: due or scheduled in the range, nothing past it.
+        var calendar = await CallAsync(client, "calendar", new() { ["from"] = Day(0), ["to"] = Day(6) });
+        Assert.Equal(new[] { water.Id, weed.Id }, Ids(calendar.GetProperty("tasks")));
+
+        // habits: the day and the six before it, from one read.
+        var habits = await CallAsync(client, "habits");
+        var row = Single(habits.GetProperty("habits"), habit.Id);
+        Assert.Equal("followed", row.GetProperty("on").GetString());
+        var week = row.GetProperty("week").EnumerateArray().ToList();
+        Assert.Equal(7, week.Count);
+        Assert.Equal(Day(0), week[0].GetProperty("day").GetString());
+        Assert.Equal("not_followed", week[2].GetProperty("state").GetString());
+
+        // people: each with what they're on.
+        var sam = Single((await CallAsync(client, "people")).GetProperty("people"), person.Id);
+        var on = Assert.Single(sam.GetProperty("on").EnumerateArray());
+        Assert.Equal(weed.Id, on.GetProperty("subject_id").GetGuid());
+        Assert.Equal("assignee", on.GetProperty("role").GetString());
+    }
+
+    [Fact]
     public async Task An_agent_reads_a_life_through_the_tools()
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);

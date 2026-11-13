@@ -35,8 +35,8 @@ public static class ArtifactEndpoints
     /// A stored file's metadata (CAP-2 / CAP-4), by its artifact id or the id of the event that
     /// carries it. Never the bytes: those are <c>/content</c>.
     /// </summary>
-    private static IResult GetMetadata(Guid id, SubjectReader reader)
-        => reader.GetArtifact(id) is { } artifact
+    private static async Task<IResult> GetMetadata(Guid id, SubjectReader reader, CancellationToken cancellationToken)
+        => await reader.GetArtifactAsync(id, cancellationToken) is { } artifact
             ? Results.Ok(artifact)
             : Results.NotFound(new ApiError($"No artifact with bytes has the id {id}."));
 

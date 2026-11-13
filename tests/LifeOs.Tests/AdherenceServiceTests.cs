@@ -71,12 +71,12 @@ public sealed class AdherenceServiceTests(PostgresFixture postgres)
         await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today, note: "  ran it early  ", cancellationToken: Ct);
 
         var reader = new SubjectReader(postgres.ConnectionString);
-        var day = Assert.Single(reader.GetHabitOccurrences(habit.Id, on: today));
+        var day = Assert.Single(await reader.GetHabitOccurrencesAsync(habit.Id, on: today, cancellationToken: Ct));
         Assert.Equal("ran it early", day.Note);
 
         // A correction without a note clears it: the newest check-off is the day's record.
         await adherence.RecordAsync(habit.Urn, AdherenceResults.Missed, today, cancellationToken: Ct);
-        Assert.Null(Assert.Single(reader.GetHabitOccurrences(habit.Id, on: today)).Note);
+        Assert.Null(Assert.Single(await reader.GetHabitOccurrencesAsync(habit.Id, on: today, cancellationToken: Ct)).Note);
     }
 
     [Fact]

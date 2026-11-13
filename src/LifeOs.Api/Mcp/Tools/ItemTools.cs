@@ -40,8 +40,8 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
 
         var stamp = await reads.NowAsync(cancellationToken);
         var take = McpResults.Limit(limit);
-        var found = subjects.SearchSubjects(query, McpResults.ParseType(type), include_archived, take + 1)
-            .Where(s => options.AllowsType(s.Type))
+        var found = (await subjects.SearchSubjectsAsync(
+                query, McpResults.ParseType(type), include_archived, take + 1, options.HiddenTypes, cancellationToken))
             .Select(ItemRef.From);
         var (items, truncated) = McpResults.Cap(found, take);
         return McpResults.Ok(stamp, $"{McpResults.Plural(items.Count, "item")} match '{query.Trim()}'.",
@@ -68,20 +68,22 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
         var stamp = await reads.NowAsync(cancellationToken);
         var before = McpResults.ParseDay(due_before, "due_before") is { } b ? McpResults.Day(b) : null;
         var after = McpResults.ParseDay(due_after, "due_after") is { } a ? McpResults.Day(a) : null;
-        var rows = subjects.QuerySubjects(McpResults.ParseType(type), include_archived)
-            .Where(s => options.AllowsType(s.Type))
-            .Where(s => MatchesStatus(s.Status, status))
-            .Where(s => string.IsNullOrWhiteSpace(area)
-                        || Same(s.Area, area) || Same(s.AreaName, area))
-            .Where(s => string.IsNullOrWhiteSpace(tag) || Tags(s.Tags).Any(t => Same(t, tag)))
-            .Where(s => before is null || (s.Due is { } d1 && string.CompareOrdinal(d1, before) <= 0))
-            .Where(s => after is null || (s.Due is { } d2 && string.CompareOrdinal(d2, after) >= 0));
-        if (before is not null || after is not null)
-        {
-            rows = rows.OrderBy(s => s.Due, StringComparer.Ordinal).ThenBy(s => s.Title, StringComparer.CurrentCultureIgnoreCase);
-        }
-
         var take = McpResults.Limit(limit);
+        var rows = await subjects.ListSubjectsAsync(
+            new SubjectFilter
+            {
+                Type = McpResults.ParseType(type),
+                IncludeArchived = include_archived,
+                HiddenTypes = options.HiddenTypes,
+                Status = status,
+                Area = area,
+                Tag = tag,
+                DueFrom = after,
+                DueTo = before,
+                ByDue = before is not null || after is not null,
+                Limit = take + 1,
+            },
+            cancellationToken);
         var (items, truncated) = McpResults.Cap(rows.Select(ItemRef.From), take);
         return McpResults.Ok(stamp, $"{McpResults.Plural(items.Count, "item")}{(truncated ? " (more not shown)" : "")}.",
             new { Items = items, Truncated = truncated });
@@ -99,9 +101,9 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
         CancellationToken cancellationToken = default)
     {
         var stamp = await reads.NowAsync(cancellationToken);
-        var detail = Find(id);
+        var detail = await FindAsync(id, cancellationToken);
 
-        var journal = subjects.GetJournal(detail.Id)
+        var journal = (await subjects.GetJournalAsync(detail.Id, cancellationToken: cancellationToken))
             .OrderByDescending(j => j.OccurredAt)
             .Take(HistoryLimit)
             .Select(j => new
@@ -112,14 +114,14 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
                 Cut = j.Content.Length > MaxEntryLength ? true : (bool?)null,
             })
             .ToList();
-        var history = subjects.GetStatusHistory(detail.Id)
+        var history = (await subjects.GetStatusHistoryAsync(detail.Id, cancellationToken: cancellationToken))
             .OrderByDescending(h => h.OccurredAt)
             .Take(HistoryLimit)
             .Select(h => new { h.Status, h.OccurredAt })
             .ToList();
 
         object? series = null;
-        if (detail.Repeating is { IsSeries: true } repeat && subjects.GetTaskSeriesHistory(repeat.SeriesId) is { } h)
+        if (detail.Repeating is { IsSeries: true } repeat && (await subjects.GetTaskSeriesHistoryAsync(repeat.SeriesId, cancellationToken: cancellationToken)) is { } h)
         {
             series = new { h.Series, Repetitions = h.Repetitions.Take(HistoryLimit).ToList() };
         }
@@ -128,7 +130,7 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
         if (detail.Type == SubjectTypes.Habit)
         {
             var since = stamp.Today.AddDays(-13);
-            habit = subjects.GetHabitOccurrences(habitId: detail.Id)
+            habit = (await subjects.GetHabitOccurrencesAsync(habitId: detail.Id, cancellationToken: cancellationToken))
                 .Where(o => o.OccurrenceDate >= since)
                 .Select(o => new { Day = McpResults.Day(o.OccurrenceDate), o.State })
                 .ToList();
@@ -147,16 +149,16 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
                 Attributes = McpResults.ParseJson(detail.Attributes),
                 detail.Repeating,
             },
-            Serves = Allowed(subjects.GetServes(detail.Id)),
-            ServedBy = Allowed(subjects.GetServedBy(detail.Id)),
-            People = subjects.GetPeopleOn(detail.Id).Select(p => new { p.PersonId, p.PersonUrn, p.PersonName, p.Role }).ToList(),
-            Tags = subjects.GetTags(detail.Id),
+            Serves = Allowed((await subjects.GetServesAsync(detail.Id, cancellationToken: cancellationToken))),
+            ServedBy = Allowed((await subjects.GetServedByAsync(detail.Id, cancellationToken: cancellationToken))),
+            People = (await subjects.GetPeopleOnAsync(detail.Id, cancellationToken: cancellationToken)).Select(p => new { p.PersonId, p.PersonUrn, p.PersonName, p.Role }).ToList(),
+            Tags = (await subjects.GetTagsAsync(detail.Id, cancellationToken: cancellationToken)),
             Journal = journal,
             StatusHistory = history,
-            Timer = detail.Type == SubjectTypes.Task ? subjects.GetTimer(detail.Id) : null,
+            Timer = detail.Type == SubjectTypes.Task ? (await subjects.GetTimerAsync(detail.Id, cancellationToken: cancellationToken)) : null,
             Series = series,
             InvolvedIn = detail.Type == SubjectTypes.Person
-                ? subjects.GetInvolvements(detail.Id)
+                ? (await subjects.GetInvolvementsAsync(detail.Id, cancellationToken: cancellationToken))
                     .Where(p => options.AllowsType(p.SubjectType))
                     .Select(p => new { p.SubjectId, p.SubjectUrn, p.SubjectType, p.SubjectTitle, p.Role })
                     .ToList()
@@ -179,8 +181,8 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
         CancellationToken cancellationToken = default)
     {
         var stamp = await reads.NowAsync(cancellationToken);
-        var all = subjects.QuerySubjects(null).Where(s => options.AllowsType(s.Type));
-        var forest = new AlignmentForest(all, subjects.GetAlignmentEdges(), include_done, MaxTreeNodes);
+        var all = (await subjects.QuerySubjectsAsync(null, cancellationToken: cancellationToken)).Where(s => options.AllowsType(s.Type));
+        var forest = new AlignmentForest(all, (await subjects.GetAlignmentEdgesAsync(cancellationToken: cancellationToken)), include_done, MaxTreeNodes);
 
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -189,7 +191,7 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
                 new { Roots = roots, Truncated = forest.Truncated });
         }
 
-        var detail = Find(id);
+        var detail = await FindAsync(id, cancellationToken);
         if (!forest.Contains(detail.Id))
         {
             throw new McpException($"{detail.Type} '{detail.Title}' is archived, so it isn't in the tree.");
@@ -203,11 +205,11 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
     }
 
     /// <summary>The item an id or URN names, or a refusal an agent can act on.</summary>
-    private SubjectDetail Find(string id)
+    private async Task<SubjectDetail> FindAsync(string id, CancellationToken cancellationToken)
     {
         var key = (id ?? "").Trim();
-        var detail = Guid.TryParse(key, out var guid) ? subjects.GetSubject(guid)
-            : key.Length > 0 ? subjects.GetSubjectByUrn(key)
+        var detail = Guid.TryParse(key, out var guid) ? await subjects.GetSubjectAsync(guid, cancellationToken)
+            : key.Length > 0 ? await subjects.GetSubjectByUrnAsync(key, cancellationToken)
             : null;
         return detail is not null && options.AllowsType(detail.Type)
             ? detail
@@ -217,24 +219,6 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
     private IReadOnlyList<RelationEdge> Allowed(IEnumerable<RelationEdge> edges)
         => edges.Where(e => options.AllowsType(e.Type)).ToList();
 
-    private static bool MatchesStatus(string? status, string? wanted)
-    {
-        if (string.IsNullOrWhiteSpace(wanted))
-        {
-            return true;
-        }
 
-        return wanted.Trim().ToLowerInvariant() switch
-        {
-            "open" => !StatusVocabulary.IsTerminal(status),
-            "closed" => StatusVocabulary.IsTerminal(status),
-            _ => SnapshotTools.Is(status, wanted),
-        };
-    }
 
-    private static bool Same(string? a, string? b)
-        => a is not null && b is not null && string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
-
-    private static IEnumerable<string> Tags(string? tags)
-        => (tags ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }

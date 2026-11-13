@@ -288,7 +288,8 @@ public sealed class RewardService(
         {
             try
             {
-                var (awards, before) = await ReconcileOnceAsync(subject, causeEventId, cancellationToken);
+                var (awards, before) = await ReconcileOnceAsync(
+                    subject, causeEventId, new DomainFolds(ReadFoldsAsync), cancellationToken);
                 if (before is null)
                 {
                     return new Earned(awards, []);
@@ -311,12 +312,36 @@ public sealed class RewardService(
     /// crash, a direct import), then pays any rank-up still due. Never opens the wallet.
     /// Returns every entry written.
     /// </summary>
+    /// <remarks>
+    /// The domains are folded once and the fold is kept from item to item until a write changes
+    /// their credit, and rank-ups are paid once at the end, not after each item (code review
+    /// CR14): every fold reads all of the domains' history.
+    /// </remarks>
     public async Task<IReadOnlyList<Award>> ReconcileAllAsync(CancellationToken cancellationToken = default)
     {
+        // With no cause nothing opens the wallet, so a closed one has nothing to reconcile.
+        if (await ledger.GetOpenedAtAsync(cancellationToken) is null)
+        {
+            return [];
+        }
+
         var awards = new List<Award>();
+        var domains = new DomainFolds(ReadFoldsAsync);
         foreach (var subject in await ledger.GetReconcileCandidatesAsync(cancellationToken))
         {
-            awards.AddRange(await ReconcileAsync(subject, causeEventId: null, cancellationToken));
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    awards.AddRange((await ReconcileOnceAsync(subject, causeEventId: null, domains, cancellationToken)).Awards);
+                    break;
+                }
+                catch (LedgerConflictException) when (attempt < ReconcileAttempts)
+                {
+                    // Another reconcile changed one of these awards first; re-read and retry.
+                    domains.Changed();
+                }
+            }
         }
 
         awards.AddRange(await ReconcileDomainsAsync(cancellationToken));
@@ -532,6 +557,23 @@ public sealed class RewardService(
     private static IReadOnlyList<DomainProgress> Fold(DomainCredit credit)
         => LifeDomains.Configured.Select(r => DomainService.Fold(r, credit)).ToList();
 
+    private async Task<IReadOnlyList<DomainProgress>> ReadFoldsAsync(CancellationToken cancellationToken)
+        => Fold(await ReadDomainsAsync(cancellationToken));
+
+    /// <summary>
+    /// The configured domains folded on first use and kept until <see cref="Changed"/>: a write
+    /// that moved their credit, or a lost race.
+    /// </summary>
+    private sealed class DomainFolds(Func<CancellationToken, Task<IReadOnlyList<DomainProgress>>> read)
+    {
+        private IReadOnlyList<DomainProgress>? folds;
+
+        public async Task<IReadOnlyList<DomainProgress>> GetAsync(CancellationToken cancellationToken)
+            => folds ??= await read(cancellationToken);
+
+        public void Changed() => folds = null;
+    }
+
     /// <summary>A rank-up award, with its domain and rank (an index into the domain's ranks).</summary>
     private sealed record RankUp(Award Award, string Currency, int Rank);
 
@@ -570,10 +612,11 @@ public sealed class RewardService(
     /// One reconcile of <paramref name="subject"/>: the entries written and, when they carry
     /// configured life-domain XP, the domains as they stood just before (else null). An earn's
     /// domain XP is paid at the multiplier of the day it's credited to (xp-domains plan §3.6),
-    /// read from one fold of the domains as they stand now.
+    /// read from <paramref name="domains"/>, one fold of the domains as they stand now, which a
+    /// write of domain XP marks changed.
     /// </summary>
     private async Task<(IReadOnlyList<Award> Awards, IReadOnlyList<DomainProgress>? DomainsBefore)> ReconcileOnceAsync(
-        SubjectRef subject, Guid? causeEventId, CancellationToken cancellationToken)
+        SubjectRef subject, Guid? causeEventId, DomainFolds domains, CancellationToken cancellationToken)
     {
         var due = await ledger.GetDueAsync(subject.Id, cancellationToken);
         var paid = await ledger.GetPaidAsync(subject.Id, cancellationToken);
@@ -583,10 +626,6 @@ public sealed class RewardService(
         var now = clock.UtcNow;
         var writes = new List<LedgerWrite>();
         var awards = new List<Award>();
-        IReadOnlyList<DomainProgress>? domains = null;
-        async Task<IReadOnlyList<DomainProgress>> DomainsAsync()
-            => domains ??= Fold(await ReadDomainsAsync(cancellationToken));
-
         var unpaid = due.Where(d => !paidKeys.Contains(d.AwardKey)).ToList();
         if (unpaid.Count > 0)
         {
@@ -603,7 +642,7 @@ public sealed class RewardService(
                 // Domain XP pays at its credited day's multiplier, frozen in the entry: nothing
                 // re-prices it later. A day logged late is priced from the days before it.
                 var earn = DomainPricing.CouldMultiply(price)
-                    ? PriceOn(price, award, await DomainsAsync())
+                    ? PriceOn(price, award, await domains.GetAsync(cancellationToken))
                     : new PricedEarn(price);
 
                 // Dated at the trigger, so the history shows the day it was earned even
@@ -642,9 +681,14 @@ public sealed class RewardService(
         }
 
         var before = awards.Any(a => a.Amounts.Keys.Any(k => LifeDomains.For(k) is not null))
-            ? await DomainsAsync()
+            ? await domains.GetAsync(cancellationToken)
             : null;
         var ids = await ledger.AppendAsync(writes, cancellationToken);
+        if (before is not null)
+        {
+            domains.Changed();
+        }
+
         return (awards.Select((award, i) => award with { EventId = ids[i] }).ToList(), before);
     }
 

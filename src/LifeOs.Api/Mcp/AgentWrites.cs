@@ -126,7 +126,7 @@ public sealed class AgentWrites(
             throw new McpException($"kind is note, idea or problem, not '{kind}'.");
         }
 
-        var about = string.IsNullOrWhiteSpace(concerning) ? null : Find(concerning, "concerning");
+        var about = string.IsNullOrWhiteSpace(concerning) ? null : await FindAsync(concerning, "concerning", cancellationToken);
         var key = RequestKey(requestId);
         if (key is not null && await EarlierAsync(agent, key, EventKinds.Note, cancellationToken) is { } earlier)
         {
@@ -209,7 +209,7 @@ public sealed class AgentWrites(
         McpAgent agent, string item, string text, string? requestId, CancellationToken cancellationToken)
     {
         var body = Body(text);
-        var subject = Find(item, "item");
+        var subject = await FindAsync(item, "item", cancellationToken);
         var key = RequestKey(requestId);
         var kernel = Kernel(agent);
         var earlier = key is null ? null : await EarlierAsync(agent, key, EventKinds.Journal, cancellationToken);
@@ -249,7 +249,7 @@ public sealed class AgentWrites(
             throw new McpException($"item_id is a capture's item_id from inbox, a GUID; '{itemId}' isn't one.");
         }
 
-        var waiting = reader.GetInbox().FirstOrDefault(i => i.ItemId == id);
+        var waiting = (await reader.GetInboxAsync(cancellationToken: cancellationToken)).FirstOrDefault(i => i.ItemId == id);
         if (waiting is null)
         {
             return new AgentDismissal(id, Dismissed: false);
@@ -317,7 +317,7 @@ public sealed class AgentWrites(
     {
         if (!string.IsNullOrWhiteSpace(review))
         {
-            var item = Find(review, "review");
+            var item = await FindAsync(review, "review", cancellationToken);
             if (item.Type != SubjectTypes.Review)
             {
                 throw new McpException($"review: {item.Title} is {Article(item.Type)} {item.Type}, not a Review.");
@@ -386,11 +386,11 @@ public sealed class AgentWrites(
     }
 
     /// <summary>The item an id or URN names, as <c>get_item</c> finds it, or a refusal the agent can act on.</summary>
-    private McpItemRef Find(string reference, string name)
+    private async Task<McpItemRef> FindAsync(string reference, string name, CancellationToken cancellationToken)
     {
         var key = (reference ?? "").Trim();
-        var detail = Guid.TryParse(key, out var guid) ? reader.GetSubject(guid)
-            : key.Length > 0 ? reader.GetSubjectByUrn(key)
+        var detail = Guid.TryParse(key, out var guid) ? await reader.GetSubjectAsync(guid, cancellationToken)
+            : key.Length > 0 ? await reader.GetSubjectByUrnAsync(key, cancellationToken)
             : null;
         return detail is not null && options.AllowsType(detail.Type)
             ? new McpItemRef(detail.Id, detail.Urn, detail.Type, detail.Title)

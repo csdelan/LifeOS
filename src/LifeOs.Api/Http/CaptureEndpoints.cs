@@ -124,7 +124,7 @@ public static class CaptureEndpoints
         string? about = null;
         if (Clean(concerning) is { } reference)
         {
-            var detail = Guid.TryParse(reference, out var id) ? reader.GetSubject(id) : reader.GetSubjectByUrn(reference);
+            var detail = Guid.TryParse(reference, out var id) ? (await reader.GetSubjectAsync(id, cancellationToken: cancellationToken)) : (await reader.GetSubjectByUrnAsync(reference, cancellationToken: cancellationToken));
             if (detail is null)
             {
                 return Results.BadRequest(new ApiError($"concerning names no item: '{reference}'."));

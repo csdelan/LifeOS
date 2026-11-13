@@ -25,12 +25,13 @@ public static class TaskEndpoints
     }
 
     /// <summary>Every repeating Task, by title; archived ones only when asked.</summary>
-    private static IResult ListSeries(SubjectReader reader, bool includeArchived = false)
-        => Results.Ok(reader.GetTaskSeries(includeArchived));
+    private static async Task<IResult> ListSeries(
+        SubjectReader reader, CancellationToken cancellationToken, bool includeArchived = false)
+        => Results.Ok(await reader.GetTaskSeriesAsync(includeArchived, cancellationToken));
 
     /// <summary>A repeating Task (by the series' id) and its repetitions, latest first.</summary>
-    private static IResult GetSeries(Guid id, SubjectReader reader)
-        => reader.GetTaskSeriesHistory(id) is { } history ? Results.Ok(history) : Results.NotFound();
+    private static async Task<IResult> GetSeries(Guid id, SubjectReader reader, CancellationToken cancellationToken)
+        => await reader.GetTaskSeriesHistoryAsync(id, cancellationToken) is { } history ? Results.Ok(history) : Results.NotFound();
 
     /// <summary>
     /// Makes the repetitions every repeating Task is owed by today: a calendar date that passed

@@ -22,26 +22,25 @@ namespace LifeOs.Api.Read;
 /// <param name="coverAppName">The <c>utm_source</c> on a cover's links back to Unsplash (COVER-1).</param>
 public sealed class SubjectReader(string connectionString, string coverAppName = Cover.DefaultAppName)
 {
-    private NpgsqlConnection Open()
+    private async Task<NpgsqlConnection> OpenAsync(CancellationToken cancellationToken)
     {
         var connection = new NpgsqlConnection(connectionString);
-        connection.Open();
+        await connection.OpenAsync(cancellationToken);
         return connection;
     }
 
     /// <summary>Subject types with counts — the Browse tree. Archived items are excluded by default (D9).</summary>
-    public IReadOnlyList<TypeCount> GetTypeCounts(bool includeArchived = false)
+    public async Task<IReadOnlyList<TypeCount>> GetTypeCountsAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
+        await using var db = await OpenAsync(cancellationToken);
         var archived = includeArchived ? "" : "WHERE NOT archived";
-        return db.Query<TypeCount>(
-            $"""
+        return (await db.QueryAsync<TypeCount>(new CommandDefinition($"""
             SELECT type, count(*) AS n FROM bsk.v_subject {archived} GROUP BY type ORDER BY type
-            """).AsList();
+            """, cancellationToken: cancellationToken))).AsList();
     }
 
-    public IReadOnlyList<SubjectListItem> GetSubjects(string type, bool includeArchived = false)
-        => QuerySubjects(type, includeArchived);
+    public Task<IReadOnlyList<SubjectListItem>> GetSubjectsAsync(string type, bool includeArchived = false, CancellationToken cancellationToken = default)
+        => QuerySubjectsAsync(type, includeArchived, cancellationToken: cancellationToken);
 
     // A list row's columns. A repetition of a repeating Task (D16) carries its series, its date
     // and its series' pattern, and pays its series' price unless it has its own.
@@ -81,20 +80,62 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     /// when asked (D9), and a repeating Task's series only when asked: its repetitions are the
     /// Tasks to do (D16).
     /// </summary>
-    public IReadOnlyList<SubjectListItem> QuerySubjects(
-        string? type, bool includeArchived = false, bool includeSeries = false)
+    public Task<IReadOnlyList<SubjectListItem>> QuerySubjectsAsync(
+        string? type, bool includeArchived = false, bool includeSeries = false, CancellationToken cancellationToken = default)
+        => ListSubjectsAsync(
+            new SubjectFilter { Type = type, IncludeArchived = includeArchived, IncludeSeries = includeSeries },
+            cancellationToken);
+
+    /// <summary>
+    /// The subjects <paramref name="filter"/> picks, filtered, ordered and cut in SQL (code review
+    /// CR14), so a list asked for a few items reads only those however much history there is.
+    /// By title, or by due date then title when the filter asks.
+    /// </summary>
+    public async Task<IReadOnlyList<SubjectListItem>> ListSubjectsAsync(
+        SubjectFilter filter, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<SubjectListItem, BountyText, CoverText, SubjectListItem>(
-            ListSelect + """
-            WHERE (@type IS NULL OR s.type = @type)
+        var status = filter.Status?.Trim();
+        var parameters = new
+        {
+            type = filter.Type,
+            includeArchived = filter.IncludeArchived,
+            includeSeries = filter.IncludeSeries,
+            hidden = filter.HiddenTypes.ToArray(),
+            open = string.Equals(status, SubjectFilter.Open, StringComparison.OrdinalIgnoreCase),
+            closed = string.Equals(status, SubjectFilter.Closed, StringComparison.OrdinalIgnoreCase),
+            status = string.IsNullOrEmpty(status) ? null : status,
+            area = filter.Area?.Trim() is { Length: > 0 } area ? area : null,
+            tag = filter.Tag?.Trim() is { Length: > 0 } tag ? tag : null,
+            dueFrom = filter.DueFrom,
+            dueTo = filter.DueTo,
+            dayFrom = filter.DueOrScheduledFrom,
+            dayTo = filter.DueOrScheduledTo,
+            byDue = filter.ByDue,
+            limit = filter.Limit,
+        };
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<SubjectListItem, BountyText, CoverText, SubjectListItem>(new CommandDefinition(ListSelect + """
+            WHERE (@type::text IS NULL OR s.type = @type)
               AND (@includeArchived OR NOT s.archived)
               AND (@includeSeries OR NOT bsk.is_task_series(s.type, s.attributes))
-            ORDER BY s.title
-            """,
+              AND NOT (s.type = ANY(@hidden))
+              AND (NOT @open OR NOT bsk.is_terminal_status(c.status))
+              AND (NOT @closed OR bsk.is_terminal_status(c.status))
+              AND (@open OR @closed OR @status::text IS NULL OR lower(btrim(c.status)) = lower(@status))
+              AND (@area::text IS NULL OR lower(btrim(s.area)) = lower(@area) OR lower(btrim(a.name)) = lower(@area))
+              AND (@tag::text IS NULL OR EXISTS (
+                     SELECT 1 FROM bsk.v_item_tag t
+                     WHERE t.item_kind = 'subject' AND t.item_id = s.id AND lower(btrim(t.tag)) = lower(@tag)))
+              AND (@dueFrom::text IS NULL OR (s.attributes->>'due') COLLATE "C" >= @dueFrom)
+              AND (@dueTo::text IS NULL OR (s.attributes->>'due') COLLATE "C" <= @dueTo)
+              AND (@dayFrom::text IS NULL
+                   OR (s.attributes->>'due') COLLATE "C" BETWEEN @dayFrom AND @dayTo
+                   OR (s.attributes->>'scheduled') COLLATE "C" BETWEEN @dayFrom AND @dayTo)
+            ORDER BY (CASE WHEN @byDue THEN s.attributes->>'due' END) COLLATE "C", s.title
+            LIMIT @limit
+            """, parameters, cancellationToken: cancellationToken),
             WithHeadline,
-            new { type, includeArchived, includeSeries },
-            splitOn: "bounty_json,cover_json").AsList();
+            splitOn: "bounty_json,cover_json")).AsList();
     }
 
     /// <summary>
@@ -103,25 +144,25 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     /// title. Archived ones only when asked; a repeating Task's series is included, since an
     /// agent may be asking about the series itself. At most <paramref name="limit"/> rows.
     /// </summary>
-    public IReadOnlyList<SubjectListItem> SearchSubjects(
-        string query, string? type = null, bool includeArchived = false, int limit = 50)
+    public async Task<IReadOnlyList<SubjectListItem>> SearchSubjectsAsync(
+        string query, string? type = null, bool includeArchived = false, int limit = 50,
+        IReadOnlyCollection<string>? hiddenTypes = null, CancellationToken cancellationToken = default)
     {
         var pattern = "%" + EscapeLike(query.Trim()) + "%";
         var prefix = EscapeLike(query.Trim()) + "%";
-        using var db = Open();
-        return db.Query<SubjectListItem, BountyText, CoverText, SubjectListItem>(
-            ListSelect + """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<SubjectListItem, BountyText, CoverText, SubjectListItem>(new CommandDefinition(ListSelect + """
             WHERE (@type IS NULL OR s.type = @type)
               AND (@includeArchived OR NOT s.archived)
+              AND NOT (s.type = ANY(@hidden))
               AND (s.title ILIKE @pattern
                    OR EXISTS (SELECT 1 FROM bsk.v_item_tag t
                               WHERE t.item_kind = 'subject' AND t.item_id = s.id AND t.tag ILIKE @pattern))
             ORDER BY (s.title ILIKE @prefix) DESC, s.archived, s.title
             LIMIT @limit
-            """,
+            """, new { type, includeArchived, pattern, prefix, limit, hidden = (hiddenTypes ?? []).ToArray() }, cancellationToken: cancellationToken),
             WithHeadline,
-            new { type, includeArchived, pattern, prefix, limit },
-            splitOn: "bounty_json,cover_json").AsList();
+            splitOn: "bounty_json,cover_json")).AsList();
     }
 
     // ILIKE's own wildcards and its escape character, matched literally.
@@ -130,26 +171,23 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             .Replace("%", @"\%", StringComparison.Ordinal)
             .Replace("_", @"\_", StringComparison.Ordinal);
 
-    public SubjectListItem? GetListItem(Guid id)
+    public async Task<SubjectListItem?> GetListItemAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<SubjectListItem, BountyText, CoverText, SubjectListItem>(
-            ListSelect + " WHERE s.id = @id",
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<SubjectListItem, BountyText, CoverText, SubjectListItem>(new CommandDefinition(ListSelect + " WHERE s.id = @id", new { id }, cancellationToken: cancellationToken),
             WithHeadline,
-            new { id },
-            splitOn: "bounty_json,cover_json").FirstOrDefault();
+            splitOn: "bounty_json,cover_json")).FirstOrDefault();
     }
 
-    public SubjectDetail? GetSubject(Guid id) => Detail("s.id = @id", new { id });
+    public Task<SubjectDetail?> GetSubjectAsync(Guid id, CancellationToken cancellationToken = default) => DetailAsync("s.id = @id", new { id }, cancellationToken);
 
-    public SubjectDetail? GetSubjectByUrn(string urn) => Detail("s.urn = @urn", new { urn });
+    public Task<SubjectDetail?> GetSubjectByUrnAsync(string urn, CancellationToken cancellationToken = default) => DetailAsync("s.urn = @urn", new { urn }, cancellationToken);
 
     /// <summary>One subject's detail, found by <paramref name="where"/>, with its series, price and cover.</summary>
-    private SubjectDetail? Detail(string where, object parameters)
+    private async Task<SubjectDetail?> DetailAsync(string where, object parameters, CancellationToken cancellationToken)
     {
-        using var db = Open();
-        var detail = db.QueryFirstOrDefault<SubjectDetail>(
-            $"""
+        await using var db = await OpenAsync(cancellationToken);
+        var detail = await db.QueryFirstOrDefaultAsync<SubjectDetail>(new CommandDefinition($"""
             SELECT s.id, s.urn, s.type, s.title,
                    c.status,
                    s.attributes->>'due' AS due,
@@ -161,12 +199,11 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = s.id
             LEFT JOIN bsk.v_area a ON a.urn = s.area
             WHERE {where}
-            """,
-            parameters);
+            """, parameters, cancellationToken: cancellationToken));
         if (detail is not null)
         {
             var bountyJson = MemberJsonOf(detail.Attributes, "bounty");
-            if (detail.Type == SubjectTypes.Task && Repeat(db, detail.Id) is { } repeat)
+            if (detail.Type == SubjectTypes.Task && await RepeatAsync(db, detail.Id, cancellationToken) is { } repeat)
             {
                 detail.Repeating = repeat.Read;
 
@@ -186,10 +223,10 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     }
 
     /// <summary>The repeating Task a Task is (or belongs to), with the series' price; null for a plain Task.</summary>
-    private static (TaskRepeatRead Read, string? SeriesBountyJson)? Repeat(NpgsqlConnection db, Guid id)
+    private static async Task<(TaskRepeatRead Read, string? SeriesBountyJson)?> RepeatAsync(
+        NpgsqlConnection db, Guid id, CancellationToken cancellationToken)
     {
-        var row = db.QueryFirstOrDefault<RepeatRow>(
-            """
+        var row = await db.QueryFirstOrDefaultAsync<RepeatRow>(new CommandDefinition("""
             SELECT (ts.id = t.id) AS is_series,
                    ts.id AS series_id, ts.urn AS series_urn, ts.title AS series_title,
                    ts.recurrence::text AS recurrence,
@@ -206,8 +243,7 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             JOIN bsk.v_subject ser ON ser.id = ts.id
             WHERE t.id = @id AND t.type = 'Task'
             LIMIT 1
-            """,
-            new { id });
+            """, new { id }, cancellationToken: cancellationToken));
         return row is null
             ? null
             : (new TaskRepeatRead
@@ -254,24 +290,23 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     }
 
     /// <summary>Every repeating Task (D16), by title; archived ones only when asked.</summary>
-    public IReadOnlyList<TaskSeriesRow> GetTaskSeries(bool includeArchived = false)
+    public async Task<IReadOnlyList<TaskSeriesRow>> GetTaskSeriesAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return QuerySeries(db, includeArchived, id: null);
+        await using var db = await OpenAsync(cancellationToken);
+        return await QuerySeriesAsync(db, includeArchived, id: null, cancellationToken);
     }
 
     /// <summary>A repeating Task and every repetition it has made, latest first; null when it isn't one.</summary>
-    public TaskSeriesHistory? GetTaskSeriesHistory(Guid id)
+    public async Task<TaskSeriesHistory?> GetTaskSeriesHistoryAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        var series = QuerySeries(db, includeArchived: true, id).FirstOrDefault();
+        await using var db = await OpenAsync(cancellationToken);
+        var series = (await QuerySeriesAsync(db, includeArchived: true, id, cancellationToken)).FirstOrDefault();
         if (series is null)
         {
             return null;
         }
 
-        var repetitions = db.Query<TaskRepetitionRow>(
-            """
+        var repetitions = (await db.QueryAsync<TaskRepetitionRow>(new CommandDefinition("""
             SELECT id, urn, title,
                    to_char(occurrence, 'YYYY-MM-DD') AS occurrence,
                    to_char(due, 'YYYY-MM-DD') AS due,
@@ -282,14 +317,13 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             FROM bsk.v_task_repetition
             WHERE series_id = @id
             ORDER BY occurrence DESC NULLS LAST, created_at DESC
-            """,
-            new { id }).AsList();
+            """, new { id }, cancellationToken: cancellationToken))).AsList();
         return new TaskSeriesHistory { Series = series, Repetitions = repetitions };
     }
 
-    private static List<TaskSeriesRow> QuerySeries(NpgsqlConnection db, bool includeArchived, Guid? id)
-        => db.Query<TaskSeriesRow, BountyText, TaskSeriesRow>(
-            """
+    private static async Task<List<TaskSeriesRow>> QuerySeriesAsync(
+        NpgsqlConnection db, bool includeArchived, Guid? id, CancellationToken cancellationToken)
+        => (await db.QueryAsync<TaskSeriesRow, BountyText, TaskSeriesRow>(new CommandDefinition("""
             SELECT ts.id, ts.urn, ts.title,
                    ts.recurrence::text AS recurrence,
                    to_char(ts.start_date, 'YYYY-MM-DD') AS start,
@@ -306,14 +340,13 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             WHERE (@includeArchived OR NOT ts.archived)
               AND (@id::uuid IS NULL OR ts.id = @id::uuid)
             ORDER BY ts.title
-            """,
+            """, new { includeArchived, id }, cancellationToken: cancellationToken),
             (row, bounty) =>
             {
                 row.Bounty = BountyRows.Headline(SubjectTypes.Task, bounty?.BountyJson);
                 return row;
             },
-            new { includeArchived, id },
-            splitOn: "bounty_json").AsList();
+            splitOn: "bounty_json")).AsList();
 
     /// <summary>
     /// The raw <paramref name="key"/> member of an attributes document, as
@@ -368,84 +401,73 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     }
 
     /// <summary>What this subject serves / results in (outgoing edges) — parents in the Map.</summary>
-    public IReadOnlyList<RelationEdge> GetServes(Guid id)
+    public async Task<IReadOnlyList<RelationEdge>> GetServesAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<RelationEdge>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<RelationEdge>(new CommandDefinition("""
             SELECT r.relation, r.to_urn AS urn, r.to_type AS type, r.to_subject AS subject_id, s.title
             FROM bsk.v_subject_relation r
             JOIN bsk.v_subject s ON s.id = r.to_subject
             WHERE r.from_subject = @id
             ORDER BY r.to_type, r.to_urn
-            """,
-            new { id }).AsList();
+            """, new { id }, cancellationToken: cancellationToken))).AsList();
     }
 
     /// <summary>What serves / results in this subject (incoming edges) — children in the Map.</summary>
-    public IReadOnlyList<RelationEdge> GetServedBy(Guid id)
+    public async Task<IReadOnlyList<RelationEdge>> GetServedByAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<RelationEdge>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<RelationEdge>(new CommandDefinition("""
             SELECT r.relation, r.from_urn AS urn, r.from_type AS type, r.from_subject AS subject_id, s.title
             FROM bsk.v_subject_relation r
             JOIN bsk.v_subject s ON s.id = r.from_subject
             WHERE r.to_subject = @id
             ORDER BY r.from_type, r.from_urn
-            """,
-            new { id }).AsList();
+            """, new { id }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public IReadOnlyList<AlignmentEdge> GetAlignmentEdges(bool includeArchived = false)
+    public async Task<IReadOnlyList<AlignmentEdge>> GetAlignmentEdgesAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<AlignmentEdge>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<AlignmentEdge>(new CommandDefinition("""
             SELECT r.from_subject AS from_id, r.to_subject AS to_id, r.relation
             FROM bsk.v_subject_relation r
             JOIN bsk.v_subject f ON f.id = r.from_subject
             JOIN bsk.v_subject t ON t.id = r.to_subject
             WHERE @includeArchived OR (NOT f.archived AND NOT t.archived)
-            """,
-            new { includeArchived }).AsList();
+            """, new { includeArchived }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public IReadOnlyList<ConcerningEvent> GetConcerningEvents(Guid id)
+    public async Task<IReadOnlyList<ConcerningEvent>> GetConcerningEventsAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<ConcerningEvent>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<ConcerningEvent>(new CommandDefinition("""
             SELECT se.event_kind AS kind, e.occurred_at, se.event_id, a.content
             FROM bsk.v_subject_event se
             JOIN bsk.v_event e ON e.id = se.event_id
             LEFT JOIN bsk.artifact a ON a.id = e.artifact_id
             WHERE se.subject_id = @id AND se.relation = 'concerns'
             ORDER BY e.occurred_at DESC
-            """,
-            new { id }).AsList();
+            """, new { id }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public IReadOnlyList<JournalEntry> GetJournal(Guid id)
+    public async Task<IReadOnlyList<JournalEntry>> GetJournalAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<JournalEntry>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<JournalEntry>(new CommandDefinition("""
             SELECT se.event_id, e.occurred_at, coalesce(a.content, '') AS content
             FROM bsk.v_subject_event se
             JOIN bsk.v_event e ON e.id = se.event_id
             LEFT JOIN bsk.artifact a ON a.id = e.artifact_id
             WHERE se.subject_id = @id AND se.relation = 'concerns' AND e.kind = 'journal'
             ORDER BY e.occurred_at ASC
-            """,
-            new { id }).AsList();
+            """, new { id }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public IReadOnlyList<InboxItem> GetInbox()
+    public async Task<IReadOnlyList<InboxItem>> GetInboxAsync(CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<InboxItem, ArtifactRecord?, InboxItem>(
-            $"""
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<InboxItem, ArtifactRecord?, InboxItem>(new CommandDefinition($"""
             SELECT i.item_id, i.item_kind, i.triaged_at,
                    i.subject_urn, i.subject_type, i.subject_title,
                    i.event_kind, i.event_content,
@@ -456,9 +478,9 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             FROM bsk.v_inbox i
             {AttachmentJoin("i")}
             ORDER BY i.triaged_at DESC
-            """,
+            """, null, cancellationToken: cancellationToken),
             WithAttachment,
-            splitOn: "id").AsList();
+            splitOn: "id")).AsList();
     }
 
     // The file or audio an Inbox item carries (CAP-2 / CAP-4): a raw capture's own, or for an Idea
@@ -506,30 +528,27 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     /// A stored file's metadata by its artifact id, or by the id of the event that carries it.
     /// Null when neither names an artifact with bytes.
     /// </summary>
-    public ArtifactRecord? GetArtifact(Guid id)
+    public async Task<ArtifactRecord?> GetArtifactAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.QueryFirstOrDefault<ArtifactRecord>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return await db.QueryFirstOrDefaultAsync<ArtifactRecord>(new CommandDefinition("""
             SELECT va.id, va.event_id, va.kind AS event_kind, va.filename, va.content_type,
                    va.byte_size, va.sha256, va.has_bytes
             FROM bsk.v_artifact va
             WHERE va.has_bytes AND (va.id = @id OR va.event_id = @id)
             ORDER BY (va.id = @id) DESC
             LIMIT 1
-            """,
-            new { id });
+            """, new { id }, cancellationToken: cancellationToken));
     }
 
     /// <summary>
     /// The files on a subject (its Files section): every stored file on an event that concerns
     /// it, oldest first. A cover or a food photo isn't one: those hang off their own events.
     /// </summary>
-    public IReadOnlyList<ArtifactRecord> GetSubjectFiles(Guid subjectId)
+    public async Task<IReadOnlyList<ArtifactRecord>> GetSubjectFilesAsync(Guid subjectId, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<ArtifactRecord>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<ArtifactRecord>(new CommandDefinition("""
             SELECT va.id, va.event_id, va.kind AS event_kind, va.filename, va.content_type,
                    va.byte_size, va.sha256, va.has_bytes
             FROM bsk.v_subject_event se
@@ -538,19 +557,17 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             WHERE se.subject_id = @subjectId AND se.relation = 'concerns'
               AND e.kind IN ('note', 'voice')
             ORDER BY e.recorded_at, e.id
-            """,
-            new { subjectId }).AsList();
+            """, new { subjectId }, cancellationToken: cancellationToken))).AsList();
     }
 
     /// <summary>
     /// Items that have left the inbox, most recently resolved first — the way back to
     /// a dismissed capture. Capped at <paramref name="limit"/> rows.
     /// </summary>
-    public IReadOnlyList<ResolvedInboxItem> GetResolvedInbox(int limit)
+    public async Task<IReadOnlyList<ResolvedInboxItem>> GetResolvedInboxAsync(int limit, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<ResolvedInboxItem, ArtifactRecord?, ResolvedInboxItem>(
-            $"""
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<ResolvedInboxItem, ArtifactRecord?, ResolvedInboxItem>(new CommandDefinition($"""
             SELECT r.item_id, r.item_kind, r.triaged_at,
                    r.resolution, r.resolved_at,
                    r.subject_status, r.subject_status_terminal,
@@ -564,92 +581,81 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             {AttachmentJoin("r")}
             ORDER BY r.resolved_at DESC
             LIMIT @limit
-            """,
+            """, new { limit }, cancellationToken: cancellationToken),
             WithAttachment,
-            new { limit },
-            splitOn: "id").AsList();
+            splitOn: "id")).AsList();
     }
 
-    public int GetInboxCount()
+    public async Task<int> GetInboxCountAsync(CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.ExecuteScalar<int>("SELECT count(*) FROM bsk.v_inbox");
+        await using var db = await OpenAsync(cancellationToken);
+        return await db.ExecuteScalarAsync<int>(new CommandDefinition("SELECT count(*) FROM bsk.v_inbox", cancellationToken: cancellationToken));
     }
 
-    public IReadOnlyList<StatusHistoryEntry> GetStatusHistory(Guid id)
+    public async Task<IReadOnlyList<StatusHistoryEntry>> GetStatusHistoryAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<StatusHistoryEntry>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<StatusHistoryEntry>(new CommandDefinition("""
             SELECT status, occurred_at, id
             FROM bsk.v_event
             WHERE kind = 'state_change' AND subject_id = @id
             ORDER BY occurred_at DESC
-            """,
-            new { id = id.ToString() }).AsList();
+            """, new { id = id.ToString() }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public IReadOnlyList<string> GetTags(Guid subjectId)
+    public async Task<IReadOnlyList<string>> GetTagsAsync(Guid subjectId, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<string>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<string>(new CommandDefinition("""
             SELECT tag FROM bsk.v_item_tag
             WHERE item_kind = 'subject' AND item_id = @subjectId
             ORDER BY tag
-            """,
-            new { subjectId }).AsList();
+            """, new { subjectId }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public IReadOnlyList<TagUniverseItem> GetTagUniverse()
+    public async Task<IReadOnlyList<TagUniverseItem>> GetTagUniverseAsync(CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<TagUniverseItem>(
-            "SELECT tag, item_count FROM bsk.v_tag_universe ORDER BY tag").AsList();
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<TagUniverseItem>(new CommandDefinition("SELECT tag, item_count FROM bsk.v_tag_universe ORDER BY tag", cancellationToken: cancellationToken))).AsList();
     }
 
     /// <summary>
     /// Every timed Task's timer (TASKS-2), running first, then most recently changed.
     /// Archived tasks are left out, as in every default view (D9).
     /// </summary>
-    public IReadOnlyList<TaskTimer> GetTimers()
+    public async Task<IReadOnlyList<TaskTimer>> GetTimersAsync(CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<TaskTimer>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<TaskTimer>(new CommandDefinition("""
             SELECT subject_id, subject_urn, subject_title, state, running_since,
                    total_seconds, session_seconds, session_started_at, sessions, last_changed_at
             FROM bsk.v_task_timer
             WHERE NOT archived
             ORDER BY (state = 'running') DESC, (state = 'paused') DESC, last_changed_at DESC
-            """).AsList();
+            """, cancellationToken: cancellationToken))).AsList();
     }
 
-    public TaskTimer? GetTimer(Guid subjectId)
+    public async Task<TaskTimer?> GetTimerAsync(Guid subjectId, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.QueryFirstOrDefault<TaskTimer>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return await db.QueryFirstOrDefaultAsync<TaskTimer>(new CommandDefinition("""
             SELECT subject_id, subject_urn, subject_title, state, running_since,
                    total_seconds, session_seconds, session_started_at, sessions, last_changed_at
             FROM bsk.v_task_timer
             WHERE subject_id = @subjectId
-            """,
-            new { subjectId });
+            """, new { subjectId }, cancellationToken: cancellationToken));
     }
 
-    public IReadOnlyList<AreaRow> GetAreas()
+    public async Task<IReadOnlyList<AreaRow>> GetAreasAsync(CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<AreaRow>(
-            "SELECT id, urn, name, description, notes, created_at FROM bsk.v_area ORDER BY name").AsList();
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<AreaRow>(new CommandDefinition("SELECT id, urn, name, description, notes, created_at FROM bsk.v_area ORDER BY name", cancellationToken: cancellationToken))).AsList();
     }
 
-    public IReadOnlyList<HabitRow> GetHabits(bool includeArchived = false)
+    public async Task<IReadOnlyList<HabitRow>> GetHabitsAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        var rows = db.Query<HabitRow, BountyText, HabitEstablishment, HabitRow>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        var rows = (await db.QueryAsync<HabitRow, BountyText, HabitEstablishment, HabitRow>(new CommandDefinition("""
             SELECT h.id, h.urn, h.name, h.cue, h.routine, h.reward,
                    h.start_date, h.end_date, h.allows_partial,
                    h.recurrence::text AS recurrence, h.archived, h.created_at,
@@ -667,15 +673,14 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             LEFT JOIN bsk.v_habit_establishment e ON e.habit_id = h.id
             WHERE @includeArchived OR NOT h.archived
             ORDER BY h.name
-            """,
+            """, new { includeArchived }, cancellationToken: cancellationToken),
             (habit, bounty, establishment) =>
             {
                 habit.Bounty = BountyRows.Headline(SubjectTypes.Habit, bounty?.BountyJson);
                 habit.Establishment = establishment;
                 return habit;
             },
-            new { includeArchived },
-            splitOn: "bounty_json,min_adherence").AsList();
+            splitOn: "bounty_json,min_adherence")).AsList();
         foreach (var row in rows)
         {
             row.LastState = MapAdherenceState(row.LastState);
@@ -684,15 +689,14 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
         return rows;
     }
 
-    public IReadOnlyList<HabitOccurrenceRow> GetHabitOccurrences(
-        Guid? habitId = null, DateOnly? on = null, DateOnly? from = null, DateOnly? to = null)
+    public async Task<IReadOnlyList<HabitOccurrenceRow>> GetHabitOccurrencesAsync(
+        Guid? habitId = null, DateOnly? on = null, DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
+        await using var db = await OpenAsync(cancellationToken);
         var onText = on?.ToString("yyyy-MM-dd");
         var fromText = from?.ToString("yyyy-MM-dd");
         var toText = to?.ToString("yyyy-MM-dd");
-        var rows = db.Query<HabitOccurrenceRow>(
-            """
+        var rows = (await db.QueryAsync<HabitOccurrenceRow>(new CommandDefinition("""
             SELECT o.habit_id, o.habit_urn, h.name AS habit_name,
                    o.occurrence_date, o.state, h.allows_partial,
                    nullif(btrim(ae.payload->>'note'), '') AS note
@@ -704,8 +708,7 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
               AND (@fromText IS NULL OR o.occurrence_date >= @fromText::date)
               AND (@toText IS NULL OR o.occurrence_date <= @toText::date)
             ORDER BY o.occurrence_date DESC, h.name
-            """,
-            new { habitId, onText, fromText, toText }).AsList();
+            """, new { habitId, onText, fromText, toText }, cancellationToken: cancellationToken))).AsList();
         foreach (var row in rows)
         {
             row.State = MapAdherenceState(row.State) ?? row.State;
@@ -714,11 +717,10 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
         return rows;
     }
 
-    public IReadOnlyList<AppointmentRow> GetAppointments(bool includeArchived = false, string? onIso = null)
+    public async Task<IReadOnlyList<AppointmentRow>> GetAppointmentsAsync(bool includeArchived = false, string? onIso = null, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<AppointmentRow>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<AppointmentRow>(new CommandDefinition("""
             SELECT id, urn, title, date, start_time, end_time, all_day,
                    location, meeting_link, area, series_urn,
                    recurrence::text AS recurrence, status, archived, created_at
@@ -726,8 +728,25 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             WHERE (@includeArchived OR NOT archived)
               AND (@onIso IS NULL OR date = @onIso)
             ORDER BY date NULLS LAST, start_time NULLS LAST, title
-            """,
-            new { includeArchived, onIso }).AsList();
+            """, new { includeArchived, onIso }, cancellationToken: cancellationToken))).AsList();
+    }
+
+    /// <summary>
+    /// The unarchived appointments dated from <paramref name="from"/> to <paramref name="to"/>
+    /// (yyyy-MM-dd), a series' occurrences among them, by day and start time.
+    /// </summary>
+    public async Task<IReadOnlyList<AppointmentRow>> GetAppointmentsBetweenAsync(
+        string from, string to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<AppointmentRow>(new CommandDefinition("""
+            SELECT id, urn, title, date, start_time, end_time, all_day,
+                   location, meeting_link, area, series_urn,
+                   recurrence::text AS recurrence, status, archived, created_at
+            FROM bsk.v_appointment
+            WHERE NOT archived AND date COLLATE "C" BETWEEN @from AND @to
+            ORDER BY date NULLS LAST, start_time NULLS LAST, title
+            """, new { from, to }, cancellationToken: cancellationToken))).AsList();
     }
 
     /// <summary>
@@ -735,26 +754,24 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
     /// series' occurrences, never the series itself, whose pattern makes those occurrences.
     /// All-day ones first, then by start time.
     /// </summary>
-    public IReadOnlyList<AppointmentRow> GetAppointmentsOn(string day)
+    public async Task<IReadOnlyList<AppointmentRow>> GetAppointmentsOnAsync(string day, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<AppointmentRow>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<AppointmentRow>(new CommandDefinition("""
             SELECT id, urn, title, date, start_time, end_time, all_day,
                    location, meeting_link, area, series_urn,
                    recurrence::text AS recurrence, status, archived, created_at
             FROM bsk.v_appointment
             WHERE NOT archived AND date = @day AND recurrence IS NULL
             ORDER BY (lower(coalesce(all_day, '')) IN ('true', 't')) DESC, start_time NULLS LAST, title
-            """,
-            new { day }).AsList();
+            """, new { day }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public IReadOnlyList<PersonRow> GetPeople(bool includeArchived = false, string? kind = null)
+    public async Task<IReadOnlyList<PersonRow>> GetPeopleAsync(
+        bool includeArchived = false, string? kind = null, int? limit = null, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<PersonRow>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<PersonRow>(new CommandDefinition("""
             SELECT s.id, s.urn, s.title,
                    s.attributes->>'person_kind' AS person_kind,
                    s.attributes->>'role' AS role,
@@ -764,36 +781,47 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
               AND (@includeArchived OR NOT s.archived)
               AND (@kind IS NULL OR lower(coalesce(s.attributes->>'person_kind', 'human')) = lower(@kind))
             ORDER BY s.title
-            """,
-            new { includeArchived, kind }).AsList();
+            LIMIT @limit
+            """, new { includeArchived, kind, limit }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public IReadOnlyList<PersonAssociationRow> GetInvolvements(Guid personId)
+    public async Task<IReadOnlyList<PersonAssociationRow>> GetInvolvementsAsync(Guid personId, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<PersonAssociationRow>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<PersonAssociationRow>(new CommandDefinition("""
             SELECT subject_id, subject_urn, subject_type, subject_title, role,
                    person_id, person_urn, person_name
             FROM bsk.v_person_association
             WHERE person_id = @personId
             ORDER BY subject_type, subject_title
-            """,
-            new { personId }).AsList();
+            """, new { personId }, cancellationToken: cancellationToken))).AsList();
     }
 
-    public IReadOnlyList<PersonAssociationRow> GetPeopleOn(Guid subjectId)
+    /// <summary>What each of <paramref name="personIds"/> is involved in, in one read (code review CR14).</summary>
+    public async Task<ILookup<Guid, PersonAssociationRow>> GetInvolvementsAsync(
+        IReadOnlyCollection<Guid> personIds, CancellationToken cancellationToken = default)
     {
-        using var db = Open();
-        return db.Query<PersonAssociationRow>(
-            """
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<PersonAssociationRow>(new CommandDefinition("""
+            SELECT subject_id, subject_urn, subject_type, subject_title, role,
+                   person_id, person_urn, person_name
+            FROM bsk.v_person_association
+            WHERE person_id = ANY(@ids)
+            ORDER BY subject_type, subject_title
+            """, new { ids = personIds.ToArray() }, cancellationToken: cancellationToken)))
+            .ToLookup(r => r.PersonId);
+    }
+
+    public async Task<IReadOnlyList<PersonAssociationRow>> GetPeopleOnAsync(Guid subjectId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<PersonAssociationRow>(new CommandDefinition("""
             SELECT subject_id, subject_urn, subject_type, subject_title, role,
                    person_id, person_urn, person_name
             FROM bsk.v_person_association
             WHERE subject_id = @subjectId
             ORDER BY role, person_name
-            """,
-            new { subjectId }).AsList();
+            """, new { subjectId }, cancellationToken: cancellationToken))).AsList();
     }
 
     /// <summary>
@@ -805,4 +833,54 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
         => string.Equals(state, "missed", StringComparison.OrdinalIgnoreCase)
             ? "not_followed"
             : state;
+}
+
+/// <summary>
+/// Which subjects <see cref="SubjectReader.ListSubjectsAsync"/> reads. Every filter left null
+/// passes everything; dates are yyyy-MM-dd and compare as text, as the attributes hold them.
+/// </summary>
+public sealed record SubjectFilter
+{
+    /// <summary>The <see cref="Status"/> for any status that isn't finished.</summary>
+    public const string Open = "open";
+
+    /// <summary>The <see cref="Status"/> for any finished status.</summary>
+    public const string Closed = "closed";
+
+    /// <summary>The canonical type, or null for every type.</summary>
+    public string? Type { get; init; }
+
+    public bool IncludeArchived { get; init; }
+
+    /// <summary>Include a repeating Task's series; its repetitions are the Tasks to do (D16).</summary>
+    public bool IncludeSeries { get; init; }
+
+    /// <summary>Types left out whatever else is asked (an agent's switched-off areas).</summary>
+    public IReadOnlyCollection<string> HiddenTypes { get; init; } = [];
+
+    /// <summary><see cref="Open"/>, <see cref="Closed"/>, or a status as the type spells it, in any case.</summary>
+    public string? Status { get; init; }
+
+    /// <summary>An area's URN or name, in any case.</summary>
+    public string? Area { get; init; }
+
+    /// <summary>A tag the subject carries, in any case.</summary>
+    public string? Tag { get; init; }
+
+    /// <summary>Due on or after this day.</summary>
+    public string? DueFrom { get; init; }
+
+    /// <summary>Due on or before this day.</summary>
+    public string? DueTo { get; init; }
+
+    /// <summary>With <see cref="DueOrScheduledTo"/>: due or scheduled from this day to that one.</summary>
+    public string? DueOrScheduledFrom { get; init; }
+
+    public string? DueOrScheduledTo { get; init; }
+
+    /// <summary>By due date, then title; else by title.</summary>
+    public bool ByDue { get; init; }
+
+    /// <summary>At most this many rows; null for all.</summary>
+    public int? Limit { get; init; }
 }

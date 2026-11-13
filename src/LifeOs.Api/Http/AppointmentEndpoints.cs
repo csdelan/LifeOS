@@ -41,7 +41,7 @@ public static class AppointmentEndpoints
             return Results.BadRequest(new ApiError($"'{on}' isn't a day. Send it as yyyy-MM-dd."));
         }
 
-        return Results.Ok(reader.GetAppointmentsOn(day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+        return Results.Ok((await reader.GetAppointmentsOnAsync(day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), cancellationToken: cancellationToken)));
     }
 
     /// <summary>
@@ -58,7 +58,7 @@ public static class AppointmentEndpoints
         }
 
         var result = await appointments.MaterializeAsync(
-            WriteEndpoints.ResolveWriteRef(id.ToString(), reader), through, cancellationToken);
+            await WriteEndpoints.ResolveWriteRefAsync(id.ToString(), reader, cancellationToken), through, cancellationToken);
         return Results.Ok(new MaterializeRow
         {
             Series = new CreatedSubject
