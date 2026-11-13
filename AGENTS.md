@@ -21,6 +21,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   connector Chris's agents use. It reads only, unless `Mcp:Writes` is `capture`: then the clients
   named in `Mcp:WriteClients` can capture to the Inbox, journal, dismiss raw captures and link a
   review to its vault reflection, as `mcp:<client_id>` (`docs/pilot/agent-access-plan.md` §5).
+  A feature whose events carry a new payload key adds it to `McpAreas`: an event no area claims
+  is hidden from agents while any area is switched off.
 - `web/`: the React + Vite SPA. With no `VITE_API_BASE_URL` it runs in mock mode on an in-memory
   store.
   A component runs a write through `useWriteAction` (`web/src/lib/write-action.ts`), which says a
@@ -153,7 +155,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   example, the options, your recommendation, then the two or three questions that settle it. Bring
   only real choices. If one option wins on every count, decide and say so in a line.
 - The plan docs record his decisions. Don't ask again about anything a plan's decisions section
-  already settled.
+  already settled. When he skips proposals, list them in the plan too, so a later review can see
+  what was already weighed.
 - His fix queue is open LifeOS Tasks tagged `lifeos`. Read them, summarize each with any choice it
   needs, wait for his go-ahead, then make one commit per Task. The connector can't change a
   Task's status, so he closes the Tasks himself.

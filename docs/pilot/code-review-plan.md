@@ -1,6 +1,6 @@
 # Code review fixes plan
 
-**Status:** CR1 to CR26 built (2026-11-12). CR27 to CR31, the second review's P0, in progress
+**Status:** CR1 to CR26 built (2026-11-12). CR27 to CR31, the second review's P0, built
 (2026-11-13); its other tiers wait for Chris's choice ([Second review](#second-review-2026-11-13)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
@@ -119,7 +119,7 @@ produced 30 proposals in three tiers, a P3 list and three choices for Chris. Chr
 first, one commit each. The numbers below are the review's; a proposal gets a CR number when
 Chris chooses it.
 
-### P0: chosen (CR27 to CR31)
+### P0: built (CR27 to CR31)
 
 | ID | Fix |
 |----|-----|
