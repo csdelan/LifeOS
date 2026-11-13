@@ -21,10 +21,10 @@ public sealed record DomainsReading(DateOnly Today, IReadOnlyList<DomainReading>
 /// One day of a domain's series (xp-domains plan §7.4.8): its credit — base, the passive part of
 /// it (sleep) and paid — and, for a configured domain, the exception comment if the day is
 /// marked and where the domain stood at the end of the day. A domain without rules has neither.
-/// <paramref name="HomeScore"/> is the day's Home Score (ten-thousandths) for a domain held by the home.
+/// <paramref name="Score"/> is the day's score (ten-thousandths) for a domain whose rule reads one: Environment's Home Score.
 /// </summary>
 public sealed record DomainSeriesDay(
-    DateOnly Day, long Base, long Passive, long Paid, string? Exception, DomainStanding? Standing, long? HomeScore = null)
+    DateOnly Day, long Base, long Passive, long Paid, string? Exception, DomainStanding? Standing, long? Score = null)
 {
     /// <summary>The base XP from things done, not slept.</summary>
     public long Action => Base - Passive;
@@ -112,7 +112,7 @@ public sealed class DomainService(IDomainCreditReader ledger)
                 var standing = progress.StandingOn(day);
                 var comment = comments.GetValueOrDefault(day);
                 return periods.TryGetValue(day, out var p)
-                    ? new DomainSeriesDay(day, p.Base, p.Passive, p.Paid, comment, standing, p.HomeScore)
+                    ? new DomainSeriesDay(day, p.Base, p.Passive, p.Paid, comment, standing, p.Score)
                     : new DomainSeriesDay(day, 0, 0, 0, comment, standing);
             });
         }
@@ -176,8 +176,9 @@ public sealed class DomainService(IDomainCreditReader ledger)
 
     /// <summary>
     /// One configured domain's progression, folded from <paramref name="credit"/>: its days, the
-    /// exception days and the last settled day — and, for a domain held by the home, each day's
-    /// Home Score from the spaces and ratings read beside the credit (environment plan §4.6).
+    /// exception days and the last settled day — and, for a domain whose rule reads a day score,
+    /// each day's score from what was read beside the credit (the home's spaces and ratings,
+    /// environment plan §4.6).
     /// </summary>
     public static DomainProgress Fold(DomainRules rules, DomainCredit credit)
     {
@@ -188,18 +189,8 @@ public sealed class DomainService(IDomainCreditReader ledger)
             credit.Today,
             exceptions,
             credit.SettledThrough,
-            HomeScoresFor(rules, credit.Home, exceptions, credit.Today));
+            rules.Consistency.DayScores(credit, exceptions));
     }
-
-    /// <summary>
-    /// The Home Score on each day from the first rating to <paramref name="today"/>, for a domain
-    /// held by the home; null for any other domain, or before the first rating.
-    /// </summary>
-    public static IReadOnlyDictionary<DateOnly, long>? HomeScoresFor(
-        DomainRules rules, HomeInputs home, IReadOnlyCollection<DateOnly> exceptions, DateOnly today)
-        => rules.Consistency is HomeConditionRule && home.Ratings.Count > 0
-            ? HomeScore.Scores(home, exceptions, home.Ratings.Min(r => r.Day), today)
-            : null;
 
     private static DomainReading Read(Currency currency, DomainCredit credit)
     {

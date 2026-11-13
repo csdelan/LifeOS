@@ -26,6 +26,12 @@ commit each, and skipped P3.
   a setting (the coin value, the home time zone, whether photos can be stored) is built by hand
   in `ServiceCollectionExtensions`, so the setting can't fall back to a parameter default unseen;
   `KernelCompositionTests` checks that every registered service can be built.
+- **CR21:** the domain fold carries a neutral day `Score`, and `IConsistencyRule` says whether
+  it reads one and works the scores out (`ReadsScore`, `DayScores`, `ScoreBar`, `Average`), so
+  the fold, `/api/domains` and `bsk domains --json` never ask which rule they hold. The API's
+  and the CLI's field names (`homeScore`, `averageHomeScore`) stay, since the web reads them.
+  The Home simulator and the CLI's written Home reading still name `HomeConditionRule`: they
+  are the home's own.
 - **CR24:** a rename or attribute change appends an `attribute_change` event in the same
   transaction, so "what was this habit's recurrence on a date" can be answered later.
 

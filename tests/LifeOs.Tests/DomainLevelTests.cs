@@ -135,11 +135,12 @@ public sealed class DomainLevelTests
     public void A_level_qualifies_only_when_all_three_tests_pass()
     {
         // Level 40 over 90 days: 49 a day on average (4,410), 59 active days, 41 active so far.
-        Assert.True(Consistency.Qualifies(40, activeSoFar: 41, days: 90, windowBase: 4_410, windowActive: 59));
-        Assert.False(Consistency.Qualifies(40, activeSoFar: 40, days: 90, windowBase: 4_410, windowActive: 59));
-        Assert.False(Consistency.Qualifies(40, activeSoFar: 41, days: 90, windowBase: 4_409, windowActive: 59));
-        Assert.False(Consistency.Qualifies(40, activeSoFar: 41, days: 90, windowBase: 4_410, windowActive: 58));
-        Assert.False(Consistency.Qualifies(2, activeSoFar: 10, days: 0, windowBase: 0, windowActive: 0));
+        IConsistencyRule rule = Consistency;
+        Assert.True(rule.Qualifies(40, reachedSoFar: 41, days: 90, windowBase: 4_410, windowReached: 59));
+        Assert.False(rule.Qualifies(40, reachedSoFar: 40, days: 90, windowBase: 4_410, windowReached: 59));
+        Assert.False(rule.Qualifies(40, reachedSoFar: 41, days: 90, windowBase: 4_409, windowReached: 59));
+        Assert.False(rule.Qualifies(40, reachedSoFar: 41, days: 90, windowBase: 4_410, windowReached: 58));
+        Assert.False(rule.Qualifies(2, reachedSoFar: 10, days: 0, windowBase: 0, windowReached: 0));
     }
 
     [Fact]

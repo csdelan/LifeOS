@@ -25,7 +25,7 @@ public sealed class EnvironmentLevelTests
 
     private static DomainProgress Fold(
         IEnumerable<DomainDay> days, IEnumerable<KeyValuePair<DateOnly, long>> scores, int today, IEnumerable<int>? exceptions = null)
-        => DomainProgress.Fold(Environment, days, D(today), exceptions?.Select(D), homeScores: new Dictionary<DateOnly, long>(scores));
+        => DomainProgress.Fold(Environment, days, D(today), exceptions?.Select(D), scores: new Dictionary<DateOnly, long>(scores));
 
     /// <summary>Level 51's bar, 57.5: <c>⌈(30 · 98 + 55 · 49) · 10,000 / 98⌉</c>.</summary>
     private const long Bar51 = 575_000;
@@ -54,7 +54,7 @@ public sealed class EnvironmentLevelTests
         Assert.Equal((62, 51, 51, 5), (progress.LifetimeLevel, progress.ConsistencyLevel, progress.Level, progress.Rank));
         Assert.Equal(LevelLimit.Consistency, progress.LimitedBy);
         Assert.Equal(90, progress.Window.Days);
-        Assert.Equal(57.5m, progress.Window.AverageHomeScore);
+        Assert.Equal(57.5m, progress.Window.AverageScore);
 
         // Every settled day cleared the bar of the level going into it: all successful for the multiplier.
         Assert.All(progress.Standings.Where(s => s.Day < D(100)), s => Assert.True(s.Active, $"{s.Day} wasn't kept up"));

@@ -362,13 +362,13 @@ internal static class DomainsCommand
                     from = p.Window.From,
                     to = p.Window.To,
                     averageBase = p.Window.Average,
-                    averageHomeScore = p.Rules.Consistency is HomeConditionRule ? p.Window.AverageHomeScore : (decimal?)null,
+                    averageHomeScore = p.Rules.Consistency.ReadsScore ? p.Window.AverageScore : (decimal?)null,
                     held = p.HeldConsistency is not { } held
                         ? null
                         : new
                         {
                             level = held.Level,
-                            bar = (p.Rules.Consistency as HomeConditionRule)?.Bar(held.Level),
+                            bar = p.Rules.Consistency.ScoreBar(held.Level),
                             activeMinimum = held.ActiveMinimum,
                             activeDays = held.ActiveDaysNow,
                             windowDays = held.WindowDays
@@ -389,7 +389,7 @@ internal static class DomainsCommand
                             ageNeeded = next.AgeNeeded,
                             age = next.AgeNow,
                             ageMet = next.AgeMet,
-                            bar = (p.Rules.Consistency as HomeConditionRule)?.Bar(next.Level)
+                            bar = p.Rules.Consistency.ScoreBar(next.Level)
                         }
                 },
                 shown = new
@@ -416,7 +416,7 @@ internal static class DomainsCommand
                 {
                     todayBase = p.TodayBase,
                     todayAction = p.TodayAction,
-                    todayHomeScore = p.TodayHomeScore is { } todayScore ? todayScore / (decimal)HomeRules.Unit : (decimal?)null,
+                    todayHomeScore = p.TodayScore is { } todayScore ? todayScore / (decimal)HomeRules.Unit : (decimal?)null,
                     activeMinimum = p.ActiveMinimum,
                     todayActive = p.TodayActive,
                     todayException = p.TodayException,
@@ -486,7 +486,7 @@ internal static class DomainsCommand
         var window = p.Window;
         Console.WriteLine(window.Days == 0
             ? $"    condition   level {p.ConsistencyLevel}: no counted days yet — rate your spaces to start your level"
-            : $"    condition   level {p.ConsistencyLevel} over {Plural(window.Days, "counted day")} (Home Score {Score(window.AverageHomeScore)} a day)");
+            : $"    condition   level {p.ConsistencyLevel} over {Plural(window.Days, "counted day")} (Home Score {Score(window.AverageScore)} a day)");
         if (p.HeldConsistency is { } held)
         {
             Console.WriteLine($"    held by     a Home Score of {Bar(home, held.Level)}+ on {held.ActiveDaysNow} of the last {Plural(held.WindowDays, "counted day")}");
@@ -502,7 +502,7 @@ internal static class DomainsCommand
         var barToday = Bar(home, p.StandingOn(p.Today.AddDays(-1)).Level);
         Console.WriteLine(p.TodayException
             ? "    today       an exception day"
-            : p.TodayHomeScore is not { } score
+            : p.TodayScore is not { } score
                 ? "    today       no Home Score yet: rate all three parts of a space"
                 : p.TodayActive
                     ? $"    today       Home Score {HomeCommand.Shown(score)} — kept up ({barToday}+ counts)"

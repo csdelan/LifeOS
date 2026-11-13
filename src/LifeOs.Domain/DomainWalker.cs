@@ -23,11 +23,11 @@ public sealed class DomainWalker
     private readonly long[] thresholds;
     private readonly int[] thresholdOf;
 
-    // Over counted days: their dates, and running sums of base XP, of Home Scores and of the
+    // Over counted days: their dates, and running sums of base XP, of day scores and of the
     // days whose measure reached each threshold. Index k holds the first k counted days.
     private readonly List<DateOnly> counted = [];
     private readonly List<long> baseSums = [0];
-    private readonly List<long> homeSums = [0];
+    private readonly List<long> scoreSums = [0];
     private readonly List<int>[] reachedSums;
 
     // Over every non-exception day walked, settled or not: the running count of successful
@@ -102,7 +102,7 @@ public sealed class DomainWalker
         var dayMinimum = consistencyRule.DayMinimum(levelBefore);
         var active = !exception
             && rules.Success.Succeeded(new PeriodFacts(
-                day, day, period.Base, period.Paid, period.Action, levelBefore, period.HomeScore));
+                day, day, period.Base, period.Paid, period.Action, levelBefore, period.Score));
         if (!exception)
         {
             successSums.Add(successSums[^1] + (active ? 1 : 0));
@@ -113,7 +113,7 @@ public sealed class DomainWalker
         {
             counted.Add(day);
             baseSums.Add(baseSums[^1] + period.Base);
-            homeSums.Add(homeSums[^1] + (period.HomeScore ?? 0));
+            scoreSums.Add(scoreSums[^1] + (period.Score ?? 0));
             var measure = consistencyRule.Measure(period);
             for (var i = 0; i < thresholds.Length; i++)
             {
@@ -205,7 +205,7 @@ public sealed class DomainWalker
         var n = Math.Min(consistencyRule.WindowDays, k);
         return n == 0
             ? new CountedWindow(0, null, null, 0)
-            : new CountedWindow(n, counted[k - n], counted[k - 1], baseSums[k] - baseSums[k - n], homeSums[k] - homeSums[k - n]);
+            : new CountedWindow(n, counted[k - n], counted[k - 1], baseSums[k] - baseSums[k - n], scoreSums[k] - scoreSums[k - n]);
     }
 
     /// <summary>
@@ -222,7 +222,7 @@ public sealed class DomainWalker
         return new ConsistencyNeed(
             level,
             n,
-            consistencyRule is ConsistencyRule xp ? xp.Average(level) : 0,
+            consistencyRule.Average(level),
             baseNeeded,
             baseSums[k] - baseSums[k - n],
             consistencyRule.DayMinimum(level),

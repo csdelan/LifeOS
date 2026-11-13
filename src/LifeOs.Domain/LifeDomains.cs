@@ -16,11 +16,12 @@ public enum Cadence
 /// as the ledger pays it, and <paramref name="ActionXp"/>, the base XP less passive awards
 /// such as sleep (xp-domains plan §7.4.2). <paramref name="ShownLevel"/> is the shown level
 /// going into the period, which the walk supplies because it comes from the days before.
-/// <paramref name="HomeScore"/> is the period's Home Score in ten-thousandths of a point, for a
-/// domain held by the home (environment plan §4.5); null when it has none.
+/// <paramref name="Score"/> is the period's day score in ten-thousandths, for a domain whose
+/// consistency rule reads one (<see cref="IConsistencyRule.ReadsScore"/>: Environment's Home
+/// Score, environment plan §4.5); null when it has none.
 /// </summary>
 public sealed record PeriodFacts(
-    DateOnly Start, DateOnly End, long BaseXp, long PaidXp, long ActionXp, int ShownLevel, long? HomeScore = null);
+    DateOnly Start, DateOnly End, long BaseXp, long PaidXp, long ActionXp, int ShownLevel, long? Score = null);
 
 /// <summary>
 /// Decides whether a period was a success for a domain: the multiplier's successful day
@@ -61,7 +62,7 @@ public sealed record ActiveAtShownLevel(ConsistencyRule Consistency) : ISuccessR
 public sealed record KeptUpAtShownLevel(HomeConditionRule Condition) : ISuccessRule
 {
     public bool Succeeded(PeriodFacts facts)
-        => facts.HomeScore is { } score && score >= Condition.Threshold(facts.ShownLevel);
+        => facts.Score is { } score && score >= Condition.Threshold(facts.ShownLevel);
 
     public string Describe(int level) => $"a Home Score of at least {HomeConditionRule.Text(Condition.Bar(level))}";
 }
@@ -80,12 +81,30 @@ public sealed record KeptUpAtShownLevel(HomeConditionRule Condition) : ISuccessR
 /// </list>
 /// Health reads action XP against an active minimum and a base XP average
 /// (<see cref="ConsistencyRule"/>); Environment reads the Home Score against a bar
-/// (<see cref="HomeConditionRule"/>).
+/// (<see cref="HomeConditionRule"/>). A rule that reads a day score of its own says so with
+/// <see cref="ReadsScore"/> and works the scores out with <see cref="DayScores"/>, so the fold,
+/// the API and the CLI never ask which rule they hold (code review CR21).
 /// </summary>
 public interface IConsistencyRule
 {
     /// <summary>What the rule reads, for the web and the CLI: <c>xp</c> or <c>home</c>.</summary>
     string Kind { get; }
+
+    /// <summary>Whether a day's test reads a day score (the Home Score) rather than XP.</summary>
+    bool ReadsScore { get; }
+
+    /// <summary>
+    /// Each day's score, in ten-thousandths, from the inputs read beside <paramref name="credit"/>
+    /// (the home's spaces and ratings), skipping <paramref name="exceptions"/> as the rule does;
+    /// null for a rule that reads XP alone, or before there's anything to score.
+    /// </summary>
+    IReadOnlyDictionary<DateOnly, long>? DayScores(DomainCredit credit, IReadOnlyCollection<DateOnly> exceptions);
+
+    /// <summary>The average base XP a day <paramref name="level"/> needs; 0 when the rule has no base test.</summary>
+    int Average(int level);
+
+    /// <summary>The day score <paramref name="level"/> needs, in points to four places; null for a rule that reads XP.</summary>
+    decimal? ScoreBar(int level);
 
     /// <summary>The most counted days the tests read.</summary>
     int WindowDays { get; }
@@ -153,6 +172,15 @@ public sealed record ConsistencyRule(
     /// <summary>Health's kind: base and action XP.</summary>
     public string Kind => "xp";
 
+    /// <summary>Health reads XP alone.</summary>
+    public bool ReadsScore => false;
+
+    /// <summary>No day score: null.</summary>
+    public IReadOnlyDictionary<DateOnly, long>? DayScores(DomainCredit credit, IReadOnlyCollection<DateOnly> exceptions) => null;
+
+    /// <summary>No day score: null.</summary>
+    public decimal? ScoreBar(int level) => null;
+
     /// <summary>Every settled, non-exception day counts.</summary>
     public bool Counts(DomainPeriod period) => true;
 
@@ -189,16 +217,6 @@ public sealed record ConsistencyRule(
 
     /// <summary>The active days so far level <paramref name="level"/> needs: <c>min(WindowDays, L + 1)</c>.</summary>
     public int AgeNeeded(int level) => Math.Min(WindowDays, level + 1);
-
-    /// <summary>
-    /// Whether <paramref name="level"/> passes all three tests, given its active days so far,
-    /// and the window's days, base XP and active days.
-    /// </summary>
-    public bool Qualifies(int level, int activeSoFar, int days, long windowBase, int windowActive)
-        => days > 0
-            && activeSoFar >= AgeNeeded(level)
-            && windowBase >= (long)Average(level) * days
-            && windowActive >= ActiveDaysNeeded(level, days);
 }
 
 /// <summary>
@@ -230,11 +248,29 @@ public sealed record HomeConditionRule(
     /// <summary>Environment's kind: the Home Score.</summary>
     public string Kind => "home";
 
+    /// <summary>Environment reads the Home Score.</summary>
+    public bool ReadsScore => true;
+
+    /// <summary>
+    /// The Home Score on each day from the first rating to the credit's today (environment plan
+    /// §4.6); null before the first rating.
+    /// </summary>
+    public IReadOnlyDictionary<DateOnly, long>? DayScores(DomainCredit credit, IReadOnlyCollection<DateOnly> exceptions)
+        => credit.Home.Ratings.Count > 0
+            ? HomeScore.Scores(credit.Home, exceptions, credit.Home.Ratings.Min(r => r.Day), credit.Today)
+            : null;
+
+    /// <summary>No base test: 0.</summary>
+    public int Average(int level) => 0;
+
+    /// <summary>The level's <see cref="Bar"/>.</summary>
+    public decimal? ScoreBar(int level) => Bar(level);
+
     /// <summary>A settled, non-exception day counts when it has a Home Score.</summary>
-    public bool Counts(DomainPeriod period) => period.HomeScore is not null;
+    public bool Counts(DomainPeriod period) => period.Score is not null;
 
     /// <summary>The day's Home Score, in ten-thousandths; 0 without one.</summary>
-    public long Measure(DomainPeriod period) => period.HomeScore ?? 0;
+    public long Measure(DomainPeriod period) => period.Score ?? 0;
 
     /// <summary>
     /// The least Home Score (ten-thousandths) that keeps <paramref name="level"/> up:

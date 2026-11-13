@@ -14,10 +14,10 @@ public sealed record DomainDay(DateOnly Day, long Base, long Paid, long Passive 
 
 /// <summary>
 /// One period of a domain's walk (a calendar day, while only a daily cadence is built) and its
-/// credit. <paramref name="HomeScore"/> is the day's Home Score in ten-thousandths, for a domain
-/// held by the home (environment plan §4.6); null when it has none.
+/// credit. <paramref name="Score"/> is the day's score in ten-thousandths, for a domain whose
+/// rule reads one (Environment's Home Score, environment plan §4.6); null when it has none.
 /// </summary>
-public sealed record DomainPeriod(DateOnly Start, DateOnly End, long Base, long Paid, long Passive = 0, long? HomeScore = null)
+public sealed record DomainPeriod(DateOnly Start, DateOnly End, long Base, long Paid, long Passive = 0, long? Score = null)
 {
     /// <summary>The base XP from things done, not slept.</summary>
     public long Action => Base - Passive;
@@ -51,16 +51,16 @@ public sealed record ConsistencyWindow(DateOnly From, DateOnly To, int Days, int
 /// <summary>
 /// The counted days the consistency level reads (xp-domains plan §7.2): the last
 /// <paramref name="Days"/> (at most 90), <paramref name="From"/> to <paramref name="To"/>, and
-/// their base XP. Null dates before any day has counted. <paramref name="HomeScore"/> is the sum
-/// of their Home Scores, in ten-thousandths, for a domain held by the home.
+/// their base XP. Null dates before any day has counted. <paramref name="Score"/> is the sum
+/// of their day scores, in ten-thousandths, for a domain whose rule reads one.
 /// </summary>
-public sealed record CountedWindow(int Days, DateOnly? From, DateOnly? To, long Base, long HomeScore = 0)
+public sealed record CountedWindow(int Days, DateOnly? From, DateOnly? To, long Base, long Score = 0)
 {
     /// <summary>The window's base XP a day, on average; 0 before any day has counted.</summary>
     public decimal Average => Days == 0 ? 0m : (decimal)Base / Days;
 
-    /// <summary>The window's Home Score a day, on average, in points; 0 before any day has counted.</summary>
-    public decimal AverageHomeScore => Days == 0 ? 0m : (decimal)HomeScore / Days / HomeRules.Unit;
+    /// <summary>The window's day score a day, on average, in points; 0 before any day has counted.</summary>
+    public decimal AverageScore => Days == 0 ? 0m : (decimal)Score / Days / HomeRules.Unit;
 }
 
 /// <summary>
@@ -148,8 +148,8 @@ public sealed record RankReached(int Rank, RankRule Rule, DateOnly QualifiedOn);
 /// at the end of the day before <paramref name="From"/>, <paramref name="End"/> at the end of
 /// <paramref name="To"/>; <paramref name="RanksReached"/> are the ranks the best rank first reached
 /// in the period, and <paramref name="Standings"/> every day of it, for the rank-over-time chart.
-/// <paramref name="CountedHomeScore"/> is the counted days' Home Scores summed, in ten-thousandths,
-/// for a domain held by the home.
+/// <paramref name="CountedScore"/> is the counted days' day scores summed, in ten-thousandths,
+/// for a domain whose rule reads one.
 /// </summary>
 public sealed record DomainPeriodReport(
     int Days,
@@ -165,10 +165,10 @@ public sealed record DomainPeriodReport(
     DomainStanding End,
     IReadOnlyList<RankReached> RanksReached,
     IReadOnlyList<DomainStanding> Standings,
-    long CountedHomeScore = 0)
+    long CountedScore = 0)
 {
-    /// <summary>The Home Score a counted day had, on average, in points; 0 when none counted.</summary>
-    public decimal AverageHomeScore => DaysCounted == 0 ? 0m : (decimal)CountedHomeScore / DaysCounted / HomeRules.Unit;
+    /// <summary>The day score a counted day had, on average, in points; 0 when none counted.</summary>
+    public decimal AverageScore => DaysCounted == 0 ? 0m : (decimal)CountedScore / DaysCounted / HomeRules.Unit;
 
     /// <summary>The active share of the days counted (0–1); 0 when none counted.</summary>
     public decimal ActiveShare => DaysCounted == 0 ? 0m : (decimal)ActiveDays / DaysCounted;
@@ -388,8 +388,8 @@ public sealed class DomainProgress
     /// <summary>Today's action XP, which the multiplier's successful day judges.</summary>
     public long TodayAction => TodayPeriod?.Action ?? 0;
 
-    /// <summary>Today's Home Score in ten-thousandths, for a domain held by the home; null without one.</summary>
-    public long? TodayHomeScore => TodayPeriod?.HomeScore;
+    /// <summary>Today's day score in ten-thousandths, for a domain whose rule reads one; null without one.</summary>
+    public long? TodayScore => TodayPeriod?.Score;
 
     /// <summary>The action XP that makes today active: the minimum of the shown level going into today.</summary>
     public int ActiveMinimum => Now.ActiveMinimum;
@@ -414,9 +414,9 @@ public sealed class DomainProgress
     /// <paramref name="today"/> (in the home zone). Credit on days after today hasn't happened
     /// yet and is left out. <paramref name="exceptions"/> are the days marked as exceptions, and
     /// <paramref name="settledThrough"/> the last settled day (yesterday when not given); days
-    /// after it don't count yet. <paramref name="homeScores"/> are the days' Home Scores, for a
-    /// domain held by the home (environment plan §4.5): its walk starts at the earlier of the first
-    /// paid XP and the first Home Score.
+    /// after it don't count yet. <paramref name="scores"/> are the days' scores, for a domain whose
+    /// rule reads one (<see cref="IConsistencyRule.DayScores"/>, environment plan §4.5): its walk
+    /// starts at the earlier of the first paid XP and the first score.
     /// </summary>
     public static DomainProgress Fold(
         DomainRules rules,
@@ -424,7 +424,7 @@ public sealed class DomainProgress
         DateOnly today,
         IEnumerable<DateOnly>? exceptions = null,
         DateOnly? settledThrough = null,
-        IReadOnlyDictionary<DateOnly, long>? homeScores = null)
+        IReadOnlyDictionary<DateOnly, long>? scores = null)
     {
         if (rules.Cadence != Cadence.Daily)
         {
@@ -448,9 +448,9 @@ public sealed class DomainProgress
             }
         }
 
-        var scores = homeScores ?? new Dictionary<DateOnly, long>();
+        var dayScores = scores ?? new Dictionary<DateOnly, long>();
         var startDays = credit.Where(kv => kv.Value.Paid > 0).Select(kv => kv.Key)
-            .Concat(scores.Keys.Where(d => d <= today))
+            .Concat(dayScores.Keys.Where(d => d <= today))
             .ToList();
         if (startDays.Count == 0)
         {
@@ -463,7 +463,7 @@ public sealed class DomainProgress
         {
             var (dayBase, dayPaid, dayPassive) = credit.GetValueOrDefault(day);
             periods.Add(new DomainPeriod(
-                day, day, dayBase, dayPaid, dayPassive, scores.TryGetValue(day, out var score) ? (long?)score : null));
+                day, day, dayBase, dayPaid, dayPassive, dayScores.TryGetValue(day, out var score) ? (long?)score : null));
         }
 
         return new DomainProgress(rules, today, settled, start, periods, marked);
@@ -535,7 +535,7 @@ public sealed class DomainProgress
         var to = SettledThrough;
         var from = to.AddDays(1 - days);
         int counted = 0, exceptionDays = 0, active = 0;
-        long countedBase = 0, dayBase = 0, paid = 0, countedHome = 0;
+        long countedBase = 0, dayBase = 0, paid = 0, countedScore = 0;
         var daily = new List<DomainStanding>(days);
         for (var day = from; day <= to; day = day.AddDays(1))
         {
@@ -554,7 +554,7 @@ public sealed class DomainProgress
             {
                 counted++;
                 countedBase += period.Base;
-                countedHome += period.HomeScore ?? 0;
+                countedScore += period.Score ?? 0;
                 active += standing.Active ? 1 : 0;
             }
         }
@@ -573,7 +573,7 @@ public sealed class DomainProgress
             StandingOn(to),
             RanksReached.Where(r => r.QualifiedOn >= from && r.QualifiedOn <= to).ToList(),
             daily,
-            countedHome);
+            countedScore);
     }
 
     /// <summary>The index of <paramref name="day"/>'s period, or null outside the start..today.</summary>

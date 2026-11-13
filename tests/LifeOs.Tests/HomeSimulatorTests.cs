@@ -126,12 +126,12 @@ public sealed class HomeSimulatorTests
         Assert.All(result.Runs, run =>
         {
             var before = run.StandingOn(first.AddDays(-1));
-            var score = run.Periods.Single(p => p.Start == first.AddDays(-1)).HomeScore;
+            var score = run.Periods.Single(p => p.Start == first.AddDays(-1)).Score;
             for (var day = first; day < first.AddDays(span.LengthDays); day = day.AddDays(1))
             {
                 var standing = run.StandingOn(day);
                 Assert.Equal((before.Level, before.ShownExact, true, false), (standing.Level, standing.ShownExact, standing.Exception, standing.Counted));
-                Assert.Equal(score, run.Periods.Single(p => p.Start == day).HomeScore);
+                Assert.Equal(score, run.Periods.Single(p => p.Start == day).Score);
             }
         });
     }
