@@ -181,6 +181,36 @@ public sealed class DomainShownLevelTests
     }
 
     [Fact]
+    public void Today_is_judged_at_the_level_going_into_it_even_when_the_level_moves_today()
+    {
+        // Code review CR50: /api/domains judged an XP domain at today's level and bsk domains --json
+        // judged every domain at it, while the walk judges a day at the level going into it.
+        var steady = Run(0, 90, 60, passive: 10).ToList();
+        var jump = Fold([.. steady, new DomainDay(D(90), 100_000, 100_000)], today: 90);
+        Assert.Equal((18, 61), (jump.RuleLevel, jump.Level));
+        Assert.Equal(Health.Success.Describe(18), jump.TodayRule);
+        Assert.Equal(Health.Consistency.DayMinimum(18), jump.ActiveMinimum);
+
+        // Tomorrow is judged at the level today ends on (70 once today has settled).
+        var tomorrow = Fold([.. steady, new DomainDay(D(90), 100_000, 100_000)], today: 91);
+        Assert.Equal(70, tomorrow.StandingOn(D(90)).Level);
+        Assert.Equal(70, tomorrow.RuleLevel);
+        Assert.Equal(Health.Success.Describe(70), tomorrow.TodayRule);
+
+        Assert.Equal(1, Fold([], today: 0).RuleLevel);
+    }
+
+    [Theory]
+    [InlineData(2.25, 2.3, 2.2)]
+    [InlineData(69.99, 70.0, 69.9)]
+    [InlineData(-0.05, -0.1, 0.0)]
+    public void Each_door_shows_an_average_and_a_score_rounded_one_way(double value, double average, double score)
+    {
+        Assert.Equal((decimal)average, DomainFigures.Average((decimal)value));
+        Assert.Equal((decimal)score, DomainFigures.Score((decimal)value));
+    }
+
+    [Fact]
     public void Best_level_and_rank_never_fall()
     {
         var random = new Random(11);

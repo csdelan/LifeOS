@@ -391,6 +391,16 @@ public sealed class DomainProgress
     /// <summary>Today's day score in ten-thousandths, for a domain whose rule reads one; null without one.</summary>
     public long? TodayScore => TodayPeriod?.Score;
 
+    /// <summary>
+    /// The shown level going into today, which today is judged at (xp-domains plan §7.4.4 step 5):
+    /// yesterday's, or 1 at the start. A level that moves today changes tomorrow's rule, not
+    /// today's. Every door reads today's rule from here (code review CR50).
+    /// </summary>
+    public int RuleLevel => StandingOn(Today.AddDays(-1)).Level;
+
+    /// <summary>What makes today a successful day, in words, at <see cref="RuleLevel"/>.</summary>
+    public string TodayRule => Rules.Success.Describe(RuleLevel);
+
     /// <summary>The action XP that makes today active: the minimum of the shown level going into today.</summary>
     public int ActiveMinimum => Now.ActiveMinimum;
 
@@ -587,4 +597,27 @@ public sealed class DomainProgress
         var i = day.DayNumber - start.DayNumber;
         return i >= 0 && i < Periods.Count ? i : null;
     }
+}
+
+/// <summary>
+/// How a door shows the fold's figures, so <c>/api/domains</c> and <c>bsk domains --json</c> say
+/// the same numbers (code review CR50).
+/// </summary>
+public static class DomainFigures
+{
+    /// <summary>An average of base XP a day, to one place, a half rounding away from zero.</summary>
+    public static decimal Average(decimal value) => Math.Round(value, 1, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// An average Home Score, to one place, cut toward zero, so an average just under a bar never
+    /// reads as clearing it.
+    /// </summary>
+    public static decimal Score(decimal value) => Math.Round(value, 1, MidpointRounding.ToZero);
+
+    /// <summary>The shown level with its fraction (<see cref="DomainStanding.ShownExact"/>), to two places.</summary>
+    public static decimal Level(long shownExact)
+        => Math.Round((decimal)shownExact / FallRule.Scale, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>A share of days, to four places.</summary>
+    public static decimal Share(decimal value) => Math.Round(value, 4);
 }

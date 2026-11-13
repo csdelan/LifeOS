@@ -201,8 +201,8 @@ internal static class DomainsCommand
                 daysCounted = p.DaysCounted,
                 exceptionDays = p.ExceptionDays,
                 activeDays = p.ActiveDays,
-                activeShare = p.ActiveShare,
-                averageBase = p.AverageBase,
+                activeShare = DomainFigures.Share(p.ActiveShare),
+                averageBase = DomainFigures.Average(p.AverageBase),
                 levelFrom = p.Before.Level,
                 levelTo = p.End.Level,
                 rankFrom = p.Before.Rank,
@@ -361,8 +361,8 @@ internal static class DomainsCommand
                     windowDays = p.Window.Days,
                     from = p.Window.From,
                     to = p.Window.To,
-                    averageBase = p.Window.Average,
-                    averageHomeScore = p.Rules.Consistency.ReadsScore ? p.Window.AverageScore : (decimal?)null,
+                    averageBase = DomainFigures.Average(p.Window.Average),
+                    averageHomeScore = p.Rules.Consistency.ReadsScore ? DomainFigures.Score(p.Window.AverageScore) : (decimal?)null,
                     held = p.HeldConsistency is not { } held
                         ? null
                         : new
@@ -380,7 +380,7 @@ internal static class DomainsCommand
                             level = next.Level,
                             windowDays = next.WindowDays,
                             average = next.Average,
-                            averageNow = next.AverageNow,
+                            averageNow = DomainFigures.Average(next.AverageNow),
                             averageMet = next.AverageMet,
                             activeMinimum = next.ActiveMinimum,
                             activeDaysNeeded = next.ActiveDaysNeeded,
@@ -395,7 +395,7 @@ internal static class DomainsCommand
                 shown = new
                 {
                     level = p.Level,
-                    exact = (decimal)p.ShownExact / FallRule.Scale,
+                    exact = DomainFigures.Level(p.ShownExact),
                     target = p.Target,
                     rank = new { index = p.Rank, title = p.RankRule.Title },
                     limitedBy = p.LimitedBy?.ToString().ToLowerInvariant(),
@@ -420,7 +420,7 @@ internal static class DomainsCommand
                     activeMinimum = p.ActiveMinimum,
                     todayActive = p.TodayActive,
                     todayException = p.TodayException,
-                    rule = p.Rules.Success.Describe(p.Level),
+                    rule = p.TodayRule,
                     window = new
                     {
                         from = p.Consistency.From,
@@ -428,7 +428,7 @@ internal static class DomainsCommand
                         days = p.Consistency.Days,
                         coveredDays = p.Consistency.CoveredDays,
                         activeDays = p.Consistency.SuccessfulDays,
-                        share = p.Consistency.Share
+                        share = DomainFigures.Share(p.Consistency.Share)
                     },
                     multiplier = p.MultiplierNow,
                     nextTier = p.NextTier is not { } tier
@@ -499,7 +499,7 @@ internal static class DomainsCommand
                 + $" {next.AgeNeeded} such days so far ({next.AgeNow}{Met(next.AgeMet)})");
         }
 
-        var barToday = Bar(home, p.StandingOn(p.Today.AddDays(-1)).Level);
+        var barToday = Bar(home, p.RuleLevel);
         Console.WriteLine(p.TodayException
             ? "    today       an exception day"
             : p.TodayScore is not { } score

@@ -459,11 +459,11 @@ public static class DomainRows
         row.DaysCounted = period.DaysCounted;
         row.ExceptionDays = period.ExceptionDays;
         row.ActiveDays = period.ActiveDays;
-        row.ActiveShare = Math.Round(period.ActiveShare, 4);
-        row.AverageBase = Math.Round(period.AverageBase, 1, MidpointRounding.AwayFromZero);
+        row.ActiveShare = DomainFigures.Share(period.ActiveShare);
+        row.AverageBase = DomainFigures.Average(period.AverageBase);
         row.Kind = progress.Rules.Consistency.Kind;
         row.AverageHomeScore = progress.Rules.Consistency.ReadsScore
-            ? Math.Round(period.AverageScore, 1, MidpointRounding.ToZero)
+            ? DomainFigures.Score(period.AverageScore)
             : null;
         row.LevelFrom = period.Before.Level;
         row.LevelTo = period.End.Level;
@@ -529,8 +529,8 @@ public static class DomainRows
             WindowDays = p.Window.Days,
             From = p.Window.From is { } from ? Day(from) : null,
             To = p.Window.To is { } to ? Day(to) : null,
-            AverageBase = Math.Round(p.Window.Average, 1, MidpointRounding.AwayFromZero),
-            AverageHomeScore = scored ? Math.Round(p.Window.AverageScore, 1, MidpointRounding.ToZero) : null,
+            AverageBase = DomainFigures.Average(p.Window.Average),
+            AverageHomeScore = scored ? DomainFigures.Score(p.Window.AverageScore) : null,
             Held = p.HeldConsistency is { } held ? Need(held, consistency) : null,
             Next = p.NextConsistency is { } next ? Need(next, consistency) : null
         };
@@ -538,7 +538,7 @@ public static class DomainRows
         row.Shown = new DomainShown
         {
             Level = p.Level,
-            Exact = Math.Round((decimal)p.ShownExact / FallRule.Scale, 2, MidpointRounding.AwayFromZero),
+            Exact = DomainFigures.Level(p.ShownExact),
             Target = p.Target,
             Rank = p.Rank,
             RankTitle = p.RankRule.Title,
@@ -583,11 +583,11 @@ public static class DomainRows
             TodayAction = p.TodayAction,
             ActiveMinimum = p.ActiveMinimum,
             TodayHomeScore = scored ? Points(p.TodayScore) : null,
-            Bar = consistency.ScoreBar(p.StandingOn(p.Today.AddDays(-1)).Level),
+            Bar = consistency.ScoreBar(p.RuleLevel),
             TodayActive = p.TodayActive,
             TodayException = p.TodayException,
-            Rule = rules.Success.Describe(scored ? p.StandingOn(p.Today.AddDays(-1)).Level : p.Level),
-            ActiveShare = Math.Round(p.Consistency.Share, 4),
+            Rule = p.TodayRule,
+            ActiveShare = DomainFigures.Share(p.Consistency.Share),
             ActiveDays = p.Consistency.SuccessfulDays,
             WindowDays = p.Consistency.Days,
             Multiplier = p.MultiplierNow,
@@ -624,7 +624,7 @@ public static class DomainRows
         Level = need.Level,
         WindowDays = need.WindowDays,
         Average = need.Average,
-        AverageNow = Math.Round(need.AverageNow, 1, MidpointRounding.AwayFromZero),
+        AverageNow = DomainFigures.Average(need.AverageNow),
         AverageMet = need.AverageMet,
         ActiveMinimum = need.ActiveMinimum,
         ActiveDaysNeeded = need.ActiveDaysNeeded,
