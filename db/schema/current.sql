@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0061 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0062 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -68,11 +68,19 @@ CREATE TABLE bsk.event (
     payload jsonb NOT NULL DEFAULT '{}'::jsonb,
     derived_from uuid[] NOT NULL DEFAULT '{}'::uuid[],
     artifact_id uuid,
+    CONSTRAINT event_activity_occurrence_check CHECK (((kind <> 'activity'::text) OR bsk.is_iso_date_text((payload ->> 'occurrence'::text)))) NOT VALID,
+    CONSTRAINT event_archive_change_archived_check CHECK (((kind <> 'archive_change'::text) OR (jsonb_typeof((payload -> 'archived'::text)) = ANY (ARRAY['boolean'::text, 'null'::text])))) NOT VALID,
     CONSTRAINT event_artifact_id_fkey FOREIGN KEY (artifact_id) REFERENCES bsk.artifact(id),
     CONSTRAINT event_derived_has_sources CHECK (((provenance <> 'derived'::text) OR (cardinality(derived_from) >= 1))),
     CONSTRAINT event_kind_check CHECK ((kind = ANY (ARRAY['journal'::text, 'note'::text, 'voice'::text, 'idea_session'::text, 'observation'::text, 'activity'::text, 'measurement'::text, 'interaction'::text, 'state_change'::text, 'archive_change'::text, 'triage'::text, 'ledger'::text, 'attribute_change'::text]))),
+    CONSTRAINT event_ledger_amounts_check CHECK (((kind <> 'ledger'::text) OR ((jsonb_typeof((payload -> 'amounts'::text)) = 'object'::text) AND (NOT (payload @? '$."amounts".*?(((@.type() != "number" || @.floor() != @) || @ > 1000000000000000) || @ < -1000000000000000)'::jsonpath))))) NOT VALID,
+    CONSTRAINT event_ledger_coin_rate_check CHECK (((kind <> 'ledger'::text) OR (jsonb_typeof((payload -> 'coin_rate'::text)) = ANY (ARRAY['number'::text, 'null'::text])))) NOT VALID,
+    CONSTRAINT event_ledger_dollars_check CHECK (((kind <> 'ledger'::text) OR (jsonb_typeof((payload -> 'dollars'::text)) = ANY (ARRAY['number'::text, 'null'::text])))) NOT VALID,
+    CONSTRAINT event_ledger_subject_id_check CHECK (((kind <> 'ledger'::text) OR bsk.is_uuid_text(NULLIF((payload ->> 'subject_id'::text), ''::text)))) NOT VALID,
     CONSTRAINT event_pkey PRIMARY KEY (id),
-    CONSTRAINT event_provenance_check CHECK ((provenance = ANY (ARRAY['declared'::text, 'observed'::text, 'derived'::text])))
+    CONSTRAINT event_provenance_check CHECK ((provenance = ANY (ARRAY['declared'::text, 'observed'::text, 'derived'::text]))),
+    CONSTRAINT event_timer_subject_id_check CHECK (((kind <> 'activity'::text) OR (NOT jsonb_exists(payload, 'timer'::text)) OR bsk.is_uuid_text((payload ->> 'subject_id'::text)))) NOT VALID,
+    CONSTRAINT event_triage_item_id_check CHECK (((kind <> 'triage'::text) OR bsk.is_uuid_text((payload ->> 'item_id'::text)))) NOT VALID
 );
 
 -- GEN-1: universal tags on items (subjects or events). Classification, distinct from relations. Mutable (add=insert, remove=delete).
@@ -1887,6 +1895,15 @@ AS $function$
     ), false);
 $function$;
 
+-- True when value is a real date written yyyy-MM-dd; null for null, so an absent payload key passes a CHECK (code review CR35).
+CREATE OR REPLACE FUNCTION bsk.is_iso_date_text(value text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE PARALLEL SAFE STRICT
+AS $function$
+    SELECT value ~ '^\d{4}-\d{2}-\d{2}$' AND bsk.try_to_date(value) IS NOT NULL;
+$function$;
+
 -- D16: true for a repeating Task's series (a Task carrying a recurrence object and no series of its own). Series hold the pattern and price and stay out of the Task lists.
 CREATE OR REPLACE FUNCTION bsk.is_task_series(type text, attributes jsonb)
  RETURNS boolean
@@ -1917,6 +1934,15 @@ AS $function$
         -- Habit Established (0027). Habit Abandoned is already above.
         'established'
     );
+$function$;
+
+-- True when value is a uuid in canonical text form; null for null, so an absent payload key passes a CHECK (code review CR35).
+CREATE OR REPLACE FUNCTION bsk.is_uuid_text(value text)
+ RETURNS boolean
+ LANGUAGE sql
+ IMMUTABLE PARALLEL SAFE STRICT
+AS $function$
+    SELECT value ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 $function$;
 
 -- A jsonb number as an int (rounded); null for anything else.

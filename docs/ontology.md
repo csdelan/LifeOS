@@ -235,7 +235,10 @@ migrations cite them by number.
    artifact's binary payload) and `artifact_object` (where a payload in object storage
    lives) reject UPDATE, DELETE and TRUNCATE via a database trigger. The past — text *and* bytes — is
    physically un-rewritable; bytes in object storage are content-addressed, never
-   overwritten by `bsk`, and checked against their sha256 on every read.
+   overwritten by `bsk`, and checked against their sha256 on every read. Since a bad row can
+   never be corrected, `event` also refuses a payload value that a view casts and couldn't read
+   (an id that isn't a uuid, a date that isn't one; migration 0062). A view that casts a new
+   payload key gets a CHECK like those.
 2. **Every fact carries provenance** (inv. 4), and derived facts must cite their sources
    (`event_derived_has_sources` CHECK).
 3. **Promotion never mutates the capture** (inv. 5). Turning a captured thought into a
