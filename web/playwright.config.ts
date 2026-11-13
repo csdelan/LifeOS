@@ -1,5 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// The test runner counts in Chris's zone too, not only the browser (timezoneId below): a test
+// pins the clock with a local time such as new Date("2026-11-07T08:30:00"), which Node reads in
+// its own zone. In CI that's UTC, eight hours off the page. Set before the workers start, so they
+// inherit it.
+process.env.TZ = "America/Los_Angeles";
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,

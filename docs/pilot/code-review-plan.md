@@ -95,3 +95,7 @@ Defects the fixes turned up, each fixed in a commit of its own that says where i
   in three, on `main` too. The Inbox opens its newest item on a desktop, so the new capture could
   show in the detail pane as well as its row, and the test's text match found three. It now takes
   the first.
+- **At the first push:** CR11's CI job failed three golden paths that pass on Chris's PC. They
+  pin the clock with a local time such as `new Date("2026-11-07T08:30:00")`, which the test
+  runner read in UTC while the page ran in Pacific, eight hours apart. `playwright.config.ts` now
+  runs the runner in Pacific too. The deploy was skipped, so staging didn't change.

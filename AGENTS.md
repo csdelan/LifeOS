@@ -62,9 +62,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   no longer needed.
 - `TreatWarningsAsErrors` is on.
 - CI (`.github/workflows/ci.yml`) runs all of this on Linux: the .NET and unit tests in **UTC**,
-  Playwright in Pacific (`timezoneId` in `web/playwright.config.ts`). A test that depends on the
-  local clock or time zone can pass on Chris's PC and fail in CI, which also skips the staging
-  deploy (52b26c9 fixed one).
+  Playwright in Pacific (`web/playwright.config.ts` sets the browser's `timezoneId` and the test
+  runner's `TZ`). A test that depends on the local clock or time zone can pass on Chris's PC and
+  fail in CI, which also skips the staging deploy. Run it with `TZ=UTC` to see what CI sees.
 - Before committing, run the .NET tests if you touched C# or SQL, and the web lint, typecheck and
   tests if you touched `web/`.
 
