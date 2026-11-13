@@ -53,7 +53,7 @@ public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFood
         """;
 
     public async Task<Meal?> GetMealAsync(Guid mealId, CancellationToken cancellationToken = default)
-        => (await QueryAsync<MealRow>(MealSql + " WHERE meal_id = @mealId", new { mealId }, cancellationToken))
+        => (await QueryAsync<MealRow>(MealSql + " WHERE meal_key = @mealId::text", new { mealId }, cancellationToken))
             .Select(r => r.ToMeal()).FirstOrDefault();
 
     public async Task<IReadOnlyList<Meal>> FindMealsAsync(string prefix, CancellationToken cancellationToken = default)
@@ -77,7 +77,7 @@ public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFood
             .Select(r => r.ToMeal()).ToList();
 
     public async Task<Fast?> GetFastAsync(Guid fastId, CancellationToken cancellationToken = default)
-        => (await QueryAsync<FastRow>(FastSql + " WHERE fast_id = @fastId", new { fastId }, cancellationToken))
+        => (await QueryAsync<FastRow>(FastSql + " WHERE fast_key = @fastId::text", new { fastId }, cancellationToken))
             .Select(r => r.ToFast()).FirstOrDefault();
 
     public async Task<IReadOnlyList<Fast>> FindFastsAsync(string prefix, CancellationToken cancellationToken = default)

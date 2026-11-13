@@ -22,12 +22,16 @@ public sealed class NpgsqlTimerRepository(NpgsqlDataSource dataSource) : ITimerR
         FROM bsk.v_task_timer
         """;
 
+    // By the text key (migration 0066, code review CR77), so a write reads this task's timer events
+    // by event_timer_subject_idx while it holds the timer lock, not every task's.
+    private const string ByTask = " WHERE subject_key = @subjectId::text";
+
     public async Task<TimerSnapshot?> GetAsync(Guid subjectId, CancellationToken cancellationToken = default)
     {
         await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var row = await connection.QueryFirstOrDefaultAsync<TimerRow>(new CommandDefinition(
-            SelectSql + " WHERE subject_id = @subjectId",
+            SelectSql + ByTask,
             new { subjectId },
             cancellationToken: cancellationToken));
         return row?.ToSnapshot();
@@ -70,7 +74,7 @@ public sealed class NpgsqlTimerRepository(NpgsqlDataSource dataSource) : ITimerR
         foreach (var write in writes)
         {
             var row = await connection.QueryFirstOrDefaultAsync<TimerRow>(new CommandDefinition(
-                SelectSql + " WHERE subject_id = @subjectId",
+                SelectSql + ByTask,
                 new { subjectId = write.SubjectId },
                 transaction: transaction,
                 cancellationToken: cancellationToken));

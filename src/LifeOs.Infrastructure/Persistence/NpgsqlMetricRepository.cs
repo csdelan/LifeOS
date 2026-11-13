@@ -73,7 +73,7 @@ public sealed class NpgsqlMetricRepository(NpgsqlDataSource dataSource) : IMetri
             .ToDictionary(r => r.MetricId, r => r.Readings);
 
     public async Task<MetricReading?> GetReadingAsync(Guid id, CancellationToken cancellationToken = default)
-        => (await QueryAsync<ReadingRow>(ReadingSql + " WHERE id = @id", new { id }, cancellationToken))
+        => (await QueryAsync<ReadingRow>(ReadingSql + " WHERE reading_key = @id::text", new { id }, cancellationToken))
             .Select(r => r.ToReading()).FirstOrDefault();
 
     public async Task<IReadOnlyList<MetricReading>> FindReadingsAsync(string prefix, CancellationToken cancellationToken = default)
@@ -86,7 +86,7 @@ public sealed class NpgsqlMetricRepository(NpgsqlDataSource dataSource) : IMetri
         => (await QueryAsync<VisitRow>(VisitSql + VisitOrder, null, cancellationToken)).Select(r => r.ToVisit()).ToList();
 
     public async Task<LabVisit?> GetVisitAsync(Guid id, CancellationToken cancellationToken = default)
-        => (await QueryAsync<VisitRow>(VisitSql + " WHERE id = @id", new { id }, cancellationToken))
+        => (await QueryAsync<VisitRow>(VisitSql + " WHERE visit_key = @id::text", new { id }, cancellationToken))
             .Select(r => r.ToVisit()).FirstOrDefault();
 
     public async Task<IReadOnlyList<LabVisit>> FindVisitsAsync(string prefix, CancellationToken cancellationToken = default)

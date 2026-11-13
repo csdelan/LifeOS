@@ -69,7 +69,7 @@ public sealed class NpgsqlSpaceRepository(NpgsqlDataSource dataSource) : ISpaceR
             .Select(r => r.ToRating()).ToList();
 
     public async Task<SpaceRating?> GetRatingAsync(Guid id, CancellationToken cancellationToken = default)
-        => (await QueryAsync<RatingRow>(RatingSql + " WHERE id = @id", new { id }, cancellationToken))
+        => (await QueryAsync<RatingRow>(RatingSql + " WHERE rating_key = @id::text", new { id }, cancellationToken))
             .Select(r => r.ToRating()).FirstOrDefault();
 
     public async Task<IReadOnlyList<SpaceRating>> FindRatingsAsync(string prefix, CancellationToken cancellationToken = default)
@@ -100,7 +100,7 @@ public sealed class NpgsqlSpaceRepository(NpgsqlDataSource dataSource) : ISpaceR
             .Select(r => r.ToPhoto()).ToList();
 
     public async Task<SpacePhoto?> GetPhotoAsync(Guid id, CancellationToken cancellationToken = default)
-        => (await QueryAsync<PhotoRow>(PhotoSql + " WHERE id = @id", new { id }, cancellationToken))
+        => (await QueryAsync<PhotoRow>(PhotoSql + " WHERE photo_key = @id::text", new { id }, cancellationToken))
             .Select(r => r.ToPhoto()).FirstOrDefault();
 
     public async Task<IReadOnlyList<SpacePhoto>> FindPhotosAsync(string prefix, CancellationToken cancellationToken = default)

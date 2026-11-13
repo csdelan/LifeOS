@@ -56,35 +56,8 @@ public sealed class ReviewReader(string readerConnectionString, IClock clock, st
             => (await db.QueryAsync<ItemRow>(new CommandDefinition(sql, args, cancellationToken: cancellationToken)))
                 .Select(r => r.ToItem(kind)).ToList();
 
-        // The home-zone day of an event, for the window.
-        const string Day = "(e.occurred_at AT TIME ZONE @zone)::date";
-
-        var status = await ItemsAsync("status", $"""
-            SELECT e.occurred_at AS attime, NULL AS atday, s.title, e.payload->>'status' AS detail, s.id AS subjectid
-            FROM bsk.event e
-            JOIN bsk.subject s ON s.id::text = e.payload->>'subject_id'
-            WHERE e.kind = 'state_change'
-              AND s.type <> 'Review'
-              AND {Day} BETWEEN @from::date AND @to::date
-            ORDER BY e.occurred_at DESC, e.id DESC
-            """);
-
-        var completed = await ItemsAsync("task-completed", $"""
-            SELECT attime, atday, title, detail, subjectid
-            FROM (
-                SELECT DISTINCT ON (s.id) e.occurred_at AS attime, NULL AS atday, s.title, NULL AS detail, s.id AS subjectid
-                FROM bsk.event e
-                JOIN bsk.v_subject s ON s.id::text = e.payload->>'subject_id'
-                WHERE e.kind = 'state_change'
-                  AND lower(e.payload->>'status') = 'completed'
-                  AND s.type = 'Task'
-                  AND NOT s.archived
-                  AND NOT bsk.is_task_series(s.type, s.attributes)
-                  AND {Day} BETWEEN @from::date AND @to::date
-                ORDER BY s.id, e.occurred_at DESC
-            ) done
-            ORDER BY attime DESC
-            """);
+        var status = await ItemsAsync("status", RecapStatusSql);
+        var completed = await ItemsAsync("task-completed", RecapCompletedSql);
 
         var overdue = await ItemsAsync("task-overdue", """
             SELECT NULL::timestamptz AS attime, to_char(due, 'YYYY-MM-DD') AS atday, title,
@@ -121,38 +94,8 @@ public sealed class ReviewReader(string readerConnectionString, IClock clock, st
             ORDER BY bsk.try_to_date(a.date), a.start_time NULLS FIRST, a.title
             """);
 
-        var journal = await ItemsAsync("journal", $"""
-            SELECT e.occurred_at AS attime, NULL AS atday, s.title,
-                   left(regexp_replace(coalesce(a.content, ''), '\s+', ' ', 'g'), 140) AS detail, s.id AS subjectid
-            FROM bsk.event e
-            JOIN bsk.subject_event se ON se.event_id = e.id AND se.relation = 'concerns'
-            JOIN bsk.subject s ON s.id = se.subject_id
-            LEFT JOIN bsk.artifact a ON a.id = e.artifact_id
-            WHERE e.kind = 'journal'
-              AND {Day} BETWEEN @from::date AND @to::date
-            ORDER BY e.occurred_at DESC, e.id DESC
-            """);
-
-        // What came into the Inbox: each item's first flag in the window, whatever became of it.
-        var inbox = await ItemsAsync("inbox", $"""
-            SELECT attime, atday, title, detail, subjectid
-            FROM (
-                SELECT DISTINCT ON (e.payload->>'item_id')
-                       e.occurred_at AS attime, NULL AS atday,
-                       coalesce(s.title, left(regexp_replace(coalesce(ca.content, ''), '\s+', ' ', 'g'), 140), 'Capture') AS title,
-                       coalesce(s.type, ce.kind) AS detail,
-                       s.id AS subjectid
-                FROM bsk.event e
-                LEFT JOIN bsk.subject s ON e.payload->>'item_kind' = 'subject' AND s.id::text = e.payload->>'item_id'
-                LEFT JOIN bsk.event ce ON e.payload->>'item_kind' = 'event' AND ce.id::text = e.payload->>'item_id'
-                LEFT JOIN bsk.artifact ca ON ca.id = ce.artifact_id
-                WHERE e.kind = 'triage'
-                  AND e.payload->>'state' = 'flagged'
-                  AND {Day} BETWEEN @from::date AND @to::date
-                ORDER BY e.payload->>'item_id', e.occurred_at, e.id
-            ) flagged
-            ORDER BY attime DESC
-            """);
+        var journal = await ItemsAsync("journal", RecapJournalSql);
+        var inbox = await ItemsAsync("inbox", RecapInboxSql);
 
         return
         [
@@ -167,6 +110,80 @@ public sealed class ReviewReader(string readerConnectionString, IClock clock, st
     }
 
     private static string Text(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The recap's window: events from the start of home-zone day <c>@from</c> to the end of day
+    /// <c>@to</c>, as times, so a read of one kind looks them up in <c>event_kind_occurred_idx</c>.
+    /// The home-zone date of each event (<c>(occurred_at AT TIME ZONE @zone)::date</c>) picks the
+    /// same events but no index can, so the recap read every event of the kind (code review CR77).
+    /// </summary>
+    private const string Window = """
+        e.occurred_at >= ((@from::date)::timestamp AT TIME ZONE @zone)
+                      AND e.occurred_at < (((@to::date) + 1)::timestamp AT TIME ZONE @zone)
+        """;
+
+    /// <summary>The recap's status changes (reviews' own left out), newest first.</summary>
+    public const string RecapStatusSql = $"""
+        SELECT e.occurred_at AS attime, NULL AS atday, s.title, e.payload->>'status' AS detail, s.id AS subjectid
+        FROM bsk.event e
+        JOIN bsk.subject s ON s.id::text = e.payload->>'subject_id'
+        WHERE e.kind = 'state_change'
+          AND s.type <> 'Review'
+          AND {Window}
+        ORDER BY e.occurred_at DESC, e.id DESC
+        """;
+
+    /// <summary>The recap's Tasks completed, each once, newest first; a repeating Task's series left out.</summary>
+    public const string RecapCompletedSql = $"""
+        SELECT attime, atday, title, detail, subjectid
+        FROM (
+            SELECT DISTINCT ON (s.id) e.occurred_at AS attime, NULL AS atday, s.title, NULL AS detail, s.id AS subjectid
+            FROM bsk.event e
+            JOIN bsk.v_subject s ON s.id::text = e.payload->>'subject_id'
+            WHERE e.kind = 'state_change'
+              AND lower(e.payload->>'status') = 'completed'
+              AND s.type = 'Task'
+              AND NOT s.archived
+              AND NOT bsk.is_task_series(s.type, s.attributes)
+              AND {Window}
+            ORDER BY s.id, e.occurred_at DESC
+        ) done
+        ORDER BY attime DESC
+        """;
+
+    /// <summary>The recap's journal entries, newest first.</summary>
+    public const string RecapJournalSql = $"""
+        SELECT e.occurred_at AS attime, NULL AS atday, s.title,
+               left(regexp_replace(coalesce(a.content, ''), '\s+', ' ', 'g'), 140) AS detail, s.id AS subjectid
+        FROM bsk.event e
+        JOIN bsk.subject_event se ON se.event_id = e.id AND se.relation = 'concerns'
+        JOIN bsk.subject s ON s.id = se.subject_id
+        LEFT JOIN bsk.artifact a ON a.id = e.artifact_id
+        WHERE e.kind = 'journal'
+          AND {Window}
+        ORDER BY e.occurred_at DESC, e.id DESC
+        """;
+
+    /// <summary>What came into the Inbox: each item's first flag in the window, whatever became of it, newest first.</summary>
+    public const string RecapInboxSql = $"""
+        SELECT attime, atday, title, detail, subjectid
+        FROM (
+            SELECT DISTINCT ON (e.payload->>'item_id')
+                   e.occurred_at AS attime, NULL AS atday,
+                   coalesce(s.title, left(regexp_replace(coalesce(ca.content, ''), '\s+', ' ', 'g'), 140), 'Capture') AS title,
+                   coalesce(s.type, ce.kind) AS detail,
+                   s.id AS subjectid
+            FROM bsk.event e
+            LEFT JOIN bsk.subject s ON e.payload->>'item_kind' = 'subject' AND s.id::text = e.payload->>'item_id'
+            LEFT JOIN bsk.event ce ON e.payload->>'item_kind' = 'event' AND ce.id::text = e.payload->>'item_id'
+            LEFT JOIN bsk.artifact ca ON ca.id = ce.artifact_id
+            WHERE e.kind = 'triage'
+              AND e.payload->>'state' = 'flagged'
+              AND {Window}
+            ORDER BY e.payload->>'item_id', e.occurred_at, e.id
+        ) flagged
+        ORDER BY attime DESC
+        """;
 
     private sealed class ItemRow
     {

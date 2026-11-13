@@ -803,7 +803,7 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             SELECT subject_id, subject_urn, subject_title, state, running_since,
                    total_seconds, session_seconds, session_started_at, sessions, last_changed_at
             FROM bsk.v_task_timer
-            WHERE subject_id = @subjectId
+            WHERE subject_key = @subjectId::text
             """, new { subjectId }, cancellationToken: cancellationToken));
     }
 

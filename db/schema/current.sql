@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0065 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0066 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -459,6 +459,7 @@ CREATE VIEW bsk.v_exception_day AS
 CREATE VIEW bsk.v_fast AS
  WITH version AS (
          SELECT e.id AS event_id,
+            (e.payload -> 'fast'::text) ->> 'id'::text AS fast_key,
             ((e.payload -> 'fast'::text) ->> 'id'::text)::uuid AS fast_id,
             e.payload -> 'fast'::text AS f,
             e.recorded_at,
@@ -473,7 +474,8 @@ CREATE VIEW bsk.v_fast AS
                     ELSE NULL::timestamp with time zone
                 END AS ended_at,
             v.recorded_at,
-            v.event_id
+            v.event_id,
+            v.fast_key
            FROM version v
           WHERE v.rn = 1 AND COALESCE(v.f ->> 'voided'::text, 'false'::text) <> 'true'::text AND jsonb_typeof(v.f -> 'started_at'::text) = 'string'::text
         ), meal_time AS MATERIALIZED (
@@ -500,7 +502,8 @@ CREATE VIEW bsk.v_fast AS
            FROM meal_time m
           WHERE m.eaten_at > l.started_at AND m.eaten_at < COALESCE(l.ended_at, now())))::integer AS meals_during,
     recorded_at,
-    event_id
+    event_id,
+    fast_key
    FROM live l;
 
 -- FOOD-3 / FOOD-4 / FOOD-6 (D13): one row per home-zone day with a live food entry, an ended fast or a close — calories, score x calories (numeric, since a score can be a half), the longest fast ending that day, its drinks, and whether it is closed (by hand, or because the day is over). DietRules (C#) scores it.
@@ -760,6 +763,7 @@ CREATE VIEW bsk.v_item_tag AS
 CREATE VIEW bsk.v_lab_visit AS
  WITH version AS (
          SELECT e.id AS event_id,
+            (e.payload -> 'lab_visit'::text) ->> 'id'::text AS visit_key,
             e.payload -> 'lab_visit'::text AS v,
             e.artifact_id,
             e.occurred_at,
@@ -782,7 +786,8 @@ CREATE VIEW bsk.v_lab_visit AS
                 CASE
                     WHEN (v.v ->> 'report'::text) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text THEN (v.v ->> 'report'::text)::uuid
                     ELSE v.artifact_id
-                END AS report
+                END AS report,
+            v.visit_key
            FROM version v
           WHERE v.rn = 1 AND COALESCE(v.v ->> 'voided'::text, 'false'::text) <> 'true'::text
         )
@@ -807,7 +812,8 @@ CREATE VIEW bsk.v_lab_visit AS
     l.first_logged_at,
     l.recorded_at AS logged_at,
     l.versions::integer AS versions,
-    l.event_id
+    l.event_id,
+    l.visit_key
    FROM live l
      LEFT JOIN bsk.v_artifact a ON a.id = l.report AND a.has_bytes;
 
@@ -844,6 +850,7 @@ CREATE VIEW bsk.v_ledger AS
 CREATE VIEW bsk.v_meal AS
  WITH version AS (
          SELECT e.id AS event_id,
+            (e.payload -> 'meal'::text) ->> 'id'::text AS meal_key,
             ((e.payload -> 'meal'::text) ->> 'id'::text)::uuid AS meal_id,
             e.payload -> 'meal'::text AS m,
             e.occurred_at,
@@ -889,7 +896,8 @@ CREATE VIEW bsk.v_meal AS
     recorded_at AS logged_at,
     versions::integer AS versions,
     event_id,
-    COALESCE((m -> 'alcoholic'::text) = 'true'::jsonb, false) AS alcoholic
+    COALESCE((m -> 'alcoholic'::text) = 'true'::jsonb, false) AS alcoholic,
+    meal_key
    FROM version v
   WHERE rn = 1 AND COALESCE(m ->> 'voided'::text, 'false'::text) <> 'true'::text;
 
@@ -943,6 +951,7 @@ CREATE VIEW bsk.v_metric AS
 CREATE VIEW bsk.v_metric_reading AS
  WITH version AS (
          SELECT e.id AS event_id,
+            (e.payload -> 'metric_reading'::text) ->> 'id'::text AS reading_key,
             e.payload -> 'metric_reading'::text AS r,
             e.occurred_at,
             e.recorded_at,
@@ -959,7 +968,8 @@ CREATE VIEW bsk.v_metric_reading AS
             v.recorded_at,
             v.rn,
             v.versions,
-            v.first_logged_at
+            v.first_logged_at,
+            v.reading_key
            FROM version v
           WHERE v.rn = 1 AND COALESCE(v.r ->> 'voided'::text, 'false'::text) <> 'true'::text AND (v.r ->> 'metric'::text) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text AND jsonb_typeof(v.r -> 'value'::text) = 'number'::text
         )
@@ -987,7 +997,8 @@ CREATE VIEW bsk.v_metric_reading AS
             ELSE NULL::uuid
         END AS visit_id,
     bsk.json_num(l.r -> 'low'::text) AS low,
-    bsk.json_num(l.r -> 'high'::text) AS high
+    bsk.json_num(l.r -> 'high'::text) AS high,
+    l.reading_key
    FROM live l
      JOIN bsk.subject m ON m.id = ((l.r ->> 'metric'::text)::uuid) AND m.type = 'Metric'::text;
 
@@ -1411,6 +1422,7 @@ CREATE VIEW bsk.v_space AS
 CREATE VIEW bsk.v_space_photo AS
  WITH version AS (
          SELECT e.id AS event_id,
+            (e.payload -> 'space_photo'::text) ->> 'id'::text AS photo_key,
             e.payload -> 'space_photo'::text AS p,
             e.artifact_id,
             e.recorded_at,
@@ -1428,7 +1440,8 @@ CREATE VIEW bsk.v_space_photo AS
                 CASE
                     WHEN (v.p ->> 'photo'::text) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text THEN (v.p ->> 'photo'::text)::uuid
                     ELSE v.artifact_id
-                END AS photo
+                END AS photo,
+            v.photo_key
            FROM version v
           WHERE v.rn = 1 AND COALESCE(v.p ->> 'voided'::text, 'false'::text) <> 'true'::text AND (v.p ->> 'space'::text) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text AND bsk.try_to_date(v.p ->> 'day'::text) IS NOT NULL
         )
@@ -1443,7 +1456,8 @@ CREATE VIEW bsk.v_space_photo AS
     a.id AS artifact_id,
     l.added_at,
     l.recorded_at AS changed_at,
-    l.event_id
+    l.event_id,
+    l.photo_key
    FROM live l
      JOIN bsk.subject s ON s.id = ((l.p ->> 'space'::text)::uuid) AND s.type = 'Space'::text
      JOIN bsk.artifact a ON a.id = l.photo;
@@ -1452,6 +1466,7 @@ CREATE VIEW bsk.v_space_photo AS
 CREATE VIEW bsk.v_space_rating AS
  WITH version AS (
          SELECT e.id AS event_id,
+            (e.payload -> 'space_rating'::text) ->> 'id'::text AS rating_key,
             e.payload -> 'space_rating'::text AS r,
             e.recorded_at,
             row_number() OVER (PARTITION BY ((e.payload -> 'space_rating'::text) ->> 'id'::text) ORDER BY e.recorded_at DESC, e.id DESC) AS rn
@@ -1461,7 +1476,8 @@ CREATE VIEW bsk.v_space_rating AS
          SELECT v.event_id,
             v.r,
             v.recorded_at,
-            v.rn
+            v.rn,
+            v.rating_key
            FROM version v
           WHERE v.rn = 1 AND COALESCE(v.r ->> 'voided'::text, 'false'::text) <> 'true'::text AND (v.r ->> 'space'::text) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text AND bsk.try_to_date(v.r ->> 'day'::text) IS NOT NULL
         )
@@ -1486,7 +1502,8 @@ CREATE VIEW bsk.v_space_rating AS
             ELSE NULL::text
         END), ''::text) AS note,
     l.recorded_at AS rated_at,
-    l.event_id
+    l.event_id,
+    l.rating_key
    FROM live l
      JOIN bsk.subject s ON s.id = ((l.r ->> 'space'::text)::uuid) AND s.type = 'Space'::text;
 
@@ -1606,51 +1623,51 @@ CREATE VIEW bsk.v_task_series AS
 
 -- TASKS-2: per-task timer state (running / paused / stopped) and recorded time, folded from append-only timer activity events. total_seconds excludes a still-running segment; add now() - running_since.
 CREATE VIEW bsk.v_task_timer AS
- WITH timer_event AS (
-         SELECT (e.payload ->> 'subject_id'::text)::uuid AS subject_id,
+ WITH timer_event AS NOT MATERIALIZED (
+         SELECT e.payload ->> 'subject_id'::text AS subject_key,
             e.payload ->> 'timer'::text AS action,
             e.occurred_at,
             e.recorded_at,
             e.id
            FROM bsk.event e
           WHERE e.kind = 'activity'::text AND jsonb_exists(e.payload, 'timer'::text)
-        ), sequenced AS (
-         SELECT t.subject_id,
+        ), sequenced AS NOT MATERIALIZED (
+         SELECT t.subject_key,
             t.action,
             t.occurred_at,
             t.recorded_at,
             t.id,
             lead(t.occurred_at) OVER w AS next_at,
             count(*) FILTER (WHERE t.action = 'start'::text) OVER w AS session_no,
-            row_number() OVER (PARTITION BY t.subject_id ORDER BY t.occurred_at DESC, t.recorded_at DESC, t.id DESC) AS rn_desc
+            row_number() OVER (PARTITION BY t.subject_key ORDER BY t.occurred_at DESC, t.recorded_at DESC, t.id DESC) AS rn_desc
            FROM timer_event t
-          WINDOW w AS (PARTITION BY t.subject_id ORDER BY t.occurred_at, t.recorded_at, t.id)
-        ), segment AS (
-         SELECT sequenced.subject_id,
+          WINDOW w AS (PARTITION BY t.subject_key ORDER BY t.occurred_at, t.recorded_at, t.id)
+        ), segment AS NOT MATERIALIZED (
+         SELECT sequenced.subject_key,
             sequenced.session_no,
             EXTRACT(epoch FROM sequenced.next_at - sequenced.occurred_at) AS seconds
            FROM sequenced
           WHERE (sequenced.action = ANY (ARRAY['start'::text, 'resume'::text])) AND sequenced.next_at IS NOT NULL
-        ), totals AS (
-         SELECT segment.subject_id,
+        ), totals AS NOT MATERIALIZED (
+         SELECT segment.subject_key,
             sum(segment.seconds) AS seconds
            FROM segment
-          GROUP BY segment.subject_id
-        ), latest AS (
-         SELECT sequenced.subject_id,
+          GROUP BY segment.subject_key
+        ), latest AS NOT MATERIALIZED (
+         SELECT sequenced.subject_key,
             sequenced.action,
             sequenced.occurred_at,
             sequenced.session_no
            FROM sequenced
           WHERE sequenced.rn_desc = 1
-        ), session_start AS (
-         SELECT DISTINCT ON (sequenced.subject_id) sequenced.subject_id,
+        ), session_start AS NOT MATERIALIZED (
+         SELECT DISTINCT ON (sequenced.subject_key) sequenced.subject_key,
             sequenced.occurred_at
            FROM sequenced
           WHERE sequenced.action = 'start'::text
-          ORDER BY sequenced.subject_id, sequenced.occurred_at DESC, sequenced.recorded_at DESC, sequenced.id DESC
+          ORDER BY sequenced.subject_key, sequenced.occurred_at DESC, sequenced.recorded_at DESC, sequenced.id DESC
         )
- SELECT l.subject_id,
+ SELECT l.subject_key::uuid AS subject_id,
     s.urn AS subject_urn,
     s.type AS subject_type,
     s.title AS subject_title,
@@ -1668,14 +1685,15 @@ CREATE VIEW bsk.v_task_timer AS
     floor(COALESCE(tot.seconds, 0::numeric))::bigint AS total_seconds,
     floor(COALESCE(( SELECT sum(g.seconds) AS sum
            FROM segment g
-          WHERE g.subject_id = l.subject_id AND g.session_no = l.session_no), 0::numeric))::bigint AS session_seconds,
+          WHERE g.subject_key = l.subject_key AND g.session_no = l.session_no), 0::numeric))::bigint AS session_seconds,
     ss.occurred_at AS session_started_at,
     l.session_no AS sessions,
-    l.occurred_at AS last_changed_at
+    l.occurred_at AS last_changed_at,
+    l.subject_key
    FROM latest l
-     JOIN bsk.subject s ON s.id = l.subject_id
-     LEFT JOIN totals tot ON tot.subject_id = l.subject_id
-     LEFT JOIN session_start ss ON ss.subject_id = l.subject_id;
+     JOIN bsk.subject s ON s.id = l.subject_key::uuid
+     LEFT JOIN totals tot ON tot.subject_key = l.subject_key
+     LEFT JOIN session_start ss ON ss.subject_key = l.subject_key;
 
 -- REWARD-1/3 (D11): the balance of each currency touched by the ledger, with earned, reversed and spent totals.
 CREATE VIEW bsk.v_wallet AS
