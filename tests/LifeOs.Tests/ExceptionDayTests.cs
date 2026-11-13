@@ -160,24 +160,21 @@ public sealed class ExceptionDayTests(PostgresFixture postgres)
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
 
-        // Fixed-offset zones from UTC−11 to UTC+14 put the local time on both sides of 4 a.m.
-        // (Etc/GMT+5 is UTC−5: the sign is inverted.) Expected is worked out either side of the
-        // read, so a turning hour can't make it flaky.
+        // In fixed-offset zones from UTC−11 to UTC+14 (Etc/GMT+5 is UTC−5: the sign is inverted),
+        // a minute before 4 a.m. on Jan 15 at home has settled through Jan 13, and 4 a.m. through
+        // Jan 14. The reader takes the instant from the kernel's clock (code review CR62).
         for (var offset = -11; offset <= 14; offset++)
         {
             var zone = offset == 0 ? "Etc/GMT" : $"Etc/GMT{(offset > 0 ? "-" : "+")}{Math.Abs(offset)}";
-            var early = Expected(DateTimeOffset.UtcNow, offset);
-            var credit = await new NpgsqlDomainCreditReader(KernelDataSource.For(db.ConnectionString), zone).GetDomainDaysAsync([Currencies.HealthXp], Ct);
-            var late = Expected(DateTimeOffset.UtcNow, offset);
-            Assert.True(credit.SettledThrough == early || credit.SettledThrough == late,
-                $"{zone}: settled through {credit.SettledThrough}, expected {early}");
-            Assert.InRange(credit.Today.DayNumber - credit.SettledThrough.DayNumber, 1, 2);
-        }
-
-        static DateOnly Expected(DateTimeOffset now, int offsetHours)
-        {
-            var local = now.UtcDateTime.AddHours(offsetHours);
-            return DateOnly.FromDateTime(local.AddHours(-LifeDomains.SettleHour)).AddDays(-1);
+            foreach (var (hour, minute, settled) in new[] { (3, 59, 13), (LifeDomains.SettleHour, 0, 14) })
+            {
+                var clock = new TestClock(new DateTimeOffset(2026, 1, 15, hour, minute, 0, TimeSpan.FromHours(offset)));
+                var credit = await new NpgsqlDomainCreditReader(KernelDataSource.For(db.ConnectionString), clock, zone)
+                    .GetDomainDaysAsync([Currencies.HealthXp], Ct);
+                Assert.Equal(
+                    (new DateOnly(2026, 1, 15), new DateOnly(2026, 1, settled)),
+                    (credit.Today, credit.SettledThrough));
+            }
         }
     }
 

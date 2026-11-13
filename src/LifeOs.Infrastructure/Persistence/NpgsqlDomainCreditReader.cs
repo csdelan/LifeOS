@@ -16,8 +16,14 @@ namespace LifeOs.Infrastructure.Persistence;
 /// <paramref name="homeTimeZone"/> (an IANA name, <see cref="HomeZone"/>) puts each credit on a
 /// local day: its own credited day when it has one, else its instant read in that zone.
 /// </para>
+/// <para>
+/// Today and the last settled day are <paramref name="clock"/>'s, read in that zone, the way
+/// <see cref="NpgsqlHomeCalendar"/> reads them, not the database's <c>now()</c> (code review
+/// CR62): the services that mark an exception day or settle a fold ask the home calendar, and
+/// the two disagreed whenever the clocks did, as a test's <c>TestClock</c> always does.
+/// </para>
 /// </summary>
-public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, string homeTimeZone = HomeZone.Default)
+public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, IClock clock, string homeTimeZone = HomeZone.Default)
     : IDomainCreditReader
 {
     public async Task<DomainCredit> GetDomainDaysAsync(
@@ -45,18 +51,19 @@ public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, string
         {
             // Every statement reads one snapshot (code review CR47): the dates, the credit, the
             // exception days and the Home, so a write landing between them can't hand a fold
-            // inputs from two moments. now() is the snapshot's too.
+            // inputs from two moments. The dates are the kernel clock's, read once (CR62).
             await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
 
             // The last settled day: yesterday once it's past the settle hour in the home zone,
             // the day before until then.
             var dates = await connection.QuerySingleAsync<DatesRow>(new CommandDefinition(
                 """
-                SELECT to_char((now() AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS today,
+                SELECT to_char((@now AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS today,
                        to_char((bsk.ledger_opened_at() AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS openedon,
-                       to_char(((now() AT TIME ZONE @tz) - make_interval(hours => @settle))::date - 1, 'YYYY-MM-DD') AS settledthrough;
+                       to_char(((@now AT TIME ZONE @tz) - make_interval(hours => @settle))::date - 1, 'YYYY-MM-DD') AS settledthrough;
                 """,
-                new { tz = homeTimeZone, settle = LifeDomains.SettleHour }, transaction, cancellationToken: cancellationToken));
+                new { now = clock.UtcNow.ToUniversalTime(), tz = homeTimeZone, settle = LifeDomains.SettleHour },
+                transaction, cancellationToken: cancellationToken));
             var rows = await connection.QueryAsync<CreditRow>(new CommandDefinition(
                 daysSql,
                 new { tz = homeTimeZone, currencies = currencies.ToArray(), passive = LifeDomains.PassiveTriggers.ToArray() },
@@ -94,8 +101,8 @@ public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, string
         try
         {
             var today = ParseDay(await connection.QuerySingleAsync<string>(new CommandDefinition(
-                "SELECT to_char((now() AT TIME ZONE @tz)::date, 'YYYY-MM-DD');",
-                new { tz = homeTimeZone }, cancellationToken: cancellationToken)));
+                "SELECT to_char((@now AT TIME ZONE @tz)::date, 'YYYY-MM-DD');",
+                new { now = clock.UtcNow.ToUniversalTime(), tz = homeTimeZone }, cancellationToken: cancellationToken)));
             var rows = await connection.QueryAsync<ExceptionRow>(new CommandDefinition(
                 """
                 SELECT to_char(x.day, 'YYYY-MM-DD') AS day, x.comment, x.marked_at AS markedat

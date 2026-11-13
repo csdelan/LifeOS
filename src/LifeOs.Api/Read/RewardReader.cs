@@ -1,3 +1,4 @@
+using LifeOs.Application.Abstractions;
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.Persistence;
@@ -17,11 +18,12 @@ namespace LifeOs.Api.Read;
 /// (<c>Rewards:HomeTimeZone</c>), as <c>bsk domains</c> does.
 /// </para>
 /// </summary>
-public sealed class RewardReader(string readerConnectionString, decimal coinValueUsd, string homeTimeZone = HomeZone.Default)
+public sealed class RewardReader(
+    string readerConnectionString, decimal coinValueUsd, IClock clock, string homeTimeZone = HomeZone.Default)
 {
     private readonly NpgsqlLedgerRepository ledger = new(KernelDataSource.For(readerConnectionString), homeTimeZone);
     private readonly NpgsqlRewardCatalogReader catalog = new(KernelDataSource.For(readerConnectionString));
-    private readonly NpgsqlDomainCreditReader credit = new(KernelDataSource.For(readerConnectionString), homeTimeZone);
+    private readonly NpgsqlDomainCreditReader credit = new(KernelDataSource.For(readerConnectionString), clock, homeTimeZone);
 
     public async Task<WalletSummary> GetWalletAsync(CancellationToken cancellationToken = default)
     {

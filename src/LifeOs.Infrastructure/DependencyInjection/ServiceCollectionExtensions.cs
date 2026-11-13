@@ -101,7 +101,7 @@ public static class ServiceCollectionExtensions
         // The reads beside the ledger (code review CR19, CR47): the catalog and the domain credit.
         services.AddSingleton<IRewardCatalogReader, NpgsqlRewardCatalogReader>();
         services.AddSingleton<IDomainCreditReader>(sp =>
-            new NpgsqlDomainCreditReader(sp.GetRequiredService<NpgsqlDataSource>(), settings.HomeTimeZone));
+            new NpgsqlDomainCreditReader(sp.GetRequiredService<NpgsqlDataSource>(), sp.GetRequiredService<IClock>(), settings.HomeTimeZone));
         services.AddSingleton<IIntegrationRepository>(sp =>
             new NpgsqlIntegrationRepository(sp.GetRequiredService<NpgsqlDataSource>(), settings.Integrations?.TokenCipher));
 

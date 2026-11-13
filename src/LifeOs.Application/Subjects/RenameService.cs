@@ -18,7 +18,7 @@ namespace LifeOs.Application.Subjects;
 /// </para>
 /// </summary>
 public sealed class RenameService(
-    SubjectService subjects, ISubjectRepository repository, IAppointmentRepository appointments, IClock clock,
+    SubjectService subjects, ISubjectRepository repository, IAppointmentRepository appointments, IHomeCalendar calendar,
     ITaskSeriesRepository? taskSeries = null)
 {
     /// <summary>
@@ -49,7 +49,9 @@ public sealed class RenameService(
         var occurrencesRenamed = 0;
         if (subject.Type == SubjectTypes.Appointment)
         {
-            var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+            // Upcoming counts from today at home, not in UTC, which is tomorrow by evening in
+            // Pacific time (code review CR62).
+            var today = await calendar.TodayAsync(cancellationToken);
             (updated, occurrencesRenamed) = await appointments.RenameWithUpcomingOccurrencesAsync(
                 subject.Id, subject.Urn, subject.Title, cleanTitle, today, cancellationToken);
         }

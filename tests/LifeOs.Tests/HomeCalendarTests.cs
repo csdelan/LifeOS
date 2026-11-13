@@ -89,6 +89,64 @@ public sealed class HomeCalendarTests(PostgresFixture postgres, ClassDatabase cl
         Assert.Equal(day, await kernel.GetRequiredService<LifeOs.Application.Reviews.ReviewService>().TodayAsync(Ct));
     }
 
+    // Code review CR62: the domain fold's today, its last settled day and the exception-day list
+    // read the kernel's clock too, not the database's now(), so a day marked by the service is
+    // found by the list it reads back.
+    [Fact]
+    public async Task The_domain_fold_and_exception_days_read_the_kernels_clock()
+    {
+        await using var db = await DatabaseAsync(DomainTestDatabase.Zone);
+        // 03:30 UTC on Jan 15: before the 4 a.m. settle, so Jan 13 is the last settled day.
+        var clock = new TestClock(new DateTimeOffset(2026, 1, 15, 3, 30, 0, TimeSpan.Zero));
+        await using var kernel = new ServiceCollection()
+            .AddLifeOsKernel(db.ConnectionString, homeTimeZone: DomainTestDatabase.Zone)
+            .AddSingleton<IClock>(clock)
+            .BuildServiceProvider();
+
+        var credit = await kernel.GetRequiredService<IDomainCreditReader>().GetDomainDaysAsync([Currencies.HealthXp], Ct);
+        Assert.Equal((new DateOnly(2026, 1, 15), new DateOnly(2026, 1, 13)), (credit.Today, credit.SettledThrough));
+
+        var exceptions = kernel.GetRequiredService<LifeOs.Application.Rewards.ExceptionDayService>();
+        var marked = await exceptions.MarkAsync(null, "Flu", Ct);
+        Assert.Equal(new DateOnly(2026, 1, 15), marked.Exception?.Day);
+        var listed = await exceptions.ListAsync(cancellationToken: Ct);
+        Assert.Equal(new DateOnly(2026, 1, 15), listed.Today);
+        Assert.Equal([new DateOnly(2026, 1, 15)], listed.Marked.Select(d => d.Day));
+    }
+
+    // Code review CR62: at 8 pm Pacific the UTC date is already tomorrow. Renaming a series then
+    // renames today's occurrence too, since "upcoming" counts from today at home.
+    [Fact]
+    public async Task Renaming_an_appointment_series_in_the_evening_renames_todays_occurrence()
+    {
+        const string pacific = "America/Los_Angeles";
+        await using var db = await DatabaseAsync(pacific);
+        // 8 pm on Jan 15 in Los Angeles is 04:00 UTC on Jan 16.
+        var clock = new TestClock(new DateTimeOffset(2026, 1, 16, 4, 0, 0, TimeSpan.Zero));
+        await using var kernel = new ServiceCollection()
+            .AddLifeOsKernel(db.ConnectionString, homeTimeZone: pacific)
+            .AddSingleton<IClock>(clock)
+            .BuildServiceProvider();
+        var subjects = kernel.GetRequiredService<SubjectService>();
+
+        var series = await subjects.CreateAsync(
+            SubjectTypes.Appointment, "Evening class",
+            attributesJson: """{"start_date":"2026-01-14","start":"21:00","recurrence":{"freq":"daily"}}""",
+            cancellationToken: Ct);
+        await kernel.GetRequiredService<AppointmentService>().MaterializeAsync(series.Urn, new DateOnly(2026, 1, 16), Ct);
+
+        var renamed = await kernel.GetRequiredService<RenameService>().RenameAsync(series.Urn, "Night class", Ct);
+
+        Assert.Equal(2, renamed.OccurrencesRenamed);
+        await using var c = new NpgsqlConnection(db.ConnectionString);
+        var titles = (await c.QueryAsync<(string Date, string Title)>(new CommandDefinition(
+            "SELECT date, title FROM bsk.v_appointment WHERE series_urn = @s ORDER BY date;",
+            new { s = series.Urn }, cancellationToken: Ct))).ToList();
+        Assert.Equal(
+            [("2026-01-14", "Evening class"), ("2026-01-15", "Night class"), ("2026-01-16", "Night class")],
+            titles);
+    }
+
     [Fact]
     public async Task A_zone_the_database_doesnt_know_fails_loudly()
     {

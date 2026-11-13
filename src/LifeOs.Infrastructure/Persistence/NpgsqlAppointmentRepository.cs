@@ -18,13 +18,14 @@ public sealed class NpgsqlAppointmentRepository(NpgsqlDataSource dataSource, Eve
         await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
-        // Anchor and window start at the series' start_date (or its creation date).
-        // start_date is the series anchor; start/end are the time-of-day fields (CAL-1).
+        // Anchor and window start at the series' start_date, or the day it was made at home
+        // (code review CR62: created_at::date was the session's UTC day, tomorrow by evening in
+        // Pacific time). start_date is the series anchor; start/end are the time-of-day fields (CAL-1).
         const string sql = """
             SELECT to_char(d, 'YYYY-MM-DD')
             FROM bsk.subject s
             CROSS JOIN LATERAL (
-                SELECT coalesce(bsk.try_to_date(s.attributes->>'start_date'), s.created_at::date) AS start_date
+                SELECT coalesce(bsk.try_to_date(s.attributes->>'start_date'), (s.created_at AT TIME ZONE bsk.home_zone())::date) AS start_date
             ) anchor
             CROSS JOIN LATERAL bsk.recurrence_occurrences(
                 s.attributes->'recurrence', anchor.start_date, anchor.start_date, @through::date) AS d

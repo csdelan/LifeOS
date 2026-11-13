@@ -3,6 +3,7 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.DependencyInjection;
+using LifeOs.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -141,7 +142,10 @@ public sealed class RenameServiceTests(ClassDatabase classDb) : IClassFixture<Cl
             subjects,
             provider.GetRequiredService<ISubjectRepository>(),
             provider.GetRequiredService<IAppointmentRepository>(),
-            new TestClock(new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero)));
+            new NpgsqlHomeCalendar(
+                KernelDataSource.For(classDb.ConnectionString),
+                new TestClock(new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero)),
+                PostgresFixture.HabitViewZone));
         var ns = Guid.NewGuid().ToString("N");
 
         var series = await subjects.CreateAsync(

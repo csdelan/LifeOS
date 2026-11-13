@@ -17,7 +17,7 @@ public sealed class EnvironmentReader(string readerConnectionString, IClock cloc
 {
     private readonly NpgsqlSpaceRepository spaces = new(KernelDataSource.For(readerConnectionString));
     private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), clock, homeTimeZone);
-    private readonly HomeService home = new(new NpgsqlDomainCreditReader(KernelDataSource.For(readerConnectionString), homeTimeZone));
+    private readonly HomeService home = new(new NpgsqlDomainCreditReader(KernelDataSource.For(readerConnectionString), clock, homeTimeZone));
 
     /// <summary>
     /// The home today: the Home Score, each space and part, Fix next, and each space's shots with
