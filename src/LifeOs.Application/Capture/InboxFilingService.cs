@@ -14,7 +14,7 @@ namespace LifeOs.Application.Capture;
 /// concerning it; the item is what's flagged.
 /// </summary>
 public sealed class InboxFilingService(
-    SubjectService subjects, RelateService relate, TriageService triage, IHomeCalendar calendar, IClock clock)
+    SubjectService subjects, RelateService relate, TriageService triage, IHomeCalendar calendar)
 {
     /// <summary>The capture kind that stays an event (D4); Idea and Problem are subject types.</summary>
     public const string Note = "Note";
@@ -63,7 +63,7 @@ public sealed class InboxFilingService(
         if (kind == SubjectTypes.Problem)
         {
             // Today where Chris lives, as the web's todayIso() gives a typed Problem.
-            var today = await calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+            var today = await calendar.TodayAsync(cancellationToken);
             attributes["date_identified"] = today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             created = (await subjects.ResolveOrCreateAsync(kind, title, attributes.ToJsonString(), cancellationToken)).Subject;
         }

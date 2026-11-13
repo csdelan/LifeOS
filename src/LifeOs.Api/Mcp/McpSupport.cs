@@ -25,7 +25,7 @@ public readonly record struct McpStamp(DateTimeOffset AsOf, DateOnly Today);
 /// </summary>
 public sealed class McpReads(string readerConnectionString, string homeTimeZone, IClock clock)
 {
-    private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), homeTimeZone);
+    private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), clock, homeTimeZone);
 
     public ChangeReader Changes { get; } = new(readerConnectionString);
 

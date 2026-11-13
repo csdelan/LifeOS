@@ -17,10 +17,10 @@ public sealed class MeasurementReader(string readerConnectionString, IClock cloc
 {
     private readonly NpgsqlMetricRepository metrics = new(KernelDataSource.For(readerConnectionString));
     private readonly MetricReads reads = new(
-        new NpgsqlMetricRepository(KernelDataSource.For(readerConnectionString)), new NpgsqlHomeCalendar(KernelDataSource.For(readerConnectionString), homeTimeZone), clock);
+        new NpgsqlMetricRepository(KernelDataSource.For(readerConnectionString)), new NpgsqlHomeCalendar(KernelDataSource.For(readerConnectionString), clock, homeTimeZone));
 
     private readonly LabVisitReads visits = new(
-        new NpgsqlMetricRepository(KernelDataSource.For(readerConnectionString)), new NpgsqlHomeCalendar(KernelDataSource.For(readerConnectionString), homeTimeZone), clock);
+        new NpgsqlMetricRepository(KernelDataSource.For(readerConnectionString)), new NpgsqlHomeCalendar(KernelDataSource.For(readerConnectionString), clock, homeTimeZone));
 
     /// <summary>Every lab visit with its results, newest collected first (<c>GET /api/measurements/visits</c>).</summary>
     public async Task<LabVisitsRead> GetVisitsAsync(CancellationToken cancellationToken = default)

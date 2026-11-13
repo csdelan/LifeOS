@@ -71,6 +71,24 @@ public sealed class HomeCalendarTests(PostgresFixture postgres, ClassDatabase cl
         Assert.Equal(DateOnly.Parse(expected), day);
     }
 
+    // Code review CR42: every service asks the calendar what day it is, and the calendar reads the
+    // kernel's clock, so a test clock moves "today" for the food log as for the rest.
+    [Fact]
+    public async Task Today_is_the_date_at_the_kernels_clock_for_every_service()
+    {
+        var clock = new TestClock(new DateTimeOffset(2026, 1, 15, 6, 30, 0, TimeSpan.Zero));
+        await using var kernel = new ServiceCollection()
+            .AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone)
+            .AddSingleton<IClock>(clock)
+            .BuildServiceProvider();
+
+        var day = new DateOnly(2026, 1, 15);
+        Assert.Equal(day, await kernel.GetRequiredService<IHomeCalendar>().TodayAsync(Ct));
+        Assert.Equal(day, await kernel.GetRequiredService<LifeOs.Application.Food.FoodReads>().TodayAsync(Ct));
+        Assert.Equal(day, await kernel.GetRequiredService<LifeOs.Application.Food.FoodLogService>().TodayAsync(Ct));
+        Assert.Equal(day, await kernel.GetRequiredService<LifeOs.Application.Reviews.ReviewService>().TodayAsync(Ct));
+    }
+
     [Fact]
     public async Task A_zone_the_database_doesnt_know_fails_loudly()
     {

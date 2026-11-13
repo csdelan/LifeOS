@@ -160,7 +160,7 @@ public sealed class OuraSyncService(
             // to the collection, so its refusal can't read as a bad token.
             var granted = (await integrations.GetAsync(service, cancellationToken))?.Scopes ?? [];
             var tags = granted.Contains(OuraConnectionService.TagScope, StringComparer.OrdinalIgnoreCase);
-            var today = await calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+            var today = await calendar.TodayAsync(cancellationToken);
             var to = today.AddDays(1);
             var tally = new Tally();
 

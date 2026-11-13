@@ -28,7 +28,7 @@ namespace LifeOs.Application.Subjects;
 /// </para>
 /// </summary>
 public sealed class TaskSeriesService(
-    ITaskSeriesRepository series, ISubjectRepository subjects, IHomeCalendar calendar, IClock clock)
+    ITaskSeriesRepository series, ISubjectRepository subjects, IHomeCalendar calendar)
 {
     // A settle that loses a race re-reads and plans again.
     private const int Attempts = 5;
@@ -461,7 +461,7 @@ public sealed class TaskSeriesService(
             seriesId, new JsonObject { [TaskSeries.StartKey] = Iso(start) }.ToJsonString(), [], cancellationToken);
 
     private Task<DateOnly> TodayAsync(CancellationToken cancellationToken)
-        => calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+        => calendar.TodayAsync(cancellationToken);
 
     private static DateOnly Max(DateOnly a, DateOnly b) => a > b ? a : b;
 

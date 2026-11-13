@@ -97,7 +97,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ILedgerRepository>(sp =>
             new NpgsqlLedgerRepository(sp.GetRequiredService<NpgsqlDataSource>(), settings.HomeTimeZone));
         services.AddSingleton<IHomeCalendar>(sp =>
-            new NpgsqlHomeCalendar(sp.GetRequiredService<NpgsqlDataSource>(), settings.HomeTimeZone));
+            new NpgsqlHomeCalendar(sp.GetRequiredService<NpgsqlDataSource>(), sp.GetRequiredService<IClock>(), settings.HomeTimeZone));
         // The ledger's narrower reads (code review CR19) are the same repository.
         services.AddSingleton<IRewardCatalogReader>(sp => sp.GetRequiredService<ILedgerRepository>());
         services.AddSingleton<IDomainCreditReader>(sp => sp.GetRequiredService<ILedgerRepository>());

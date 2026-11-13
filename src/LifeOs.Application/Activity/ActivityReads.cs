@@ -60,14 +60,14 @@ public sealed record ActivitySummary(
 /// prints, and from A3 what the API's reader serves. Days are Oura's own; "today" is the home
 /// zone's.
 /// </summary>
-public sealed class ActivityReads(IActivityRepository activity, IHomeCalendar calendar, IClock clock)
+public sealed class ActivityReads(IActivityRepository activity, IHomeCalendar calendar)
 {
     /// <summary>The widest range a read answers, in days.</summary>
     public const int MaxRangeDays = 731;
 
     /// <summary>Today in the home zone.</summary>
     public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default)
-        => calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+        => calendar.TodayAsync(cancellationToken);
 
     /// <summary>The last <paramref name="days"/> days through today.</summary>
     public async Task<(DateOnly From, DateOnly To)> LastDaysAsync(int days, CancellationToken cancellationToken = default)

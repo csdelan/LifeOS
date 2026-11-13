@@ -5,6 +5,7 @@ using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.DependencyInjection;
+using LifeOs.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -26,6 +27,7 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
 
     private readonly string adminConnectionString;
     private readonly string name;
+    private readonly string zone;
     private readonly CancellationToken ct;
 
     private DomainTestDatabase(
@@ -33,6 +35,7 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
     {
         this.adminConnectionString = adminConnectionString;
         this.name = name;
+        this.zone = zone;
         this.ct = ct;
         ConnectionString = connectionString;
         Kernel = new ServiceCollection().AddLifeOsKernel(connectionString, homeTimeZone: zone).BuildServiceProvider();
@@ -57,7 +60,14 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
     }
 
     /// <summary>Today in the home zone.</summary>
-    public Task<DateOnly> TodayAsync() => Get<IHomeCalendar>().DateAtAsync(DateTimeOffset.UtcNow, ct);
+    public Task<DateOnly> TodayAsync() => Get<IHomeCalendar>().TodayAsync(ct);
+
+    /// <summary>
+    /// The home calendar by <paramref name="clock"/>, for a service a test builds with a clock of its
+    /// own: the kernel's calendar reads the kernel's clock.
+    /// </summary>
+    public IHomeCalendar CalendarOn(IClock clock)
+        => new NpgsqlHomeCalendar(KernelDataSource.For(ConnectionString), clock, zone);
 
     /// <summary>Opens the wallet <paramref name="daysAgo"/> days ago.</summary>
     public Task OpenWalletAsync(int daysAgo) => Get<RewardService>().OpenAsync(DateTimeOffset.UtcNow.AddDays(-daysAgo), ct);

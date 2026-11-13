@@ -79,7 +79,7 @@ public static class ApiHost
             reader, integrations.Unsplash?.AppName ?? Cover.DefaultAppName));
         builder.Services.AddSingleton(sp => new RewardReader(
             reader, sp.GetRequiredService<RewardService>().CoinValueUsd, homeZone));
-        builder.Services.AddSingleton(new FoodReader(reader, homeZone));
+        builder.Services.AddSingleton(sp => new FoodReader(reader, sp.GetRequiredService<IClock>(), homeZone));
         builder.Services.AddSingleton(sp => new EnvironmentReader(reader, sp.GetRequiredService<IClock>(), homeZone));
         builder.Services.AddSingleton(sp => new MeasurementReader(reader, sp.GetRequiredService<IClock>(), homeZone));
         builder.Services.AddSingleton(sp => new ReviewReader(reader, sp.GetRequiredService<IClock>(), homeZone));

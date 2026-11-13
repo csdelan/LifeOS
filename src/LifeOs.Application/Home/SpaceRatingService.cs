@@ -190,7 +190,7 @@ public sealed class SpaceRatingService(
         string? space = null, int days = DefaultDays, CancellationToken cancellationToken = default)
     {
         Check(days);
-        var today = await calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+        var today = await calendar.TodayAsync(cancellationToken);
         Guid? spaceId = string.IsNullOrWhiteSpace(space) ? null : (await spaceService.ResolveAsync(space, cancellationToken)).Id;
         var ratings = await spaces.GetRatingsAsync(spaceId, today.AddDays(1 - days), cancellationToken);
         return new RatingList(

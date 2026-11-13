@@ -70,7 +70,7 @@ internal static class RateCommand
                 var service = provider.GetRequiredService<SpaceRatingService>();
                 var spaces = await provider.GetRequiredService<SpaceService>().ListAsync(true, cancellationToken);
                 var today = await provider.GetRequiredService<IHomeCalendar>()
-                    .DateAtAsync(provider.GetRequiredService<IClock>().UtcNow, cancellationToken);
+                    .TodayAsync(cancellationToken);
                 var dayText = parseResult.GetValue(dayOption);
                 DateOnly? day = dayText is null ? null : DomainsExceptionCommand.ParseDay(dayText, today);
 

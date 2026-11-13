@@ -34,7 +34,8 @@ namespace LifeOs.Application.Food;
 /// </para>
 /// </summary>
 public sealed class FoodRewards(
-    IFoodLogRepository food, ILedgerRepository ledger, RewardService rewards, IClock clock, EventSource eventSource)
+    IFoodLogRepository food, ILedgerRepository ledger, RewardService rewards, IHomeCalendar calendar, IClock clock,
+    EventSource eventSource)
 {
     private static readonly DateOnly Earliest = new(2000, 1, 1);
 
@@ -89,7 +90,7 @@ public sealed class FoodRewards(
         DateTimeOffset openedAt, Guid? causeEventId, Func<Task<IReadOnlyList<DomainProgress>>> domains,
         CancellationToken cancellationToken)
     {
-        var today = await food.TodayAsync(cancellationToken);
+        var today = await calendar.TodayAsync(cancellationToken);
         var candidates = await CandidatesAsync(Earliest, today, cancellationToken);
         var held = await ledger.GetKeyedAwardsAsync(FoodAwards.Triggers, cancellationToken);
         var policy = new DayAwardPolicy(

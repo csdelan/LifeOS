@@ -52,7 +52,7 @@ internal static class DomainsExceptionCommand
                 await using var provider = Cli.BuildServices(connectionString);
                 var service = provider.GetRequiredService<ExceptionDayService>();
                 var today = await provider.GetRequiredService<IHomeCalendar>()
-                    .DateAtAsync(provider.GetRequiredService<IClock>().UtcNow, cancellationToken);
+                    .TodayAsync(cancellationToken);
 
                 ExceptionDayChange change;
                 if (unmark is not null)

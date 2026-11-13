@@ -299,7 +299,7 @@ public sealed class FoodLogService(
     /// </summary>
     public async Task<FoodWriteResult> CloseDayAsync(DateOnly? day = null, CancellationToken cancellationToken = default)
     {
-        var today = await food.TodayAsync(cancellationToken);
+        var today = await reads.TodayAsync(cancellationToken);
         var target = day ?? today;
         if (target > today)
         {
@@ -354,7 +354,7 @@ public sealed class FoodLogService(
         => food.LocalAtAsync(instant, cancellationToken);
 
     /// <summary>Today in the home zone.</summary>
-    public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default) => food.TodayAsync(cancellationToken);
+    public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default) => reads.TodayAsync(cancellationToken);
 
     /// <summary>A live food entry named by its id or the start of it (at least 4 hex digits).</summary>
     public Task<Meal> ResolveMealAsync(string reference, CancellationToken cancellationToken = default)

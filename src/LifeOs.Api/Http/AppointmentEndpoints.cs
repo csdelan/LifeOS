@@ -34,7 +34,7 @@ public static class AppointmentEndpoints
         DateOnly day;
         if (string.IsNullOrWhiteSpace(on))
         {
-            day = await calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+            day = await calendar.TodayAsync(cancellationToken);
         }
         else if (!DateOnly.TryParseExact(on.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out day))
         {

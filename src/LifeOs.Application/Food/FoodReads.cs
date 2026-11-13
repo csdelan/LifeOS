@@ -9,7 +9,7 @@ namespace LifeOs.Application.Food;
 /// host can build it on the reader connection (the API's <c>FoodReader</c>) as well as behind
 /// <see cref="FoodLogService"/>, and both read alike.
 /// </summary>
-public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger)
+public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger, IHomeCalendar calendar)
 {
     /// <summary>The widest range <see cref="GetDaysAsync"/> answers.</summary>
     public const int MaxRangeDays = 62;
@@ -21,7 +21,7 @@ public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger)
     public DietRules Rules { get; } = DietRules.Default;
 
     /// <summary>Today in the home zone.</summary>
-    public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default) => food.TodayAsync(cancellationToken);
+    public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default) => calendar.TodayAsync(cancellationToken);
 
     /// <summary>
     /// One day of the Food Log (default today): its entries (oldest first), the fasts that ended
@@ -30,7 +30,7 @@ public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger)
     /// </summary>
     public async Task<FoodDayView> GetDayAsync(DateOnly? day = null, CancellationToken cancellationToken = default)
     {
-        var today = await food.TodayAsync(cancellationToken);
+        var today = await calendar.TodayAsync(cancellationToken);
         var target = day ?? today;
         var facts = (await food.GetDaysAsync(target, target, cancellationToken)).FirstOrDefault()
                     ?? FoodDay.Empty(target, target < today);
@@ -64,7 +64,7 @@ public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger)
             throw new ArgumentException($"Ask for at most {MaxRangeDays} days at a time.");
         }
 
-        var today = await food.TodayAsync(cancellationToken);
+        var today = await calendar.TodayAsync(cancellationToken);
         var byDay = (await food.GetDaysAsync(from, to, cancellationToken)).ToDictionary(d => d.Day);
         var paid = await GetPaidAsync(from, to, cancellationToken);
         var days = new List<FoodDaySummary>();

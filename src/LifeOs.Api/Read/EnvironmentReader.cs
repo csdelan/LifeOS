@@ -16,7 +16,7 @@ namespace LifeOs.Api.Read;
 public sealed class EnvironmentReader(string readerConnectionString, IClock clock, string homeTimeZone = HomeZone.Default)
 {
     private readonly NpgsqlSpaceRepository spaces = new(KernelDataSource.For(readerConnectionString));
-    private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), homeTimeZone);
+    private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), clock, homeTimeZone);
     private readonly HomeService home = new(new NpgsqlLedgerRepository(KernelDataSource.For(readerConnectionString), homeTimeZone));
 
     /// <summary>
@@ -103,7 +103,7 @@ public sealed class EnvironmentReader(string readerConnectionString, IClock cloc
         Guid? space, int days, CancellationToken cancellationToken = default)
     {
         SpaceRatingService.Check(days);
-        var today = await calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+        var today = await calendar.TodayAsync(cancellationToken);
         var from = today.AddDays(1 - days);
         var all = await spaces.GetSpacesAsync(cancellationToken);
         var ratings = await spaces.GetRatingsAsync(space, from, cancellationToken);

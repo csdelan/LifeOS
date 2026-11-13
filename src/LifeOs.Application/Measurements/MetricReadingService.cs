@@ -180,7 +180,7 @@ public sealed class MetricReadingService(
 
     /// <summary>Today in the home zone.</summary>
     public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default)
-        => calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+        => calendar.TodayAsync(cancellationToken);
 
     /// <summary>A home-zone wall-clock time as an instant (for hosts reading "2026-11-01 07:10").</summary>
     public Task<DateTimeOffset> InstantAtAsync(DateTime local, CancellationToken cancellationToken = default)

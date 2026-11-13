@@ -241,7 +241,7 @@ internal static class SpacePhotoCommand
         }
 
         var today = await provider.GetRequiredService<IHomeCalendar>()
-            .DateAtAsync(provider.GetRequiredService<IClock>().UtcNow, cancellationToken);
+            .TodayAsync(cancellationToken);
         return DomainsExceptionCommand.ParseDay(text, today);
     }
 

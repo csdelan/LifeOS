@@ -59,9 +59,6 @@ public interface IFoodLogRepository
     Task<IReadOnlyList<(DateOnly Day, int Drinks)>> CountDrinksAsync(
         DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
 
-    /// <summary>Today in the home zone.</summary>
-    Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default);
-
     /// <summary>The home-zone day and wall-clock time of <paramref name="instant"/>.</summary>
     Task<DateTime> LocalAtAsync(DateTimeOffset instant, CancellationToken cancellationToken = default);
 

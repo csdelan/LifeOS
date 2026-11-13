@@ -19,11 +19,11 @@ public sealed class ReviewReader(string readerConnectionString, IClock clock, st
     public const int MaxRecapDays = 62;
 
     private readonly NpgsqlReviewRepository reviews = new(KernelDataSource.For(readerConnectionString));
-    private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), homeTimeZone);
+    private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), clock, homeTimeZone);
 
     /// <summary>Today in the home zone.</summary>
     public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default)
-        => calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+        => calendar.TodayAsync(cancellationToken);
 
     /// <summary>The reviews whose period is from <paramref name="from"/> to <paramref name="to"/>, daily first on a day.</summary>
     public async Task<IReadOnlyList<ReviewRow>> ListAsync(

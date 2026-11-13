@@ -136,15 +136,6 @@ public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFood
                 new { from = from.ToUniversalTime(), to = to.ToUniversalTime() }, cancellationToken))
             .Select(r => (ParseDay(r.Day), r.Drinks)).ToList();
 
-    public async Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default)
-    {
-        await using var connection = dataSource.CreateConnection();
-        await connection.OpenAsync(cancellationToken);
-        var day = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
-            "SELECT to_char(bsk.home_today(), 'YYYY-MM-DD');", cancellationToken: cancellationToken));
-        return ParseDay(day!);
-    }
-
     public async Task<DateTime> LocalAtAsync(DateTimeOffset instant, CancellationToken cancellationToken = default)
     {
         await using var connection = dataSource.CreateConnection();

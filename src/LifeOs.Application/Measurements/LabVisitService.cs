@@ -74,7 +74,7 @@ public sealed class LabVisitService(
     EventSource eventSource,
     bool reportsEnabled = true)
 {
-    private readonly LabVisitReads reads = new(metrics, calendar, clock);
+    private readonly LabVisitReads reads = new(metrics, calendar);
 
     /// <summary>The refusal when reports can't be stored on this host.</summary>
     public const string ReportsNotSetUp =
@@ -188,7 +188,7 @@ public sealed class LabVisitService(
 
     /// <summary>Today in the home zone.</summary>
     public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default)
-        => calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+        => calendar.TodayAsync(cancellationToken);
 
     private async Task<LabVisitRead> SaveCoreAsync(
         LabVisit? existing, LabVisitEntry entry, CancellationToken cancellationToken)
@@ -462,12 +462,12 @@ public sealed class LabVisitService(
 /// The lab visits' reads (MEASURE-4, plan §4.9), shared by <see cref="LabVisitService"/> and the
 /// API's reader connection: each visit with its results, in the order its report prints them.
 /// </summary>
-public sealed class LabVisitReads(IMetricRepository metrics, IHomeCalendar calendar, IClock clock)
+public sealed class LabVisitReads(IMetricRepository metrics, IHomeCalendar calendar)
 {
     /// <summary>Every visit with its results, newest collected first.</summary>
     public async Task<LabVisitList> ListAsync(CancellationToken cancellationToken = default)
     {
-        var today = await calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+        var today = await calendar.TodayAsync(cancellationToken);
         var visits = await metrics.GetVisitsAsync(cancellationToken);
         var results = (await metrics.GetResultsAsync(null, cancellationToken)).ToLookup(r => r.VisitId);
         var all = await metrics.GetMetricsAsync(cancellationToken);

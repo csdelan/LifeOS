@@ -25,7 +25,7 @@ public sealed record MetricRead(
 /// goal are worked out from all of a metric's history, so a short range starts from the trend as
 /// it was. The API builds one on the reader connection.
 /// </summary>
-public sealed class MetricReads(IMetricRepository metrics, IHomeCalendar calendar, IClock clock)
+public sealed class MetricReads(IMetricRepository metrics, IHomeCalendar calendar)
 {
     /// <summary>Every metric (archived ones only when asked), by name, with its count and newest reading.</summary>
     public async Task<IReadOnlyList<MetricSummary>> ListAsync(
@@ -56,7 +56,7 @@ public sealed class MetricReads(IMetricRepository metrics, IHomeCalendar calenda
         }
 
         var metric = MetricService.Resolve(await metrics.GetMetricsAsync(cancellationToken), reference);
-        var today = await calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+        var today = await calendar.TodayAsync(cancellationToken);
         DateOnly? from = days is { } n ? today.AddDays(1 - n) : null;
 
         var readings = await metrics.GetReadingsAsync(metric.Id, cancellationToken: cancellationToken);

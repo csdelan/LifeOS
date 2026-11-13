@@ -24,8 +24,7 @@ public sealed class ActivityReader(string readerConnectionString, string homeTim
 
     private readonly ActivityReads reads = new(
         new NpgsqlActivityRepository(KernelDataSource.For(readerConnectionString)),
-        new NpgsqlHomeCalendar(KernelDataSource.For(readerConnectionString), homeTimeZone),
-        clock ?? new SystemClock());
+        new NpgsqlHomeCalendar(KernelDataSource.For(readerConnectionString), clock ?? new SystemClock(), homeTimeZone));
 
     private readonly ActivityPaidReads paid = new(new NpgsqlLedgerRepository(KernelDataSource.For(readerConnectionString), homeTimeZone));
 

@@ -155,7 +155,7 @@ public sealed class ExceptionDayService(
             cancellationToken);
     }
 
-    private Task<DateOnly> TodayAsync(CancellationToken cancellationToken) => calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+    private Task<DateOnly> TodayAsync(CancellationToken cancellationToken) => calendar.TodayAsync(cancellationToken);
 
     private static string Text(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 }

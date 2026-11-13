@@ -124,7 +124,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 
 - Dates are days in Chris's home time zone (Pacific). `InvariantGlobalization` is on, so .NET
   can't resolve IANA zones on Windows. Do zone math in Postgres (`McpReads.StartOfDayAsync` is an
-  example). In SQL, today is `bsk.home_today()`, never `current_date`, which is UTC's.
+  example). In SQL, today is `bsk.home_today()`, never `current_date`, which is UTC's. In C#,
+  it's `IHomeCalendar.TodayAsync()`, by the kernel's `IClock`, so a `TestClock` moves it; a view's
+  `bsk.home_today()` reads the database's clock, which no test can move.
 - The zone is set twice, `Rewards:HomeTimeZone` and the database's `bsk.home_zone`, and the API
   won't start, nor the calendar answer, while they disagree (`HomeZoneCheck`). A test kernel on
   another zone needs a `DomainTestDatabase` made in that zone. The web's `todayIso()` counts in

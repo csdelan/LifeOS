@@ -280,7 +280,7 @@ public sealed class AgentWrites(
         var key = RequestKey(requestId);
         var kernel = Kernel(agent);
         var (target, opened) = await ReviewForAsync(kernel, review, kind, day, cancellationToken);
-        var today = await calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+        var today = await calendar.TodayAsync(cancellationToken);
 
         var earlier = key is null ? null : await EarlierAsync(agent, key, EventKinds.Observation, cancellationToken);
         if (earlier is null)
@@ -412,8 +412,8 @@ public sealed class AgentWrites(
             new CaptureService(events, artifacts, clock, source),
             relate,
             triage,
-            new InboxFilingService(subjects, relate, triage, calendar, clock),
-            new ReviewService(subjects, subjectRepository, reviews, status, calendar, clock),
+            new InboxFilingService(subjects, relate, triage, calendar),
+            new ReviewService(subjects, subjectRepository, reviews, status, calendar),
             new ReflectionService(events, edges, reviews, clock, source));
     }
 

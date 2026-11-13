@@ -24,12 +24,11 @@ public sealed class ReviewService(
     ISubjectRepository subjectRepository,
     IReviewRepository reviews,
     StatusService status,
-    IHomeCalendar calendar,
-    IClock clock)
+    IHomeCalendar calendar)
 {
     /// <summary>Today in the home zone.</summary>
     public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default)
-        => calendar.DateAtAsync(clock.UtcNow, cancellationToken);
+        => calendar.TodayAsync(cancellationToken);
 
     /// <summary>
     /// The <paramref name="kind"/> review holding <paramref name="day"/> (today when null), made
