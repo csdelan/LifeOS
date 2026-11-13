@@ -41,12 +41,11 @@ import { dayPartXp, paidBetween, partXpWords } from "@/lib/activity-xp";
 import { formatDay } from "@/lib/dates";
 import type { ActivitySummaryRead, ActivityWeekRow } from "@/lib/production-ui-types";
 import { useActivityDay, useActivityDays } from "@/lib/queries";
-import { loadView, saveView } from "@/lib/view-state";
+import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 
 const VIEW = "activity.sleep";
 
-type SleepView = { range: MetricRange; metric: SleepMetric };
 
 /** A score's tone, or Time asleep's one tone. */
 function tone(value: number, metric: SleepMetric): string {
@@ -161,22 +160,12 @@ export function SleepCard({
   summary: ActivitySummaryRead;
   onOpenDay: (day: string) => void;
 }) {
-  const [view, setViewState] = useState<SleepView>(() => loadView<SleepView>(VIEW, { range: "30", metric: "sleep" }));
+  const [range, setRange] = usePersistedChoice<MetricRange>(VIEW, "range", METRIC_RANGES, "30");
+  const [metric, setMetric] = usePersistedChoice<SleepMetric>(VIEW, "metric", SLEEP_METRICS, "sleep");
   const [mode, setMode] = useState<"chart" | "table">("chart");
   const titleId = useId();
   const today = summary.today;
-  const { range, metric } = view;
   const days = useActivityDays(rangeFrom(range, today), today);
-
-  const setView = (patch: Partial<SleepView>) => {
-    const next = { ...view, ...patch };
-    setViewState(next);
-    try {
-      saveView(VIEW, next);
-    } catch {
-      // Storage can be full or blocked; the choice still applies to this view.
-    }
-  };
 
   const all = days.data?.days ?? [];
   const values = all.map((d) => sleepValue(d, metric));
@@ -288,7 +277,7 @@ export function SleepCard({
       <WeekTiles thisWeek={summary.thisWeek} lastWeek={summary.lastWeek} />
 
       <div className="flex flex-wrap items-center gap-3 border-t pt-3">
-        <ToggleGroup label="Range" value={range} onChange={(r) => setView({ range: r })} options={[...METRIC_RANGES]} />
+        <ToggleGroup label="Range" value={range} onChange={setRange} options={[...METRIC_RANGES]} />
         <ToggleGroup
           label="Show as"
           value={mode}
@@ -299,7 +288,7 @@ export function SleepCard({
           ]}
         />
         {mode === "chart" ? (
-          <ToggleGroup label="Measure" value={metric} onChange={(m) => setView({ metric: m })} options={SLEEP_METRICS} />
+          <ToggleGroup label="Measure" value={metric} onChange={setMetric} options={SLEEP_METRICS} />
         ) : null}
       </div>
 

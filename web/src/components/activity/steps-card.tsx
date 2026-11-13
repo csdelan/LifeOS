@@ -35,7 +35,7 @@ import { dayPartXp, paidBetween, paidFor } from "@/lib/activity-xp";
 import { formatDay } from "@/lib/dates";
 import type { ActivityDayRow, ActivitySummaryRead } from "@/lib/production-ui-types";
 import { useActivityDays } from "@/lib/queries";
-import { loadView, saveView } from "@/lib/view-state";
+import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 
 const VIEW = "activity.steps";
@@ -59,21 +59,12 @@ function bandCell(steps: number | null, targets: StepTargets) {
  * steps XP: earned, or projected while it isn't paid yet.
  */
 export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
-  const [range, setRangeState] = useState<MetricRange>(() => loadView<{ range: MetricRange }>(VIEW, { range: "30" }).range);
+  const [range, setRange] = usePersistedChoice<MetricRange>(VIEW, "range", METRIC_RANGES, "30");
   const [mode, setMode] = useState<"chart" | "table">("chart");
   const titleId = useId();
   const today = summary.today;
   const days = useActivityDays(rangeFrom(range, today), today);
   const targets: StepTargets = summary;
-
-  const setRange = (next: MetricRange) => {
-    setRangeState(next);
-    try {
-      saveView(VIEW, { range: next });
-    } catch {
-      // Storage can be full or blocked; the range still applies to this view.
-    }
-  };
 
   const all = days.data?.days ?? [];
   const averages = rollingAverage(all, today);

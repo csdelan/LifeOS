@@ -16,7 +16,7 @@ import {
 } from "@/lib/activity";
 import type { ActivitySummaryRead, ActivityTagRow } from "@/lib/production-ui-types";
 import { useActivityTags } from "@/lib/queries";
-import { loadView, saveView } from "@/lib/view-state";
+import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 
 const VIEW = "activity.tags";
@@ -57,7 +57,7 @@ export function TagsCard({
   summary: ActivitySummaryRead;
   onOpenDay: (day: string) => void;
 }) {
-  const [range, setRangeState] = useState<MetricRange>(() => loadView<{ range: MetricRange }>(VIEW, { range: "30" }).range);
+  const [range, setRangeState] = usePersistedChoice<MetricRange>(VIEW, "range", METRIC_RANGES, "30");
   const [showAll, setShowAll] = useState(false);
   const titleId = useId();
   const listId = useId();
@@ -68,11 +68,6 @@ export function TagsCard({
   const setRange = (next: MetricRange) => {
     setRangeState(next);
     setShowAll(false);
-    try {
-      saveView(VIEW, { range: next });
-    } catch {
-      // Storage can be full or blocked; the range still applies to this view.
-    }
   };
 
   const all = tags.data?.tags ?? [];

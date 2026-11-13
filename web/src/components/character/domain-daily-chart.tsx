@@ -6,7 +6,7 @@ import { barPlus } from "@/lib/domains";
 import { shownPoints } from "@/lib/home-score";
 import type { DomainDayRow } from "@/lib/production-ui-types";
 import { useDomainDays } from "@/lib/queries";
-import { loadView, saveView } from "@/lib/view-state";
+import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 
 const RANGES = [
@@ -60,7 +60,7 @@ function describe(d: DomainDayRow, home = false): string {
  * out of 100 and the step line is the bar the day had to reach to be kept up.
  */
 export function DomainDailyChart({ domain, name }: { domain: string; name: string }) {
-  const [range, setRangeState] = useState<Range>(() => loadView<{ range: Range }>(VIEW, { range: "30" }).range);
+  const [range, setRangeState] = usePersistedChoice<Range>(VIEW, "range", RANGES, "30");
   const [mode, setMode] = useState<"chart" | "table">("chart");
   const [hovered, setHovered] = useState<number | null>(null);
   const days = useDomainDays(domain, Number(range));
@@ -70,11 +70,6 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
   const setRange = (next: Range) => {
     setRangeState(next);
     setHovered(null);
-    try {
-      saveView(VIEW, { range: next });
-    } catch {
-      // Storage can be full or blocked; the range still applies to this view.
-    }
   };
 
   const data = days.data;

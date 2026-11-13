@@ -7,7 +7,7 @@ import { domainSymbol, newBestsText, percent, periodLabel, rankSummary, type Ran
 import type { DomainReportRow, DomainRow } from "@/lib/production-ui-types";
 import { useDomainReport, useDomains } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { loadView, saveView } from "@/lib/view-state";
+import { usePersistedChoice } from "@/lib/view-state";
 
 const PERIODS = [
   { id: "7", label: "7 days" },
@@ -69,22 +69,12 @@ export interface RankPoint {
  * domain in a table. From three configured domains, spider charts compare ranks and levels too.
  */
 export function DomainReports() {
-  const [view, setViewState] = useState(() => loadView<{ period: Period }>(VIEW, { period: "30" }));
-  const period = PERIODS.some((p) => p.id === view.period) ? view.period : "30";
+  const [period, setPeriod] = usePersistedChoice<Period>(VIEW, "period", PERIODS, "30");
   const report = useDomainReport(Number(period));
   const domains = useDomains();
   const ranksId = useId();
   const levelsId = useId();
   const tableId = useId();
-
-  const setPeriod = (next: Period) => {
-    setViewState({ period: next });
-    try {
-      saveView(VIEW, { period: next });
-    } catch {
-      // Storage can be full or blocked; the choice still applies to this view.
-    }
-  };
 
   // The period the data on screen covers: while a new one loads, the last one stays (dimmed),
   // labelled as what it is.

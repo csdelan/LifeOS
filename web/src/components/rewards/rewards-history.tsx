@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
@@ -41,7 +41,7 @@ import {
   type Period,
   type PeriodTotals,
 } from "@/lib/rewards-history";
-import { loadView, saveView } from "@/lib/view-state";
+import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 
 const VIEW_KEY = "rewards.history";
@@ -58,24 +58,7 @@ const ENTRY_FILTERS: { id: EntryFilter; label: string }[] = [
   { id: "redeem", label: "Spent" },
 ];
 
-/** The currency and bucket last picked on this device. */
-function usePersistedView() {
-  const [view, setView] = useState(() => {
-    const stored = loadView(VIEW_KEY, { currency: "xp", bucket: "week" as HistoryBucket });
-    return {
-      currency: currencyDef(stored.currency)?.key ?? "xp",
-      bucket: stored.bucket === "month" ? "month" : ("week" as HistoryBucket),
-    };
-  });
-  useEffect(() => {
-    try {
-      saveView(VIEW_KEY, view);
-    } catch {
-      // Storage can be unavailable (private windows); the choice just isn't remembered.
-    }
-  }, [view]);
-  return [view, setView] as const;
-}
+const BUCKETS: readonly HistoryBucket[] = ["week", "month"];
 
 /**
  * The Rewards History (REWARD-5): a month calendar of what each day earned, earned vs spent
@@ -89,7 +72,9 @@ export function RewardsHistory({ onOpenSubject }: { onOpenSubject: (subjectId: s
   const tz = useMemo(() => viewerTimeZone(), []);
   const [month, setMonth] = useState(thisMonth);
   const [selection, setSelection] = useState<Period | null>(null);
-  const [view, setView] = usePersistedView();
+  const [currency, setCurrency] = usePersistedChoice<string>(VIEW_KEY, "currency", CURRENCIES.map((c) => c.key), "xp");
+  const [bucket, setBucket] = usePersistedChoice<HistoryBucket>(VIEW_KEY, "bucket", BUCKETS, "week");
+  const view = { currency, bucket };
 
   const range = historyRange(month, today);
   const daily = useLedgerDaily(range.from, range.to, tz);
@@ -139,13 +124,13 @@ export function RewardsHistory({ onOpenSubject }: { onOpenSubject: (subjectId: s
         <ToggleGroup
           label="Currency"
           value={view.currency}
-          onChange={(currency) => setView((v) => ({ ...v, currency }))}
+          onChange={setCurrency}
           options={CURRENCIES.map((c) => ({ id: c.key, label: c.label, symbol: c.symbol }))}
         />
         <ToggleGroup
           label="Chart by"
           value={view.bucket}
-          onChange={(bucket) => setView((v) => ({ ...v, bucket }))}
+          onChange={setBucket}
           options={[
             { id: "week", label: "Weeks" },
             { id: "month", label: "Months" },

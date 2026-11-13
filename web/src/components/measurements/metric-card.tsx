@@ -33,7 +33,7 @@ import {
 } from "@/lib/measurements";
 import type { MetricDayRow, MetricDetailRead, MetricFlag } from "@/lib/production-ui-types";
 import { useMetricsOver, useWrites } from "@/lib/queries";
-import { loadView, saveView } from "@/lib/view-state";
+import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 import { errorText } from "@/lib/write-action";
 
@@ -106,8 +106,11 @@ export function MetricCard({
   const writes = useWrites();
   const view = `measurements.${group.key}`;
   // Labs come months apart, so a lab test opens on all of it; any other metric on 90 days.
-  const [range, setRangeState] = useState<MetricRange>(
-    () => loadView<{ range: MetricRange }>(view, { range: group.metrics[0].panel != null ? "all" : "90" }).range,
+  const [range, setRange] = usePersistedChoice<MetricRange>(
+    view,
+    "range",
+    RANGES,
+    group.metrics[0].panel != null ? "all" : "90",
   );
   const [mode, setMode] = useState<"chart" | "table">("chart");
   const [editOpen, setEditOpen] = useState(false);
@@ -116,15 +119,6 @@ export function MetricCard({
     group.metrics.map((m) => m.id),
     rangeDays(range),
   );
-
-  const setRange = (next: MetricRange) => {
-    setRangeState(next);
-    try {
-      saveView(view, { range: next });
-    } catch {
-      // Storage can be full or blocked; the range still applies to this view.
-    }
-  };
 
   const reads = read.data;
   // The metrics as the reads have them (fresher than the list's), in the group's order.

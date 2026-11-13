@@ -12,7 +12,7 @@ import { formatDay } from "@/lib/dates";
 import { barPlus } from "@/lib/domains";
 import { shownScore } from "@/lib/environment";
 import { useEnvironmentDays } from "@/lib/queries";
-import { loadView, saveView } from "@/lib/view-state";
+import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 
 const RANGES = [
@@ -41,18 +41,9 @@ export interface LevelBarLine {
  */
 export function HomeScoreChart({ levelBar }: { levelBar?: LevelBarLine }) {
   const titleId = useId();
-  const [range, setRangeState] = useState<Range>(() => loadView<{ range: Range }>(VIEW, { range: "30" }).range);
+  const [range, setRange] = usePersistedChoice<Range>(VIEW, "range", RANGES, "30");
   const [mode, setMode] = useState<"chart" | "table">("chart");
   const read = useEnvironmentDays(Number(range));
-
-  const setRange = (next: Range) => {
-    setRangeState(next);
-    try {
-      saveView(VIEW, { range: next });
-    } catch {
-      // Storage can be full or blocked; the range still applies to this view.
-    }
-  };
 
   const today = read.data?.today ?? "";
   const days = read.data?.days ?? [];

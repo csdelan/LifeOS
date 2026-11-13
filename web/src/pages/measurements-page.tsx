@@ -81,11 +81,7 @@ export function MeasurementsPage() {
       const next = new Set(now);
       if (on) next.add(key);
       else next.delete(key);
-      try {
-        saveView(OPEN_VIEW, { keys: [...next] });
-      } catch {
-        // Storage can be full or blocked; the row still opens.
-      }
+      saveView(OPEN_VIEW, { keys: [...next] });
       return next;
     });
   };

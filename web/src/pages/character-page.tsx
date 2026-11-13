@@ -30,7 +30,7 @@ import {
 import { shownPoints } from "@/lib/home-score";
 import type { DomainConsistency, DomainCurrent, DomainLifetime, DomainRow } from "@/lib/production-ui-types";
 import { useDomains, useWrites } from "@/lib/queries";
-import { loadView, saveView } from "@/lib/view-state";
+import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 
 /**
@@ -175,19 +175,10 @@ function DomainCard({ domain }: { domain: DomainRow }) {
   const headingId = useId();
   const chartId = useId();
   const view = `character.${domain.key}.chart`;
-  const [chartOpen, setChartOpenState] = useState(() => loadView<{ open: boolean }>(view, { open: false }).open);
+  const [chartOpen, setChartOpen] = usePersistedChoice<boolean>(view, "open", [true, false], false);
   const shown = domain.shown!;
   const best = domain.best!;
   const fallHistory = fallHistoryText(domain);
-
-  const setChartOpen = (open: boolean) => {
-    setChartOpenState(open);
-    try {
-      saveView(view, { open });
-    } catch {
-      // Storage can be full or blocked; the chart still opens for this view.
-    }
-  };
 
   return (
     <section aria-labelledby={headingId} className="rounded-xl bg-card ring-1 ring-foreground/10">
