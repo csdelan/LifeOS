@@ -18,6 +18,9 @@ public sealed class LogCapture : ILoggerProvider
     public IReadOnlyList<string> Messages(string category)
         => lines.Where(l => l.Category == category).Select(l => l.Message).ToList();
 
+    /// <summary>Every message logged, oldest first, whatever its category.</summary>
+    public IReadOnlyList<string> All() => lines.Select(l => l.Message).ToList();
+
     public ILogger CreateLogger(string categoryName) => new Logger(this, categoryName);
 
     public void Dispose()

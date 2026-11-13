@@ -102,7 +102,9 @@ What follows from it:
 - **Nothing runs on a clock.** There's no background job, and the Fly machines stop when
   idle (`min_machines_running = 0`). Work that depends on time passing is caught up when the
   app opens: Food (`POST /api/food/settle`), Domains (`POST /api/domains/settle`) and the Oura
-  sync all do this.
+  sync all do this. Since code review CR57 the API also catches up as it starts, before it
+  answers anything: repetitions, food days, activity days already synced and rank-ups, so an
+  agent reading `/mcp` first thing sees today's (`StartupCatchUp`).
 - **Days are home-zone days.** `bsk.home_today()` and `IHomeCalendar` give today's date in
   the home zone. "Wednesday has passed" must use them, not UTC. **Weeks run Monday to Sunday.**
 

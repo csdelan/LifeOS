@@ -19,7 +19,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - `src/LifeOs.Cli`: the `bsk` CLI, and the only door for `bsk migrate`. Run it with
   `dotnet run --project src/LifeOs.Cli -- <verb>` (`bsk` isn't on PATH). Outside programs that
   read (Python, BI, `psql`) use the `bsk_reader` role and the `v_*` views.
-- `src/LifeOs.Api`: the ASP.NET Core API. It serves the SPA in production and `/mcp`, the
+- `src/LifeOs.Api`: the ASP.NET Core API. It catches up repeating Tasks and the rewards as it
+  starts (`StartupCatchUp`), so starting it against a database writes to it; `CatchUp:OnStart`
+  false turns that off, and `ApiTestHost` does. It serves the SPA in production and `/mcp`, the
   connector Chris's agents use. It reads only, unless `Mcp:Writes` is `capture`: then the clients
   named in `Mcp:WriteClients` can capture to the Inbox, journal, dismiss raw captures and link a
   review to its vault reflection, as `mcp:<client_id>` (`docs/pilot/agent-access-plan.md` §5).

@@ -7,7 +7,8 @@ namespace LifeOs.Application.Rewards;
 /// Brings the rewards up to date, the one way every door does it (code review CR46): the food
 /// days that closed themselves (food-log plan §3.4), the activity days Oura has finished
 /// (activity plan §3.8), then any rank-up the domains have reached, by time alone included
-/// (xp-domains plan §3.7). Safe to repeat: nothing pays twice.
+/// (xp-domains plan §3.7). Safe to repeat: nothing pays twice. The API runs it as it starts (code
+/// review CR57), and the Character page each time it opens.
 /// <para>
 /// With <c>items</c>, it first heals every item whose own reconcile never ran (rewards plan §3.3).
 /// That reads every item ever paid, so it grows with history: <c>bsk rewards reconcile</c> asks

@@ -18,8 +18,8 @@ namespace LifeOs.Application.Subjects;
 /// <item>after the last completion: when the latest closes, N after the day it closed.</item>
 /// </list>
 /// The first is made when the pattern is set. <see cref="SettleAsync"/> catches up dates that
-/// passed while nothing ran (there's no background job: the app calls it when Tasks or Focus
-/// opens). Nothing here changes a status: a late repetition waits for Chris to complete it,
+/// passed while nothing ran: there's no background job, so the API calls it as it starts (code
+/// review CR57) and the app when Tasks or Focus opens. Nothing here changes a status: a late repetition waits for Chris to complete it,
 /// cancel it or mark it Missed.
 /// </para>
 /// <para>

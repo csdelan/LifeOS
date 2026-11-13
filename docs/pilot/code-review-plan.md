@@ -1,7 +1,8 @@
 # Code review fixes plan
 
 **Status:** CR1 to CR26 built (2026-11-12). CR27 to CR56, the second review's P0, P1 and P2, built
-(2026-11-13); its three choices wait for Chris ([Second review](#second-review-2026-11-13)).
+(2026-11-13), and CR57 for its choice A; choices B and C wait for Chris
+([Second review](#second-review-2026-11-13)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
@@ -69,6 +70,14 @@ commit each, and skipped P3 (listed under the second review, so it isn't lost).
   cites the series' newest `attribute_change` on those keys, or is `declared` when there is none.
 - **CR54:** `life_snapshot` reads only open items now, but still lists every unarchived value,
   whatever its status, as it did.
+- **CR57 (choice A):** the API catches up as it starts, in `StartupCatchUp`, before it answers
+  anything: the repetitions repeating Tasks are owed, then `SettlementService` (food days,
+  activity days already synced, rank-ups). Fly stops the machine when idle, so the first request
+  of most days starts it, and agents reading `/mcp` see today's chores and yesterday's XP. It
+  doesn't sync Oura (the activity plan's "no background job in phase 1" stands) or heal every
+  item (CR46). A catch-up that fails or runs past 20 seconds is logged and the API starts anyway;
+  the pages still catch up when they open, for a machine that stayed up past midnight.
+  `CatchUp:OnStart` false turns it off; test hosts start with it off.
 
 ## Items
 
@@ -193,6 +202,7 @@ misses `.claude/`.
 
 - **A.** Run the catch-up jobs (repeating Tasks, food days, rank-ups, the item sweep) when the
   API starts, reversing the recurring-tasks plan's "no background job"; or document the gap.
+  *Chosen 2026-11-13: run them at start, without the item sweep or an Oura sync (CR57).*
 - **B.** Stop maintaining the mock's copy of the reward economy, replacing each part with
   canned reads when its rule next changes, and check exact amounts in .NET.
 - **C.** A non-owner database role for the API, so it can't drop the append-only triggers.

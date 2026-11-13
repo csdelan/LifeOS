@@ -75,6 +75,12 @@ public static class ApiHost
         // The zone must be the database's own bsk.home_zone too; startup fails when it isn't.
         builder.Services.AddHostedService(sp => new HomeZoneStartupCheck(
             KernelDataSource.For(owner), homeZone, sp.GetRequiredService<ILogger<HomeZoneStartupCheck>>()));
+        // What fell due while the machine was stopped is caught up before the API answers anything,
+        // unless CatchUp:OnStart is false (code review CR57); a value that isn't true or false fails.
+        if (StartupCatchUp.Enabled(builder.Configuration[StartupCatchUp.ConfigurationKey]))
+        {
+            builder.Services.AddHostedService<StartupCatchUp>();
+        }
         builder.Services.AddSingleton(new SubjectReader(
             reader, integrations.Unsplash?.AppName ?? Cover.DefaultAppName));
         builder.Services.AddSingleton(sp => new RewardReader(

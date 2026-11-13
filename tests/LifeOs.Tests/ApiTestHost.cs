@@ -56,6 +56,9 @@ internal sealed class ApiTestHost(WebApplication app, HttpClient client) : IAsyn
             ["ConnectionStrings:Reader"] = BskReader.ConnectionStringFrom(connectionString),
             ["VITE_SUPABASE_URL"] = "https://placeholder.supabase.co",
             ["VITE_SUPABASE_ANON_KEY"] = "placeholder-anon-key",
+            // A test's host doesn't catch up as it starts, so what a test seeds before it stays as
+            // seeded; StartupCatchUpTests turns it on.
+            ["CatchUp:OnStart"] = "false",
         };
         foreach (var (key, value) in configuration ?? new Dictionary<string, string?>())
         {

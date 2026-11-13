@@ -8,7 +8,8 @@ namespace LifeOs.Cli.Commands;
 /// <summary>
 /// <c>bsk tasks settle</c>: makes the repetitions every repeating Task is owed by today
 /// (TASKS-3, D16). A repetition on a calendar date that passed while nothing ran gets its
-/// next; nothing's status changes. The web calls the same thing when Tasks or Focus opens.
+/// next; nothing's status changes. The API calls the same thing as it starts, and the web when
+/// Tasks or Focus opens.
 /// </summary>
 internal static class TasksCommand
 {
