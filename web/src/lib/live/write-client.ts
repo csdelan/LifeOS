@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { fits } from "@/lib/live/fits";
 import { api, unwrap } from "@/lib/live/http";
 import type {
   LabVisitResult,
@@ -59,8 +60,7 @@ function notify(message: string) {
 }
 
 /** A cover set or moved, its cover normalized; a download count that failed is said, not hidden. */
-function coverResult(raw: unknown): CoverResult {
-  const result = raw as CoverResult;
+function coverResult(result: CoverResult): CoverResult {
   const cover = normalizeCover(result.cover);
   if (!cover) throw new Error("The server's answer had no cover in it.");
   return { ...result, cover };
@@ -69,15 +69,15 @@ function coverResult(raw: unknown): CoverResult {
 export function createLiveWriteClient(): LifeOsWriteClient {
   return {
     async newSubject(req) {
-      const created = (await unwrap(api().POST("/api/subjects", { body: req }))) as unknown as CreatedSubject;
+      const created = fits<CreatedSubject>()(await unwrap(api().POST("/api/subjects", { body: req })));
       notify(`Created ${created.title}`);
       return created;
     },
 
     async promote(source, type, title) {
-      const created = (await unwrap(
+      const created = fits<CreatedSubject>()(await unwrap(
         api().POST("/api/promote", { body: { source, type, title } }),
-      )) as unknown as CreatedSubject;
+      ));
       notify(`Promoted to ${type}`);
       return created;
     },
@@ -88,9 +88,9 @@ export function createLiveWriteClient(): LifeOsWriteClient {
     },
 
     async rename(subject, title) {
-      const renamed = (await unwrap(
+      const renamed = fits<RenamedSubject>()(await unwrap(
         api().POST("/api/rename", { body: { subject, title } }),
-      )) as unknown as RenamedSubject;
+      ));
       if (renamed.changed) notify(renamedMessage(renamed));
       return renamed;
     },
@@ -120,9 +120,9 @@ export function createLiveWriteClient(): LifeOsWriteClient {
     },
 
     async renameTag(from, to) {
-      const renamed = (await unwrap(
+      const renamed = fits<RenamedTag>()(await unwrap(
         api().POST("/api/rename-tag", { body: { from, to } }),
-      )) as unknown as RenamedTag;
+      ));
       if (renamed.renamed + renamed.merged > 0) notify(`Renamed #${renamed.from} → #${renamed.to}`);
       return renamed;
     },
@@ -258,35 +258,35 @@ export function createLiveWriteClient(): LifeOsWriteClient {
     },
 
     async authorizeOura(redirectUri) {
-      const result = (await unwrap(
+      const result = fits<{ authorizeUrl: string }>()(await unwrap(
         api().POST("/api/oura/authorize", { body: { redirectUri } }),
-      )) as unknown as { authorizeUrl: string };
+      ));
       return result.authorizeUrl;
     },
 
     async connectOura(code, state) {
       return normalizeOuraStatus(
-        (await unwrap(api().POST("/api/oura/connect", { body: { code, state } }))) as unknown as OuraStatus,
+        fits<OuraStatus>()(await unwrap(api().POST("/api/oura/connect", { body: { code, state } }))),
       );
     },
 
     async syncActivity(force) {
       return normalizeSync(
-        (await unwrap(api().POST("/api/activity/sync", { body: { force: force ?? false } }))) as unknown as ActivitySyncResult,
+        fits<ActivitySyncResult>()(await unwrap(api().POST("/api/activity/sync", { body: { force: force ?? false } }))),
       );
     },
 
     async setWorkoutNote(workout, text) {
       return normalizeWorkout(
-        (await unwrap(
+        fits<WorkoutRow>()(await unwrap(
           api().POST("/api/activity/workouts/{id}/note", { params: { path: { id: workout } }, body: { text } }),
-        )) as unknown as WorkoutRow,
+        )),
       );
     },
 
     async addSpace(req) {
       const row = normalizeSpace(
-        (await unwrap(api().POST("/api/environment/spaces", { body: req }))) as unknown as SpaceRow,
+        fits<SpaceRow>()(await unwrap(api().POST("/api/environment/spaces", { body: req }))),
       );
       notify(`Added ${row.name}`);
       return row;
@@ -294,9 +294,9 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async setSpace(space, req) {
       const row = normalizeSpace(
-        (await unwrap(
+        fits<SpaceRow>()(await unwrap(
           api().POST("/api/environment/spaces/{id}", { params: { path: { id: space } }, body: req }),
-        )) as unknown as SpaceRow,
+        )),
       );
       notify(`Saved ${row.name}`);
       return row;
@@ -403,7 +403,7 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async addMetric(req) {
       const row = normalizeMetric(
-        (await unwrap(api().POST("/api/measurements/metrics", { body: req }))) as unknown as MetricRow,
+        fits<MetricRow>()(await unwrap(api().POST("/api/measurements/metrics", { body: req }))),
       );
       notify(`Added ${row.name}`);
       return row;
@@ -411,9 +411,9 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async setMetric(metric, req) {
       const row = normalizeMetric(
-        (await unwrap(
+        fits<MetricRow>()(await unwrap(
           api().POST("/api/measurements/metrics/{id}", { params: { path: { id: metric } }, body: req }),
-        )) as unknown as MetricRow,
+        )),
       );
       notify(`Saved ${row.name}`);
       return row;
@@ -422,52 +422,52 @@ export function createLiveWriteClient(): LifeOsWriteClient {
     // A reading write says nothing itself: the sheet announces it with the metric's decimals.
     async logReading(req) {
       return normalizeReadingResult(
-        (await unwrap(api().POST("/api/measurements/readings", { body: req }))) as unknown as MetricReadingResult,
+        fits<MetricReadingResult>()(await unwrap(api().POST("/api/measurements/readings", { body: req }))),
       );
     },
 
     async logReadings(req) {
       return normalizeReadingsResult(
-        (await unwrap(api().POST("/api/measurements/readings/batch", { body: req }))) as unknown as MetricReadingsResult,
+        fits<MetricReadingsResult>()(await unwrap(api().POST("/api/measurements/readings/batch", { body: req }))),
       );
     },
 
     async editReading(reading, req) {
       return normalizeReadingResult(
-        (await unwrap(
+        fits<MetricReadingResult>()(await unwrap(
           api().POST("/api/measurements/readings/{id}", { params: { path: { id: reading } }, body: req }),
-        )) as unknown as MetricReadingResult,
+        )),
       );
     },
 
     async deleteReading(reading) {
       return normalizeReadingResult(
-        (await unwrap(
+        fits<MetricReadingResult>()(await unwrap(
           api().POST("/api/measurements/readings/{id}/delete", { params: { path: { id: reading } } }),
-        )) as unknown as MetricReadingResult,
+        )),
       );
     },
 
     // A visit write says nothing itself either: the sheet announces it once its report is in.
     async logLabVisit(req) {
       return normalizeLabVisitResult(
-        (await unwrap(api().POST("/api/measurements/visits", { body: req }))) as unknown as LabVisitResult,
+        fits<LabVisitResult>()(await unwrap(api().POST("/api/measurements/visits", { body: req }))),
       );
     },
 
     async saveLabVisit(visit, req) {
       return normalizeLabVisitResult(
-        (await unwrap(
+        fits<LabVisitResult>()(await unwrap(
           api().POST("/api/measurements/visits/{id}", { params: { path: { id: visit } }, body: req }),
-        )) as unknown as LabVisitResult,
+        )),
       );
     },
 
     async deleteLabVisit(visit) {
       return normalizeLabVisitResult(
-        (await unwrap(
+        fits<LabVisitResult>()(await unwrap(
           api().POST("/api/measurements/visits/{id}/delete", { params: { path: { id: visit } } }),
-        )) as unknown as LabVisitResult,
+        )),
       );
     },
 
@@ -475,29 +475,29 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       const form = new FormData();
       form.append("report", report, filename ?? (report instanceof File ? report.name : "report.pdf"));
       return normalizeLabVisitResult(
-        (await unwrap(
+        fits<LabVisitResult>()(await unwrap(
           api().POST("/api/measurements/visits/{id}/report", {
             params: { path: { id: visit } },
             // The browser sets the multipart boundary; openapi-fetch leaves FormData as it is.
             body: form as unknown as { report?: string },
             bodySerializer: (body) => body as unknown as FormData,
           }),
-        )) as unknown as LabVisitResult,
+        )),
       );
     },
 
     async removeLabReport(visit) {
       return normalizeLabVisitResult(
-        (await unwrap(
+        fits<LabVisitResult>()(await unwrap(
           api().POST("/api/measurements/visits/{id}/report/delete", { params: { path: { id: visit } } }),
-        )) as unknown as LabVisitResult,
+        )),
       );
     },
 
     async timer(task, action) {
-      const result = (await unwrap(
+      const result = fits<TimerActionResult>()(await unwrap(
         api().POST("/api/timer", { body: { task, action } }),
-      )) as unknown as TimerActionResult;
+      ));
       return normalizeTimerAwards({
         ...result,
         timer: normalizeTimer(result.timer),
@@ -596,19 +596,19 @@ export function createLiveWriteClient(): LifeOsWriteClient {
     },
 
     async materialize(series, through) {
-      const result = (await unwrap(
+      const result = fits<MaterializeResult>()(await unwrap(
         api().POST("/api/appointments/{id}/materialize", {
           params: { path: { id: series } },
           body: { through },
         }),
-      )) as unknown as MaterializeResult;
+      ));
       notify(materializedMessage(result, through));
       return result;
     },
 
     async settleTasks() {
-      const read = await unwrap(api().POST("/api/tasks/settle"));
-      return { series: Number(read.series) || 0, made: (read.made ?? []) as CreatedSubject[] };
+      const read = fits<{ series: number; made: CreatedSubject[] }>()(await unwrap(api().POST("/api/tasks/settle")));
+      return { series: read.series || 0, made: read.made ?? [] };
     },
 
     async openReview(kind, date) {
@@ -633,7 +633,7 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async redeem(req) {
       const redemption = normalizeRedemption(
-        (await unwrap(api().POST("/api/redeem", { body: req }))) as unknown as Redemption,
+        fits<Redemption>()(await unwrap(api().POST("/api/redeem", { body: req }))),
       );
       notify(redemptionMessage(redemption));
       return redemption;
@@ -641,7 +641,7 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async addReward(req) {
       const reward = normalizeReward(
-        (await unwrap(api().POST("/api/rewards", { body: req }))) as unknown as RewardRow,
+        fits<RewardRow>()(await unwrap(api().POST("/api/rewards", { body: req }))),
       );
       notify(`Added ${reward.name}`);
       return reward;
@@ -649,9 +649,9 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async priceReward(reward, price) {
       const row = normalizeReward(
-        (await unwrap(
+        fits<RewardRow>()(await unwrap(
           api().POST("/api/rewards/price", { body: { reward, price } }),
-        )) as unknown as RewardRow,
+        )),
       );
       notify("Price saved");
       return row;
@@ -659,9 +659,9 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async targetReward(reward, targetUsd) {
       const row = normalizeReward(
-        (await unwrap(
+        fits<RewardRow>()(await unwrap(
           api().POST("/api/rewards/target", { body: { reward, targetUsd } }),
-        )) as unknown as RewardRow,
+        )),
       );
       notify(targetUsd === null ? "Target removed" : "Target saved");
       return row;
@@ -669,34 +669,36 @@ export function createLiveWriteClient(): LifeOsWriteClient {
 
     async setBounty(req) {
       const result = normalizeBountyResult(
-        (await unwrap(api().POST("/api/bounty", { body: req }))) as unknown as BountyResult,
+        fits<BountyResult>()(await unwrap(api().POST("/api/bounty", { body: req }))),
       );
       notify("Bounty saved");
       return result;
     },
 
     async setCover(req) {
-      const result = coverResult(await unwrap(api().POST("/api/cover", { body: req })));
+      const result = coverResult(fits<CoverResult>()(await unwrap(api().POST("/api/cover", { body: req }))));
       notify("Cover set");
       if (result.downloadProblem) toast.warning(result.downloadProblem);
       return result;
     },
 
     async moveCover(subject, positionY) {
-      const result = coverResult(await unwrap(api().POST("/api/cover/position", { body: { subject, positionY } })));
+      const result = coverResult(
+        fits<CoverResult>()(await unwrap(api().POST("/api/cover/position", { body: { subject, positionY } }))),
+      );
       notify("Cover moved");
       return result;
     },
 
     async clearCover(subject) {
-      const result = (await unwrap(api().POST("/api/cover/clear", { body: { subject } }))) as unknown as CoverCleared;
+      const result = fits<CoverCleared>()(await unwrap(api().POST("/api/cover/clear", { body: { subject } })));
       notify(result.removed ? "Cover removed" : "No cover to remove");
       return result;
     },
 
     async setHabitTarget(req) {
       const result = normalizeHabitTarget(
-        (await unwrap(api().POST("/api/habits/target", { body: req }))) as unknown as HabitTargetResult,
+        fits<HabitTargetResult>()(await unwrap(api().POST("/api/habits/target", { body: req }))),
       );
       notify(req.clear ? "Target back on the default" : "Target saved");
       return result;

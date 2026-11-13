@@ -5,7 +5,8 @@ namespace LifeOs.Api.Http;
 
 /// <summary>
 /// Read endpoints over <c>bsk.v_*</c> via the <c>bsk_reader</c> connection.
-/// Shapes match <c>web/src/lib/production-ui-types.ts</c>. Composed reads
+/// The OpenAPI document is the contract for their shapes; the web checks its own types
+/// against the generated ones (<c>web/src/lib/live/fits.ts</c>). Composed reads
 /// (alignment forest, dashboard) stay in <c>web/src/lib/derive.ts</c> — this
 /// surface returns the primitives those functions consume.
 /// </summary>

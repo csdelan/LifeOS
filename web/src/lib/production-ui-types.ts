@@ -1,15 +1,12 @@
 /**
- * LifeOS — Production Web UI seed types.
+ * LifeOS — the web app's types for what it reads and writes.
  *
- * INTERIM, hand-authored mirror of the kernel's read models and write-verb surface,
- * for scaffolding the first-pass UI against mock data. Sources:
- *   - Read models:  src/LifeOs.Pilot/Reader/ReadModels.cs
- *   - Verb surface: docs/pilot/ui-refactor-plan.md §3
- *   - Vocabulary:   src/LifeOs.Pilot/Shell/PilotVocab.cs (mirror of the Domain)
- *
- * In Production this file is REPLACED by the OpenAPI-generated client (types come from
- * LifeOs.Api, which is built from the Domain — the single source of truth). Until then,
- * a Cursor agent copies this into web/src/ and generates mock data from it.
+ * Hand-written: they narrow the API's plain strings to unions (statuses, kinds, states) and name
+ * the fields the app fills in itself. The API's OpenAPI document is the contract, and
+ * `src/api/schema.d.ts` its generated types. The live seams check every response against these
+ * types with `fits` (`lib/live/fits.ts`, code review CR38), so one that drifts from the API fails
+ * the build. A new feature's type that needs no narrowing can be an alias of the generated one
+ * (`components["schemas"]["X"]`); older ones become aliases as their feature is next worked on.
  *
  * Date conventions (matching the kernel readers):
  *   - `*Date` / `due` / `scheduled` / `targetDate` / `occurrenceDate` : "YYYY-MM-DD"

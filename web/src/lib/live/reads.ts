@@ -1,5 +1,6 @@
 import { todayIso } from "@/lib/dates";
 import { deriveDashboard, type AlignmentEdge } from "@/lib/derive";
+import { fits, type ArtifactAppSide } from "@/lib/live/fits";
 import { api, ApiRequestError, unwrap } from "@/lib/live/http";
 import { normalizeCoverSearch, withNormalCover } from "@/lib/cover";
 import { repeatingSection, type RecapSection } from "@/lib/review-recap";
@@ -81,11 +82,6 @@ import {
 import { normalizeLabVisits } from "@/lib/labs";
 import { normalizeMetric, normalizeMetricDetail } from "@/lib/measurements";
 import { normalizeArtifact } from "@/lib/artifacts";
-
-function asType<T>(value: unknown): T {
-  return value as T;
-}
-
 /** An Inbox row with its file's metadata in numbers (CAP-2 / CAP-4); null when it has none. */
 function withNormalAttachment<T extends InboxItem>(item: T): T {
   return { ...item, attachment: item.attachment ? normalizeArtifact(item.attachment) : null };
@@ -134,7 +130,7 @@ export const liveReads: LifeOsReads = {
         },
       }),
     );
-    return asType<SubjectListItem[]>(data).map((s) => withNormalCover(normalizeListBounty(s)));
+    return fits<SubjectListItem[]>()(data).map((s) => withNormalCover(normalizeListBounty(s)));
   },
 
   async getSubject(id) {
@@ -145,7 +141,7 @@ export const liveReads: LifeOsReads = {
     if (!response.ok || data === undefined) {
       throw new Error(`API ${response.status}`);
     }
-    const detail = withNormalCover(normalizeDetailBounty(asType<SubjectDetail>(data)));
+    const detail = withNormalCover(normalizeDetailBounty(fits<SubjectDetail>()(data)));
     return { ...detail, repeating: normalizeRepeat(detail.repeating) };
   },
 
@@ -157,50 +153,50 @@ export const liveReads: LifeOsReads = {
     if (!response.ok || data === undefined) {
       throw new Error(`API ${response.status}`);
     }
-    return withNormalCover(normalizeListBounty(asType<SubjectListItem>(data)));
+    return withNormalCover(normalizeListBounty(fits<SubjectListItem>()(data)));
   },
 
   async relations(id) {
     const data = await unwrap(
       api().GET("/api/subjects/{id}/relations", { params: { path: { id } } }),
     );
-    return asType<{ parents: RelationEdge[]; children: RelationEdge[] }>(data);
+    return fits<{ parents: RelationEdge[]; children: RelationEdge[] }>()(data);
   },
 
   async tags(id) {
     const data = await unwrap(
       api().GET("/api/subjects/{id}/tags", { params: { path: { id } } }),
     );
-    return asType<string[]>(data);
+    return fits<string[]>()(data);
   },
 
   async tagUniverse() {
     const data = await unwrap(api().GET("/api/tags"));
-    return asType<TagUniverseItem[]>(data);
+    return fits<TagUniverseItem[]>()(data);
   },
 
   async journal(id) {
     const data = await unwrap(
       api().GET("/api/subjects/{id}/journal", { params: { path: { id } } }),
     );
-    return asType<JournalEntry[]>(data);
+    return fits<JournalEntry[]>()(data);
   },
 
   async history(id) {
     const data = await unwrap(
       api().GET("/api/subjects/{id}/history", { params: { path: { id } } }),
     );
-    return asType<StatusHistoryEntry[]>(data);
+    return fits<StatusHistoryEntry[]>()(data);
   },
 
   async inbox() {
     const data = await unwrap(api().GET("/api/inbox"));
-    return asType<InboxItem[]>(data).map(withNormalAttachment);
+    return fits<InboxItem[], ArtifactAppSide>()(data).map(withNormalAttachment);
   },
 
   async inboxResolved() {
     const data = await unwrap(api().GET("/api/inbox/resolved"));
-    return asType<ResolvedInboxItem[]>(data).map(withNormalAttachment);
+    return fits<ResolvedInboxItem[], ArtifactAppSide>()(data).map(withNormalAttachment);
   },
 
   async artifact(id) {
@@ -223,22 +219,22 @@ export const liveReads: LifeOsReads = {
 
   async areas() {
     const data = await unwrap(api().GET("/api/areas"));
-    return asType<AreaRow[]>(data);
+    return fits<AreaRow[]>()(data);
   },
 
   async people() {
     const data = await unwrap(api().GET("/api/people"));
-    return asType<PersonRow[]>(data);
+    return fits<PersonRow[]>()(data);
   },
 
   async habits() {
     const data = await unwrap(api().GET("/api/habits"));
-    return asType<HabitRow[]>(data).map(normalizeHabit);
+    return fits<HabitRow[]>()(data).map(normalizeHabit);
   },
 
   async appointments(opts) {
     const data = await unwrap(api().GET("/api/appointments", { params: { query: { on: opts.on } } }));
-    return asType<AppointmentRow[]>(data);
+    return fits<AppointmentRow[]>()(data);
   },
 
   async occurrences(opts) {
@@ -254,19 +250,19 @@ export const liveReads: LifeOsReads = {
         },
       }),
     );
-    return asType<HabitOccurrenceRow[]>(data);
+    return fits<HabitOccurrenceRow[]>()(data);
   },
 
   async timers() {
     const data = await unwrap(api().GET("/api/timers"));
-    return asType<TaskTimer[]>(data).map(normalizeTimer);
+    return fits<TaskTimer[]>()(data).map(normalizeTimer);
   },
 
   async taskSeries(opts) {
     const data = await unwrap(
       api().GET("/api/tasks/series", { params: { query: { includeArchived: opts?.includeArchived } } }),
     );
-    return asType<TaskSeriesRow[]>(data).map(normalizeSeriesRow);
+    return fits<TaskSeriesRow[]>()(data).map(normalizeSeriesRow);
   },
 
   async taskSeriesHistory(id) {
@@ -275,108 +271,108 @@ export const liveReads: LifeOsReads = {
     if (!response.ok || data === undefined) {
       throw new Error(`API ${response.status}`);
     }
-    const read = asType<TaskSeriesHistory>(data);
+    const read = fits<TaskSeriesHistory>()(data);
     return {
       series: normalizeSeriesRow(read.series),
-      repetitions: asType<TaskRepetitionRow[]>(read.repetitions ?? []),
+      repetitions: fits<TaskRepetitionRow[]>()(read.repetitions ?? []),
     };
   },
 
   async wallet() {
     const data = await unwrap(api().GET("/api/wallet"));
-    return normalizeWallet(asType<Wallet>(data));
+    return normalizeWallet(fits<Wallet>()(data));
   },
 
   async domains() {
     const data = await unwrap(api().GET("/api/domains"));
-    return normalizeDomains(asType<DomainsRead>(data));
+    return normalizeDomains(fits<DomainsRead>()(data));
   },
 
   async domainDays(domain, days) {
     const data = await unwrap(
       api().GET("/api/domains/{key}/days", { params: { path: { key: domain }, query: { days } } }),
     );
-    return normalizeDomainDays(asType<DomainDaysRead>(data));
+    return normalizeDomainDays(fits<DomainDaysRead>()(data));
   },
 
   async domainReport(days) {
     const data = await unwrap(api().GET("/api/domains/report", { params: { query: { days } } }));
-    return normalizeDomainReport(asType<DomainReportRead>(data));
+    return normalizeDomainReport(fits<DomainReportRead>()(data));
   },
 
   async exceptionDays(days) {
     const data = await unwrap(api().GET("/api/domains/exceptions", { params: { query: { days } } }));
-    return normalizeExceptionDays(asType<ExceptionDaysRead>(data));
+    return normalizeExceptionDays(fits<ExceptionDaysRead>()(data));
   },
 
   async foodDay(date) {
     const data = await unwrap(api().GET("/api/food/day", { params: { query: { date } } }));
-    return normalizeFoodDay(asType<FoodDayRead>(data));
+    return normalizeFoodDay(fits<FoodDayRead>()(data));
   },
 
   async foodDays(from, to) {
     const data = await unwrap(api().GET("/api/food/days", { params: { query: { from, to } } }));
-    return normalizeFoodDays(asType<FoodDaysRead>(data));
+    return normalizeFoodDays(fits<FoodDaysRead>()(data));
   },
 
   async foodRecent(limit) {
     const data = await unwrap(api().GET("/api/food/recent", { params: { query: { limit } } }));
-    return asType<MealRow[]>(data).map(normalizeMeal);
+    return fits<MealRow[]>()(data).map(normalizeMeal);
   },
 
   async activitySummary() {
     const data = await unwrap(api().GET("/api/activity/summary"));
-    return normalizeSummary(asType<ActivitySummaryRead>(data));
+    return normalizeSummary(fits<ActivitySummaryRead>()(data));
   },
 
   async activityDays(from, to) {
     const data = await unwrap(api().GET("/api/activity/days", { params: { query: { from, to } } }));
-    return normalizeActivityDays(asType<ActivityDaysRead>(data));
+    return normalizeActivityDays(fits<ActivityDaysRead>()(data));
   },
 
   async activityWorkouts(from, to) {
     const data = await unwrap(api().GET("/api/activity/workouts", { params: { query: { from, to } } }));
-    return normalizeWorkouts(asType<ActivityWorkoutsRead>(data));
+    return normalizeWorkouts(fits<ActivityWorkoutsRead>()(data));
   },
 
   async activityTags(from, to) {
     const data = await unwrap(api().GET("/api/activity/tags", { params: { query: { from, to } } }));
-    return normalizeTags(asType<ActivityTagsRead>(data));
+    return normalizeTags(fits<ActivityTagsRead>()(data));
   },
 
   async ouraStatus() {
-    return normalizeOuraStatus(asType<OuraStatus>(await unwrap(api().GET("/api/oura/status"))));
+    return normalizeOuraStatus(fits<OuraStatus>()(await unwrap(api().GET("/api/oura/status"))));
   },
 
   async environment() {
-    return normalizeEnvironment(asType<EnvironmentRead>(await unwrap(api().GET("/api/environment"))));
+    return normalizeEnvironment(fits<EnvironmentRead>()(await unwrap(api().GET("/api/environment"))));
   },
 
   async environmentDays(days) {
     const data = await unwrap(api().GET("/api/environment/days", { params: { query: { days } } }));
-    return normalizeHomeDays(asType<HomeDaysRead>(data));
+    return normalizeHomeDays(fits<HomeDaysRead>()(data));
   },
 
   async spaces() {
-    return asType<SpaceRow[]>(await unwrap(api().GET("/api/environment/spaces"))).map(normalizeSpace);
+    return fits<SpaceRow[]>()(await unwrap(api().GET("/api/environment/spaces"))).map(normalizeSpace);
   },
 
   async spaceRatings(opts) {
     const data = await unwrap(
       api().GET("/api/environment/ratings", { params: { query: { space: opts?.space, days: opts?.days } } }),
     );
-    return normalizeSpaceRatings(asType<SpaceRatingsRead>(data));
+    return normalizeSpaceRatings(fits<SpaceRatingsRead>()(data));
   },
 
   async spacePhotos(space, shot) {
     const data = await unwrap(
       api().GET("/api/environment/spaces/{id}/photos", { params: { path: { id: space }, query: { shot } } }),
     );
-    return normalizeSpacePhotos(asType<SpacePhotosRead>(data));
+    return normalizeSpacePhotos(fits<SpacePhotosRead>()(data));
   },
 
   async metrics() {
-    return asType<MetricRow[]>(await unwrap(api().GET("/api/measurements/metrics"))).map(normalizeMetric);
+    return fits<MetricRow[]>()(await unwrap(api().GET("/api/measurements/metrics"))).map(normalizeMetric);
   },
 
   async metric(metric, days) {
@@ -385,16 +381,16 @@ export const liveReads: LifeOsReads = {
         params: { path: { id: metric }, query: { days: days ?? undefined } },
       }),
     );
-    return normalizeMetricDetail(asType<MetricDetailRead>(data));
+    return normalizeMetricDetail(fits<MetricDetailRead>()(data));
   },
 
   async labVisits() {
-    return normalizeLabVisits(asType<LabVisitsRead>(await unwrap(api().GET("/api/measurements/visits"))));
+    return normalizeLabVisits(fits<LabVisitsRead>()(await unwrap(api().GET("/api/measurements/visits"))));
   },
 
   async activityDay(date) {
     const data = await unwrap(api().GET("/api/activity/day", { params: { query: { date } } }));
-    return normalizeDayDetail(asType<ActivityDayDetailRead>(data));
+    return normalizeDayDetail(fits<ActivityDayDetailRead>()(data));
   },
 
   async ledger(opts) {
@@ -403,7 +399,7 @@ export const liveReads: LifeOsReads = {
         params: { query: { from: opts?.from, to: opts?.to, limit: opts?.limit } },
       }),
     );
-    return asType<LedgerRow[]>(data).map(normalizeLedgerRow);
+    return fits<LedgerRow[]>()(data).map(normalizeLedgerRow);
   },
 
   async ledgerDaily(opts) {
@@ -412,7 +408,7 @@ export const liveReads: LifeOsReads = {
         params: { query: { from: opts.from, to: opts.to, tz: opts.tz } },
       }),
     );
-    return asType<LedgerDay[]>(data).map(normalizeLedgerDay);
+    return fits<LedgerDay[]>()(data).map(normalizeLedgerDay);
   },
 
   async rewards(opts) {
@@ -421,7 +417,7 @@ export const liveReads: LifeOsReads = {
         params: { query: { includeArchived: opts?.includeArchived } },
       }),
     );
-    return asType<RewardRow[]>(data).map(normalizeReward);
+    return fits<RewardRow[]>()(data).map(normalizeReward);
   },
 
   async coverSearch(query, page = 1) {
@@ -431,7 +427,7 @@ export const liveReads: LifeOsReads = {
 
   async bountyDefaults() {
     const data = await unwrap(api().GET("/api/bounty/defaults"));
-    return normalizeBountyDefaults(asType<BountyTypeDefaults[]>(data));
+    return normalizeBountyDefaults(fits<BountyTypeDefaults[]>()(data));
   },
 
   async reviews(opts) {
@@ -440,7 +436,7 @@ export const liveReads: LifeOsReads = {
         params: { query: { kind: opts?.kind, from: opts?.from, to: opts?.to } },
       }),
     );
-    return asType<unknown[]>(data).map(normalizeReview);
+    return fits<unknown[]>()(data).map(normalizeReview);
   },
 
   async recap(opts) {
@@ -461,7 +457,7 @@ export const liveReads: LifeOsReads = {
       opts.end,
       opts.asOf,
     );
-    const recorded: RecapSection[] = asType<RecapSection[]>(sections).map((section) => ({
+    const recorded: RecapSection[] = fits<RecapSection[]>()(sections).map((section) => ({
       ...section,
       items: (section.items ?? []).map((item) => ({
         ...item,
@@ -483,7 +479,7 @@ export const liveReads: LifeOsReads = {
         params: { query: { includeArchived: opts?.includeArchived } },
       }),
     );
-    return asType<AlignmentEdge[]>(data);
+    return fits<AlignmentEdge[]>()(data);
   },
 
   async dashboard() {
