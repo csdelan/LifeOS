@@ -20,6 +20,44 @@
     {
       "files": ["src/lib/mock/**", "src/lib/client.ts", "src/test/**", "**/*.test.ts", "**/*.test.tsx", "e2e/**"],
       "rules": { "no-restricted-imports": "off" }
+    },
+    {
+      "files": ["src/lib/live/write-client.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "sonner",
+                "message": "A write's success is said once, in decorateWrites (lib/queries.ts), for both write clients (code review CR55)."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@/lib/mock", "@/lib/mock/*"],
+                "message": "App code reaches the mock only through lib/client.ts, so production builds leave it out (code review CR23). Shared types go in lib/reads.ts or lib/production-ui-types.ts."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/lib/mock/write-client.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "sonner",
+                "message": "A write's success is said once, in decorateWrites (lib/queries.ts), for both write clients (code review CR55)."
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

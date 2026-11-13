@@ -12,11 +12,17 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { toast } from "sonner";
 import { getAgentsClient } from "@/lib/agents";
+import { materializedMessage } from "@/lib/appointments";
 import { isLiveApi } from "@/lib/api-base";
 import { createWriteClient, getReads } from "@/lib/client";
 import { todayIso } from "@/lib/dates";
 import { buildAlignmentForest, type DashboardRead, type MapLens } from "@/lib/derive";
+import { exceptionMarkedMessage, exceptionUnmarkedMessage } from "@/lib/domains";
+import { ratedMessage } from "@/lib/environment";
+import { foodWriteMessage } from "@/lib/food";
+import { redemptionMessage } from "@/lib/rewards";
 import { mapSubjects } from "@/lib/task-series";
 import { announceEarned } from "@/lib/earn-feedback";
 import { nextCoverPage } from "@/lib/cover";
@@ -25,6 +31,7 @@ import type { LifeOsReads } from "@/lib/reads";
 import type {
   AdherenceState,
   Earned,
+  FoodWriteResult,
   HabitOccurrenceRow,
   InboxItem,
   LifeOsWriteClient,
@@ -33,6 +40,7 @@ import type {
   SubjectListItem,
   SubjectType,
 } from "@/lib/production-ui-types";
+import { renamedMessage } from "@/lib/production-ui-types";
 import { errorText } from "@/lib/write-action";
 
 function reads(): LifeOsReads {
@@ -150,10 +158,20 @@ function archiveMoves(subject: string): QueryKeys {
   return [...moves.subject(subject), ...moves.subjectLists, ...moves.typedLists, qk.domains];
 }
 
-/** A food write: announce what it earned, gave back or re-scored, then refresh what it moved. */
-async function foodWrite<T extends Earned>(qc: QueryClient, write: () => Promise<T>): Promise<T> {
+/**
+ * A write's success, said here once for both write clients, live and mock (code review CR55), so
+ * the two can't drift into saying different things. A refusal says nothing here: `useWriteAction`
+ * says it where the write was asked for.
+ */
+function said(message: string) {
+  toast.success(message);
+}
+
+/** A food write: say what it did and what it earned, gave back or re-scored, then refresh what it moved. */
+async function foodWrite(qc: QueryClient, write: () => Promise<FoodWriteResult>): Promise<FoodWriteResult> {
   try {
     const result = await write();
+    said(foodWriteMessage(result));
     announceEarned(result);
     return result;
   } finally {
@@ -165,9 +183,14 @@ async function foodWrite<T extends Earned>(qc: QueryClient, write: () => Promise
  * A rating write (HOME-2): announce any level or rank it moved, then refresh the home and what
  * it moved. Ratings feed Environment's level, so the domains, wallet and ledger refresh too.
  */
-async function ratingWrite<T extends Earned>(qc: QueryClient, write: () => Promise<T>): Promise<T> {
+async function ratingWrite<T extends Earned>(
+  qc: QueryClient,
+  write: () => Promise<T>,
+  say: (result: T) => string,
+): Promise<T> {
   try {
     const result = await write();
+    said(say(result));
     announceEarned(result);
     return result;
   } finally {
@@ -175,10 +198,15 @@ async function ratingWrite<T extends Earned>(qc: QueryClient, write: () => Promi
   }
 }
 
-/** A photo or shot write (HOME-4): refresh the home's reads, where Then and Now live. */
-async function photoWrite<T>(qc: QueryClient, write: () => Promise<T>): Promise<T> {
+/**
+ * A photo or shot write (HOME-4): say what it did, unless it's one of a batch the sheet announces
+ * once, then refresh the home's reads, where Then and Now live.
+ */
+async function photoWrite<T>(qc: QueryClient, write: () => Promise<T>, message?: string): Promise<T> {
   try {
-    return await write();
+    const result = await write();
+    if (message) said(message);
+    return result;
   } finally {
     await invalidate(qc, [qk.environment]);
   }
@@ -189,6 +217,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
   return {
     async newSubject(req) {
       const created = await client.newSubject(req);
+      said(`Created ${created.title}`);
       const extra =
         req.type === "Idea" || req.type === "Problem"
           ? [qk.inbox]
@@ -207,12 +236,14 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async promote(source, type, title) {
       const created = await client.promote(source, type, title);
+      said(`Promoted to ${type}`);
       await invalidate(qc, [qk.inbox, ...moves.subjectLists]);
       return created;
     },
 
     async setAttributes(subject, attrs) {
       await client.setAttributes(subject, attrs);
+      said("Saved");
       await invalidate(qc, [
         ...moves.subject(subject),
         ...moves.subjectLists,
@@ -225,6 +256,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async rename(subject, title) {
       const renamed = await client.rename(subject, title);
+      if (renamed.changed) said(renamedMessage(renamed));
       // Titles show up in nearly every read (lists, relations, inbox rows, people,
       // habits, the graph), so refresh everything rather than chase each copy.
       if (renamed.changed) await qc.invalidateQueries();
@@ -235,6 +267,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
       optimisticStatus(qc, subject, status);
       try {
         const earned = await client.setStatus(subject, status);
+        said(`Status → ${status}`);
         announceEarned(earned);
         return earned;
       } finally {
@@ -254,11 +287,13 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async archive(subject) {
       await client.archive(subject);
+      said("Archived");
       await invalidate(qc, archiveMoves(subject));
     },
 
     async restore(subject) {
       await client.restore(subject);
+      said("Restored");
       await invalidate(qc, archiveMoves(subject));
     },
 
@@ -269,6 +304,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async renameTag(from, to) {
       const renamed = await client.renameTag(from, to);
+      if (renamed.renamed + renamed.merged > 0) said(`Renamed #${renamed.from} → #${renamed.to}`);
       // Every item's tag list may have changed, and the tag-universe counts with it.
       await invalidate(qc, [["tags"], qk.tagUniverse, qk.subjects, qk.inbox]);
       return renamed;
@@ -276,6 +312,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async link(from, relation, to, remove) {
       await (remove ? client.link(from, relation, to, true) : client.link(from, relation, to));
+      said(remove ? "Unlinked" : "Linked");
       await invalidate(qc, [
         qk.relations(from),
         qk.relations(to),
@@ -286,6 +323,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async relate(eventId, subject, as) {
       await client.relate(eventId, subject, as);
+      said("Related");
       await invalidate(qc, [
         qk.inbox,
         qk.journal(subject),
@@ -296,9 +334,11 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async flag(item) {
       await client.flag(item);
+      said("Flagged to Inbox");
       await invalidate(qc, [qk.inbox, qk.dashboard]);
     },
 
+    // Says nothing here: the Inbox shows "Dismissed" with an Undo action.
     async dismiss(item) {
       optimisticInboxRemove(qc, item);
       try {
@@ -312,6 +352,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
       optimisticInboxRemove(qc, item);
       try {
         await client.drop(item);
+        said("Dropped");
       } finally {
         await invalidate(qc, [qk.inbox, ...moves.subjectLists]);
       }
@@ -321,6 +362,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
       optimisticAdhere(qc, habit, state === "missed" ? "not_followed" : state, opts?.on);
       try {
         const earned = await client.adhere(habit, state, opts);
+        said(state === "followed" ? "Marked followed" : state === "partial" ? "Partial credit" : "Marked missed");
         announceEarned(earned);
         return earned;
       } finally {
@@ -339,6 +381,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
     async markException(comment, day) {
       try {
         const result = await client.markException(comment, day);
+        said(exceptionMarkedMessage(result.exception?.day ?? day));
         announceEarned(result, { lostBecause: "Without that day, your last 90 days support a lower level." });
         return result;
       } finally {
@@ -351,6 +394,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
     async unmarkException(day) {
       try {
         const result = await client.unmarkException(day);
+        said(exceptionUnmarkedMessage(day));
         announceEarned(result, { lostBecause: "The day counts again, and your last 90 days support a lower level." });
         return result;
       } finally {
@@ -430,7 +474,9 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async addSpace(req) {
       try {
-        return await client.addSpace(req);
+        const row = await client.addSpace(req);
+        said(`Added ${row.name}`);
+        return row;
       } finally {
         await invalidate(qc, [qk.environment, qk.domains]);
       }
@@ -438,7 +484,9 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async setSpace(space, req) {
       try {
-        return await client.setSpace(space, req);
+        const row = await client.setSpace(space, req);
+        said(`Saved ${row.name}`);
+        return row;
       } finally {
         // A weight or pace applies to all of history, so every day's score can move.
         await invalidate(qc, [qk.environment, qk.domains]);
@@ -446,50 +494,53 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
     },
 
     async rateSpaces(ratings, day) {
-      return ratingWrite(qc, () => client.rateSpaces(ratings, day));
+      return ratingWrite(qc, () => client.rateSpaces(ratings, day), ratedMessage);
     },
 
     async editSpaceRating(rating, req) {
-      return ratingWrite(qc, () => client.editSpaceRating(rating, req));
+      return ratingWrite(qc, () => client.editSpaceRating(rating, req), () => "Rating saved");
     },
 
     async deleteSpaceRating(rating) {
-      return ratingWrite(qc, () => client.deleteSpaceRating(rating));
+      return ratingWrite(qc, () => client.deleteSpaceRating(rating), () => "Rating deleted");
     },
 
     // Photos and shots (HOME-4) never move a level or the ledger: only the home's reads refresh.
+    // An added photo says nothing here: a batch is announced once, by the sheet that sends it.
     async addSpacePhoto(space, photo, req) {
       return photoWrite(qc, () => client.addSpacePhoto(space, photo, req));
     },
 
     async changeSpacePhoto(photo, req, opts) {
-      return photoWrite(qc, () => client.changeSpacePhoto(photo, req, opts));
+      return photoWrite(qc, () => client.changeSpacePhoto(photo, req, opts), opts?.quiet ? undefined : "Photo moved");
     },
 
     async removeSpacePhoto(photo) {
-      return photoWrite(qc, () => client.removeSpacePhoto(photo));
+      return photoWrite(qc, () => client.removeSpacePhoto(photo), "Photo removed");
     },
 
     async setSpaceBaseline(photo) {
-      return photoWrite(qc, () => client.setSpaceBaseline(photo));
+      return photoWrite(qc, () => client.setSpaceBaseline(photo), "Made the baseline");
     },
 
     async addShot(space, name, opts) {
-      return photoWrite(qc, () => client.addShot(space, name, opts));
+      return photoWrite(qc, () => client.addShot(space, name, opts), opts?.quiet ? undefined : `Added the shot ${name.trim()}`);
     },
 
     async renameShot(space, shot, name) {
-      return photoWrite(qc, () => client.renameShot(space, shot, name));
+      return photoWrite(qc, () => client.renameShot(space, shot, name), "Shot renamed");
     },
 
     async removeShot(space, shot) {
-      return photoWrite(qc, () => client.removeShot(space, shot));
+      return photoWrite(qc, () => client.removeShot(space, shot), "Shot removed");
     },
 
     // Readings are information only (D20): a write moves no level, so only Measurements refreshes.
     async addMetric(req) {
       try {
-        return await client.addMetric(req);
+        const row = await client.addMetric(req);
+        said(`Added ${row.name}`);
+        return row;
       } finally {
         await invalidate(qc, [qk.measurements]);
       }
@@ -497,12 +548,15 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async setMetric(metric, req) {
       try {
-        return await client.setMetric(metric, req);
+        const row = await client.setMetric(metric, req);
+        said(`Saved ${row.name}`);
+        return row;
       } finally {
         await invalidate(qc, [qk.measurements]);
       }
     },
 
+    // A reading write says nothing here: the sheet announces it with the metric's decimals.
     async logReading(req) {
       try {
         return await client.logReading(req);
@@ -535,7 +589,8 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
       }
     },
 
-    // A visit write makes tests and moves their ranges, so all of Measurements refreshes too.
+    // A visit write makes tests and moves their ranges, so all of Measurements refreshes too. It
+    // says nothing here either: the sheet announces it once its report is in.
     async logLabVisit(req) {
       try {
         return await client.logLabVisit(req);
@@ -584,6 +639,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async materialize(series, through) {
       const result = await client.materialize(series, through);
+      said(materializedMessage(result, through));
       await invalidate(qc, moves.subjectLists);
       return result;
     },
@@ -618,17 +674,20 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async appendJournal(subject, text) {
       await client.appendJournal(subject, text);
+      said("Journal appended");
       await invalidate(qc, [qk.journal(subject)]);
     },
 
     async capture(text, type) {
       await client.capture(text, type);
+      said("Captured to Inbox");
       const made = type === "Idea" || type === "Problem" ? [qk.subjects] : [];
       await invalidate(qc, [qk.inbox, qk.dashboard, ...made]);
     },
 
     async captureDocument(req) {
       const result = await client.captureDocument(req);
+      said(result.deduplicated ? "That file is already in LifeOS" : "Captured to Inbox");
       const extra = [
         ...(req.type === "Idea" || req.type === "Problem" ? [qk.subjects] : []),
         ...(result.subject ? [qk.files(result.subject.id)] : []),
@@ -639,6 +698,7 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async captureVoice(req) {
       const result = await client.captureVoice(req);
+      said(req.concerning ? "Dictated. The nightly sweep files it in your vault." : "Captured to Inbox");
       const extra = [
         ...(req.type === "Idea" || req.type === "Problem" ? [qk.subjects] : []),
         ...(result.subject ? [qk.files(result.subject.id)] : []),
@@ -655,16 +715,19 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async saveReview(id, body) {
       await client.saveReview(id, body);
+      said("Review saved");
       await invalidate(qc, [qk.reviews]);
     },
 
     async completeReview(id) {
       await client.completeReview(id);
+      said("Review complete");
       await invalidate(qc, [qk.reviews]);
     },
 
     async redeem(req) {
       const redemption = await client.redeem(req);
+      said(redemptionMessage(redemption));
       // The response carries the wallet after the spend: show it at once, and refresh the
       // rest without waiting, so the celebration lands with the click.
       qc.setQueryData(qk.wallet, redemption.wallet);
@@ -674,48 +737,57 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
 
     async addReward(req) {
       const reward = await client.addReward(req);
+      said(`Added ${reward.name}`);
       await invalidate(qc, [qk.rewards, qk.subjects]);
       return reward;
     },
 
     async priceReward(reward, price) {
       const row = await client.priceReward(reward, price);
+      said("Price saved");
       await invalidate(qc, [qk.rewards, qk.subject(reward)]);
       return row;
     },
 
     async targetReward(reward, targetUsd) {
       const row = await client.targetReward(reward, targetUsd);
+      said(targetUsd === null ? "Target removed" : "Target saved");
       await invalidate(qc, [qk.rewards, qk.subject(reward)]);
       return row;
     },
 
     async setBounty(req) {
       const result = await client.setBounty(req);
+      said("Bounty saved");
       await invalidate(qc, [...moves.subject(result.subject.id), qk.subjects, qk.habits, qk.dashboard]);
       return result;
     },
 
     async setHabitTarget(req) {
       const result = await client.setHabitTarget(req);
+      said(req.clear ? "Target back on the default" : "Target saved");
       await invalidate(qc, [qk.habits, qk.subject(result.habit.id)]);
       return result;
     },
 
     async setCover(req) {
       const result = await client.setCover(req);
+      said("Cover set");
+      if (result.downloadProblem) toast.warning(result.downloadProblem);
       await invalidate(qc, coverKeys(result.subject.id));
       return result;
     },
 
     async moveCover(subject, positionY) {
       const result = await client.moveCover(subject, positionY);
+      said("Cover moved");
       await invalidate(qc, coverKeys(result.subject.id));
       return result;
     },
 
     async clearCover(subject) {
       const result = await client.clearCover(subject);
+      said(result.removed ? "Cover removed" : "No cover to remove");
       await invalidate(qc, coverKeys(result.subject.id));
       return result;
     },

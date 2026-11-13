@@ -1,15 +1,10 @@
-import { toast } from "sonner";
 import type {
   CreatedSubject,
   LifeOsWriteClient,
   NewSubjectRequest,
 } from "@/lib/production-ui-types";
-import { inferChildRelation, renamedMessage } from "@/lib/production-ui-types";
+import { inferChildRelation } from "@/lib/production-ui-types";
 import { extensionForMime, sha256Hex } from "@/lib/artifacts";
-import { materializedMessage } from "@/lib/appointments";
-import { redemptionMessage } from "@/lib/rewards";
-import { foodWriteMessage } from "@/lib/food";
-import { exceptionMarkedMessage, exceptionUnmarkedMessage } from "@/lib/domains";
 import {
   addEdge,
   removeEdge,
@@ -85,7 +80,6 @@ import {
   mockSetSpace,
   mockSetSpaceBaseline,
 } from "@/lib/mock/environment-store";
-import { ratedMessage } from "@/lib/environment";
 import {
   mockAddMetric,
   mockArchiveMetric,
@@ -106,10 +100,6 @@ const wait = (ms = 90) => new Promise((r) => setTimeout(r, ms));
 /** The exception days a photo's score reads, from the main store. */
 const exceptions = () => getState().exceptionDays;
 
-function notify(message: string) {
-  toast.success(message);
-}
-
 export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient {
   const bump = () => onChange?.();
 
@@ -122,7 +112,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
         if (parent) relation = inferChildRelation(req.type, parent.type);
       }
       const created = createSubject({ ...req, relation });
-      notify(`Created ${created.title}`);
       bump();
       return created;
     },
@@ -134,7 +123,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       const carried = getState().tagsByItem[byRef(source)?.id ?? source] ?? [];
       if (carried.length) setTags(created.id, carried);
       removeInbox(source, "promoted");
-      notify(`Promoted to ${type}`);
       bump();
       return created;
     },
@@ -142,14 +130,12 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async setAttributes(subject, attrs) {
       await wait();
       applyAttrs(byRef(subject)?.id ?? subject, attrs);
-      notify("Saved");
       bump();
     },
 
     async rename(subject, title) {
       await wait();
       const renamed = renameSubject(subject, title);
-      if (renamed.changed) notify(renamedMessage(renamed));
       bump();
       return renamed;
     },
@@ -157,7 +143,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async setStatus(subject, status) {
       await wait();
       const earned = earnStatus(subject, status);
-      notify(`Status → ${status}`);
       bump();
       return earned;
     },
@@ -166,14 +151,12 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       await wait();
       // A space is archived in the home's half of the store (HOME-1), a metric in measurements'.
       if (!mockArchiveSpace(subject, true) && !mockArchiveMetric(subject, true)) archiveSubject(subject, true);
-      notify("Archived");
       bump();
     },
 
     async restore(subject) {
       await wait();
       if (!mockArchiveSpace(subject, false) && !mockArchiveMetric(subject, false)) archiveSubject(subject, false);
-      notify("Restored");
       bump();
     },
 
@@ -186,7 +169,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async renameTag(from, to) {
       await wait();
       const renamed = renameTag(from, to);
-      if (renamed.renamed + renamed.merged > 0) notify(`Renamed #${renamed.from} → #${renamed.to}`);
       bump();
       return renamed;
     },
@@ -199,49 +181,36 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
         if (remove) removeEdge(a.id, relation, b.id);
         else addEdge(a.id, relation, b.id);
       }
-      notify(remove ? "Unlinked" : "Linked");
       bump();
     },
 
     async relate(eventId, subject, as) {
       await wait();
       relateEvent(eventId, subject, as);
-      const target = byRef(subject);
-      notify(target ? `Related to ${target.title}` : "Related");
       bump();
     },
 
     async flag(item) {
       await wait();
       flagItem(item);
-      notify("Flagged to Inbox");
       bump();
     },
 
     async dismiss(item) {
       await wait();
       removeInbox(item);
-      // No toast here: the Inbox shows "Dismissed" with an Undo action.
       bump();
     },
 
     async drop(item) {
       await wait();
       dropInboxItem(item);
-      notify("Dropped");
       bump();
     },
 
     async adhere(habit, state, opts) {
       await wait();
       const earned = earnDay(habit, state, opts?.on, opts?.note);
-      notify(
-        state === "followed"
-          ? "Marked followed"
-          : state === "partial"
-            ? "Partial credit"
-            : "Marked missed",
-      );
       bump();
       return earned;
     },
@@ -256,7 +225,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async markException(comment, day) {
       await wait();
       const result = mockMarkException(comment, day);
-      notify(exceptionMarkedMessage(result.exception?.day ?? day));
       bump();
       return result;
     },
@@ -264,7 +232,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async unmarkException(day) {
       await wait();
       const result = mockUnmarkException(day);
-      notify(exceptionUnmarkedMessage(day));
       bump();
       return result;
     },
@@ -272,7 +239,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async logFood(req) {
       await wait();
       const result = mockLogFood(req);
-      notify(foodWriteMessage(result));
       bump();
       return result;
     },
@@ -280,7 +246,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async editFood(meal, req) {
       await wait();
       const result = mockEditFood(meal, req);
-      notify(foodWriteMessage(result));
       bump();
       return result;
     },
@@ -288,7 +253,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async setFoodPhoto(meal, photo, filename) {
       await wait();
       const result = mockSetFoodPhoto(meal, photo, filename);
-      notify(foodWriteMessage(result));
       bump();
       return result;
     },
@@ -296,7 +260,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async removeFoodPhoto(meal) {
       await wait();
       const result = mockRemoveFoodPhoto(meal);
-      notify(foodWriteMessage(result));
       bump();
       return result;
     },
@@ -304,7 +267,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async deleteFood(meal) {
       await wait();
       const result = mockDeleteFood(meal);
-      notify(foodWriteMessage(result));
       bump();
       return result;
     },
@@ -312,7 +274,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async fast(req) {
       await wait();
       const result = mockFastAction(req);
-      notify(foodWriteMessage(result));
       bump();
       return result;
     },
@@ -320,7 +281,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async closeFoodDay(day) {
       await wait();
       const result = mockCloseFoodDay(day);
-      notify(foodWriteMessage(result));
       bump();
       return result;
     },
@@ -363,7 +323,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async addSpace(req) {
       await wait();
       const row = mockAddSpace(req);
-      notify(`Added ${row.name}`);
       bump();
       return row;
     },
@@ -371,7 +330,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async setSpace(space, req) {
       await wait();
       const row = mockSetSpace(space, req);
-      notify(`Saved ${row.name}`);
       bump();
       return row;
     },
@@ -379,7 +337,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async rateSpaces(ratings, day) {
       await wait();
       const result = mockHomeWrite(() => mockRateSpaces(ratings, day));
-      notify(ratedMessage(result));
       bump();
       return result;
     },
@@ -387,7 +344,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async editSpaceRating(rating, req) {
       await wait();
       const result = mockHomeWrite(() => mockEditSpaceRating(rating, req));
-      notify("Rating saved");
       bump();
       return result;
     },
@@ -395,23 +351,20 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async deleteSpaceRating(rating) {
       await wait();
       const result = mockHomeWrite(() => mockDeleteSpaceRating(rating));
-      notify("Rating deleted");
       bump();
       return result;
     },
 
     async addSpacePhoto(space, photo, req) {
       await wait();
-      // No toast here: a batch of photos is announced once, by the sheet that sends it.
       const result = mockAddSpacePhoto(space, photo, req, exceptions());
       bump();
       return result;
     },
 
-    async changeSpacePhoto(photo, req, opts) {
+    async changeSpacePhoto(photo, req) {
       await wait();
       const result = mockChangeSpacePhoto(photo, req, exceptions());
-      if (!opts?.quiet) notify("Photo moved");
       bump();
       return result;
     },
@@ -419,7 +372,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async removeSpacePhoto(photo) {
       await wait();
       const result = mockRemoveSpacePhoto(photo, exceptions());
-      notify("Photo removed");
       bump();
       return result;
     },
@@ -427,15 +379,13 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async setSpaceBaseline(photo) {
       await wait();
       const result = mockSetSpaceBaseline(photo, exceptions());
-      notify("Made the baseline");
       bump();
       return result;
     },
 
-    async addShot(space, name, opts) {
+    async addShot(space, name) {
       await wait();
       const result = mockAddShot(space, name, exceptions());
-      if (!opts?.quiet) notify(`Added the shot ${name.trim()}`);
       bump();
       return result;
     },
@@ -443,7 +393,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async renameShot(space, shot, name) {
       await wait();
       const result = mockRenameShot(space, shot, name, exceptions());
-      notify("Shot renamed");
       bump();
       return result;
     },
@@ -451,7 +400,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async removeShot(space, shot) {
       await wait();
       const result = mockRemoveShot(space, shot, exceptions());
-      notify("Shot removed");
       bump();
       return result;
     },
@@ -459,7 +407,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async addMetric(req) {
       await wait();
       const row = mockAddMetric(req);
-      notify(`Added ${row.name}`);
       bump();
       return row;
     },
@@ -467,12 +414,10 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async setMetric(metric, req) {
       await wait();
       const row = mockSetMetric(metric, req);
-      notify(`Saved ${row.name}`);
       bump();
       return row;
     },
 
-    // A reading write says nothing itself: the sheet announces it with the metric's decimals.
     async logReading(req) {
       await wait();
       const result = mockLogReading(req);
@@ -501,7 +446,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       return result;
     },
 
-    // A visit write says nothing itself either: the sheet announces it once its report is in.
     async logLabVisit(req) {
       await wait();
       const result = mockLogLabVisit(req);
@@ -553,7 +497,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async materialize(series, through) {
       await wait();
       const result = materializeAppointments(series, through);
-      notify(materializedMessage(result, through));
       bump();
       return result;
     },
@@ -574,14 +517,12 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async appendJournal(subject, text) {
       await wait();
       appendJournal(subject, text);
-      notify("Journal appended");
       bump();
     },
 
     async capture(text, type) {
       await wait();
       captureNote(text, type);
-      notify("Captured to Inbox");
       bump();
     },
 
@@ -590,7 +531,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       // TODO(api): multipart upload to the kernel's attach write path (`bsk attach`).
       const sha256 = (await sha256Hex(req.file)) ?? null;
       const result = captureDocument({ ...req, sha256 });
-      notify("Captured to Inbox");
       bump();
       return result;
     },
@@ -607,7 +547,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
         contentType: req.audioBlob.type || "audio/webm",
         filename: `voice.${ext}`,
       });
-      notify("Captured to Inbox");
       bump();
       return result;
     },
@@ -622,21 +561,18 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async saveReview(id, body) {
       await wait();
       saveReviewBody(id, body);
-      notify("Review saved");
       bump();
     },
 
     async completeReview(id) {
       await wait();
       completeReviewDoc(id);
-      notify("Review complete");
       bump();
     },
 
     async redeem(req) {
       await wait();
       const redemption = mockRedeem(req);
-      notify(redemptionMessage(redemption));
       bump();
       return redemption;
     },
@@ -644,7 +580,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async addReward(req) {
       await wait();
       const reward = mockAddReward(req);
-      notify(`Added ${reward.name}`);
       bump();
       return reward;
     },
@@ -652,7 +587,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async priceReward(reward, price) {
       await wait();
       const row = mockPriceReward(reward, price);
-      notify("Price saved");
       bump();
       return row;
     },
@@ -660,7 +594,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async targetReward(reward, targetUsd) {
       await wait();
       const row = mockTargetReward(reward, targetUsd);
-      notify(targetUsd === null ? "Target removed" : "Target saved");
       bump();
       return row;
     },
@@ -668,7 +601,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async setCover(req) {
       await wait();
       const result = mockSetCover(req);
-      notify("Cover set");
       bump();
       return result;
     },
@@ -676,7 +608,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async moveCover(subject, positionY) {
       await wait();
       const result = mockMoveCover(subject, positionY);
-      notify("Cover moved");
       bump();
       return result;
     },
@@ -684,7 +615,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async clearCover(subject) {
       await wait();
       const result = mockClearCover(subject);
-      notify(result.removed ? "Cover removed" : "No cover to remove");
       bump();
       return result;
     },
@@ -692,7 +622,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async setBounty(req) {
       await wait();
       const result = mockSetBounty(req);
-      notify("Bounty saved");
       bump();
       return result;
     },
@@ -700,7 +629,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async setHabitTarget(req) {
       await wait();
       const result = mockSetHabitTarget(req);
-      notify(req.clear ? "Target back on the default" : "Target saved");
       bump();
       return result;
     },

@@ -1,8 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
+import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockReads } from "@/lib/mock/api";
+import { createMockWriteClient } from "@/lib/mock/write-client";
 import type { LifeOsWriteClient } from "@/lib/production-ui-types";
 import { decorateWrites, qk, useAlignmentEdges, useAlignmentForest, useSubjects } from "@/lib/queries";
 
@@ -63,6 +65,53 @@ describe("write invalidation", () => {
   it("a write leaves the reads it doesn't move alone", async () => {
     const stale = await staleAfter((w) => w.appendJournal("s1", "text"), [qk.journal("s1"), qk.habits, qk.wallet]);
     expect(stale).toEqual(["journal/s1"]);
+  });
+});
+
+// Code review CR55: a write's success is said once, by the decorator, whichever client is under it.
+describe("a write's success", () => {
+  /** A client whose writes answer `answer`, or refuse when it's an Error. */
+  function answering(answer: unknown): LifeOsWriteClient {
+    return new Proxy({} as LifeOsWriteClient, {
+      get: () => async () => {
+        if (answer instanceof Error) throw answer;
+        return answer;
+      },
+    });
+  }
+
+  it("is said by the decorator, the same for both clients", async () => {
+    const success = vi.spyOn(toast, "success").mockImplementation(() => 1);
+    const writes = decorateWrites(idle, new QueryClient());
+    await writes.flag("s1");
+    await writes.relate("e1", "s1");
+    expect(success.mock.calls).toEqual([["Flagged to Inbox"], ["Related"]]);
+  });
+
+  it("isn't said by the mock client on its own, so the decorator doesn't say it twice", async () => {
+    const success = vi.spyOn(toast, "success").mockImplementation(() => 1);
+    await createMockWriteClient().capture("A thought to file later");
+    expect(success).not.toHaveBeenCalled();
+    await decorateWrites(createMockWriteClient(), new QueryClient()).capture("Another thought");
+    expect(success.mock.calls).toEqual([["Captured to Inbox"]]);
+  });
+
+  it("reads what the write answered", async () => {
+    const success = vi.spyOn(toast, "success").mockImplementation(() => 1);
+    const qc = new QueryClient();
+    await decorateWrites(answering({ deduplicated: true, subject: null }), qc).captureDocument({
+      file: new File(["x"], "a.pdf"),
+      description: "",
+      type: "Note",
+    });
+    await decorateWrites(answering({ changed: false }), qc).rename("s1", "Same title");
+    expect(success.mock.calls).toEqual([["That file is already in LifeOS"]]);
+  });
+
+  it("isn't said when the write is refused", async () => {
+    const success = vi.spyOn(toast, "success").mockImplementation(() => 1);
+    await expect(decorateWrites(answering(new Error("No")), new QueryClient()).archive("s1")).rejects.toThrow("No");
+    expect(success).not.toHaveBeenCalled();
   });
 });
 

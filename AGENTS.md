@@ -28,7 +28,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - `web/`: the React + Vite SPA. With no `VITE_API_BASE_URL` it runs in mock mode on an in-memory
   store.
   A component runs a write through `useWriteAction` (`web/src/lib/write-action.ts`), which says a
-  failure inline or in a toast; a bare `void writes.x()` loses it. App code reaches the mock only
+  failure inline or in a toast; a bare `void writes.x()` loses it. A write's success toast is said
+  once, in `decorateWrites` (`lib/queries.ts`), never in a write client. App code reaches the mock only
   through `lib/client.ts` (a lint rule says so), so the production bundle leaves it out; the read
   seam's types are in `lib/reads.ts`. Pages load lazily (`lazyRouteComponent` in `router.tsx`).
   A live read or write returns the API's data through `fits<T>()(data)` (`lib/live/fits.ts`),
