@@ -39,7 +39,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - `src/LifeOs.Pilot`: the original WinForms app. Chris still runs it, often against staging. It
   writes to staging, and migrates dev on launch, only with the `bsk` that
   `scripts/install-bsk.ps1` builds from `origin/main` into `%USERPROFILE%\.lifeos\bin\bsk` (or
-  `BSK_EXE`), never with the repo's own build output. Re-run the script after a push.
+  `BSK_EXE`), never with the repo's own build output. Re-run the script after a push: a `bsk`
+  older than the database's newest migration refuses every verb but `migrate` and `check`
+  (`StaleBskGuard`).
 - `docs/ontology.md` is the model. `docs/pilot/ui-requirements.md` is the living spec, with the
   requirement IDs (TASKS-3, MEASURE-1, ...) and decisions (D1, D2, ...). Each feature has a
   `docs/pilot/<feature>-plan.md` with numbered phases, their status and Chris's decisions.

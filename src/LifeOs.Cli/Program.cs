@@ -78,4 +78,11 @@ if (KernelConnectionString.AmbientRemoteNotice(
     Console.Error.WriteLine(notice);
 }
 
+// A bsk older than the database won't run against it (code review CR66).
+if (await LifeOs.Cli.StaleBskGuard.RefusalAsync(parsed, connectionOption, CancellationToken.None) is { } refusal)
+{
+    LifeOs.Cli.Cli.WriteError(parsed.GetValue(jsonOption), refusal);
+    return 1;
+}
+
 return await parsed.InvokeAsync();
