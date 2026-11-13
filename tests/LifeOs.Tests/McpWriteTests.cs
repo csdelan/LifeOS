@@ -43,11 +43,13 @@ public sealed class McpWriteTests(PostgresFixture postgres)
     public async Task At_capture_a_writer_is_listed_the_capture_tools_and_nothing_else_that_writes()
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
-        await using var host = await StartAsync(db.ConnectionString);
+        var log = new LogCapture();
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, Settings(McpWrites.Capture), log.AddTo);
         await ActAsAiPersonAsync(host, Writer);
         await using var client = await McpServerTests.ConnectAsync(host, ApiTestHost.TokenFor(clientId: Writer));
 
         var tools = await client.ListToolsAsync(cancellationToken: Ct);
+        Assert.Contains($"MCP write tools listed for {Writer}", log.Messages("LifeOs.Api.Mcp"));
 
         var writing = tools.Where(t => t.ProtocolTool.Annotations?.ReadOnlyHint != true).Select(t => t.Name).Order();
         Assert.Equal(McpWriteAccess.Tools.Order(), writing);
@@ -58,10 +60,11 @@ public sealed class McpWriteTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task A_client_not_named_to_write_or_acting_as_no_AI_person_stays_read_only()
+    public async Task A_client_not_named_to_write_or_acting_as_no_AI_person_stays_read_only_and_the_log_says_why()
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
-        await using var host = await StartAsync(db.ConnectionString);
+        var log = new LogCapture();
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, Settings(McpWrites.Capture), log.AddTo);
         // Other acts as an AI Person but isn't named in Mcp:WriteClients; Writer is named but acts as no one.
         await ActAsAiPersonAsync(host, Other);
         await McpServerTests.AllowAsync(host, Writer);
@@ -77,6 +80,11 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         }
 
         Assert.Equal(0, await AgentEventsAsync(db));
+        // An agent can't tell why it has no write tools, so the server logs it.
+        var hidden = log.Messages("LifeOs.Api.Mcp").Where(m => m.StartsWith("MCP write tools", StringComparison.Ordinal)).ToList();
+        Assert.Contains($"MCP write tools hidden from {Other}: Mcp:WriteClients doesn't name it", hidden);
+        Assert.Contains($"MCP write tools hidden from {Writer}: it acts as no AI-agent Person in use (Connected agents)", hidden);
+        Assert.DoesNotContain(hidden, m => m.Contains("listed", StringComparison.Ordinal));
     }
 
     [Fact]

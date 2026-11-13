@@ -963,6 +963,11 @@ Connected agents page; Claude registers a new one each time it connects again, s
 one must be named too. The allow list and the Person link are read on every call, so revoking
 the client or unlinking its Person stops its writes at once.
 
+An agent can't tell why it has no write tools, so each time a client lists tools with writes on,
+the server logs which: `MCP write tools listed for <client id>`, or `MCP write tools hidden from
+<client id>: <why>`, the why being the condition above that failed. `fly logs -a
+lifeos-mz55-staging` shows it.
+
 **Rollout:**
 1. `capture` on staging for a week or two;
 2. then `full` on staging;

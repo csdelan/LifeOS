@@ -57,13 +57,27 @@ public static class McpHost
             .WithResources<McpGuide>()
             .WithRequestFilters(filters => filters.AddListToolsFilter(next => async (context, cancellationToken) =>
             {
-                // The write tools are listed only to an agent that may write (§5.1).
+                // The write tools are listed only to an agent that may write (§5.1). Either way it's
+                // logged, with the reason when they're hidden, since an agent can't say why it lacks them.
                 var result = await next(context, cancellationToken);
-                if (options.WritesOn
-                    && (context.Services?.GetService<McpWriteAccess>() is not { } writers
-                        || await writers.WriterAsync(context.User, cancellationToken) is null))
+                if (!options.WritesOn)
+                {
+                    return result;
+                }
+
+                var check = context.Services?.GetService<McpWriteAccess>() is { } writers
+                    ? await writers.CheckAsync(context.User, cancellationToken)
+                    : new McpWriteCheck(null, "the write tools aren't registered");
+                var client = context.User is { } user ? AgentClaims.ClientId(user) : null;
+                var logger = context.Services?.GetService<ILoggerFactory>()?.CreateLogger("LifeOs.Api.Mcp");
+                if (check.Agent is null)
                 {
                     result.Tools = result.Tools.Where(t => !McpWriteAccess.Tools.Contains(t.Name)).ToList();
+                    logger?.LogInformation("MCP write tools hidden from {ClientId}: {Why}", client, check.Why);
+                }
+                else
+                {
+                    logger?.LogInformation("MCP write tools listed for {ClientId}", client);
                 }
 
                 return result;

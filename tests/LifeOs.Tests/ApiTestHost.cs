@@ -67,8 +67,9 @@ internal sealed class ApiTestHost(WebApplication app, HttpClient client) : IAsyn
         builder.Configuration.AddInMemoryCollection(settings);
 
         ApiHost.ConfigureServices(builder);
-        services?.Invoke(builder.Services);
         builder.Logging.ClearProviders();
+        // After clearing, so a test can add a logger provider (LogCapture) and read what was logged.
+        services?.Invoke(builder.Services);
         var app = builder.Build();
         ApiHost.ConfigurePipeline(app);
         await app.StartAsync(cancellationToken);

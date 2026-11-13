@@ -37,21 +37,48 @@ public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http
 
     /// <summary>The agent <paramref name="user"/> signed in as, when it may write; null otherwise.</summary>
     public async Task<McpAgent?> WriterAsync(ClaimsPrincipal? user, CancellationToken cancellationToken)
+        => (await CheckAsync(user, cancellationToken)).Agent;
+
+    /// <summary>
+    /// Whether <paramref name="user"/> may write, and if not, why, in words for the log: the
+    /// server logs it when it hides the write tools, so a missing tool can be traced to its setting.
+    /// </summary>
+    public async Task<McpWriteCheck> CheckAsync(ClaimsPrincipal? user, CancellationToken cancellationToken)
     {
         var clientId = user is null ? null : AgentClaims.ClientId(user);
-        if (clientId is null || access is null || !options.NamesWriter(clientId))
+        if (clientId is null)
         {
-            return null;
+            return new McpWriteCheck(null, "the token names no agent client");
+        }
+
+        if (!options.WritesOn)
+        {
+            return new McpWriteCheck(null, $"{McpOptions.WritesKey} is off");
+        }
+
+        if (!options.NamesWriter(clientId))
+        {
+            return new McpWriteCheck(null, $"{McpOptions.WriteClientsKey} doesn't name it");
+        }
+
+        if (access is null)
+        {
+            return new McpWriteCheck(null, "this host has no list of allowed agents");
         }
 
         var person = await access.WriterAsync(clientId, cancellationToken);
-        return person is null ? null : new McpAgent(clientId, person.Id, person.Name);
+        return person is null
+            ? new McpWriteCheck(null, "it acts as no AI-agent Person in use (Connected agents)")
+            : new McpWriteCheck(new McpAgent(clientId, person.Id, person.Name), null);
     }
 
     /// <summary>The agent making this call, or a refusal it can read.</summary>
     public async Task<McpAgent> CurrentAsync(CancellationToken cancellationToken)
         => await WriterAsync(http.HttpContext?.User, cancellationToken) ?? throw new McpException(Refusal);
 }
+
+/// <summary>Whether a client may write: the agent when it may, else why not.</summary>
+public sealed record McpWriteCheck(McpAgent? Agent, string? Why);
 
 /// <summary>
 /// The writes an agent can make at the <c>capture</c> level (agent-access plan §5.2, notes plan
