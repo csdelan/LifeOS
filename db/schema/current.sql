@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0064 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0065 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -572,7 +572,7 @@ CREATE VIEW bsk.v_habit AS
     attributes ->> 'reward'::text AS reward,
     attributes ->> 'start'::text AS start_date,
     attributes ->> 'end'::text AS end_date,
-    COALESCE((attributes ->> 'allows_partial'::text)::boolean, false) AS allows_partial,
+    COALESCE(lower(btrim(attributes ->> 'allows_partial'::text)) = 'true'::text, false) AS allows_partial,
     attributes -> 'recurrence'::text AS recurrence,
     bsk.is_archived(id) AS archived,
     created_at

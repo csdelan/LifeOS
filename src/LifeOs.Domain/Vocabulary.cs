@@ -166,6 +166,16 @@ public static class AdherenceResults
     public const string Missed = "missed";
 
     public static readonly IReadOnlyList<string> All = [Followed, Partial, Missed];
+
+    /// <summary>The habit attribute that allows <see cref="Partial"/>.</summary>
+    public const string AllowsPartialKey = "allows_partial";
+
+    /// <summary>
+    /// Whether a habit's <see cref="AllowsPartialKey"/> (as text, <c>attributes->>key</c>) allows
+    /// partial credit: "true" in any case, spaces trimmed; anything else, or none, doesn't.
+    /// <c>bsk.v_habit</c> reads it the same way (migration 0065, code review CR70).
+    /// </summary>
+    public static bool PartialAllowed(string? flag) => string.Equals(flag?.Trim(), "true", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>

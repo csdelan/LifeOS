@@ -99,8 +99,8 @@ public sealed class AdherenceService(
 
     private async Task<bool> AllowsPartialAsync(Guid habitId, CancellationToken cancellationToken)
     {
-        var value = await repository.GetAttributeValueAsync(habitId, "allows_partial", cancellationToken);
-        return string.Equals(value?.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+        var value = await repository.GetAttributeValueAsync(habitId, AdherenceResults.AllowsPartialKey, cancellationToken);
+        return AdherenceResults.PartialAllowed(value);
     }
 }
 
