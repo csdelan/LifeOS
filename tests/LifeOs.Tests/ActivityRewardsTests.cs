@@ -30,7 +30,7 @@ public sealed class ActivityRewardsTests(PostgresFixture postgres)
 
         public ActivityRewards With(ActivityRules rules)
             => new(H.Activity, Db.Get<ILedgerRepository>(), Db.Get<RewardService>(), Db.Get<IHomeCalendar>(), H.Clock,
-                KernelSources.Cli, rules);
+                new EventSource(KernelSources.Cli), rules);
 
         public ValueTask DisposeAsync() => H.DisposeAsync();
     }

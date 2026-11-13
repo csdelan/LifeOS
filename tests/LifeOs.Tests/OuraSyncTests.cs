@@ -26,11 +26,11 @@ internal sealed class OuraHarness : IAsyncDisposable
         Db = db;
         Clock = clock;
         Oura = oura;
-        Integrations = new NpgsqlIntegrationRepository(db.ConnectionString, new TokenCipher(RandomNumberGenerator.GetBytes(32)));
+        Integrations = new NpgsqlIntegrationRepository(KernelDataSource.For(db.ConnectionString), new TokenCipher(RandomNumberGenerator.GetBytes(32)));
         Connection = new OuraConnectionService(Integrations, client, clock);
-        Activity = new NpgsqlActivityRepository(db.ConnectionString);
+        Activity = new NpgsqlActivityRepository(KernelDataSource.For(db.ConnectionString));
         Sync = new OuraSyncService(Connection, client, Activity, Integrations, db.Get<IHomeCalendar>(), clock);
-        Notes = new WorkoutNoteService(Activity, db.Get<IEventStore>(), clock, KernelSources.Cli);
+        Notes = new WorkoutNoteService(Activity, db.Get<IEventStore>(), clock, new EventSource(KernelSources.Cli));
         Reads = new ActivityReads(Activity, db.Get<IHomeCalendar>(), clock);
     }
 

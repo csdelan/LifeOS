@@ -11,7 +11,7 @@ namespace LifeOs.Application.Activity;
 /// workout's Oura id, so syncs never touch it; the newest wins and an empty text clears it.
 /// Refusals are in words, with nothing written.
 /// </summary>
-public sealed class WorkoutNoteService(IActivityRepository activity, IEventStore events, IClock clock, string sourceId)
+public sealed class WorkoutNoteService(IActivityRepository activity, IEventStore events, IClock clock, EventSource eventSource)
 {
     /// <summary>The longest note, in characters.</summary>
     public const int MaxLength = 140;
@@ -40,7 +40,7 @@ public sealed class WorkoutNoteService(IActivityRepository activity, IEventStore
         var now = clock.UtcNow;
         var payload = JsonSerializer.Serialize(new { workout_note = new { workout = workout.Id, text = note } });
         await events.AppendAsync(
-            new NewEvent(EventKinds.Note, Provenances.Declared, now, now, sourceId, PayloadJson: payload),
+            new NewEvent(EventKinds.Note, Provenances.Declared, now, now, eventSource.Id, PayloadJson: payload),
             cancellationToken);
         return await activity.GetWorkoutAsync(workout.Id, cancellationToken) ?? workout;
     }

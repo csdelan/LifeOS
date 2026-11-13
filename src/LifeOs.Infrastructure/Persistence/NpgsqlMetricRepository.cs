@@ -14,7 +14,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// in one transaction, since the stream is append-only. The API reads through one of these on the
 /// reader connection.
 /// </summary>
-public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRepository
+public sealed class NpgsqlMetricRepository(NpgsqlDataSource dataSource) : IMetricRepository
 {
     // Aliased to the rows' property names (the CLI host doesn't turn on underscore matching);
     // dates and local times as text, since Dapper has no DateOnly mapping in every host.
@@ -121,7 +121,7 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
 
     public async Task<DateTimeOffset> InstantAtAsync(DateTime local, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var instant = await connection.ExecuteScalarAsync<DateTime>(new CommandDefinition(
             "SELECT (@local::timestamp AT TIME ZONE bsk.home_zone());",
@@ -138,7 +138,7 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
             return [];
         }
 
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -187,7 +187,7 @@ public sealed class NpgsqlMetricRepository(string connectionString) : IMetricRep
 
     private async Task<IEnumerable<T>> QueryAsync<T>(string sql, object? args, CancellationToken cancellationToken)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         return await connection.QueryAsync<T>(new CommandDefinition(sql, args, cancellationToken: cancellationToken));
     }

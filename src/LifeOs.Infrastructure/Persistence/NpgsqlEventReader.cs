@@ -6,11 +6,11 @@ using Npgsql;
 namespace LifeOs.Infrastructure.Persistence;
 
 /// <summary>Reads source events from <c>bsk.event</c>.</summary>
-public sealed class NpgsqlEventReader(string connectionString) : IEventReader
+public sealed class NpgsqlEventReader(NpgsqlDataSource dataSource) : IEventReader
 {
     public async Task<SourceEvent?> FindAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // subject_id is read as text and parsed here; a payload need not carry one,

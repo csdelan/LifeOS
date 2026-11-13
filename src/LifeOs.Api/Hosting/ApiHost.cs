@@ -55,7 +55,7 @@ public static class ApiHost
         // Coins are real money (REWARD-3): Rewards:CoinValueUsd, default $0.50; a bad value
         // fails startup rather than mis-pricing deposits. Rewards:HomeTimeZone (default
         // America/Los_Angeles) decides which day an earn counts on; a malformed one fails too.
-        var homeZone = ServiceCollectionExtensions.ParseHomeTimeZone(builder.Configuration[HomeZone.ConfigurationKey]);
+        var homeZone = KernelSettings.ParseHomeTimeZone(builder.Configuration[HomeZone.ConfigurationKey]);
         // Artifact bytes (food photos) go to Supabase Storage when Storage:SupabaseSecretKey is
         // set; a malformed setting fails startup. Outside Development, photos without it are
         // refused rather than kept in the database (Supabase's free plan holds 500 MB).
@@ -65,13 +65,13 @@ public static class ApiHost
         // Unsplash (cover-images plan §3.2) is optional too: without Unsplash:AccessKey the cover
         // picker says covers aren't set up; covers already set still show.
         var integrations = IntegrationSettings.Resolve(key => builder.Configuration[key]);
-        builder.Services.AddLifeOsKernel(
+        builder.Services.AddLifeOsKernel(KernelSettings.Resolve(
             owner, KernelSources.Api,
-            ServiceCollectionExtensions.ParseCoinValueUsd(builder.Configuration[CoinRates.ConfigurationKey]),
+            KernelSettings.ParseCoinValueUsd(builder.Configuration[CoinRates.ConfigurationKey]),
             homeZone,
             storage,
             allowPhotosInDatabase: builder.Environment.IsDevelopment(),
-            integrations: integrations);
+            integrations: integrations));
         builder.Services.AddSingleton(new SubjectReader(
             reader, integrations.Unsplash?.AppName ?? Cover.DefaultAppName));
         builder.Services.AddSingleton(sp => new RewardReader(
@@ -82,7 +82,7 @@ public static class ApiHost
         builder.Services.AddSingleton(sp => new ReviewReader(reader, sp.GetRequiredService<IClock>(), homeZone));
         builder.Services.AddSingleton(sp => new ActivityReader(reader, homeZone, sp.GetRequiredService<IClock>()));
         builder.Services.AddSingleton(sp => new ArtifactReader(
-            new NpgsqlArtifactBlobStore(reader, sp.GetService<IObjectStorage>())));
+            new NpgsqlArtifactBlobStore(KernelDataSource.For(reader), sp.GetService<IObjectStorage>())));
 
         // The agents Chris allowed and what each called (agent-access plan §4.5), on the owner
         // connection: bsk_ops is never granted to bsk_reader. /mcp checks the list on every call.

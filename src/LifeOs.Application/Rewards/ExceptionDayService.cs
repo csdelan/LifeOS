@@ -22,7 +22,7 @@ public sealed record ExceptionDays(DateOnly Today, int Days, IReadOnlyList<Excep
 /// </summary>
 public sealed class ExceptionDayService(
     ILedgerRepository ledger, IEventStore events, RewardService rewards, IHomeCalendar calendar, IClock clock,
-    string sourceId)
+    EventSource eventSource)
 {
     /// <summary>The longest comment, in characters.</summary>
     public const int MaxLength = 140;
@@ -151,7 +151,7 @@ public sealed class ExceptionDayService(
         var now = clock.UtcNow;
         var payload = JsonSerializer.Serialize(new Dictionary<string, object> { [PayloadKey] = exceptionDay });
         return events.AppendAsync(
-            new NewEvent(EventKinds.Note, Provenances.Declared, now, now, sourceId, PayloadJson: payload),
+            new NewEvent(EventKinds.Note, Provenances.Declared, now, now, eventSource.Id, PayloadJson: payload),
             cancellationToken);
     }
 

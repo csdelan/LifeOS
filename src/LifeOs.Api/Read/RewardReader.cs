@@ -19,7 +19,7 @@ namespace LifeOs.Api.Read;
 /// </summary>
 public sealed class RewardReader(string readerConnectionString, decimal coinValueUsd, string homeTimeZone = HomeZone.Default)
 {
-    private readonly NpgsqlLedgerRepository ledger = new(readerConnectionString, homeTimeZone);
+    private readonly NpgsqlLedgerRepository ledger = new(KernelDataSource.For(readerConnectionString), homeTimeZone);
 
     public async Task<WalletSummary> GetWalletAsync(CancellationToken cancellationToken = default)
     {

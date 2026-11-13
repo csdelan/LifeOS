@@ -404,7 +404,7 @@ public sealed class AgentWrites(
     /// </summary>
     private AgentKernel Kernel(McpAgent agent)
     {
-        var source = agent.SourceId;
+        var source = new EventSource(agent.SourceId);
         var subjects = new SubjectService(subjectRepository, clock, source);
         var relate = new RelateService(subjects, eventReader, edges);
         var triage = new TriageService(subjects, eventReader, events, clock, source, status);

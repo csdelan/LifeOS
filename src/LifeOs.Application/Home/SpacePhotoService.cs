@@ -34,7 +34,7 @@ public sealed class SpacePhotoService(
     ISubjectEventRepository edges,
     IHomeCalendar calendar,
     IClock clock,
-    string sourceId,
+    EventSource eventSource,
     bool enabled = true)
 {
     /// <summary>True when this host takes photos.</summary>
@@ -76,7 +76,7 @@ public sealed class SpacePhotoService(
             Provenance: Provenances.Declared,
             OccurredAt: occurredAt,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             Sha256: Convert.ToHexStringLower(SHA256.HashData(bytes)),
             Bytes: bytes,
             ContentType: contentType,
@@ -226,7 +226,7 @@ public sealed class SpacePhotoService(
         => on == today ? now : await spaces.NoonAsync(on, cancellationToken);
 
     private NewEvent Declared(DateTimeOffset occurredAt, DateTimeOffset now, string payload)
-        => new(EventKinds.Observation, Provenances.Declared, occurredAt, now, sourceId, PayloadJson: payload);
+        => new(EventKinds.Observation, Provenances.Declared, occurredAt, now, eventSource.Id, PayloadJson: payload);
 
     /// <summary>A photo version's payload; <paramref name="photo"/> left out when the event stores the bytes itself.</summary>
     private static string Payload(Guid id, Guid space, string shot, DateOnly day, Guid? photo)

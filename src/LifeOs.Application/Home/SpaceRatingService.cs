@@ -51,7 +51,7 @@ public sealed record RatingList(DateOnly Today, int Days, IReadOnlyList<SpaceRat
 /// </summary>
 public sealed class SpaceRatingService(
     ISpaceRepository spaces, SpaceService spaceService, RewardService rewards, IHomeCalendar calendar, IClock clock,
-    string sourceId)
+    EventSource eventSource)
 {
     /// <summary>How far back a list reads by default.</summary>
     public const int DefaultDays = 90;
@@ -269,7 +269,7 @@ public sealed class SpaceRatingService(
     }
 
     private NewEvent Declared(DateTimeOffset occurredAt, DateTimeOffset now, string payload)
-        => new(EventKinds.Measurement, Provenances.Declared, occurredAt, now, sourceId, PayloadJson: payload);
+        => new(EventKinds.Measurement, Provenances.Declared, occurredAt, now, eventSource.Id, PayloadJson: payload);
 
     /// <summary>A rating's payload; the parts as numbers (4.5, 4), the ones left out absent.</summary>
     private static string Payload(

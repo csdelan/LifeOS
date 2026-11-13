@@ -23,7 +23,7 @@ namespace LifeOs.Application.Subjects;
 /// </summary>
 public sealed class AdherenceService(
     SubjectService subjects, ISubjectRepository repository, IActivityWriter writer, RewardService rewards,
-    IClock clock, IHomeCalendar calendar, string sourceId)
+    IClock clock, IHomeCalendar calendar, EventSource eventSource)
 {
     /// <summary>
     /// Records <paramref name="result"/> for the habit's occurrence on
@@ -85,7 +85,7 @@ public sealed class AdherenceService(
             Provenance: Provenances.Declared,
             OccurredAt: now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             PayloadJson: payload);
 
         var eventId = await writer.WriteAsync(

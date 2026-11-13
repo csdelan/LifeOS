@@ -26,7 +26,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// conversion; a zone it doesn't know fails the read loudly.
 /// </para>
 /// </summary>
-public sealed class NpgsqlLedgerRepository(string connectionString, string homeTimeZone = HomeZone.Default)
+public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string homeTimeZone = HomeZone.Default)
     : ILedgerRepository
 {
     // One lock for every ledger write: a balance check is only sound if nothing else
@@ -147,7 +147,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
 
     public async Task<IReadOnlyList<WalletBalance>> GetBalancesAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var rows = await connection.QueryAsync<BalanceRow>(new CommandDefinition(
             "SELECT currency, earned, reversed, spent, balance FROM bsk.v_wallet ORDER BY currency;",
@@ -158,7 +158,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     public async Task<IReadOnlyList<LedgerEntry>> GetEntriesAsync(
         DateTimeOffset? from, DateTimeOffset? to, int? limit, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // Page by entry, not by row: the newest `limit` events, then every currency row
@@ -196,7 +196,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     public async Task<IReadOnlyList<LedgerDayTotal>> GetDailyTotalsAsync(
         DateOnly from, DateOnly to, string timeZone, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // The range ends are local midnights in the zone (`timestamp AT TIME ZONE` gives the
@@ -244,7 +244,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     public async Task<DomainCredit> GetDomainDaysAsync(
         IReadOnlyCollection<string> currencies, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // Aliased to CreditRow's names (no underscore matching in the CLI host). A passive
@@ -303,7 +303,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     public async Task<(DateOnly Today, IReadOnlyList<ExceptionDay> Days)> GetExceptionDaysAsync(
         int days, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         try
         {
@@ -337,7 +337,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     public async Task<IReadOnlySet<string>> GetPaidKeysAsync(
         string trigger, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var keys = await connection.QueryAsync<string>(new CommandDefinition(
             """
@@ -354,7 +354,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     public async Task<Guid?> GetLatestCreditEventAsync(
         string currency, DateOnly day, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         try
         {
@@ -378,7 +378,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
 
     public async Task<DateTimeOffset?> GetOpenedAtAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var openedAt = await connection.ExecuteScalarAsync<DateTime?>(new CommandDefinition(
             "SELECT bsk.ledger_opened_at();", cancellationToken: cancellationToken));
@@ -388,7 +388,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     public async Task<(DateTimeOffset OpenedAt, bool Created)> OpenAsync(
         NewEvent openEvent, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await LockAsync(connection, transaction, cancellationToken);
@@ -418,7 +418,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
             return [];
         }
 
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await LockAsync(connection, transaction, cancellationToken);
@@ -474,7 +474,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
 
     public async Task<IReadOnlyList<PaidAward>> GetPaidAsync(Guid subjectId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var rows = await connection.QueryAsync<PaidRow>(new CommandDefinition(
             """
@@ -513,7 +513,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
 
     public async Task<IReadOnlyList<SubjectRef>> GetReconcileCandidatesAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var rows = await connection.QueryAsync<SubjectRow>(new CommandDefinition(
             """
@@ -532,7 +532,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
 
     public async Task<Guid?> GetLatestSubjectEventAsync(Guid subjectId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // Events name their subject either in the payload (state_change, archive_change)
@@ -562,7 +562,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     public async Task<IReadOnlyList<CatalogReward>> GetCatalogAsync(
         bool includeArchived, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var rows = await connection.QueryAsync<CatalogRow>(new CommandDefinition(
             $"""
@@ -577,7 +577,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
 
     public async Task<CatalogReward?> GetCatalogRewardAsync(Guid rewardId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var row = await connection.QuerySingleOrDefaultAsync<CatalogRow>(new CommandDefinition(
             $"""
@@ -592,7 +592,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     private async Task<IReadOnlyList<DueAward>> GetAwardsAsync(
         string view, Guid subjectId, CancellationToken cancellationToken)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         IEnumerable<AwardRow> rows;
         try
@@ -666,7 +666,7 @@ public sealed class NpgsqlLedgerRepository(string connectionString, string homeT
     public async Task<IReadOnlyList<KeyedAward>> GetKeyedAwardsAsync(
         IReadOnlyCollection<string> triggers, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var rows = await connection.QueryAsync<KeyedRow>(new CommandDefinition(
             KeyedAwardsSql, new { triggers = triggers.ToArray() }, cancellationToken: cancellationToken));

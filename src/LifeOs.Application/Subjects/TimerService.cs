@@ -29,7 +29,7 @@ namespace LifeOs.Application.Subjects;
 /// </para>
 /// </summary>
 public sealed class TimerService(
-    SubjectService subjects, ITimerRepository timers, StatusService status, IClock clock, string sourceId,
+    SubjectService subjects, ITimerRepository timers, StatusService status, IClock clock, EventSource eventSource,
     TaskSeriesService? taskSeries = null)
 {
     /// <summary>The Task status Complete moves to (a terminal member of the Task vocabulary).</summary>
@@ -167,7 +167,7 @@ public sealed class TimerService(
             Provenance: Provenances.Declared,
             OccurredAt: at,
             RecordedAt: at,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             PayloadJson: payload);
         return new TimerWrite(subjectId, expectedState, timerEvent);
     }

@@ -400,7 +400,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
     [InlineData("0.75", 0.75)]
     [InlineData("$1", 1.00)]
     public void A_configured_coin_value_reads_as_dollars(string? configured, double expected)
-        => Assert.Equal((decimal)expected, ServiceCollectionExtensions.ParseCoinValueUsd(configured));
+        => Assert.Equal((decimal)expected, KernelSettings.ParseCoinValueUsd(configured));
 
     [Theory]
     [InlineData("half a dollar")]
@@ -408,7 +408,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
     [InlineData("-1")]
     public void A_bad_coin_value_fails_loudly_rather_than_defaulting(string configured)
     {
-        var refused = Assert.Throws<InvalidOperationException>(() => ServiceCollectionExtensions.ParseCoinValueUsd(configured));
+        var refused = Assert.Throws<InvalidOperationException>(() => KernelSettings.ParseCoinValueUsd(configured));
         Assert.Contains(CoinRates.ConfigurationKey, refused.Message);
     }
 }

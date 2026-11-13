@@ -11,7 +11,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// because <c>bsk.event</c> is append-only — a committed event with missing edges
 /// could never be corrected or removed.
 /// </summary>
-public sealed class NpgsqlActivityWriter(string connectionString) : IActivityWriter
+public sealed class NpgsqlActivityWriter(NpgsqlDataSource dataSource) : IActivityWriter
 {
     private const string InsertEventSql = """
         INSERT INTO bsk.event
@@ -32,7 +32,7 @@ public sealed class NpgsqlActivityWriter(string connectionString) : IActivityWri
         NewEvent activityEvent, IReadOnlyList<SubjectEventEdge> edges,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 

@@ -10,12 +10,12 @@ namespace LifeOs.Infrastructure.Persistence;
 /// horizon) and drop any date that already exists as an occurrence subject
 /// (<c>attributes.series</c> = the series urn, <c>attributes.date</c> = the date).
 /// </summary>
-public sealed class NpgsqlAppointmentRepository(string connectionString) : IAppointmentRepository
+public sealed class NpgsqlAppointmentRepository(NpgsqlDataSource dataSource) : IAppointmentRepository
 {
     public async Task<IReadOnlyList<DateOnly>> PendingOccurrenceDatesAsync(
         Guid seriesId, string seriesUrn, DateOnly through, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // Anchor and window start at the series' start_date (or its creation date).
@@ -48,7 +48,7 @@ public sealed class NpgsqlAppointmentRepository(string connectionString) : IAppo
         Guid id, string urn, string previousTitle, string newTitle, DateOnly fromDate,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 

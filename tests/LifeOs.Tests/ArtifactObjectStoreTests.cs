@@ -48,7 +48,7 @@ public sealed class ArtifactObjectStoreTests(PostgresFixture postgres)
     public async Task Bytes_go_to_the_object_store_and_read_back_byte_for_byte()
     {
         var storage = new MemoryObjectStorage();
-        var store = new NpgsqlArtifactBlobStore(postgres.ConnectionString, storage);
+        var store = new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString), storage);
         var (bytes, sha) = RandomBytes();
 
         var put = await store.PutAsync(Capture(bytes, sha, Source()), Ct);
@@ -87,7 +87,7 @@ public sealed class ArtifactObjectStoreTests(PostgresFixture postgres)
     public async Task The_same_bytes_again_reuse_the_artifact_without_uploading()
     {
         var storage = new MemoryObjectStorage();
-        var store = new NpgsqlArtifactBlobStore(postgres.ConnectionString, storage);
+        var store = new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString), storage);
         var (bytes, sha) = RandomBytes();
         var source = Source();
 
@@ -103,7 +103,7 @@ public sealed class ArtifactObjectStoreTests(PostgresFixture postgres)
     public async Task A_failed_upload_writes_nothing()
     {
         var storage = new MemoryObjectStorage { Failing = true };
-        var store = new NpgsqlArtifactBlobStore(postgres.ConnectionString, storage);
+        var store = new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString), storage);
         var (bytes, sha) = RandomBytes();
 
         await Assert.ThrowsAsync<ObjectStorageException>(() => store.PutAsync(Capture(bytes, sha, Source()), Ct));
@@ -119,10 +119,10 @@ public sealed class ArtifactObjectStoreTests(PostgresFixture postgres)
     public async Task Bytes_stored_in_the_database_before_object_storage_still_read()
     {
         var (bytes, sha) = RandomBytes();
-        var before = await new NpgsqlArtifactBlobStore(postgres.ConnectionString).PutAsync(Capture(bytes, sha, Source()), Ct);
+        var before = await new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString)).PutAsync(Capture(bytes, sha, Source()), Ct);
 
         var storage = new MemoryObjectStorage();
-        var store = new NpgsqlArtifactBlobStore(postgres.ConnectionString, storage);
+        var store = new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString), storage);
 
         Assert.Equal(bytes, (await store.GetAsync(before.ArtifactId, Ct))!.Bytes);
         Assert.Equal(0, storage.Uploads);
@@ -136,17 +136,17 @@ public sealed class ArtifactObjectStoreTests(PostgresFixture postgres)
     public async Task Reading_an_object_needs_its_store_and_checks_what_comes_back()
     {
         var storage = new MemoryObjectStorage();
-        var store = new NpgsqlArtifactBlobStore(postgres.ConnectionString, storage);
+        var store = new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString), storage);
         var (bytes, sha) = RandomBytes();
         var put = await store.PutAsync(Capture(bytes, sha, Source()), Ct);
         var key = $"artifacts/{sha}";
 
         // A host without object storage knows where the bytes are but can't fetch them.
         var unconfigured = await Assert.ThrowsAsync<ObjectStorageException>(
-            () => new NpgsqlArtifactBlobStore(postgres.ConnectionString).GetAsync(put.ArtifactId, Ct));
+            () => new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString)).GetAsync(put.ArtifactId, Ct));
         Assert.Contains("Storage__SupabaseSecretKey", unconfigured.Message);
         // Its metadata still reads.
-        Assert.NotNull(await new NpgsqlArtifactBlobStore(postgres.ConnectionString).GetMetadataAsync(put.ArtifactId, Ct));
+        Assert.NotNull(await new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString)).GetMetadataAsync(put.ArtifactId, Ct));
 
         // Changed bytes are caught, size and hash alike.
         var changed = bytes.ToArray();
@@ -166,7 +166,7 @@ public sealed class ArtifactObjectStoreTests(PostgresFixture postgres)
     [Fact]
     public async Task Object_rows_are_append_only_and_bytes_live_in_one_place()
     {
-        var store = new NpgsqlArtifactBlobStore(postgres.ConnectionString, new MemoryObjectStorage());
+        var store = new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString), new MemoryObjectStorage());
         var (bytes, sha) = RandomBytes();
         var put = await store.PutAsync(Capture(bytes, sha, Source()), Ct);
 
@@ -193,11 +193,11 @@ public sealed class ArtifactObjectStoreTests(PostgresFixture postgres)
     {
         var storage = new MemoryObjectStorage();
         var (bytes, sha) = RandomBytes();
-        var put = await new NpgsqlArtifactBlobStore(postgres.ConnectionString, storage).PutAsync(Capture(bytes, sha, Source()), Ct);
+        var put = await new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString), storage).PutAsync(Capture(bytes, sha, Source()), Ct);
         var readerConnection = BskReader.ConnectionStringFrom(postgres.ConnectionString);
 
         // A store on the reader connection serves the bytes, as the API does.
-        Assert.Equal(bytes, (await new NpgsqlArtifactBlobStore(readerConnection, storage).GetAsync(put.ArtifactId, Ct))!.Bytes);
+        Assert.Equal(bytes, (await new NpgsqlArtifactBlobStore(KernelDataSource.For(readerConnection), storage).GetAsync(put.ArtifactId, Ct))!.Bytes);
 
         await using var reader = new NpgsqlConnection(readerConnection);
         await reader.OpenAsync(Ct);

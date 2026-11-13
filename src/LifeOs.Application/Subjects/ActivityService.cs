@@ -15,7 +15,7 @@ namespace LifeOs.Application.Subjects;
 /// Commitment such as "never add to a losing position", answered by the same SQL
 /// over <c>subject_event WHERE relation = 'violates'</c>.
 /// </summary>
-public sealed class ActivityService(SubjectService subjects, IActivityWriter writer, IClock clock, string sourceId)
+public sealed class ActivityService(SubjectService subjects, IActivityWriter writer, IClock clock, EventSource eventSource)
 {
     public async Task<ActivityResult> LogAsync(
         ActivityInput input, CancellationToken cancellationToken = default)
@@ -44,7 +44,7 @@ public sealed class ActivityService(SubjectService subjects, IActivityWriter wri
             Provenance: Provenances.Declared,
             OccurredAt: now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             PayloadJson: payload);
 
         // The event and its edges land together, or not at all (the stream is

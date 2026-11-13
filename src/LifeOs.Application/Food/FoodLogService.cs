@@ -21,7 +21,7 @@ namespace LifeOs.Application.Food;
 /// written. Days and wall-clock times are the home zone's.
 /// </summary>
 public sealed class FoodLogService(
-    IFoodLogRepository food, FoodRewards rewards, FoodReads reads, IArtifactBlobStore blobs, IClock clock, string sourceId)
+    IFoodLogRepository food, FoodRewards rewards, FoodReads reads, IArtifactBlobStore blobs, IClock clock, EventSource eventSource)
 {
     /// <summary>The widest range <see cref="GetDaysAsync"/> answers.</summary>
     public const int MaxRangeDays = FoodReads.MaxRangeDays;
@@ -557,7 +557,7 @@ public sealed class FoodLogService(
     }
 
     private NewEvent Declared(string kind, DateTimeOffset occurredAt, DateTimeOffset now, string payload)
-        => new(kind, Provenances.Declared, occurredAt, now, sourceId, PayloadJson: payload);
+        => new(kind, Provenances.Declared, occurredAt, now, eventSource.Id, PayloadJson: payload);
 
     private static IReadOnlyList<DateOnly> Days(params DateOnly?[] days)
         => days.Where(d => d is not null).Select(d => d!.Value).Distinct().ToList();

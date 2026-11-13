@@ -108,7 +108,7 @@ public sealed class HabitTodayTests(PostgresFixture postgres)
         Assert.InRange(aheadToday.DayNumber - behindToday.DayNumber, 1, 2);
 
         // The views and the app's calendar (which dates check-offs) agree on the day.
-        var calendar = new NpgsqlHomeCalendar(postgres.ConnectionString, Kiritimati);
+        var calendar = new NpgsqlHomeCalendar(KernelDataSource.For(postgres.ConnectionString), Kiritimati);
         Assert.Contains(aheadToday, new[]
         {
             await calendar.DateAtAsync(DateTimeOffset.UtcNow.AddMinutes(-1), Ct),

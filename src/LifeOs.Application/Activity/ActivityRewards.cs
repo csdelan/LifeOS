@@ -45,7 +45,7 @@ public sealed class ActivityRewards(
     RewardService rewards,
     IHomeCalendar calendar,
     IClock clock,
-    string sourceId,
+    EventSource eventSource,
     ActivityRules? rules = null)
 {
     private static readonly JsonSerializerOptions OmitNulls = new()
@@ -217,7 +217,7 @@ public sealed class ActivityRewards(
             },
             OmitNulls);
         var newEvent = new NewEvent(
-            EventKinds.Ledger, Provenances.Derived, at, now, sourceId, PayloadJson: payload, DerivedFrom: award.Sources);
+            EventKinds.Ledger, Provenances.Derived, at, now, eventSource.Id, PayloadJson: payload, DerivedFrom: award.Sources);
         return new PlannedAward(
             new LedgerWrite(newEvent, [], GuardBalance: false, AwardKey: award.Key, ExpectPaid: false),
             new Award(
@@ -242,7 +242,7 @@ public sealed class ActivityRewards(
             },
             OmitNulls);
         var newEvent = new NewEvent(
-            EventKinds.Ledger, Provenances.Derived, now, now, sourceId, PayloadJson: payload,
+            EventKinds.Ledger, Provenances.Derived, now, now, eventSource.Id, PayloadJson: payload,
             DerivedFrom: [paid.LastEventId]);
         return new PlannedAward(
             new LedgerWrite(

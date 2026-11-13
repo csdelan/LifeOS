@@ -15,7 +15,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// database's clock as each is written (<c>clock_timestamp()</c>, not the transaction's start),
 /// so a sync that waited for the lock always stamps later than the one it waited on.
 /// </summary>
-public sealed class NpgsqlActivityRepository(string connectionString) : IActivityRepository
+public sealed class NpgsqlActivityRepository(NpgsqlDataSource dataSource) : IActivityRepository
 {
     // One lock for every Oura sync. Arbitrary but fixed.
     private const long SyncLockKey = 0x6F75_7261_7379_6E63; // "ourasync"
@@ -75,7 +75,7 @@ public sealed class NpgsqlActivityRepository(string connectionString) : IActivit
 
     public async Task<IOuraSyncLock> BeginSyncAsync(CancellationToken cancellationToken = default)
     {
-        var connection = new NpgsqlConnection(connectionString);
+        var connection = dataSource.CreateConnection();
         NpgsqlTransaction? transaction = null;
         try
         {
@@ -154,7 +154,7 @@ public sealed class NpgsqlActivityRepository(string connectionString) : IActivit
 
     private async Task<IEnumerable<T>> QueryAsync<T>(string sql, object args, CancellationToken cancellationToken)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         return await connection.QueryAsync<T>(new CommandDefinition(sql, args, cancellationToken: cancellationToken));
     }

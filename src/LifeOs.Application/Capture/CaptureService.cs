@@ -11,7 +11,7 @@ namespace LifeOs.Application.Capture;
 /// beyond its text.
 /// </summary>
 public sealed class CaptureService(
-    IEventStore events, IArtifactStore artifacts, IClock clock, string sourceId)
+    IEventStore events, IArtifactStore artifacts, IClock clock, EventSource eventSource)
 {
     /// <summary>Captures a free-text note as one <c>note</c> event.</summary>
     public Task<CaptureResult> CaptureNoteAsync(string text, CancellationToken cancellationToken = default)
@@ -75,7 +75,7 @@ public sealed class CaptureService(
             Provenance: Provenances.Declared,
             OccurredAt: now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             PayloadJson: payload);
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);
@@ -101,7 +101,7 @@ public sealed class CaptureService(
             Provenance: Provenances.Declared,
             OccurredAt: now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             ExternalId: externalId,
             PayloadJson: payloadJson,
             ArtifactId: artifactId);

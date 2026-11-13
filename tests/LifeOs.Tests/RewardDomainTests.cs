@@ -245,7 +245,7 @@ public sealed class RewardDomainTests(PostgresFixture postgres)
     [InlineData("America/Argentina/Buenos_Aires", "America/Argentina/Buenos_Aires")]
     [InlineData("Etc/GMT+8", "Etc/GMT+8")]
     public void A_configured_home_zone_is_an_iana_name_or_the_default(string? configured, string expected)
-        => Assert.Equal(expected, ServiceCollectionExtensions.ParseHomeTimeZone(configured));
+        => Assert.Equal(expected, KernelSettings.ParseHomeTimeZone(configured));
 
     [Theory]
     [InlineData("Pacific Standard Time")]
@@ -254,7 +254,7 @@ public sealed class RewardDomainTests(PostgresFixture postgres)
     public void A_home_zone_that_isnt_an_iana_name_is_refused(string configured)
     {
         var refused = Assert.Throws<InvalidOperationException>(
-            () => ServiceCollectionExtensions.ParseHomeTimeZone(configured));
+            () => KernelSettings.ParseHomeTimeZone(configured));
         Assert.Contains(HomeZone.ConfigurationKey, refused.Message);
         Assert.Throws<InvalidOperationException>(
             () => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString, homeTimeZone: configured));

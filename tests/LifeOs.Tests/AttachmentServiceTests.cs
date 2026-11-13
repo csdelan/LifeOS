@@ -156,7 +156,7 @@ public sealed class AttachmentServiceTests(PostgresFixture postgres)
     {
         // A service with a deliberately tiny limit; nothing should reach the store.
         var service = new AttachmentService(
-            new NpgsqlArtifactBlobStore(postgres.ConnectionString), new SystemClock(), "cli", maxBytes: 8);
+            new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString)), new SystemClock(), new EventSource("cli"), maxBytes: 8);
 
         var tooBig = new byte[9];
 

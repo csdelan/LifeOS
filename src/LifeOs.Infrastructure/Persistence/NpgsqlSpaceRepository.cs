@@ -16,7 +16,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// on its own connection, so every life-domain fold sees the spaces and ratings beside the
 /// credit (environment plan §4.6).
 /// </summary>
-public sealed class NpgsqlSpaceRepository(string connectionString) : ISpaceRepository
+public sealed class NpgsqlSpaceRepository(NpgsqlDataSource dataSource) : ISpaceRepository
 {
     // Aliased to the rows' property names (the CLI host doesn't turn on underscore matching);
     // dates as text, since Dapper has no DateOnly mapping in every host. The fold's read
@@ -95,7 +95,7 @@ public sealed class NpgsqlSpaceRepository(string connectionString) : ISpaceRepos
 
     public async Task<DateTimeOffset> NoonAsync(DateOnly day, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var instant = await connection.ExecuteScalarAsync<DateTime>(new CommandDefinition(
             "SELECT ((@day::date + time '12:00')::timestamp AT TIME ZONE bsk.home_zone());",
@@ -137,7 +137,7 @@ public sealed class NpgsqlSpaceRepository(string connectionString) : ISpaceRepos
             return [];
         }
 
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -204,7 +204,7 @@ public sealed class NpgsqlSpaceRepository(string connectionString) : ISpaceRepos
 
     private async Task<IEnumerable<T>> QueryAsync<T>(string sql, object? args, CancellationToken cancellationToken)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         return await connection.QueryAsync<T>(new CommandDefinition(sql, args, cancellationToken: cancellationToken));
     }

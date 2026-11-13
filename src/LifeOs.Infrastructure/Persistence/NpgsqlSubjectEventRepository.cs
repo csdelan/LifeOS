@@ -9,13 +9,13 @@ namespace LifeOs.Infrastructure.Persistence;
 /// already exist. Idempotent on the table's <c>(event_id, subject_id, relation)</c>
 /// unique key, so relating the same capture to the same subject twice is a no-op.
 /// </summary>
-public sealed class NpgsqlSubjectEventRepository(string connectionString) : ISubjectEventRepository
+public sealed class NpgsqlSubjectEventRepository(NpgsqlDataSource dataSource) : ISubjectEventRepository
 {
     public async Task<bool> CreateEdgeAsync(
         Guid eventId, Guid subjectId, string relation, string provenance,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         const string sql = """

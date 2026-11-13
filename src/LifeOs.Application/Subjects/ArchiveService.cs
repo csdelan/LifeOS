@@ -15,7 +15,7 @@ namespace LifeOs.Application.Subjects;
 /// one is refused while another uses its name, whichever route restores it.
 /// </summary>
 public sealed class ArchiveService(
-    SubjectService subjects, IEventStore events, IClock clock, string sourceId, TaskSeriesService? taskSeries = null,
+    SubjectService subjects, IEventStore events, IClock clock, EventSource eventSource, TaskSeriesService? taskSeries = null,
     ISpaceRepository? spaces = null, IMetricRepository? metrics = null)
 {
     /// <summary>Archives the subject — hides it from default views, reversibly.</summary>
@@ -59,7 +59,7 @@ public sealed class ArchiveService(
             Provenance: Provenances.Declared,
             OccurredAt: now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             PayloadJson: payload);
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);

@@ -14,7 +14,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// is append-only. Dates and wall-clock times are the database's home zone
 /// (<c>bsk.home_zone()</c>), the zone the views read.
 /// </summary>
-public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogRepository
+public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFoodLogRepository
 {
     // One lock for all food writes: a fast's overlap check reads every fast. Arbitrary but fixed.
     private const long FoodLockKey = 0x666F_6F64_6C6F_67; // "foodlog"
@@ -125,7 +125,7 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
 
     public async Task<DrinkHistory> GetDrinkHistoryAsync(DateOnly to, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var first = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT to_char(min(day), 'YYYY-MM-DD') FROM bsk.v_food_day;", cancellationToken: cancellationToken));
@@ -151,7 +151,7 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
 
     public async Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var day = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
             "SELECT to_char(bsk.home_today(), 'YYYY-MM-DD');", cancellationToken: cancellationToken));
@@ -160,7 +160,7 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
 
     public async Task<DateTime> LocalAtAsync(DateTimeOffset instant, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var local = await connection.ExecuteScalarAsync<DateTime>(new CommandDefinition(
             "SELECT @instant::timestamptz AT TIME ZONE bsk.home_zone();",
@@ -171,7 +171,7 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
 
     public async Task<DateTimeOffset> InstantAtAsync(DateTime local, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var instant = await connection.ExecuteScalarAsync<DateTime>(new CommandDefinition(
             "SELECT (@local::timestamp AT TIME ZONE bsk.home_zone());",
@@ -188,7 +188,7 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
             return [];
         }
 
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -262,7 +262,7 @@ public sealed class NpgsqlFoodLogRepository(string connectionString) : IFoodLogR
 
     private async Task<IEnumerable<T>> QueryAsync<T>(string sql, object? args, CancellationToken cancellationToken)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         return await connection.QueryAsync<T>(new CommandDefinition(sql, args, cancellationToken: cancellationToken));
     }

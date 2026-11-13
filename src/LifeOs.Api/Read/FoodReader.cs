@@ -15,8 +15,8 @@ namespace LifeOs.Api.Read;
 public sealed class FoodReader(string readerConnectionString, string homeTimeZone = HomeZone.Default)
 {
     private readonly FoodReads reads = new(
-        new NpgsqlFoodLogRepository(readerConnectionString),
-        new NpgsqlLedgerRepository(readerConnectionString, homeTimeZone));
+        new NpgsqlFoodLogRepository(KernelDataSource.For(readerConnectionString)),
+        new NpgsqlLedgerRepository(KernelDataSource.For(readerConnectionString), homeTimeZone));
 
     /// <summary>One day (default today).</summary>
     public async Task<FoodDayRead> GetDayAsync(DateOnly? day, CancellationToken cancellationToken = default)

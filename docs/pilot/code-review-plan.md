@@ -22,6 +22,10 @@ commit each, and skipped P3.
   write's (a photo that didn't upload). A form says a failure inline and runs one write at a
   time; a row's button says it in a toast and lets clicks run side by side. A promise nothing
   waited on is said in a toast too.
+- **CR18:** the container builds each kernel service from its constructor. A service that takes
+  a setting (the coin value, the home time zone, whether photos can be stored) is built by hand
+  in `ServiceCollectionExtensions`, so the setting can't fall back to a parameter default unseen;
+  `KernelCompositionTests` checks that every registered service can be built.
 - **CR24:** a rename or attribute change appends an `attribute_change` event in the same
   transaction, so "what was this habit's recurrence on a date" can be answered later.
 

@@ -23,11 +23,11 @@ public sealed class ActivityReader(string readerConnectionString, string homeTim
     public const int DefaultWeeks = 12;
 
     private readonly ActivityReads reads = new(
-        new NpgsqlActivityRepository(readerConnectionString),
-        new NpgsqlHomeCalendar(readerConnectionString, homeTimeZone),
+        new NpgsqlActivityRepository(KernelDataSource.For(readerConnectionString)),
+        new NpgsqlHomeCalendar(KernelDataSource.For(readerConnectionString), homeTimeZone),
         clock ?? new SystemClock());
 
-    private readonly ActivityPaidReads paid = new(new NpgsqlLedgerRepository(readerConnectionString, homeTimeZone));
+    private readonly ActivityPaidReads paid = new(new NpgsqlLedgerRepository(KernelDataSource.For(readerConnectionString), homeTimeZone));
 
     /// <summary>
     /// Every day from <paramref name="from"/> to <paramref name="to"/>, oldest first, at most

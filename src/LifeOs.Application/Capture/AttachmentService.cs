@@ -18,7 +18,7 @@ namespace LifeOs.Application.Capture;
 /// before any bytes are written.
 /// </summary>
 public sealed class AttachmentService(
-    IArtifactBlobStore blobs, IClock clock, string sourceId, long maxBytes)
+    IArtifactBlobStore blobs, IClock clock, EventSource eventSource, long maxBytes)
 {
     /// <summary>
     /// Captures a document/attachment as one <c>note</c> event with a binary artifact
@@ -72,7 +72,7 @@ public sealed class AttachmentService(
             Provenance: Provenances.Declared,
             OccurredAt: now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             Sha256: sha256,
             Bytes: bytes,
             ContentType: resolvedContentType,

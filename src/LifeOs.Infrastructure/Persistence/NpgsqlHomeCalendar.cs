@@ -11,11 +11,11 @@ namespace LifeOs.Infrastructure.Persistence;
 /// <paramref name="homeTimeZone"/> (an IANA name, <see cref="HomeZone"/>), since .NET runs
 /// with invariant globalization and can't. A zone the database doesn't know fails loudly.
 /// </summary>
-public sealed class NpgsqlHomeCalendar(string connectionString, string homeTimeZone = HomeZone.Default) : IHomeCalendar
+public sealed class NpgsqlHomeCalendar(NpgsqlDataSource dataSource, string homeTimeZone = HomeZone.Default) : IHomeCalendar
 {
     public async Task<DateOnly> DateAtAsync(DateTimeOffset instant, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         try
         {

@@ -25,7 +25,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// artifacts stored before object storage was configured still read from the database. A
 /// store built on the reader connection serves reads only.
 /// </summary>
-public sealed class NpgsqlArtifactBlobStore(string connectionString, IObjectStorage? objects = null) : IArtifactBlobStore
+public sealed class NpgsqlArtifactBlobStore(NpgsqlDataSource dataSource, IObjectStorage? objects = null) : IArtifactBlobStore
 {
     private const string FindExistingSql = """
         SELECT id AS EventId, artifact_id AS ArtifactId
@@ -95,7 +95,7 @@ public sealed class NpgsqlArtifactBlobStore(string connectionString, IObjectStor
     public async Task<BinaryCaptureResult> PutAsync(
         NewBinaryCapture capture, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         if (objects is null)
@@ -150,7 +150,7 @@ public sealed class NpgsqlArtifactBlobStore(string connectionString, IObjectStor
 
     public async Task<bool> ExistsAsync(Guid artifactId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
@@ -169,7 +169,7 @@ public sealed class NpgsqlArtifactBlobStore(string connectionString, IObjectStor
     public async Task<ArtifactBlob?> GetAsync(Guid artifactId, CancellationToken cancellationToken = default)
     {
         StoredRow? row;
-        await using (var connection = new NpgsqlConnection(connectionString))
+        await using (var connection = dataSource.CreateConnection())
         {
             await connection.OpenAsync(cancellationToken);
             row = await connection.QuerySingleOrDefaultAsync<StoredRow>(new CommandDefinition(
@@ -188,7 +188,7 @@ public sealed class NpgsqlArtifactBlobStore(string connectionString, IObjectStor
     public async Task<ArtifactBlobMetadata?> GetMetadataAsync(
         Guid artifactId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         var row = await connection.QuerySingleOrDefaultAsync<MetadataRow>(new CommandDefinition(

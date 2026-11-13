@@ -26,7 +26,7 @@ public sealed record ReadingList(DateOnly Today, int? Days, IReadOnlyList<Metric
 /// level. Refusals are in words, with nothing written.
 /// </summary>
 public sealed class MetricReadingService(
-    IMetricRepository metrics, MetricService metricService, IHomeCalendar calendar, IClock clock, string sourceId)
+    IMetricRepository metrics, MetricService metricService, IHomeCalendar calendar, IClock clock, EventSource eventSource)
 {
     /// <summary>How far back a list reads by default.</summary>
     public const int DefaultDays = 90;
@@ -231,7 +231,7 @@ public sealed class MetricReadingService(
            ?? throw new InvalidOperationException($"The reading {id} wasn't found after it was written.");
 
     private NewEvent Declared(DateTimeOffset occurredAt, DateTimeOffset now, string payload)
-        => new(EventKinds.Measurement, Provenances.Declared, occurredAt, now, sourceId, PayloadJson: payload);
+        => new(EventKinds.Measurement, Provenances.Declared, occurredAt, now, eventSource.Id, PayloadJson: payload);
 
     /// <summary>
     /// A reading's payload; the value as a number (192.4), and the note, the visit and the printed

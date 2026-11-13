@@ -11,7 +11,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// and completing a review go through the subject and status services. The API reads through one
 /// of these on the reader connection.
 /// </summary>
-public sealed class NpgsqlReviewRepository(string connectionString) : IReviewRepository
+public sealed class NpgsqlReviewRepository(NpgsqlDataSource dataSource) : IReviewRepository
 {
     // Aliased to the row's property names (the CLI host doesn't turn on underscore matching);
     // days as text, since Dapper has no DateOnly mapping in every host.
@@ -56,7 +56,7 @@ public sealed class NpgsqlReviewRepository(string connectionString) : IReviewRep
 
     private async Task<IReadOnlyList<Review>> QueryAsync(string sql, object args, CancellationToken cancellationToken)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var rows = await connection.QueryAsync<ReviewRow>(new CommandDefinition(sql, args, cancellationToken: cancellationToken));
         return rows.Select(r => r.ToReview()).ToList();

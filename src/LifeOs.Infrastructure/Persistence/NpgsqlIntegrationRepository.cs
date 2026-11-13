@@ -14,7 +14,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// them plain. A host without a token key can still read a connection's state; storing or
 /// reading tokens then refuses in words.
 /// </summary>
-public sealed class NpgsqlIntegrationRepository(string connectionString, TokenCipher? cipher) : IIntegrationRepository
+public sealed class NpgsqlIntegrationRepository(NpgsqlDataSource dataSource, TokenCipher? cipher) : IIntegrationRepository
 {
     // Aliased to the row's property names: the CLI host doesn't turn on Dapper's underscore
     // matching. Dates as text, since Dapper has no DateOnly mapping in every host.
@@ -214,7 +214,7 @@ public sealed class NpgsqlIntegrationRepository(string connectionString, TokenCi
 
     private async Task<NpgsqlConnection> OpenAsync(CancellationToken cancellationToken)
     {
-        var connection = new NpgsqlConnection(connectionString);
+        var connection = dataSource.CreateConnection();
         try
         {
             await connection.OpenAsync(cancellationToken);

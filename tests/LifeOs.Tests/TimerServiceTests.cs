@@ -29,10 +29,10 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
         var clock = new TestClock(DateTimeOffset.UtcNow);
         var timers = new TimerService(
             subjects,
-            new NpgsqlTimerRepository(postgres.ConnectionString),
+            new NpgsqlTimerRepository(KernelDataSource.For(postgres.ConnectionString)),
             provider.GetRequiredService<StatusService>(),
             clock,
-            KernelSources.Cli);
+            new EventSource(KernelSources.Cli));
         return (timers, subjects, clock);
     }
 
@@ -245,7 +245,7 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
             provider.GetRequiredService<IEventStore>(),
             provider.GetRequiredService<LifeOs.Application.Rewards.RewardService>(),
             clock,
-            KernelSources.Cli);
+            new EventSource(KernelSources.Cli));
         var task = await TaskAsync(subjects);
         await timers.ApplyAsync(task.Urn, TimerActions.Start, Ct);
         clock.Advance(TimeSpan.FromSeconds(10));
@@ -303,7 +303,7 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
         await timers.ApplyAsync(task.Urn, TimerActions.Start, Ct);
 
         // Another window still believes the timer is stopped and tries to start it.
-        var repository = new NpgsqlTimerRepository(postgres.ConnectionString);
+        var repository = new NpgsqlTimerRepository(KernelDataSource.For(postgres.ConnectionString));
         var stale = new TimerWrite(task.Id, TimerStates.Stopped, new NewEvent(
             EventKinds.Activity, Provenances.Declared, clock.UtcNow, clock.UtcNow, KernelSources.Cli,
             PayloadJson: $$"""{"subject_id":"{{task.Id}}","timer":"start"}"""));

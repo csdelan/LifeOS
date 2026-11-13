@@ -11,14 +11,14 @@ namespace LifeOs.Application.Reviews;
 /// <c>concerns</c> edge to the Review. The newest link wins, so linking again writes a new version
 /// and the log keeps every one; linking the same note with the same summary writes nothing.
 /// Linking never completes the review. The connector's <c>link_reflection</c> builds one of these
-/// for each agent, writing as <paramref name="sourceId"/>.
+/// for each agent, writing as <paramref name="eventSource"/>.
 /// </summary>
 public sealed class ReflectionService(
     IEventStore events,
     ISubjectEventRepository edges,
     IReviewRepository reviews,
     IClock clock,
-    string sourceId)
+    EventSource eventSource)
 {
     /// <summary>
     /// Links the note at <paramref name="path"/> in <paramref name="vault"/> to the review.
@@ -51,7 +51,7 @@ public sealed class ReflectionService(
             Provenance: Provenances.Declared,
             OccurredAt: now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             ExternalId: externalId,
             PayloadJson: payload.ToJsonString()), cancellationToken);
         await FinishAsync(eventId, review.Id, cancellationToken);

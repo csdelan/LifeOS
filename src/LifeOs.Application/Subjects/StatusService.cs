@@ -28,7 +28,7 @@ namespace LifeOs.Application.Subjects;
 /// </para>
 /// </summary>
 public sealed class StatusService(
-    SubjectService subjects, IEventStore events, RewardService rewards, IClock clock, string sourceId,
+    SubjectService subjects, IEventStore events, RewardService rewards, IClock clock, EventSource eventSource,
     TaskSeriesService? taskSeries = null, ITimerRepository? timers = null)
 {
     public async Task<StatusResult> ChangeStatusAsync(
@@ -59,7 +59,7 @@ public sealed class StatusService(
                     Provenance: Provenances.Declared,
                     OccurredAt: now,
                     RecordedAt: now,
-                    SourceId: sourceId,
+                    SourceId: eventSource.Id,
                     PayloadJson: stop))],
                 cancellationToken);
         }
@@ -69,7 +69,7 @@ public sealed class StatusService(
             Provenance: Provenances.Declared,
             OccurredAt: now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             PayloadJson: payload);
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);

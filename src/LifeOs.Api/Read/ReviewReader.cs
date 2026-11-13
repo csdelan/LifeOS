@@ -18,8 +18,8 @@ public sealed class ReviewReader(string readerConnectionString, IClock clock, st
     /// <summary>The longest recap read, in days: a month and a bit.</summary>
     public const int MaxRecapDays = 62;
 
-    private readonly NpgsqlReviewRepository reviews = new(readerConnectionString);
-    private readonly NpgsqlHomeCalendar calendar = new(readerConnectionString, homeTimeZone);
+    private readonly NpgsqlReviewRepository reviews = new(KernelDataSource.For(readerConnectionString));
+    private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), homeTimeZone);
 
     /// <summary>Today in the home zone.</summary>
     public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default)

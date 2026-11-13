@@ -15,9 +15,9 @@ namespace LifeOs.Api.Read;
 /// </summary>
 public sealed class EnvironmentReader(string readerConnectionString, IClock clock, string homeTimeZone = HomeZone.Default)
 {
-    private readonly NpgsqlSpaceRepository spaces = new(readerConnectionString);
-    private readonly NpgsqlHomeCalendar calendar = new(readerConnectionString, homeTimeZone);
-    private readonly HomeService home = new(new NpgsqlLedgerRepository(readerConnectionString, homeTimeZone));
+    private readonly NpgsqlSpaceRepository spaces = new(KernelDataSource.For(readerConnectionString));
+    private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), homeTimeZone);
+    private readonly HomeService home = new(new NpgsqlLedgerRepository(KernelDataSource.For(readerConnectionString), homeTimeZone));
 
     /// <summary>
     /// The home today: the Home Score, each space and part, Fix next, and each space's shots with

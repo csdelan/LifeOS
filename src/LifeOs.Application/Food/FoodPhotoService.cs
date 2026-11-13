@@ -21,7 +21,7 @@ namespace LifeOs.Application.Food;
 /// </para>
 /// </summary>
 public sealed class FoodPhotoService(
-    IArtifactBlobStore blobs, FoodLogService food, IClock clock, string sourceId, bool enabled = true)
+    IArtifactBlobStore blobs, FoodLogService food, IClock clock, EventSource eventSource, bool enabled = true)
 {
     /// <summary>True when this host takes photos.</summary>
     public bool Enabled => enabled;
@@ -49,7 +49,7 @@ public sealed class FoodPhotoService(
             Provenance: Provenances.Declared,
             OccurredAt: now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             Sha256: Convert.ToHexStringLower(SHA256.HashData(bytes)),
             Bytes: bytes,
             ContentType: contentType,

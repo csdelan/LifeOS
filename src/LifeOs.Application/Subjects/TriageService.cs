@@ -14,7 +14,7 @@ namespace LifeOs.Application.Subjects;
 /// The marker is append-only, mirroring status and archive.
 /// </summary>
 public sealed class TriageService(
-    SubjectService subjects, IEventReader events, IEventStore store, IClock clock, string sourceId,
+    SubjectService subjects, IEventReader events, IEventStore store, IClock clock, EventSource eventSource,
     StatusService status)
 {
     /// <summary>Flags the referenced item into the inbox.</summary>
@@ -100,7 +100,7 @@ public sealed class TriageService(
                 Provenance: Provenances.Declared,
                 OccurredAt: now,
                 RecordedAt: now,
-                SourceId: sourceId,
+                SourceId: eventSource.Id,
                 PayloadJson: payload),
             cancellationToken);
     }

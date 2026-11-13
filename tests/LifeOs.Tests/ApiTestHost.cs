@@ -37,10 +37,6 @@ internal sealed class ApiTestHost(WebApplication app, HttpClient client) : IAsyn
         IReadOnlyDictionary<string, string?>? configuration = null,
         Action<IServiceCollection>? services = null)
     {
-        // Program.Main sets this before building the host; the read endpoints need it
-        // to map snake_case columns (item_id -> ItemId).
-        DefaultTypeMap.MatchNamesWithUnderscores = true;
-
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             EnvironmentName = "Development",

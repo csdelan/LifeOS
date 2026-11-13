@@ -13,7 +13,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// unique index on (series, occurrence) backs that up. Dates travel as text, since Dapper has
 /// no DateOnly mapping in every host.
 /// </summary>
-public sealed class NpgsqlTaskSeriesRepository(string connectionString) : ITaskSeriesRepository
+public sealed class NpgsqlTaskSeriesRepository(NpgsqlDataSource dataSource) : ITaskSeriesRepository
 {
     // How far ahead NextOccurrenceAsync looks for a pattern's next date.
     private const int LookAheadDays = 3 * 366;
@@ -31,7 +31,7 @@ public sealed class NpgsqlTaskSeriesRepository(string connectionString) : ITaskS
 
     public async Task<TaskSeriesState?> GetAsync(Guid taskId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         var row = await connection.QuerySingleOrDefaultAsync<TaskRow>(new CommandDefinition(
@@ -90,7 +90,7 @@ public sealed class NpgsqlTaskSeriesRepository(string connectionString) : ITaskS
 
     public async Task<IReadOnlyList<Guid>> RepeatingAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         var ids = await connection.QueryAsync<Guid>(new CommandDefinition(
@@ -102,7 +102,7 @@ public sealed class NpgsqlTaskSeriesRepository(string connectionString) : ITaskS
     public async Task<IReadOnlyList<TaskRepetition>> RepetitionsAsync(
         string seriesUrn, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         var rows = await connection.QueryAsync<RepetitionRow>(new CommandDefinition(
@@ -114,7 +114,7 @@ public sealed class NpgsqlTaskSeriesRepository(string connectionString) : ITaskS
     public async Task<DateOnly?> NextOccurrenceAsync(
         string recurrenceJson, DateOnly anchor, DateOnly from, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         var next = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
@@ -131,7 +131,7 @@ public sealed class NpgsqlTaskSeriesRepository(string connectionString) : ITaskS
         TaskSeriesState series, DateOnly? expectedLatest, IReadOnlyList<NewTaskRepetition> repetitions,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -189,7 +189,7 @@ public sealed class NpgsqlTaskSeriesRepository(string connectionString) : ITaskS
         Guid seriesId, Guid repetitionId, string patchJson, IReadOnlyList<string> removeKeys,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -223,7 +223,7 @@ public sealed class NpgsqlTaskSeriesRepository(string connectionString) : ITaskS
     public async Task<(bool Updated, int RepetitionsRenamed)> RenameWithOpenRepetitionsAsync(
         Guid id, string urn, string previousTitle, string newTitle, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -253,7 +253,7 @@ public sealed class NpgsqlTaskSeriesRepository(string connectionString) : ITaskS
         string seriesUrn, string key, string? previousValue, string? newValue,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         return await connection.ExecuteAsync(new CommandDefinition(
@@ -274,7 +274,7 @@ public sealed class NpgsqlTaskSeriesRepository(string connectionString) : ITaskS
         string seriesUrn, IReadOnlyCollection<string> add, IReadOnlyCollection<string> remove,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 

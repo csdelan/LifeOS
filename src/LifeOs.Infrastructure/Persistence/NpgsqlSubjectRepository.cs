@@ -6,12 +6,12 @@ using Npgsql;
 namespace LifeOs.Infrastructure.Persistence;
 
 /// <summary>Reads and creates subjects in <c>bsk.subject</c>.</summary>
-public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectRepository
+public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource) : ISubjectRepository
 {
     public async Task<SubjectRef?> FindByUrnAsync(
         string urn, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         return await connection.QuerySingleOrDefaultAsync<SubjectRef>(new CommandDefinition(
@@ -22,7 +22,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
     public async Task<SubjectRef?> FindByTypeAndTitleAsync(
         string type, string title, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // Oldest match wins, so repeated resolves are stable.
@@ -40,7 +40,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
     public async Task<IReadOnlyList<SubjectRef>> FindByShortIdAsync(
         string shortId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // The short id is the URN's trailing token, separated from the slug by '-'
@@ -62,7 +62,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
     public async Task<IReadOnlyList<SubjectRef>> FindByTitleContainsAsync(
         string fragment, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // Case-insensitive substring match; an exact (case-insensitive) title sorts
@@ -82,7 +82,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
     public async Task<Guid> CreateAsync(
         NewSubject newSubject, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -170,7 +170,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
         NewSubject child, string relation, Guid parentId, string provenance,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -202,7 +202,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
     public async Task<bool> RenameAsync(
         Guid id, string newTitle, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // Only the title column changes. The URN is left untouched, so no stored
@@ -231,7 +231,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
     public async Task<string?> GetAttributeValueAsync(
         Guid id, string key, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
@@ -241,7 +241,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
 
     public async Task<string?> GetStatusAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
@@ -253,7 +253,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
         NewSubject newSubject, string relation, Guid fromId, string provenance,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -285,7 +285,7 @@ public sealed class NpgsqlSubjectRepository(string connectionString) : ISubjectR
         Guid id, string patchJson, IReadOnlyList<string> removeKeys,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // Merge the patch (right wins), then strip any keys marked for removal — one

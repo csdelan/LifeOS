@@ -10,7 +10,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// the affected-row count is how many tags actually changed. The item is a subject
 /// or an event — the caller says which, and the unused id column stays NULL.
 /// </summary>
-public sealed class NpgsqlTagRepository(string connectionString) : ITagRepository
+public sealed class NpgsqlTagRepository(NpgsqlDataSource dataSource) : ITagRepository
 {
     public async Task<int> AddAsync(
         bool isEvent, Guid itemId, IReadOnlyCollection<string> tags,
@@ -21,7 +21,7 @@ public sealed class NpgsqlTagRepository(string connectionString) : ITagRepositor
             return 0;
         }
 
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         const string sql = """
@@ -43,7 +43,7 @@ public sealed class NpgsqlTagRepository(string connectionString) : ITagRepositor
             return 0;
         }
 
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // NOT DISTINCT FROM so the NULL side of the polymorphic item matches NULL.
@@ -62,7 +62,7 @@ public sealed class NpgsqlTagRepository(string connectionString) : ITagRepositor
         bool fromIsEvent, Guid fromItemId, Guid toSubjectId,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         // One set-based copy; the per-item unique index makes it idempotent.
@@ -89,7 +89,7 @@ public sealed class NpgsqlTagRepository(string connectionString) : ITagRepositor
     public async Task<(int Renamed, int Merged)> RenameAsync(
         string oldTag, string newTag, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 

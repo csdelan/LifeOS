@@ -1,4 +1,3 @@
-using System.Globalization;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Activity;
 using LifeOs.Application.Capture;
@@ -17,316 +16,173 @@ using LifeOs.Infrastructure.Persistence;
 using LifeOs.Infrastructure.Rebuild;
 using LifeOs.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace LifeOs.Infrastructure.DependencyInjection;
 
 /// <summary>
 /// Composition root: registers the application services and their Postgres-backed
-/// implementations against a single connection string. This is the only place
-/// wiring lives; the CLI and any future host build on it.
+/// implementations for one <see cref="KernelSettings"/>. This is the only place wiring lives;
+/// the CLI, the API and the tests build on it.
 /// <para>
-/// <c>coinValueUsd</c> is what a reward Coin is worth in dollars. A host with
-/// configuration passes its <c>Rewards:CoinValueUsd</c>; otherwise it comes from the
-/// <c>Rewards__CoinValueUsd</c> environment variable (the same setting, as ASP.NET names it
-/// there), else <see cref="CoinRates.DefaultUsd"/>.
-/// </para>
-/// <para>
-/// <c>homeTimeZone</c> decides which local day an earn counts on (<see cref="HomeZone"/>).
-/// It comes from the host's <c>Rewards:HomeTimeZone</c> the same way, else the
-/// <c>Rewards__HomeTimeZone</c> environment variable, else <see cref="HomeZone.Default"/>.
-/// </para>
-/// <para>
-/// <c>objectStorage</c>, when given, keeps new artifact bytes in Supabase Storage rather than
-/// the database (migration 0035); artifacts already in the database still read from there. A
-/// host passes it explicitly (<see cref="SupabaseStorageOptions.Resolve"/>) — nothing here reads
-/// it from the environment, so a test never uploads. <c>allowPhotosInDatabase</c> false refuses
-/// food photos when there is no object storage, so they never fill a small hosted database.
-/// </para>
-/// <para>
-/// <c>integrations</c> connects outside services (activity plan §3.1): with an Oura app it
-/// registers <see cref="IOuraClient"/>, and with a token key the repository can store tokens.
-/// A host passes it explicitly (<see cref="IntegrationSettings.Resolve"/>), so a test never
-/// calls Oura. Without it, <see cref="OuraConnectionService"/> says Oura isn't set up. With an
-/// Unsplash key it registers <see cref="IUnsplashClient"/>; without one,
-/// <see cref="CoverService"/> says Unsplash isn't set up.
+/// The container builds each service from its constructor (code review CR18), from the
+/// repositories, the clock, the shared <see cref="NpgsqlDataSource"/> and the host's
+/// <see cref="EventSource"/>. Only a service that takes a setting is built by hand here, so that
+/// setting can't fall back to its parameter's default unseen.
 /// </para>
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>The environment variable that carries <see cref="CoinRates.ConfigurationKey"/>.</summary>
-    public const string CoinValueVariable = "Rewards__CoinValueUsd";
-
-    /// <summary>The environment variable that carries <see cref="HomeZone.ConfigurationKey"/>.</summary>
-    public const string HomeTimeZoneVariable = "Rewards__HomeTimeZone";
-
+    /// <summary>
+    /// The kernel on <paramref name="connectionString"/>, with the settings a host gave and the
+    /// rest from the environment (<see cref="KernelSettings.Resolve"/>).
+    /// </summary>
     public static IServiceCollection AddLifeOsKernel(
         this IServiceCollection services, string connectionString, string sourceId = KernelSources.Cli,
         decimal? coinValueUsd = null, string? homeTimeZone = null,
         SupabaseStorageOptions? objectStorage = null, bool allowPhotosInDatabase = true,
         IntegrationSettings? integrations = null)
-    {
-        var coinValue = coinValueUsd ?? ParseCoinValueUsd(Environment.GetEnvironmentVariable(CoinValueVariable));
-        var homeZone = ParseHomeTimeZone(homeTimeZone ?? Environment.GetEnvironmentVariable(HomeTimeZoneVariable));
+        => services.AddLifeOsKernel(KernelSettings.Resolve(
+            connectionString, sourceId, coinValueUsd, homeTimeZone, objectStorage, allowPhotosInDatabase, integrations));
 
+    public static IServiceCollection AddLifeOsKernel(this IServiceCollection services, KernelSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        DapperConventions.Apply();
+
+        services.AddSingleton(settings);
+        services.AddSingleton(new EventSource(settings.SourceId));
+        services.AddSingleton(KernelDataSource.For(settings.ConnectionString));
         services.AddSingleton<IClock, SystemClock>();
 
-        services.AddSingleton<IArtifactStore>(_ => new NpgsqlArtifactStore(connectionString));
-        if (objectStorage is not null)
+        AddStore(services, settings);
+        AddServices(services, settings);
+
+        // Operational services that work directly against the store.
+        services.AddSingleton(_ => new MigrationRunner(settings.ConnectionString));
+        services.AddSingleton(_ => new DerivedRebuilder(settings.ConnectionString));
+        services.AddSingleton(_ => new DiagnosticRunner(settings.ConnectionString));
+
+        return services;
+    }
+
+    /// <summary>The repositories, the artifact stores and the outside services.</summary>
+    private static void AddStore(IServiceCollection services, KernelSettings settings)
+    {
+        if (settings.ObjectStorage is { } storage)
         {
             services.AddSingleton<IObjectStorage>(_ =>
-                new SupabaseObjectStorage(SupabaseObjectStorage.CreateHttpClient(), objectStorage));
+                new SupabaseObjectStorage(SupabaseObjectStorage.CreateHttpClient(), storage));
         }
 
-        services.AddSingleton<IArtifactBlobStore>(sp =>
-            new NpgsqlArtifactBlobStore(connectionString, sp.GetService<IObjectStorage>()));
-        services.AddSingleton<IEventStore>(_ => new NpgsqlEventStore(connectionString));
-        services.AddSingleton<IEventReader>(_ => new NpgsqlEventReader(connectionString));
-        services.AddSingleton<ISubjectRepository>(_ => new NpgsqlSubjectRepository(connectionString));
-        services.AddSingleton<IRelationRepository>(_ => new NpgsqlRelationRepository(connectionString));
-        services.AddSingleton<IActivityWriter>(_ => new NpgsqlActivityWriter(connectionString));
-        services.AddSingleton<ISubjectEventRepository>(_ => new NpgsqlSubjectEventRepository(connectionString));
-        services.AddSingleton<ITagRepository>(_ => new NpgsqlTagRepository(connectionString));
-        services.AddSingleton<IAppointmentRepository>(_ => new NpgsqlAppointmentRepository(connectionString));
-        services.AddSingleton<ITimerRepository>(_ => new NpgsqlTimerRepository(connectionString));
-        services.AddSingleton<ITaskSeriesRepository>(_ => new NpgsqlTaskSeriesRepository(connectionString));
-        services.AddSingleton<ILedgerRepository>(_ => new NpgsqlLedgerRepository(connectionString, homeZone));
-        services.AddSingleton<IHomeCalendar>(_ => new NpgsqlHomeCalendar(connectionString, homeZone));
-        services.AddSingleton<IFoodLogRepository>(_ => new NpgsqlFoodLogRepository(connectionString));
-        services.AddSingleton<ISpaceRepository>(_ => new NpgsqlSpaceRepository(connectionString));
-        services.AddSingleton<IMetricRepository>(_ => new NpgsqlMetricRepository(connectionString));
-        services.AddSingleton<IReviewRepository>(_ => new NpgsqlReviewRepository(connectionString));
-        services.AddSingleton<IIntegrationRepository>(_ =>
-            new NpgsqlIntegrationRepository(connectionString, integrations?.TokenCipher));
-        services.AddSingleton<IActivityRepository>(_ => new NpgsqlActivityRepository(connectionString));
-        if (integrations?.Unsplash is { } unsplash)
+        services.AddSingleton<IArtifactStore, NpgsqlArtifactStore>();
+        services.AddSingleton<IArtifactBlobStore, NpgsqlArtifactBlobStore>();
+        services.AddSingleton<IEventStore, NpgsqlEventStore>();
+        services.AddSingleton<IEventReader, NpgsqlEventReader>();
+        services.AddSingleton<ISubjectRepository, NpgsqlSubjectRepository>();
+        services.AddSingleton<IRelationRepository, NpgsqlRelationRepository>();
+        services.AddSingleton<IActivityWriter, NpgsqlActivityWriter>();
+        services.AddSingleton<ISubjectEventRepository, NpgsqlSubjectEventRepository>();
+        services.AddSingleton<ITagRepository, NpgsqlTagRepository>();
+        services.AddSingleton<IAppointmentRepository, NpgsqlAppointmentRepository>();
+        services.AddSingleton<ITimerRepository, NpgsqlTimerRepository>();
+        services.AddSingleton<ITaskSeriesRepository, NpgsqlTaskSeriesRepository>();
+        services.AddSingleton<IFoodLogRepository, NpgsqlFoodLogRepository>();
+        services.AddSingleton<ISpaceRepository, NpgsqlSpaceRepository>();
+        services.AddSingleton<IMetricRepository, NpgsqlMetricRepository>();
+        services.AddSingleton<IReviewRepository, NpgsqlReviewRepository>();
+        services.AddSingleton<IActivityRepository, NpgsqlActivityRepository>();
+
+        // These take the home time zone or the token key.
+        services.AddSingleton<ILedgerRepository>(sp =>
+            new NpgsqlLedgerRepository(sp.GetRequiredService<NpgsqlDataSource>(), settings.HomeTimeZone));
+        services.AddSingleton<IHomeCalendar>(sp =>
+            new NpgsqlHomeCalendar(sp.GetRequiredService<NpgsqlDataSource>(), settings.HomeTimeZone));
+        services.AddSingleton<IIntegrationRepository>(sp =>
+            new NpgsqlIntegrationRepository(sp.GetRequiredService<NpgsqlDataSource>(), settings.Integrations?.TokenCipher));
+
+        if (settings.Integrations?.Unsplash is { } unsplash)
         {
             services.AddSingleton<IUnsplashClient>(_ =>
                 new UnsplashHttpClient(UnsplashHttpClient.CreateHttpClient(), unsplash));
         }
 
-        if (integrations?.Oura is { } oura)
+        if (settings.Integrations?.Oura is { } oura)
         {
             services.AddSingleton<IOuraClient>(sp =>
                 new OuraHttpClient(OuraHttpClient.CreateHttpClient(), oura, sp.GetRequiredService<IClock>()));
         }
+    }
 
-        services.AddSingleton(sp => new CaptureService(
-            sp.GetRequiredService<IEventStore>(),
-            sp.GetRequiredService<IArtifactStore>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId));
+    /// <summary>
+    /// Photos and lab reports can be kept: in object storage (the host's, or one a test
+    /// registers), or in the database where the host allows it.
+    /// </summary>
+    private static bool StoresPhotos(IServiceProvider services, KernelSettings settings)
+        => settings.AllowPhotosInDatabase || services.GetService<IObjectStorage>() is not null;
 
-        // Binary captures (CAP-2 voice / CAP-4 attachments). The size guard is
-        // configurable via BSK_MAX_ARTIFACT_BYTES, defaulting to ArtifactLimits.DefaultMaxBytes.
-        var maxArtifactBytes = ResolveMaxArtifactBytes();
+    private static void AddServices(IServiceCollection services, KernelSettings settings)
+    {
+        // Subjects, their relations, statuses and repeats (D16).
+        services.AddSingleton<SubjectService>();
+        services.AddSingleton<TaskSeriesService>();
+        services.AddSingleton<ChildCreationService>();
+        services.AddSingleton<RelationService>();
+        services.AddSingleton<AttributeService>();
+        services.AddSingleton<RenameService>();
+        services.AddSingleton<RecurrenceService>();
+        services.AddSingleton<StatusService>();
+        services.AddSingleton<ArchiveService>();
+        services.AddSingleton<PromotionService>();
+        services.AddSingleton<SubjectCreationService>();
+        services.AddSingleton<DecisionService>();
+        services.AddSingleton<ActivityService>();
+        services.AddSingleton<AdherenceService>();
+        services.AddSingleton<TimerService>();
+        services.AddSingleton<HabitTargetService>();
+        services.AddSingleton<RelateService>();
+        services.AddSingleton<TagService>();
+        services.AddSingleton<PeopleService>();
+        services.AddSingleton<AppointmentService>();
+        services.AddSingleton<TriageService>();
+
+        // Capture and the Inbox (CAP-1 to CAP-4).
+        services.AddSingleton<CaptureService>();
+        services.AddSingleton<InboxFilingService>();
         services.AddSingleton(sp => new AttachmentService(
             sp.GetRequiredService<IArtifactBlobStore>(),
             sp.GetRequiredService<IClock>(),
-            sourceId,
-            maxArtifactBytes));
+            sp.GetRequiredService<EventSource>(),
+            settings.MaxArtifactBytes));
 
-        services.AddSingleton(sp => new SubjectService(
-            sp.GetRequiredService<ISubjectRepository>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId));
-
-        // Repeating Tasks (D16): the series service the status, pattern, edit, tag, archive and
-        // timer paths consult.
-        services.AddSingleton(sp => new TaskSeriesService(
-            sp.GetRequiredService<ITaskSeriesRepository>(),
-            sp.GetRequiredService<ISubjectRepository>(),
-            sp.GetRequiredService<IHomeCalendar>(),
-            sp.GetRequiredService<IClock>()));
-
-        services.AddSingleton(sp => new ChildCreationService(sp.GetRequiredService<SubjectService>()));
-
-        services.AddSingleton(sp => new RelationService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<IRelationRepository>()));
-
-        services.AddSingleton(sp => new AttributeService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>(),
-            sp.GetRequiredService<TaskSeriesService>()));
-
-        services.AddSingleton(sp => new RenameService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>(),
-            sp.GetRequiredService<IAppointmentRepository>(),
-            sp.GetRequiredService<IClock>(),
-            sp.GetRequiredService<ITaskSeriesRepository>()));
-
-        services.AddSingleton(sp => new RecurrenceService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>(),
-            sp.GetRequiredService<TaskSeriesService>()));
-
-        services.AddSingleton(sp => new StatusService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<IEventStore>(),
-            sp.GetRequiredService<RewardService>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId,
-            sp.GetRequiredService<TaskSeriesService>(),
-            sp.GetRequiredService<ITimerRepository>()));
-
-        services.AddSingleton(sp => new ArchiveService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<IEventStore>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId,
-            sp.GetRequiredService<TaskSeriesService>(),
-            sp.GetRequiredService<ISpaceRepository>(),
-            sp.GetRequiredService<IMetricRepository>()));
-
-        services.AddSingleton(sp => new PromotionService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<IEventReader>(),
-            sp.GetRequiredService<StatusService>(),
-            sp.GetRequiredService<ITagRepository>(),
-            sp.GetRequiredService<TriageService>()));
-
-        services.AddSingleton(sp => new SubjectCreationService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ChildCreationService>(),
-            sp.GetRequiredService<TriageService>(),
-            sp.GetRequiredService<TaskSeriesService>()));
-
-        services.AddSingleton(sp => new InboxFilingService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<RelateService>(),
-            sp.GetRequiredService<TriageService>(),
-            sp.GetRequiredService<IHomeCalendar>(),
-            sp.GetRequiredService<IClock>()));
-
-        services.AddSingleton(sp => new DecisionService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<RelationService>()));
-
-        services.AddSingleton(sp => new ActivityService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<IActivityWriter>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId));
-
-        services.AddSingleton(sp => new AdherenceService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>(),
-            sp.GetRequiredService<IActivityWriter>(),
-            sp.GetRequiredService<RewardService>(),
-            sp.GetRequiredService<IClock>(),
-            sp.GetRequiredService<IHomeCalendar>(),
-            sourceId));
-
-        services.AddSingleton(sp => new TimerService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ITimerRepository>(),
-            sp.GetRequiredService<StatusService>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId,
-            sp.GetRequiredService<TaskSeriesService>()));
-
-        services.AddSingleton(sp => new FoodRewards(
-            sp.GetRequiredService<IFoodLogRepository>(),
-            sp.GetRequiredService<ILedgerRepository>(),
-            sp.GetRequiredService<RewardService>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId));
-
-        services.AddSingleton(sp => new FoodReads(
-            sp.GetRequiredService<IFoodLogRepository>(),
-            sp.GetRequiredService<ILedgerRepository>()));
-
-        services.AddSingleton(sp => new FoodLogService(
-            sp.GetRequiredService<IFoodLogRepository>(),
-            sp.GetRequiredService<FoodRewards>(),
-            sp.GetRequiredService<FoodReads>(),
-            sp.GetRequiredService<IArtifactBlobStore>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId));
-
-        services.AddSingleton(sp => new FoodPhotoService(
-            sp.GetRequiredService<IArtifactBlobStore>(),
-            sp.GetRequiredService<FoodLogService>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId,
-            enabled: allowPhotosInDatabase || sp.GetService<IObjectStorage>() is not null));
-
+        // Rewards, domains and exception days (D11, D12, REWARD-8).
         services.AddSingleton(sp => new RewardService(
             sp.GetRequiredService<ILedgerRepository>(),
             sp.GetRequiredService<ISubjectRepository>(),
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IClock>(),
-            sourceId,
-            coinValue));
+            sp.GetRequiredService<EventSource>(),
+            settings.CoinValueUsd));
+        services.AddSingleton<DomainService>();
+        services.AddSingleton<ExceptionDayService>();
+        services.AddSingleton<RewardCatalogService>();
+        services.AddSingleton<BountyService>();
 
-        services.AddSingleton(sp => new DomainService(sp.GetRequiredService<ILedgerRepository>()));
-
-        // Exception days (REWARD-8, xp-domains plan §7.4.3).
-        services.AddSingleton(sp => new ExceptionDayService(
-            sp.GetRequiredService<ILedgerRepository>(),
-            sp.GetRequiredService<IEventStore>(),
-            sp.GetRequiredService<RewardService>(),
-            sp.GetRequiredService<IHomeCalendar>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId));
-
-        // The home's spaces and their ratings (HOME-1, HOME-2, environment plan §4.1–§4.2).
-        services.AddSingleton(sp => new SpaceService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>(),
-            sp.GetRequiredService<ISpaceRepository>(),
-            sp.GetRequiredService<ArchiveService>()));
-        services.AddSingleton(sp => new SpaceRatingService(
-            sp.GetRequiredService<ISpaceRepository>(),
-            sp.GetRequiredService<SpaceService>(),
-            sp.GetRequiredService<RewardService>(),
-            sp.GetRequiredService<IHomeCalendar>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId));
-        services.AddSingleton(sp => new HomeService(sp.GetRequiredService<ILedgerRepository>()));
-
-        // Metrics and their readings (MEASURE-1, measurements plan §4.5): information only, so
-        // nothing here touches the ledger.
-        services.AddSingleton(sp => new MetricService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>(),
-            sp.GetRequiredService<IMetricRepository>(),
-            sp.GetRequiredService<ArchiveService>()));
-        services.AddSingleton(sp => new MetricReadingService(
-            sp.GetRequiredService<IMetricRepository>(),
-            sp.GetRequiredService<MetricService>(),
-            sp.GetRequiredService<IHomeCalendar>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId));
-        services.AddSingleton(sp => new MetricReads(
-            sp.GetRequiredService<IMetricRepository>(),
-            sp.GetRequiredService<IHomeCalendar>(),
-            sp.GetRequiredService<IClock>()));
-
-        // Lab visits and their results (MEASURE-4, measurements plan §4.9): reports are stored where
-        // photos are, so the same hosts take them.
-        services.AddSingleton(sp => new LabVisitService(
-            sp.GetRequiredService<IMetricRepository>(),
-            sp.GetRequiredService<MetricService>(),
+        // The Food Log (D13).
+        services.AddSingleton<FoodRewards>();
+        services.AddSingleton<FoodReads>();
+        services.AddSingleton<FoodLogService>();
+        services.AddSingleton(sp => new FoodPhotoService(
             sp.GetRequiredService<IArtifactBlobStore>(),
-            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<FoodLogService>(),
             sp.GetRequiredService<IClock>(),
-            sourceId,
-            reportsEnabled: allowPhotosInDatabase || sp.GetService<IObjectStorage>() is not null));
+            sp.GetRequiredService<EventSource>(),
+            enabled: StoresPhotos(sp, settings)));
 
-        // Daily and weekly reviews (REVIEW-1, REVIEW-2, reviews plan §2): opened lazily, one per
-        // kind and period, completed by a status change.
-        services.AddSingleton(sp => new ReviewService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>(),
-            sp.GetRequiredService<IReviewRepository>(),
-            sp.GetRequiredService<StatusService>(),
-            sp.GetRequiredService<IHomeCalendar>(),
-            sp.GetRequiredService<IClock>()));
-
-        // Photos of each space, from a baseline (HOME-4, environment plan §8): the Food Log's
-        // photo storage, so the same hosts take them.
+        // The home's spaces, their ratings and photos (D18, HOME-1 to HOME-4).
+        services.AddSingleton<SpaceService>();
+        services.AddSingleton<SpaceRatingService>();
+        services.AddSingleton<HomeService>();
         services.AddSingleton(sp => new SpacePhotoService(
             sp.GetRequiredService<IArtifactBlobStore>(),
             sp.GetRequiredService<ISpaceRepository>(),
@@ -334,55 +190,31 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ISubjectEventRepository>(),
             sp.GetRequiredService<IHomeCalendar>(),
             sp.GetRequiredService<IClock>(),
-            sourceId,
-            enabled: allowPhotosInDatabase || sp.GetService<IObjectStorage>() is not null));
+            sp.GetRequiredService<EventSource>(),
+            enabled: StoresPhotos(sp, settings)));
 
-        services.AddSingleton(sp => new RewardCatalogService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>(),
-            sp.GetRequiredService<ILedgerRepository>()));
+        // Metrics, readings and lab visits (D20): information only, so nothing touches the ledger.
+        services.AddSingleton<MetricService>();
+        services.AddSingleton<MetricReadingService>();
+        services.AddSingleton<MetricReads>();
+        services.AddSingleton(sp => new LabVisitService(
+            sp.GetRequiredService<IMetricRepository>(),
+            sp.GetRequiredService<MetricService>(),
+            sp.GetRequiredService<IArtifactBlobStore>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>(),
+            sp.GetRequiredService<EventSource>(),
+            reportsEnabled: StoresPhotos(sp, settings)));
 
-        services.AddSingleton(sp => new BountyService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>()));
+        // Daily and weekly reviews (REVIEW-1, REVIEW-2).
+        services.AddSingleton<ReviewService>();
 
+        // Covers (D15) and Oura (D14): each takes an outside client that may not be set up.
         services.AddSingleton(sp => new CoverService(
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<ISubjectRepository>(),
             sp.GetService<IUnsplashClient>(),
             sp.GetRequiredService<IClock>()));
-
-        services.AddSingleton(sp => new HabitTargetService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>()));
-
-        services.AddSingleton(sp => new RelateService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<IEventReader>(),
-            sp.GetRequiredService<ISubjectEventRepository>()));
-
-        services.AddSingleton(sp => new TagService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<IEventReader>(),
-            sp.GetRequiredService<ITagRepository>(),
-            sp.GetRequiredService<TaskSeriesService>()));
-
-        services.AddSingleton(sp => new PeopleService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<ISubjectRepository>()));
-
-        services.AddSingleton(sp => new AppointmentService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<IAppointmentRepository>()));
-
-        services.AddSingleton(sp => new TriageService(
-            sp.GetRequiredService<SubjectService>(),
-            sp.GetRequiredService<IEventReader>(),
-            sp.GetRequiredService<IEventStore>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId,
-            sp.GetRequiredService<StatusService>()));
-
         services.AddSingleton(sp => new OuraConnectionService(
             sp.GetRequiredService<IIntegrationRepository>(),
             sp.GetService<IOuraClient>(),
@@ -394,79 +226,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IIntegrationRepository>(),
             sp.GetRequiredService<IHomeCalendar>(),
             sp.GetRequiredService<IClock>()));
-        services.AddSingleton(sp => new WorkoutNoteService(
-            sp.GetRequiredService<IActivityRepository>(),
-            sp.GetRequiredService<IEventStore>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId));
-        services.AddSingleton(sp => new ActivityReads(
-            sp.GetRequiredService<IActivityRepository>(),
-            sp.GetRequiredService<IHomeCalendar>(),
-            sp.GetRequiredService<IClock>()));
-        services.AddSingleton(sp => new ActivityRewards(
-            sp.GetRequiredService<IActivityRepository>(),
-            sp.GetRequiredService<ILedgerRepository>(),
-            sp.GetRequiredService<RewardService>(),
-            sp.GetRequiredService<IHomeCalendar>(),
-            sp.GetRequiredService<IClock>(),
-            sourceId));
-
-        // Operational services that work directly against the store.
-        services.AddSingleton(_ => new MigrationRunner(connectionString));
-        services.AddSingleton(_ => new DerivedRebuilder(connectionString));
-        services.AddSingleton(_ => new DiagnosticRunner(connectionString));
-
-        return services;
-    }
-
-    /// <summary>
-    /// A configured coin value: <see cref="CoinRates.DefaultUsd"/> when blank, otherwise a
-    /// dollar amount above zero. Anything else fails loudly — Coins are real money, so a
-    /// typo must not silently fall back to the default.
-    /// </summary>
-    public static decimal ParseCoinValueUsd(string? configured)
-    {
-        if (string.IsNullOrWhiteSpace(configured))
-        {
-            return CoinRates.DefaultUsd;
-        }
-
-        return decimal.TryParse(
-                   configured.Trim().TrimStart('$'), NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
-               && value > 0
-            ? value
-            : throw new InvalidOperationException(
-                $"{CoinRates.ConfigurationKey} must be a dollar amount above zero, e.g. 0.50; got '{configured}'.");
-    }
-
-    /// <summary>
-    /// A configured home time zone: <see cref="HomeZone.Default"/> when blank, otherwise an
-    /// IANA zone name. Anything else fails loudly — a misread zone would file earns on the
-    /// wrong days. (Postgres checks the name itself on first use.)
-    /// </summary>
-    public static string ParseHomeTimeZone(string? configured)
-    {
-        if (string.IsNullOrWhiteSpace(configured))
-        {
-            return HomeZone.Default;
-        }
-
-        var zone = configured.Trim();
-        return HomeZone.IsWellFormed(zone)
-            ? zone
-            : throw new InvalidOperationException(
-                $"{HomeZone.ConfigurationKey} must be an IANA time zone name, e.g. {HomeZone.Default}; got '{configured}'.");
-    }
-
-    /// <summary>
-    /// The binary-artifact size guard, from <c>BSK_MAX_ARTIFACT_BYTES</c> when it holds
-    /// a positive integer, otherwise <see cref="ArtifactLimits.DefaultMaxBytes"/>.
-    /// </summary>
-    private static long ResolveMaxArtifactBytes()
-    {
-        var configured = Environment.GetEnvironmentVariable("BSK_MAX_ARTIFACT_BYTES");
-        return long.TryParse(configured, out var bytes) && bytes > 0
-            ? bytes
-            : ArtifactLimits.DefaultMaxBytes;
+        services.AddSingleton<WorkoutNoteService>();
+        services.AddSingleton<ActivityReads>();
+        services.AddSingleton<ActivityRewards>();
     }
 }

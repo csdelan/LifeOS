@@ -11,7 +11,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// every timer write, re-check each task's state under it, then insert each action's
 /// event and its <c>concerns</c> edge — all or nothing, since the stream is append-only.
 /// </summary>
-public sealed class NpgsqlTimerRepository(string connectionString) : ITimerRepository
+public sealed class NpgsqlTimerRepository(NpgsqlDataSource dataSource) : ITimerRepository
 {
     // One lock for all timer writes: starting a timer can pause another, so writes
     // to different tasks must serialize too. The key is arbitrary but fixed.
@@ -43,7 +43,7 @@ public sealed class NpgsqlTimerRepository(string connectionString) : ITimerRepos
 
     public async Task<TimerSnapshot?> GetAsync(Guid subjectId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var row = await connection.QueryFirstOrDefaultAsync<TimerRow>(new CommandDefinition(
             SelectSql + " WHERE subject_id = @subjectId",
@@ -54,7 +54,7 @@ public sealed class NpgsqlTimerRepository(string connectionString) : ITimerRepos
 
     public async Task<IReadOnlyList<TimerSnapshot>> GetRunningAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         var rows = await connection.QueryAsync<TimerRow>(new CommandDefinition(
             SelectSql + " WHERE state = @running ORDER BY running_since",
@@ -65,7 +65,7 @@ public sealed class NpgsqlTimerRepository(string connectionString) : ITimerRepos
 
     public async Task<string?> GetTaskStatusAsync(Guid subjectId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT status FROM bsk_derived.subject_current_source WHERE subject_id = @subjectId",
@@ -80,7 +80,7 @@ public sealed class NpgsqlTimerRepository(string connectionString) : ITimerRepos
             return;
         }
 
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 

@@ -5,13 +5,13 @@ using Npgsql;
 namespace LifeOs.Infrastructure.Persistence;
 
 /// <summary>Creates directed subject → subject edges in <c>bsk.subject_relation</c>.</summary>
-public sealed class NpgsqlRelationRepository(string connectionString) : IRelationRepository
+public sealed class NpgsqlRelationRepository(NpgsqlDataSource dataSource) : IRelationRepository
 {
     public async Task<Guid> CreateAsync(
         Guid fromSubject, string relation, Guid toSubject, string provenance,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         const string sql = """
@@ -30,7 +30,7 @@ public sealed class NpgsqlRelationRepository(string connectionString) : IRelatio
         Guid fromSubject, string relation, Guid toSubject,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
         const string sql = """

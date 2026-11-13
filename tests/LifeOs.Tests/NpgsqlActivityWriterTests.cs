@@ -35,7 +35,7 @@ public sealed class NpgsqlActivityWriterTests(PostgresFixture postgres)
     [Fact]
     public async Task Event_and_edges_are_written_together()
     {
-        var writer = new NpgsqlActivityWriter(postgres.ConnectionString);
+        var writer = new NpgsqlActivityWriter(KernelDataSource.For(postgres.ConnectionString));
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync(Ct);
         var commitment = await InsertCommitmentAsync(connection, Guid.NewGuid().ToString("N"));
@@ -54,7 +54,7 @@ public sealed class NpgsqlActivityWriterTests(PostgresFixture postgres)
     [Fact]
     public async Task A_failing_edge_rolls_back_the_event()
     {
-        var writer = new NpgsqlActivityWriter(postgres.ConnectionString);
+        var writer = new NpgsqlActivityWriter(KernelDataSource.For(postgres.ConnectionString));
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync(Ct);
         var commitment = await InsertCommitmentAsync(connection, Guid.NewGuid().ToString("N"));

@@ -71,7 +71,7 @@ public sealed class LabVisitService(
     IArtifactBlobStore blobs,
     IHomeCalendar calendar,
     IClock clock,
-    string sourceId,
+    EventSource eventSource,
     bool reportsEnabled = true)
 {
     private readonly LabVisitReads reads = new(metrics, calendar, clock);
@@ -136,7 +136,7 @@ public sealed class LabVisitService(
             Provenance: Provenances.Declared,
             OccurredAt: visit.CollectedAt,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             Sha256: Convert.ToHexStringLower(SHA256.HashData(bytes)),
             Bytes: bytes,
             ContentType: contentType,
@@ -412,7 +412,7 @@ public sealed class LabVisitService(
     }
 
     private NewEvent Declared(DateTimeOffset occurredAt, DateTimeOffset now, string payload)
-        => new(EventKinds.Measurement, Provenances.Declared, occurredAt, now, sourceId, PayloadJson: payload);
+        => new(EventKinds.Measurement, Provenances.Declared, occurredAt, now, eventSource.Id, PayloadJson: payload);
 
     /// <summary>A visit version's payload; the lab, note and report left out when there are none.</summary>
     private static string VisitPayload(Guid id, string? lab, string? note, Guid? report)

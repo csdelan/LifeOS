@@ -34,7 +34,7 @@ namespace LifeOs.Application.Food;
 /// </para>
 /// </summary>
 public sealed class FoodRewards(
-    IFoodLogRepository food, ILedgerRepository ledger, RewardService rewards, IClock clock, string sourceId)
+    IFoodLogRepository food, ILedgerRepository ledger, RewardService rewards, IClock clock, EventSource eventSource)
 {
     private static readonly DateOnly Earliest = new(2000, 1, 1);
 
@@ -219,7 +219,7 @@ public sealed class FoodRewards(
             },
             OmitNulls);
         var newEvent = new NewEvent(
-            EventKinds.Ledger, Provenances.Derived, at, now, sourceId, PayloadJson: payload, DerivedFrom: award.Sources);
+            EventKinds.Ledger, Provenances.Derived, at, now, eventSource.Id, PayloadJson: payload, DerivedFrom: award.Sources);
         return new PlannedAward(
             new LedgerWrite(newEvent, [], GuardBalance: false, AwardKey: award.Key, ExpectPaid: false),
             new Award(
@@ -247,7 +247,7 @@ public sealed class FoodRewards(
             },
             OmitNulls);
         var newEvent = new NewEvent(
-            EventKinds.Ledger, Provenances.Derived, now, now, sourceId, PayloadJson: payload,
+            EventKinds.Ledger, Provenances.Derived, now, now, eventSource.Id, PayloadJson: payload,
             DerivedFrom: [causeEventId ?? paid.LastEventId]);
         return new PlannedAward(
             new LedgerWrite(

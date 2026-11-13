@@ -11,11 +11,11 @@ namespace LifeOs.Application.Subjects;
 /// <para>
 /// Every way of creating a subject goes through here, so a type born with a status
 /// (<see cref="StatusVocabulary.InitialStatusFor"/>: a new Habit is Planned) gets it from
-/// every door, stamped with <paramref name="clock"/> and <paramref name="sourceId"/> as a
+/// every door, stamped with <paramref name="clock"/> and <paramref name="eventSource"/> as a
 /// status change would be.
 /// </para>
 /// </summary>
-public sealed class SubjectService(ISubjectRepository subjects, IClock clock, string sourceId)
+public sealed class SubjectService(ISubjectRepository subjects, IClock clock, EventSource eventSource)
 {
     /// <summary>
     /// Resolves an <em>existing</em> subject named by a URN, a short id, or a fuzzy
@@ -220,7 +220,7 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, st
         return new(urn, type, title, attributes, originEventId)
         {
             Status = StatusVocabulary.InitialStatusFor(type) is { } status
-                ? new InitialStatus(status, clock.UtcNow, sourceId)
+                ? new InitialStatus(status, clock.UtcNow, eventSource.Id)
                 : null
         };
     }

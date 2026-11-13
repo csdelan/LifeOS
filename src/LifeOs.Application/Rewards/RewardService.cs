@@ -33,7 +33,7 @@ namespace LifeOs.Application.Rewards;
 /// </summary>
 public sealed class RewardService(
     ILedgerRepository ledger, ISubjectRepository subjects, SubjectService resolver, IClock clock,
-    string sourceId, decimal coinValueUsd = CoinRates.DefaultUsd)
+    EventSource eventSource, decimal coinValueUsd = CoinRates.DefaultUsd)
 {
     // A reconcile that loses a race on an award re-reads and tries again; two retries
     // are plenty for one person's windows racing.
@@ -105,7 +105,7 @@ public sealed class RewardService(
             Provenance: Provenances.Declared,
             OccurredAt: at ?? now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             PayloadJson: JsonSerializer.Serialize(new { entry = LedgerEntries.Open }));
 
         var (openedAt, created) = await ledger.OpenAsync(openEvent, cancellationToken);
@@ -206,7 +206,7 @@ public sealed class RewardService(
             Provenance: Provenances.Declared,
             OccurredAt: now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             PayloadJson: payload);
         IReadOnlyList<SubjectEventEdge> edges = reward is null
             ? []
@@ -730,7 +730,7 @@ public sealed class RewardService(
             Provenance: Provenances.Derived,
             OccurredAt: occurredAt,
             RecordedAt: recordedAt,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             PayloadJson: payload,
             DerivedFrom: derivedFrom);
 
@@ -768,7 +768,7 @@ public sealed class RewardService(
             Provenance: Provenances.Derived,
             OccurredAt: now,
             RecordedAt: now,
-            SourceId: sourceId,
+            SourceId: eventSource.Id,
             PayloadJson: payload,
             DerivedFrom: [cause]);
 

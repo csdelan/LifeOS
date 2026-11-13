@@ -191,7 +191,7 @@ public sealed class OuraConnectionTests(PostgresFixture postgres)
     private (OuraConnectionService Service, FakeOuraClient Oura) Create(TokenCipher? key = null)
     {
         var oura = new FakeOuraClient(clock);
-        var repository = new NpgsqlIntegrationRepository(postgres.ConnectionString, key ?? cipher);
+        var repository = new NpgsqlIntegrationRepository(KernelDataSource.For(postgres.ConnectionString), key ?? cipher);
         return (new OuraConnectionService(repository, oura, clock, service), oura);
     }
 
@@ -319,7 +319,7 @@ public sealed class OuraConnectionTests(PostgresFixture postgres)
         var (connection, oura) = await ConnectedAsync();
         // A second door (the CLI beside the API) on the same database.
         var other = new OuraConnectionService(
-            new NpgsqlIntegrationRepository(postgres.ConnectionString, cipher), oura, clock, service);
+            new NpgsqlIntegrationRepository(KernelDataSource.For(postgres.ConnectionString), cipher), oura, clock, service);
         clock.Advance(oura.Lifetime);
         oura.RefreshDelay = TimeSpan.FromMilliseconds(300);
 
@@ -407,7 +407,7 @@ public sealed class OuraConnectionTests(PostgresFixture postgres)
     public async Task Without_an_oura_app_the_status_says_so_and_the_rest_refuses()
     {
         var connection = new OuraConnectionService(
-            new NpgsqlIntegrationRepository(postgres.ConnectionString, null), null, clock, service);
+            new NpgsqlIntegrationRepository(KernelDataSource.For(postgres.ConnectionString), null), null, clock, service);
 
         Assert.Equal(OuraStatus.NotConfigured, (await connection.GetStatusAsync(Ct)).State);
         var ex = await Assert.ThrowsAsync<OuraConnectionException>(() => connection.BeginConnectAsync(Redirect, Ct));
