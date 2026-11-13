@@ -1,7 +1,7 @@
 # Code review fixes plan
 
-**Status:** CR1 to CR26 built (2026-11-12). CR27 to CR40, the second review's P0 and P1, built
-(2026-11-13); its P2 and the three choices wait for Chris ([Second review](#second-review-2026-11-13)).
+**Status:** CR1 to CR26 built (2026-11-12). CR27 to CR56, the second review's P0, P1 and P2, built
+(2026-11-13); its three choices wait for Chris ([Second review](#second-review-2026-11-13)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
@@ -53,6 +53,22 @@ commit each, and skipped P3 (listed under the second review, so it isn't lost).
   derive from `KernelRefusalException`, which carries its kind. A food write that raced another is
   now a 409, not a 400, like a timer's; a ledger race is a 409, not a 500. A fault's 500 no longer
   repeats the exception's text.
+- **CR42:** the kernel's today is `IHomeCalendar.TodayAsync`, the home-zone date at `IClock`'s
+  now. The review proposed backing it with `bsk.home_today()`, but that reads the database's
+  clock, which no test can move, and the review, repeating-Task and activity tests set today with
+  a `TestClock`. A view's `bsk.home_today()` still reads the database's clock.
+- **CR46:** `SettlementService.SettleAsync` heals every item first only when asked (`items:
+  true`), since that reads every item ever paid. `bsk rewards reconcile` asks; the Character
+  page's settle, which runs each time the page opens, doesn't, and leaves each item to the
+  reconcile its own write runs.
+- **CR51:** a change that follows from another (a repetition redated by its series' new pattern,
+  an open repetition or upcoming occurrence taking its series' new title or field) is recorded on
+  the item it changed as `derived`, citing the series' own change, because the ontology requires
+  a derived event to cite its sources (the `event_derived_has_sources` CHECK). A rename's follow
+  cites the change made in its transaction; a redate or a followed field runs apart from it and
+  cites the series' newest `attribute_change` on those keys, or is `declared` when there is none.
+- **CR54:** `life_snapshot` reads only open items now, but still lists every unarchived value,
+  whatever its status, as it did.
 
 ## Items
 
@@ -116,8 +132,8 @@ For the record, since they weren't written down when Chris skipped them:
 
 A second pass looked for what the first missed or left half done, with the same weighting. It
 produced 30 proposals in three tiers, a P3 list and three choices for Chris. Chris chose P0
-first, then P1, one commit each. The numbers below are the review's; a proposal gets a CR number
-when Chris chooses it.
+first, then P1, then P2, one commit each. The numbers below are the review's; a proposal gets a
+CR number when Chris chooses it.
 
 ### P0: built (CR27 to CR31)
 
@@ -143,26 +159,26 @@ when Chris chooses it.
 | CR39 | 10 | Every test class runs alongside the others: 14 left the serial collection, 69 take a `ClassDatabase`, and the collection is gone. The suite takes about 40 seconds instead of 90. |
 | CR40 | 14 | `scripts/live-check.ps1` and `scripts/live-check/fakes.mjs` run the throwaway-database live check in one command, and `-Stop` undoes it. `docs/agents/verifying.md` still describes the steps by hand: another session has uncommitted edits to it, so it should point at the script once those land. |
 
-### P2: proposed
+### P2: built (CR41 to CR56)
 
-| # | Fix |
-|---|-----|
-| 15 | One Application "settle everything" method (the API and CLI chains differ today). |
-| 16 | `AgentWrites` builds each agent's services from `AddLifeOsKernel`, not by hand. |
-| 17 | CR7 leftovers: capture filing and journal append in Application, atomic. |
-| 18 | `SubjectService.ResolveAsync` takes a GUID; `ResolveWriteRefAsync` and its copies go. |
-| 19 | CR19 leftovers: the ledger repository really split; the credit read in one snapshot. |
-| 20 | Domain progression out of `RewardService`; one place prices a repeating Task (D16). |
-| 21 | Reserved attribute keys as one table (`establish_target` and `bounty` are unguarded). |
-| 22 | One source of "today" for the kernel. |
-| 23 | `DomainProgress` says today's rule level, so the API and `bsk domains --json` agree. |
-| 24 | `SubjectTypes.All/Creatable/Parse` and `EventKinds.All` replace the copied lists. |
-| 25 | Rule-parity cases for the diet rules and the status vocabulary. |
-| 26 | Reads that still grow with history: MCP snapshot and item tools, journal and history limits, the live review recap. |
-| 27 | Success toasts in one place, not in both write clients. |
-| 28 | The golden-path and a11y specs split by feature; two workers. |
-| 29 | `ReaderRoleTests` checks every view from the catalog. |
-| 30 | CR24 leftovers: redating and following a repetition's attributes leave events. |
+| ID | Review # | Fix |
+|----|----------|-----|
+| CR41 | 24 | `SubjectTypes.All`, `Creatable` and `ParseCreatable`, and `EventKinds.All`, replace the copied lists; promoting reads the type through them, so "goal" no longer reaches the CHECK. |
+| CR42 | 22 | The kernel asks for today one way, `IHomeCalendar.TodayAsync` at `IClock`'s now; the food log no longer asks the database. |
+| CR43 | 18 | `SubjectService.ResolveAsync` takes an id, so `ResolveWriteRefAsync` and its copies are gone; the reads' own lookups share `FindByIdOrUrnAsync`. |
+| CR44 | 17 | `InboxFilingService.CaptureAsync` writes and files every capture, the web's typed quick capture included; `JournalService.AppendAsync` writes an entry and its edge in one transaction. |
+| CR45 | 16 | An agent's writes go through a kernel of its own (`SourceKernels`, built by `AddLifeOsKernel`); a test checks every Application service is registered. |
+| CR46 | 15 | `SettlementService.SettleAsync` is the one settle for the page and the CLI; `ActivitySyncService` syncs Oura and pays what the sync made due. |
+| CR47 | 19 | The ledger repository holds only the ledger; the reward catalog and the domain credit have readers of their own, the credit read in one repeatable-read transaction. |
+| CR48 | 20 | `RankUpService` folds the domains and pays rank-ups; `ItemPrices` prices an item, and a repetition by its series (D16), in one place. |
+| CR49 | 21 | `ReservedAttributes` lists every key only its own verb may write; create and set check it at every door. |
+| CR50 | 23 | `DomainProgress.RuleLevel` and `TodayRule`, and `DomainFigures`' rounding, so `/api/domains` and `bsk domains --json` agree. |
+| CR51 | 30 | A repetition redated by its series, and a repetition or occurrence following its series' title or field, leave a derived `attribute_change` citing the series' change. |
+| CR52 | 29 | `ReaderRoleTests` reads, as `bsk_reader`, every table and view `pg_class` lists. |
+| CR53 | 25 | `tests/rules/diet.json` and `statuses.json`, answered by both rule-parity suites. |
+| CR54 | 26 | `life_snapshot`, `get_item`, `inbox` and dismiss read only what they show; the journal and history endpoints take a limit; the review recap reads the period's repetitions in one call (`GET /api/tasks/series/due`). |
+| CR55 | 27 | Success toasts are said in `decorateWrites`, for both write clients; a lint rule keeps `sonner` out of the clients. |
+| CR56 | 28 | The golden-path and a11y specs are split by feature (`web/e2e/golden`, `web/e2e/a11y`), and two workers run them. |
 
 ### P3: when working in that area
 
