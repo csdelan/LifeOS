@@ -1,7 +1,7 @@
 # Code review fixes plan
 
-**Status:** CR1 to CR26 built (2026-11-12). CR27 to CR31, the second review's P0, built
-(2026-11-13); its other tiers wait for Chris's choice ([Second review](#second-review-2026-11-13)).
+**Status:** CR1 to CR26 built (2026-11-12). CR27 to CR40, the second review's P0 and P1, built
+(2026-11-13); its P2 and the three choices wait for Chris ([Second review](#second-review-2026-11-13)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
@@ -116,8 +116,8 @@ For the record, since they weren't written down when Chris skipped them:
 
 A second pass looked for what the first missed or left half done, with the same weighting. It
 produced 30 proposals in three tiers, a P3 list and three choices for Chris. Chris chose P0
-first, one commit each. The numbers below are the review's; a proposal gets a CR number when
-Chris chooses it.
+first, then P1, one commit each. The numbers below are the review's; a proposal gets a CR number
+when Chris chooses it.
 
 ### P0: built (CR27 to CR31)
 
@@ -129,19 +129,19 @@ Chris chooses it.
 | CR30 | `TRUNCATE` is refused on the append-only tables, as UPDATE and DELETE are. |
 | CR31 | The diagnostics count days in the home zone, not UTC. |
 
-### P1: proposed
+### P1: built (CR32 to CR40)
 
-| # | Fix |
-|---|-----|
-| 6 | The food views filter the way their indexes are built, and `v_fast` folds meals once instead of once per fast. |
-| 7 | An index on `bsk.event.artifact_id`; split the `OR` in the artifact lookup. |
-| 8 | Ledger reads by subject and trigger use matching expression indexes; `award_key = ANY(@keys)`. |
-| 9 | CHECK constraints on the payload keys views cast (`archived`, `item_id`, `occurrence`, ledger amounts). |
-| 10 | Finish CR12: 14 test files that use only their own database leave the serial collection; then a database per class for the rest. |
-| 11 | The web checks responses against the generated types and retires `production-ui-types.ts` feature by feature. |
-| 12 | The palette and New dialog stop loading every subject on every page; the dashboard and forest come from cached reads. |
-| 13 | Named cache-invalidation groups; Archive and Restore refresh Habits. |
-| 14 | `scripts/live-check.ps1` and committed fakes for the throwaway-database check. |
+| ID | Review # | Fix |
+|----|----------|-----|
+| CR32 | 6 | The food views say the predicates their partial indexes are built on (migration 0059), and `v_fast` folds the meals once instead of once per fast. |
+| CR33 | 7 | An index on `bsk.event.artifact_id` (0060); the artifact lookup's `OR` split into two keyed halves. |
+| CR34 | 8 | Ledger reads by subject and by trigger use expression indexes that match the view (0061). The keyed-award read kept its query: the trigger index serves it, so `award_key = ANY(@keys)` wasn't needed. |
+| CR35 | 9 | NOT VALID CHECK constraints on every payload key a view casts (0062): `archived`, `item_id`, `occurrence`, a timer's `subject_id`, and the ledger's `subject_id`, `dollars`, `coin_rate` and `amounts`. |
+| CR36 | 13 | Writes refresh named groups of cached reads; Archive and Restore share one list, Habits and the Inbox among them. |
+| CR37 | 12 | The palette and New dialog read subjects only while open; the Map's outline is built from the cached subject and edge reads; Habits reads the day's occurrences, not the dashboard. The dashboard itself stays one read, since the mock's carries its seeded focus. |
+| CR38 | 11 | Live reads and writes pass the API's data through `fits<T>()` (`lib/live/fits.ts`), so tsc checks the generated type against the app's. `production-ui-types.ts` stays; its types become aliases of the generated ones feature by feature, as each is next worked on. |
+| CR39 | 10 | Every test class runs alongside the others: 14 left the serial collection, 69 take a `ClassDatabase`, and the collection is gone. The suite takes about 40 seconds instead of 90. |
+| CR40 | 14 | `scripts/live-check.ps1` and `scripts/live-check/fakes.mjs` run the throwaway-database live check in one command, and `-Stop` undoes it. `docs/agents/verifying.md` still describes the steps by hand: another session has uncommitted edits to it, so it should point at the script once those land. |
 
 ### P2: proposed
 

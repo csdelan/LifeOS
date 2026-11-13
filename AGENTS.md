@@ -91,6 +91,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   so read it to see what a view is now. After adding a migration, run
   `./scripts/update-schema.ps1` and commit the file with it; a test fails while it's stale. Another
   test checks that `SubjectTypes`, `EventKinds` and `Provenances` match the CHECK constraints.
+- A view over `bsk.event` uses a partial index only if it states the index's predicate
+  (`jsonb_exists(payload, 'meal')`), and an expression index only if it uses the same expression,
+  casts and all; otherwise the planner scans the whole log. `EventIndexTests` checks each read's
+  plan names its index, so add a read there with its index.
 - `bsk migrate` takes a lock, and refuses a pending migration numbered below the highest one already
   applied (`--allow-out-of-order` overrides). `scripts/migrate-staging.ps1` runs only from a clean
   `origin/main`, and the Release workflow only from `main` or a `v*` tag.
