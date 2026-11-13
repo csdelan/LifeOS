@@ -10,16 +10,15 @@ namespace LifeOs.Tests;
 /// latest state_change per subject, rebuild is deterministic (byte-identical
 /// across runs), and verify detects drift.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RebuildTests(PostgresFixture postgres)
+public sealed class RebuildTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private DerivedRebuilder Rebuilder => new(postgres.ConnectionString);
+    private DerivedRebuilder Rebuilder => new(classDb.ConnectionString);
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

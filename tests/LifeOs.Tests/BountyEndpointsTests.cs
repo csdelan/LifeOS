@@ -14,14 +14,13 @@ namespace LifeOs.Tests;
 /// and detail reads, and a habit's status and "Ready to establish" progress on
 /// <c>GET /api/habits</c>.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class BountyEndpointsTests(PostgresFixture postgres)
+public sealed class BountyEndpointsTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private static string Unique(string name) => $"{name} {Guid.NewGuid():N}";
 
-    private Task<ApiTestHost> StartAsync() => ApiTestHost.StartAsync(postgres.ConnectionString, Ct);
+    private Task<ApiTestHost> StartAsync() => ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
 
     private static async Task<JsonElement> PostAsync(HttpClient client, string path, object body)
     {
@@ -222,7 +221,7 @@ public sealed class BountyEndpointsTests(PostgresFixture postgres)
     {
         await using var host = await StartAsync();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        await using var kernel = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        await using var kernel = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
         var habit = await kernel.CreateTrackedHabitAsync(
             Unique("ready habit"),
             JsonSerializer.Serialize(new

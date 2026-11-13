@@ -19,8 +19,7 @@ namespace LifeOs.Tests;
 /// Corrections are newer recordings, and reconcile follows them. The database is
 /// shared, so each test reasons about its own habits.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RewardHabitTests(PostgresFixture postgres)
+public sealed class RewardHabitTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -32,7 +31,7 @@ public sealed class RewardHabitTests(PostgresFixture postgres)
 
     private Kernel Build()
     {
-        var provider = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        var provider = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
         return new Kernel(
             provider,
             provider.GetRequiredService<SubjectService>(),
@@ -72,7 +71,7 @@ public sealed class RewardHabitTests(PostgresFixture postgres)
     /// <summary>Records followed days straight to the event store — history behind reconcile's back.</summary>
     private async Task RecordRawAsync(SubjectRef habit, string result, IEnumerable<int> daysAgo)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         foreach (var day in daysAgo)
         {
@@ -100,7 +99,7 @@ public sealed class RewardHabitTests(PostgresFixture postgres)
 
     private async Task<string?> OccurrenceStateAsync(SubjectRef habit, DateOnly date)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT state FROM bsk.v_habit_occurrence WHERE habit_id = @id AND occurrence_date = @d::date;",
@@ -127,7 +126,7 @@ public sealed class RewardHabitTests(PostgresFixture postgres)
         Assert.Equal(AwardKeys.Day(habit.Id, Today, AdherenceResults.Followed), award.AwardKey);
         Assert.Equal(Default(BountyTriggers.Followed), award.Amounts);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var derivedFrom = await connection.ExecuteScalarAsync<Guid[]>(new CommandDefinition(
             "SELECT derived_from FROM bsk.event WHERE id = @id;", new { id = award.EventId }, cancellationToken: Ct));
@@ -208,7 +207,7 @@ public sealed class RewardHabitTests(PostgresFixture postgres)
         Assert.Single(seventh.Awards, a => a.Trigger == BountyTriggers.Followed);
 
         // The milestone cites all seven days.
-        await using (var connection = new NpgsqlConnection(postgres.ConnectionString))
+        await using (var connection = new NpgsqlConnection(classDb.ConnectionString))
         {
             await connection.OpenAsync(Ct);
             var derivedFrom = await connection.ExecuteScalarAsync<Guid[]>(new CommandDefinition(
@@ -358,7 +357,7 @@ public sealed class RewardHabitTests(PostgresFixture postgres)
 
     private async Task<(bool Met, decimal? Adherence, long Concluded)?> EstablishmentAsync(SubjectRef habit)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var row = await connection.QuerySingleOrDefaultAsync<(bool, decimal?, long)?>(new CommandDefinition(
             "SELECT target_met, adherence, concluded FROM bsk.v_habit_establishment WHERE habit_id = @id;",
@@ -421,7 +420,7 @@ public sealed class RewardHabitTests(PostgresFixture postgres)
     [Fact]
     public async Task The_reader_role_can_read_the_habit_lifecycle_views()
     {
-        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(postgres.ConnectionString));
+        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(classDb.ConnectionString));
         await reader.OpenAsync(Ct);
 
         foreach (var sql in new[]

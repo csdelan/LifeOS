@@ -15,8 +15,7 @@ namespace LifeOs.Tests;
 /// goals and projects; a download is counted on set and never on move; clearing removes it;
 /// and nothing else — <c>bsk set</c>, other attribute edits, renames — writes or loses it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CoverServiceTests(PostgresFixture postgres)
+public sealed class CoverServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 23, 18, 4, 0, TimeSpan.Zero);
 
@@ -24,7 +23,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
 
     private ServiceProvider Provider(FakeUnsplashClient? unsplash)
     {
-        var services = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString);
+        var services = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString);
         services.AddSingleton<IClock>(new TestClock(Now));
         if (unsplash is not null)
         {
@@ -45,7 +44,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
 
     private async Task<string?> StoredCover(Guid id)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT attributes->>'cover' FROM bsk.subject WHERE id = @id;", new { id }, cancellationToken: Ct));
@@ -53,7 +52,7 @@ public sealed class CoverServiceTests(PostgresFixture postgres)
 
     private async Task<string?> Stored(Guid id, string key)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT attributes->>@key FROM bsk.subject WHERE id = @id;", new { id, key }, cancellationToken: Ct));

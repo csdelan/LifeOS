@@ -12,16 +12,15 @@ namespace LifeOs.Tests;
 /// assertions off each test's own Commitment so it is robust to the shared
 /// container.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class BreachDiagnosticTests(PostgresFixture postgres)
+public sealed class BreachDiagnosticTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private DiagnosticRunner Runner => new(postgres.ConnectionString);
+    private DiagnosticRunner Runner => new(classDb.ConnectionString);
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

@@ -24,8 +24,7 @@ namespace LifeOs.Tests;
 /// each test reasons about its own habits.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RewardMaintenanceTests(PostgresFixture postgres)
+public sealed class RewardMaintenanceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -37,7 +36,7 @@ public sealed class RewardMaintenanceTests(PostgresFixture postgres)
 
     private Kernel Build()
     {
-        var provider = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        var provider = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
         return new Kernel(
             provider,
             provider.GetRequiredService<SubjectService>(),
@@ -89,7 +88,7 @@ public sealed class RewardMaintenanceTests(PostgresFixture postgres)
 
     private async Task<string?> OccurrenceStateAsync(SubjectRef habit, DateOnly date)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT state FROM bsk.v_habit_occurrence WHERE habit_id = @id AND occurrence_date = @d::date;",

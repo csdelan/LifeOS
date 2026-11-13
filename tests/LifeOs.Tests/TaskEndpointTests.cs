@@ -14,8 +14,7 @@ namespace LifeOs.Tests;
 /// <c>POST /api/tasks/settle</c>. The host reads today in UTC, as the database does here, and
 /// each test stops its series when it's done.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TaskEndpointTests(PostgresFixture postgres)
+public sealed class TaskEndpointTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -28,7 +27,7 @@ public sealed class TaskEndpointTests(PostgresFixture postgres)
     private static string Weekday(DateOnly date) => date.DayOfWeek.ToString()[..3].ToLowerInvariant();
 
     private Task<ApiTestHost> StartAsync() => ApiTestHost.StartAsync(
-        postgres.ConnectionString, Ct,
+        classDb.ConnectionString, Ct,
         new Dictionary<string, string?> { [HomeZone.ConfigurationKey] = PostgresFixture.HabitViewZone });
 
     private static async Task<JsonElement> PostAsync(HttpClient client, string path, object body)
@@ -108,7 +107,7 @@ public sealed class TaskEndpointTests(PostgresFixture postgres)
         Assert.Equal(4, completedLine.GetProperty("amounts").GetProperty("xp").GetInt64());
 
         // Found by URN, as the connector's get_item does, it reads the same.
-        var byUrn = (await new SubjectReader(postgres.ConnectionString).GetSubjectByUrnAsync(detail.GetProperty("urn").GetString()!, Ct))!;
+        var byUrn = (await new SubjectReader(classDb.ConnectionString).GetSubjectByUrnAsync(detail.GetProperty("urn").GetString()!, Ct))!;
         Assert.Equal(series, byUrn.Repeating!.SeriesId);
         Assert.True(byUrn.BountyFromSeries);
         Assert.Contains(byUrn.Bounty!, l => l.Trigger == "completed");

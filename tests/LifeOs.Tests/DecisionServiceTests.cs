@@ -12,13 +12,12 @@ namespace LifeOs.Tests;
 /// when it results in nothing; it can result in a subject; it can supersede a prior
 /// Decision (reversal trail); and its review date is stored.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DecisionServiceTests(PostgresFixture postgres)
+public sealed class DecisionServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     [Fact]
     public async Task A_decision_that_results_in_nothing_still_persists_with_its_prediction()
@@ -36,7 +35,7 @@ public sealed class DecisionServiceTests(PostgresFixture postgres)
         Assert.Null(result.ResultsInSubjectId);
         Assert.Null(result.SupersedesSubjectId);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var row = await connection.QuerySingleAsync<(string Type, string Expected, string Confidence, string ReviewAt)>(
             new CommandDefinition(
@@ -74,7 +73,7 @@ public sealed class DecisionServiceTests(PostgresFixture postgres)
 
         Assert.Equal(project.Id, result.ResultsInSubjectId);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var relation = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
             "SELECT relation FROM bsk.subject_relation WHERE from_subject = @from AND to_subject = @to;",
@@ -93,7 +92,7 @@ public sealed class DecisionServiceTests(PostgresFixture postgres)
 
         Assert.Equal(prior.Decision.Id, reversal.SupersedesSubjectId);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var relation = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
             "SELECT relation FROM bsk.subject_relation WHERE from_subject = @from AND to_subject = @to;",

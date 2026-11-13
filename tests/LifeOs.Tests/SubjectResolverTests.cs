@@ -12,13 +12,12 @@ namespace LifeOs.Tests;
 /// id, or by a unique fuzzy title, and reporting candidates rather than guessing
 /// when a title is ambiguous. Also covers <c>bsk new</c>'s create-with-attributes.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SubjectResolverTests(PostgresFixture postgres)
+public sealed class SubjectResolverTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private SubjectService Service()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString)
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString)
             .BuildServiceProvider().GetRequiredService<SubjectService>();
 
     private static string ShortIdOf(string urn) => urn[(urn.LastIndexOfAny(['-', ':']) + 1)..];
@@ -99,7 +98,7 @@ public sealed class SubjectResolverTests(PostgresFixture postgres)
         var created = await service.CreateAsync(
             SubjectTypes.Constraint, $"cap projects {Guid.NewGuid():N}", attributes, cancellationToken: Ct);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var row = await connection.QuerySingleAsync<(string Scope, string Limit, string Type)>(
             new CommandDefinition(
@@ -120,7 +119,7 @@ public sealed class SubjectResolverTests(PostgresFixture postgres)
         var created = await service.CreateAsync(
             SubjectTypes.Season, $"winter season {Guid.NewGuid():N}", attributes, cancellationToken: Ct);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var row = await connection.QuerySingleAsync<(string Focus, string Ends)>(
             new CommandDefinition(

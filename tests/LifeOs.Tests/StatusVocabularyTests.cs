@@ -12,14 +12,13 @@ namespace LifeOs.Tests;
 /// crucially, keep the code mirror and the SQL predicate agreeing word-for-word —
 /// the same two-mirrored-places discipline the ontology applies to Vocabulary.cs.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class StatusVocabularyTests(PostgresFixture postgres)
+public sealed class StatusVocabularyTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

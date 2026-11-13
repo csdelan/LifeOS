@@ -14,13 +14,12 @@ namespace LifeOs.Tests;
 /// same SQL a breach diagnostic would use. Non-Commitment targets are rejected;
 /// duplicate references collapse to one edge; the event and its edges are atomic.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ActivityServiceTests(PostgresFixture postgres)
+public sealed class ActivityServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     [Fact]
     public async Task Activity_evidences_a_commitment_and_is_recorded_in_the_payload()
@@ -35,7 +34,7 @@ public sealed class ActivityServiceTests(PostgresFixture postgres)
 
         Assert.Contains(commitment.Id, result.EvidencesCommitmentIds);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
 
         // The event carries only its text...
@@ -65,7 +64,7 @@ public sealed class ActivityServiceTests(PostgresFixture postgres)
         await activities.LogAsync(
             new ActivityInput("doubled down on the losing trade", Violates: [commitment.Urn]), Ct);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
 
         // The shape a breach diagnostic (M4.3) uses: violating events for a
@@ -121,7 +120,7 @@ public sealed class ActivityServiceTests(PostgresFixture postgres)
 
         Assert.Equal([commitment.Id], result.EvidencesCommitmentIds);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var edges = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.subject_event WHERE event_id = @event AND subject_id = @commitment;",

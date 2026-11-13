@@ -22,7 +22,6 @@ namespace LifeOs.Tests;
 /// days back, so it has settled whatever the hour.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class DomainRankAwardTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

@@ -20,8 +20,7 @@ namespace LifeOs.Tests;
 /// and the database shared, so each test earns what it spends and reasons about its own
 /// Rewards and the change it made.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RewardCatalogTests(PostgresFixture postgres)
+public sealed class RewardCatalogTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -34,7 +33,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
     private Kernel Build(decimal? coinValueUsd = null)
     {
         var provider = new ServiceCollection()
-            .AddLifeOsKernel(postgres.ConnectionString, coinValueUsd: coinValueUsd)
+            .AddLifeOsKernel(classDb.ConnectionString, coinValueUsd: coinValueUsd)
             .BuildServiceProvider();
         return new Kernel(
             provider,
@@ -67,7 +66,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
 
     private async Task<long> LedgerEventCountAsync()
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.event WHERE kind = 'ledger';", cancellationToken: Ct));
@@ -75,7 +74,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
 
     private async Task<(string? SubjectId, string? Note, decimal? Dollars, decimal? CoinRate)> PayloadAsync(Guid eventId)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.QuerySingleAsync<(string?, string?, decimal?, decimal?)>(new CommandDefinition(
             """
@@ -168,7 +167,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
 
         // No Coins, so no dollars; the entry names the reward and concerns it.
         Assert.Equal((movie.Reward.Id.ToString(), (string?)null, (decimal?)null, (decimal?)null), await PayloadAsync(redemption.EventId));
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var edge = await connection.QuerySingleAsync<(string Relation, string Provenance)>(new CommandDefinition(
             "SELECT relation, provenance FROM bsk.subject_event WHERE event_id = @id AND subject_id = @reward;",
@@ -388,7 +387,7 @@ public sealed class RewardCatalogTests(PostgresFixture postgres)
     [Fact]
     public async Task The_reader_role_can_read_the_catalog()
     {
-        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(postgres.ConnectionString));
+        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(classDb.ConnectionString));
         await reader.OpenAsync(Ct);
 
         var count = await reader.ExecuteScalarAsync<long>(new CommandDefinition(

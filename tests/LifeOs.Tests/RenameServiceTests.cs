@@ -15,17 +15,16 @@ namespace LifeOs.Tests;
 /// it and leaves the URN — the stable handle every reference keys on — untouched.
 /// A reuse-by-title conflict (two Problems, one title) is rejected; other types are free.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RenameServiceTests(PostgresFixture postgres)
+public sealed class RenameServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private async Task<string?> ReadTitle(Guid id)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT title FROM bsk.subject WHERE id = @id;", new { id }, cancellationToken: Ct));
@@ -168,7 +167,7 @@ public sealed class RenameServiceTests(PostgresFixture postgres)
 
     private async Task<Guid> OccurrenceId(string seriesUrn, string date)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
             "SELECT id FROM bsk.subject WHERE attributes->>'series' = @seriesUrn AND attributes->>'date' = @date;",
@@ -177,7 +176,7 @@ public sealed class RenameServiceTests(PostgresFixture postgres)
 
     private async Task<string> UrnOf(Guid id)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string>(new CommandDefinition(
             "SELECT urn FROM bsk.subject WHERE id = @id;", new { id }, cancellationToken: Ct)) ?? "";

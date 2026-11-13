@@ -13,19 +13,18 @@ namespace LifeOs.Tests;
 /// hand-built diagnostics (full control over the SQL) plus the embedded fixtures
 /// for the discovery-driven paths.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DiagnosticRunnerTests(PostgresFixture postgres)
+public sealed class DiagnosticRunnerTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private DiagnosticRunner Runner => new(postgres.ConnectionString);
+    private DiagnosticRunner Runner => new(classDb.ConnectionString);
 
     private DiagnosticRunner RunnerWithFixtures =>
-        new(postgres.ConnectionString, new EmbeddedDiagnosticSource(typeof(DiagnosticRunnerTests).Assembly));
+        new(classDb.ConnectionString, new EmbeddedDiagnosticSource(typeof(DiagnosticRunnerTests).Assembly));
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

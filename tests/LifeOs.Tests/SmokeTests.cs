@@ -3,13 +3,12 @@ using Npgsql;
 
 namespace LifeOs.Tests;
 
-[Collection(PostgresCollection.Name)]
-public sealed class SmokeTests(PostgresFixture postgres)
+public sealed class SmokeTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     [Fact]
     public async Task Connects_to_postgres_and_reads_select_1()
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(TestContext.Current.CancellationToken);
 
         var result = await connection.ExecuteScalarAsync<int>(

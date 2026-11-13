@@ -15,15 +15,14 @@ namespace LifeOs.Tests;
 /// The wallet is global and the database shared, so each test reasons about the change
 /// it made.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RewardEndpointsTests(PostgresFixture postgres)
+public sealed class RewardEndpointsTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private static string Unique(string name) => $"{name} {Guid.NewGuid():N}";
 
     private Task<ApiTestHost> StartAsync(IReadOnlyDictionary<string, string?>? configuration = null)
-        => ApiTestHost.StartAsync(postgres.ConnectionString, Ct, configuration);
+        => ApiTestHost.StartAsync(classDb.ConnectionString, Ct, configuration);
 
     private static async Task<JsonElement> PostAsync(HttpClient client, string path, object body)
     {
@@ -103,7 +102,7 @@ public sealed class RewardEndpointsTests(PostgresFixture postgres)
     {
         await using var host = await StartAsync();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        await using var kernel = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        await using var kernel = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
         var habit = await kernel.CreateTrackedHabitAsync(
             Unique("api habit"),
             JsonSerializer.Serialize(new { start = today.AddDays(-1).ToString("yyyy-MM-dd"), recurrence = new { freq = "daily" } }),

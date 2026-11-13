@@ -19,8 +19,7 @@ namespace LifeOs.Tests;
 /// the opening pays); the timer's actions are back-dated, which is what makes the time.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RewardTimedTests(PostgresFixture postgres)
+public sealed class RewardTimedTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -30,7 +29,7 @@ public sealed class RewardTimedTests(PostgresFixture postgres)
 
     private Kernel Build()
     {
-        var provider = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        var provider = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
         return new Kernel(
             provider,
             provider.GetRequiredService<SubjectService>(),

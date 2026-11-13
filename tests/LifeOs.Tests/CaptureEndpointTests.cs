@@ -14,7 +14,6 @@ namespace LifeOs.Tests;
 /// the file, and <c>GET /api/artifacts/{id}</c> answers its metadata. Each test has a database
 /// of its own, so its Inbox holds only what the test captured.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class CaptureEndpointTests(PostgresFixture postgres)
 {
     private const string Pacific = "America/Los_Angeles";

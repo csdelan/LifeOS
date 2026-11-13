@@ -13,7 +13,6 @@ namespace LifeOs.Tests;
 /// migration 0057). A key that was added has no "from"; one that was removed has no "to". A write
 /// that changes nothing appends nothing, and the subject reads as it did before.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class AttributeChangeTests(PostgresFixture postgres)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;

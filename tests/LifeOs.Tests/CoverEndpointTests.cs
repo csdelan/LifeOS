@@ -13,7 +13,6 @@ namespace LifeOs.Tests;
 /// server, setting by photo id, moving and clearing, and the cover on the subject reads — with
 /// Unsplash played by <see cref="FakeUnsplashClient"/>. Each test has a database of its own.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class CoverEndpointTests(PostgresFixture postgres)
 {
     private const string Referral = "utm_source=lifeos&utm_medium=referral";

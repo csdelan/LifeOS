@@ -129,7 +129,6 @@ internal sealed class OuraHarness : IAsyncDisposable
 /// a window at a time, tokens refreshed once when refused, and the events kept out of every view
 /// about items.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class OuraSyncTests(PostgresFixture postgres)
 {
     private static readonly DateOnly Today = OuraHarness.Today;
@@ -756,7 +755,6 @@ public sealed class OuraSyncTests(PostgresFixture postgres)
 /// the newest winning, untouched by syncs, back with a workout that comes back, and refused in
 /// words with nothing written.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class WorkoutNoteTests(PostgresFixture postgres)
 {
     private const string RunId = "0a1b2c3d-4e5f-run";

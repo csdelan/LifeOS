@@ -16,17 +16,16 @@ namespace LifeOs.Tests;
 /// allows <c>serves Task</c>, mutates a promoted source, or edits the projection
 /// directly must fail here. Each invariant is exercised through the real write path.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DomainRuleTests(PostgresFixture postgres)
+public sealed class DomainRuleTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }
@@ -95,7 +94,7 @@ public sealed class DomainRuleTests(PostgresFixture postgres)
         var provider = Provider();
         var subjects = provider.GetRequiredService<SubjectService>();
         var status = provider.GetRequiredService<StatusService>();
-        var rebuilder = new DerivedRebuilder(postgres.ConnectionString);
+        var rebuilder = new DerivedRebuilder(classDb.ConnectionString);
 
         var task = await subjects.CreateAsync(SubjectTypes.Task, $"status task {Guid.NewGuid():N}", cancellationToken: Ct);
         await status.ChangeStatusAsync(task.Urn, "Completed", Ct);

@@ -17,19 +17,18 @@ namespace LifeOs.Tests;
 /// Each test ends with no timer left running, so tests sharing the database never
 /// pause one another's timers.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TimerServiceTests(PostgresFixture postgres)
+public sealed class TimerServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private (TimerService Timers, SubjectService Subjects, TestClock Clock) Build()
     {
-        var provider = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        var provider = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
         var subjects = provider.GetRequiredService<SubjectService>();
         var clock = new TestClock(DateTimeOffset.UtcNow);
         var timers = new TimerService(
             subjects,
-            new NpgsqlTimerRepository(KernelDataSource.For(postgres.ConnectionString)),
+            new NpgsqlTimerRepository(KernelDataSource.For(classDb.ConnectionString)),
             provider.GetRequiredService<StatusService>(),
             clock,
             new EventSource(KernelSources.Cli));
@@ -94,7 +93,7 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
         clock.Advance(TimeSpan.FromSeconds(1));
         await timers.ApplyAsync(task.Urn, TimerActions.Stop, Ct);
 
-        await using var c = new NpgsqlConnection(postgres.ConnectionString);
+        await using var c = new NpgsqlConnection(classDb.ConnectionString);
         await c.OpenAsync(Ct);
         var rows = (await c.QueryAsync<(string Kind, string Action, string Relation)>(new CommandDefinition(
             """
@@ -151,7 +150,7 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
         Assert.Equal(TimerStates.Stopped, done.Timer.State);
         Assert.Equal(45, done.Timer.TotalSeconds);
 
-        await using var c = new NpgsqlConnection(postgres.ConnectionString);
+        await using var c = new NpgsqlConnection(classDb.ConnectionString);
         await c.OpenAsync(Ct);
         var status = await c.QuerySingleAsync<string>(new CommandDefinition(
             "SELECT status FROM bsk_derived.subject_current_source WHERE subject_id = @id;",
@@ -212,7 +211,7 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
         await Status(clock).ChangeStatusAsync(task.Urn, closing, Ct);
 
         Assert.Equal(TimerStates.Stopped, (await timers.GetAsync(task.Urn, Ct)).State);
-        await using var c = new NpgsqlConnection(postgres.ConnectionString);
+        await using var c = new NpgsqlConnection(classDb.ConnectionString);
         await c.OpenAsync(Ct);
         // The stop and the status are written at the same moment, so they're compared by time
         // rather than read back in order.
@@ -239,7 +238,7 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
     {
         // A status service without the timer, as the kernel was before closing stopped it.
         var (timers, subjects, clock) = Build();
-        var provider = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        var provider = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
         var unaware = new StatusService(
             subjects,
             provider.GetRequiredService<IEventStore>(),
@@ -263,7 +262,7 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
     /// clock so its stop lands after the timer events the test wrote.
     /// </summary>
     private StatusService Status(IClock clock)
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).AddSingleton(clock).BuildServiceProvider()
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).AddSingleton(clock).BuildServiceProvider()
             .GetRequiredService<StatusService>();
 
     [Fact]
@@ -303,13 +302,13 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
         await timers.ApplyAsync(task.Urn, TimerActions.Start, Ct);
 
         // Another window still believes the timer is stopped and tries to start it.
-        var repository = new NpgsqlTimerRepository(KernelDataSource.For(postgres.ConnectionString));
+        var repository = new NpgsqlTimerRepository(KernelDataSource.For(classDb.ConnectionString));
         var stale = new TimerWrite(task.Id, TimerStates.Stopped, new NewEvent(
             EventKinds.Activity, Provenances.Declared, clock.UtcNow, clock.UtcNow, KernelSources.Cli,
             PayloadJson: $$"""{"subject_id":"{{task.Id}}","timer":"start"}"""));
         await Assert.ThrowsAsync<TimerConflictException>(() => repository.AppendAsync([stale], Ct));
 
-        await using var c = new NpgsqlConnection(postgres.ConnectionString);
+        await using var c = new NpgsqlConnection(classDb.ConnectionString);
         await c.OpenAsync(Ct);
         var starts = await c.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.event WHERE payload->>'subject_id' = @id AND payload->>'timer' = 'start';",
@@ -329,7 +328,7 @@ public sealed class TimerServiceTests(PostgresFixture postgres)
         clock.Advance(TimeSpan.FromSeconds(2));
         await timers.ApplyAsync(task.Urn, TimerActions.Stop, Ct);
 
-        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(postgres.ConnectionString));
+        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(classDb.ConnectionString));
         await reader.OpenAsync(Ct);
         var total = await reader.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT total_seconds FROM bsk.v_task_timer WHERE subject_id = @id;",

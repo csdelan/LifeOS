@@ -16,7 +16,6 @@ namespace LifeOs.Tests;
 /// serves the bytes to the owner, cached for good and revalidated by hash. Each test has a
 /// database of its own (UTC).
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class FoodPhotoEndpointTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

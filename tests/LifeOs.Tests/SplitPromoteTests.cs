@@ -17,17 +17,16 @@ namespace LifeOs.Tests;
 /// the inbox. Also covers Problem reuse-by-title on (re-)creation (Decision 1) and the
 /// atomicity of the incoming-edge create.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SplitPromoteTests(PostgresFixture postgres)
+public sealed class SplitPromoteTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }
@@ -134,7 +133,7 @@ public sealed class SplitPromoteTests(PostgresFixture postgres)
     public async Task A_failed_incoming_edge_leaves_no_orphan_target()
     {
         var repository = new NpgsqlSubjectRepository(
-            KernelDataSource.For(postgres.ConnectionString), new EventSource("tests"), new LifeOs.Infrastructure.SystemClock());
+            KernelDataSource.For(classDb.ConnectionString), new EventSource("tests"), new LifeOs.Infrastructure.SystemClock());
         var urn = $"urn:bsk:goal:orphan-target-{Guid.NewGuid():N}";
         var target = new NewSubject(urn, SubjectTypes.Goal, "orphan target", "{}", OriginEventId: null);
 

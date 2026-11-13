@@ -11,14 +11,13 @@ namespace LifeOs.Tests;
 /// hash column is well-formed, the metadata view hides the raw bytes, and the
 /// SELECT-only reader can read metadata and bytes but never write them.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ArtifactBlobTests(PostgresFixture postgres)
+public sealed class ArtifactBlobTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }
@@ -140,7 +139,7 @@ public sealed class ArtifactBlobTests(PostgresFixture postgres)
         await using var owner = await OpenAsync();
         var artifactId = await SeedBlobAsync(owner, [4, 2]);
 
-        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(postgres.ConnectionString));
+        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(classDb.ConnectionString));
         await reader.OpenAsync(Ct);
 
         // Metadata via the view, and the bytes via a deliberate SELECT — both allowed.

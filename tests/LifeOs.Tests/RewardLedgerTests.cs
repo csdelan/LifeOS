@@ -18,14 +18,13 @@ namespace LifeOs.Tests;
 /// The wallet is global and the database is shared, so each test reasons about the
 /// change it made, never an absolute balance.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RewardLedgerTests(PostgresFixture postgres)
+public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private (RewardService Rewards, RedemptionService Redemptions, ServiceProvider Provider) Build()
     {
-        var provider = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        var provider = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
         return (provider.GetRequiredService<RewardService>(), provider.GetRequiredService<RedemptionService>(), provider);
     }
 
@@ -71,7 +70,7 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
 
     private async Task<long> LedgerEventCountAsync()
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.event WHERE kind = 'ledger';", cancellationToken: Ct));
@@ -129,7 +128,7 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
         Assert.Equal(5, redemption.Amounts[Currencies.Coins]);
         Assert.Equal("Toward the bike", redemption.Note);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var row = await connection.QuerySingleAsync<(string Kind, string Provenance, string Entry, long Coins, string Note)>(
             new CommandDefinition(
@@ -289,7 +288,7 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
         Assert.Equal(first.OpenedAt, second.OpenedAt);
         Assert.Equal(first.OpenedAt, (await rewards.GetWalletAsync(Ct)).OpenedAt);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var opens = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.event WHERE kind = 'ledger' AND payload->>'entry' = 'open';",
@@ -321,7 +320,7 @@ public sealed class RewardLedgerTests(PostgresFixture postgres)
     [Fact]
     public async Task The_reader_role_can_read_the_ledger_and_wallet()
     {
-        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(postgres.ConnectionString));
+        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(classDb.ConnectionString));
         await reader.OpenAsync(Ct);
 
         foreach (var sql in new[]

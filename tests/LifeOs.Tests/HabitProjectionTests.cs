@@ -14,18 +14,17 @@ namespace LifeOs.Tests;
 /// counts consecutive fully-followed concluded occurrences (partial/missed break it);
 /// corrections and cue-based habits are handled; archived habits drop out.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class HabitProjectionTests(PostgresFixture postgres)
+public sealed class HabitProjectionTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

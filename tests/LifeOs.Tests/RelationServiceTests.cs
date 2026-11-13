@@ -12,13 +12,12 @@ namespace LifeOs.Tests;
 /// rejects <c>X serves Task</c> with a clear message, and a Task serving a
 /// Commitment (or standing alone) is allowed.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RelationServiceTests(PostgresFixture postgres)
+public sealed class RelationServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     [Fact]
     public async Task Linking_produces_a_relation_row()
@@ -33,7 +32,7 @@ public sealed class RelationServiceTests(PostgresFixture postgres)
 
         var result = await relations.LinkAsync(task.Urn, SubjectRelations.Serves, commitment.Urn, Ct);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var row = await connection.QuerySingleAsync<(Guid FromSubject, string Relation, Guid ToSubject, string Provenance)>(
             new CommandDefinition(
@@ -63,7 +62,7 @@ public sealed class RelationServiceTests(PostgresFixture postgres)
         Assert.Contains("Task is a leaf", ex.Message);
 
         // And nothing was written.
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var count = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.subject_relation WHERE to_subject = @task;",
@@ -103,7 +102,7 @@ public sealed class RelationServiceTests(PostgresFixture postgres)
 
         Assert.Equal(1, result.Removed);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var count = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.subject_relation WHERE from_subject = @from AND to_subject = @to;",

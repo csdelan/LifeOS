@@ -13,14 +13,13 @@ namespace LifeOs.Tests;
 /// off each test's own subjects (unique urns) so they are robust to the shared
 /// container.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class UnclosedLoopsDecorativeDiagnosticTests(PostgresFixture postgres)
+public sealed class UnclosedLoopsDecorativeDiagnosticTests(PostgresFixture postgres, ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private async Task<NpgsqlConnection> OpenAsync(string? connectionString = null)
     {
-        var connection = new NpgsqlConnection(connectionString ?? postgres.ConnectionString);
+        var connection = new NpgsqlConnection(connectionString ?? classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }
@@ -62,7 +61,7 @@ public sealed class UnclosedLoopsDecorativeDiagnosticTests(PostgresFixture postg
 
     private async Task<Finding?> FindAsync(string diagnostic, Guid subjectId, string? connectionString = null)
     {
-        var runner = new DiagnosticRunner(connectionString ?? postgres.ConnectionString);
+        var runner = new DiagnosticRunner(connectionString ?? classDb.ConnectionString);
         var report = await runner.RunAsync(only: diagnostic, cancellationToken: Ct);
         var result = Assert.Single(report.Diagnostics);
         Assert.Equal(diagnostic, result.Name);

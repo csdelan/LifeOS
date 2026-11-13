@@ -13,16 +13,15 @@ namespace LifeOs.Tests;
 /// runner. Assertions key off each test's own subjects (unique urns / focus
 /// tags) so they are robust to the shared container.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class NeglectDiagnosticTests(PostgresFixture postgres)
+public sealed class NeglectDiagnosticTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private DiagnosticRunner Runner => new(postgres.ConnectionString);
+    private DiagnosticRunner Runner => new(classDb.ConnectionString);
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

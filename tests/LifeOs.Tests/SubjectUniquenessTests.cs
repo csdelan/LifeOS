@@ -14,13 +14,12 @@ namespace LifeOs.Tests;
 /// differences resolve to the same Problem, and types that are NOT reuse-by-title
 /// (e.g. Task) are deliberately left unconstrained.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SubjectUniquenessTests(PostgresFixture postgres)
+public sealed class SubjectUniquenessTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     [Fact]
     public async Task Titles_that_differ_only_by_whitespace_resolve_to_the_same_problem()
@@ -62,7 +61,7 @@ public sealed class SubjectUniquenessTests(PostgresFixture postgres)
         await repository.CreateAsync(new NewSubject($"urn:bsk:task:a-{g}", SubjectTypes.Task, title), Ct);
         await repository.CreateAsync(new NewSubject($"urn:bsk:task:b-{g}", SubjectTypes.Task, title), Ct);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var count = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.subject WHERE type = 'Task' AND title = @title;",

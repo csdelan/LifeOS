@@ -19,8 +19,7 @@ namespace LifeOs.Tests;
 /// and §4.4 fix 3): LifeOS's own allow list, changed only with Chris's web session, and the
 /// access log behind Connected agents.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AgentAccessTests(PostgresFixture postgres)
+public sealed class AgentAccessTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
@@ -279,7 +278,7 @@ public sealed class AgentAccessTests(PostgresFixture postgres)
 
         var noList = await HandleAsync(new McpAgentHandler(auth, mcp));
         var cantRead = await HandleAsync(new McpAgentHandler(auth, mcp, unreachable));
-        var allowed = await HandleAsync(new McpAgentHandler(auth, mcp, new AgentAccessStore(postgres.ConnectionString, "UTC")), allowFirst: true);
+        var allowed = await HandleAsync(new McpAgentHandler(auth, mcp, new AgentAccessStore(classDb.ConnectionString, "UTC")), allowFirst: true);
 
         Assert.True(noList.HasFailed);
         Assert.True(cantRead.HasFailed);
@@ -362,7 +361,7 @@ public sealed class AgentAccessTests(PostgresFixture postgres)
     public async Task This_week_starts_Monday_in_the_home_zone_and_old_rows_are_deleted()
     {
         var client = NewClient("weekly");
-        await using (var owner = new NpgsqlConnection(postgres.ConnectionString))
+        await using (var owner = new NpgsqlConnection(classDb.ConnectionString))
         {
             await owner.OpenAsync(Ct);
             await owner.ExecuteAsync(new CommandDefinition(
@@ -377,7 +376,7 @@ public sealed class AgentAccessTests(PostgresFixture postgres)
         }
 
         // A new store cleans up on its first write.
-        var store = new AgentAccessStore(postgres.ConnectionString, "UTC");
+        var store = new AgentAccessStore(classDb.ConnectionString, "UTC");
         var before = Assert.Single(await store.ListAsync(Ct), a => a.ClientId == client);
         await store.RecordCallAsync(new AgentCallRecord(client, "people", null, AgentAccessStore.Ok, 0, 1), Ct);
         var calls = await store.RecentCallsAsync(client, limit: 10, Ct);
@@ -392,7 +391,7 @@ public sealed class AgentAccessTests(PostgresFixture postgres)
     private static string NewClient(string name) => $"{name}-{Guid.NewGuid():N}"[..24];
 
     private Task<ApiTestHost> StartAsync()
-        => ApiTestHost.StartAsync(postgres.ConnectionString, Ct, new Dictionary<string, string?>
+        => ApiTestHost.StartAsync(classDb.ConnectionString, Ct, new Dictionary<string, string?>
         {
             [McpOptions.EnabledKey] = "true",
             [HomeZone.ConfigurationKey] = "UTC",
@@ -403,7 +402,7 @@ public sealed class AgentAccessTests(PostgresFixture postgres)
         var client = NewClient("unit");
         if (allowFirst)
         {
-            await new AgentAccessStore(postgres.ConnectionString, "UTC").AllowAsync(client, "Unit", null, cancellationToken: Ct);
+            await new AgentAccessStore(classDb.ConnectionString, "UTC").AllowAsync(client, "Unit", null, cancellationToken: Ct);
         }
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(

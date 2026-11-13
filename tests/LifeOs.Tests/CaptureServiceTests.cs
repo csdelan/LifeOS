@@ -11,8 +11,7 @@ namespace LifeOs.Tests;
 /// composition root, capture a note, and confirm it reached Postgres through the
 /// repository layer with the body stored as an artifact.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CaptureServiceTests(PostgresFixture postgres)
+public sealed class CaptureServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -20,7 +19,7 @@ public sealed class CaptureServiceTests(PostgresFixture postgres)
     public async Task Capture_runs_service_to_repository_to_postgres_and_back()
     {
         await using var provider = new ServiceCollection()
-            .AddLifeOsKernel(postgres.ConnectionString)
+            .AddLifeOsKernel(classDb.ConnectionString)
             .BuildServiceProvider();
 
         var capture = provider.GetRequiredService<CaptureService>();
@@ -28,7 +27,7 @@ public sealed class CaptureServiceTests(PostgresFixture postgres)
         const string text = "buy milk and think about the roadmap";
         var result = await capture.CaptureNoteAsync(text, Ct);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
 
         var row = await connection.QuerySingleAsync<(string Kind, string Provenance, string Source, Guid? ArtifactId)>(
@@ -51,7 +50,7 @@ public sealed class CaptureServiceTests(PostgresFixture postgres)
     public async Task Empty_capture_text_is_rejected_before_touching_the_store()
     {
         await using var provider = new ServiceCollection()
-            .AddLifeOsKernel(postgres.ConnectionString)
+            .AddLifeOsKernel(classDb.ConnectionString)
             .BuildServiceProvider();
 
         var capture = provider.GetRequiredService<CaptureService>();

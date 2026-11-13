@@ -11,7 +11,6 @@ namespace LifeOs.Tests;
 /// answers <c>progress</c> and pays any rank-up it unlocks, and <c>GET /api/domains</c> reads
 /// Environment's consistency as <c>kind: "home"</c>.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class EnvironmentDomainTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

@@ -21,8 +21,7 @@ namespace LifeOs.Tests;
 /// on today's clock, since nothing earned before the wallet opened pays.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TaskSeriesTests(PostgresFixture postgres)
+public sealed class TaskSeriesTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -41,7 +40,7 @@ public sealed class TaskSeriesTests(PostgresFixture postgres)
     {
         var clock = TestClock.Ticking();
         clock.On(on ?? Monday);
-        var services = new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone);
+        var services = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone);
         if (!realClock)
         {
             services.AddSingleton<IClock>(clock);
@@ -90,7 +89,7 @@ public sealed class TaskSeriesTests(PostgresFixture postgres)
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }
@@ -669,7 +668,7 @@ public sealed class TaskSeriesTests(PostgresFixture postgres)
                 new { ids = new[] { series.Id, plain.Id } }, cancellationToken: Ct));
         }
 
-        var report = await new DiagnosticRunner(postgres.ConnectionString).RunAsync(only: "neglect", cancellationToken: Ct);
+        var report = await new DiagnosticRunner(classDb.ConnectionString).RunAsync(only: "neglect", cancellationToken: Ct);
         var findings = Assert.Single(report.Diagnostics).Findings;
         Assert.DoesNotContain(findings, f => f.Subject.Id == series.Id);
         Assert.Contains(findings, f => f.Subject.Id == plain.Id);

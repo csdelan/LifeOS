@@ -21,8 +21,7 @@ namespace LifeOs.Tests;
 /// gives back exactly what it paid. The wallet is global and the database shared, so
 /// each test reasons about its own items and the change it made.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RewardEarningTests(PostgresFixture postgres)
+public sealed class RewardEarningTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -33,7 +32,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
     private Kernel Build(string? connectionString = null)
     {
         var provider = new ServiceCollection()
-            .AddLifeOsKernel(connectionString ?? postgres.ConnectionString)
+            .AddLifeOsKernel(connectionString ?? classDb.ConnectionString)
             .BuildServiceProvider();
         return new Kernel(
             provider,
@@ -69,7 +68,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
 
     private async Task<long> LedgerEntriesForAsync(SubjectRef subject, string? connectionString = null)
     {
-        await using var connection = new NpgsqlConnection(connectionString ?? postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(connectionString ?? classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.event WHERE kind = 'ledger' AND payload->>'subject_id' = @id;",
@@ -101,7 +100,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
         }
 
         // The earn is derived from the completion and concerns the task.
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var row = await connection.QuerySingleAsync<(string Provenance, Guid[] DerivedFrom, long Edges)>(
             new CommandDefinition(
@@ -190,7 +189,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
         Assert.Empty(await NetForAsync(kernel, task));
 
         // The reversal cites the reopening that undid the award.
-        await using (var connection = new NpgsqlConnection(postgres.ConnectionString))
+        await using (var connection = new NpgsqlConnection(classDb.ConnectionString))
         {
             await connection.OpenAsync(Ct);
             var derivedFrom = await connection.ExecuteScalarAsync<Guid[]>(new CommandDefinition(
@@ -385,7 +384,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
         Assert.Equal(LedgerEntries.Reversal, reversal.Entry);
         Assert.Empty(await NetForAsync(kernel, task));
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var derivedFrom = await connection.ExecuteScalarAsync<Guid[]>(new CommandDefinition(
             "SELECT derived_from FROM bsk.event WHERE id = @id;", new { id = reversal.EventId },
@@ -414,13 +413,13 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
     public async Task On_a_fresh_wallet_the_first_paying_completion_opens_it_and_history_stays_unpaid()
     {
         var database = $"reward_fresh_{Guid.NewGuid():N}";
-        await using (var admin = new NpgsqlConnection(postgres.ConnectionString))
+        await using (var admin = new NpgsqlConnection(classDb.ConnectionString))
         {
             await admin.OpenAsync(Ct);
             await admin.ExecuteAsync(new CommandDefinition($"CREATE DATABASE {database};", cancellationToken: Ct));
         }
 
-        var connectionString = new NpgsqlConnectionStringBuilder(postgres.ConnectionString) { Database = database }
+        var connectionString = new NpgsqlConnectionStringBuilder(classDb.ConnectionString) { Database = database }
             .ConnectionString;
         try
         {
@@ -458,7 +457,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
         finally
         {
             NpgsqlConnection.ClearAllPools();
-            await using var admin = new NpgsqlConnection(postgres.ConnectionString);
+            await using var admin = new NpgsqlConnection(classDb.ConnectionString);
             await admin.OpenAsync(Ct);
             await admin.ExecuteAsync(new CommandDefinition(
                 $"DROP DATABASE IF EXISTS {database} WITH (FORCE);", cancellationToken: Ct));
@@ -513,7 +512,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres)
     [Fact]
     public async Task The_reader_role_can_read_what_is_due()
     {
-        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(postgres.ConnectionString));
+        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(classDb.ConnectionString));
         await reader.OpenAsync(Ct);
 
         foreach (var sql in new[] { "SELECT count(*) FROM bsk.v_reward_trigger;", "SELECT count(*) FROM bsk.v_reward_due;" })

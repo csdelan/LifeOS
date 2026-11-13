@@ -13,17 +13,16 @@ namespace LifeOs.Tests;
 /// reference (set via the existing `bsk set`), surfaced on v_subject and listed by
 /// v_area. Areas are permanent — the single writer refuses to archive one.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AreaTypeTests(PostgresFixture postgres)
+public sealed class AreaTypeTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

@@ -22,8 +22,7 @@ namespace LifeOs.Tests;
 /// rolls it back.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DomainCreditTests(PostgresFixture postgres)
+public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     // UTC+14 and UTC−11: at any instant their dates are at least a day apart.
     private const string Kiritimati = "Pacific/Kiritimati";
@@ -40,7 +39,7 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
     private Kernel Build(string homeTimeZone = "UTC")
     {
         var provider = new ServiceCollection()
-            .AddLifeOsKernel(postgres.ConnectionString, homeTimeZone: homeTimeZone)
+            .AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: homeTimeZone)
             .BuildServiceProvider();
         return new Kernel(
             provider.GetRequiredService<SubjectService>(),
@@ -76,7 +75,7 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
         string awardKey, NpgsqlConnection? connection = null, NpgsqlTransaction? transaction = null)
     {
         var owned = connection is null;
-        connection ??= new NpgsqlConnection(postgres.ConnectionString);
+        connection ??= new NpgsqlConnection(classDb.ConnectionString);
         try
         {
             if (owned)
@@ -103,7 +102,7 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
 
     private async Task<DateOnly> CreditedOnAsync(Guid ledgerEventId)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var day = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
             "SELECT payload->>'credited_on' FROM bsk.event WHERE id = @id;", new { id = ledgerEventId }, cancellationToken: Ct));
@@ -175,7 +174,7 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
     {
         // Phase X5 stamps `base` on an earn a multiplier raised. Written by hand here, and
         // rolled back, since no flow writes one yet.
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         await using var transaction = await connection.BeginTransactionAsync(Ct);
         var (multiplied, malformed) = ($"test:{Guid.NewGuid():N}", $"test:{Guid.NewGuid():N}");

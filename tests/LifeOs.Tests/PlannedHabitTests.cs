@@ -24,8 +24,7 @@ namespace LifeOs.Tests;
 /// is the same whichever zone reads it.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PlannedHabitTests(PostgresFixture postgres)
+public sealed class PlannedHabitTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -34,7 +33,7 @@ public sealed class PlannedHabitTests(PostgresFixture postgres)
     private static string Unique(string name) => $"{name} {Guid.NewGuid():N}";
 
     private ServiceProvider Kernel()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private static string Daily(int startOffset)
         => JsonSerializer.Serialize(new
@@ -54,7 +53,7 @@ public sealed class PlannedHabitTests(PostgresFixture postgres)
 
     private async Task<string?> StatusAsync(Guid id)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT status FROM bsk_derived.subject_current_source WHERE subject_id = @id;",
@@ -64,7 +63,7 @@ public sealed class PlannedHabitTests(PostgresFixture postgres)
     /// <summary>The habit's occurrences, days ago → state, oldest first.</summary>
     private async Task<List<(int DaysAgo, string State)>> OccurrencesAsync(Guid habitId)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var rows = await connection.QueryAsync<(string Day, string State)>(new CommandDefinition(
             """
@@ -80,7 +79,7 @@ public sealed class PlannedHabitTests(PostgresFixture postgres)
     /// <summary>The habit's establishment row as (age, missed), or null when it has none.</summary>
     private async Task<(int AgeDays, long Missed)?> EstablishmentAsync(Guid habitId)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var rows = (await connection.QueryAsync<(int, long)>(new CommandDefinition(
             "SELECT age_days, missed FROM bsk.v_habit_establishment WHERE habit_id = @habitId;",
@@ -90,7 +89,7 @@ public sealed class PlannedHabitTests(PostgresFixture postgres)
 
     private async Task<long> RecordingsAsync(Guid habitId)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.event WHERE kind = 'activity' AND payload->>'subject_id' = @id;",
@@ -129,7 +128,7 @@ public sealed class PlannedHabitTests(PostgresFixture postgres)
         Assert.Null(await StatusAsync(goal.Id));
 
         // The web's New: the habit reads back Planned, with no progress toward establishing.
-        await using var host = await ApiTestHost.StartAsync(postgres.ConnectionString, Ct);
+        await using var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
         var created = await host.Client.PostAsJsonAsync(
             "/api/subjects", new { type = SubjectTypes.Habit, title = Unique("web habit") }, Ct);
         Assert.True(created.IsSuccessStatusCode, await created.Content.ReadAsStringAsync(Ct));
@@ -163,7 +162,7 @@ public sealed class PlannedHabitTests(PostgresFixture postgres)
             () => adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, Today.AddDays(-1), cancellationToken: Ct));
         Assert.Contains("is Planned, so it isn't tracked yet", refused.Message);
 
-        await using var host = await ApiTestHost.StartAsync(postgres.ConnectionString, Ct);
+        await using var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
         var response = await host.Client.PostAsJsonAsync("/api/adhere", new
         {
             habit = habit.Id.ToString(), state = "followed", on = Today.ToString("yyyy-MM-dd")

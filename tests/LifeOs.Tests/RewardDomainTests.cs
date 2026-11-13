@@ -24,8 +24,7 @@ namespace LifeOs.Tests;
 /// The database is shared, so each test reasons about its own items. The zone tests read
 /// triggers from 2003, which are before the wallet opened: they write no ledger entries.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RewardDomainTests(PostgresFixture postgres)
+public sealed class RewardDomainTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -41,7 +40,7 @@ public sealed class RewardDomainTests(PostgresFixture postgres)
     private Kernel Build(string? homeTimeZone = null)
     {
         var provider = new ServiceCollection()
-            .AddLifeOsKernel(postgres.ConnectionString, homeTimeZone: homeTimeZone)
+            .AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: homeTimeZone)
             .BuildServiceProvider();
         return new Kernel(
             provider,
@@ -89,7 +88,7 @@ public sealed class RewardDomainTests(PostgresFixture postgres)
     /// <summary>The <c>credited_on</c> a ledger entry carries, or null when it carries none.</summary>
     private async Task<string?> CreditedOnAsync(Guid ledgerEventId)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT payload->>'credited_on' FROM bsk.event WHERE id = @id;",
@@ -260,7 +259,7 @@ public sealed class RewardDomainTests(PostgresFixture postgres)
             () => KernelSettings.ParseHomeTimeZone(configured));
         Assert.Contains(HomeZone.ConfigurationKey, refused.Message);
         Assert.Throws<InvalidOperationException>(
-            () => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString, homeTimeZone: configured));
+            () => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: configured));
     }
 
     [Fact]

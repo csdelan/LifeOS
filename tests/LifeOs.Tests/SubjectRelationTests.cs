@@ -8,8 +8,7 @@ namespace LifeOs.Tests;
 /// subject type inserts with no DDL, relations are constrained to valid kinds
 /// and existing subjects, and origin_event_id defaults NULL.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SubjectRelationTests(PostgresFixture postgres)
+public sealed class SubjectRelationTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static readonly string[] AllSubjectTypes =
     [
@@ -21,7 +20,7 @@ public sealed class SubjectRelationTests(PostgresFixture postgres)
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

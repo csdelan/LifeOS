@@ -13,13 +13,12 @@ namespace LifeOs.Tests;
 /// origin_event_id set and leaves the source event byte-identical. The origin
 /// column is the promotion link; there is no promoted_from edge (see #24).
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PromotionServiceTests(PostgresFixture postgres)
+public sealed class PromotionServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     // A canonical snapshot of a single event row, for byte-identity comparison.
     private async Task<string> EventSnapshotAsync(NpgsqlConnection connection, Guid id)
@@ -37,7 +36,7 @@ public sealed class PromotionServiceTests(PostgresFixture postgres)
         var source = await capture.CaptureJournalAsync(
             $"a long journal entry worth acting on {Guid.NewGuid():N}", Ct);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var before = await EventSnapshotAsync(connection, source.EventId);
 
@@ -80,7 +79,7 @@ public sealed class PromotionServiceTests(PostgresFixture postgres)
         // edge. The source subject stays reachable via the event's payload.
         Assert.Equal(session.EventId, result.OriginEventId);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var edges = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.subject_relation WHERE from_subject = @from;",
@@ -90,7 +89,7 @@ public sealed class PromotionServiceTests(PostgresFixture postgres)
 
     private async Task<List<string>> TagsAsync(string column, Guid id)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return (await connection.QueryAsync<string>(new CommandDefinition(
             $"SELECT tag FROM bsk.item_tag WHERE {column} = @id ORDER BY tag;",

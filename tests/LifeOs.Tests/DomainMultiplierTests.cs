@@ -17,7 +17,6 @@ namespace LifeOs.Tests;
 /// reads every Health day in it.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class DomainMultiplierTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

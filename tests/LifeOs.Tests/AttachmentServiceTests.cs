@@ -17,17 +17,16 @@ namespace LifeOs.Tests;
 /// transcript, the size guard rejects oversized payloads, and a multi-MB payload
 /// survives the roundtrip intact.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AttachmentServiceTests(PostgresFixture postgres)
+public sealed class AttachmentServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider BuildProvider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }
@@ -156,7 +155,7 @@ public sealed class AttachmentServiceTests(PostgresFixture postgres)
     {
         // A service with a deliberately tiny limit; nothing should reach the store.
         var service = new AttachmentService(
-            new NpgsqlArtifactBlobStore(KernelDataSource.For(postgres.ConnectionString)), new SystemClock(), new EventSource("cli"), maxBytes: 8);
+            new NpgsqlArtifactBlobStore(KernelDataSource.For(classDb.ConnectionString)), new SystemClock(), new EventSource("cli"), maxBytes: 8);
 
         var tooBig = new byte[9];
 

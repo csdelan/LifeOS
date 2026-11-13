@@ -39,22 +39,21 @@ public sealed class EditorBufferTests
 }
 
 /// <summary>Capture and journal behaviour against Postgres.</summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CaptureAndJournalDbTests(PostgresFixture postgres)
+public sealed class CaptureAndJournalDbTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private CaptureService Capture()
     {
         var provider = new ServiceCollection()
-            .AddLifeOsKernel(postgres.ConnectionString)
+            .AddLifeOsKernel(classDb.ConnectionString)
             .BuildServiceProvider();
         return provider.GetRequiredService<CaptureService>();
     }
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

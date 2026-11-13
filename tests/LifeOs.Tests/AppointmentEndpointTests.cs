@@ -10,7 +10,6 @@ namespace LifeOs.Tests;
 /// <c>POST /api/appointments/{id}/materialize</c> makes a repeating appointment's occurrences,
 /// the twin of <c>bsk materialize</c>. Each test has a database of its own.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class AppointmentEndpointTests(PostgresFixture postgres)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;

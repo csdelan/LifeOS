@@ -12,17 +12,16 @@ namespace LifeOs.Tests;
 /// <c>bsk relate</c>'s service: filing an existing capture against a subject with a
 /// <c>concerns</c> edge. Relating is idempotent, and an unknown event is an error.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RelateServiceTests(PostgresFixture postgres)
+public sealed class RelateServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private async Task<int> EdgeCount(Guid eventId, Guid subjectId, string relation)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             """

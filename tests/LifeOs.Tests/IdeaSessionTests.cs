@@ -13,17 +13,16 @@ namespace LifeOs.Tests;
 /// idea_session event referencing a Problem, and the individual ideas are not
 /// created as subjects.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class IdeaSessionTests(PostgresFixture postgres)
+public sealed class IdeaSessionTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

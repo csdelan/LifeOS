@@ -9,8 +9,8 @@ namespace LifeOs.Tests;
 
 /// <summary>
 /// One PostgreSQL container for the whole test run. Every migration is applied once, to a
-/// template database; the shared database and each test's own database
-/// (<see cref="DomainTestDatabase"/>) are copies of it, which take a moment instead of a full
+/// template database; each test's database (<see cref="DomainTestDatabase"/>) and each class's
+/// (<see cref="ClassDatabase"/>) is a copy of it, which takes a moment instead of a full
 /// migration each.
 /// </summary>
 public sealed class PostgresFixture : IAsyncLifetime
@@ -24,9 +24,10 @@ public sealed class PostgresFixture : IAsyncLifetime
         .Build();
 
     /// <summary>
-    /// The shared database, for the tests in <see cref="PostgresCollection"/>. They see each
-    /// other's rows, so a test whose answer depends on the whole database takes a
-    /// <see cref="DomainTestDatabase"/> instead.
+    /// A copy of the template that no test writes to: the connection the other copies are made
+    /// and dropped through, and a migrated schema to read. A test that writes takes a database of
+    /// its own (<see cref="DomainTestDatabase"/> or <see cref="ClassDatabase"/>), so no two classes
+    /// see each other's rows and every class runs alongside the others.
     /// </summary>
     public string ConnectionString { get; private set; } = string.Empty;
 
@@ -77,15 +78,4 @@ public sealed class PostgresFixture : IAsyncLifetime
         => new NpgsqlConnectionStringBuilder(connectionString) { Database = database }.ConnectionString;
 
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();
-}
-
-/// <summary>
-/// The tests that use the shared database. They run one at a time, because some count or list
-/// rows the others write. A new test that needs a database takes a
-/// <see cref="DomainTestDatabase"/> and stays out of this collection, so it runs alongside.
-/// </summary>
-[CollectionDefinition(Name)]
-public sealed class PostgresCollection
-{
-    public const string Name = "postgres";
 }

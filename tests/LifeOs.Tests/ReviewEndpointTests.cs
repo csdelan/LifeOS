@@ -12,7 +12,6 @@ namespace LifeOs.Tests;
 /// <c>bsk review</c>: list, open-or-create, complete, keep focus and the recap. Each test has a
 /// database of its own (home zone UTC); the review tests set the clock by hand.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class ReviewEndpointTests(PostgresFixture postgres)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;

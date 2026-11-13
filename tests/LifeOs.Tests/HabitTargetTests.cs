@@ -17,13 +17,12 @@ namespace LifeOs.Tests;
 /// <c>bsk.v_habit_establishment</c> reads — numbers, never strings — and it refuses what the
 /// view would silently ignore. The database is shared, so each test makes its own habits.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class HabitTargetTests(PostgresFixture postgres)
+public sealed class HabitTargetTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Kernel()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     // A habit is tracked, so the establishment view reads it (a Planned one has no progress).
     private static Task<SubjectRef> NewAsync(ServiceProvider kernel, string type, string? attributesJson = null)
@@ -35,7 +34,7 @@ public sealed class HabitTargetTests(PostgresFixture postgres)
     /// <summary>The target as the view reads it.</summary>
     private async Task<(decimal MinAdherence, int WindowDays)> ViewTargetAsync(SubjectRef habit)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.QuerySingleAsync<(decimal, int)>(new CommandDefinition(
             "SELECT min_adherence, window_days FROM bsk.v_habit_establishment WHERE habit_id = @id;",
@@ -44,7 +43,7 @@ public sealed class HabitTargetTests(PostgresFixture postgres)
 
     private async Task<string?> StoredAsync(SubjectRef habit)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT attributes->>'establish_target' FROM bsk.subject WHERE id = @id;",
@@ -153,7 +152,7 @@ public sealed class HabitTargetTests(PostgresFixture postgres)
     [Fact]
     public async Task The_endpoint_sets_and_clears_the_target_the_habits_read_shows()
     {
-        await using var host = await ApiTestHost.StartAsync(postgres.ConnectionString, Ct);
+        await using var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
         await using var kernel = Kernel();
         var habit = await NewAsync(kernel, SubjectTypes.Habit);
 
@@ -181,7 +180,7 @@ public sealed class HabitTargetTests(PostgresFixture postgres)
     [Fact]
     public async Task A_target_the_kernel_refuses_is_a_400_with_its_reason()
     {
-        await using var host = await ApiTestHost.StartAsync(postgres.ConnectionString, Ct);
+        await using var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
         await using var kernel = Kernel();
         var habit = await NewAsync(kernel, SubjectTypes.Habit);
         var goal = await NewAsync(kernel, SubjectTypes.Goal);

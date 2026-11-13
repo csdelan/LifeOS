@@ -8,14 +8,13 @@ namespace LifeOs.Tests;
 /// Verifies the bsk_reader role from migration 0005: it can read every table and
 /// view, and cannot write to any of them.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ReaderRoleTests(PostgresFixture postgres)
+public sealed class ReaderRoleTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private async Task<NpgsqlConnection> OpenReaderAsync()
     {
-        var connection = new NpgsqlConnection(BskReader.ConnectionStringFrom(postgres.ConnectionString));
+        var connection = new NpgsqlConnection(BskReader.ConnectionStringFrom(classDb.ConnectionString));
         await connection.OpenAsync(Ct);
         return connection;
     }
@@ -24,7 +23,7 @@ public sealed class ReaderRoleTests(PostgresFixture postgres)
     public async Task Reader_connects_and_reads_tables_and_views()
     {
         // Seed a subject and event as the owner so there is something to read.
-        await using (var owner = new NpgsqlConnection(postgres.ConnectionString))
+        await using (var owner = new NpgsqlConnection(classDb.ConnectionString))
         {
             await owner.OpenAsync(Ct);
             await owner.ExecuteAsync(new CommandDefinition(

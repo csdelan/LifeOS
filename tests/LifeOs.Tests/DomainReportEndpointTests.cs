@@ -10,7 +10,6 @@ namespace LifeOs.Tests;
 /// every life domain over its last N days: Health's counted, exception and active days, XP,
 /// levels, bests and ranks, ending at the last settled day; the others' XP only. Runs in a database of its own (<see cref="DomainTestDatabase"/>).
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class DomainReportEndpointTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

@@ -11,17 +11,16 @@ namespace LifeOs.Tests;
 /// <c>bsk set</c>'s service: editing a subject's attributes in place. A patch merges
 /// (existing keys survive), a blank value removes a key, and an unknown subject errors.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AttributeServiceTests(PostgresFixture postgres)
+public sealed class AttributeServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private async Task<string?> ReadAttribute(Guid id, string key)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT attributes->>@key FROM bsk.subject WHERE id = @id;",

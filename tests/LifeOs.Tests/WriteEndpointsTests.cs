@@ -12,8 +12,7 @@ namespace LifeOs.Tests;
 /// (a uuid), while the Application services resolve urn / short id / title — so
 /// these tests send exactly what the web client sends and check the edge lands.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class WriteEndpointsTests(PostgresFixture postgres)
+public sealed class WriteEndpointsTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -291,7 +290,7 @@ public sealed class WriteEndpointsTests(PostgresFixture postgres)
 
     private async Task<bool> EdgeExistsAsync(Guid from, string relation, Guid to)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
             """
@@ -302,5 +301,5 @@ public sealed class WriteEndpointsTests(PostgresFixture postgres)
             new { from, relation, to }, cancellationToken: Ct));
     }
 
-    private Task<ApiTestHost> StartAsync() => ApiTestHost.StartAsync(postgres.ConnectionString, Ct);
+    private Task<ApiTestHost> StartAsync() => ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
 }

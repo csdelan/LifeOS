@@ -22,7 +22,6 @@ namespace LifeOs.Tests;
 /// the first sync puts its records in. Each test has a database of its own, in UTC, with the
 /// clock at noon on Thursday 2026-10-22.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class ActivityEndpointTests(PostgresFixture postgres)
 {
     private static readonly DateOnly Today = OuraHarness.Today;
@@ -535,7 +534,6 @@ public sealed class ActivityEndpointTests(PostgresFixture postgres)
 /// directly: today counts toward the goal once it's there, but isn't averaged or counted under
 /// the minimum until it's over.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class ActivitySummaryTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

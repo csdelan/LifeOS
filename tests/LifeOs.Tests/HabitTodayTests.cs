@@ -21,8 +21,7 @@ namespace LifeOs.Tests;
 /// Pago Pago's today is always over in Kiritimati, which is the evening case.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class HabitTodayTests(PostgresFixture postgres)
+public sealed class HabitTodayTests(PostgresFixture postgres, ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private const string Kiritimati = "Pacific/Kiritimati";
     private const string PagoPago = "Pacific/Pago_Pago";
@@ -32,7 +31,7 @@ public sealed class HabitTodayTests(PostgresFixture postgres)
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Kernel()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     /// <summary>A session whose home zone is <paramref name="zone"/> (null: the database's), for one transaction.</summary>
     private sealed class Session(NpgsqlConnection connection, NpgsqlTransaction transaction) : IAsyncDisposable
@@ -55,7 +54,7 @@ public sealed class HabitTodayTests(PostgresFixture postgres)
 
     private async Task<Session> SessionAsync(string? zone)
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var transaction = await connection.BeginTransactionAsync(Ct);
         if (zone is not null)

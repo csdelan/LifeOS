@@ -8,14 +8,13 @@ namespace LifeOs.Tests;
 /// events and artifacts, provenance/timestamp NOT NULL, the derived-events check,
 /// and (source_id, external_id) idempotency.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SourceTablesTests(PostgresFixture postgres)
+public sealed class SourceTablesTests(PostgresFixture postgres, ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

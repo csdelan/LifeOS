@@ -13,17 +13,16 @@ namespace LifeOs.Tests;
 /// series materializes each occurrence as its own subject that inherits the series'
 /// template fields and carries its own status. Materialization is idempotent.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AppointmentTests(PostgresFixture postgres)
+public sealed class AppointmentTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

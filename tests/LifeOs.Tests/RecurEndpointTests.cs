@@ -11,14 +11,13 @@ namespace LifeOs.Tests;
 /// recurrence, the twin of <c>bsk recur</c>. It stores the object the expander reads, and a
 /// recurrence sent through <c>POST /api/subjects</c> as text is stored as the object too.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class RecurEndpointTests(PostgresFixture postgres)
+public sealed class RecurEndpointTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private static string Unique(string name) => $"{name} {Guid.NewGuid():N}";
 
-    private Task<ApiTestHost> StartAsync() => ApiTestHost.StartAsync(postgres.ConnectionString, Ct);
+    private Task<ApiTestHost> StartAsync() => ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
 
     private static async Task<JsonElement> PostAsync(HttpClient client, string path, object body)
     {
@@ -30,7 +29,7 @@ public sealed class RecurEndpointTests(PostgresFixture postgres)
 
     private async Task<string?> StoredAsync(Guid id)
     {
-        await using var c = new NpgsqlConnection(postgres.ConnectionString);
+        await using var c = new NpgsqlConnection(classDb.ConnectionString);
         await c.OpenAsync(Ct);
         return await c.ExecuteScalarAsync<string?>(new CommandDefinition(
             """

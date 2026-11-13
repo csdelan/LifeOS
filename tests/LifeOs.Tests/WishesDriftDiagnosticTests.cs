@@ -13,16 +13,15 @@ namespace LifeOs.Tests;
 /// Task is left alone. Runs the real embedded diagnostics through the M4.1
 /// runner, keyed off each test's own subjects.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class WishesDriftDiagnosticTests(PostgresFixture postgres)
+public sealed class WishesDriftDiagnosticTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private DiagnosticRunner Runner => new(postgres.ConnectionString);
+    private DiagnosticRunner Runner => new(classDb.ConnectionString);
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

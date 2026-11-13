@@ -4,15 +4,14 @@ using Npgsql;
 
 namespace LifeOs.Tests;
 
-[Collection(PostgresCollection.Name)]
-public sealed class MigrationRunnerTests(PostgresFixture postgres)
+public sealed class MigrationRunnerTests(PostgresFixture postgres, ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
     public async Task Records_applied_migrations_in_history_table()
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
 
         var versions = (await connection.QueryAsync<long>(
@@ -27,7 +26,7 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
     [Fact]
     public async Task Baseline_migration_created_the_bsk_schema()
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
 
         var exists = await connection.ExecuteScalarAsync<bool>(
@@ -41,7 +40,7 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
     [Fact]
     public async Task History_table_is_hidden_from_other_roles()
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
 
         var rowSecurity = await connection.ExecuteScalarAsync<bool>(
@@ -75,7 +74,7 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
     public async Task Re_running_is_idempotent_and_applies_nothing()
     {
         // The fixture already applied every migration, so a second run is a no-op.
-        var runner = new MigrationRunner(postgres.ConnectionString);
+        var runner = new MigrationRunner(classDb.ConnectionString);
 
         var applied = await runner.ApplyAsync(Ct);
 
@@ -117,14 +116,14 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
     public async Task Two_runners_on_an_empty_database_take_turns()
     {
         var name = $"migrate_{Guid.NewGuid():N}";
-        await using (var admin = new NpgsqlConnection(postgres.ConnectionString))
+        await using (var admin = new NpgsqlConnection(classDb.ConnectionString))
         {
             await admin.ExecuteAsync(new CommandDefinition($"CREATE DATABASE {name};", cancellationToken: Ct));
         }
 
         try
         {
-            var connectionString = new NpgsqlConnectionStringBuilder(postgres.ConnectionString) { Database = name }.ConnectionString;
+            var connectionString = new NpgsqlConnectionStringBuilder(classDb.ConnectionString) { Database = name }.ConnectionString;
             var runs = await Task.WhenAll(
                 new MigrationRunner(connectionString).ApplyAsync(Ct),
                 new MigrationRunner(connectionString).ApplyAsync(Ct));
@@ -135,7 +134,7 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres)
         finally
         {
             NpgsqlConnection.ClearAllPools();
-            await using var admin = new NpgsqlConnection(postgres.ConnectionString);
+            await using var admin = new NpgsqlConnection(classDb.ConnectionString);
             await admin.ExecuteAsync(new CommandDefinition($"DROP DATABASE {name} WITH (FORCE);", cancellationToken: CancellationToken.None));
         }
     }

@@ -17,8 +17,7 @@ namespace LifeOs.Tests;
 /// nothing else in the shared database lands, so it can assert exact totals; everything a
 /// test spends it first earns, so the shared wallet never drops.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class LedgerDailyTests(PostgresFixture postgres)
+public sealed class LedgerDailyTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private const string Chicago = "America/Chicago";
 
@@ -28,7 +27,7 @@ public sealed class LedgerDailyTests(PostgresFixture postgres)
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Kernel()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     // Stored as the instant it is (Npgsql writes only UTC offsets).
     private static DateTimeOffset InChicago(DateOnly day, int hour, int minute)
@@ -141,7 +140,7 @@ public sealed class LedgerDailyTests(PostgresFixture postgres)
         await using var provider = Kernel();
         var day = new DateOnly(2003, 2, 12);
         await SeedAsync(provider, day);
-        await using var host = await ApiTestHost.StartAsync(postgres.ConnectionString, Ct);
+        await using var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
 
         var days = (await host.Client.GetFromJsonAsync<JsonElement>(
             "/api/ledger/daily?from=2003-02-12&to=2003-02-14&tz=America/Chicago", Ct)).EnumerateArray().ToList();
@@ -160,7 +159,7 @@ public sealed class LedgerDailyTests(PostgresFixture postgres)
     [Fact]
     public async Task The_daily_endpoint_refuses_a_missing_or_bad_range_and_an_unknown_zone()
     {
-        await using var host = await ApiTestHost.StartAsync(postgres.ConnectionString, Ct);
+        await using var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
 
         async Task<(HttpStatusCode, string)> Refused(string path)
         {

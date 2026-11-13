@@ -26,8 +26,7 @@ namespace LifeOs.Tests;
 /// The read-only MCP server at <c>/mcp</c> (agent-access plan §4.7, steps 1.1 and 1.2): who may
 /// call it, what it answers, and that it leaves out the areas switched off.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class McpServerTests(PostgresFixture postgres)
+public sealed class McpServerTests(PostgresFixture postgres, ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private const string Agent = "agent-client-1";
 
@@ -40,7 +39,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [Fact]
     public async Task Off_by_default_mcp_and_its_metadata_are_404()
     {
-        await using var host = await ApiTestHost.StartAsync(postgres.ConnectionString, Ct);
+        await using var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
 
         using var mcp = await host.Client.SendAsync(Initialize(ApiTestHost.TokenFor(clientId: Agent)), Ct);
         Assert.Equal(HttpStatusCode.NotFound, mcp.StatusCode);
@@ -51,7 +50,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [Fact]
     public async Task No_token_is_401_pointing_to_the_metadata()
     {
-        await using var host = await StartAsync(postgres.ConnectionString);
+        await using var host = await StartAsync(classDb.ConnectionString);
 
         using var response = await Anonymous(host).SendAsync(Initialize(token: null), Ct);
 
@@ -64,7 +63,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [Fact]
     public async Task Api_401s_keep_their_plain_challenge()
     {
-        await using var host = await StartAsync(postgres.ConnectionString);
+        await using var host = await StartAsync(classDb.ConnectionString);
 
         using var response = await Anonymous(host).GetAsync("api/me", Ct);
 
@@ -76,7 +75,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [Fact]
     public async Task Metadata_is_anonymous_and_names_supabase_as_the_authorization_server()
     {
-        await using var host = await StartAsync(postgres.ConnectionString);
+        await using var host = await StartAsync(classDb.ConnectionString);
 
         var metadata = await Anonymous(host).GetFromJsonAsync<JsonElement>(".well-known/oauth-protected-resource/mcp", Ct);
 
@@ -87,7 +86,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [Fact]
     public async Task A_web_session_token_on_mcp_is_403()
     {
-        await using var host = await StartAsync(postgres.ConnectionString);
+        await using var host = await StartAsync(classDb.ConnectionString);
 
         using var response = await host.Client.SendAsync(Initialize(ApiTestHost.TokenFor()), Ct);
 
@@ -97,7 +96,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [Fact]
     public async Task An_agent_token_on_api_is_403_for_reads_and_writes()
     {
-        await using var host = await StartAsync(postgres.ConnectionString);
+        await using var host = await StartAsync(classDb.ConnectionString);
         var token = ApiTestHost.TokenFor(clientId: Agent);
 
         using var read = new HttpRequestMessage(HttpMethod.Get, "api/me");
@@ -112,7 +111,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [Fact]
     public async Task An_agent_token_on_mcp_is_200()
     {
-        await using var host = await StartAsync(postgres.ConnectionString);
+        await using var host = await StartAsync(classDb.ConnectionString);
 
         using var response = await host.Client.SendAsync(Initialize(ApiTestHost.TokenFor(clientId: Agent)), Ct);
 
@@ -131,7 +130,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
         string email, string clientId, bool google, string? signIn)
     {
         var settings = new Dictionary<string, string?>(On) { [McpOptions.BlockedClientsKey] = "blocked-client, other" };
-        await using var host = await ApiTestHost.StartAsync(postgres.ConnectionString, Ct, settings);
+        await using var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct, settings);
         // On LifeOS's list, so only the rule under test refuses it.
         await AllowAsync(host, clientId);
 
@@ -401,7 +400,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
     {
         // The vault agent files spoken reflections from the inbox (notes plan N6), so a few minutes
         // of dictation must come through whole, and text past the limit must say it was cut.
-        await using var host = await StartAsync(postgres.ConnectionString);
+        await using var host = await StartAsync(classDb.ConnectionString);
         var ns = Guid.NewGuid().ToString("N")[..8];
         var reflection = $"Daily reflection {ns}. " + string.Concat(Enumerable.Repeat("Good focus today, bad sleep. ", 200)).TrimEnd();
         var tooLong = $"Long dictation {ns}. " + new string('x', PlanTools.MaxCaptureLength);
@@ -427,7 +426,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [Fact]
     public async Task A_bad_argument_is_an_error_the_agent_can_read()
     {
-        await using var host = await StartAsync(postgres.ConnectionString);
+        await using var host = await StartAsync(classDb.ConnectionString);
         await using var client = await ConnectAsync(host, ApiTestHost.TokenFor(clientId: Agent));
 
         var missing = await client.CallToolAsync("get_item", new Dictionary<string, object?> { ["id"] = "urn:bsk:task:nope-000000" }, cancellationToken: Ct);
@@ -758,7 +757,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [Fact]
     public async Task The_reader_role_runs_every_diagnostic()
     {
-        var runner = new DiagnosticRunner(BskReader.ConnectionStringFrom(postgres.ConnectionString));
+        var runner = new DiagnosticRunner(BskReader.ConnectionStringFrom(classDb.ConnectionString));
 
         var report = await runner.RunAsync(cancellationToken: Ct);
 
@@ -798,7 +797,7 @@ public sealed class McpServerTests(PostgresFixture postgres)
     [InlineData("2026-10-27", "UTC", "2026-10-27T00:00:00Z")]
     public async Task A_day_since_starts_at_its_midnight_in_the_home_zone(string day, string zone, string expected)
     {
-        var reads = new McpReads(BskReader.ConnectionStringFrom(postgres.ConnectionString), zone, new TestClock(FixedNow));
+        var reads = new McpReads(BskReader.ConnectionStringFrom(classDb.ConnectionString), zone, new TestClock(FixedNow));
         var tools = new RecordTools(reads, McpOptions.From(Config()));
 
         Assert.Equal(DateTimeOffset.Parse(expected, System.Globalization.CultureInfo.InvariantCulture),

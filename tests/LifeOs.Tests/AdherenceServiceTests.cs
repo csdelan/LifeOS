@@ -16,17 +16,16 @@ namespace LifeOs.Tests;
 /// correction is another recording for the same date. Occurrence/streak projection
 /// is the next phase.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AdherenceServiceTests(PostgresFixture postgres)
+public sealed class AdherenceServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone).BuildServiceProvider();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }
@@ -70,7 +69,7 @@ public sealed class AdherenceServiceTests(PostgresFixture postgres)
         var today = await provider.GetRequiredService<IHomeCalendar>().DateAtAsync(DateTimeOffset.UtcNow, Ct);
         await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today, note: "  ran it early  ", cancellationToken: Ct);
 
-        var reader = new SubjectReader(postgres.ConnectionString);
+        var reader = new SubjectReader(classDb.ConnectionString);
         var day = Assert.Single(await reader.GetHabitOccurrencesAsync(habit.Id, on: today, cancellationToken: Ct));
         Assert.Equal("ran it early", day.Note);
 

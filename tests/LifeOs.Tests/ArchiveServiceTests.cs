@@ -16,19 +16,18 @@ namespace LifeOs.Tests;
 /// delete. These tests exercise the fold (newest wins), the reader column, the
 /// append-only history, and the exclusion of archived subjects from a diagnostic.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ArchiveServiceTests(PostgresFixture postgres)
+public sealed class ArchiveServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
-    private DiagnosticRunner Runner => new(postgres.ConnectionString);
+    private DiagnosticRunner Runner => new(classDb.ConnectionString);
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

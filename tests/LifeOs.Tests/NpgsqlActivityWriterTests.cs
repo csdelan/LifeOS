@@ -11,8 +11,7 @@ namespace LifeOs.Tests;
 /// whole thing back. This matters because <c>bsk.event</c> is append-only — a
 /// committed event with missing edges could never be repaired.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class NpgsqlActivityWriterTests(PostgresFixture postgres)
+public sealed class NpgsqlActivityWriterTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -35,8 +34,8 @@ public sealed class NpgsqlActivityWriterTests(PostgresFixture postgres)
     [Fact]
     public async Task Event_and_edges_are_written_together()
     {
-        var writer = new NpgsqlActivityWriter(KernelDataSource.For(postgres.ConnectionString));
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var writer = new NpgsqlActivityWriter(KernelDataSource.For(classDb.ConnectionString));
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var commitment = await InsertCommitmentAsync(connection, Guid.NewGuid().ToString("N"));
 
@@ -54,8 +53,8 @@ public sealed class NpgsqlActivityWriterTests(PostgresFixture postgres)
     [Fact]
     public async Task A_failing_edge_rolls_back_the_event()
     {
-        var writer = new NpgsqlActivityWriter(KernelDataSource.For(postgres.ConnectionString));
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var writer = new NpgsqlActivityWriter(KernelDataSource.For(classDb.ConnectionString));
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var commitment = await InsertCommitmentAsync(connection, Guid.NewGuid().ToString("N"));
 

@@ -15,7 +15,6 @@ namespace LifeOs.Tests;
 /// item, so one test's running fast would refuse another's: each test has a database of its
 /// own (UTC unless it's about the home zone).
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class FoodLogServiceTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;

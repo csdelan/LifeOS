@@ -17,16 +17,15 @@ namespace LifeOs.Tests;
 /// each test's own Constraint limit relative to it, and by keying findings off the
 /// test's own Constraint (unique urn) rather than asserting an absolute count.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ConstraintDiagnosticTests(PostgresFixture postgres)
+public sealed class ConstraintDiagnosticTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private DiagnosticRunner Runner => new(postgres.ConnectionString);
+    private DiagnosticRunner Runner => new(classDb.ConnectionString);
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }

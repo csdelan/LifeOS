@@ -14,7 +14,6 @@ namespace LifeOs.Tests;
 /// <see cref="FakeOuraClient"/>. The domain folds read the real clock, so each test runs on
 /// today's date: the harness clock starts now, and XP starts 10 days ago.
 /// </summary>
-[Collection(PostgresCollection.Name)]
 public sealed class ActivityRewardsTests(PostgresFixture postgres)
 {
     private static readonly OuraSyncOptions Recent = new(HistoryWindows: 0);

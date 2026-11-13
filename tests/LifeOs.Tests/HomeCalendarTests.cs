@@ -20,8 +20,7 @@ namespace LifeOs.Tests;
 /// whichever zone a check-off used shows in its date whenever the test runs.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class HomeCalendarTests(PostgresFixture postgres)
+public sealed class HomeCalendarTests(PostgresFixture postgres, ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private const string Kiritimati = "Pacific/Kiritimati";
     private const string PagoPago = "Pacific/Pago_Pago";
@@ -30,7 +29,7 @@ public sealed class HomeCalendarTests(PostgresFixture postgres)
 
     private ServiceProvider Kernel(string homeTimeZone)
         => new ServiceCollection()
-            .AddLifeOsKernel(postgres.ConnectionString, homeTimeZone: homeTimeZone)
+            .AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: homeTimeZone)
             .BuildServiceProvider();
 
     /// <summary>A database whose home zone is <paramref name="zone"/>, with a kernel in the same zone.</summary>
@@ -101,7 +100,7 @@ public sealed class HomeCalendarTests(PostgresFixture postgres)
     public async Task The_api_wont_start_with_a_zone_that_isnt_the_databases_own()
     {
         var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => ApiTestHost.StartAsync(
-            postgres.ConnectionString, Ct, new Dictionary<string, string?> { [HomeZone.ConfigurationKey] = Kiritimati }));
+            classDb.ConnectionString, Ct, new Dictionary<string, string?> { [HomeZone.ConfigurationKey] = Kiritimati }));
 
         Assert.Contains("bsk.home_zone", refused.Message);
     }

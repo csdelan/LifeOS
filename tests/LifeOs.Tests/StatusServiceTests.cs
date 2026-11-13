@@ -15,13 +15,12 @@ namespace LifeOs.Tests;
 /// nothing more — the <c>subject_current</c> projection reflects it only after a
 /// rebuild folds the event in, never by a direct write (epic invariant 8).
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class StatusServiceTests(PostgresFixture postgres)
+public sealed class StatusServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     [Fact]
     public async Task Status_writes_a_state_change_event_and_the_projection_reflects_it_after_rebuild()
@@ -29,14 +28,14 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
         var provider = Provider();
         var subjects = provider.GetRequiredService<SubjectService>();
         var status = provider.GetRequiredService<StatusService>();
-        var rebuilder = new DerivedRebuilder(postgres.ConnectionString);
+        var rebuilder = new DerivedRebuilder(classDb.ConnectionString);
         var ns = Guid.NewGuid().ToString("N");
 
         var project = await subjects.CreateAsync(SubjectTypes.Project, $"launch {ns}", cancellationToken: Ct);
 
         var result = await status.ChangeStatusAsync(project.Urn, "Active", Ct);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
 
         // A state_change event exists, tagged to this subject.
@@ -68,12 +67,12 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
         // A hand-advanced clock so the two state_change events have distinct,
         // ordered timestamps and "latest wins" is deterministic, not a race.
         var provider = new ServiceCollection()
-            .AddLifeOsKernel(postgres.ConnectionString)
+            .AddLifeOsKernel(classDb.ConnectionString)
             .AddSingleton<IClock>(TestClock.Ticking(new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero)))
             .BuildServiceProvider();
         var subjects = provider.GetRequiredService<SubjectService>();
         var status = provider.GetRequiredService<StatusService>();
-        var rebuilder = new DerivedRebuilder(postgres.ConnectionString);
+        var rebuilder = new DerivedRebuilder(classDb.ConnectionString);
         var ns = Guid.NewGuid().ToString("N");
 
         var task = await subjects.CreateAsync(SubjectTypes.Task, $"pack {ns}", cancellationToken: Ct);
@@ -82,7 +81,7 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
 
         await rebuilder.RebuildAsync(Ct);
 
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var current = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT status FROM bsk_derived.subject_current WHERE subject_id = @id;",
@@ -148,7 +147,7 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
         var result = await status.ChangeStatusAsync(task.Urn, "  in PROGRESS ", Ct);
 
         Assert.Equal("In progress", result.Status);
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         var stored = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
             "SELECT payload->>'status' FROM bsk.event WHERE id = @id;",
@@ -158,7 +157,7 @@ public sealed class StatusServiceTests(PostgresFixture postgres)
 
     private async Task<long> StateChangesForAsync(Guid subjectId)
     {
-        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.event WHERE kind = 'state_change' AND payload->>'subject_id' = @id;",

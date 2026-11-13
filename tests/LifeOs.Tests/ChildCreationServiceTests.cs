@@ -16,17 +16,16 @@ namespace LifeOs.Tests;
 /// tests cover each inferred pair, the leaf-rule guard, the ambiguous-pair error,
 /// and — at the repository — that a failed edge leaves no orphan child.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ChildCreationServiceTests(PostgresFixture postgres)
+public sealed class ChildCreationServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString).BuildServiceProvider();
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
-        var connection = new NpgsqlConnection(postgres.ConnectionString);
+        var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return connection;
     }
@@ -117,7 +116,7 @@ public sealed class ChildCreationServiceTests(PostgresFixture postgres)
     {
         // Repository-level: a bogus parent id fails the FK, and the whole create rolls back.
         var repository = new NpgsqlSubjectRepository(
-            KernelDataSource.For(postgres.ConnectionString), new EventSource("tests"), new LifeOs.Infrastructure.SystemClock());
+            KernelDataSource.For(classDb.ConnectionString), new EventSource("tests"), new LifeOs.Infrastructure.SystemClock());
         var urn = $"urn:bsk:task:orphan-{Guid.NewGuid():N}";
         var child = new NewSubject(urn, SubjectTypes.Task, "orphan task", "{}", OriginEventId: null);
 

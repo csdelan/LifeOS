@@ -9,13 +9,12 @@ namespace LifeOs.Tests;
 /// The shared resolve-or-create used by <c>bsk ideas</c> (and later the M3
 /// subject commands): a new title creates a subject; the same title reuses it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SubjectServiceTests(PostgresFixture postgres)
+public sealed class SubjectServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private SubjectService Service()
-        => new ServiceCollection().AddLifeOsKernel(postgres.ConnectionString)
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString)
             .BuildServiceProvider().GetRequiredService<SubjectService>();
 
     [Fact]
