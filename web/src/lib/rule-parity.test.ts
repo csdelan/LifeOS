@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { exerciseXp, sleepXp, stepsXp } from "@/lib/activity-score";
+import { caloriesPartFor, drinkFactorFor, fastingFor, guessMealType, isScore, scoreDay } from "@/lib/diet-score";
 import { ENVIRONMENT, HEALTH, levelFor, totalFor } from "@/lib/domain-fold";
 import { exerciseVerdict } from "@/lib/exercise-rules";
 import { fade, partDrag, partValue, ratingPoints, spaceScore } from "@/lib/home-score";
-import type { HomePart, ReviewKind } from "@/lib/production-ui-types";
+import { STATUS_BY_TYPE, initialStatus, isTerminal } from "@/lib/production-ui-types";
+import type { HomePart, ReviewKind, SubjectType } from "@/lib/production-ui-types";
 import { reviewPeriod } from "@/lib/reviews";
 
 /**
@@ -52,6 +54,27 @@ const rules: Record<string, Record<string, (...args: unknown[]) => unknown>> = {
     totalFor: (domain, level) => totalFor(curve(domain), n(level)),
     levelFor: (domain, xp) => levelFor(curve(domain), n(xp)),
   },
+  diet: {
+    isScore: (score) => isScore(n(score)),
+    caloriesPart: (calories) => caloriesPartFor(n(calories)),
+    fasting: (seconds) => fastingFor(n(seconds)),
+    drinkFactor: (drinks) => drinkFactorFor(n(drinks)),
+    score: (calories, scoreCalories, fast, drinks) => {
+      const day = scoreDay({
+        calories: n(calories),
+        scoreCalories: n(scoreCalories),
+        longestFastSeconds: fast as number | null,
+        drinks: n(drinks),
+      });
+      return { foodAward: day.foodAward, fastAward: day.fastAward, fastAwardUncut: day.fastAwardUncut, total: day.total };
+    },
+    mealType: (hour) => guessMealType(new Date(2026, 0, 5, n(hour), 30)),
+  },
+  statuses: {
+    statuses: (type) => STATUS_BY_TYPE[s(type) as SubjectType] ?? [],
+    initial: (type) => initialStatus(s(type) as SubjectType),
+    terminal: (status) => isTerminal(status as string | null),
+  },
 };
 
 function answer(file: string, c: RuleCase): unknown {
@@ -68,7 +91,7 @@ function answer(file: string, c: RuleCase): unknown {
 describe("the web's copies of kernel rules", () => {
   it("finds the shared cases", () => {
     expect(Object.keys(files).map((path) => path.split("/").pop()).sort()).toEqual(
-      ["activity.json", "home.json", "levels.json", "reviews.json"],
+      ["activity.json", "diet.json", "home.json", "levels.json", "reviews.json", "statuses.json"],
     );
   });
 

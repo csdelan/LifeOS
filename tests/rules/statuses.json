@@ -1,0 +1,457 @@
+{
+  "about": "The status vocabulary (D7): StatusVocabulary in C#, STATUS_BY_TYPE, isTerminal and initialStatus in the web\u0027s lib/production-ui-types.ts.",
+  "cases": [
+    {
+      "rule": "statuses",
+      "args": [
+        "Value"
+      ],
+      "out": []
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Goal"
+      ],
+      "out": [
+        "New",
+        "Active",
+        "Completed",
+        "Abandoned"
+      ]
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Problem"
+      ],
+      "out": [
+        "Open",
+        "Working",
+        "Resolved",
+        "Cancelled"
+      ]
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Project"
+      ],
+      "out": [
+        "New",
+        "Active",
+        "Completed",
+        "Abandoned"
+      ]
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Task"
+      ],
+      "out": [
+        "Not started",
+        "In progress",
+        "Waiting",
+        "Completed",
+        "Missed",
+        "Cancelled"
+      ]
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Commitment"
+      ],
+      "out": [
+        "Open",
+        "Fulfilled",
+        "Missed",
+        "Cancelled"
+      ]
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Decision"
+      ],
+      "out": [
+        "Open",
+        "Implementing",
+        "Cancelled",
+        "Closed"
+      ]
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Idea"
+      ],
+      "out": [
+        "New",
+        "Promoted",
+        "Rejected"
+      ]
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Person"
+      ],
+      "out": []
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Constraint"
+      ],
+      "out": []
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Season"
+      ],
+      "out": []
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Area"
+      ],
+      "out": []
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Habit"
+      ],
+      "out": [
+        "Planned",
+        "Building",
+        "Established",
+        "Abandoned"
+      ]
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Appointment"
+      ],
+      "out": [
+        "Scheduled",
+        "Completed",
+        "Cancelled",
+        "Missed"
+      ]
+    },
+    {
+      "rule": "statuses",
+      "args": [
+        "Reward"
+      ],
+      "out": []
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Value"
+      ],
+      "out": ""
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Goal"
+      ],
+      "out": "New"
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Problem"
+      ],
+      "out": "Open"
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Project"
+      ],
+      "out": "New"
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Task"
+      ],
+      "out": "Not started"
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Commitment"
+      ],
+      "out": "Open"
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Decision"
+      ],
+      "out": "Open"
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Idea"
+      ],
+      "out": "New"
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Person"
+      ],
+      "out": ""
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Constraint"
+      ],
+      "out": ""
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Season"
+      ],
+      "out": ""
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Area"
+      ],
+      "out": ""
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Habit"
+      ],
+      "out": "Planned"
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Appointment"
+      ],
+      "out": "Scheduled"
+    },
+    {
+      "rule": "initial",
+      "args": [
+        "Reward"
+      ],
+      "out": ""
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "New"
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Active"
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Completed"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Abandoned"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Not started"
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "In progress"
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Waiting"
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Missed"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Cancelled"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Open"
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Fulfilled"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Implementing"
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Closed"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Working"
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Resolved"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Scheduled"
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Promoted"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Rejected"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Planned"
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Building"
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "Established"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "done"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "dropped"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "archived"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        "superseded"
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        " completed "
+      ],
+      "out": true
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        ""
+      ],
+      "out": false
+    },
+    {
+      "rule": "terminal",
+      "args": [
+        null
+      ],
+      "out": false
+    }
+  ]
+}

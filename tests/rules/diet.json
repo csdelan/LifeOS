@@ -1,0 +1,449 @@
+{
+  "about": "The diet score (food-log plan \u00A72, \u00A77.2): DietRules and FoodEntries in C#, lib/diet-score.ts in the web.",
+  "cases": [
+    {
+      "rule": "isScore",
+      "args": [
+        0.5
+      ],
+      "out": false
+    },
+    {
+      "rule": "isScore",
+      "args": [
+        1
+      ],
+      "out": true
+    },
+    {
+      "rule": "isScore",
+      "args": [
+        1.5
+      ],
+      "out": true
+    },
+    {
+      "rule": "isScore",
+      "args": [
+        2.5
+      ],
+      "out": true
+    },
+    {
+      "rule": "isScore",
+      "args": [
+        3.5
+      ],
+      "out": true
+    },
+    {
+      "rule": "isScore",
+      "args": [
+        4
+      ],
+      "out": true
+    },
+    {
+      "rule": "isScore",
+      "args": [
+        5
+      ],
+      "out": true
+    },
+    {
+      "rule": "isScore",
+      "args": [
+        5.5
+      ],
+      "out": false
+    },
+    {
+      "rule": "isScore",
+      "args": [
+        1.25
+      ],
+      "out": false
+    },
+    {
+      "rule": "caloriesPart",
+      "args": [
+        0
+      ],
+      "out": 0
+    },
+    {
+      "rule": "caloriesPart",
+      "args": [
+        499
+      ],
+      "out": 0
+    },
+    {
+      "rule": "caloriesPart",
+      "args": [
+        500
+      ],
+      "out": 4
+    },
+    {
+      "rule": "caloriesPart",
+      "args": [
+        1200
+      ],
+      "out": 4
+    },
+    {
+      "rule": "caloriesPart",
+      "args": [
+        2000
+      ],
+      "out": 4
+    },
+    {
+      "rule": "caloriesPart",
+      "args": [
+        2100
+      ],
+      "out": 3.2
+    },
+    {
+      "rule": "caloriesPart",
+      "args": [
+        2250
+      ],
+      "out": 2
+    },
+    {
+      "rule": "caloriesPart",
+      "args": [
+        2499
+      ],
+      "out": 0.008
+    },
+    {
+      "rule": "caloriesPart",
+      "args": [
+        2500
+      ],
+      "out": 0
+    },
+    {
+      "rule": "caloriesPart",
+      "args": [
+        4000
+      ],
+      "out": 0
+    },
+    {
+      "rule": "fasting",
+      "args": [
+        0
+      ],
+      "out": 0
+    },
+    {
+      "rule": "fasting",
+      "args": [
+        43200
+      ],
+      "out": 0
+    },
+    {
+      "rule": "fasting",
+      "args": [
+        48600
+      ],
+      "out": 1.0
+    },
+    {
+      "rule": "fasting",
+      "args": [
+        54000
+      ],
+      "out": 2
+    },
+    {
+      "rule": "fasting",
+      "args": [
+        64800
+      ],
+      "out": 4
+    },
+    {
+      "rule": "fasting",
+      "args": [
+        86400
+      ],
+      "out": 8
+    },
+    {
+      "rule": "fasting",
+      "args": [
+        108000
+      ],
+      "out": 8
+    },
+    {
+      "rule": "drinkFactor",
+      "args": [
+        0
+      ],
+      "out": 1
+    },
+    {
+      "rule": "drinkFactor",
+      "args": [
+        1
+      ],
+      "out": 0.9
+    },
+    {
+      "rule": "drinkFactor",
+      "args": [
+        3
+      ],
+      "out": 0.7
+    },
+    {
+      "rule": "drinkFactor",
+      "args": [
+        9
+      ],
+      "out": 0.1
+    },
+    {
+      "rule": "drinkFactor",
+      "args": [
+        10
+      ],
+      "out": 0
+    },
+    {
+      "rule": "drinkFactor",
+      "args": [
+        12
+      ],
+      "out": 0
+    },
+    {
+      "rule": "score",
+      "args": [
+        0,
+        0,
+        null,
+        0
+      ],
+      "out": {
+        "foodAward": 0,
+        "fastAward": 0,
+        "fastAwardUncut": 0,
+        "total": 0
+      }
+    },
+    {
+      "rule": "score",
+      "args": [
+        1800,
+        9000,
+        57600,
+        0
+      ],
+      "out": {
+        "foodAward": 32,
+        "fastAward": 3,
+        "fastAwardUncut": 3,
+        "total": 35
+      }
+    },
+    {
+      "rule": "score",
+      "args": [
+        1800,
+        9000,
+        57600,
+        1
+      ],
+      "out": {
+        "foodAward": 29,
+        "fastAward": 2,
+        "fastAwardUncut": 3,
+        "total": 31
+      }
+    },
+    {
+      "rule": "score",
+      "args": [
+        1800,
+        9000,
+        57600,
+        10
+      ],
+      "out": {
+        "foodAward": 0,
+        "fastAward": 0,
+        "fastAwardUncut": 3,
+        "total": 0
+      }
+    },
+    {
+      "rule": "score",
+      "args": [
+        2250,
+        6750,
+        86400,
+        0
+      ],
+      "out": {
+        "foodAward": 16,
+        "fastAward": 8,
+        "fastAwardUncut": 8,
+        "total": 24
+      }
+    },
+    {
+      "rule": "score",
+      "args": [
+        1400,
+        3500,
+        null,
+        0
+      ],
+      "out": {
+        "foodAward": 15,
+        "fastAward": 0,
+        "fastAwardUncut": 0,
+        "total": 15
+      }
+    },
+    {
+      "rule": "score",
+      "args": [
+        1400,
+        3500,
+        null,
+        5
+      ],
+      "out": {
+        "foodAward": 7,
+        "fastAward": 0,
+        "fastAwardUncut": 0,
+        "total": 7
+      }
+    },
+    {
+      "rule": "score",
+      "args": [
+        600,
+        2100,
+        null,
+        0
+      ],
+      "out": {
+        "foodAward": 22,
+        "fastAward": 0,
+        "fastAwardUncut": 0,
+        "total": 22
+      }
+    },
+    {
+      "rule": "score",
+      "args": [
+        333,
+        1165.5,
+        36000,
+        2
+      ],
+      "out": {
+        "foodAward": 14,
+        "fastAward": 0,
+        "fastAwardUncut": 0,
+        "total": 14
+      }
+    },
+    {
+      "rule": "score",
+      "args": [
+        0,
+        0,
+        64800,
+        0
+      ],
+      "out": {
+        "foodAward": 0,
+        "fastAward": 4,
+        "fastAwardUncut": 4,
+        "total": 4
+      }
+    },
+    {
+      "rule": "mealType",
+      "args": [
+        0
+      ],
+      "out": "snack"
+    },
+    {
+      "rule": "mealType",
+      "args": [
+        3
+      ],
+      "out": "snack"
+    },
+    {
+      "rule": "mealType",
+      "args": [
+        4
+      ],
+      "out": "breakfast"
+    },
+    {
+      "rule": "mealType",
+      "args": [
+        10
+      ],
+      "out": "breakfast"
+    },
+    {
+      "rule": "mealType",
+      "args": [
+        11
+      ],
+      "out": "lunch"
+    },
+    {
+      "rule": "mealType",
+      "args": [
+        15
+      ],
+      "out": "lunch"
+    },
+    {
+      "rule": "mealType",
+      "args": [
+        16
+      ],
+      "out": "dinner"
+    },
+    {
+      "rule": "mealType",
+      "args": [
+        21
+      ],
+      "out": "dinner"
+    },
+    {
+      "rule": "mealType",
+      "args": [
+        22
+      ],
+      "out": "snack"
+    },
+    {
+      "rule": "mealType",
+      "args": [
+        23
+      ],
+      "out": "snack"
+    }
+  ]
+}

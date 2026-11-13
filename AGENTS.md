@@ -140,7 +140,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - Versioned entries (meals, fasts, room ratings, photos): the newest by `recorded_at` wins, never
   by `occurred_at`.
 - Rewards and XP progression is a pure fold over events and is never stored.
-- The web copies some kernel rules (activity XP, Home Score parts, review periods, level curves).
+- The web copies some kernel rules (activity XP, the diet score, Home Score parts, review periods,
+  level curves, the status vocabulary).
   Their cases live in `tests/rules/*.json`, which `RuleParityTests` and `rule-parity.test.ts`
   both check. To change one on purpose, change the C#, run `RuleParityTests` with
   `LIFEOS_WRITE_RULES=1`, then the TypeScript until its test passes. A new copied rule gets cases.

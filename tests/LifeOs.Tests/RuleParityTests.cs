@@ -20,7 +20,7 @@ public sealed class RuleParityTests
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    public static TheoryData<string> Files => new(["activity", "home", "reviews", "levels"]);
+    public static TheoryData<string> Files => new(["activity", "home", "reviews", "levels", "diet", "statuses"]);
 
     [Theory]
     [MemberData(nameof(Files))]
@@ -87,6 +87,17 @@ public sealed class RuleParityTests
         ("levels", "totalFor") => Curve(Text(a[0])!).TotalFor(Int(a[1])),
         ("levels", "levelFor") => Curve(Text(a[0])!).LevelFor(Long(a[1])),
 
+        ("diet", "isScore") => FoodEntries.IsScore(Decimal(a[0])),
+        ("diet", "caloriesPart") => DietRules.Default.CaloriesPartFor(Long(a[0])),
+        ("diet", "fasting") => DietRules.Default.FastingFor(Long(a[0])),
+        ("diet", "drinkFactor") => DietRules.Default.DrinkFactorFor(Int(a[0])),
+        ("diet", "score") => Diet(a),
+        ("diet", "mealType") => FoodEntries.GuessMealType(new TimeOnly(Int(a[0]), 30)),
+
+        ("statuses", "statuses") => StatusVocabulary.For(Text(a[0])!),
+        ("statuses", "initial") => StatusVocabulary.InitialStatusFor(Text(a[0])!) ?? StatusVocabulary.For(Text(a[0])!).FirstOrDefault() ?? "",
+        ("statuses", "terminal") => StatusVocabulary.IsTerminal(Text(a[0])),
+
         _ => throw new InvalidOperationException($"tests/rules/{file}.json names a rule this test doesn't know: {rule}."),
     };
 
@@ -96,6 +107,14 @@ public sealed class RuleParityTests
         var (start, end) = ReviewPeriods.LooksBack(kind, period);
         var (planStart, planEnd) = ReviewPeriods.Plans(kind, period);
         return new { date = period, start, end, planStart, planEnd };
+    }
+
+    /// <summary>A day's awards, from its calories, Σ score × calories, longest fast (or null) and drinks.</summary>
+    private static object Diet(JsonArray a)
+    {
+        var score = DietRules.Default.Score(new DietDayFacts(
+            Long(a[0]), Decimal(a[1]), a[2] is null ? null : Long(a[2]), Int(a[3])));
+        return new { foodAward = score.FoodAward, fastAward = score.FastAward, fastAwardUncut = score.FastAwardUncut, total = score.Total };
     }
 
     private static ILevelCurve Curve(string domain) => domain switch
