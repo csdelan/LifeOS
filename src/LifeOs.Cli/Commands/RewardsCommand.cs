@@ -1,7 +1,5 @@
 using System.CommandLine;
 using System.Globalization;
-using LifeOs.Application.Activity;
-using LifeOs.Application.Food;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
@@ -261,11 +259,7 @@ internal static class RewardsCommand
                 await using var provider = Cli.BuildServices(connectionString);
                 var rewards = provider.GetRequiredService<RewardService>();
                 var awards = reference is null
-                    ? [
-                        .. await rewards.ReconcileAllAsync(cancellationToken),
-                        .. (await provider.GetRequiredService<FoodRewards>().SettleAsync(cancellationToken: cancellationToken)).Awards,
-                        .. (await provider.GetRequiredService<ActivityRewards>().SettleAsync(cancellationToken)).Awards
-                    ]
+                    ? (await provider.GetRequiredService<SettlementService>().SettleAsync(items: true, cancellationToken)).Awards
                     : await rewards.ReconcileAsync(
                         await provider.GetRequiredService<SubjectService>().ResolveAsync(reference, cancellationToken),
                         causeEventId: null,

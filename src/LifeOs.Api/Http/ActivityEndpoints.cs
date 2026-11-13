@@ -92,10 +92,10 @@ public static class ActivityEndpoints
     }
 
     private static async Task<IResult> Sync(
-        ActivitySyncBody? body, OuraSyncService oura, ActivityRewards rewards, CancellationToken cancellationToken)
+        ActivitySyncBody? body, ActivitySyncService activity, CancellationToken cancellationToken)
     {
-        var sync = await oura.SyncForPageAsync(body?.Force ?? false, cancellationToken);
-        return Results.Ok(ActivityRows.From(sync, await rewards.SettleAsync(cancellationToken)));
+        var synced = await activity.SyncForPageAsync(body?.Force ?? false, cancellationToken);
+        return Results.Ok(ActivityRows.From(synced.Sync, synced.Earned));
     }
 }
 

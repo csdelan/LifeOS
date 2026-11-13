@@ -46,6 +46,27 @@ public sealed class RewardSweepTests(PostgresFixture postgres)
         Assert.Equal(4, counter.Count(nameof(ILedgerRepository.GetDomainDaysAsync)));
     }
 
+    // Code review CR46: the Character page and bsk rewards reconcile settle through one method. The
+    // page's settle leaves an item to the reconcile its own write runs; the CLI's heals it too.
+    [Fact]
+    public async Task Settling_heals_an_item_only_when_asked_and_never_pays_twice()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var today = await db.TodayAsync();
+        await db.OpenWalletAsync(daysAgo: 10);
+        var habit = await db.HabitAsync(today, startOffset: 3, healthXp: 5);
+        await CheckOffWithoutReconcileAsync(db, habit, today);
+        var settlement = db.Get<SettlementService>();
+
+        var page = await settlement.SettleAsync(cancellationToken: Ct);
+        var cli = await settlement.SettleAsync(items: true, Ct);
+        var again = await settlement.SettleAsync(items: true, Ct);
+
+        Assert.DoesNotContain(page.Awards, a => a.Subject?.Id == habit.Id);
+        Assert.Contains(cli.Awards, a => a.Subject?.Id == habit.Id && a.Amounts.ContainsKey(Currencies.HealthXp));
+        Assert.Empty(again.Awards);
+    }
+
     /// <summary>The habit followed on <paramref name="day"/>, written straight to the log with no reconcile after it.</summary>
     private async Task CheckOffWithoutReconcileAsync(DomainTestDatabase db, SubjectRef habit, DateOnly day)
     {

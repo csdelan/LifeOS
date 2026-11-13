@@ -234,5 +234,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<WorkoutNoteService>();
         services.AddSingleton<ActivityReads>();
         services.AddSingleton<ActivityRewards>();
+        services.AddSingleton<ActivitySyncService>();
+
+        // Settling everything at once (code review CR46): the food and activity days, rank-ups.
+        services.AddSingleton<SettlementService>();
     }
 }

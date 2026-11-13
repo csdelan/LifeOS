@@ -86,9 +86,8 @@ internal static class OuraCommand
             return Run(parseResult, connectionOption, jsonOption, async (services, asJson, ct) =>
             {
                 var from = fromText is null ? (DateOnly?)null : ParseDay(fromText);
-                var result = await services.GetRequiredService<OuraSyncService>().SyncAsync(
+                var (result, earned) = await services.GetRequiredService<ActivitySyncService>().SyncAsync(
                     new OuraSyncOptions(from, HistoryWindows: int.MaxValue), ct);
-                var earned = await services.GetRequiredService<ActivityRewards>().SettleAsync(ct);
                 if (asJson)
                 {
                     Cli.WriteJson(new { sync = result, awards = RewardOutput.AwardsJson(earned.Awards) });
