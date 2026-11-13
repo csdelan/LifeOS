@@ -938,8 +938,9 @@ claude mcp add --transport http lifeos https://lifeos-mz55-staging.fly.dev/mcp
 ## 5. Phase 2: writes behind a switch
 
 **Status, 2026-11-12:** the `capture` level is built, with `dismiss` added so the vault agent
-can clear the captures it files (notes plan N7, Chris's choice A). It's off on staging until
-Chris sets `Mcp__Writes=capture` and `Mcp__WriteClients`. `full` isn't built. The code:
+can clear the captures it files (notes plan N7, Chris's choice A). Staging has had it on since that
+evening: Chris set `Mcp__Writes=capture` and named the claude.ai connector's client, which
+Claude Code on PICARD signs in as too, and claude.ai lists the write tools. `full` isn't built. The code:
 `src/LifeOs.Api/Mcp/AgentWrites.cs` and `Mcp/Tools/CaptureTools.cs`; the tests:
 `tests/LifeOs.Tests/McpWriteTests.cs`.
 
