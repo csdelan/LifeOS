@@ -107,10 +107,14 @@ public sealed class MigrateConnectionTests : IDisposable
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+        // A refusal is written as its bare message: pwsh's own error view wraps at the console's
+        // width and colours it, which differs between Chris's PCs and CI's runners.
         foreach (var argument in new[]
                  {
                      "-NoProfile", "-NonInteractive", "-Command",
-                     $"$ErrorActionPreference = 'Stop'; Import-Module {Quote(module)} -Force; {command}",
+                     "$ErrorActionPreference = 'Stop'; $PSStyle.OutputRendering = 'PlainText'; " +
+                     $"try {{ Import-Module {Quote(module)} -Force; {command} }} " +
+                     "catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }",
                  })
         {
             start.ArgumentList.Add(argument);
