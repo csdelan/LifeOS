@@ -92,11 +92,12 @@ public sealed class TaskSeriesService(
     }
 
     /// <summary>
-    /// After a status move: a repetition that closed makes the next; a series restarted counts
-    /// from today. Returns the repetitions made.
+    /// After a status move, <paramref name="statusChange"/>: a repetition that closed makes the
+    /// next; a series restarted counts from today, a start derived from that move (code review
+    /// CR69). Returns the repetitions made.
     /// </summary>
     public async Task<IReadOnlyList<SubjectRef>> AfterStatusAsync(
-        TaskStatusFollowUp followUp, CancellationToken cancellationToken = default)
+        TaskStatusFollowUp followUp, Guid statusChange, CancellationToken cancellationToken = default)
     {
         if (followUp.SeriesId is not { } seriesId)
         {
@@ -106,15 +107,18 @@ public sealed class TaskSeriesService(
         var today = await TodayAsync(cancellationToken);
         if (followUp.Restarting)
         {
-            await SetStartAsync(seriesId, today, cancellationToken);
+            await SetStartAsync(seriesId, today, FollowedChange.Event(statusChange), cancellationToken);
         }
 
         return await EnsureAsync(seriesId, today, cancellationToken);
     }
 
-    /// <summary>A series restored from the archive repeats again, from today.</summary>
+    /// <summary>
+    /// A series restored from the archive, by <paramref name="restore"/>, repeats again from today,
+    /// a start derived from the restore (code review CR69).
+    /// </summary>
     public async Task<IReadOnlyList<SubjectRef>> AfterRestoreAsync(
-        SubjectRef subject, CancellationToken cancellationToken = default)
+        SubjectRef subject, Guid restore, CancellationToken cancellationToken = default)
     {
         if (subject.Type != SubjectTypes.Task
             || await series.GetAsync(subject.Id, cancellationToken) is not { IsSeries: true })
@@ -123,7 +127,7 @@ public sealed class TaskSeriesService(
         }
 
         var today = await TodayAsync(cancellationToken);
-        await SetStartAsync(subject.Id, today, cancellationToken);
+        await SetStartAsync(subject.Id, today, FollowedChange.Event(restore), cancellationToken);
         return await EnsureAsync(subject.Id, today, cancellationToken);
     }
 
@@ -187,11 +191,15 @@ public sealed class TaskSeriesService(
 
         if (start is { } chosen && chosen != task.Start)
         {
-            await SetStartAsync(subject.Id, chosen, cancellationToken);
+            // Chosen, so declared.
+            await SetStartAsync(subject.Id, chosen, followed: null, cancellationToken);
         }
         else if (task.Start is null)
         {
-            await SetStartAsync(subject.Id, task.Due ?? today, cancellationToken);
+            // Worked out from the pattern just set, so derived from it (code review CR69); a Task
+            // made with its pattern has no change to cite, and its start is declared.
+            await SetStartAsync(
+                subject.Id, task.Due ?? today, FollowedChange.NewestChangeOf(Recurrence.AttributeKey), cancellationToken);
         }
 
         task = await series.GetAsync(subject.Id, cancellationToken);
@@ -272,10 +280,12 @@ public sealed class TaskSeriesService(
             }
 
             // A pattern set without one (made with its attributes, say) gets its start now, so
-            // the dates it repeats on don't drift with each day it's settled.
+            // the dates it repeats on don't drift with each day it's settled: derived from the
+            // pattern's newest change, or declared when it has none (code review CR69).
             if (state.Start is null)
             {
-                await SetStartAsync(seriesId, state.Due ?? today, cancellationToken);
+                await SetStartAsync(
+                    seriesId, state.Due ?? today, FollowedChange.NewestChangeOf(Recurrence.AttributeKey), cancellationToken);
                 continue;
             }
 
@@ -456,9 +466,13 @@ public sealed class TaskSeriesService(
             Urns.Build(SubjectTypes.Task, state.Series.Title), state.Series.Title, occurrence, attributes.ToJsonString());
     }
 
-    private Task SetStartAsync(Guid seriesId, DateOnly start, CancellationToken cancellationToken)
-        => subjects.UpdateAttributesAsync(
-            seriesId, new JsonObject { [TaskSeries.StartKey] = Iso(start) }.ToJsonString(), [], cancellationToken);
+    private Task SetStartAsync(Guid seriesId, DateOnly start, FollowedChange? followed, CancellationToken cancellationToken)
+    {
+        var patch = new JsonObject { [TaskSeries.StartKey] = Iso(start) }.ToJsonString();
+        return followed is null
+            ? subjects.UpdateAttributesAsync(seriesId, patch, [], cancellationToken)
+            : subjects.UpdateAttributesAsync(seriesId, patch, [], followed, cancellationToken);
+    }
 
     private Task<DateOnly> TodayAsync(CancellationToken cancellationToken)
         => calendar.TodayAsync(cancellationToken);

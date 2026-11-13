@@ -366,8 +366,9 @@ public sealed class LabVisitService(
     }
 
     /// <summary>
-    /// Each metric's range becomes its newest result's printed one (plan §4.9), when that differs.
-    /// A range the metric can no longer show (its decimal places were cut since) is left as it is.
+    /// Each metric's range becomes its newest result's printed one (plan §4.9), when that differs,
+    /// recorded as derived from that result (code review CR69). A range the metric can no longer
+    /// show (its decimal places were cut since) is left as it is.
     /// </summary>
     private async Task SyncRangesAsync(IEnumerable<Guid> metricIds, CancellationToken cancellationToken)
     {
@@ -385,11 +386,7 @@ public sealed class LabVisitService(
 
             try
             {
-                await metricService.SetAsync(
-                    id.ToString(),
-                    new MetricChange(
-                        Low: newest.Low, ClearLow: newest.Low is null, High: newest.High, ClearHigh: newest.High is null),
-                    cancellationToken);
+                await metricService.FollowRangeAsync(id, newest.Low, newest.High, newest.EventId, cancellationToken);
             }
             catch (ArgumentException)
             {

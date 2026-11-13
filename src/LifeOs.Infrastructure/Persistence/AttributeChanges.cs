@@ -15,6 +15,10 @@ namespace LifeOs.Infrastructure.Persistence;
 /// <c>declared</c>; one that follows from it (a repetition redated by its series' new pattern, an
 /// open repetition or upcoming occurrence taking its series' new title or field) is
 /// <c>derived</c>, on the subject it changed, and cites the series' own change (code review CR51).
+/// So is one the system makes after another write (code review CR69): a series' start set when it
+/// restarts, is restored or gets its pattern, citing that move, restore or pattern change, and a
+/// metric's range taken from its newest lab result, citing the result
+/// (<see cref="FollowedChange"/>).
 /// </para>
 /// </summary>
 internal static class AttributeChanges

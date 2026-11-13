@@ -114,8 +114,26 @@ public sealed class MetricService(
     /// range. Refused when nothing is asked, for a unit change once the metric has readings, and
     /// for a target or range end with more decimal places than the metric takes.
     /// </summary>
-    public async Task<Metric> SetAsync(
+    public Task<Metric> SetAsync(
         string reference, MetricChange change, CancellationToken cancellationToken = default)
+        => SetAsync(reference, change, followed: null, cancellationToken);
+
+    /// <summary>
+    /// The metric's normal range taken from a lab result (measurements plan §4.9), as the system
+    /// changes it after a visit is saved: derived from <paramref name="result"/>, the result's event
+    /// (code review CR69). Refused as <see cref="SetAsync(string, MetricChange, CancellationToken)"/>
+    /// refuses a range the metric can't show.
+    /// </summary>
+    internal Task<Metric> FollowRangeAsync(
+        Guid metricId, decimal? low, decimal? high, Guid result, CancellationToken cancellationToken)
+        => SetAsync(
+            metricId.ToString(),
+            new MetricChange(Low: low, ClearLow: low is null, High: high, ClearHigh: high is null),
+            FollowedChange.Event(result),
+            cancellationToken);
+
+    private async Task<Metric> SetAsync(
+        string reference, MetricChange change, FollowedChange? followed, CancellationToken cancellationToken)
     {
         if (change.IsEmpty)
         {
@@ -202,17 +220,17 @@ public sealed class MetricService(
             removed.Add(MetricLimits.HighKey);
         }
 
-        if (title is not null && title != metric.Name)
+        var rename = title is not null && title != metric.Name ? title : null;
+        if (rename is not null)
         {
-            await CheckFreeAsync(title, except: metric.Id, cancellationToken);
-            if (!await repository.RenameAsync(metric.Id, title, cancellationToken))
-            {
-                throw new SubjectNotFoundException(metric.Urn);
-            }
+            await CheckFreeAsync(rename, except: metric.Id, cancellationToken);
         }
 
-        if ((patch.Count > 0 || removed.Count > 0)
-            && !await repository.UpdateAttributesAsync(metric.Id, patch.ToJsonString(), removed, cancellationToken))
+        // The name and the rest in one transaction (code review CR69).
+        if ((rename is not null || patch.Count > 0 || removed.Count > 0)
+            && !await (followed is null
+                ? repository.EditAsync(metric.Id, rename, patch.ToJsonString(), removed, cancellationToken)
+                : repository.UpdateAttributesAsync(metric.Id, patch.ToJsonString(), removed, followed, cancellationToken)))
         {
             throw new SubjectNotFoundException(metric.Urn);
         }

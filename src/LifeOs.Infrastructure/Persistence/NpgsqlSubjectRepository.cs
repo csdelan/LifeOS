@@ -213,49 +213,9 @@ public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource, EventSo
         }
     }
 
-    public async Task<bool> RenameAsync(
+    public Task<bool> RenameAsync(
         Guid id, string newTitle, CancellationToken cancellationToken = default)
-    {
-        await using var connection = dataSource.CreateConnection();
-        await connection.OpenAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-
-        // Only the title column changes. The URN is left untouched, so no stored
-        // reference is affected — edges and tags key on id, and the URN string is
-        // unchanged; the slug it embeds is a birth-time convenience, not identity.
-        try
-        {
-            var before = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
-                "SELECT title FROM bsk.subject WHERE id = @Id FOR UPDATE;",
-                new { Id = id }, transaction, cancellationToken: cancellationToken));
-            if (before is null)
-            {
-                return false;
-            }
-
-            await connection.ExecuteAsync(new CommandDefinition(
-                "UPDATE bsk.subject SET title = @Title WHERE id = @Id;",
-                new { Id = id, Title = newTitle }, transaction, cancellationToken: cancellationToken));
-            if (AttributeChanges.Title(before, newTitle) is { } change)
-            {
-                await AttributeChanges.AppendAsync(connection, transaction, id, change, eventSource, clock, cancellationToken);
-            }
-
-            await transaction.CommitAsync(cancellationToken);
-            return true;
-        }
-        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            // Renaming a reuse-by-title subject (e.g. a Problem) onto an existing title
-            // trips subject_reuse_title_key. Read the type back so the message names it,
-            // then translate to the application concept (as CreateAsync does).
-            var type = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
-                "SELECT type FROM bsk.subject WHERE id = @Id;",
-                new { Id = id }, cancellationToken: cancellationToken));
-            throw new DuplicateSubjectException(type ?? "subject", newTitle, ex);
-        }
-    }
+        => ChangeAsync(id, newTitle, "{}", [], followed: null, cancellationToken);
 
     public async Task<string?> GetAttributeValueAsync(
         Guid id, string key, CancellationToken cancellationToken = default)
@@ -310,20 +270,74 @@ public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource, EventSo
         }
     }
 
-    public async Task<bool> UpdateAttributesAsync(
+    public Task<bool> UpdateAttributesAsync(
         Guid id, string patchJson, IReadOnlyList<string> removeKeys,
         CancellationToken cancellationToken = default)
+        => ChangeAsync(id, newTitle: null, patchJson, removeKeys, followed: null, cancellationToken);
+
+    public Task<bool> UpdateAttributesAsync(
+        Guid id, string patchJson, IReadOnlyList<string> removeKeys, FollowedChange followed,
+        CancellationToken cancellationToken = default)
+        => ChangeAsync(id, newTitle: null, patchJson, removeKeys, followed, cancellationToken);
+
+    public Task<bool> EditAsync(
+        Guid id, string? newTitle, string patchJson, IReadOnlyList<string> removeKeys,
+        CancellationToken cancellationToken = default)
+        => ChangeAsync(id, newTitle, patchJson, removeKeys, followed: null, cancellationToken);
+
+    /// <summary>
+    /// The title and the attributes changed in one transaction, each change with its
+    /// <c>attribute_change</c>: declared, or derived from what <paramref name="followed"/> names.
+    /// </summary>
+    private async Task<bool> ChangeAsync(
+        Guid id, string? newTitle, string patchJson, IReadOnlyList<string> removeKeys, FollowedChange? followed,
+        CancellationToken cancellationToken)
     {
         await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        var before = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
-            "SELECT attributes::text FROM bsk.subject WHERE id = @Id FOR UPDATE;",
+        var before = await connection.QuerySingleOrDefaultAsync<(string Title, string Attributes)?>(new CommandDefinition(
+            "SELECT title, attributes::text FROM bsk.subject WHERE id = @Id FOR UPDATE;",
             new { Id = id }, transaction, cancellationToken: cancellationToken));
-        if (before is null)
+        if (before is not { } row)
         {
             return false;
+        }
+
+        var cause = followed switch
+        {
+            { EventId: { } eventId } => eventId,
+            { Keys: { Count: > 0 } keys } => await AttributeChanges.CauseAsync(connection, transaction, id, keys, cancellationToken),
+            _ => null,
+        };
+
+        if (newTitle is not null)
+        {
+            // Only the title column changes. The URN is left untouched, so no stored
+            // reference is affected — edges and tags key on id, and the URN string is
+            // unchanged; the slug it embeds is a birth-time convenience, not identity. Renaming a
+            // reuse-by-title subject (e.g. a Problem) onto an existing title trips
+            // subject_reuse_title_key, translated to the application concept (as CreateAsync does).
+            try
+            {
+                await connection.ExecuteAsync(new CommandDefinition(
+                    "UPDATE bsk.subject SET title = @Title WHERE id = @Id;",
+                    new { Id = id, Title = newTitle }, transaction, cancellationToken: cancellationToken));
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                var type = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+                    "SELECT type FROM bsk.subject WHERE id = @Id;", new { Id = id }, cancellationToken: cancellationToken));
+                throw new DuplicateSubjectException(type ?? "subject", newTitle, ex);
+            }
+
+            if (AttributeChanges.Title(row.Title, newTitle) is { } renamed)
+            {
+                await AttributeChanges.AppendAsync(
+                    connection, transaction, id, renamed, eventSource, clock, cancellationToken, cause);
+            }
         }
 
         // Merge the patch (right wins), then strip any keys marked for removal — one
@@ -335,14 +349,20 @@ public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource, EventSo
             WHERE id = @Id;
             """;
 
+        if (newTitle is not null && patchJson == "{}" && removeKeys.Count == 0)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
+
         await connection.ExecuteAsync(new CommandDefinition(
             sql,
             new { Id = id, Patch = patchJson, Remove = removeKeys.ToArray() },
             transaction,
             cancellationToken: cancellationToken));
-        if (AttributeChanges.Attributes(before, patchJson, removeKeys) is { } change)
+        if (AttributeChanges.Attributes(row.Attributes, patchJson, removeKeys) is { } change)
         {
-            await AttributeChanges.AppendAsync(connection, transaction, id, change, eventSource, clock, cancellationToken);
+            await AttributeChanges.AppendAsync(connection, transaction, id, change, eventSource, clock, cancellationToken, cause);
         }
 
         await transaction.CommitAsync(cancellationToken);

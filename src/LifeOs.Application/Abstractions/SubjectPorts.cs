@@ -64,6 +64,27 @@ public interface ISubjectRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Changes attributes as the system does because of another change (code review CR51, CR69): a
+    /// series' start set when it restarts, a metric's range taken from its newest lab result. The
+    /// <c>attribute_change</c> is <c>derived</c> and cites what <paramref name="followed"/> names;
+    /// when that's nothing, it's <c>declared</c>.
+    /// </summary>
+    Task<bool> UpdateAttributesAsync(
+        Guid id, string patchJson, IReadOnlyList<string> removeKeys, FollowedChange followed,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Renames a subject (when <paramref name="newTitle"/> is given) and merges
+    /// <paramref name="patchJson"/> and removes <paramref name="removeKeys"/> from its attributes, in
+    /// one transaction, so an edit of both lands whole or not at all (code review CR69). Returns
+    /// whether a row was affected; a title another reuse-by-title subject has is a
+    /// <see cref="DuplicateSubjectException"/>, as <see cref="RenameAsync"/> says.
+    /// </summary>
+    Task<bool> EditAsync(
+        Guid id, string? newTitle, string patchJson, IReadOnlyList<string> removeKeys,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Changes a subject's <c>title</c> in place. Only the title column is touched:
     /// the URN is an immutable handle (its slug is a birth-time convenience), and
     /// edges/tags reference the subject by <c>id</c>, so a rename never breaks a link.
@@ -133,6 +154,20 @@ public interface IRelationRepository
     Task<int> DeleteAsync(
         Guid fromSubject, string relation, Guid toSubject,
         CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// What a change the system makes follows (code review CR69): the event that caused it, or the
+/// subject's newest <c>attribute_change</c> to one of <see cref="Keys"/>, for a follow that runs
+/// apart from its cause (CR51).
+/// </summary>
+public sealed record FollowedChange(Guid? EventId = null, IReadOnlyCollection<string>? Keys = null)
+{
+    /// <summary>A change that follows <paramref name="eventId"/>.</summary>
+    public static FollowedChange Event(Guid eventId) => new(EventId: eventId);
+
+    /// <summary>A change that follows the subject's newest change to one of <paramref name="keys"/>.</summary>
+    public static FollowedChange NewestChangeOf(params string[] keys) => new(Keys: keys);
 }
 
 /// <summary>

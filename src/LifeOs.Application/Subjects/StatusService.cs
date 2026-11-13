@@ -74,7 +74,7 @@ public sealed class StatusService(
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);
         var earned = await rewards.ReconcileWithProgressAsync(subject, eventId, cancellationToken);
-        var made = taskSeries is null ? [] : await taskSeries.AfterStatusAsync(followUp, cancellationToken);
+        var made = taskSeries is null ? [] : await taskSeries.AfterStatusAsync(followUp, eventId, cancellationToken);
         return new StatusResult(eventId, subject, status, earned.Awards, earned.Progress) { Repetitions = made };
     }
 

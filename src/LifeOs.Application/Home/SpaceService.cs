@@ -68,16 +68,15 @@ public sealed class SpaceService(
             patch[SpaceLimits.PaceKey] = SpaceLimits.CheckPace(p);
         }
 
-        if (title is not null && title != space.Name)
+        var rename = title is not null && title != space.Name ? title : null;
+        if (rename is not null)
         {
-            await CheckFreeAsync(title, except: space.Id, cancellationToken);
-            if (!await repository.RenameAsync(space.Id, title, cancellationToken))
-            {
-                throw new SubjectNotFoundException(space.Urn);
-            }
+            await CheckFreeAsync(rename, except: space.Id, cancellationToken);
         }
 
-        if (patch.Count > 0 && !await repository.UpdateAttributesAsync(space.Id, patch.ToJsonString(), [], cancellationToken))
+        // The name and the rest in one transaction (code review CR69).
+        if ((rename is not null || patch.Count > 0)
+            && !await repository.EditAsync(space.Id, rename, patch.ToJsonString(), [], cancellationToken))
         {
             throw new SubjectNotFoundException(space.Urn);
         }

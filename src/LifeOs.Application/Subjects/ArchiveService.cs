@@ -67,7 +67,7 @@ public sealed class ArchiveService(
         // Archiving a repeating Task stops it; restoring it repeats again from today (D16).
         if (!archived && taskSeries is not null)
         {
-            await taskSeries.AfterRestoreAsync(subject, cancellationToken);
+            await taskSeries.AfterRestoreAsync(subject, eventId, cancellationToken);
         }
 
         return new ArchiveResult(eventId, subject, archived);
