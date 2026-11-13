@@ -24,7 +24,7 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
     [
         EventKinds.Journal, EventKinds.Note, EventKinds.Voice, EventKinds.IdeaSession, EventKinds.Observation,
         EventKinds.Activity, EventKinds.Measurement, EventKinds.Interaction, EventKinds.StateChange,
-        EventKinds.ArchiveChange, EventKinds.Triage, EventKinds.Ledger,
+        EventKinds.ArchiveChange, EventKinds.Triage, EventKinds.Ledger, EventKinds.AttributeChange,
     ];
 
     [McpServerTool(Name = "recent_changes", Title = "Recent changes", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
@@ -44,7 +44,7 @@ public sealed partial class RecordTools(McpReads reads, McpOptions options)
         """)]
     public async Task<CallToolResult> RecentChanges(
         [Description("Since when: an ISO instant (2026-10-27T18:00:00Z), a day (2026-10-27, from its start in Chris's time zone), or a span back from now (24h, 3d, 2w, or ISO P3D). Default 7d.")] string? since = null,
-        [Description("Only these event kinds: journal, note, voice, idea_session, observation, activity, measurement, interaction, state_change, archive_change, triage, ledger. Leave out for every kind but ledger.")] string[]? types = null,
+        [Description("Only these event kinds: journal, note, voice, idea_session, observation, activity, measurement, interaction, state_change, archive_change, triage, ledger, attribute_change (a rename or changed attributes, from and to). Leave out for every kind but ledger.")] string[]? types = null,
         [Description("At most this many events (default 50, at most 200).")] int? limit = null,
         [Description("Which time 'since' and the order go by: recorded (when LifeOS recorded it, the default) or occurred (when it happened; use it for a week review).")] string? by = null,
         [Description("To continue a cut answer: the 'next' it gave. Leave out for the newest events.")] string? cursor = null,

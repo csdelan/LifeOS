@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0056 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0057 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -70,7 +70,7 @@ CREATE TABLE bsk.event (
     artifact_id uuid,
     CONSTRAINT event_artifact_id_fkey FOREIGN KEY (artifact_id) REFERENCES bsk.artifact(id),
     CONSTRAINT event_derived_has_sources CHECK (((provenance <> 'derived'::text) OR (cardinality(derived_from) >= 1))),
-    CONSTRAINT event_kind_check CHECK ((kind = ANY (ARRAY['journal'::text, 'note'::text, 'voice'::text, 'idea_session'::text, 'observation'::text, 'activity'::text, 'measurement'::text, 'interaction'::text, 'state_change'::text, 'archive_change'::text, 'triage'::text, 'ledger'::text]))),
+    CONSTRAINT event_kind_check CHECK ((kind = ANY (ARRAY['journal'::text, 'note'::text, 'voice'::text, 'idea_session'::text, 'observation'::text, 'activity'::text, 'measurement'::text, 'interaction'::text, 'state_change'::text, 'archive_change'::text, 'triage'::text, 'ledger'::text, 'attribute_change'::text]))),
     CONSTRAINT event_pkey PRIMARY KEY (id),
     CONSTRAINT event_provenance_check CHECK ((provenance = ANY (ARRAY['declared'::text, 'observed'::text, 'derived'::text])))
 );

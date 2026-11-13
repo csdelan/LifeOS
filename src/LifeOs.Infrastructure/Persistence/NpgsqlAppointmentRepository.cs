@@ -10,7 +10,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// horizon) and drop any date that already exists as an occurrence subject
 /// (<c>attributes.series</c> = the series urn, <c>attributes.date</c> = the date).
 /// </summary>
-public sealed class NpgsqlAppointmentRepository(NpgsqlDataSource dataSource) : IAppointmentRepository
+public sealed class NpgsqlAppointmentRepository(NpgsqlDataSource dataSource, EventSource eventSource, IClock clock) : IAppointmentRepository
 {
     public async Task<IReadOnlyList<DateOnly>> PendingOccurrenceDatesAsync(
         Guid seriesId, string seriesUrn, DateOnly through, CancellationToken cancellationToken = default)
@@ -52,9 +52,17 @@ public sealed class NpgsqlAppointmentRepository(NpgsqlDataSource dataSource) : I
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
+        // The series' own rename is recorded (code review CR24); the ones that follow it aren't.
+        var before = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT title FROM bsk.subject WHERE id = @id FOR UPDATE;",
+            new { id }, transaction, cancellationToken: cancellationToken));
         var updated = await connection.ExecuteAsync(new CommandDefinition(
             "UPDATE bsk.subject SET title = @newTitle WHERE id = @id;",
             new { id, newTitle }, transaction, cancellationToken: cancellationToken));
+        if (before is not null && AttributeChanges.Title(before, newTitle) is { } change)
+        {
+            await AttributeChanges.AppendAsync(connection, transaction, id, change, eventSource, clock, cancellationToken);
+        }
 
         // Only occurrences that still match the old series title follow it, so one
         // renamed by hand keeps its own name; past dates keep the name they happened under.

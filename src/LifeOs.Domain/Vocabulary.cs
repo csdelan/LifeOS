@@ -24,6 +24,12 @@ public static class EventKinds
     /// <c>v_ledger</c> / <c>v_wallet</c> (REWARD-1 / D11, migration 0025).
     /// </summary>
     public const string Ledger = "ledger";
+
+    /// <summary>
+    /// A subject's title or attributes changed, from what to what, appended in the same transaction
+    /// as the change (code review CR24, migration 0057). The views still read the subject row.
+    /// </summary>
+    public const string AttributeChange = "attribute_change";
 }
 
 /// <summary>

@@ -5,8 +5,12 @@ using Npgsql;
 
 namespace LifeOs.Infrastructure.Persistence;
 
-/// <summary>Reads and creates subjects in <c>bsk.subject</c>.</summary>
-public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource) : ISubjectRepository
+/// <summary>
+/// Reads and creates subjects in <c>bsk.subject</c>. A rename or an attribute change appends an
+/// <c>attribute_change</c> event from <paramref name="eventSource"/> in the same transaction
+/// (code review CR24).
+/// </summary>
+public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource, EventSource eventSource, IClock clock) : ISubjectRepository
 {
     public async Task<SubjectRef?> FindByUrnAsync(
         string urn, CancellationToken cancellationToken = default)
@@ -204,20 +208,35 @@ public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource) : ISubj
     {
         await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         // Only the title column changes. The URN is left untouched, so no stored
         // reference is affected — edges and tags key on id, and the URN string is
         // unchanged; the slug it embeds is a birth-time convenience, not identity.
         try
         {
-            var affected = await connection.ExecuteAsync(new CommandDefinition(
-                "UPDATE bsk.subject SET title = @Title WHERE id = @Id;",
-                new { Id = id, Title = newTitle }, cancellationToken: cancellationToken));
+            var before = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+                "SELECT title FROM bsk.subject WHERE id = @Id FOR UPDATE;",
+                new { Id = id }, transaction, cancellationToken: cancellationToken));
+            if (before is null)
+            {
+                return false;
+            }
 
-            return affected > 0;
+            await connection.ExecuteAsync(new CommandDefinition(
+                "UPDATE bsk.subject SET title = @Title WHERE id = @Id;",
+                new { Id = id, Title = newTitle }, transaction, cancellationToken: cancellationToken));
+            if (AttributeChanges.Title(before, newTitle) is { } change)
+            {
+                await AttributeChanges.AppendAsync(connection, transaction, id, change, eventSource, clock, cancellationToken);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+            return true;
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
+            await transaction.RollbackAsync(cancellationToken);
             // Renaming a reuse-by-title subject (e.g. a Problem) onto an existing title
             // trips subject_reuse_title_key. Read the type back so the message names it,
             // then translate to the application concept (as CreateAsync does).
@@ -287,6 +306,15 @@ public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource) : ISubj
     {
         await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var before = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT attributes::text FROM bsk.subject WHERE id = @Id FOR UPDATE;",
+            new { Id = id }, transaction, cancellationToken: cancellationToken));
+        if (before is null)
+        {
+            return false;
+        }
 
         // Merge the patch (right wins), then strip any keys marked for removal — one
         // update, so a set-and-clear in the same call is atomic. Only the attributes
@@ -297,11 +325,17 @@ public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource) : ISubj
             WHERE id = @Id;
             """;
 
-        var affected = await connection.ExecuteAsync(new CommandDefinition(
+        await connection.ExecuteAsync(new CommandDefinition(
             sql,
             new { Id = id, Patch = patchJson, Remove = removeKeys.ToArray() },
+            transaction,
             cancellationToken: cancellationToken));
+        if (AttributeChanges.Attributes(before, patchJson, removeKeys) is { } change)
+        {
+            await AttributeChanges.AppendAsync(connection, transaction, id, change, eventSource, clock, cancellationToken);
+        }
 
-        return affected > 0;
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 }

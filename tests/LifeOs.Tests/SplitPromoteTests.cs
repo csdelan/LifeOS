@@ -133,7 +133,8 @@ public sealed class SplitPromoteTests(PostgresFixture postgres)
     [Fact]
     public async Task A_failed_incoming_edge_leaves_no_orphan_target()
     {
-        var repository = new NpgsqlSubjectRepository(KernelDataSource.For(postgres.ConnectionString));
+        var repository = new NpgsqlSubjectRepository(
+            KernelDataSource.For(postgres.ConnectionString), new EventSource("tests"), new LifeOs.Infrastructure.SystemClock());
         var urn = $"urn:bsk:goal:orphan-target-{Guid.NewGuid():N}";
         var target = new NewSubject(urn, SubjectTypes.Goal, "orphan target", "{}", OriginEventId: null);
 

@@ -13,7 +13,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// unique index on (series, occurrence) backs that up. Dates travel as text, since Dapper has
 /// no DateOnly mapping in every host.
 /// </summary>
-public sealed class NpgsqlTaskSeriesRepository(NpgsqlDataSource dataSource) : ITaskSeriesRepository
+public sealed class NpgsqlTaskSeriesRepository(NpgsqlDataSource dataSource, EventSource eventSource, IClock clock) : ITaskSeriesRepository
 {
     // How far ahead NextOccurrenceAsync looks for a pattern's next date.
     private const int LookAheadDays = 3 * 366;
@@ -227,9 +227,17 @@ public sealed class NpgsqlTaskSeriesRepository(NpgsqlDataSource dataSource) : IT
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
+        // The series' own rename is recorded (code review CR24); the ones that follow it aren't.
+        var before = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT title FROM bsk.subject WHERE id = @id FOR UPDATE;",
+            new { id }, transaction, cancellationToken: cancellationToken));
         var updated = await connection.ExecuteAsync(new CommandDefinition(
             "UPDATE bsk.subject SET title = @newTitle WHERE id = @id;",
             new { id, newTitle }, transaction, cancellationToken: cancellationToken));
+        if (before is not null && AttributeChanges.Title(before, newTitle) is { } change)
+        {
+            await AttributeChanges.AppendAsync(connection, transaction, id, change, eventSource, clock, cancellationToken);
+        }
 
         // Only open repetitions still carrying the old title follow, so one renamed by hand
         // keeps its own name, and a closed one keeps the name it was done under.

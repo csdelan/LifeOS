@@ -116,7 +116,8 @@ public sealed class ChildCreationServiceTests(PostgresFixture postgres)
     public async Task A_failed_parent_edge_leaves_no_orphan_child()
     {
         // Repository-level: a bogus parent id fails the FK, and the whole create rolls back.
-        var repository = new NpgsqlSubjectRepository(KernelDataSource.For(postgres.ConnectionString));
+        var repository = new NpgsqlSubjectRepository(
+            KernelDataSource.For(postgres.ConnectionString), new EventSource("tests"), new LifeOs.Infrastructure.SystemClock());
         var urn = $"urn:bsk:task:orphan-{Guid.NewGuid():N}";
         var child = new NewSubject(urn, SubjectTypes.Task, "orphan task", "{}", OriginEventId: null);
 
