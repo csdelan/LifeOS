@@ -62,10 +62,7 @@ public static class CaptureEndpoints
             return Results.BadRequest(new ApiError("Send the document as multipart/form-data, in a field named file."));
         }
 
-        if (!InboxFilingService.TryKind(type, out var kind))
-        {
-            return Results.BadRequest(new ApiError(BadKind(type)));
-        }
+        var kind = InboxFilingService.ParseKind(type);
 
         var bytes = await ReadAsync(file, cancellationToken);
         var text = Clean(description);
@@ -115,10 +112,7 @@ public static class CaptureEndpoints
         RelateService relate,
         CancellationToken cancellationToken)
     {
-        if (!InboxFilingService.TryKind(type, out var kind))
-        {
-            return Results.BadRequest(new ApiError(BadKind(type)));
-        }
+        var kind = InboxFilingService.ParseKind(type);
 
         // Found before anything is written, so a bad id leaves no capture behind.
         string? about = null;
@@ -204,8 +198,6 @@ public static class CaptureEndpoints
         await file.CopyToAsync(buffer, cancellationToken);
         return buffer.ToArray();
     }
-
-    private static string BadKind(string? type) => $"A capture is a Note, an Idea or a Problem, not '{type}'.";
 
     private static string? Clean(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 

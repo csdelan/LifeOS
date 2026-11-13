@@ -216,6 +216,48 @@ public sealed class CaptureEndpointTests(PostgresFixture postgres)
         Assert.Equal("voice", Assert.Single(files.EnumerateArray()).GetProperty("eventKind").GetString());
     }
 
+    // Code review CR44: a typed capture is a note event however it's filed, so an Idea typed into
+    // quick capture keeps the words it was made from, as a document or voice Idea does.
+    [Fact]
+    public async Task A_typed_idea_keeps_the_note_it_was_made_from_and_a_typed_note_is_flagged()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
+
+        await OkStatusAsync(await host.Client.PostAsJsonAsync("/api/capture", new { text = "  Call the plumber  " }, Ct));
+        await OkStatusAsync(await host.Client.PostAsJsonAsync(
+            "/api/capture", new { text = Shed, type = "idea" }, Ct));
+        Assert.Contains("not 'Goal'", await RefusedAsync(
+            await host.Client.PostAsJsonAsync("/api/capture", new { text = "Run a marathon", type = "Goal" }, Ct)));
+
+        var inbox = await InboxAsync(host);
+        Assert.Equal(2, inbox.Length);
+        var note = Assert.Single(inbox, i => i.GetProperty("itemKind").GetString() == "event");
+        Assert.Equal("Call the plumber", note.GetProperty("eventContent").GetString());
+        var idea = Assert.Single(inbox, i => i.GetProperty("itemKind").GetString() == "subject");
+        Assert.Equal(SubjectTypes.Idea, idea.GetProperty("subjectType").GetString());
+        Assert.Equal("A shed for the bikes", idea.GetProperty("subjectTitle").GetString());
+
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
+        var (description, kept) = await connection.QuerySingleAsync<(string, string)>(
+            """
+            SELECT s.attributes->>'description', a.content
+            FROM bsk.subject s
+            JOIN bsk.subject_event se ON se.subject_id = s.id AND se.relation = 'concerns'
+            JOIN bsk.event e ON e.id = se.event_id AND e.kind = 'note'
+            JOIN bsk.artifact a ON a.id = e.artifact_id
+            WHERE s.id = @id
+            """,
+            new { id = idea.GetProperty("itemId").GetGuid() });
+        Assert.Equal(Shed, description);
+        Assert.Equal(Shed, kept);
+    }
+
+    private const string Shed = "A shed for the bikes\nBehind the garage";
+
+    private static async Task OkStatusAsync(HttpResponseMessage response)
+        => Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(Ct));
+
     [Fact]
     public async Task Captures_that_cannot_be_written_are_refused_in_words_with_nothing_written()
     {

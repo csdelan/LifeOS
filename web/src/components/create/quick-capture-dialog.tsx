@@ -11,9 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AttachmentPicker, oversizedFile } from "@/components/artifacts/attachment-picker";
 import { CaptureKindTabs } from "@/components/create/capture-kind-tabs";
 import { formatBytes, MAX_ARTIFACT_BYTES } from "@/lib/artifacts";
-import { useCreateSubject, useWrites } from "@/lib/queries";
-import { deriveTitle } from "@/lib/capture";
-import { todayIso } from "@/lib/dates";
+import { useWrites } from "@/lib/queries";
 import type { CaptureKind } from "@/lib/production-ui-types";
 import { errorText } from "@/lib/write-action";
 
@@ -29,7 +27,6 @@ export function QuickCaptureDialog({
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const writes = useWrites();
-  const create = useCreateSubject();
   const [pending, setPending] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
 
@@ -55,20 +52,8 @@ export function QuickCaptureDialog({
     try {
       if (file) {
         await writes.captureDocument({ file, description: body, type: kind });
-      } else if (kind === "Note") {
-        await writes.capture(body);
-      } else if (kind === "Idea") {
-        await create.mutateAsync({
-          type: "Idea",
-          title: deriveTitle(body),
-          attrs: { description: body },
-        });
       } else {
-        await create.mutateAsync({
-          type: "Problem",
-          title: deriveTitle(body),
-          attrs: { description: body, date_identified: todayIso() },
-        });
+        await writes.capture(body, kind);
       }
       reset();
       onOpenChange(false);

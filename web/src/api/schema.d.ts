@@ -2351,6 +2351,7 @@ export interface components {
         };
         CaptureBody: {
             text?: string;
+            type?: null | string;
         };
         CoverBody: {
             subject?: string;

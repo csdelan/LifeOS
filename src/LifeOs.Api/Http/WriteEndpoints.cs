@@ -441,8 +441,7 @@ public static class WriteEndpoints
 
     private static async Task<IResult> AppendJournal(
         JournalBody body,
-        CaptureService capture,
-        RelateService relate,
+        JournalService journal,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject) || string.IsNullOrWhiteSpace(body.Text))
@@ -450,21 +449,18 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject and text are required."));
         }
 
-        // Same composition as the Pilot's BskCli.AppendJournal: capture a journal
-        // event, then relate it to the subject. Both services already exist.
-        var captured = await capture.CaptureJournalAsync(body.Text, cancellationToken);
-        await relate.RelateAsync(
-            captured.EventId,
-            body.Subject,
-            SubjectEventRelations.Concerns,
-            cancellationToken);
+        await journal.AppendAsync(body.Subject, body.Text, cancellationToken: cancellationToken);
         return Results.Ok();
     }
 
+    /// <summary>
+    /// A typed capture: <c>text</c>, and <c>type</c> (Note, the default; Idea or Problem). A Note
+    /// is flagged in the Inbox; an Idea or Problem is made from the text and flagged, and the note
+    /// event concerns it, as a document or voice capture does.
+    /// </summary>
     private static async Task<IResult> Capture(
         CaptureBody body,
-        CaptureService capture,
-        TriageService triage,
+        InboxFilingService filing,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Text))
@@ -472,8 +468,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("text is required."));
         }
 
-        var result = await capture.CaptureNoteAsync(body.Text, cancellationToken);
-        await triage.FlagItemAsync(isEvent: true, result.EventId, cancellationToken);
+        await filing.CaptureAsync(body.Text, body.Type, cancellationToken: cancellationToken);
         return Results.Ok();
     }
 
@@ -686,6 +681,9 @@ public sealed class JournalBody
 public sealed class CaptureBody
 {
     public string Text { get; set; } = "";
+
+    /// <summary>Note (the default), Idea or Problem.</summary>
+    public string? Type { get; set; }
 }
 
 public sealed record ApiError(string Error, object? Candidates = null);

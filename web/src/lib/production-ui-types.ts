@@ -2391,7 +2391,8 @@ export interface LifeOsWriteClient {
   /** Drive a Task's timer (TASKS-2). Starting or resuming pauses any other running timer. */
   timer(task: string, action: TimerAction): Promise<TimerActionResult>;
   appendJournal(subject: string, text: string): Promise<void>;
-  capture(text: string): Promise<void>;                                         // note event → inbox
+  /** A typed capture (CAP-1): a `note` event, flagged; an Idea or Problem is made from it and flagged instead. */
+  capture(text: string, type?: CaptureKind): Promise<void>;
   /**
    * Document / attachment capture (CAP-4). Note → `note` event + binary artifact;
    * Idea / Problem → durable subject (D4) with the file related onto it.

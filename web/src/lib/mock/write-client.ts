@@ -578,9 +578,9 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       bump();
     },
 
-    async capture(text) {
+    async capture(text, type) {
       await wait();
-      captureNote(text);
+      captureNote(text, type);
       notify("Captured to Inbox");
       bump();
     },

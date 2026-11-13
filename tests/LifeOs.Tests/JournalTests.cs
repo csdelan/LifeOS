@@ -1,6 +1,8 @@
 using Dapper;
 using LifeOs.Application.Capture;
+using LifeOs.Application.Subjects;
 using LifeOs.Cli.Editor;
+using LifeOs.Domain;
 using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -43,13 +45,10 @@ public sealed class CaptureAndJournalDbTests(ClassDatabase classDb) : IClassFixt
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private CaptureService Capture()
-    {
-        var provider = new ServiceCollection()
-            .AddLifeOsKernel(classDb.ConnectionString)
-            .BuildServiceProvider();
-        return provider.GetRequiredService<CaptureService>();
-    }
+    private CaptureService Capture() => Get<CaptureService>();
+
+    private T Get<T>() where T : notnull
+        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider().GetRequiredService<T>();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
@@ -103,5 +102,32 @@ public sealed class CaptureAndJournalDbTests(ClassDatabase classDb) : IClassFixt
             "SELECT content FROM bsk.artifact WHERE id = @id;",
             new { id = first.ArtifactId }, cancellationToken: Ct));
         Assert.Equal("first note", firstContent);
+    }
+
+    // Code review CR44: an entry and the edge to its item are one write, and an item that isn't
+    // there leaves no entry behind.
+    [Fact]
+    public async Task A_journal_entry_is_written_with_its_item_or_not_at_all()
+    {
+        var task = await Get<SubjectService>().CreateAsync(SubjectTypes.Task, $"journal task {Guid.NewGuid():N}", cancellationToken: Ct);
+        var text = $"Called the council about the permit {Guid.NewGuid():N}";
+        var journal = Get<JournalService>();
+
+        var entry = await journal.AppendAsync(task.Id.ToString(), text, cancellationToken: Ct);
+        await Assert.ThrowsAsync<SubjectNotFoundException>(
+            () => journal.AppendAsync(Guid.NewGuid().ToString(), $"{text} again", cancellationToken: Ct));
+
+        Assert.Equal(task.Urn, entry.Subject.Urn);
+        await using var connection = await OpenAsync();
+        var concerned = await connection.QuerySingleAsync<Guid>(new CommandDefinition(
+            """
+            SELECT se.subject_id FROM bsk.subject_event se JOIN bsk.event e ON e.id = se.event_id
+            WHERE e.id = @id AND e.kind = 'journal' AND se.relation = 'concerns'
+            """,
+            new { id = entry.EventId }, cancellationToken: Ct));
+        Assert.Equal(task.Id, concerned);
+        var written = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.artifact WHERE content LIKE @text || '%';", new { text }, cancellationToken: Ct));
+        Assert.Equal(1, written);
     }
 }

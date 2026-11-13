@@ -7015,6 +7015,12 @@
         "properties": {
           "text": {
             "type": "string"
+          },
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

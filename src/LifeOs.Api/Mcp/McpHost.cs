@@ -166,6 +166,7 @@ public static class McpHost
             services.AddSingleton(sp => new AgentWrites(
                 sp.GetRequiredService<IEventStore>(),
                 sp.GetRequiredService<IArtifactStore>(),
+                sp.GetRequiredService<IActivityWriter>(),
                 sp.GetRequiredService<IEventReader>(),
                 sp.GetRequiredService<ISubjectRepository>(),
                 sp.GetRequiredService<ISubjectEventRepository>(),

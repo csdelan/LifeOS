@@ -516,8 +516,8 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       notify("Journal appended");
     },
 
-    async capture(text) {
-      await unwrap(api().POST("/api/capture", { body: { text } }));
+    async capture(text, type) {
+      await unwrap(api().POST("/api/capture", { body: { text, type } }));
       notify("Captured to Inbox");
     },
 

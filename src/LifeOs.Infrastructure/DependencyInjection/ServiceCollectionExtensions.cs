@@ -149,9 +149,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AppointmentService>();
         services.AddSingleton<TriageService>();
 
-        // Capture and the Inbox (CAP-1 to CAP-4).
+        // Capture, the Inbox and journals (CAP-1 to CAP-4, JOURNAL-1).
         services.AddSingleton<CaptureService>();
         services.AddSingleton<InboxFilingService>();
+        services.AddSingleton<JournalService>();
         services.AddSingleton(sp => new AttachmentService(
             sp.GetRequiredService<IArtifactBlobStore>(),
             sp.GetRequiredService<IClock>(),

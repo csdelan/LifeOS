@@ -95,6 +95,7 @@ public sealed record McpWriteCheck(McpAgent? Agent, string? Why);
 public sealed class AgentWrites(
     IEventStore events,
     IArtifactStore artifacts,
+    IActivityWriter activityWriter,
     IEventReader eventReader,
     ISubjectRepository subjectRepository,
     ISubjectEventRepository edges,
@@ -134,10 +135,11 @@ public sealed class AgentWrites(
         }
 
         var kernel = Kernel(agent);
-        CaptureResult captured;
+        InboxCapture captured;
         try
         {
-            captured = await kernel.Capture.CaptureFromAsync(EventKinds.Note, body, key, Payload(agent), cancellationToken);
+            // Once the capture is written, filing it runs to the end even if the agent hangs up.
+            captured = await kernel.Filing.CaptureAsync(body, type, key, Payload(agent), cancellationToken);
         }
         catch (PostgresException e) when (key is not null && e.SqlState == PostgresErrorCodes.UniqueViolation)
         {
@@ -146,16 +148,12 @@ public sealed class AgentWrites(
             return await FinishCaptureAsync(agent, first, type, body, about);
         }
 
-        // The capture is written, so filing it runs to the end even if the agent hangs up:
-        // a capture that is never flagged never reaches the Inbox.
-        var made = await kernel.Filing.FileAsync(
-            type, captured.EventId, deduplicated: false, InboxFilingService.FirstLine(body) ?? "Capture", body,
-            CancellationToken.None);
         if (about is not null)
         {
             await kernel.Relate.RelateAsync(captured.EventId, about.Urn, SubjectEventRelations.Concerns, CancellationToken.None);
         }
 
+        var made = captured.Item;
         var item = made is null ? null : new McpItemRef(made.Id, made.Urn, made.Type, made.Title);
         return new AgentCapture(captured.EventId, type, item, about is null ? [] : [about], AlreadyDone: false);
     }
@@ -217,9 +215,8 @@ public sealed class AgentWrites(
         {
             try
             {
-                var captured = await kernel.Capture.CaptureFromAsync(EventKinds.Journal, body, key, Payload(agent), cancellationToken);
-                await kernel.Relate.RelateAsync(captured.EventId, subject.Urn, SubjectEventRelations.Concerns, cancellationToken);
-                return new AgentJournalEntry(captured.EventId, subject, AlreadyDone: false);
+                var entry = await kernel.Journal.AppendAsync(subject.Urn, body, key, Payload(agent), cancellationToken);
+                return new AgentJournalEntry(entry.EventId, subject, AlreadyDone: false);
             }
             catch (PostgresException e) when (key is not null && e.SqlState == PostgresErrorCodes.UniqueViolation)
             {
@@ -229,7 +226,8 @@ public sealed class AgentWrites(
 
         if (earlier.Concerns.Count == 0)
         {
-            // The first call wrote the entry and stopped before it reached the item: finish it.
+            // An entry written before the entry and its edge were one transaction (code review
+            // CR44), whose first call stopped before it reached the item: finish it.
             await kernel.Relate.RelateAsync(earlier.EventId, subject.Urn, SubjectEventRelations.Concerns, cancellationToken);
             return new AgentJournalEntry(earlier.EventId, subject, AlreadyDone: true);
         }
@@ -405,17 +403,18 @@ public sealed class AgentWrites(
         var subjects = new SubjectService(subjectRepository, clock, source);
         var relate = new RelateService(subjects, eventReader, edges);
         var triage = new TriageService(subjects, eventReader, events, clock, source, status);
+        var capture = new CaptureService(events, artifacts, clock, source);
         return new AgentKernel(
-            new CaptureService(events, artifacts, clock, source),
             relate,
             triage,
-            new InboxFilingService(subjects, relate, triage, calendar),
+            new InboxFilingService(capture, subjects, relate, triage, calendar),
+            new JournalService(subjects, artifacts, activityWriter, clock, source),
             new ReviewService(subjects, subjectRepository, reviews, status, calendar),
             new ReflectionService(events, edges, reviews, clock, source));
     }
 
     private sealed record AgentKernel(
-        CaptureService Capture, RelateService Relate, TriageService Triage, InboxFilingService Filing,
+        RelateService Relate, TriageService Triage, InboxFilingService Filing, JournalService Journal,
         ReviewService Reviews, ReflectionService Reflections);
 }
 

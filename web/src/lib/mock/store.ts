@@ -827,13 +827,27 @@ export function dropInboxItem(itemRef: string) {
   emit();
 }
 
-export function captureNote(text: string) {
+/** A typed capture: a note, flagged, or an Idea or Problem made from it, as the kernel files it. */
+export function captureNote(text: string, type: CaptureKind = "Note") {
   const eventId = newId();
   const occurredAt = nowIso();
   state.events = [
     { id: eventId, kind: "note", content: text, occurredAt },
     ...state.events,
   ];
+  if (type === "Idea" || type === "Problem") {
+    const created = createSubject({
+      type,
+      title: deriveTitle(text),
+      attrs: { description: text, ...(type === "Problem" ? { date_identified: todayIso() } : {}) },
+    });
+    addEventRelation(eventId, created.id);
+    state.inbox = state.inbox.map((item) =>
+      item.subjectUrn === created.urn ? { ...item, eventKind: "note", eventContent: text } : item,
+    );
+    emit();
+    return;
+  }
   state.inbox = [
     {
       itemId: eventId,

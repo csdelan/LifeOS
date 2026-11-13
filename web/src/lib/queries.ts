@@ -621,9 +621,10 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
       await invalidate(qc, [qk.journal(subject)]);
     },
 
-    async capture(text) {
-      await client.capture(text);
-      await invalidate(qc, [qk.inbox, qk.dashboard]);
+    async capture(text, type) {
+      await client.capture(text, type);
+      const made = type === "Idea" || type === "Problem" ? [qk.subjects] : [];
+      await invalidate(qc, [qk.inbox, qk.dashboard, ...made]);
     },
 
     async captureDocument(req) {
