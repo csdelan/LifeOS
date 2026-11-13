@@ -222,24 +222,23 @@ internal static class FoodCommand
                 await using var provider = Cli.BuildServices(connectionString);
                 var food = provider.GetRequiredService<FoodLogService>();
                 var reference = parseResult.GetValue(entryArgument)!;
-                var meal = await food.ResolveMealAsync(reference, cancellationToken);
                 var (on, off) = (parseResult.GetValue(alcoholOption), parseResult.GetValue(noAlcoholOption));
                 if (on && off)
                 {
                     throw new ArgumentException("Use --alcohol or --no-alcohol, not both.");
                 }
 
-                var input = new FoodEntryInput(
-                    parseResult.GetValue(nameOption) ?? meal.Name,
-                    parseResult.GetValue(options.Score) ?? meal.Score,
-                    parseResult.GetValue(options.Calories) ?? meal.Calories,
-                    await ParseAtAsync(parseResult.GetValue(options.At), food, cancellationToken) ?? meal.EatenAt,
-                    parseResult.GetValue(options.Type) ?? meal.MealType,
-                    parseResult.GetValue(options.Protein) ?? meal.ProteinG,
-                    parseResult.GetValue(options.Carbs) ?? meal.CarbsG,
-                    parseResult.GetValue(options.Fat) ?? meal.FatG,
+                var change = new FoodEntryChange(
+                    parseResult.GetValue(nameOption),
+                    parseResult.GetValue(options.Score),
+                    parseResult.GetValue(options.Calories),
+                    await ParseAtAsync(parseResult.GetValue(options.At), food, cancellationToken),
+                    parseResult.GetValue(options.Type),
+                    parseResult.GetValue(options.Protein),
+                    parseResult.GetValue(options.Carbs),
+                    parseResult.GetValue(options.Fat),
                     on ? true : off ? false : null);
-                var result = await food.EditAsync(meal.Id.ToString(), input, cancellationToken);
+                var result = await food.ChangeAsync(reference, change, cancellationToken);
                 FoodOutput.WriteResult(result, asJson);
                 return 0;
             });

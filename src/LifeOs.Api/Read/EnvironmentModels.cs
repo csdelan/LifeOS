@@ -407,9 +407,7 @@ public static class EnvironmentRows
         Name = space.Name,
         Weight = space.Weight,
         Pace = space.Pace,
-        Share = space.Archived || totalWeight == 0
-            ? null
-            : Math.Round(100m * space.Weight / totalWeight, 1, MidpointRounding.AwayFromZero),
+        Share = SpaceShares.Of(space, totalWeight),
         ArchivedAt = space.ArchivedAt,
         ArchivedOn = space.ArchivedOn is { } on ? Day(on) : null
     };

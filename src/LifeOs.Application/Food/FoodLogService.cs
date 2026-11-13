@@ -99,20 +99,53 @@ public sealed class FoodLogService(
 
     /// <summary>
     /// Replaces a food entry with <paramref name="input"/> as a whole (named by its id or the
-    /// start of it). The photo, when it has one, is kept, and so is the alcohol flag when the
-    /// input leaves it out.
+    /// start of it), as the Log food sheet sends it: a nutrient left out is cleared. The photo,
+    /// when it has one, is kept, and so are the time, the meal type and the alcohol flag when the
+    /// input leaves them out (code review CR72).
     /// </summary>
     public async Task<FoodWriteResult> EditAsync(
         string reference, FoodEntryInput input, CancellationToken cancellationToken = default)
     {
         var now = clock.UtcNow;
         var meal = await ResolveMealAsync(reference, cancellationToken);
-        var entry = await NormalizeAsync(input with { Alcoholic = input.Alcoholic ?? meal.Alcoholic }, now, cancellationToken);
+        var entry = await NormalizeAsync(
+            input with
+            {
+                EatenAt = input.EatenAt ?? meal.EatenAt,
+                MealType = input.MealType ?? meal.MealType,
+                Alcoholic = input.Alcoholic ?? meal.Alcoholic,
+            },
+            now,
+            cancellationToken);
         var ids = await food.AppendAsync(
             [MealEvent(meal.Id, entry, meal.PhotoArtifactId, now)], FoodGuard.None, cancellationToken);
         return await ResultAsync(
             FoodActions.Edited, await food.GetMealAsync(meal.Id, cancellationToken), null, null,
             [meal.EatenOn, entry.EatenOn], ids[0], cancellationToken);
+    }
+
+    /// <summary>
+    /// Changes what <paramref name="change"/> gives of a food entry, as <c>bsk food edit</c> does:
+    /// each field left out keeps the entry's (code review CR72). Otherwise as
+    /// <see cref="EditAsync"/>.
+    /// </summary>
+    public async Task<FoodWriteResult> ChangeAsync(
+        string reference, FoodEntryChange change, CancellationToken cancellationToken = default)
+    {
+        var meal = await ResolveMealAsync(reference, cancellationToken);
+        return await EditAsync(
+            meal.Id.ToString(),
+            new FoodEntryInput(
+                change.Name ?? meal.Name,
+                change.Score ?? meal.Score,
+                change.Calories ?? meal.Calories,
+                change.EatenAt,
+                change.MealType,
+                change.ProteinG ?? meal.ProteinG,
+                change.CarbsG ?? meal.CarbsG,
+                change.FatG ?? meal.FatG,
+                change.Alcoholic),
+            cancellationToken);
     }
 
     /// <summary>Deletes a food entry: a voided version, so the record keeps what it was.</summary>
@@ -558,6 +591,18 @@ public sealed record FoodEntryInput(
     string Name,
     decimal Score,
     int Calories,
+    DateTimeOffset? EatenAt = null,
+    string? MealType = null,
+    int? ProteinG = null,
+    int? CarbsG = null,
+    int? FatG = null,
+    bool? Alcoholic = null);
+
+/// <summary>A change to a food entry (<see cref="FoodLogService.ChangeAsync"/>): what's given replaces the entry's, and what's left out stays.</summary>
+public sealed record FoodEntryChange(
+    string? Name = null,
+    decimal? Score = null,
+    int? Calories = null,
     DateTimeOffset? EatenAt = null,
     string? MealType = null,
     int? ProteinG = null,

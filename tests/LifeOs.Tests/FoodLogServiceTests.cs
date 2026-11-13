@@ -104,12 +104,13 @@ public sealed class FoodLogServiceTests(PostgresFixture postgres)
         Assert.Equal(new DateTime(2025, 10, 19, 18, 30, 0), meal.EatenLocal);
         Assert.Equal(FoodEntries.Dinner, meal.MealType);
 
-        // Moved past midnight there, it re-scores both days.
+        // Moved past midnight there, it re-scores both days. The edit leaves the meal type out, so
+        // it stays dinner, as both doors kept it (code review CR72).
         var moved = await food.EditAsync(
             meal.Id.ToString(), Entry("Salmon salad", 5, 650, new DateTimeOffset(2025, 10, 20, 8, 0, 0, TimeSpan.Zero)), Ct);
         Assert.Equal([new DateOnly(2025, 10, 19), new DateOnly(2025, 10, 20)], moved.Days);
         Assert.Equal(new DateOnly(2025, 10, 20), moved.Meal!.EatenOn);
-        Assert.Equal(FoodEntries.Snack, moved.Meal.MealType);
+        Assert.Equal(FoodEntries.Dinner, moved.Meal.MealType);
         var range = await food.GetDaysAsync(new DateOnly(2025, 10, 19), new DateOnly(2025, 10, 20), Ct);
         Assert.Equal([0L, 650L], range.Days.Select(d => d.Facts.Calories));
         Assert.All(range.Days, d => Assert.True(d.Facts.Closed, "a past day is closed by time"));

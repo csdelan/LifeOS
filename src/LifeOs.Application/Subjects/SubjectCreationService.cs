@@ -13,7 +13,8 @@ namespace LifeOs.Application.Subjects;
 ///   <item>a repeating Task gets its first repetition at once, from its start (D16).</item>
 /// </list>
 /// An attribute with a verb of its own (a status, a bounty, ...) is refused, as an edit refuses it
-/// (<see cref="ReservedAttributes"/>). Checking the door's own arguments (a Value's statement, a
+/// (<see cref="ReservedAttributes"/>), and a Value without its statement is refused as
+/// <see cref="SubjectService"/> refuses it (code review CR72). Checking the door's own arguments (a
 /// relation without a parent) stays with the door, which knows what its options are called.
 /// </summary>
 public sealed class SubjectCreationService(

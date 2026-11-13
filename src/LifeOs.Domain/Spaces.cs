@@ -145,6 +145,23 @@ public static class HomeParts
 }
 
 /// <summary>
+/// A space's weight as its share of the Home Score (environment plan §2.2), the one way the API and
+/// <c>bsk space</c> say it (code review CR72): in percent of the weights of the spaces not
+/// archived, to one place, half away from zero; none once archived, or when no space counts.
+/// </summary>
+public static class SpaceShares
+{
+    /// <summary>The weights of the spaces that count: those not archived.</summary>
+    public static int TotalWeight(IEnumerable<Space> spaces) => spaces.Where(s => !s.Archived).Sum(s => s.Weight);
+
+    /// <summary><paramref name="space"/>'s share of <paramref name="totalWeight"/>, in percent to one place.</summary>
+    public static decimal? Of(Space space, int totalWeight)
+        => space.Archived || totalWeight <= 0
+            ? null
+            : Math.Round(100m * space.Weight / totalWeight, 1, MidpointRounding.AwayFromZero);
+}
+
+/// <summary>
 /// The limits on spaces and ratings (HOME-1, HOME-2, environment plan §4.1–§4.2), shared by the
 /// services, the CLI and the API so they refuse the same things in the same words.
 /// </summary>

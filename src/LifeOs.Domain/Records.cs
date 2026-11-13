@@ -39,6 +39,31 @@ public sealed record InitialStatus(string Status, DateTimeOffset At, string Sour
 public sealed record SubjectRef(Guid Id, string Urn, string Type, string Title);
 
 /// <summary>
+/// An identity statement (type Value): its title is the short handle, and
+/// <c>attributes.statement</c> is who Chris has chosen to be. The database refuses a Value
+/// without one (<c>subject_value_has_statement</c>); the kernel refuses it first, in words, from
+/// every door and promotion (code review CR72).
+/// </summary>
+public static class ValueStatements
+{
+    /// <summary>The attribute holding a Value's statement.</summary>
+    public const string AttributeKey = "statement";
+
+    /// <summary>The refusal for a Value without one.</summary>
+    public const string Missing =
+        "A Value needs a statement: the title is the short handle, the statement is who you've chosen to be.";
+
+    /// <summary>Whether <paramref name="attributes"/> holds a statement that isn't blank, as the database's check reads it.</summary>
+    public static bool Has(System.Text.Json.Nodes.JsonObject attributes)
+        => attributes[AttributeKey] switch
+        {
+            null => false,
+            System.Text.Json.Nodes.JsonValue value when value.TryGetValue<string>(out var text) => !string.IsNullOrWhiteSpace(text),
+            var other => other.ToJsonString().Trim().Length > 0,
+        };
+}
+
+/// <summary>
 /// A lightweight read view of a source event, used by promotion. <c>SubjectId</c>
 /// is the subject the event's payload references (e.g. the Problem an
 /// <c>idea_session</c> is about), or <c>null</c> when the event names no subject.

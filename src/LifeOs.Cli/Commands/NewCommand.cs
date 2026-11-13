@@ -102,16 +102,7 @@ internal static class NewCommand
             {
                 var canonicalType = SubjectTypes.ParseCreatable(type);
 
-                // A Value is an identity statement: the title is its short handle, and a
-                // full statement is required (enforced by the kernel; checked here so the
-                // message is actionable rather than a raw constraint violation).
-                var statement = parseResult.GetValue(statementOption);
-                if (canonicalType == SubjectTypes.Value && string.IsNullOrWhiteSpace(statement))
-                {
-                    throw new ArgumentException(
-                        "A Value needs --statement: the title is the short handle, the statement is who you've chosen to be.");
-                }
-
+                // A Value is an identity statement, which the kernel refuses without --statement.
                 var attributes = new JsonObject();
                 Set(attributes, "expected_cadence", parseResult.GetValue(cadenceOption));
                 Set(attributes, "next_review_at", parseResult.GetValue(reviewAtOption));

@@ -116,9 +116,7 @@ public static class FoodEndpoints
             return missing;
         }
 
-        var meal = await food.ResolveMealAsync(id, cancellationToken);
-        var result = await food.EditAsync(
-            meal.Id.ToString(), Input(body, body.EatenAt ?? meal.EatenAt, body.MealType ?? meal.MealType), cancellationToken);
+        var result = await food.EditAsync(id, Input(body, body.EatenAt, body.MealType), cancellationToken);
         return Results.Ok(FoodRows.From(result));
     }
 

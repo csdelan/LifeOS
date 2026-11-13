@@ -79,13 +79,6 @@ public static class WriteEndpoints
         var canonicalType = SubjectTypes.ParseCreatable(body.Type);
         var attributes = BuildCreateAttributes(body);
 
-        if (canonicalType == SubjectTypes.Value
-            && (attributes["statement"] is not JsonValue statement || string.IsNullOrWhiteSpace(statement.ToString())))
-        {
-            return Results.BadRequest(new ApiError(
-                "A Value needs statement: the title is the short handle, the statement is who you've chosen to be."));
-        }
-
         if (string.IsNullOrWhiteSpace(body.Parent) && !string.IsNullOrWhiteSpace(body.Relation))
         {
             return Results.BadRequest(new ApiError("relation only applies with parent."));

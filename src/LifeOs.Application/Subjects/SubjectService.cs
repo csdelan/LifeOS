@@ -213,7 +213,8 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
     /// <summary>
     /// The subject to insert, with the status its type is born with, if any. A Task made with a
     /// pattern is a repeating Task (D16), so one it can't repeat on is refused here, before
-    /// anything is written, whichever door made it.
+    /// anything is written, whichever door made it; so is a Value without its statement (code
+    /// review CR72), promotion's included.
     /// </summary>
     private NewSubject Insertable(
         string urn, string type, string title, string attributesJson, Guid? originEventId = null)
@@ -222,6 +223,12 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
         if (type == SubjectTypes.Task && PatternOf(attributes) is { } pattern)
         {
             TaskSeries.CheckTaskPattern(pattern);
+        }
+
+        if (type == SubjectTypes.Value
+            && !ValueStatements.Has(System.Text.Json.Nodes.JsonNode.Parse(attributes) as System.Text.Json.Nodes.JsonObject ?? []))
+        {
+            throw new ArgumentException(ValueStatements.Missing);
         }
 
         return new(urn, type, title, attributes, originEventId)

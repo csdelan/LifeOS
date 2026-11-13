@@ -94,7 +94,7 @@ internal static class SpaceCommand
                 Console.WriteLine($"{"Space".PadRight(width)}  Weight  Share  Pace");
                 foreach (var s in spaces)
                 {
-                    var share = s.Archived ? "  —  " : $"{Share(s.Weight, total),4:0.0}%";
+                    var share = SpaceShares.Of(s, total) is { } percent ? $"{percent,4:0.0}%" : "  —  ";
                     Console.WriteLine(
                         $"{s.Name.PadRight(width)}  {s.Weight,6}  {share}  {s.Pace,4}{(s.Archived ? "  (archived)" : "")}");
                 }
@@ -170,7 +170,7 @@ internal static class SpaceCommand
             return 0;
         }
 
-        var share = space.Archived ? "archived" : $"{Share(space.Weight, total):0.0}% of the Home Score";
+        var share = space.Archived ? "archived" : $"{SpaceShares.Of(space, total) ?? 0m:0.0}% of the Home Score";
         Console.WriteLine($"{done}: weight {space.Weight}, pace {space.Pace} ({share}).");
         return 0;
     }
@@ -182,13 +182,11 @@ internal static class SpaceCommand
         name = space.Name,
         weight = space.Weight,
         pace = space.Pace,
-        share = space.Archived ? (decimal?)null : Math.Round(Share(space.Weight, totalWeight), 1),
+        share = SpaceShares.Of(space, totalWeight),
         archivedAt = space.ArchivedAt,
         archivedOn = space.ArchivedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         shots = SpacePhotoCommand.ShotsJson(space)
     };
-
-    private static decimal Share(int weight, int total) => total == 0 ? 0m : 100m * weight / total;
 
     private static Option<int?> WeightOption() => new("--weight")
     {

@@ -48,6 +48,14 @@ public sealed class AttributeService(
         // A key with a verb of its own is refused before anything is written (code review CR49).
         ReservedAttributes.Check(subject.Type, assignments.Select(a => a.Key));
 
+        // A Value keeps its statement (code review CR72): clearing it is refused in words.
+        if (subject.Type == SubjectTypes.Value
+            && assignments.Any(a => string.Equals(a.Key.Trim(), ValueStatements.AttributeKey, StringComparison.Ordinal)
+                && string.IsNullOrWhiteSpace(a.Value)))
+        {
+            throw new ArgumentException(ValueStatements.Missing);
+        }
+
         if (subject.Type == SubjectTypes.Task)
         {
             var pattern = assignments.FirstOrDefault(a =>
