@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using LifeOs.Pilot.Shell;
 
 namespace LifeOs.Pilot.Cli;
 
@@ -11,18 +12,44 @@ public sealed class BskException(string message) : Exception(message);
 /// bsk is the only writer). Returns stdout on success, and throws
 /// <see cref="BskException"/> with the CLI's (plain-text) message on a non-zero exit.
 /// </summary>
-public sealed class BskCli(string executablePath)
+public sealed class BskCli(string executablePath, bool fromWorkingTree = false)
 {
     /// <summary>
-    /// Locates <c>bsk.exe</c>: the <c>BSK_EXE</c> environment variable if set, else the
-    /// build output under the repo that contains this pilot. Throws if it cannot be found.
+    /// Where <c>scripts/install-bsk.ps1</c> publishes <c>bsk</c>, built from a clean checkout
+    /// of <c>origin/main</c>.
     /// </summary>
-    public static BskCli Locate()
+    public static string InstalledPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".lifeos", "bin", "bsk", "bsk.exe");
+
+    /// <summary>
+    /// True when this is the repo's own build output. Agents build unpushed code in the same
+    /// tree, so that copy is never used for STAGING and never migrates DEV on launch.
+    /// </summary>
+    public bool FromWorkingTree { get; } = fromWorkingTree;
+
+    /// <summary>
+    /// Locates <c>bsk.exe</c>: the <c>BSK_EXE</c> environment variable if set, else the copy
+    /// <c>scripts/install-bsk.ps1</c> installed, else (DEV only) the build output under the repo
+    /// that contains this pilot. Throws if none can be used for <paramref name="environment"/>.
+    /// </summary>
+    internal static BskCli Locate(PilotEnvironment environment)
     {
         var fromEnvironment = Environment.GetEnvironmentVariable("BSK_EXE");
         if (!string.IsNullOrWhiteSpace(fromEnvironment) && File.Exists(fromEnvironment))
         {
             return new BskCli(fromEnvironment);
+        }
+
+        if (File.Exists(InstalledPath))
+        {
+            return new BskCli(InstalledPath);
+        }
+
+        if (environment == PilotEnvironment.Staging)
+        {
+            throw new BskException(
+                "Writes to STAGING use only the bsk built from main. Run ./scripts/install-bsk.ps1 "
+                + $"(it installs {InstalledPath}), or set BSK_EXE, then restart the pilot.");
         }
 
         var root = FindRepoRoot(AppContext.BaseDirectory);
@@ -33,13 +60,14 @@ public sealed class BskCli(string executablePath)
                 var candidate = Path.Combine(root, "src", "LifeOs.Cli", "bin", configuration, "net10.0", "bsk.exe");
                 if (File.Exists(candidate))
                 {
-                    return new BskCli(candidate);
+                    return new BskCli(candidate, fromWorkingTree: true);
                 }
             }
         }
 
         throw new BskException(
-            "Could not find bsk.exe. Build the solution (./run.ps1) or set the BSK_EXE environment variable to its full path.");
+            "Could not find bsk.exe. Run ./scripts/install-bsk.ps1, build the solution (./run.ps1), "
+            + "or set the BSK_EXE environment variable to its full path.");
     }
 
     private static string? FindRepoRoot(string start)

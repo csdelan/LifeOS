@@ -25,6 +25,7 @@ internal static class Program
         // back to the STAGING .env when one is available, so the pilot can still open
         // against Supabase instead of stalling on a dead local DB. The choice is not
         // persisted — next launch tries DEV again in case the local DB is back up.
+        // A failover is read-only: Chris writes to staging only when he chose it.
         if (activation.Effective == PilotEnvironment.Dev
             && !LocalDatabase.CanConnect(ReaderConnectionString.Resolve()))
         {
@@ -33,9 +34,11 @@ internal static class Program
             {
                 activation = failover with
                 {
+                    WritesEnabled = false,
                     Warning =
                         "The local DEV database isn't reachable, so the pilot connected to STAGING "
                         + $"(Supabase) using:\n{settings.EnvFilePath}\n\n"
+                        + "It's read-only this session. To write to STAGING, choose it from the selector. "
                         + (failover.Warning
                             ?? "Switch back to DEV from the selector once your local database is running."),
                 };
@@ -45,14 +48,23 @@ internal static class Program
         var reader = new SubjectReader(ReaderConnectionString.Resolve());
 
         // Writes shell out to bsk (which inherits our environment). Disabled when
-        // Staging has no owner credentials, or when bsk.exe can't be found — the
-        // write buttons then explain the read-only state.
+        // Staging has no owner credentials, or when no usable bsk.exe is found — the
+        // write buttons then explain the read-only state. STAGING uses only the bsk
+        // installed from main (scripts/install-bsk.ps1) or BSK_EXE.
         BskCli? bsk = null;
         if (activation.WritesEnabled)
         {
             try
             {
-                bsk = BskCli.Locate();
+                bsk = BskCli.Locate(activation.Effective);
+            }
+            catch (BskException ex) when (activation.Effective == PilotEnvironment.Staging)
+            {
+                activation = activation with
+                {
+                    WritesEnabled = false,
+                    Warning = activation.Warning is null ? ex.Message : $"{activation.Warning}\n\n{ex.Message}",
+                };
             }
             catch (BskException)
             {
@@ -60,13 +72,16 @@ internal static class Program
             }
         }
 
-        // Keep the LOCAL dev database in step with the build by applying pending
+        // Keep the LOCAL dev database in step with main by applying pending
         // migrations before the window opens (a schema-touching migration that
-        // hasn't been applied makes reads referencing new columns fail). The
-        // STAGING schema is owned by CI and scripts/migrate-staging.ps1, so the
-        // pilot never migrates it on launch. Best-effort: a failure warns but the
-        // app still opens (it already surfaces read errors).
-        if (bsk is not null && activation.Effective == PilotEnvironment.Dev)
+        // hasn't been applied makes reads referencing new columns fail). Only the
+        // installed bsk (or BSK_EXE) does this: the repo's own build can carry a
+        // migration an agent is still drafting, and once applied, editing it makes
+        // every later migrate refuse. The STAGING schema is owned by CI and
+        // scripts/migrate-staging.ps1, so the pilot never migrates it on launch.
+        // Best-effort: a failure warns but the app still opens (it already surfaces
+        // read errors).
+        if (bsk is not null && !bsk.FromWorkingTree && activation.Effective == PilotEnvironment.Dev)
         {
             try
             {
