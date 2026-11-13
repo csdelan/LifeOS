@@ -4,6 +4,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Dapper;
 using LifeOs.Api.Mcp;
+using LifeOs.Application.Abstractions;
+using LifeOs.Application.Capture;
 using LifeOs.Domain;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
@@ -177,8 +179,7 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         var ideaKey = Key();
         var idea = await CallAsync(client, "capture", new() { ["text"] = $"Stain it instead {ns}", ["kind"] = "idea", ["request_id"] = ideaKey });
         var ideaAgain = await CallAsync(client, "capture", new() { ["text"] = $"Stain it instead {ns}", ["kind"] = "idea", ["request_id"] = ideaKey });
-        Assert.Contains(ideaAgain.GetProperty("concerns").EnumerateArray(),
-            c => c.GetProperty("id").GetGuid() == idea.GetProperty("item").GetProperty("id").GetGuid());
+        Assert.Equal(idea.GetProperty("item").GetProperty("id").GetGuid(), ideaAgain.GetProperty("item").GetProperty("id").GetGuid());
 
         var entryKey = Key();
         var entry = await CallAsync(client, "add_journal_entry", new() { ["item"] = taskId.ToString(), ["text"] = $"First coat {ns}", ["request_id"] = entryKey });
@@ -207,6 +208,36 @@ public sealed class McpWriteTests(PostgresFixture postgres)
             new Dictionary<string, object?> { ["item"] = taskId.ToString(), ["text"] = "Again", ["request_id"] = noteKey }, cancellationToken: Ct);
         Assert.True(misused.IsError);
         Assert.Contains("different write", Text(misused), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_retry_files_a_capture_the_first_call_wrote_and_stopped_on()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await StartAsync(db.ConnectionString);
+        await ActAsAiPersonAsync(host, Writer);
+        var ns = Guid.NewGuid().ToString("N")[..8];
+        await using var client = await McpServerTests.ConnectAsync(host, ApiTestHost.TokenFor(clientId: Writer));
+
+        // As if the first call wrote the capture and was cancelled before it filed it.
+        var interrupted = new CaptureService(db.Get<IEventStore>(), db.Get<IArtifactStore>(), db.Get<IClock>(), $"mcp:{Writer}");
+        var noteKey = Guid.NewGuid().ToString();
+        var ideaKey = Guid.NewGuid().ToString();
+        await interrupted.CaptureFromAsync(EventKinds.Note, $"Sand the deck {ns}", noteKey, "{}", Ct);
+        await interrupted.CaptureFromAsync(EventKinds.Note, $"A pergola {ns}", ideaKey, "{}", Ct);
+
+        var note = await CallAsync(client, "capture", new() { ["text"] = $"Sand the deck {ns}", ["request_id"] = noteKey });
+        var idea = await CallAsync(client, "capture", new() { ["text"] = $"A pergola {ns}", ["kind"] = "idea", ["request_id"] = ideaKey });
+
+        Assert.True(note.GetProperty("already_done").GetBoolean());
+        Assert.Equal($"A pergola {ns}", idea.GetProperty("item").GetProperty("title").GetString());
+        var inbox = (await CallAsync(client, "inbox", new() { ["limit"] = 200 })).GetProperty("items").EnumerateArray().ToList();
+        Assert.Contains(inbox, i => i.TryGetProperty("text", out var t) && t.GetString() == $"Sand the deck {ns}");
+        Assert.Contains(inbox, i => i.GetProperty("item_id").GetGuid() == idea.GetProperty("item").GetProperty("id").GetGuid());
+
+        // Retried again, nothing more is made.
+        var ideaAgain = await CallAsync(client, "capture", new() { ["text"] = $"A pergola {ns}", ["kind"] = "idea", ["request_id"] = ideaKey });
+        Assert.Equal(idea.GetProperty("item").GetProperty("id").GetGuid(), ideaAgain.GetProperty("item").GetProperty("id").GetGuid());
     }
 
     [Fact]

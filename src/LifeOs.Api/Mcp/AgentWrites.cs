@@ -130,7 +130,7 @@ public sealed class AgentWrites(
         var key = RequestKey(requestId);
         if (key is not null && await EarlierAsync(agent, key, EventKinds.Note, cancellationToken) is { } earlier)
         {
-            return new AgentCapture(earlier.EventId, null, null, earlier.Concerns, AlreadyDone: true);
+            return await FinishCaptureAsync(agent, earlier, type, body, about);
         }
 
         var kernel = Kernel(agent);
@@ -143,19 +143,65 @@ public sealed class AgentWrites(
         {
             // The same request, retried while the first was still writing.
             var first = await EarlierAsync(agent, key, EventKinds.Note, cancellationToken) ?? throw new McpException(Busy);
-            return new AgentCapture(first.EventId, null, null, first.Concerns, AlreadyDone: true);
+            return await FinishCaptureAsync(agent, first, type, body, about);
         }
 
+        // The capture is written, so filing it runs to the end even if the agent hangs up:
+        // a capture that is never flagged never reaches the Inbox.
         var made = await CaptureEndpoints.FileAsync(
             type, captured.EventId, deduplicated: false, CaptureEndpoints.FirstLine(body) ?? "Capture", body,
-            kernel.Filing, cancellationToken);
+            kernel.Filing, CancellationToken.None);
         if (about is not null)
         {
-            await kernel.Relate.RelateAsync(captured.EventId, about.Urn, SubjectEventRelations.Concerns, cancellationToken);
+            await kernel.Relate.RelateAsync(captured.EventId, about.Urn, SubjectEventRelations.Concerns, CancellationToken.None);
         }
 
         var item = made is null ? null : new McpItemRef(made.Id, made.Urn, made.Type, made.Title);
         return new AgentCapture(captured.EventId, type, item, about is null ? [] : [about], AlreadyDone: false);
+    }
+
+    /// <summary>
+    /// A retried capture: does whatever the first call stopped before (flagging the note, making
+    /// the idea or problem, relating the item it concerns), then answers as the first call would
+    /// have. A capture flagged once and since cleared by Chris stays cleared.
+    /// </summary>
+    private async Task<AgentCapture> FinishCaptureAsync(
+        McpAgent agent, McpEarlierWrite earlier, string type, string body, McpItemRef? about)
+    {
+        var kernel = Kernel(agent);
+        var concerns = earlier.Concerns.ToList();
+        McpItemRef? item = null;
+        if (type == CaptureEndpoints.Note)
+        {
+            if (!await reads.EverTriagedAsync(earlier.EventId, CancellationToken.None))
+            {
+                await kernel.Triage.FlagItemAsync(isEvent: true, earlier.EventId, CancellationToken.None);
+            }
+        }
+        else
+        {
+            item = concerns.FirstOrDefault(c => c.Type == type && c.Id != about?.Id);
+            if (item is null)
+            {
+                var made = await CaptureEndpoints.FileAsync(
+                    type, earlier.EventId, deduplicated: false, CaptureEndpoints.FirstLine(body) ?? "Capture", body,
+                    kernel.Filing, CancellationToken.None);
+                item = new McpItemRef(made!.Id, made.Urn, made.Type, made.Title);
+            }
+            else if (!await reads.EverTriagedAsync(item.Id, CancellationToken.None))
+            {
+                await kernel.Triage.FlagItemAsync(isEvent: false, item.Id, CancellationToken.None);
+            }
+        }
+
+        if (about is not null && concerns.All(c => c.Id != about.Id))
+        {
+            await kernel.Relate.RelateAsync(earlier.EventId, about.Urn, SubjectEventRelations.Concerns, CancellationToken.None);
+            concerns.Add(about);
+        }
+
+        return new AgentCapture(
+            earlier.EventId, type, item, concerns.Where(c => c.Id != item?.Id).ToList(), AlreadyDone: true);
     }
 
     /// <summary>Adds an entry to an item's journal (JOURNAL-1), as <c>POST /api/journal</c> does.</summary>

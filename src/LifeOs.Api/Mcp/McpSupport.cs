@@ -86,6 +86,21 @@ public sealed class McpReads(string readerConnectionString, string homeTimeZone,
     }
 
     /// <summary>
+    /// True when the item has ever had a triage marker (flagged, dismissed, promoted…). A retried
+    /// write uses it to tell "never flagged" from "flagged, then cleared by Chris", which must stay
+    /// cleared.
+    /// </summary>
+    public async Task<bool> EverTriagedAsync(Guid itemId, CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(readerConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            "SELECT EXISTS (SELECT 1 FROM bsk.v_event WHERE kind = 'triage' AND payload->>'item_id' = @item);",
+            new { item = itemId.ToString() },
+            cancellationToken: cancellationToken));
+    }
+
+    /// <summary>
     /// The items each of <paramref name="eventIds"/> concerns, oldest edge first; an event that
     /// concerns nothing isn't in the answer. The inbox shows them, so the vault agent knows which
     /// review a capture dictated from the review answers (reviews plan §4.1).
