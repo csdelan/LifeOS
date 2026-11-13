@@ -958,8 +958,8 @@ function JournalTab({ subjectId }: { subjectId: string }) {
       <Separator />
       {composing ? (
         <JournalEditor
-          onAppend={(html) => {
-            void writes.appendJournal(subjectId, html);
+          onAppend={async (html) => {
+            await writes.appendJournal(subjectId, html);
             setComposing(false);
           }}
         />

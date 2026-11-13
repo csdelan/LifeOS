@@ -1,16 +1,23 @@
+import { useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
+import { toast } from "sonner";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { journalExtensions } from "./journal-html";
 
+/**
+ * Writes one journal entry. The text is cleared only once {@link onAppend} has saved it; if the
+ * save fails, the entry stays in the editor to try again.
+ */
 export function JournalEditor({
   onAppend,
   disabled,
 }: {
-  onAppend: (html: string) => void;
+  onAppend: (html: string) => Promise<void>;
   disabled?: boolean;
 }) {
+  const [saving, setSaving] = useState(false);
   const editor = useEditor({
     extensions: [
       ...journalExtensions,
@@ -97,15 +104,23 @@ export function JournalEditor({
       <div className="flex justify-end border-t px-2 py-2">
         <Button
           size="sm"
-          disabled={disabled || empty}
-          onClick={() => {
+          disabled={disabled || empty || saving}
+          onClick={async () => {
             const html = editor.getHTML();
             if (editor.isEmpty) return;
-            onAppend(html);
-            editor.commands.clearContent();
+            setSaving(true);
+            try {
+              await onAppend(html);
+              editor.commands.clearContent();
+            } catch (e) {
+              const why = e instanceof Error && e.message ? e.message : "The entry wasn't saved.";
+              toast.error(`${why} It's still in the editor.`);
+            } finally {
+              setSaving(false);
+            }
           }}
         >
-          Append
+          {saving ? "Appending…" : "Append"}
         </Button>
       </div>
     </div>
