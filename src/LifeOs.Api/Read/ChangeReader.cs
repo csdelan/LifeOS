@@ -10,7 +10,7 @@ namespace LifeOs.Api.Read;
 /// text. An agent catches up with it. Areas switched off for agents leave their events out, so
 /// <c>Mcp:Domains</c> keeps them out of every tool.
 /// </summary>
-public sealed class ChangeReader(string readerConnectionString)
+public sealed class ChangeReader(NpgsqlDataSource dataSource)
 {
     /// <summary>The most text an event's content or payload brings along.</summary>
     public const int MaxTextLength = 500;
@@ -47,8 +47,7 @@ public sealed class ChangeReader(string readerConnectionString)
         var at = byOccurred ? "occurred_at" : "recorded_at";
         var off = McpAreas.All.Where(a => excluded.Contains(a.Name)).ToList();
         var on = McpAreas.All.Except(off).ToList();
-        await using var db = new NpgsqlConnection(readerConnectionString);
-        await db.OpenAsync(cancellationToken);
+        await using var db = await dataSource.OpenConnectionAsync(cancellationToken);
         return (await db.QueryAsync<ChangeRow>(new CommandDefinition(
             $"""
             WITH matched AS (

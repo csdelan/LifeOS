@@ -6,8 +6,8 @@ using Dapper;
 using LifeOs.Api.Read;
 using LifeOs.Application.Abstractions;
 using LifeOs.Domain;
+using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Diagnostics;
-using LifeOs.Infrastructure.Persistence;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using Npgsql;
@@ -23,16 +23,16 @@ public readonly record struct McpStamp(DateTimeOffset AsOf, DateOnly Today);
 /// write tools write only through <see cref="AgentWrites"/> (§5). The kernel's own
 /// <see cref="DiagnosticRunner"/> runs as the owner, so the tools get their own.
 /// </summary>
-public sealed class McpReads(string readerConnectionString, string homeTimeZone, IClock clock)
+public sealed class McpReads(
+    NpgsqlDataSource dataSource, IHomeCalendar calendar, IClock clock, KernelSettings settings,
+    ChangeReader changes, DiagnosticRunner diagnostics)
 {
-    private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), clock, homeTimeZone);
+    public ChangeReader Changes { get; } = changes;
 
-    public ChangeReader Changes { get; } = new(readerConnectionString);
-
-    public DiagnosticRunner Diagnostics { get; } = new(readerConnectionString);
+    public DiagnosticRunner Diagnostics { get; } = diagnostics;
 
     /// <summary>The home zone, an IANA name.</summary>
-    public string HomeTimeZone { get; } = homeTimeZone;
+    public string HomeTimeZone { get; } = settings.HomeTimeZone;
 
     public async Task<McpStamp> NowAsync(CancellationToken cancellationToken)
     {
@@ -47,8 +47,7 @@ public sealed class McpReads(string readerConnectionString, string homeTimeZone,
     /// </summary>
     public async Task<DateTimeOffset> StartOfDayAsync(DateOnly day, CancellationToken cancellationToken)
     {
-        await using var connection = new NpgsqlConnection(readerConnectionString);
-        await connection.OpenAsync(cancellationToken);
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         var start = await connection.ExecuteScalarAsync<DateTime>(new CommandDefinition(
             "SELECT (@day::date::timestamp AT TIME ZONE @tz);",
             new { day = McpResults.Day(day), tz = HomeTimeZone },
@@ -69,8 +68,7 @@ public sealed class McpReads(string readerConnectionString, string homeTimeZone,
             return new Dictionary<Guid, IReadOnlyList<McpItemRef>>();
         }
 
-        await using var connection = new NpgsqlConnection(readerConnectionString);
-        await connection.OpenAsync(cancellationToken);
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         var rows = await connection.QueryAsync<EarlierRow>(new CommandDefinition(
             """
             SELECT se.event_id AS id, '' AS kind, s.id AS subjectid, s.urn, s.type, s.title

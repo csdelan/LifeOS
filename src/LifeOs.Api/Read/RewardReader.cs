@@ -1,7 +1,7 @@
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.Persistence;
+using LifeOs.Infrastructure.DependencyInjection;
 
 namespace LifeOs.Api.Read;
 
@@ -14,16 +14,14 @@ namespace LifeOs.Api.Read;
 /// writes live here; redeeming goes through <see cref="RewardService"/>.
 /// <para>
 /// The life domains (REWARD-6 / REWARD-7) fold <c>bsk.v_award_credit</c> through
-/// <see cref="DomainService"/>, on the days of <paramref name="homeTimeZone"/>
-/// (<c>Rewards:HomeTimeZone</c>), as <c>bsk domains</c> does.
+/// <see cref="DomainService"/>, on the days of the home zone (<c>Rewards:HomeTimeZone</c>), as
+/// <c>bsk domains</c> does. Coins are priced at the host's <c>Rewards:CoinValueUsd</c>.
 /// </para>
 /// </summary>
 public sealed class RewardReader(
-    string readerConnectionString, decimal coinValueUsd, IClock clock, string homeTimeZone = HomeZone.Default)
+    ILedgerRepository ledger, IRewardCatalogReader catalog, IDomainCreditReader credit, KernelSettings settings)
 {
-    private readonly NpgsqlLedgerRepository ledger = new(KernelDataSource.For(readerConnectionString), homeTimeZone);
-    private readonly NpgsqlRewardCatalogReader catalog = new(KernelDataSource.For(readerConnectionString));
-    private readonly NpgsqlDomainCreditReader credit = new(KernelDataSource.For(readerConnectionString), clock, homeTimeZone);
+    private readonly decimal coinValueUsd = settings.CoinValueUsd;
 
     public async Task<WalletSummary> GetWalletAsync(CancellationToken cancellationToken = default)
     {

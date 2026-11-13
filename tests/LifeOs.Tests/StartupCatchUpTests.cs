@@ -33,7 +33,7 @@ public sealed class StartupCatchUpTests(PostgresFixture postgres)
         });
 
     private static async Task<List<string?>> OccurrencesAsync(DomainTestDatabase db, Guid series)
-        => (await new SubjectReader(db.ConnectionString).GetTaskSeriesHistoryAsync(series, Ct))!
+        => (await TestReaders.Subjects(db.ConnectionString).GetTaskSeriesHistoryAsync(series, Ct))!
             .Repetitions.Select(r => r.Occurrence).ToList();
 
     [Fact]

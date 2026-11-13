@@ -69,7 +69,7 @@ public sealed class AdherenceServiceTests(ClassDatabase classDb) : IClassFixture
         var today = await provider.GetRequiredService<IHomeCalendar>().DateAtAsync(DateTimeOffset.UtcNow, Ct);
         await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today, note: "  ran it early  ", cancellationToken: Ct);
 
-        var reader = new SubjectReader(classDb.ConnectionString);
+        var reader = TestReaders.Subjects(classDb.ConnectionString);
         var day = Assert.Single(await reader.GetHabitOccurrencesAsync(habit.Id, on: today, cancellationToken: Ct));
         Assert.Equal("ran it early", day.Note);
 

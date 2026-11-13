@@ -2,7 +2,7 @@ using System.Globalization;
 using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.Persistence;
+using LifeOs.Infrastructure.DependencyInjection;
 using Npgsql;
 
 namespace LifeOs.Api.Read;
@@ -10,16 +10,16 @@ namespace LifeOs.Api.Read;
 /// <summary>
 /// The reviews' reads (REVIEW-1, REVIEW-2, reviews plan §3) on the <c>bsk_reader</c> connection:
 /// the reviews through <c>bsk.v_review</c>, each with what it reads as today, and the recap of the
-/// days a review looks back on, read straight from the record. Days are in
-/// <paramref name="homeTimeZone"/>. No writes live here; they go through <c>ReviewService</c>.
+/// days a review looks back on, read straight from the record. Days are in the host's home zone.
+/// No writes live here; they go through <c>ReviewService</c>.
 /// </summary>
-public sealed class ReviewReader(string readerConnectionString, IClock clock, string homeTimeZone = HomeZone.Default)
+public sealed class ReviewReader(
+    NpgsqlDataSource dataSource, IReviewRepository reviews, IHomeCalendar calendar, KernelSettings settings)
 {
     /// <summary>The longest recap read, in days: a month and a bit.</summary>
     public const int MaxRecapDays = 62;
 
-    private readonly NpgsqlReviewRepository reviews = new(KernelDataSource.For(readerConnectionString));
-    private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), clock, homeTimeZone);
+    private readonly string homeTimeZone = settings.HomeTimeZone;
 
     /// <summary>Today in the home zone.</summary>
     public Task<DateOnly> TodayAsync(CancellationToken cancellationToken = default)
@@ -48,8 +48,7 @@ public sealed class ReviewReader(string readerConnectionString, IClock clock, st
     public async Task<IReadOnlyList<RecapSectionRow>> RecapAsync(
         DateOnly from, DateOnly to, DateOnly asOf, CancellationToken cancellationToken = default)
     {
-        await using var db = new NpgsqlConnection(readerConnectionString);
-        await db.OpenAsync(cancellationToken);
+        await using var db = await dataSource.OpenConnectionAsync(cancellationToken);
         var args = new { zone = homeTimeZone, from = Text(from), to = Text(to), asOf = Text(asOf) };
 
         async Task<IReadOnlyList<RecapItemRow>> ItemsAsync(string kind, string sql)

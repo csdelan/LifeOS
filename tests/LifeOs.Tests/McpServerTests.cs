@@ -776,7 +776,7 @@ public sealed class McpServerTests(PostgresFixture postgres, ClassDatabase class
     [InlineData("5000d", "2025-10-27T12:00:00Z")]
     public async Task Since_reads_instants_and_spans(string? since, string expected)
     {
-        var tools = new RecordTools(new McpReads("Host=unused", "UTC", new TestClock(FixedNow)), McpOptions.From(Config()));
+        var tools = new RecordTools(TestReaders.Mcp("Host=unused", "UTC", new TestClock(FixedNow)), McpOptions.From(Config()));
 
         var from = await tools.SinceAsync(since, FixedNow, Ct);
 
@@ -786,7 +786,7 @@ public sealed class McpServerTests(PostgresFixture postgres, ClassDatabase class
     [Fact]
     public async Task Since_refuses_what_it_cannot_read()
     {
-        var tools = new RecordTools(new McpReads("Host=unused", "UTC", new TestClock(FixedNow)), McpOptions.From(Config()));
+        var tools = new RecordTools(TestReaders.Mcp("Host=unused", "UTC", new TestClock(FixedNow)), McpOptions.From(Config()));
 
         await Assert.ThrowsAsync<McpException>(() => tools.SinceAsync("yesterday-ish", FixedNow, Ct));
     }
@@ -797,7 +797,7 @@ public sealed class McpServerTests(PostgresFixture postgres, ClassDatabase class
     [InlineData("2026-10-27", "UTC", "2026-10-27T00:00:00Z")]
     public async Task A_day_since_starts_at_its_midnight_in_the_home_zone(string day, string zone, string expected)
     {
-        var reads = new McpReads(BskReader.ConnectionStringFrom(classDb.ConnectionString), zone, new TestClock(FixedNow));
+        var reads = TestReaders.Mcp(BskReader.ConnectionStringFrom(classDb.ConnectionString), zone, new TestClock(FixedNow));
         var tools = new RecordTools(reads, McpOptions.From(Config()));
 
         Assert.Equal(DateTimeOffset.Parse(expected, System.Globalization.CultureInfo.InvariantCulture),

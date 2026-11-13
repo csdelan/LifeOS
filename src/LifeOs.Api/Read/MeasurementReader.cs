@@ -1,7 +1,6 @@
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Measurements;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.Persistence;
 
 namespace LifeOs.Api.Read;
 
@@ -10,18 +9,11 @@ namespace LifeOs.Api.Read;
 /// <c>bsk_reader</c> connection, like every other API read: the metrics and readings through
 /// <c>bsk.v_metric</c> and <c>bsk.v_metric_reading</c>, with the trend and goal from
 /// <see cref="MetricReads"/>, and the lab visits through <c>bsk.v_lab_visit</c>, on the days of
-/// <paramref name="homeTimeZone"/>. No writes live here; they go through <see cref="MetricService"/>,
+/// the home zone. No writes live here; they go through <see cref="MetricService"/>,
 /// <see cref="MetricReadingService"/> and <see cref="LabVisitService"/>.
 /// </summary>
-public sealed class MeasurementReader(string readerConnectionString, IClock clock, string homeTimeZone = HomeZone.Default)
+public sealed class MeasurementReader(IMetricRepository metrics, MetricReads reads, LabVisitReads visits)
 {
-    private readonly NpgsqlMetricRepository metrics = new(KernelDataSource.For(readerConnectionString));
-    private readonly MetricReads reads = new(
-        new NpgsqlMetricRepository(KernelDataSource.For(readerConnectionString)), new NpgsqlHomeCalendar(KernelDataSource.For(readerConnectionString), clock, homeTimeZone));
-
-    private readonly LabVisitReads visits = new(
-        new NpgsqlMetricRepository(KernelDataSource.For(readerConnectionString)), new NpgsqlHomeCalendar(KernelDataSource.For(readerConnectionString), clock, homeTimeZone));
-
     /// <summary>Every lab visit with its results, newest collected first (<c>GET /api/measurements/visits</c>).</summary>
     public async Task<LabVisitsRead> GetVisitsAsync(CancellationToken cancellationToken = default)
     {

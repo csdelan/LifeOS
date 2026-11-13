@@ -1,8 +1,6 @@
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Activity;
 using LifeOs.Domain;
-using LifeOs.Infrastructure;
-using LifeOs.Infrastructure.Persistence;
 
 namespace LifeOs.Api.Read;
 
@@ -14,19 +12,13 @@ namespace LifeOs.Api.Read;
 /// out with the days. The one write, a workout's note, goes through
 /// <see cref="WorkoutNoteService"/>; syncing goes through <see cref="OuraSyncService"/>.
 /// </summary>
-public sealed class ActivityReader(string readerConnectionString, string homeTimeZone = HomeZone.Default, IClock? clock = null)
+public sealed class ActivityReader(ActivityReads reads, ActivityPaidReads paid)
 {
     /// <summary>The days a range covers when it gives no start: 30, ending on its last day.</summary>
     public const int DefaultDays = 30;
 
     /// <summary>The weeks of workouts a range covers when it gives no start: 12, Monday to Sunday.</summary>
     public const int DefaultWeeks = 12;
-
-    private readonly ActivityReads reads = new(
-        new NpgsqlActivityRepository(KernelDataSource.For(readerConnectionString)),
-        new NpgsqlHomeCalendar(KernelDataSource.For(readerConnectionString), clock ?? new SystemClock(), homeTimeZone));
-
-    private readonly ActivityPaidReads paid = new(new NpgsqlLedgerRepository(KernelDataSource.For(readerConnectionString), homeTimeZone));
 
     /// <summary>
     /// Every day from <paramref name="from"/> to <paramref name="to"/>, oldest first, at most

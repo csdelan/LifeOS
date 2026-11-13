@@ -107,7 +107,7 @@ public sealed class TaskEndpointTests(ClassDatabase classDb) : IClassFixture<Cla
         Assert.Equal(4, completedLine.GetProperty("amounts").GetProperty("xp").GetInt64());
 
         // Found by URN, as the connector's get_item does, it reads the same.
-        var byUrn = (await new SubjectReader(classDb.ConnectionString).GetSubjectByUrnAsync(detail.GetProperty("urn").GetString()!, Ct))!;
+        var byUrn = (await TestReaders.Subjects(classDb.ConnectionString).GetSubjectByUrnAsync(detail.GetProperty("urn").GetString()!, Ct))!;
         Assert.Equal(series, byUrn.Repeating!.SeriesId);
         Assert.True(byUrn.BountyFromSeries);
         Assert.Contains(byUrn.Bounty!, l => l.Trigger == "completed");

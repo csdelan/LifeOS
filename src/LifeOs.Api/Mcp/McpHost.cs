@@ -28,7 +28,7 @@ public static class McpHost
     /// Registers the server when <c>Mcp:Enabled</c> is true. Call after <c>AddLifeOsAuth</c>,
     /// whose JWT validation it shares.
     /// </summary>
-    public static void AddLifeOsMcp(this WebApplicationBuilder builder, string readerConnectionString, string homeTimeZone)
+    public static void AddLifeOsMcp(this WebApplicationBuilder builder)
     {
         var options = McpOptions.From(builder.Configuration);
         if (!options.Enabled)
@@ -38,7 +38,6 @@ public static class McpHost
 
         var auth = SupabaseAuthOptions.From(builder.Configuration);
         var services = builder.Services;
-        services.AddSingleton(sp => new McpReads(readerConnectionString, homeTimeZone, sp.GetRequiredService<IClock>()));
 
         var server = services
             .AddMcpServer(o =>

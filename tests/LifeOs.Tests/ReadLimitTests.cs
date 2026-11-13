@@ -73,7 +73,7 @@ public sealed class ReadLimitTests(ClassDatabase classDb) : IClassFixture<ClassD
         var task = (await SendAsync(c, "/api/subjects", new { type = SubjectTypes.Task, title = $"Flagged task {ns}" })).GetProperty("id").GetGuid();
         await SendAsync(c, "/api/flag", new { item = task.ToString() });
 
-        var reader = new SubjectReader(classDb.ConnectionString);
+        var reader = TestReaders.Subjects(classDb.ConnectionString);
         var all = await reader.GetInboxAsync(cancellationToken: Ct);
         var first = all.Single(i => (i.EventContent ?? "").Contains($"First thought {ns}", StringComparison.Ordinal));
 

@@ -204,6 +204,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<MetricService>();
         services.AddSingleton<MetricReadingService>();
         services.AddSingleton<MetricReads>();
+        services.AddSingleton<LabVisitReads>();
         services.AddSingleton(sp => new LabVisitService(
             sp.GetRequiredService<IMetricRepository>(),
             sp.GetRequiredService<MetricService>(),
@@ -236,6 +237,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IClock>()));
         services.AddSingleton<WorkoutNoteService>();
         services.AddSingleton<ActivityReads>();
+        services.AddSingleton<ActivityPaidReads>();
         services.AddSingleton<ActivityRewards>();
         services.AddSingleton<ActivitySyncService>();
 

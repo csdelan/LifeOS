@@ -2,7 +2,6 @@ using System.Globalization;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Food;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.Persistence;
 
 namespace LifeOs.Api.Read;
 
@@ -13,13 +12,8 @@ namespace LifeOs.Api.Read;
 /// exactly as <c>bsk food</c> prints it. No writes live here; they go through
 /// <see cref="FoodLogService"/>.
 /// </summary>
-public sealed class FoodReader(string readerConnectionString, IClock clock, string homeTimeZone = HomeZone.Default)
+public sealed class FoodReader(FoodReads reads)
 {
-    private readonly FoodReads reads = new(
-        new NpgsqlFoodLogRepository(KernelDataSource.For(readerConnectionString)),
-        new NpgsqlLedgerRepository(KernelDataSource.For(readerConnectionString), homeTimeZone),
-        new NpgsqlHomeCalendar(KernelDataSource.For(readerConnectionString), clock, homeTimeZone));
-
     /// <summary>One day (default today).</summary>
     public async Task<FoodDayRead> GetDayAsync(DateOnly? day, CancellationToken cancellationToken = default)
         => FoodRows.From(await reads.GetDayAsync(day, cancellationToken), reads.Rules);

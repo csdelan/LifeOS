@@ -2,7 +2,6 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Home;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.Persistence;
 
 namespace LifeOs.Api.Read;
 
@@ -10,15 +9,11 @@ namespace LifeOs.Api.Read;
 /// The home's reads (HOME-1 to HOME-4, environment plan §4.7, §8.3) on the <c>bsk_reader</c>
 /// connection, like every other API read: the spaces and ratings through <c>bsk.v_space</c> and
 /// <c>bsk.v_space_rating</c>, and the Home Score through <see cref="HomeService"/> on the
-/// reader's own domain-credit read, on the days of <paramref name="homeTimeZone"/>. No writes live
-/// here; they go through <see cref="SpaceService"/> and <see cref="SpaceRatingService"/>.
+/// reader's own domain-credit read, on the days of the home zone. No writes live here; they go
+/// through <see cref="SpaceService"/> and <see cref="SpaceRatingService"/>.
 /// </summary>
-public sealed class EnvironmentReader(string readerConnectionString, IClock clock, string homeTimeZone = HomeZone.Default)
+public sealed class EnvironmentReader(ISpaceRepository spaces, IHomeCalendar calendar, HomeService home)
 {
-    private readonly NpgsqlSpaceRepository spaces = new(KernelDataSource.For(readerConnectionString));
-    private readonly NpgsqlHomeCalendar calendar = new(KernelDataSource.For(readerConnectionString), clock, homeTimeZone);
-    private readonly HomeService home = new(new NpgsqlDomainCreditReader(KernelDataSource.For(readerConnectionString), clock, homeTimeZone));
-
     /// <summary>
     /// The home today: the Home Score, each space and part, Fix next, and each space's shots with
     /// Then and Now (<c>GET /api/environment</c>).

@@ -81,17 +81,9 @@ public static class ApiHost
         {
             builder.Services.AddHostedService<StartupCatchUp>();
         }
-        builder.Services.AddSingleton(new SubjectReader(
-            reader, integrations.Unsplash?.AppName ?? Cover.DefaultAppName));
-        builder.Services.AddSingleton(sp => new RewardReader(
-            reader, sp.GetRequiredService<RewardService>().CoinValueUsd, sp.GetRequiredService<IClock>(), homeZone));
-        builder.Services.AddSingleton(sp => new FoodReader(reader, sp.GetRequiredService<IClock>(), homeZone));
-        builder.Services.AddSingleton(sp => new EnvironmentReader(reader, sp.GetRequiredService<IClock>(), homeZone));
-        builder.Services.AddSingleton(sp => new MeasurementReader(reader, sp.GetRequiredService<IClock>(), homeZone));
-        builder.Services.AddSingleton(sp => new ReviewReader(reader, sp.GetRequiredService<IClock>(), homeZone));
-        builder.Services.AddSingleton(sp => new ActivityReader(reader, homeZone, sp.GetRequiredService<IClock>()));
-        builder.Services.AddSingleton(sp => new ArtifactReader(
-            new NpgsqlArtifactBlobStore(KernelDataSource.For(reader), sp.GetService<IObjectStorage>())));
+        // Every read on the reader connection, built from a kernel there with this host's settings
+        // and clock (code review CR81).
+        builder.Services.AddLifeOsReaders(reader);
 
         // The agents Chris allowed and what each called (agent-access plan §4.5), on the owner
         // connection: bsk_ops is never granted to bsk_reader. /mcp checks the list on every call.
@@ -102,7 +94,7 @@ public static class ApiHost
 
         // The read-only MCP server for Chris's agents (agent-access plan §4), off unless
         // Mcp:Enabled is true. Its tools read on the reader connection only.
-        builder.AddLifeOsMcp(reader, homeZone);
+        builder.AddLifeOsMcp();
 
         builder.Services.Configure<ForwardedHeadersOptions>(options =>
         {

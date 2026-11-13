@@ -46,7 +46,7 @@ public sealed class RecentChangesAreaTests(PostgresFixture postgres)
         await capture.CaptureIdeaSessionAsync(problem.Id, "The gate sticks", ["Plane the edge"], Ct);
         await db.Get<ActivityService>().LogAsync(new ActivityInput("Walked the dog"), Ct);
 
-        var reader = new ChangeReader(db.ConnectionString);
+        var reader = TestReaders.Changes(db.ConnectionString);
         var everything = (await reader.GetChangesAsync(since, null, NoneOff, 500, cancellationToken: Ct));
         var core = (await reader.GetChangesAsync(since, null, AllOff, 500, cancellationToken: Ct));
 
@@ -97,7 +97,7 @@ public sealed class RecentChangesAreaTests(PostgresFixture postgres)
             unplaced = await InsertAsync(owner, "measurement", "api", """{"brand_new_feature": {"fixture": true}}""");
         }
 
-        var reader = new ChangeReader(db.ConnectionString);
+        var reader = TestReaders.Changes(db.ConnectionString);
         var everything = Ids((await reader.GetChangesAsync(since, null, NoneOff, 500, cancellationToken: Ct)));
         Assert.Contains(unplaced, everything);
         Assert.All(byArea.Values.SelectMany(ids => ids), id => Assert.Contains(id, everything));

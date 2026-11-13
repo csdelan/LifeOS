@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Dapper;
 using LifeOs.Domain;
+using LifeOs.Infrastructure.DependencyInjection;
 using Npgsql;
 
 namespace LifeOs.Api.Read;
@@ -18,16 +19,14 @@ namespace LifeOs.Api.Read;
 /// <c>bsk.is_archived</c> on <c>v_subject</c>. Together that means a status or
 /// archive write is visible on the next read without a <c>bsk rebuild</c>.
 /// </remarks>
-/// <param name="connectionString">The reader connection.</param>
-/// <param name="coverAppName">The <c>utm_source</c> on a cover's links back to Unsplash (COVER-1).</param>
-public sealed class SubjectReader(string connectionString, string coverAppName = Cover.DefaultAppName)
+/// <param name="dataSource">The reader connection's pool (<see cref="ReaderKernel"/>).</param>
+/// <param name="settings">The host's settings: the <c>utm_source</c> on a cover's links back to Unsplash (COVER-1).</param>
+public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings settings)
 {
+    private readonly string coverAppName = settings.Integrations?.Unsplash?.AppName ?? Cover.DefaultAppName;
+
     private async Task<NpgsqlConnection> OpenAsync(CancellationToken cancellationToken)
-    {
-        var connection = new NpgsqlConnection(connectionString);
-        await connection.OpenAsync(cancellationToken);
-        return connection;
-    }
+        => await dataSource.OpenConnectionAsync(cancellationToken);
 
     /// <summary>Subject types with counts — the Browse tree. Archived items are excluded by default (D9).</summary>
     public async Task<IReadOnlyList<TypeCount>> GetTypeCountsAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
