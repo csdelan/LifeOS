@@ -183,6 +183,19 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
 
     public Task<SubjectDetail?> GetSubjectByUrnAsync(string urn, CancellationToken cancellationToken = default) => DetailAsync("s.urn = @urn", new { urn }, cancellationToken);
 
+    /// <summary>
+    /// The subject an id or a URN names exactly, or null: how a read, or a check made before a
+    /// write, looks an item up. A write itself names it to its service, which reads titles and
+    /// short ids too (<c>SubjectService.ResolveAsync</c>).
+    /// </summary>
+    public Task<SubjectDetail?> FindByIdOrUrnAsync(string? reference, CancellationToken cancellationToken = default)
+    {
+        var key = (reference ?? "").Trim();
+        return Guid.TryParse(key, out var id) ? GetSubjectAsync(id, cancellationToken)
+            : key.Length > 0 ? GetSubjectByUrnAsync(key, cancellationToken)
+            : Task.FromResult<SubjectDetail?>(null);
+    }
+
     /// <summary>One subject's detail, found by <paramref name="where"/>, with its series, price and cover.</summary>
     private async Task<SubjectDetail?> DetailAsync(string where, object parameters, CancellationToken cancellationToken)
     {

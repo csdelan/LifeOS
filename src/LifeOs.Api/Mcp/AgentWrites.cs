@@ -388,10 +388,7 @@ public sealed class AgentWrites(
     /// <summary>The item an id or URN names, as <c>get_item</c> finds it, or a refusal the agent can act on.</summary>
     private async Task<McpItemRef> FindAsync(string reference, string name, CancellationToken cancellationToken)
     {
-        var key = (reference ?? "").Trim();
-        var detail = Guid.TryParse(key, out var guid) ? await reader.GetSubjectAsync(guid, cancellationToken)
-            : key.Length > 0 ? await reader.GetSubjectByUrnAsync(key, cancellationToken)
-            : null;
+        var detail = await reader.FindByIdOrUrnAsync(reference, cancellationToken);
         return detail is not null && options.AllowsType(detail.Type)
             ? new McpItemRef(detail.Id, detail.Urn, detail.Type, detail.Title)
             : throw new McpException($"{name}: no item has the id or URN '{reference}'. Find one with find_items or list_items.");

@@ -81,12 +81,11 @@ public static class RewardEndpoints
     private static async Task<IResult> Redeem(
         RedeemBody body,
         RedemptionService redemptions,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         var reward = string.IsNullOrWhiteSpace(body.Reward)
             ? null
-            : await WriteEndpoints.ResolveWriteRefAsync(body.Reward, reader, cancellationToken);
+            : body.Reward;
         var redemption = await redemptions.RedeemAsync(
             reward, body.Amounts is { Count: > 0 } amounts ? amounts : null, body.Note, cancellationToken);
         return Results.Ok(RewardRows.From(redemption));
@@ -110,7 +109,6 @@ public static class RewardEndpoints
     private static async Task<IResult> PriceReward(
         RewardPriceBody body,
         RewardCatalogService catalog,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Reward) || body.Price is not { Count: > 0 })
@@ -119,14 +117,13 @@ public static class RewardEndpoints
         }
 
         var reward = await catalog.SetPriceAsync(
-            await WriteEndpoints.ResolveWriteRefAsync(body.Reward, reader, cancellationToken), body.Price, cancellationToken);
+            body.Reward, body.Price, cancellationToken);
         return Results.Ok(RewardRows.From(reward));
     }
 
     private static async Task<IResult> TargetReward(
         RewardTargetBody body,
         RewardCatalogService catalog,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Reward))
@@ -135,7 +132,7 @@ public static class RewardEndpoints
         }
 
         var reward = await catalog.SetTargetAsync(
-            await WriteEndpoints.ResolveWriteRefAsync(body.Reward, reader, cancellationToken), body.TargetUsd, cancellationToken);
+            body.Reward, body.TargetUsd, cancellationToken);
         return Results.Ok(RewardRows.From(reward));
     }
 
@@ -144,7 +141,6 @@ public static class RewardEndpoints
     private static async Task<IResult> SetBounty(
         BountyBody body,
         BountyService bounties,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject))
@@ -159,7 +155,7 @@ public static class RewardEndpoints
             return Results.BadRequest(new ApiError("Send one of amounts, nothing or clear (everyMinutes may come alone, with amounts or with nothing)."));
         }
 
-        var subject = await WriteEndpoints.ResolveWriteRefAsync(body.Subject, reader, cancellationToken);
+        var subject = body.Subject;
         var view = body.Clear
             ? await bounties.ClearAsync(subject, body.Trigger, cancellationToken)
             : body.Nothing
@@ -171,7 +167,6 @@ public static class RewardEndpoints
     private static async Task<IResult> SetHabitTarget(
         HabitTargetBody body,
         HabitTargetService targets,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Habit))
@@ -185,7 +180,7 @@ public static class RewardEndpoints
             return Results.BadRequest(new ApiError("Send minAdherence and/or windowDays, or clear — one of them."));
         }
 
-        var habit = await WriteEndpoints.ResolveWriteRefAsync(body.Habit, reader, cancellationToken);
+        var habit = body.Habit;
         var view = body.Clear
             ? await targets.ClearAsync(habit, cancellationToken)
             : await targets.SetAsync(habit, body.MinAdherence, body.WindowDays, cancellationToken);

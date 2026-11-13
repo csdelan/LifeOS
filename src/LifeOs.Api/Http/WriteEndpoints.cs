@@ -69,7 +69,6 @@ public static class WriteEndpoints
     private static async Task<IResult> NewSubject(
         NewSubjectBody body,
         SubjectCreationService creation,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Type) || string.IsNullOrWhiteSpace(body.Title))
@@ -92,7 +91,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("relation only applies with parent."));
         }
 
-        var parent = string.IsNullOrWhiteSpace(body.Parent) ? null : await ResolveWriteRefAsync(body.Parent, reader, cancellationToken);
+        var parent = string.IsNullOrWhiteSpace(body.Parent) ? null : body.Parent;
         var made = await creation.CreateAsync(
             canonicalType, body.Title, attributes.ToJsonString(), parent, body.Relation, cancellationToken);
         return Results.Ok(ToCreated(made.Subject));
@@ -101,7 +100,6 @@ public static class WriteEndpoints
     private static async Task<IResult> Promote(
         PromoteBody body,
         PromotionService promotion,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Source) || string.IsNullOrWhiteSpace(body.Type)
@@ -112,14 +110,13 @@ public static class WriteEndpoints
 
         // A capture event's id stays as it is; an item's id becomes its URN.
         var promoted = await promotion.PromoteFromInboxAsync(
-            await ResolveWriteRefAsync(body.Source, reader, cancellationToken), body.Type, body.Title, cancellationToken);
+            body.Source, body.Type, body.Title, cancellationToken);
         return Results.Ok(ToCreated(promoted.Subject));
     }
 
     private static async Task<IResult> SetAttributes(
         SetAttributesBody body,
         AttributeService attributes,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject) || body.Attrs is null || body.Attrs.Count == 0)
@@ -130,14 +127,13 @@ public static class WriteEndpoints
         var assignments = body.Attrs
             .Select(pair => new AttributeAssignment(pair.Key, pair.Value))
             .ToList();
-        await attributes.SetAsync(await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), assignments, cancellationToken);
+        await attributes.SetAsync(body.Subject, assignments, cancellationToken);
         return Results.Ok();
     }
 
     private static async Task<IResult> Rename(
         RenameBody body,
         RenameService rename,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject) || string.IsNullOrWhiteSpace(body.Title))
@@ -145,7 +141,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject and title are required."));
         }
 
-        var result = await rename.RenameAsync(await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), body.Title, cancellationToken);
+        var result = await rename.RenameAsync(body.Subject, body.Title, cancellationToken);
         return Results.Ok(new RenamedSubject
         {
             Id = result.Subject.Id,
@@ -159,7 +155,6 @@ public static class WriteEndpoints
     private static async Task<IResult> SetStatus(
         StatusBody body,
         StatusService status,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject) || string.IsNullOrWhiteSpace(body.Status))
@@ -169,7 +164,7 @@ public static class WriteEndpoints
 
         // The reconcile's earns and reversals ride back for REWARD-4's feedback.
         var result = await status.ChangeStatusAsync(
-            await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), body.Status, cancellationToken);
+            body.Subject, body.Status, cancellationToken);
         return Results.Ok(RewardRows.Earned(result.Awards, result.Progress));
     }
 
@@ -183,7 +178,6 @@ public static class WriteEndpoints
     private static async Task<IResult> Recur(
         RecurBody body,
         RecurrenceService recurrence,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject))
@@ -191,7 +185,7 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject is required."));
         }
 
-        var subjectRef = await ResolveWriteRefAsync(body.Subject, reader, cancellationToken);
+        var subjectRef = body.Subject;
         if (body.Recurrence is not { } pattern)
         {
             var cleared = await recurrence.ClearAsync(subjectRef, cancellationToken);
@@ -214,7 +208,6 @@ public static class WriteEndpoints
     private static async Task<IResult> Archive(
         SubjectBody body,
         ArchiveService archive,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject))
@@ -222,14 +215,13 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject is required."));
         }
 
-        await archive.ArchiveAsync(await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), cancellationToken);
+        await archive.ArchiveAsync(body.Subject, cancellationToken);
         return Results.Ok();
     }
 
     private static async Task<IResult> Restore(
         SubjectBody body,
         ArchiveService archive,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject))
@@ -237,14 +229,13 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject is required."));
         }
 
-        await archive.RestoreAsync(await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), cancellationToken);
+        await archive.RestoreAsync(body.Subject, cancellationToken);
         return Results.Ok();
     }
 
     private static async Task<IResult> Tag(
         TagBody body,
         TagService tags,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Item))
@@ -253,7 +244,7 @@ public static class WriteEndpoints
         }
 
         await tags.ApplyAsync(
-            await ResolveWriteRefAsync(body.Item, reader, cancellationToken),
+            body.Item,
             body.Add ?? [],
             body.Remove ?? [],
             cancellationToken);
@@ -283,7 +274,6 @@ public static class WriteEndpoints
     private static async Task<IResult> Link(
         LinkBody body,
         RelationService relations,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.From) || string.IsNullOrWhiteSpace(body.Relation)
@@ -292,8 +282,8 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("from, relation, and to are required."));
         }
 
-        var from = await ResolveWriteRefAsync(body.From, reader, cancellationToken);
-        var to = await ResolveWriteRefAsync(body.To, reader, cancellationToken);
+        var from = body.From;
+        var to = body.To;
         if (body.Remove)
         {
             // What an edit form takes away: a Goal's old identity statement, an unticked parent.
@@ -310,7 +300,6 @@ public static class WriteEndpoints
     private static async Task<IResult> Relate(
         RelateBody body,
         RelateService relate,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (body.EventId == Guid.Empty || string.IsNullOrWhiteSpace(body.Subject))
@@ -322,14 +311,13 @@ public static class WriteEndpoints
             ? SubjectEventRelations.Concerns
             : body.As;
         await relate.RelateAsync(
-            body.EventId, await ResolveWriteRefAsync(body.Subject, reader, cancellationToken), relation, cancellationToken);
+            body.EventId, body.Subject, relation, cancellationToken);
         return Results.Ok();
     }
 
     private static async Task<IResult> Flag(
         ItemBody body,
         TriageService triage,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Item))
@@ -337,14 +325,13 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("item is required."));
         }
 
-        await triage.FlagAsync(await ResolveWriteRefAsync(body.Item, reader, cancellationToken), cancellationToken);
+        await triage.FlagAsync(body.Item, cancellationToken);
         return Results.Ok();
     }
 
     private static async Task<IResult> Dismiss(
         ItemBody body,
         TriageService triage,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Item))
@@ -352,14 +339,13 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("item is required."));
         }
 
-        await triage.DismissAsync(await ResolveWriteRefAsync(body.Item, reader, cancellationToken), cancellationToken);
+        await triage.DismissAsync(body.Item, cancellationToken);
         return Results.Ok();
     }
 
     private static async Task<IResult> Drop(
         ItemBody body,
         TriageService triage,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Item))
@@ -367,14 +353,13 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("item is required."));
         }
 
-        await triage.DropAsync(await ResolveWriteRefAsync(body.Item, reader, cancellationToken), cancellationToken);
+        await triage.DropAsync(body.Item, cancellationToken);
         return Results.Ok();
     }
 
     private static async Task<IResult> Adhere(
         AdhereBody body,
         AdherenceService adherence,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Habit) || string.IsNullOrWhiteSpace(body.State))
@@ -389,7 +374,7 @@ public static class WriteEndpoints
         };
         var occurrence = ParseOccurrence(body.On);
         var recorded = await adherence.RecordAsync(
-            await ResolveWriteRefAsync(body.Habit, reader, cancellationToken), result, occurrence, body.Note, cancellationToken);
+            body.Habit, result, occurrence, body.Note, cancellationToken);
         return Results.Ok(RewardRows.Earned(recorded.Awards, recorded.Progress));
     }
 
@@ -405,7 +390,7 @@ public static class WriteEndpoints
         }
 
         var action = body.Action.Trim().ToLowerInvariant();
-        var task = await ResolveWriteRefAsync(body.Task, reader, cancellationToken);
+        var task = body.Task;
         var result = action == "complete"
             ? await timers.CompleteAsync(task, cancellationToken)
             : await timers.ApplyAsync(task, action, cancellationToken);
@@ -432,7 +417,6 @@ public static class WriteEndpoints
     private static async Task<IResult> Involve(
         InvolveBody body,
         PeopleService people,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject) || string.IsNullOrWhiteSpace(body.Person)
@@ -441,8 +425,8 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("subject, person, and role are required."));
         }
 
-        var subject = await ResolveWriteRefAsync(body.Subject, reader, cancellationToken);
-        var person = await ResolveWriteRefAsync(body.Person, reader, cancellationToken);
+        var subject = body.Subject;
+        var person = body.Person;
         if (body.Remove)
         {
             await people.RemoveAsync(subject, person, body.Role, cancellationToken);
@@ -459,7 +443,6 @@ public static class WriteEndpoints
         JournalBody body,
         CaptureService capture,
         RelateService relate,
-        SubjectReader reader,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject) || string.IsNullOrWhiteSpace(body.Text))
@@ -472,7 +455,7 @@ public static class WriteEndpoints
         var captured = await capture.CaptureJournalAsync(body.Text, cancellationToken);
         await relate.RelateAsync(
             captured.EventId,
-            await ResolveWriteRefAsync(body.Subject, reader, cancellationToken),
+            body.Subject,
             SubjectEventRelations.Concerns,
             cancellationToken);
         return Results.Ok();
@@ -525,23 +508,6 @@ public static class WriteEndpoints
         }
 
         return attributes;
-    }
-
-    /// <summary>
-    /// HTTP clients name subjects by id; Application services resolve urn / short id /
-    /// title. When the reference is a uuid that names a subject, substitute its urn.
-    /// Event ids (promote / tag / triage of a capture) are left as the guid string.
-    /// </summary>
-    internal static async Task<string> ResolveWriteRefAsync(
-        string reference, SubjectReader reader, CancellationToken cancellationToken)
-    {
-        if (!Guid.TryParse(reference.Trim(), out var id))
-        {
-            return reference;
-        }
-
-        var subject = await reader.GetSubjectAsync(id, cancellationToken);
-        return subject?.Urn ?? reference;
     }
 
     /// <summary>The occurrence date asked for, or null for today in the home zone (the service's default).</summary>

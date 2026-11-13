@@ -23,6 +23,16 @@ public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource, EventSo
             new { urn }, cancellationToken: cancellationToken));
     }
 
+    public async Task<SubjectRef?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await using var connection = dataSource.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        return await connection.QuerySingleOrDefaultAsync<SubjectRef>(new CommandDefinition(
+            "SELECT id, urn, type, title FROM bsk.subject WHERE id = @id;",
+            new { id }, cancellationToken: cancellationToken));
+    }
+
     public async Task<SubjectRef?> FindByTypeAndTitleAsync(
         string type, string title, CancellationToken cancellationToken = default)
     {

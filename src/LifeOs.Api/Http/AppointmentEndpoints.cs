@@ -49,7 +49,7 @@ public static class AppointmentEndpoints
     /// skipped, so running it again only extends the horizon.
     /// </summary>
     private static async Task<IResult> Materialize(
-        Guid id, MaterializeBody body, AppointmentService appointments, SubjectReader reader,
+        Guid id, MaterializeBody body, AppointmentService appointments,
         CancellationToken cancellationToken)
     {
         if (!DateOnly.TryParseExact(body.Through?.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var through))
@@ -58,7 +58,7 @@ public static class AppointmentEndpoints
         }
 
         var result = await appointments.MaterializeAsync(
-            await WriteEndpoints.ResolveWriteRefAsync(id.ToString(), reader, cancellationToken), through, cancellationToken);
+            id.ToString(), through, cancellationToken);
         return Results.Ok(new MaterializeRow
         {
             Series = new CreatedSubject

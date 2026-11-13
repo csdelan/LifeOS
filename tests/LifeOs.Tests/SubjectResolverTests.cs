@@ -38,6 +38,22 @@ public sealed class SubjectResolverTests(ClassDatabase classDb) : IClassFixture<
         Assert.Equal(created.Id, byTitle.Id);
     }
 
+    // Code review CR43: the web names items by id, and every door hands the id straight to the
+    // service, which looks it up by key rather than reading the whole item first.
+    [Fact]
+    public async Task Resolves_by_id_and_refuses_an_id_no_subject_has()
+    {
+        var service = Service();
+        var created = await service.CreateAsync(SubjectTypes.Task, $"resolve by id {Guid.NewGuid():N}", cancellationToken: Ct);
+
+        var byId = await service.ResolveAsync($" {created.Id} ", Ct);
+        var missing = Guid.NewGuid().ToString();
+
+        Assert.Equal(created.Urn, byId.Urn);
+        var refused = await Assert.ThrowsAsync<SubjectNotFoundException>(() => service.ResolveAsync(missing, Ct));
+        Assert.Contains(missing, refused.Message);
+    }
+
     [Fact]
     public async Task Resolves_by_a_case_insensitive_title_fragment()
     {

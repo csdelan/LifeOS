@@ -18,12 +18,13 @@ namespace LifeOs.Application.Subjects;
 public sealed class SubjectService(ISubjectRepository subjects, IClock clock, EventSource eventSource)
 {
     /// <summary>
-    /// Resolves an <em>existing</em> subject named by a URN, a short id, or a fuzzy
-    /// title. This is the shared resolver every other M3/M4 command uses to name a
-    /// subject; unlike <see cref="ResolveOrCreateAsync"/> it never creates. A URN or
-    /// short id must match exactly; a title resolves when it uniquely identifies one
-    /// subject (an exact case-insensitive title wins over broader substring matches).
-    /// Ambiguity raises <see cref="AmbiguousSubjectException"/> rather than guessing.
+    /// Resolves an <em>existing</em> subject named by its id, a URN, a short id, or a fuzzy
+    /// title. This is the shared resolver every door uses to name a subject (the web sends
+    /// ids, <c>bsk</c> URNs and titles; code review CR43); unlike
+    /// <see cref="ResolveOrCreateAsync"/> it never creates. An id, URN or short id must match
+    /// exactly; a title resolves when it uniquely identifies one subject (an exact
+    /// case-insensitive title wins over broader substring matches). Ambiguity raises
+    /// <see cref="AmbiguousSubjectException"/> rather than guessing.
     /// </summary>
     public async Task<SubjectRef> ResolveAsync(
         string reference, CancellationToken cancellationToken = default)
@@ -34,6 +35,12 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
         }
 
         reference = reference.Trim();
+
+        if (Guid.TryParse(reference, out var id))
+        {
+            return await subjects.FindByIdAsync(id, cancellationToken)
+                ?? throw new SubjectNotFoundException(reference);
+        }
 
         if (Urns.IsUrn(reference))
         {

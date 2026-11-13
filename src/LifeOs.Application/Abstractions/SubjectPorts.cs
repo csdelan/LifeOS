@@ -9,6 +9,8 @@ public interface ISubjectRepository
 {
     Task<SubjectRef?> FindByUrnAsync(string urn, CancellationToken cancellationToken = default);
 
+    Task<SubjectRef?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
     Task<SubjectRef?> FindByTypeAndTitleAsync(
         string type, string title, CancellationToken cancellationToken = default);
 

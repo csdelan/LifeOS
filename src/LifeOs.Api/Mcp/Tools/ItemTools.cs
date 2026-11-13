@@ -208,10 +208,7 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
     /// <summary>The item an id or URN names, or a refusal an agent can act on.</summary>
     private async Task<SubjectDetail> FindAsync(string id, CancellationToken cancellationToken)
     {
-        var key = (id ?? "").Trim();
-        var detail = Guid.TryParse(key, out var guid) ? await subjects.GetSubjectAsync(guid, cancellationToken)
-            : key.Length > 0 ? await subjects.GetSubjectByUrnAsync(key, cancellationToken)
-            : null;
+        var detail = await subjects.FindByIdOrUrnAsync(id, cancellationToken);
         return detail is not null && options.AllowsType(detail.Type)
             ? detail
             : throw new McpException($"No item has the id or URN '{id}'. Find one with find_items or list_items.");

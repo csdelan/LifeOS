@@ -74,7 +74,7 @@ public static class CoverEndpoints
     }
 
     private static async Task<IResult> SetCover(
-        CoverBody body, CoverService covers, SubjectReader reader, CancellationToken cancellationToken)
+        CoverBody body, CoverService covers, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject) || string.IsNullOrWhiteSpace(body.PhotoId))
         {
@@ -82,12 +82,12 @@ public static class CoverEndpoints
         }
 
         var change = await covers.SetFromUnsplashAsync(
-            await WriteEndpoints.ResolveWriteRefAsync(body.Subject, reader, cancellationToken), body.PhotoId, body.PositionY, cancellationToken);
+            body.Subject, body.PhotoId, body.PositionY, cancellationToken);
         return Results.Ok(CoverResult.From(change, covers.AppName));
     }
 
     private static async Task<IResult> MoveCover(
-        CoverPositionBody body, CoverService covers, SubjectReader reader, CancellationToken cancellationToken)
+        CoverPositionBody body, CoverService covers, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject) || body.PositionY is not { } position)
         {
@@ -95,19 +95,19 @@ public static class CoverEndpoints
         }
 
         var change = await covers.MoveAsync(
-            await WriteEndpoints.ResolveWriteRefAsync(body.Subject, reader, cancellationToken), position, cancellationToken);
+            body.Subject, position, cancellationToken);
         return Results.Ok(CoverResult.From(change, covers.AppName));
     }
 
     private static async Task<IResult> ClearCover(
-        CoverClearBody body, CoverService covers, SubjectReader reader, CancellationToken cancellationToken)
+        CoverClearBody body, CoverService covers, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(body.Subject))
         {
             return Results.BadRequest(new ApiError("subject is required."));
         }
 
-        var cleared = await covers.ClearAsync(await WriteEndpoints.ResolveWriteRefAsync(body.Subject, reader, cancellationToken), cancellationToken);
+        var cleared = await covers.ClearAsync(body.Subject, cancellationToken);
         return Results.Ok(CoverClearedRead.From(cleared));
     }
 }
