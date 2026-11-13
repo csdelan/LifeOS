@@ -6,7 +6,8 @@ namespace LifeOs.Tests;
 
 /// <summary>
 /// Verifies the bsk_reader role from migration 0005: it can read every table and
-/// view, and cannot write to any of them.
+/// view, and cannot write to any of them. The relations read come from the catalog, so a new
+/// view is checked the day it's added (code review CR52).
 /// </summary>
 public sealed class ReaderRoleTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
@@ -34,26 +35,40 @@ public sealed class ReaderRoleTests(ClassDatabase classDb) : IClassFixture<Class
                 new { urn = $"urn:bsk:task:{Guid.NewGuid():N}" }, cancellationToken: Ct));
         }
 
-        await using var reader = await OpenReaderAsync();
-
-        // Reads against base tables and every flattened view succeed.
-        foreach (var relation in new[]
-                 {
-                     "bsk.subject", "bsk.event", "bsk.subject_relation", "bsk.subject_event",
-                     "bsk_derived.subject_current",
-                     "bsk.v_subject", "bsk.v_event", "bsk.v_subject_relation", "bsk.v_subject_event",
-                     "bsk.v_subject_current",
-                     "bsk.v_meal", "bsk.v_fast", "bsk.v_food_day",
-                     "bsk.v_exception_day",
-                     "bsk.v_space", "bsk.v_space_rating", "bsk.v_space_photo",
-                     "bsk.v_metric", "bsk.v_metric_reading", "bsk.v_lab_visit",
-                     "bsk.v_review"
-                 })
+        // Every table and view in the readable schemas, as the owner sees them in the catalog.
+        List<string> relations;
+        await using (var owner = new NpgsqlConnection(classDb.ConnectionString))
         {
-            var count = await reader.ExecuteScalarAsync<long>(new CommandDefinition(
-                $"SELECT count(*) FROM {relation};", cancellationToken: Ct));
-            Assert.True(count >= 0, $"reader could not read {relation}");
+            relations = (await owner.QueryAsync<string>(new CommandDefinition(
+                """
+                SELECT format('%I.%I', n.nspname, c.relname)
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname IN ('bsk', 'bsk_derived') AND c.relkind IN ('r', 'p', 'v', 'm')
+                ORDER BY 1;
+                """, cancellationToken: Ct))).AsList();
         }
+
+        Assert.Contains("bsk.subject", relations);
+        Assert.Contains("bsk_derived.subject_current", relations);
+        Assert.True(relations.Count(r => r.StartsWith("bsk.v_", StringComparison.Ordinal)) >= 40, string.Join(", ", relations));
+
+        await using var reader = await OpenReaderAsync();
+        var unreadable = new List<string>();
+        foreach (var relation in relations)
+        {
+            try
+            {
+                await reader.ExecuteScalarAsync<long>(new CommandDefinition(
+                    $"SELECT count(*) FROM {relation};", cancellationToken: Ct));
+            }
+            catch (PostgresException ex)
+            {
+                unreadable.Add($"{relation}: {ex.SqlState} {ex.MessageText}");
+            }
+        }
+
+        Assert.Empty(unreadable);
     }
 
     [Theory]
