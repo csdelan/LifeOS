@@ -183,7 +183,21 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<SubjectService>(),
             sp.GetRequiredService<IEventReader>(),
             sp.GetRequiredService<StatusService>(),
-            sp.GetRequiredService<ITagRepository>()));
+            sp.GetRequiredService<ITagRepository>(),
+            sp.GetRequiredService<TriageService>()));
+
+        services.AddSingleton(sp => new SubjectCreationService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ChildCreationService>(),
+            sp.GetRequiredService<TriageService>(),
+            sp.GetRequiredService<TaskSeriesService>()));
+
+        services.AddSingleton(sp => new InboxFilingService(
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<RelateService>(),
+            sp.GetRequiredService<TriageService>(),
+            sp.GetRequiredService<IHomeCalendar>(),
+            sp.GetRequiredService<IClock>()));
 
         services.AddSingleton(sp => new DecisionService(
             sp.GetRequiredService<SubjectService>(),

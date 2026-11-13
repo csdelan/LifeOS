@@ -76,10 +76,7 @@ public static class WriteEndpoints
 
     private static async Task<IResult> NewSubject(
         NewSubjectBody body,
-        SubjectService subjects,
-        ChildCreationService children,
-        TriageService triage,
-        TaskSeriesService taskSeries,
+        SubjectCreationService creation,
         SubjectReader reader,
         CancellationToken cancellationToken)
     {
@@ -103,45 +100,15 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("relation only applies with parent."));
         }
 
-        SubjectRef created;
-        if (!string.IsNullOrWhiteSpace(body.Parent))
-        {
-            var childLink = await children.CreateChildAsync(
-                canonicalType, body.Title, ResolveWriteRef(body.Parent, reader), body.Relation,
-                attributes.ToJsonString(), cancellationToken);
-            created = childLink.Child;
-        }
-        else if (canonicalType == SubjectTypes.Problem)
-        {
-            var resolved = await subjects.ResolveOrCreateAsync(
-                canonicalType, body.Title, attributes.ToJsonString(), cancellationToken);
-            created = resolved.Subject;
-        }
-        else
-        {
-            created = await subjects.CreateAsync(
-                canonicalType, body.Title, attributes.ToJsonString(), cancellationToken: cancellationToken);
-        }
-
-        if (canonicalType is SubjectTypes.Problem or SubjectTypes.Idea)
-        {
-            await triage.FlagItemAsync(isEvent: false, created.Id, cancellationToken);
-        }
-
-        // Its first repetition, from its start (else its due date or today).
-        if (canonicalType == SubjectTypes.Task)
-        {
-            await taskSeries.AfterPatternAsync(created, cancellationToken: cancellationToken);
-        }
-
-        return Results.Ok(ToCreated(created));
+        var parent = string.IsNullOrWhiteSpace(body.Parent) ? null : ResolveWriteRef(body.Parent, reader);
+        var made = await creation.CreateAsync(
+            canonicalType, body.Title, attributes.ToJsonString(), parent, body.Relation, cancellationToken);
+        return Results.Ok(ToCreated(made.Subject));
     }
 
     private static async Task<IResult> Promote(
         PromoteBody body,
         PromotionService promotion,
-        TriageService triage,
-        IEventReader events,
         SubjectReader reader,
         CancellationToken cancellationToken)
     {
@@ -151,25 +118,10 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("source, type, and title are required."));
         }
 
-        Guid? eventId = null;
-        if (Guid.TryParse(body.Source, out var gid)
-            && await events.FindAsync(gid, cancellationToken) is not null)
-        {
-            eventId = gid;
-        }
-
-        if (eventId is { } id)
-        {
-            var result = await promotion.PromoteAsync(id, body.Type, body.Title, cancellationToken);
-            await triage.SetStateAsync(isEvent: true, result.OriginEventId, TriageStates.Promoted, cancellationToken);
-            return Results.Ok(ToCreated(result.Subject));
-        }
-
-        var sourceRef = ResolveWriteRef(body.Source, reader);
-        var subjectResult = await promotion.PromoteSubjectAsync(
-            sourceRef, body.Type, body.Title, cancellationToken);
-        await triage.SetStateAsync(isEvent: false, subjectResult.Source.Id, TriageStates.Promoted, cancellationToken);
-        return Results.Ok(ToCreated(subjectResult.Target));
+        // A capture event's id stays as it is; an item's id becomes its URN.
+        var promoted = await promotion.PromoteFromInboxAsync(
+            ResolveWriteRef(body.Source, reader), body.Type, body.Title, cancellationToken);
+        return Results.Ok(ToCreated(promoted.Subject));
     }
 
     private static async Task<IResult> SetAttributes(

@@ -143,7 +143,6 @@ internal static class NewCommand
                 }
 
                 await using var provider = Cli.BuildServices(connectionString);
-                var subjects = provider.GetRequiredService<SubjectService>();
 
                 var parent = parseResult.GetValue(parentOption);
                 var relation = parseResult.GetValue(relationOption);
@@ -152,41 +151,13 @@ internal static class NewCommand
                     throw new ArgumentException("--relation only applies with --parent.");
                 }
 
-                SubjectRef created;
-                ChildCreationResult? childLink = null;
-                var reused = false;
-                if (!string.IsNullOrWhiteSpace(parent))
-                {
-                    // Parent-first: create the child and its parent edge atomically (GEN-7).
-                    childLink = await provider.GetRequiredService<ChildCreationService>()
-                        .CreateChildAsync(
-                            canonicalType, title, parent, relation, attributes.ToJsonString(), cancellationToken);
-                    created = childLink.Child;
-                }
-                else if (canonicalType == SubjectTypes.Problem)
-                {
-                    // A Problem is unique by title — the durable question you keep returning
-                    // to (§6 / D4). Re-creating one reuses the existing subject rather than
-                    // erroring; attributes apply only when it is genuinely new.
-                    var resolved = await subjects.ResolveOrCreateAsync(
-                        canonicalType, title, attributes.ToJsonString(), cancellationToken);
-                    created = resolved.Subject;
-                    reused = !resolved.Created;
-                }
-                else
-                {
-                    created = await subjects.CreateAsync(
-                        canonicalType, title, attributes.ToJsonString(), cancellationToken: cancellationToken);
-                }
-
-                // A Problem or Idea is a capture-like subject: it enters the inbox for
-                // triage on creation, whether from quick capture or global New
-                // (GEN-14 / CAP-6 flag-on-capture). Other types are deliberate and not flagged.
-                if (canonicalType is SubjectTypes.Problem or SubjectTypes.Idea)
-                {
-                    await provider.GetRequiredService<TriageService>()
-                        .FlagItemAsync(isEvent: false, created.Id, cancellationToken);
-                }
+                // Under a parent with its edge (GEN-7); a Problem of the same title reused (D4);
+                // a Problem or Idea flagged for the Inbox; a repeating Task's first repetition (D16).
+                var made = await provider.GetRequiredService<SubjectCreationService>().CreateAsync(
+                    canonicalType, title, attributes.ToJsonString(), parent, relation, cancellationToken);
+                var created = made.Subject;
+                var childLink = made.Link;
+                var reused = made.Reused;
 
                 if (asJson)
                 {

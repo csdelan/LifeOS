@@ -46,22 +46,14 @@ internal static class PromoteCommand
             return Cli.RunAsync(asJson, async () =>
             {
                 await using var provider = Cli.BuildServices(connectionString);
-                var promotion = provider.GetRequiredService<PromotionService>();
-                var triage = provider.GetRequiredService<TriageService>();
-
                 // A uuid naming a real event is an event promote; anything else is a
-                // subject (Idea) promote.
-                Guid? eventId = null;
-                if (Guid.TryParse(source, out var gid)
-                    && await provider.GetRequiredService<IEventReader>().FindAsync(gid, cancellationToken) is not null)
-                {
-                    eventId = gid;
-                }
+                // subject (Idea) promote. Either way the source leaves the Inbox.
+                var promoted = await provider.GetRequiredService<PromotionService>()
+                    .PromoteFromInboxAsync(source, type, title, cancellationToken);
 
-                if (eventId is { } id)
+                if (promoted.OriginEventId is { } originEventId)
                 {
-                    var result = await promotion.PromoteAsync(id, type, title, cancellationToken);
-                    await triage.SetStateAsync(isEvent: true, result.OriginEventId, TriageStates.Promoted, cancellationToken);
+                    var result = new PromotionResult(promoted.Subject, originEventId);
 
                     if (asJson)
                     {
@@ -82,8 +74,7 @@ internal static class PromoteCommand
                 }
                 else
                 {
-                    var result = await promotion.PromoteSubjectAsync(source, type, title, cancellationToken);
-                    await triage.SetStateAsync(isEvent: false, result.Source.Id, TriageStates.Promoted, cancellationToken);
+                    var result = promoted.FromSubject!;
 
                     if (asJson)
                     {

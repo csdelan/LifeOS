@@ -22,9 +22,6 @@ public static class CaptureEndpoints
     // Room in an upload for the multipart framing and the text fields around the file.
     private const int RequestOverhead = 256 * 1024;
 
-    // The capture kind that stays an event (D4); Idea and Problem are subject types.
-    internal const string Note = "Note";
-
     public static void MapCaptureEndpoints(this WebApplication app)
     {
         var api = app.MapGroup("/api/capture")
@@ -57,7 +54,7 @@ public static class CaptureEndpoints
         [FromForm] string? type,
         [FromForm] string? title,
         AttachmentService attachments,
-        [AsParameters] CaptureFiling deps,
+        InboxFilingService filing,
         CancellationToken cancellationToken)
     {
         if (file is null)
@@ -65,7 +62,7 @@ public static class CaptureEndpoints
             return Results.BadRequest(new ApiError("Send the document as multipart/form-data, in a field named file."));
         }
 
-        if (!TryKind(type, out var kind))
+        if (!InboxFilingService.TryKind(type, out var kind))
         {
             return Results.BadRequest(new ApiError(BadKind(type)));
         }
@@ -78,8 +75,8 @@ public static class CaptureEndpoints
 
         var subject = await FileAsync(
             kind, result.EventId, result.Deduplicated,
-            Clean(title) ?? FirstLine(text) ?? filename ?? "Document",
-            text ?? filename ?? "Document", deps, cancellationToken);
+            Clean(title) ?? InboxFilingService.FirstLine(text) ?? filename ?? "Document",
+            text ?? filename ?? "Document", filing, cancellationToken);
 
         return Results.Ok(new BinaryCaptureRow
         {
@@ -114,10 +111,11 @@ public static class CaptureEndpoints
         AttachmentService attachments,
         CaptureService capture,
         SubjectReader reader,
-        [AsParameters] CaptureFiling deps,
+        InboxFilingService filing,
+        RelateService relate,
         CancellationToken cancellationToken)
     {
-        if (!TryKind(type, out var kind))
+        if (!InboxFilingService.TryKind(type, out var kind))
         {
             return Results.BadRequest(new ApiError(BadKind(type)));
         }
@@ -135,10 +133,10 @@ public static class CaptureEndpoints
             about = detail.Urn;
         }
 
-        var result = await CaptureVoiceAsync(audio, transcript, keepAudio, kind, title, attachments, capture, deps, cancellationToken);
+        var result = await CaptureVoiceAsync(audio, transcript, keepAudio, kind, title, attachments, capture, filing, cancellationToken);
         if (about is not null && result.Row is { } row)
         {
-            await deps.Relate.RelateAsync(row.EventId, about, SubjectEventRelations.Concerns, cancellationToken);
+            await relate.RelateAsync(row.EventId, about, SubjectEventRelations.Concerns, cancellationToken);
         }
 
         return result.Response;
@@ -146,19 +144,19 @@ public static class CaptureEndpoints
 
     private static async Task<(IResult Response, BinaryCaptureRow? Row)> CaptureVoiceAsync(
         IFormFile? audio, string? transcript, bool? keepAudio, string kind, string? title,
-        AttachmentService attachments, CaptureService capture, CaptureFiling deps,
+        AttachmentService attachments, CaptureService capture, InboxFilingService filing,
         CancellationToken cancellationToken)
     {
         var text = Clean(transcript);
         var needsTranscription = text is null;
         var keep = keepAudio == true || needsTranscription;
-        var heading = Clean(title) ?? FirstLine(text) ?? "Needs transcription";
+        var heading = Clean(title) ?? InboxFilingService.FirstLine(text) ?? "Needs transcription";
         var body = text ?? "Needs transcription.";
 
         if (!keep)
         {
             var spoken = await capture.CaptureVoiceTranscriptAsync(text!, cancellationToken);
-            var made = await FileAsync(kind, spoken.EventId, deduplicated: false, heading, body, deps, cancellationToken);
+            var made = await FileAsync(kind, spoken.EventId, deduplicated: false, heading, body, filing, cancellationToken);
             var said = new BinaryCaptureRow { EventId = spoken.EventId, Kind = EventKinds.Voice, Subject = made };
             return (Results.Ok(said), said);
         }
@@ -174,7 +172,7 @@ public static class CaptureEndpoints
         var filename = string.IsNullOrWhiteSpace(audio.FileName) ? null : Path.GetFileName(audio.FileName);
         var result = await attachments.CaptureVoiceAsync(
             bytes, filename, audio.ContentType, text, cancellationToken);
-        var subject = await FileAsync(kind, result.EventId, result.Deduplicated, heading, body, deps, cancellationToken);
+        var subject = await FileAsync(kind, result.EventId, result.Deduplicated, heading, body, filing, cancellationToken);
 
         var row = new BinaryCaptureRow
         {
@@ -192,46 +190,13 @@ public static class CaptureEndpoints
         return (Results.Ok(row), row);
     }
 
-    /// <summary>
-    /// Puts a capture in the Inbox (D4). A Note flags the event itself, unless it's a file already
-    /// captured (that one is already there, or was dealt with). An Idea or a Problem is made now,
-    /// as a typed capture makes it, with the event concerning it; the subject is what's flagged.
-    /// An agent's <c>capture</c> files the same way (agent-access plan §5.2).
-    /// </summary>
-    internal static async Task<CreatedSubject?> FileAsync(
+    /// <summary>Files a capture in the Inbox (<see cref="InboxFilingService"/>), as the API reads what it made.</summary>
+    private static async Task<CreatedSubject?> FileAsync(
         string kind, Guid eventId, bool deduplicated, string title, string description,
-        CaptureFiling deps, CancellationToken cancellationToken)
-    {
-        if (kind == Note)
-        {
-            if (!deduplicated)
-            {
-                await deps.Triage.FlagItemAsync(isEvent: true, eventId, cancellationToken);
-            }
-
-            return null;
-        }
-
-        var attributes = new JsonObject { ["description"] = description };
-        SubjectRef created;
-        if (kind == SubjectTypes.Problem)
-        {
-            // Today where Chris lives, as the web's todayIso() gives a typed Problem.
-            var today = await deps.Calendar.DateAtAsync(deps.Clock.UtcNow, cancellationToken);
-            attributes["date_identified"] = today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
-            created = (await deps.Subjects.ResolveOrCreateAsync(
-                kind, title, attributes.ToJsonString(), cancellationToken)).Subject;
-        }
-        else
-        {
-            created = await deps.Subjects.CreateAsync(
-                kind, title, attributes.ToJsonString(), cancellationToken: cancellationToken);
-        }
-
-        await deps.Relate.RelateAsync(eventId, created.Urn, SubjectEventRelations.Concerns, cancellationToken);
-        await deps.Triage.FlagItemAsync(isEvent: false, created.Id, cancellationToken);
-        return new CreatedSubject { Id = created.Id, Urn = created.Urn, Type = created.Type, Title = created.Title };
-    }
+        InboxFilingService filing, CancellationToken cancellationToken)
+        => await filing.FileAsync(kind, eventId, deduplicated, title, description, cancellationToken) is { } made
+            ? new CreatedSubject { Id = made.Id, Urn = made.Urn, Type = made.Type, Title = made.Title }
+            : null;
 
     private static async Task<byte[]> ReadAsync(IFormFile file, CancellationToken cancellationToken)
     {
@@ -240,34 +205,11 @@ public static class CaptureEndpoints
         return buffer.ToArray();
     }
 
-    internal static bool TryKind(string? type, out string kind)
-    {
-        var wanted = string.IsNullOrWhiteSpace(type) ? Note : type.Trim();
-        kind = new[] { Note, SubjectTypes.Idea, SubjectTypes.Problem }
-            .FirstOrDefault(k => string.Equals(k, wanted, StringComparison.OrdinalIgnoreCase)) ?? "";
-        return kind.Length > 0;
-    }
-
     private static string BadKind(string? type) => $"A capture is a Note, an Idea or a Problem, not '{type}'.";
 
     private static string? Clean(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
-    /// <summary>The first line, cut to 80 characters with an ellipsis, as the web's deriveTitle does.</summary>
-    internal static string? FirstLine(string? text)
-    {
-        var line = text?.Split('\n')[0].Trim();
-        if (string.IsNullOrEmpty(line))
-        {
-            return null;
-        }
-
-        return line.Length <= 80 ? line : $"{line[..79].TrimEnd()}…";
-    }
 }
-
-/// <summary>The services a capture files itself with, bound from DI so each endpoint stays readable.</summary>
-public readonly record struct CaptureFiling(
-    SubjectService Subjects, RelateService Relate, TriageService Triage, IHomeCalendar Calendar, IClock Clock);
 
 /// <summary>
 /// What a document or voice capture wrote: the event, the stored file (none for a voice note

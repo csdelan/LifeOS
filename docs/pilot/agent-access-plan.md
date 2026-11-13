@@ -980,7 +980,7 @@ lifeos-mz55-staging` shows it.
 
 | Tool | Does | Calls |
 |---|---|---|
-| `capture(text, kind = note \| idea \| problem, concerning?)` | An Inbox capture (CAP-1), which Chris triages like any other. A note is the capture, flagged; an idea or problem is made at once, titled by the first line, and flagged, as a voice or document capture does (D4) | the service behind `POST /api/capture`, and `CaptureEndpoints.FileAsync` |
+| `capture(text, kind = note \| idea \| problem, concerning?)` | An Inbox capture (CAP-1), which Chris triages like any other. A note is the capture, flagged; an idea or problem is made at once, titled by the first line, and flagged, as a voice or document capture does (D4) | the service behind `POST /api/capture`, and `InboxFilingService.FileAsync` |
 | `add_journal_entry(item, text)` | Appends to an item's journal (JOURNAL-1) | `POST /api/journal` |
 | `dismiss(item_id)` | Clears a raw capture (a note or voice note) from the Inbox, attention-only: it stays in LifeOS, and flagging it again undoes it. Ideas, Problems and other items are refused, and one already out of the Inbox is left alone (notes plan N7) | `POST /api/dismiss`'s `TriageService` |
 | `link_reflection(path, vault, summary, review? \| kind + day, request_id?)` | Links a daily or weekly review to the vault note that answers it: an `observation` event concerning the Review, the newest winning. Named by kind and day, the review is opened if it isn't yet. It never completes the review (reviews plan §4.1, notes plan N8) | `ReflectionService`, and `ReviewService.OpenAsync` as `POST /api/reviews/open` calls it |

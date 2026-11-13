@@ -15,8 +15,29 @@ namespace LifeOs.Application.Subjects;
 /// onto the new subject, so classification done during triage follows the item.
 /// </summary>
 public sealed class PromotionService(
-    SubjectService subjects, IEventReader events, StatusService status, ITagRepository tags)
+    SubjectService subjects, IEventReader events, StatusService status, ITagRepository tags, TriageService triage)
 {
+    /// <summary>
+    /// Promotes what the Inbox holds, as every door does (<c>bsk promote</c>,
+    /// <c>POST /api/promote</c>, code review CR7): a uuid naming a capture event promotes the
+    /// event; anything else names an item (canonically an Idea) to promote into new work. Either
+    /// way the source leaves the Inbox, marked promoted.
+    /// </summary>
+    public async Task<InboxPromotion> PromoteFromInboxAsync(
+        string source, string type, string title, CancellationToken cancellationToken = default)
+    {
+        if (Guid.TryParse(source.Trim(), out var id) && await events.FindAsync(id, cancellationToken) is not null)
+        {
+            var promoted = await PromoteAsync(id, type, title, cancellationToken);
+            await triage.SetStateAsync(isEvent: true, promoted.OriginEventId, TriageStates.Promoted, cancellationToken);
+            return new InboxPromotion(promoted.Subject, promoted.OriginEventId, null);
+        }
+
+        var result = await PromoteSubjectAsync(source, type, title, cancellationToken);
+        await triage.SetStateAsync(isEvent: false, result.Source.Id, TriageStates.Promoted, cancellationToken);
+        return new InboxPromotion(result.Target, null, result);
+    }
+
     public async Task<PromotionResult> PromoteAsync(
         Guid eventId, string type, string title, CancellationToken cancellationToken = default)
     {
@@ -36,8 +57,8 @@ public sealed class PromotionService(
     /// canonical case is an Idea — promotes into new work by creating the target and a
     /// <c>results_in</c> edge (source → target) atomically. When the source is an Idea
     /// its status advances to <c>Promoted</c>; other source types keep their status
-    /// (e.g. a Problem is not resolved just because it produced work, GEN-14). Resolving
-    /// the source's inbox triage is the caller's step (the CLI), alongside event promote.
+    /// (e.g. a Problem is not resolved just because it produced work, GEN-14). It leaves the
+    /// source's Inbox triage alone; <see cref="PromoteFromInboxAsync"/> marks it.
     /// </summary>
     public async Task<SubjectPromotionResult> PromoteSubjectAsync(
         string sourceReference, string targetType, string targetTitle,
@@ -67,3 +88,9 @@ public sealed record PromotionResult(SubjectRef Subject, Guid OriginEventId);
 
 /// <summary>The outcome of a subject → subject promotion: the source, the new target, and the edge.</summary>
 public sealed record SubjectPromotionResult(SubjectRef Source, SubjectRef Target, Guid EdgeId);
+
+/// <summary>
+/// What <see cref="PromotionService.PromoteFromInboxAsync"/> made: the new item, and either the
+/// capture event it came from or the item promotion (source, target and edge).
+/// </summary>
+public sealed record InboxPromotion(SubjectRef Subject, Guid? OriginEventId, SubjectPromotionResult? FromSubject);

@@ -58,12 +58,13 @@ public sealed class SplitPromoteTests(PostgresFixture postgres)
         var idea = await subjects.CreateAsync(SubjectTypes.Idea, $"a bright idea {ns}", cancellationToken: Ct);
         await triage.FlagItemAsync(isEvent: false, idea.Id, Ct);
 
-        var result = await promotion.PromoteSubjectAsync(idea.Urn, SubjectTypes.Goal, $"the goal {ns}", Ct);
-        // Mirror the CLI: promote resolves the source out of the inbox.
-        await triage.SetStateAsync(isEvent: false, idea.Id, TriageStates.Promoted, Ct);
+        // As bsk promote and POST /api/promote do (CR7): the source leaves the Inbox too.
+        var result = await promotion.PromoteFromInboxAsync(idea.Urn, SubjectTypes.Goal, $"the goal {ns}", Ct);
 
         await using var connection = await OpenAsync();
-        Assert.True(await EdgeExistsAsync(connection, idea.Id, SubjectRelations.ResultsIn, result.Target.Id));
+        Assert.Null(result.OriginEventId);
+        Assert.Equal(result.Subject.Id, result.FromSubject!.Target.Id);
+        Assert.True(await EdgeExistsAsync(connection, idea.Id, SubjectRelations.ResultsIn, result.Subject.Id));
         Assert.Equal("Promoted", await FoldedStatusAsync(connection, idea.Id));
         Assert.False(await InInboxAsync(connection, idea.Id));
     }
@@ -96,10 +97,11 @@ public sealed class SplitPromoteTests(PostgresFixture postgres)
         var captured = await capture.CaptureNoteAsync($"promote me {Guid.NewGuid():N}", Ct);
         await triage.FlagItemAsync(isEvent: true, captured.EventId, Ct);
 
-        var result = await promotion.PromoteAsync(captured.EventId, SubjectTypes.Project, $"real project {Guid.NewGuid():N}", Ct);
-        await triage.SetStateAsync(isEvent: true, captured.EventId, TriageStates.Promoted, Ct);
+        var result = await promotion.PromoteFromInboxAsync(
+            captured.EventId.ToString(), SubjectTypes.Project, $"real project {Guid.NewGuid():N}", Ct);
 
         Assert.Equal(captured.EventId, result.OriginEventId);
+        Assert.Null(result.FromSubject);
         await using var connection = await OpenAsync();
         Assert.False(await InInboxAsync(connection, captured.EventId));
     }

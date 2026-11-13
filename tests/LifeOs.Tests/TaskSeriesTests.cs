@@ -11,10 +11,6 @@ using Npgsql;
 namespace LifeOs.Tests;
 
 /// <summary>
-/// A clock set to a day by hand: noon UTC (the tests' home zone), a second later on every
-/// read so events written on one day still fold in the order they were written.
-/// </summary>
-/// <summary>
 /// TASKS-3 / D16 (migration 0042, recurring-tasks plan RT2): repeating Tasks. A series is a
 /// Task carrying a pattern; each repetition is an ordinary Task for one date.
 /// <para>

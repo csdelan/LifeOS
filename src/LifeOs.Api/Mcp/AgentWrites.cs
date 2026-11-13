@@ -121,7 +121,7 @@ public sealed class AgentWrites(
         CancellationToken cancellationToken)
     {
         var body = Body(text);
-        if (!CaptureEndpoints.TryKind(kind, out var type))
+        if (!InboxFilingService.TryKind(kind, out var type))
         {
             throw new McpException($"kind is note, idea or problem, not '{kind}'.");
         }
@@ -148,9 +148,9 @@ public sealed class AgentWrites(
 
         // The capture is written, so filing it runs to the end even if the agent hangs up:
         // a capture that is never flagged never reaches the Inbox.
-        var made = await CaptureEndpoints.FileAsync(
-            type, captured.EventId, deduplicated: false, CaptureEndpoints.FirstLine(body) ?? "Capture", body,
-            kernel.Filing, CancellationToken.None);
+        var made = await kernel.Filing.FileAsync(
+            type, captured.EventId, deduplicated: false, InboxFilingService.FirstLine(body) ?? "Capture", body,
+            CancellationToken.None);
         if (about is not null)
         {
             await kernel.Relate.RelateAsync(captured.EventId, about.Urn, SubjectEventRelations.Concerns, CancellationToken.None);
@@ -171,7 +171,7 @@ public sealed class AgentWrites(
         var kernel = Kernel(agent);
         var concerns = earlier.Concerns.ToList();
         McpItemRef? item = null;
-        if (type == CaptureEndpoints.Note)
+        if (type == InboxFilingService.Note)
         {
             if (!await reads.EverTriagedAsync(earlier.EventId, CancellationToken.None))
             {
@@ -183,9 +183,9 @@ public sealed class AgentWrites(
             item = concerns.FirstOrDefault(c => c.Type == type && c.Id != about?.Id);
             if (item is null)
             {
-                var made = await CaptureEndpoints.FileAsync(
-                    type, earlier.EventId, deduplicated: false, CaptureEndpoints.FirstLine(body) ?? "Capture", body,
-                    kernel.Filing, CancellationToken.None);
+                var made = await kernel.Filing.FileAsync(
+                    type, earlier.EventId, deduplicated: false, InboxFilingService.FirstLine(body) ?? "Capture", body,
+                    CancellationToken.None);
                 item = new McpItemRef(made!.Id, made.Urn, made.Type, made.Title);
             }
             else if (!await reads.EverTriagedAsync(item.Id, CancellationToken.None))
@@ -412,13 +412,13 @@ public sealed class AgentWrites(
             new CaptureService(events, artifacts, clock, source),
             relate,
             triage,
-            new CaptureFiling(subjects, relate, triage, calendar, clock),
+            new InboxFilingService(subjects, relate, triage, calendar, clock),
             new ReviewService(subjects, subjectRepository, reviews, status, calendar, clock),
             new ReflectionService(events, edges, reviews, clock, source));
     }
 
     private sealed record AgentKernel(
-        CaptureService Capture, RelateService Relate, TriageService Triage, CaptureFiling Filing,
+        CaptureService Capture, RelateService Relate, TriageService Triage, InboxFilingService Filing,
         ReviewService Reviews, ReflectionService Reflections);
 }
 
