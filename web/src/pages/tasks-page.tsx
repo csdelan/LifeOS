@@ -25,10 +25,11 @@ import {
   useAreas,
   useCreateSubject,
   useSubjects,
+  useSubjectsOfTypes,
   useTagUniverse,
   useTimers,
 } from "@/lib/queries";
-import { STATUS_BY_TYPE, defaultStatus } from "@/lib/production-ui-types";
+import { STATUS_BY_TYPE, defaultStatus, type SubjectListItem, type SubjectType } from "@/lib/production-ui-types";
 import { todayIso } from "@/lib/dates";
 import { NONE } from "@/lib/subject-forms";
 import {
@@ -59,12 +60,15 @@ const DEFAULT_VIEW: TasksView = {
   tag: "",
 };
 
+/** What a Task's parent filter offers. */
+const PARENT_TYPES: readonly SubjectType[] = ["Goal", "Project"];
+const NO_PARENTS: SubjectListItem[] = [];
+
 export function TasksPage() {
   const search = useSearch({ from: "/tasks" });
   const navigate = useNavigate({ from: "/tasks" });
   const selected = search.selected;
-  const { data, isLoading, isError } = useSubjects("Task", true);
-  const { data: allSubjects } = useSubjects(undefined, true);
+  const { data: parentRows } = useSubjectsOfTypes(PARENT_TYPES);
   const { data: edges } = useAlignmentEdges(true);
   const { data: areas } = useAreas();
   const { data: tags } = useTagUniverse();
@@ -73,13 +77,20 @@ export function TasksPage() {
   const { openNew } = useCreateActions();
   const { setDirty, requestNavigation } = useDirty();
   const [filters, setFilters] = useState<TasksView>(() => loadView("tasks", DEFAULT_VIEW));
+  const activeView = filters.status === "active";
+  const repeatingView = filters.status === "repeating";
+  // Active, the view it opens on, shows open Tasks only, so it reads only those and not every
+  // repetition ever done; the other views read every Task (code review CR76).
+  const { data, isLoading, isError } = useSubjects("Task", !activeView, false, {
+    status: activeView ? "open" : undefined,
+    enabled: !repeatingView,
+  });
   const [draft, setDraft] = useState("");
   const [entryError, setEntryError] = useState<string | null>(null);
   const entryRef = useRef<HTMLInputElement>(null);
   const today = todayIso();
   // A repeating Task's date that passed while the app was closed gets its repetition (TASKS-3).
   useTaskSettleOnOpen();
-  const repeatingView = filters.status === "repeating";
 
   // A saved tag filter whose tag was renamed (or is no longer used) falls back to
   // "Any tag" rather than silently hiding every task.
@@ -90,13 +101,7 @@ export function TasksPage() {
     saveView("tasks", filters);
   }, [filters]);
 
-  const parents = useMemo(
-    () =>
-      (allSubjects ?? []).filter(
-        (s) => (s.type === "Goal" || s.type === "Project") && !s.archived,
-      ),
-    [allSubjects],
-  );
+  const parents = parentRows ?? NO_PARENTS;
 
   const parentOf = useMemo(() => {
     const map = new Map<string, string[]>();

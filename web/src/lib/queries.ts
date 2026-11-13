@@ -806,12 +806,9 @@ function matchesRef(id: string, urn: string, ref: string) {
 }
 
 function optimisticStatus(qc: QueryClient, subject: string, status: string) {
-  qc.setQueriesData<SubjectListItem[]>(
-    { queryKey: qk.subjects },
-    (old) =>
-      old?.map((s) =>
-        matchesRef(s.id, s.urn, subject) ? { ...s, status } : s,
-      ),
+  // The palette's search is cached under the same key and isn't a list; it refreshes when the write lands.
+  qc.setQueriesData<SubjectListItem[]>({ queryKey: qk.subjects }, (old) =>
+    Array.isArray(old) ? old.map((s) => (matchesRef(s.id, s.urn, subject) ? { ...s, status } : s)) : old,
   );
   qc.setQueryData<SubjectDetail | null>(qk.subject(subject), (old) =>
     old ? { ...old, status } : old,
@@ -887,17 +884,76 @@ export function useCoverSearch(query: string, enabled = true) {
   });
 }
 
-/** Subjects by type; a repeating Task's series only with `includeSeries` (TASKS-3). */
+/** What a subject list reads beyond its type: open or closed items only, at most `limit` (code review CR76). */
+export interface SubjectListScope {
+  enabled?: boolean;
+  /** `open`, `closed`, or one status. */
+  status?: string;
+  limit?: number;
+}
+
+function subjectListKey(
+  type: SubjectType | undefined,
+  includeArchived: boolean,
+  includeSeries: boolean,
+  scope: SubjectListScope,
+) {
+  return [...qk.subjects, type ?? "all", includeArchived, includeSeries, scope.status ?? "any", scope.limit ?? "all"];
+}
+
+/**
+ * Subjects by type; a repeating Task's series only with `includeSeries` (TASKS-3). A page that
+ * shows open items asks for `status: "open"`, so it doesn't download every repetition ever done
+ * (code review CR76).
+ */
 export function useSubjects(
   type?: SubjectType,
   includeArchived = false,
   includeSeries = false,
-  opts: { enabled?: boolean } = {},
+  opts: SubjectListScope = {},
 ) {
   return useQuery({
-    queryKey: [...qk.subjects, type ?? "all", includeArchived, includeSeries],
-    queryFn: () => reads().listSubjects({ type, includeArchived, includeSeries }),
+    queryKey: subjectListKey(type, includeArchived, includeSeries, opts),
+    queryFn: () =>
+      reads().listSubjects({ type, includeArchived, includeSeries, status: opts.status, limit: opts.limit }),
     enabled: opts.enabled ?? true,
+  });
+}
+
+function joinLists(results: { data?: SubjectListItem[]; isLoading: boolean }[]) {
+  return {
+    data: results.every((r) => r.data) ? results.flatMap((r) => r.data!) : undefined,
+    isLoading: results.some((r) => r.isLoading),
+  };
+}
+
+/**
+ * The live subjects of `types`, read a type at a time, each sharing `useSubjects(type)`'s cache:
+ * a picker that offers Goals and Projects reads those, not every Task there is (code review CR76).
+ */
+export function useSubjectsOfTypes(types: readonly SubjectType[], enabled = true) {
+  return useQueries({
+    queries: types.map((type) => ({
+      queryKey: subjectListKey(type, false, false, {}),
+      queryFn: () => reads().listSubjects({ type }),
+      enabled,
+    })),
+    combine: joinLists,
+  });
+}
+
+/**
+ * The command palette's matches for `query` among `types`, searched on the server and ranked as
+ * the palette ranked them (code review CR76). Kept under the subject lists' key, so a write that
+ * changes a list refreshes it too.
+ */
+export function useSubjectSearch(query: string, types: readonly SubjectType[], enabled = true) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: [...qk.subjects, "search", q, types.join(",")],
+    queryFn: () => reads().searchSubjects(q, { types }),
+    enabled: enabled && q.length > 0,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -980,11 +1036,18 @@ export function useInbox() {
   });
 }
 
-export function useResolvedInbox(enabled = true) {
+/** How many resolved items the Resolved view reads at first, and how many more each Load older adds (code review CR76). */
+export const RESOLVED_PAGE = 50;
+/** The most the API returns. */
+export const RESOLVED_MAX = 1000;
+
+/** The newest `limit` items to leave the Inbox; the rows already shown stay while more load. */
+export function useResolvedInbox(enabled = true, limit = RESOLVED_PAGE) {
   return useQuery({
-    queryKey: qk.inboxResolved,
-    queryFn: () => reads().inboxResolved(),
+    queryKey: [...qk.inboxResolved, limit],
+    queryFn: () => reads().inboxResolved(limit),
     enabled,
+    placeholderData: keepPreviousData,
   });
 }
 

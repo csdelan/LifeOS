@@ -44,6 +44,7 @@ export interface FieldDef {
   placeholder?: string;
   hint?: string;
   options?: { value: string; label: string }[];
+  /** The types a parent picker offers, and the only ones the form reads for it: a picker without them offers nothing. */
   parentTypes?: SubjectType[];
   createOnly?: boolean;
   editOnly?: boolean;

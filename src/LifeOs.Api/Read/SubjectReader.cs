@@ -165,6 +165,77 @@ public sealed class SubjectReader(string connectionString, string coverAppName =
             splitOn: "bounty_json,cover_json")).AsList();
     }
 
+    /// <summary>
+    /// The command palette's search (code review CR76): subjects with every word of
+    /// <paramref name="query"/>, in any order and case, somewhere in their title, type (and its
+    /// label, Identity Statement or Person / Agent), URN, area's name or tags. A title equal to the
+    /// query comes first, then one starting with it, then one with a word starting with its first
+    /// word, then one containing it, then the rest, each archived one after every live one; by title
+    /// within each. A repeating Task's series is left out, as the lists leave it. At most
+    /// <paramref name="limit"/> rows, and <see cref="SubjectSearchResult.Total"/> counts them all.
+    /// </summary>
+    public async Task<SubjectSearchResult> FindSubjectsAsync(
+        string query, IReadOnlyCollection<string>? types, int limit, CancellationToken cancellationToken = default)
+    {
+        var q = query.Trim().ToLowerInvariant();
+        var words = q.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0)
+        {
+            return new SubjectSearchResult();
+        }
+
+        var parameters = new
+        {
+            q,
+            words,
+            prefix = EscapeLike(q) + "%",
+            contains = "%" + EscapeLike(q) + "%",
+            wordStart = "(^|[[:space:]/:,.()\u2013\u2014-])" + EscapeRegex(words[0]),
+            types = types is { Count: > 0 } ? types.ToArray() : null,
+            limit,
+        };
+        const string where = """
+            WHERE (@types::text[] IS NULL OR s.type = ANY(@types))
+              AND NOT bsk.is_task_series(s.type, s.attributes)
+              AND NOT EXISTS (
+                    SELECT 1 FROM unnest(@words::text[]) AS w(word)
+                    WHERE strpos(lower(concat_ws(' ', s.title, s.type,
+                              CASE s.type WHEN 'Value' THEN 'Identity Statement' WHEN 'Person' THEN 'Person / Agent' END,
+                              s.urn, a.name,
+                              (SELECT string_agg(t.tag, ' ') FROM bsk.v_item_tag t
+                               WHERE t.item_kind = 'subject' AND t.item_id = s.id))), w.word) = 0)
+            """;
+        await using var db = await OpenAsync(cancellationToken);
+        var total = await db.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.v_subject s LEFT JOIN bsk.v_area a ON a.urn = s.area " + where,
+            parameters, cancellationToken: cancellationToken));
+        var matches = (await db.QueryAsync<SubjectListItem, BountyText, CoverText, SubjectListItem>(new CommandDefinition(ListSelect + where + """
+            ORDER BY (CASE WHEN lower(s.title) = @q THEN 0
+                           WHEN lower(s.title) LIKE @prefix THEN 1
+                           WHEN lower(s.title) ~ @wordStart THEN 2
+                           WHEN lower(s.title) LIKE @contains THEN 3
+                           ELSE 4 END) + (CASE WHEN s.archived THEN 10 ELSE 0 END),
+                     lower(s.title), s.title
+            LIMIT @limit
+            """, parameters, cancellationToken: cancellationToken),
+            WithHeadline,
+            splitOn: "bounty_json,cover_json")).AsList();
+        return new SubjectSearchResult { Matches = matches, Total = total };
+    }
+
+    /// <summary>How many items wait in the Inbox (<c>bsk.v_inbox</c>), as <see cref="GetInboxAsync"/> lists them.</summary>
+    public async Task<int> CountInboxAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await OpenAsync(cancellationToken);
+        return await db.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.v_inbox;", cancellationToken: cancellationToken));
+    }
+
+    // A regular expression's own characters, matched literally: each ASCII character that isn't a
+    // letter or digit gets a backslash (one before a letter would make it an escape).
+    private static string EscapeRegex(string text)
+        => string.Concat(text.Select(ch => ch < 128 && !char.IsAsciiLetterOrDigit(ch) ? "\\" + ch : ch.ToString()));
+
     // ILIKE's own wildcards and its escape character, matched literally.
     private static string EscapeLike(string text)
         => text.Replace(@"\", @"\\", StringComparison.Ordinal)

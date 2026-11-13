@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/subjects/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SearchSubjects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/subjects/{id}": {
         parameters: {
             query?: never;
@@ -188,6 +204,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["GetResolvedInbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inbox/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CountInbox"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3064,6 +3096,10 @@ export interface components {
         };
         /** Format: binary */
         IFormFile: string;
+        InboxCount: {
+            /** Format: int32 */
+            count: number;
+        };
         InboxItem: {
             /** Format: uuid */
             itemId: string;
@@ -3882,6 +3918,11 @@ export interface components {
             parents: components["schemas"]["RelationEdge"][];
             children: components["schemas"]["RelationEdge"][];
         };
+        SubjectSearchResult: {
+            matches: components["schemas"]["SubjectListItem"][];
+            /** Format: int32 */
+            total: number;
+        };
         TagBody: {
             item?: string;
             add?: null | string[];
@@ -4077,6 +4118,8 @@ export interface operations {
                 type?: string;
                 includeArchived?: boolean;
                 includeSeries?: boolean;
+                status?: string;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -4124,6 +4167,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SearchSubjects: {
+        parameters: {
+            query?: {
+                q?: string;
+                types?: string[];
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubjectSearchResult"];
                 };
             };
         };
@@ -4358,6 +4425,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResolvedInboxItem"][];
+                };
+            };
+        };
+    };
+    CountInbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxCount"];
                 };
             };
         };

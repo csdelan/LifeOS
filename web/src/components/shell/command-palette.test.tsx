@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockReads } from "@/lib/mock/api";
@@ -53,7 +53,36 @@ describe("Command palette: finding subjects", () => {
 
     await user.type(screen.getByRole("combobox"), "production react");
     expect(await screen.findByRole("option", { name: /React \+ Vite for Production UI/ })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /Blazor/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("option", { name: /Blazor/ })).not.toBeInTheDocument());
+  });
+
+  it("asks the server, not a download of every subject (code review CR76)", async () => {
+    const list = vi.spyOn(mockReads, "listSubjects");
+    const search = vi.spyOn(mockReads, "searchSubjects");
+    try {
+      const user = userEvent.setup();
+      renderPalette();
+      await user.type(screen.getByRole("combobox"), "blazor");
+      await screen.findByRole("option", { name: /Blazor for Production UI/ });
+
+      expect(list).not.toHaveBeenCalled();
+      expect(search).toHaveBeenLastCalledWith("blazor", expect.objectContaining({ types: expect.any(Array) }));
+      // One search once typing paused, not one a key.
+      expect(search.mock.calls.length).toBeLessThan("blazor".length);
+    } finally {
+      list.mockRestore();
+      search.mockRestore();
+    }
+  });
+
+  it("forgets the matches when the search box is cleared", async () => {
+    const user = userEvent.setup();
+    renderPalette();
+    const box = screen.getByRole("combobox");
+    await user.type(box, "blazor");
+    await screen.findByRole("option", { name: /Blazor for Production UI/ });
+    await user.clear(box);
+    expect(screen.queryByRole("group", { name: "Subjects" })).not.toBeInTheDocument();
   });
 
   it("still opens a Goal on the Map", async () => {

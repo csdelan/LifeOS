@@ -23,6 +23,7 @@ import {
 } from "@/lib/mock/store";
 import { todayHabitRows } from "@/lib/derive";
 import { todayIso } from "@/lib/dates";
+import { isTerminal } from "@/lib/production-ui-types";
 import { mockReads } from "@/lib/mock/api";
 import { createMockWriteClient } from "@/lib/mock/write-client";
 
@@ -338,5 +339,34 @@ describe("mock task timer", () => {
     expect(timer?.state).toBe("stopped");
     expect(timer?.totalSeconds).toBe(25 * 60);
     expect(timerFor("task-shoes")).toBeNull();
+  });
+});
+
+describe("mock subject reads, as the API narrows them (code review CR76)", () => {
+  beforeEach(() => resetStore());
+
+  it("reads open or closed items, or one status, and stops at the limit", async () => {
+    const done = createSubject({ type: "Task", title: "Done one" });
+    setStatus(done.id, "Completed");
+
+    const open = await mockReads.listSubjects({ type: "Task", status: "open" });
+    const closed = await mockReads.listSubjects({ type: "Task", status: "closed" });
+    const completed = await mockReads.listSubjects({ type: "Task", status: "completed" });
+    const every = await mockReads.listSubjects({ type: "Task" });
+
+    expect(open.length).toBeGreaterThan(0);
+    expect(open.every((s) => !isTerminal(s.status))).toBe(true);
+    expect(closed.map((s) => s.id)).toContain(done.id);
+    expect(closed.every((s) => isTerminal(s.status))).toBe(true);
+    expect(completed.every((s) => s.status === "Completed")).toBe(true);
+    expect(open.length + closed.length).toBe(every.length);
+    expect(await mockReads.listSubjects({ limit: 3 })).toHaveLength(3);
+  });
+
+  it("searches among the types asked for, counts the Inbox and cuts Resolved", async () => {
+    expect((await mockReads.searchSubjects("blazor", { types: ["Decision"] })).matches.map((s) => s.id)).toContain("dec-blazor");
+    expect((await mockReads.searchSubjects("blazor", { types: ["Task", "Goal"] })).total).toBe(0);
+    expect(await mockReads.inboxCount()).toBe((await mockReads.inbox()).length);
+    expect(await mockReads.inboxResolved(1)).toHaveLength(1);
   });
 });

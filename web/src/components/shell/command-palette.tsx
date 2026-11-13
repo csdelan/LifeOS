@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { defaultFilter } from "cmdk";
 import {
@@ -11,9 +11,10 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command";
-import { useSubjects } from "@/lib/queries";
+import { useSubjectSearch } from "@/lib/queries";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { typeLabel } from "@/lib/production-ui-types";
-import { openTarget, searchSubjects } from "@/lib/browse";
+import { BROWSE_TYPE_ORDER, openTarget, type SubjectSearch } from "@/lib/browse";
 import {
   ActivityIcon,
   CompassIcon,
@@ -40,9 +41,10 @@ import {
 import { useTheme } from "next-themes";
 
 const SUBJECT_VALUE = "subject:";
+const NOTHING_FOUND: SubjectSearch = { matches: [], total: 0 };
 
 /**
- * Subjects arrive already matched and ranked by `searchSubjects`, so they score alike and keep
+ * Subjects arrive already matched and ranked by the server's search, so they score alike and keep
  * that order; everything else (Navigate, Actions) keeps cmdk's fuzzy match. Their middling
  * score puts a page or action that closely matches ("task" → Tasks) above them, and a loose
  * match below.
@@ -66,11 +68,13 @@ export function CommandPalette({
 }) {
   const navigate = useNavigate();
   const { setTheme, theme } = useTheme();
-  // Every subject, archived ones too: the search box finds any item, not the first few. The
-  // palette is mounted on every page, so it loads them only while it's open.
-  const { data: subjects } = useSubjects(undefined, true, false, { enabled: open });
+  // The server searches every subject, archived ones too, and sends the best few: the search box
+  // finds any item without the browser downloading them all (code review CR76). It asks once
+  // typing pauses, and only while the palette is open.
   const [query, setQuery] = useState("");
-  const found = useMemo(() => searchSubjects(subjects ?? [], query), [subjects, query]);
+  const searched = useDebouncedValue(query, 150);
+  const search = useSubjectSearch(searched, BROWSE_TYPE_ORDER, open);
+  const found = query.trim() && searched.trim() ? (search.data ?? NOTHING_FOUND) : NOTHING_FOUND;
   // Each opening starts with an empty search.
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {

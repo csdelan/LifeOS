@@ -7,7 +7,7 @@
  */
 
 import { todayIso } from "@/lib/dates";
-import type { LifeOsReads, SubjectRelations } from "@/lib/reads";
+import type { LifeOsReads, ListSubjectsOptions, SubjectRelations } from "@/lib/reads";
 import { deriveDashboard, type AlignmentEdge, type DashboardRead } from "@/lib/derive";
 import type {
   ActivityDayDetailRead,
@@ -57,7 +57,8 @@ import type {
   SpaceRatingsRead,
   SpaceRow,
 } from "@/lib/production-ui-types";
-import { isTerminal } from "@/lib/production-ui-types";
+import { isTerminal, type SubjectType } from "@/lib/production-ui-types";
+import { searchSubjects, type SubjectSearch } from "@/lib/browse";
 import { composeRecap, type RecapSection } from "@/lib/review-recap";
 import { BOUNTY_DEFAULTS } from "@/lib/bounty";
 import { tagUniverse, toRelationEdge } from "@/lib/mock/seed";
@@ -128,16 +129,29 @@ function inboxTags(row: InboxItem): string[] {
   return key ? (storeState().tagsByItem[key] ?? []) : [];
 }
 
-function listOf(type?: SubjectListItem["type"], includeArchived = false, includeSeries = false): SubjectListItem[] {
-  return storeState()
+function listOf(
+  type?: SubjectListItem["type"],
+  includeArchived = false,
+  includeSeries = false,
+  status?: string,
+  limit?: number,
+): SubjectListItem[] {
+  const wanted = status?.trim().toLowerCase();
+  const rows = storeState()
     .subjects.filter((s) => {
       if (!includeArchived && s.archived) return false;
       if (type && s.type !== type) return false;
       // A repeating Task's series stays out of the lists: its repetitions are the Tasks (D16).
       if (!includeSeries && isTaskSeries(s.id)) return false;
+      // The kernel's folded status, as the API filters it: an item with none is open.
+      const current = s.status ?? "";
+      if (wanted === "open" && isTerminal(current)) return false;
+      if (wanted === "closed" && !isTerminal(current)) return false;
+      if (wanted && wanted !== "open" && wanted !== "closed" && current.toLowerCase() !== wanted) return false;
       return true;
     })
     .map(listed);
+  return limit == null ? rows : rows.slice(0, limit);
 }
 
 /** A subject as the list reads give it: with its bounty, cover and repeat, as the live API does. */
@@ -162,13 +176,21 @@ function withActivityPaid(days: ActivityDayRow[]): ActivityDayRow[] {
 export type { LifeOsReads, SubjectRelations };
 
 export const mockReads: LifeOsReads = {
-  async listSubjects(opts?: {
-    type?: SubjectListItem["type"];
-    includeArchived?: boolean;
-    includeSeries?: boolean;
-  }): Promise<SubjectListItem[]> {
+  async listSubjects(opts?: ListSubjectsOptions): Promise<SubjectListItem[]> {
     await wait();
-    return listOf(opts?.type, opts?.includeArchived, opts?.includeSeries);
+    return listOf(opts?.type, opts?.includeArchived, opts?.includeSeries, opts?.status, opts?.limit);
+  },
+
+  async searchSubjects(query: string, opts?: { types?: readonly SubjectType[]; limit?: number }): Promise<SubjectSearch> {
+    await wait();
+    const types = opts?.types;
+    const rows = listOf(undefined, true).filter((s) => !types || types.includes(s.type));
+    return searchSubjects(rows, query, opts?.limit);
+  },
+
+  async inboxCount(): Promise<number> {
+    await wait();
+    return storeState().inbox.length;
   },
 
   async getSubject(id: string): Promise<SubjectDetail | null> {
@@ -227,7 +249,7 @@ export const mockReads: LifeOsReads = {
       .map((row) => ({ ...row, tags: inboxTags(row) }));
   },
 
-  async inboxResolved(): Promise<ResolvedInboxItem[]> {
+  async inboxResolved(limit = 50): Promise<ResolvedInboxItem[]> {
     await wait();
     return [...storeState().resolved]
       .sort((a, b) => b.resolvedAt.localeCompare(a.resolvedAt))
@@ -244,7 +266,8 @@ export const mockReads: LifeOsReads = {
             subjectStatusTerminal: isTerminal(subject?.status),
           },
         ];
-      });
+      })
+      .slice(0, limit);
   },
 
   async artifact(id: string): Promise<ArtifactRecord | null> {

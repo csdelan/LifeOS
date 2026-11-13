@@ -14,7 +14,7 @@ import {
 import { RecurrenceEditor } from "@/components/create/recurrence-editor";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { DateChip } from "@/components/primitives/date-chip";
-import { useAreas, usePeople, useSubjects } from "@/lib/queries";
+import { useAreas, usePeople, useSubjectsOfTypes } from "@/lib/queries";
 import { defaultStatus, isTerminal, typeLabel } from "@/lib/production-ui-types";
 import type { SubjectType, TaskRepeat } from "@/lib/production-ui-types";
 import {
@@ -45,7 +45,9 @@ export function SubjectTypeFields({
   const fields = visibleFields(type, mode, values);
   const { data: areas } = useAreas();
   const { data: people } = usePeople();
-  const { data: allSubjects } = useSubjects();
+  // Only the types its pickers offer: a Task's parents are Goals and Projects, so the form never
+  // downloads every Task there is (code review CR76).
+  const { data: parentSubjects } = useSubjectsOfTypes(pickerTypes(fields));
 
   return (
     <div className="space-y-4">
@@ -58,12 +60,18 @@ export function SubjectTypeFields({
           type={type}
           areas={areas ?? []}
           people={people ?? []}
-          subjects={allSubjects ?? []}
+          subjects={parentSubjects ?? []}
           repeating={repeating}
         />
       ))}
     </div>
   );
+}
+
+/** The types the visible parent pickers offer, each once. */
+function pickerTypes(fields: ReturnType<typeof visibleFields>): SubjectType[] {
+  const types = fields.flatMap((f) => (f.kind === "parent" || f.kind === "parents" ? (f.parentTypes ?? []) : []));
+  return [...new Set(types)];
 }
 
 function FieldBlock({

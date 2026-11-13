@@ -5,10 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { CreateActions, type CreateOpts } from "@/components/create/create-context";
 import { createWriteClient } from "@/lib/client";
-import { resetStore } from "@/lib/mock/store";
+import { createSubject, resetStore } from "@/lib/mock/store";
 import { mockReads } from "@/lib/mock/api";
 import type { SubjectListItem, SubjectType } from "@/lib/production-ui-types";
-import { BrowsePage } from "@/pages/browse-page";
+import { BROWSE_PAGE, BrowsePage } from "@/pages/browse-page";
 
 const router = vi.hoisted(() => {
   let search: Record<string, unknown> = {};
@@ -253,6 +253,41 @@ describe("Browse page (BROWSE-2)", () => {
     await listOf("Decision");
     expect(router.get()).toEqual({ type: "Decision", selected: "dec-stack" });
     expect(screen.getByRole("checkbox", { name: "Implementing" })).toBeChecked();
+  });
+});
+
+describe("Browse page with thousands of items (code review CR76)", () => {
+  it("draws the first two hundred rows, the open one too, and Show more draws the next", async () => {
+    let last = "";
+    for (let i = 0; i < 230; i++) last = createSubject({ type: "Task", title: `Repetition ${String(i).padStart(3, "0")}` }).id;
+    const tasks = (await mockReads.listSubjects({ type: "Task" })).length;
+    const user = userEvent.setup();
+    renderPage({ type: "Task", selected: last });
+
+    // By title, Repetition 229 sorts past the first page; it's open, so the list draws down to it.
+    const list = await listOf("Task");
+    const drawn = within(list).getAllByRole("listitem").length;
+    expect(drawn).toBeGreaterThan(BROWSE_PAGE);
+    expect(drawn).toBeLessThan(tasks);
+    expect(within(list).getByRole("button", { name: /Repetition 229/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^Show \d+ more$/ }));
+
+    expect(within(list).getAllByRole("listitem")).toHaveLength(tasks);
+    expect(screen.queryByRole("button", { name: /^Show \d+ more$/ })).not.toBeInTheDocument();
+  });
+
+  it("starts again from the first page when the filters change", async () => {
+    for (let i = 0; i < 450; i++) createSubject({ type: "Task", title: `Repetition ${i}` });
+    const user = userEvent.setup();
+    renderPage({ type: "Task" });
+    const list = await listOf("Task");
+    await user.click(screen.getByRole("button", { name: /^Show \d+ more$/ }));
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2 * BROWSE_PAGE);
+
+    await user.type(screen.getByRole("searchbox"), "Repetition");
+
+    expect(within(await listOf("Task")).getAllByRole("listitem")).toHaveLength(BROWSE_PAGE);
   });
 });
 

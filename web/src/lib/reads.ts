@@ -55,6 +55,8 @@ import type {
   Wallet,
 } from "@/lib/production-ui-types";
 import type { RecapSection } from "@/lib/review-recap";
+import type { SubjectSearch } from "@/lib/browse";
+import type { SubjectType } from "@/lib/production-ui-types";
 
 /** A subject's parent and child edges. */
 export interface SubjectRelations {
@@ -62,13 +64,32 @@ export interface SubjectRelations {
   children: RelationEdge[];
 }
 
+/** What `listSubjects` reads (code review CR76). */
+export interface ListSubjectsOptions {
+  type?: SubjectListItem["type"];
+  includeArchived?: boolean;
+  includeSeries?: boolean;
+  /** `open`, `closed`, or one status; every status when left out. */
+  status?: string;
+  /** At most this many, from 1 to 1000. */
+  limit?: number;
+}
+
 export interface LifeOsReads {
-  /** Subjects by type; a repeating Task's series only with `includeSeries` (TASKS-3). */
-  listSubjects(opts?: {
-    type?: SubjectListItem["type"];
-    includeArchived?: boolean;
-    includeSeries?: boolean;
-  }): Promise<SubjectListItem[]>;
+  /**
+   * Subjects by type; a repeating Task's series only with `includeSeries` (TASKS-3). `status` is
+   * `open` (any status not finished), `closed`, or one status; `limit` cuts the list (code review
+   * CR76), so a page that shows open items reads only those.
+   */
+  listSubjects(opts?: ListSubjectsOptions): Promise<SubjectListItem[]>;
+  /**
+   * The command palette's search (`GET /api/subjects/search`, code review CR76): subjects with
+   * every word of `query` in their title, type, URN, area or tags, archived ones too, best first;
+   * at most `limit`, with how many match in all.
+   */
+  searchSubjects(query: string, opts?: { types?: readonly SubjectType[]; limit?: number }): Promise<SubjectSearch>;
+  /** How many items wait in the Inbox (`GET /api/inbox/count`): Focus shows the number, not the rows. */
+  inboxCount(): Promise<number>;
   getSubject(id: string): Promise<SubjectDetail | null>;
   getListItem(id: string): Promise<SubjectListItem | null>;
   relations(id: string): Promise<SubjectRelations>;
@@ -77,8 +98,8 @@ export interface LifeOsReads {
   journal(id: string): Promise<JournalEntry[]>;
   history(id: string): Promise<StatusHistoryEntry[]>;
   inbox(): Promise<InboxItem[]>;
-  /** Items that left the Inbox, most recently resolved first (Back to Inbox). */
-  inboxResolved(): Promise<ResolvedInboxItem[]>;
+  /** The newest `limit` (50 when left out) items to leave the Inbox, most recently resolved first (Back to Inbox). */
+  inboxResolved(limit?: number): Promise<ResolvedInboxItem[]>;
   /**
    * Artifact metadata (no payload).
    * // TODO(api): GET /api/artifacts/{id} from `bsk.v_artifact`.

@@ -39,6 +39,8 @@ import { CREATABLE_TYPES, defaultStatus, typeLabel } from "@/lib/production-ui-t
 import type { InboxItem, ResolvedInboxItem, SubjectType } from "@/lib/production-ui-types";
 import { inboxItemBody, inboxItemTitle } from "@/lib/capture";
 import {
+  RESOLVED_MAX,
+  RESOLVED_PAGE,
   useInbox,
   useResolvedInbox,
   useSubjects,
@@ -99,7 +101,10 @@ export function InboxPage() {
   const navigate = useNavigate({ from: "/inbox" });
   const resolvedView = search.view === "resolved";
   const open = useInbox();
-  const resolved = useResolvedInbox(resolvedView);
+  // Resolved reads the newest few and Load older reads further back (code review CR76).
+  const [resolvedLimit, setResolvedLimit] = useState(RESOLVED_PAGE);
+  const resolved = useResolvedInbox(resolvedView, resolvedLimit);
+  const olderLeft = resolvedView && !!resolved.data && resolved.data.length >= resolvedLimit && resolvedLimit < RESOLVED_MAX;
   const { data, isLoading, isError } = resolvedView ? resolved : open;
   const rows: InboxItem[] | undefined = data;
   const isDesktop = useIsDesktop();
@@ -325,7 +330,7 @@ export function InboxPage() {
               />
             )
           ) : null}
-          <ul className="divide-y divide-border/60">
+          <ul aria-label={resolvedView ? "Resolved items" : "Inbox items"} className="divide-y divide-border/60">
             {table.getRowModel().rows.map((row) => (
               <li key={row.id}>
                 <button
@@ -348,6 +353,19 @@ export function InboxPage() {
               </li>
             ))}
           </ul>
+          {olderLeft ? (
+            <div className="p-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                disabled={resolved.isPlaceholderData}
+                onClick={() => setResolvedLimit((n) => Math.min(n + RESOLVED_PAGE, RESOLVED_MAX))}
+              >
+                {resolved.isPlaceholderData ? "Loading older…" : "Load older"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
       <div className="hidden min-w-0 flex-1 overflow-y-auto p-6 md:block">

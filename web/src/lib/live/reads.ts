@@ -16,6 +16,7 @@ import {
   normalizeWallet,
 } from "@/lib/rewards";
 import type { LifeOsReads } from "@/lib/reads";
+import type { SubjectSearch } from "@/lib/browse";
 import { normalizeDomainDays, normalizeDomainReport, normalizeDomains, normalizeExceptionDays } from "@/lib/domains";
 import { normalizeFoodDay, normalizeFoodDays, normalizeMeal } from "@/lib/food";
 import { normalizeRepeat, normalizeSeriesRow, seriesFromDue } from "@/lib/task-series";
@@ -128,11 +129,27 @@ export const liveReads: LifeOsReads = {
             type: opts?.type,
             includeArchived: opts?.includeArchived,
             includeSeries: opts?.includeSeries,
+            status: opts?.status,
+            limit: opts?.limit,
           },
         },
       }),
     );
     return fits<SubjectListItem[]>()(data).map((s) => withNormalCover(normalizeListBounty(s)));
+  },
+
+  async searchSubjects(query, opts) {
+    const data = await unwrap(
+      api().GET("/api/subjects/search", {
+        params: { query: { q: query, types: opts?.types ? [...opts.types] : undefined, limit: opts?.limit } },
+      }),
+    );
+    const found = fits<SubjectSearch>()(data);
+    return { ...found, matches: found.matches.map((s) => withNormalCover(normalizeListBounty(s))) };
+  },
+
+  async inboxCount() {
+    return fits<{ count: number }>()(await unwrap(api().GET("/api/inbox/count"))).count;
   },
 
   async getSubject(id) {
@@ -196,8 +213,8 @@ export const liveReads: LifeOsReads = {
     return fits<InboxItem[], ArtifactAppSide>()(data).map(withNormalAttachment);
   },
 
-  async inboxResolved() {
-    const data = await unwrap(api().GET("/api/inbox/resolved"));
+  async inboxResolved(limit) {
+    const data = await unwrap(api().GET("/api/inbox/resolved", { params: { query: { limit } } }));
     return fits<ResolvedInboxItem[], ArtifactAppSide>()(data).map(withNormalAttachment);
   },
 
@@ -492,17 +509,18 @@ export const liveReads: LifeOsReads = {
 
   async dashboard() {
     const today = todayIso();
-    const [subjects, edges, inbox, habits, occurrences] = await Promise.all([
-      this.listSubjects(),
+    // Focus shows open items only and the Inbox's size, so it reads just those (code review CR76).
+    const [subjects, edges, inboxCount, habits, occurrences] = await Promise.all([
+      this.listSubjects({ status: "open" }),
       this.edges(),
-      this.inbox(),
+      this.inboxCount(),
       this.habits(),
       this.occurrences({ on: today }),
     ]);
     return deriveDashboard({
       subjects,
       edges,
-      inboxCount: inbox.length,
+      inboxCount,
       habits,
       occurrences,
       today,

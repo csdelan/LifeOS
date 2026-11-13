@@ -54,6 +54,21 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         ],
         "responses": {
@@ -104,6 +119,54 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/subjects/search": {
+      "get": {
+        "tags": [
+          "Reads"
+        ],
+        "operationId": "SearchSubjects",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "types",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectSearchResult"
                 }
               }
             }
@@ -435,6 +498,26 @@
                   "items": {
                     "$ref": "#/components/schemas/ResolvedInboxItem"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inbox/count": {
+      "get": {
+        "tags": [
+          "Reads"
+        ],
+        "operationId": "CountInbox",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCount"
                 }
               }
             }
@@ -9470,6 +9553,18 @@
         "type": "string",
         "format": "binary"
       },
+      "InboxCount": {
+        "required": [
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "InboxItem": {
         "required": [
           "itemId",
@@ -12517,6 +12612,25 @@
             "items": {
               "$ref": "#/components/schemas/RelationEdge"
             }
+          }
+        }
+      },
+      "SubjectSearchResult": {
+        "required": [
+          "matches",
+          "total"
+        ],
+        "type": "object",
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubjectListItem"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

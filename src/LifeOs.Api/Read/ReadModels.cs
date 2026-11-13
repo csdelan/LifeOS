@@ -140,6 +140,19 @@ public sealed class StatusHistoryEntry
     public Guid Id { get; set; }
 }
 
+/// <summary>The command palette's search: the best matches, and how many match in all (code review CR76).</summary>
+public sealed class SubjectSearchResult
+{
+    public IReadOnlyList<SubjectListItem> Matches { get; set; } = [];
+    public int Total { get; set; }
+}
+
+/// <summary>How many items wait in the Inbox.</summary>
+public sealed class InboxCount
+{
+    public int Count { get; set; }
+}
+
 /// <summary>One flagged item awaiting triage, from <c>bsk.v_inbox</c>.</summary>
 public sealed class InboxItem
 {

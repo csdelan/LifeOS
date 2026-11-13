@@ -20,6 +20,8 @@ public static class ReadEndpoints
 
         api.MapGet("/subjects", ListSubjects).WithName("ListSubjects")
             .Produces<IReadOnlyList<SubjectListItem>>();
+        api.MapGet("/subjects/search", SearchSubjects).WithName("SearchSubjects")
+            .Produces<SubjectSearchResult>();
         api.MapGet("/subjects/{id:guid}", GetSubject).WithName("GetSubject")
             .Produces<SubjectDetail>().Produces(StatusCodes.Status404NotFound);
         api.MapGet("/subjects/{id:guid}/list-item", GetListItem).WithName("GetListItem")
@@ -40,6 +42,8 @@ public static class ReadEndpoints
             .Produces<IReadOnlyList<InboxItem>>();
         api.MapGet("/inbox/resolved", GetResolvedInbox).WithName("GetResolvedInbox")
             .Produces<IReadOnlyList<ResolvedInboxItem>>();
+        api.MapGet("/inbox/count", CountInbox).WithName("CountInbox")
+            .Produces<InboxCount>();
         api.MapGet("/areas", GetAreas).WithName("GetAreas")
             .Produces<IReadOnlyList<AreaRow>>();
         api.MapGet("/people", GetPeople).WithName("GetPeople")
@@ -60,10 +64,32 @@ public static class ReadEndpoints
     /// <summary>
     /// Subjects of a type, or every type. A repeating Task's series is left out unless
     /// <paramref name="includeSeries"/>: its repetitions are the Tasks to do (D16).
+    /// <paramref name="status"/> narrows them to <c>open</c> ones (any status not finished),
+    /// <c>closed</c> ones or one status, and <paramref name="limit"/> (1 to 1000) cuts the list, so a
+    /// page that shows open items reads only those however many repetitions are done (code review CR76).
     /// </summary>
     private static async Task<IResult> ListSubjects(
-        SubjectReader reader, CancellationToken cancellationToken, string? type, bool includeArchived = false, bool includeSeries = false)
-        => Results.Ok((await reader.QuerySubjectsAsync(type, includeArchived, includeSeries, cancellationToken: cancellationToken)));
+        SubjectReader reader, CancellationToken cancellationToken, string? type, bool includeArchived = false,
+        bool includeSeries = false, string? status = null, int? limit = null)
+        => Results.Ok(await reader.ListSubjectsAsync(
+            new SubjectFilter
+            {
+                Type = type, IncludeArchived = includeArchived, IncludeSeries = includeSeries,
+                Status = status, Limit = HistoryLimit(limit)
+            },
+            cancellationToken));
+
+    /// <summary>
+    /// The command palette's search (code review CR76): subjects with every word of
+    /// <paramref name="q"/> in their title, type, URN, area or tags, archived ones too, ranked as
+    /// <see cref="SubjectReader.FindSubjectsAsync"/> says; at most <paramref name="limit"/> (1 to
+    /// 200), with how many match in all. <paramref name="types"/> narrows it to those types.
+    /// </summary>
+    private static async Task<IResult> SearchSubjects(
+        SubjectReader reader, CancellationToken cancellationToken, string? q = null, string[]? types = null, int limit = 50)
+        => limit is >= 1 and <= 200
+            ? Results.Ok(await reader.FindSubjectsAsync(q ?? "", types, limit, cancellationToken))
+            : throw new ArgumentException($"limit is a whole number from 1 to 200, not {limit}.");
 
     private static async Task<IResult> GetSubject(Guid id, SubjectReader reader, CancellationToken cancellationToken)
     {
@@ -109,8 +135,13 @@ public static class ReadEndpoints
     private static async Task<IResult> GetInbox(SubjectReader reader, CancellationToken cancellationToken)
         => Results.Ok((await reader.GetInboxAsync(cancellationToken: cancellationToken)));
 
+    /// <summary>The newest <paramref name="limit"/> (1 to 1000) items to leave the Inbox; Resolved's Load older asks for more (code review CR76).</summary>
     private static async Task<IResult> GetResolvedInbox(SubjectReader reader, CancellationToken cancellationToken, int limit = 50)
-        => Results.Ok((await reader.GetResolvedInboxAsync(Math.Clamp(limit, 1, 200), cancellationToken: cancellationToken)));
+        => Results.Ok((await reader.GetResolvedInboxAsync(Math.Clamp(limit, 1, 1000), cancellationToken: cancellationToken)));
+
+    /// <summary>How many items wait in the Inbox: Focus shows the number, not the rows (code review CR76).</summary>
+    private static async Task<IResult> CountInbox(SubjectReader reader, CancellationToken cancellationToken)
+        => Results.Ok(new InboxCount { Count = await reader.CountInboxAsync(cancellationToken) });
 
     private static async Task<IResult> GetAreas(SubjectReader reader, CancellationToken cancellationToken)
         => Results.Ok((await reader.GetAreasAsync(cancellationToken: cancellationToken)));
