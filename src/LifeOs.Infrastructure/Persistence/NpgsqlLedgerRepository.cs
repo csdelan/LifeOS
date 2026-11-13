@@ -65,9 +65,7 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
         LIMIT 1;
         """;
 
-    // Every award key with one of @triggers: its net per currency (an empty object once
-    // reversed), its latest earn as bsk.v_award_credit picks it, and its newest entry.
-    // Aliased to KeyedRow's names (no underscore matching in the CLI host).
+    // Every award key with one of @triggers, ever written: what a re-pricing reconcile compares against.
     private const string KeyedAwardsSql = """
         WITH keyed AS (
             SELECT e.id, e.occurred_at, e.recorded_at, e.payload, e.derived_from, e.payload->>'award_key' AS award_key
@@ -76,6 +74,26 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
               AND e.payload->>'award_key' IS NOT NULL
               AND e.payload->>'trigger' = ANY(@triggers)
         ),
+        """ + KeyedFoldSql;
+
+    /// <summary>
+    /// The awards of some keys, as <see cref="KeyedAwardsSql"/> folds them, looked up by
+    /// <c>event_ledger_award_key_idx</c>: a page's days, not every keyed award (code review CR78).
+    /// </summary>
+    public const string AwardsByKeySql = """
+        WITH keyed AS (
+            SELECT e.id, e.occurred_at, e.recorded_at, e.payload, e.derived_from, e.payload->>'award_key' AS award_key
+            FROM bsk.event e
+            WHERE e.kind = 'ledger'
+              AND e.payload->>'award_key' = ANY(@keys)
+        ),
+        """ + KeyedFoldSql;
+
+    // Each of the `keyed` events' keys: its net per currency (an empty object once reversed), its
+    // latest earn as bsk.v_award_credit picks it, and its newest entry. Aliased to KeyedRow's
+    // names (no underscore matching in the CLI host).
+    private const string KeyedFoldSql = """
+
         net AS (
             SELECT l.award_key,
                    coalesce(jsonb_object_agg(l.currency, l.net) FILTER (WHERE l.net <> 0), '{}'::jsonb) AS net
@@ -480,13 +498,19 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
         }
     }
 
-    public async Task<IReadOnlyList<KeyedAward>> GetKeyedAwardsAsync(
+    public Task<IReadOnlyList<KeyedAward>> GetKeyedAwardsAsync(
         IReadOnlyCollection<string> triggers, CancellationToken cancellationToken = default)
+        => ReadKeyedAsync(KeyedAwardsSql, new { triggers = triggers.ToArray() }, cancellationToken);
+
+    public Task<IReadOnlyList<KeyedAward>> GetDayAwardsAsync(
+        IReadOnlyCollection<string> triggers, DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+        => ReadKeyedAsync(AwardsByKeySql, new { keys = DayAwardKeys.Keys(triggers, from, to).ToArray() }, cancellationToken);
+
+    private async Task<IReadOnlyList<KeyedAward>> ReadKeyedAsync(string sql, object args, CancellationToken cancellationToken)
     {
         await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
-        var rows = await connection.QueryAsync<KeyedRow>(new CommandDefinition(
-            KeyedAwardsSql, new { triggers = triggers.ToArray() }, cancellationToken: cancellationToken));
+        var rows = await connection.QueryAsync<KeyedRow>(new CommandDefinition(sql, args, cancellationToken: cancellationToken));
         return rows.Select(r =>
             {
                 var basis = Amounts(r.BaseJson);

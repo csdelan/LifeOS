@@ -320,7 +320,7 @@ public static class FoodRows
         Progress = result.Earned.Progress.Select(RewardRows.From).ToList()
     };
 
-    private static FoodAwardPaidRow? Paid(FoodPaid? paid)
+    private static FoodAwardPaidRow? Paid(DayAwardPaid? paid)
         => paid is null ? null : new FoodAwardPaidRow { Base = paid.Base, Paid = paid.Paid, Multiplier = paid.Multiplier };
 
     private static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

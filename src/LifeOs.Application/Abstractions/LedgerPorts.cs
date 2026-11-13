@@ -48,6 +48,15 @@ public interface ILedgerRepository
     Task<IReadOnlyList<KeyedAward>> GetKeyedAwardsAsync(
         IReadOnlyCollection<string> triggers, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The awards keyed by day (<see cref="DayAwardKeys"/>) of <paramref name="triggers"/> on the
+    /// days from <paramref name="from"/> to <paramref name="to"/>, as <see cref="GetKeyedAwardsAsync"/>
+    /// reads them, looked up by those days' keys: what a page shows paid for the days it shows
+    /// (code review CR78).
+    /// </summary>
+    Task<IReadOnlyList<KeyedAward>> GetDayAwardsAsync(
+        IReadOnlyCollection<string> triggers, DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
+
     /// <summary>When the wallet was opened (its earliest <c>open</c> entry), or <c>null</c> before launch.</summary>
     Task<DateTimeOffset?> GetOpenedAtAsync(CancellationToken cancellationToken = default);
 

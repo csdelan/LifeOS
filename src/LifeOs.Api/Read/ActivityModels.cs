@@ -402,7 +402,7 @@ public static class ActivityRows
         BaseTotal = paid.BaseTotal,
     };
 
-    private static ActivityAwardPaidRow? From(ActivityPaid? paid)
+    private static ActivityAwardPaidRow? From(DayAwardPaid? paid)
         => paid is null ? null : new ActivityAwardPaidRow { Base = paid.Base, Paid = paid.Paid, Multiplier = paid.Multiplier };
 
     public static WorkoutRow From(Workout workout)

@@ -250,7 +250,7 @@ public sealed class ActivityRewardsTests(PostgresFixture postgres)
         // What the page reads it paid (A9): each part's base, paid and multiplier.
         var paid = await new ActivityPaidReads(w.Db.Get<ILedgerRepository>()).GetDayAsync(day, Ct);
         Assert.Equal(
-            (new ActivityPaid(20, 26, 1.3m), new ActivityPaid(25, 33, 1.3m), new ActivityPaid(15, 20, 1.3m), 79L, 60L),
+            (new DayAwardPaid(20, 26, 1.3m), new DayAwardPaid(25, 33, 1.3m), new DayAwardPaid(15, 20, 1.3m), 79L, 60L),
             (paid.Steps, paid.Exercise, paid.Sleep, paid.Total, paid.BaseTotal));
         Assert.Equal(ActivityDayPaid.None, await new ActivityPaidReads(w.Db.Get<ILedgerRepository>()).GetDayAsync(w.Today, Ct));
 

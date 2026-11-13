@@ -277,8 +277,8 @@ public sealed class FoodRewardsTests(PostgresFixture postgres)
         Assert.Equal((70L, 70L, 82L, true), (row.Base, row.Action, row.Paid, row.Active));
 
         var paid = (await food.GetDayAsync(day, Ct)).Paid;
-        Assert.Equal(new FoodPaid(32, 42, 1.3m), paid.Diet);
-        Assert.Equal(new FoodPaid(7, 9, 1.3m), paid.Fast);
+        Assert.Equal(new DayAwardPaid(32, 42, 1.3m), paid.Diet);
+        Assert.Equal(new DayAwardPaid(7, 9, 1.3m), paid.Fast);
         Assert.Equal((51L, 39L), (paid.Total, paid.BaseTotal));
     }
 

@@ -1,4 +1,5 @@
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 
 namespace LifeOs.Application.Food;
@@ -147,25 +148,11 @@ public sealed class FoodReads(IFoodLogRepository food, ILedgerRepository ledger,
     public async Task<IReadOnlyDictionary<DateOnly, FoodDayPaid>> GetPaidAsync(
         DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
     {
-        var byDay = new Dictionary<DateOnly, FoodDayPaid>();
-        foreach (var award in await ledger.GetKeyedAwardsAsync(FoodAwards.Triggers, cancellationToken))
-        {
-            if (!award.Paid || FoodAwards.DayOf(award.AwardKey) is not { } day || day < from || day > to)
-            {
-                continue;
-            }
-
-            var paid = new FoodPaid(
-                award.LatestBase.GetValueOrDefault(Rules.Currency),
-                award.Net.GetValueOrDefault(Rules.Currency),
-                award.LatestMultipliers.TryGetValue(Rules.Currency, out var multiplier) ? multiplier : null);
-            var current = byDay.GetValueOrDefault(day) ?? FoodDayPaid.None;
-            byDay[day] = award.AwardKey.StartsWith(FoodAwards.FastTrigger + ":", StringComparison.Ordinal)
-                ? current with { Fast = paid }
-                : current with { Diet = paid };
-        }
-
-        return byDay;
+        var paid = await ledger.GetDayPaidAsync(FoodAwards.Triggers, from, to, Rules.Currency, cancellationToken);
+        return paid.ToDictionary(
+            day => day.Key,
+            day => new FoodDayPaid(
+                day.Value.GetValueOrDefault(FoodAwards.FastTrigger), day.Value.GetValueOrDefault(FoodAwards.DietTrigger)));
     }
 
     /// <summary>

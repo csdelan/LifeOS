@@ -803,7 +803,7 @@ internal static class FoodOutput
     /// <summary>What the ledger pays a day: "39 Health XP (food 32 x 1.2 = 38, fast 7)".</summary>
     private static string Paid(FoodDayPaid paid)
     {
-        static string? One(string what, FoodPaid? part)
+        static string? One(string what, DayAwardPaid? part)
             => part is null ? null
                 : part.Multiplier is { } m
                     ? $"{what} {part.Base} x {m.ToString("0.0#", CultureInfo.InvariantCulture)} = {part.Paid}"

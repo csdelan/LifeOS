@@ -156,11 +156,8 @@ public sealed class FoodRewards(
 
 }
 
-/// <summary>What the ledger pays for one food award: its base, what it paid, and the multiplier (null at 1.0).</summary>
-public sealed record FoodPaid(long Base, long Paid, decimal? Multiplier);
-
 /// <summary>What the ledger pays a food day: its fast and its food, each null when unpaid.</summary>
-public sealed record FoodDayPaid(FoodPaid? Fast, FoodPaid? Diet)
+public sealed record FoodDayPaid(DayAwardPaid? Fast, DayAwardPaid? Diet)
 {
     /// <summary>Health XP paid for the day's diet, after the multiplier.</summary>
     public long Total => (Fast?.Paid ?? 0) + (Diet?.Paid ?? 0);

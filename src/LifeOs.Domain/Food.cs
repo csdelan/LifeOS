@@ -217,22 +217,12 @@ public static class FoodAwards
     /// <summary>Both triggers.</summary>
     public static readonly IReadOnlyList<string> Triggers = [FastTrigger, DietTrigger];
 
-    public static string FastKey(DateOnly day) => $"{FastTrigger}:{day:yyyy-MM-dd}";
+    public static string FastKey(DateOnly day) => DayAwardKeys.Key(FastTrigger, day);
 
-    public static string DietKey(DateOnly day) => $"{DietTrigger}:{day:yyyy-MM-dd}";
+    public static string DietKey(DateOnly day) => DayAwardKeys.Key(DietTrigger, day);
 
     /// <summary>The day a food award key is for, or null when it isn't one.</summary>
-    public static DateOnly? DayOf(string awardKey)
-    {
-        var separator = awardKey.IndexOf(':');
-        return separator > 0
-               && Triggers.Contains(awardKey[..separator])
-               && DateOnly.TryParseExact(
-                   awardKey[(separator + 1)..], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
-                   System.Globalization.DateTimeStyles.None, out var day)
-            ? day
-            : null;
-    }
+    public static DateOnly? DayOf(string awardKey) => DayAwardKeys.Parse(awardKey, Triggers)?.Day;
 }
 
 /// <summary>
