@@ -2,26 +2,14 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/app-shell";
+// Focus, the landing page, loads with the app; every other page is fetched when it is first
+// opened, so the Map's graph layout and the pages' own code stay out of the first download
+// (code review CR23).
 import { FocusPage } from "@/pages/focus-page";
-import { InboxPage } from "@/pages/inbox-page";
-import { MapPage } from "@/pages/map-page";
-import { BrowsePage } from "@/pages/browse-page";
-import { TasksPage } from "@/pages/tasks-page";
-import { HabitsPage } from "@/pages/habits-page";
-import { RewardsPage } from "@/pages/rewards-page";
-import { CharacterPage } from "@/pages/character-page";
-import { FoodPage } from "@/pages/food-page";
-import { ActivityConnectedPage, ActivityPage } from "@/pages/activity-page";
-import { EnvironmentPage } from "@/pages/environment-page";
-import { MeasurementsPage } from "@/pages/measurements-page";
-import { VisionPage } from "@/pages/vision-page";
-import { ReviewsPage } from "@/pages/reviews-page";
-import { PeoplePage } from "@/pages/people-page";
-import { AreasPage } from "@/pages/areas-page";
-import { GalleryPage } from "@/pages/gallery-page";
 import type { MapLens } from "@/lib/derive";
 import type { GraphLayoutKind, MapViewMode, OrphanFilter } from "@/lib/graph-model";
 import { parseMapShow, type MapShow } from "@/lib/map-show";
@@ -122,7 +110,7 @@ const inboxRoute = createRoute({
     item: typeof search.item === "string" ? search.item : undefined,
     view: search.view === "resolved" ? "resolved" : undefined,
   }),
-  component: InboxPage,
+  component: lazyRouteComponent(() => import("@/pages/inbox-page"), "InboxPage"),
 });
 
 const mapRoute = createRoute({
@@ -152,7 +140,7 @@ const mapRoute = createRoute({
           search.colorByArea === "1",
     show: parseMapShow(search.show),
   }),
-  component: MapPage,
+  component: lazyRouteComponent(() => import("@/pages/map-page"), "MapPage"),
 });
 
 /** Every subject, by type and filters, with its detail (BROWSE-2). */
@@ -163,13 +151,13 @@ const browseRoute = createRoute({
     type: parseBrowseType(search.type),
     selected: typeof search.selected === "string" ? search.selected : undefined,
   }),
-  component: BrowsePage,
+  component: lazyRouteComponent(() => import("@/pages/browse-page"), "BrowsePage"),
 });
 
 const visionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/vision",
-  component: VisionPage,
+  component: lazyRouteComponent(() => import("@/pages/vision-page"), "VisionPage"),
 });
 
 const tasksRoute = createRoute({
@@ -178,7 +166,7 @@ const tasksRoute = createRoute({
   validateSearch: (search: Record<string, unknown>): TasksSearch => ({
     selected: typeof search.selected === "string" ? search.selected : undefined,
   }),
-  component: TasksPage,
+  component: lazyRouteComponent(() => import("@/pages/tasks-page"), "TasksPage"),
 });
 
 const habitsRoute = createRoute({
@@ -187,7 +175,7 @@ const habitsRoute = createRoute({
   validateSearch: (search: Record<string, unknown>): HabitsSearch => ({
     selected: typeof search.selected === "string" ? search.selected : undefined,
   }),
-  component: HabitsPage,
+  component: lazyRouteComponent(() => import("@/pages/habits-page"), "HabitsPage"),
 });
 
 const rewardsRoute = createRoute({
@@ -197,7 +185,7 @@ const rewardsRoute = createRoute({
     view: search.view === "history" ? "history" : undefined,
     selected: typeof search.selected === "string" ? search.selected : undefined,
   }),
-  component: RewardsPage,
+  component: lazyRouteComponent(() => import("@/pages/rewards-page"), "RewardsPage"),
 });
 
 const foodRoute = createRoute({
@@ -207,27 +195,27 @@ const foodRoute = createRoute({
     view: search.view === "week" || search.view === "month" ? search.view : undefined,
     date: typeof search.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(search.date) ? search.date : undefined,
   }),
-  component: FoodPage,
+  component: lazyRouteComponent(() => import("@/pages/food-page"), "FoodPage"),
 });
 
 const activityRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/activity",
-  component: ActivityPage,
+  component: lazyRouteComponent(() => import("@/pages/activity-page"), "ActivityPage"),
 });
 
 /** Weight and, later, any metric Chris measures (MEASURE-1, MEASURE-2). */
 const measurementsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/measurements",
-  component: MeasurementsPage,
+  component: lazyRouteComponent(() => import("@/pages/measurements-page"), "MeasurementsPage"),
 });
 
 /** The home's spaces, ratings and Home Score (HOME-1..3). */
 const environmentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/environment",
-  component: EnvironmentPage,
+  component: lazyRouteComponent(() => import("@/pages/environment-page"), "EnvironmentPage"),
 });
 
 const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : undefined);
@@ -241,7 +229,7 @@ const activityConnectedRoute = createRoute({
     error: text(search.error),
     error_description: text(search.error_description),
   }),
-  component: ActivityConnectedPage,
+  component: lazyRouteComponent(() => import("@/pages/activity-page"), "ActivityConnectedPage"),
 });
 
 const characterRoute = createRoute({
@@ -250,7 +238,7 @@ const characterRoute = createRoute({
   validateSearch: (search: Record<string, unknown>): CharacterSearch => ({
     view: search.view === "reports" ? "reports" : undefined,
   }),
-  component: CharacterPage,
+  component: lazyRouteComponent(() => import("@/pages/character-page"), "CharacterPage"),
 });
 
 const reviewsRoute = createRoute({
@@ -260,25 +248,25 @@ const reviewsRoute = createRoute({
     kind: search.kind === "weekly" || search.kind === "daily" ? search.kind : undefined,
     date: typeof search.date === "string" ? search.date : undefined,
   }),
-  component: ReviewsPage,
+  component: lazyRouteComponent(() => import("@/pages/reviews-page"), "ReviewsPage"),
 });
 
 const peopleRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/people",
-  component: PeoplePage,
+  component: lazyRouteComponent(() => import("@/pages/people-page"), "PeoplePage"),
 });
 
 const areasRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/areas",
-  component: AreasPage,
+  component: lazyRouteComponent(() => import("@/pages/areas-page"), "AreasPage"),
 });
 
 const galleryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/gallery",
-  component: GalleryPage,
+  component: lazyRouteComponent(() => import("@/pages/gallery-page"), "GalleryPage"),
 });
 
 const routeTree = rootRoute.addChildren([

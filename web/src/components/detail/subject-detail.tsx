@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Resolver } from "react-hook-form";
@@ -68,10 +68,13 @@ import {
 } from "@/lib/subject-forms";
 import { RelationshipsTab } from "./relationships-tab";
 import { TagsTab } from "./tags-tab";
-import { JournalTab } from "./journal-tab";
 import { HistoryTab } from "./history-tab";
 import { EstablishmentPanel } from "./establishment-panel";
 import { errorText, useWriteAction } from "@/lib/write-action";
+
+// The journal (tiptap's editor and its HTML schema) is fetched when the Journal tab is first
+// opened, not with every page that shows an item (code review CR23).
+const JournalTab = lazy(() => import("./journal-tab").then((m) => ({ default: m.JournalTab })));
 
 export function SubjectDetail({
   subjectId,
@@ -563,7 +566,9 @@ export function SubjectDetail({
             <TagsTab subjectId={subject.id} />
           </TabsContent>
           <TabsContent value="journal">
-            <JournalTab subjectId={subject.id} />
+            <Suspense fallback={<ListSkeleton rows={3} />}>
+              <JournalTab subjectId={subject.id} />
+            </Suspense>
           </TabsContent>
           <TabsContent value="history">
             <HistoryTab subjectId={subject.id} />

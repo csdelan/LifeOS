@@ -3,6 +3,23 @@
   "plugins": ["react", "typescript", "oxc"],
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@/lib/mock", "@/lib/mock/*"],
+            "message": "App code reaches the mock only through lib/client.ts, so production builds leave it out (code review CR23). Shared types go in lib/reads.ts or lib/production-ui-types.ts."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/lib/mock/**", "src/lib/client.ts", "src/test/**", "**/*.test.ts", "**/*.test.tsx", "e2e/**"],
+      "rules": { "no-restricted-imports": "off" }
+    }
+  ]
 }

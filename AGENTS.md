@@ -20,7 +20,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - `web/`: the React + Vite SPA. With no `VITE_API_BASE_URL` it runs in mock mode on an in-memory
   store.
   A component runs a write through `useWriteAction` (`web/src/lib/write-action.ts`), which says a
-  failure inline or in a toast; a bare `void writes.x()` loses it.
+  failure inline or in a toast; a bare `void writes.x()` loses it. App code reaches the mock only
+  through `lib/client.ts` (a lint rule says so), so the production bundle leaves it out; the read
+  seam's types are in `lib/reads.ts`. Pages load lazily (`lazyRouteComponent` in `router.tsx`).
 - `src/LifeOs.Pilot`: the original WinForms app. Chris still runs it, often against staging. It
   writes to staging, and migrates dev on launch, only with the `bsk` that
   `scripts/install-bsk.ps1` builds from `origin/main` into `%USERPROFILE%\.lifeos\bin\bsk` (or

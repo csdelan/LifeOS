@@ -7,6 +7,7 @@
  */
 
 import { todayIso } from "@/lib/dates";
+import type { LifeOsReads, SubjectRelations } from "@/lib/reads";
 import {
   buildAlignmentForest,
   deriveDashboard,
@@ -43,8 +44,6 @@ import type {
   PersonRow,
   RelationEdge,
   ResolvedInboxItem,
-  ReviewDoc,
-  ReviewKind,
   RewardRow,
   StatusHistoryEntry,
   SubjectDetail,
@@ -123,11 +122,6 @@ export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib
 
 const wait = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 
-export interface SubjectRelations {
-  parents: RelationEdge[];
-  children: RelationEdge[];
-}
-
 /** An Inbox row's own tags: keyed by subject id for a subject, by event id otherwise. */
 function inboxTags(row: InboxItem): string[] {
   const key =
@@ -161,145 +155,6 @@ function shown(subjects: SubjectListItem[]): SubjectListItem[] {
   return subjects.filter((s) => !isTaskSeries(s.id)).map(listed);
 }
 
-export interface LifeOsReads {
-  /** Subjects by type; a repeating Task's series only with `includeSeries` (TASKS-3). */
-  listSubjects(opts?: {
-    type?: SubjectListItem["type"];
-    includeArchived?: boolean;
-    includeSeries?: boolean;
-  }): Promise<SubjectListItem[]>;
-  getSubject(id: string): Promise<SubjectDetail | null>;
-  getListItem(id: string): Promise<SubjectListItem | null>;
-  relations(id: string): Promise<SubjectRelations>;
-  tags(id: string): Promise<string[]>;
-  tagUniverse(): Promise<TagUniverseItem[]>;
-  journal(id: string): Promise<JournalEntry[]>;
-  history(id: string): Promise<StatusHistoryEntry[]>;
-  inbox(): Promise<InboxItem[]>;
-  /** Items that left the Inbox, most recently resolved first (Back to Inbox). */
-  inboxResolved(): Promise<ResolvedInboxItem[]>;
-  /**
-   * Artifact metadata (no payload).
-   * // TODO(api): GET /api/artifacts/{id} from `bsk.v_artifact`.
-   */
-  artifact(id: string): Promise<ArtifactRecord | null>;
-  /**
-   * URL that streams the managed bytes.
-   * Mock: the retained object URL. // TODO(api): kernel bytes-fetch / `bsk artifact get`.
-   */
-  artifactBytesUrl(id: string): Promise<string | null>;
-  /**
-   * Binary artifacts related onto a subject (the Files section).
-   * // TODO(api): GET /api/subjects/{id}/files
-   */
-  subjectFiles(subjectId: string): Promise<ArtifactRecord[]>;
-  areas(): Promise<AreaRow[]>;
-  people(): Promise<PersonRow[]>;
-  habits(): Promise<HabitRow[]>;
-  /** Habit days, of one habit, on one day or over a range (a weekly review's check-offs). */
-  occurrences(opts?: { habitId?: string; on?: string; from?: string; to?: string }): Promise<HabitOccurrenceRow[]>;
-  /**
-   * The appointments on a day (CAL-1, `GET /api/appointments?on=`): one-time ones and a series'
-   * occurrences, never the series itself; all-day first, then by start time.
-   */
-  appointments(opts: { on: string }): Promise<AppointmentRow[]>;
-  /** Every timed Task's timer (TASKS-2), running first. Archived tasks are left out. */
-  timers(): Promise<TaskTimer[]>;
-  /** Every repeating Task (TASKS-3), by title, with its repetitions counted. */
-  taskSeries(opts?: { includeArchived?: boolean }): Promise<TaskSeriesRow[]>;
-  /** A repeating Task (by the series' id) and its repetitions, latest first; null when it isn't one. */
-  taskSeriesHistory(id: string): Promise<TaskSeriesHistory | null>;
-  /** Every currency's balance (REWARD-1), and what a Coin is worth. */
-  wallet(): Promise<Wallet>;
-  /** Every life domain's progression (REWARD-6 / REWARD-7, xp-domains plan §3.11). */
-  domains(): Promise<DomainsRead>;
-  /** One life domain's last `days` days (30 by default), today included: the daily chart. */
-  domainDays(domain: string, days?: number): Promise<DomainDaysRead>;
-  /** Every life domain over its last `days` days (30 by default): the Reports view. */
-  domainReport(days?: number): Promise<DomainReportRead>;
-  /** The days marked as exceptions among the last `days` (90 by default), newest first (REWARD-8). */
-  exceptionDays(days?: number): Promise<ExceptionDaysRead>;
-  /** One day of the Food Log (today by default): its entries, fasts and diet score (FOOD-4). */
-  foodDay(date?: string): Promise<FoodDayRead>;
-  /** Every day of a range, at most 62 (the week so far by default): the Week and Month views. */
-  foodDays(from?: string, to?: string): Promise<FoodDaysRead>;
-  /** The newest version of each recent entry by name, for "Log again". */
-  foodRecent(limit?: number): Promise<MealRow[]>;
-  /**
-   * The Activity page's top (ACTIVITY-1..4): today so far with last night, today's workouts,
-   * this week against last, and the Oura connection.
-   */
-  activitySummary(): Promise<ActivitySummaryRead>;
-  /** Every day of a range (the 30 days through today by default), oldest first: the charts. */
-  activityDays(from?: string, to?: string): Promise<ActivityDaysRead>;
-  /** Workouts on those days (the last 12 whole weeks by default), newest first, counted or not. */
-  activityWorkouts(from?: string, to?: string): Promise<ActivityWorkoutsRead>;
-  /** Tags from the Oura app starting on those days (the 30 days through today by default), newest first. */
-  activityTags(from?: string, to?: string): Promise<ActivityTagsRead>;
-  /** One day in full (today by default): both scores' contributors, the night, naps, workouts and tags. */
-  activityDay(date?: string): Promise<ActivityDayDetailRead>;
-  /** The Oura connection (`GET /api/oura/status`): other pages ask for the throttled sync when it's connected. */
-  ouraStatus(): Promise<OuraStatus>;
-  /** The home today (HOME-3): the Home Score, each space with its parts, and Fix next. */
-  environment(): Promise<EnvironmentRead>;
-  /** The Home Score on each of the last `days` days (90 by default), oldest first, with exception days. */
-  environmentDays(days?: number): Promise<HomeDaysRead>;
-  /** Every space (HOME-1), archived ones included, by name. */
-  spaces(): Promise<SpaceRow[]>;
-  /** The ratings among the last `days` (90 by default), of one space (its id) when given, newest first. */
-  spaceRatings(opts?: { space?: string; days?: number }): Promise<SpaceRatingsRead>;
-  /**
-   * A space's photos (HOME-4, `GET /api/environment/spaces/{id}/photos`), newest first, of one
-   * shot (its id or name) when given, each with the space's score on its day; its shots too.
-   */
-  spacePhotos(space: string, shot?: string): Promise<SpacePhotosRead>;
-  /** Every metric (MEASURE-1, `GET /api/measurements/metrics`), archived ones included, by name. */
-  metrics(): Promise<MetricRow[]>;
-  /**
-   * One metric (its id or name) over the last `days` days, all history when null
-   * (`GET /api/measurements/metrics/{id}`): readings newest first, day values with the trend,
-   * and the goal.
-   */
-  metric(metric: string, days: number | null): Promise<MetricDetailRead>;
-  /**
-   * Every lab visit with its results, newest collected first (MEASURE-4,
-   * `GET /api/measurements/visits`). A report's bytes come from `artifactBytesUrl`.
-   */
-  labVisits(): Promise<LabVisitsRead>;
-  /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
-  ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
-  /**
-   * The history by local day (REWARD-5): the days [from, to) (`YYYY-MM-DD`) as they read in
-   * `tz`, the viewer's IANA time zone, oldest first; days without entries are left out.
-   */
-  ledgerDaily(opts: { from: string; to: string; tz: string }): Promise<LedgerDay[]>;
-  /** The reward catalog (REWARD-3), with each Reward's redemptions and savings progress. */
-  rewards(opts?: { includeArchived?: boolean }): Promise<RewardRow[]>;
-  /** What each trigger of each earning type pays by default (REWARD-2). */
-  bountyDefaults(): Promise<BountyTypeDefaults[]>;
-  /**
-   * A page of Unsplash photos for the cover picker (COVER-1), searched through the server.
-   * Without an Access Key there, `configured` is false and there are no photos.
-   */
-  coverSearch(query: string, page?: number): Promise<CoverSearchRead>;
-  /**
-   * The reviews whose day is in the range (REVIEW-1, REVIEW-2), as they read today. Reading
-   * never makes one: `openReview` does, the first time a review is looked at.
-   */
-  reviews(opts?: { kind?: ReviewKind; from?: string; to?: string }): Promise<ReviewDoc[]>;
-  recap(opts: { start: string; end: string; asOf: string }): Promise<RecapSection[]>;
-  /**
-   * Bulk alignment edges (serves / results_in / supersedes) for Map outline + graph.
-   * // TODO(api): live GET /api/edges — already sketched in OpenAPI; confirm it returns
-   * the full graph (not per-subject) before relying on it in live mode.
-   */
-  edges(opts?: { includeArchived?: boolean }): Promise<AlignmentEdge[]>;
-  dashboard(): Promise<DashboardRead>;
-  alignmentForest(opts?: {
-    includeArchived?: boolean;
-    lens?: MapLens;
-  }): Promise<import("@/lib/derive").AlignmentNode[]>;
-}
 
 
 /** The days with what the mock's ledger pays each (`ActivityPaidReads`). */
@@ -308,6 +163,8 @@ function withActivityPaid(days: ActivityDayRow[]): ActivityDayRow[] {
   const paid = mockActivityPaid(days[0].day, days[days.length - 1].day);
   return days.map((d) => ({ ...d, paid: paid.get(d.day) ?? d.paid }));
 }
+
+export type { LifeOsReads, SubjectRelations };
 
 export const mockReads: LifeOsReads = {
   async listSubjects(opts?: {

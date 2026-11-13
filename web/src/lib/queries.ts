@@ -20,7 +20,7 @@ import { mapForestStatus, type DashboardRead, type MapLens } from "@/lib/derive"
 import { announceEarned } from "@/lib/earn-feedback";
 import { nextCoverPage } from "@/lib/cover";
 import { fetchMe, meQueryKey } from "@/lib/me";
-import type { LifeOsReads } from "@/lib/mock/api";
+import type { LifeOsReads } from "@/lib/reads";
 import type {
   AdherenceState,
   Earned,

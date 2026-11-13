@@ -18,7 +18,7 @@ import {
   normalizeReward,
   normalizeWallet,
 } from "@/lib/rewards";
-import type { LifeOsReads } from "@/lib/mock/api";
+import type { LifeOsReads } from "@/lib/reads";
 import { normalizeDomainDays, normalizeDomainReport, normalizeDomains, normalizeExceptionDays } from "@/lib/domains";
 import { normalizeFoodDay, normalizeFoodDays, normalizeMeal } from "@/lib/food";
 import { mapSubjects, normalizeRepeat, normalizeSeriesRow } from "@/lib/task-series";

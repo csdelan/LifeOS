@@ -6,8 +6,8 @@
  */
 
 import { isLiveApi } from "@/lib/api-base";
+import { mockState } from "@/lib/client";
 import { api, unwrap } from "@/lib/live/http";
-import { getState } from "@/lib/mock/store";
 import { getSupabase } from "@/lib/supabase";
 
 /** An agent on LifeOS's allow list, allowed or revoked, or one LifeOS refused. */
@@ -464,7 +464,7 @@ export function mockAgentsClient(): AgentsClient {
     async linkPerson(clientId, personId) {
       const previous = mock.records.get(clientId);
       if (!previous) throw new Error(`No agent with client id ${clientId} was ever allowed in LifeOS.`);
-      const person = personId ? getState().people.find((p) => p.id === personId) : null;
+      const person = personId ? (await mockState()).people.find((p) => p.id === personId) : null;
       if (personId && !person) throw new Error(`No Person has the id ${personId}.`);
       if (person && person.personKind !== "ai") {
         throw new Error(`${person.title} is a person, not an AI agent. Link an agent to a Person whose kind is AI.`);
