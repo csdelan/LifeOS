@@ -12,7 +12,7 @@ namespace LifeOs.Application.Subjects;
 /// <c>relate</c> / <c>link</c> — tags classify, relations connect.
 /// </summary>
 public sealed class TagService(
-    SubjectService subjects, IEventReader events, ITagRepository tags, TaskSeriesService? taskSeries = null)
+    SubjectService subjects, IEventReader events, ITagRepository tags, TaskSeriesService taskSeries)
 {
     public async Task<TagResult> ApplyAsync(
         string reference, IEnumerable<string> add, IEnumerable<string> remove,
@@ -36,7 +36,7 @@ public sealed class TagService(
             : await tags.AddAsync(item.IsEvent, item.Id, toAdd, cancellationToken);
 
         // A repeating Task's tags follow to its open repetitions (D16).
-        if (!item.IsEvent && taskSeries is not null)
+        if (!item.IsEvent)
         {
             await taskSeries.FollowTagsAsync(item.Id, toAdd, toRemove, cancellationToken);
         }

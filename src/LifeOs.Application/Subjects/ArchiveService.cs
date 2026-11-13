@@ -15,8 +15,8 @@ namespace LifeOs.Application.Subjects;
 /// one is refused while another uses its name, whichever route restores it.
 /// </summary>
 public sealed class ArchiveService(
-    SubjectService subjects, IEventStore events, IClock clock, EventSource eventSource, TaskSeriesService? taskSeries = null,
-    ISpaceRepository? spaces = null, IMetricRepository? metrics = null)
+    SubjectService subjects, IEventStore events, IClock clock, EventSource eventSource, TaskSeriesService taskSeries,
+    ISpaceRepository spaces, IMetricRepository metrics)
 {
     /// <summary>Archives the subject — hides it from default views, reversibly.</summary>
     public Task<ArchiveResult> ArchiveAsync(
@@ -65,7 +65,7 @@ public sealed class ArchiveService(
         var eventId = await events.AppendAsync(newEvent, cancellationToken);
 
         // Archiving a repeating Task stops it; restoring it repeats again from today (D16).
-        if (!archived && taskSeries is not null)
+        if (!archived)
         {
             await taskSeries.AfterRestoreAsync(subject, eventId, cancellationToken);
         }
@@ -75,11 +75,6 @@ public sealed class ArchiveService(
 
     private async Task CheckSpaceNameFreeAsync(Guid id, CancellationToken cancellationToken)
     {
-        if (spaces is null)
-        {
-            return;
-        }
-
         var all = await spaces.GetSpacesAsync(cancellationToken);
         var space = all.FirstOrDefault(s => s.Id == id);
         if (space is not { Archived: true })
@@ -97,11 +92,6 @@ public sealed class ArchiveService(
 
     private async Task CheckMetricNameFreeAsync(Guid id, CancellationToken cancellationToken)
     {
-        if (metrics is null)
-        {
-            return;
-        }
-
         var all = await metrics.GetMetricsAsync(cancellationToken);
         var metric = all.FirstOrDefault(m => m.Id == id);
         if (metric is not { Archived: true })

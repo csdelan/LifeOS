@@ -145,7 +145,8 @@ public sealed class RenameServiceTests(ClassDatabase classDb) : IClassFixture<Cl
             new NpgsqlHomeCalendar(
                 KernelDataSource.For(classDb.ConnectionString),
                 new TestClock(new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero)),
-                PostgresFixture.HabitViewZone));
+                PostgresFixture.HabitViewZone),
+            provider.GetRequiredService<ITaskSeriesRepository>());
         var ns = Guid.NewGuid().ToString("N");
 
         var series = await subjects.CreateAsync(

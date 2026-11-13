@@ -31,7 +31,8 @@ public sealed class TimerServiceTests(ClassDatabase classDb) : IClassFixture<Cla
             new NpgsqlTimerRepository(KernelDataSource.For(classDb.ConnectionString)),
             provider.GetRequiredService<StatusService>(),
             clock,
-            new EventSource(KernelSources.Cli));
+            new EventSource(KernelSources.Cli),
+            provider.GetRequiredService<TaskSeriesService>());
         return (timers, subjects, clock);
     }
 
@@ -236,20 +237,16 @@ public sealed class TimerServiceTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task A_timer_left_running_on_a_closed_task_can_still_be_stopped_but_not_resumed()
     {
-        // A status service without the timer, as the kernel was before closing stopped it.
+        // Closed as the kernel did before closing stopped the timer: the status change alone.
         var (timers, subjects, clock) = Build();
         var provider = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
-        var unaware = new StatusService(
-            subjects,
-            provider.GetRequiredService<IEventStore>(),
-            provider.GetRequiredService<LifeOs.Application.Rewards.RewardService>(),
-            clock,
-            new EventSource(KernelSources.Cli));
         var task = await TaskAsync(subjects);
         await timers.ApplyAsync(task.Urn, TimerActions.Start, Ct);
         clock.Advance(TimeSpan.FromSeconds(10));
         await timers.ApplyAsync(task.Urn, TimerActions.Pause, Ct);
-        await unaware.ChangeStatusAsync(task.Urn, "Cancelled", Ct);
+        await provider.GetRequiredService<IEventStore>().AppendAsync(new NewEvent(
+            EventKinds.StateChange, Provenances.Declared, clock.UtcNow, clock.UtcNow, KernelSources.Cli,
+            PayloadJson: System.Text.Json.JsonSerializer.Serialize(new { subject_id = task.Id.ToString(), status = "Cancelled" })), Ct);
 
         var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => timers.ApplyAsync(task.Urn, TimerActions.Resume, Ct));
         Assert.Contains("it's Cancelled", refused.Message, StringComparison.Ordinal);

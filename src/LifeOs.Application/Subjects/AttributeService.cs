@@ -23,7 +23,7 @@ namespace LifeOs.Application.Subjects;
 /// </para>
 /// </summary>
 public sealed class AttributeService(
-    SubjectService subjects, ISubjectRepository repository, TaskSeriesService? taskSeries = null)
+    SubjectService subjects, ISubjectRepository repository, TaskSeriesService taskSeries)
 {
     /// <summary>
     /// Sets or removes attributes on the subject named by <paramref name="reference"/>
@@ -60,16 +60,14 @@ public sealed class AttributeService(
         {
             var pattern = assignments.FirstOrDefault(a =>
                 string.Equals(a.Key.Trim(), Recurrence.AttributeKey, StringComparison.OrdinalIgnoreCase));
-            if (pattern is not null && taskSeries is not null)
+            if (pattern is not null)
             {
                 await taskSeries.GuardPatternAsync(
                     subject, clearing: string.IsNullOrWhiteSpace(pattern.Value), cancellationToken);
             }
         }
 
-        var edit = taskSeries is null
-            ? null
-            : await taskSeries.BeforeEditAsync(subject, assignments.Select(a => a.Key.Trim()), cancellationToken);
+        var edit = await taskSeries.BeforeEditAsync(subject, assignments.Select(a => a.Key.Trim()), cancellationToken);
 
         var patch = new JsonObject();
         var removed = new List<string>();
@@ -108,7 +106,7 @@ public sealed class AttributeService(
 
         var setKeys = patch.Select(pair => pair.Key).ToList();
 
-        if (taskSeries is not null && subject.Type == SubjectTypes.Task)
+        if (subject.Type == SubjectTypes.Task)
         {
             if (edit is not null)
             {

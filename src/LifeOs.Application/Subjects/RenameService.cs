@@ -19,7 +19,7 @@ namespace LifeOs.Application.Subjects;
 /// </summary>
 public sealed class RenameService(
     SubjectService subjects, ISubjectRepository repository, IAppointmentRepository appointments, IHomeCalendar calendar,
-    ITaskSeriesRepository? taskSeries = null)
+    ITaskSeriesRepository taskSeries)
 {
     /// <summary>
     /// Renames the subject named by <paramref name="reference"/> (urn, short id, or
@@ -55,7 +55,7 @@ public sealed class RenameService(
             (updated, occurrencesRenamed) = await appointments.RenameWithUpcomingOccurrencesAsync(
                 subject.Id, subject.Urn, subject.Title, cleanTitle, today, cancellationToken);
         }
-        else if (subject.Type == SubjectTypes.Task && taskSeries is not null)
+        else if (subject.Type == SubjectTypes.Task)
         {
             (updated, occurrencesRenamed) = await taskSeries.RenameWithOpenRepetitionsAsync(
                 subject.Id, subject.Urn, subject.Title, cleanTitle, cancellationToken);

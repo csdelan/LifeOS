@@ -29,7 +29,7 @@ namespace LifeOs.Application.Subjects;
 /// </summary>
 public sealed class StatusService(
     SubjectService subjects, IEventStore events, RewardService rewards, IClock clock, EventSource eventSource,
-    TaskSeriesService? taskSeries = null, ITimerRepository? timers = null)
+    TaskSeriesService taskSeries, ITimerRepository timers)
 {
     public async Task<StatusResult> ChangeStatusAsync(
         string reference, string newStatus, CancellationToken cancellationToken = default)
@@ -42,14 +42,12 @@ public sealed class StatusService(
         var subject = await subjects.ResolveAsync(reference, cancellationToken);
         var status = VocabularyStatus(subject.Type, newStatus);
 
-        var followUp = taskSeries is null
-            ? TaskStatusFollowUp.None
-            : await taskSeries.BeforeStatusAsync(subject, status, cancellationToken);
+        var followUp = await taskSeries.BeforeStatusAsync(subject, status, cancellationToken);
 
         var payload = JsonSerializer.Serialize(new { subject_id = subject.Id.ToString(), status });
 
         var now = clock.UtcNow;
-        if (timers is not null && subject.Type == SubjectTypes.Task && StatusVocabulary.IsTerminal(status)
+        if (subject.Type == SubjectTypes.Task && StatusVocabulary.IsTerminal(status)
             && await timers.GetAsync(subject.Id, cancellationToken) is { State: TimerStates.Running or TimerStates.Paused } timer)
         {
             var stop = JsonSerializer.Serialize(new { subject_id = subject.Id.ToString(), timer = TimerActions.Stop });
@@ -74,7 +72,7 @@ public sealed class StatusService(
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);
         var earned = await rewards.ReconcileWithProgressAsync(subject, eventId, cancellationToken);
-        var made = taskSeries is null ? [] : await taskSeries.AfterStatusAsync(followUp, eventId, cancellationToken);
+        var made = await taskSeries.AfterStatusAsync(followUp, eventId, cancellationToken);
         return new StatusResult(eventId, subject, status, earned.Awards, earned.Progress) { Repetitions = made };
     }
 

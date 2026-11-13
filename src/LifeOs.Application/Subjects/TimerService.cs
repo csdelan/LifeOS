@@ -30,7 +30,7 @@ namespace LifeOs.Application.Subjects;
 /// </summary>
 public sealed class TimerService(
     SubjectService subjects, ITimerRepository timers, StatusService status, IClock clock, EventSource eventSource,
-    TaskSeriesService? taskSeries = null)
+    TaskSeriesService taskSeries)
 {
     /// <summary>The Task status Complete moves to (a terminal member of the Task vocabulary).</summary>
     public const string CompletedStatus = "Completed";
@@ -123,7 +123,7 @@ public sealed class TimerService(
         }
 
         // A repeating Task's series is never worked on itself: its repetitions are (D16).
-        if (taskSeries is not null && await taskSeries.IsSeriesAsync(subject.Id, cancellationToken))
+        if (await taskSeries.IsSeriesAsync(subject.Id, cancellationToken))
         {
             throw new InvalidOperationException(
                 $"'{subject.Title}' is a repeating task; time one of its repetitions instead.");

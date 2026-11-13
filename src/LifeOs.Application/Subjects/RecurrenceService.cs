@@ -17,7 +17,7 @@ namespace LifeOs.Application.Subjects;
 /// </para>
 /// </summary>
 public sealed class RecurrenceService(
-    SubjectService subjects, ISubjectRepository repository, TaskSeriesService? taskSeries = null)
+    SubjectService subjects, ISubjectRepository repository, TaskSeriesService taskSeries)
 {
     /// <summary>Sets the recurrence from a canonical recurrence JSON object string.</summary>
     public async Task<SubjectRef> SetAsync(
@@ -52,10 +52,7 @@ public sealed class RecurrenceService(
             throw new ArgumentException("A start date here is for repeating Tasks; set another subject's start with `bsk set`.");
         }
 
-        if (taskSeries is not null)
-        {
-            await taskSeries.GuardPatternAsync(subject, clearing: false, cancellationToken);
-        }
+        await taskSeries.GuardPatternAsync(subject, clearing: false, cancellationToken);
 
         var patch = new JsonObject { ["recurrence"] = JsonNode.Parse(canonical) };
         var updated = await repository.UpdateAttributesAsync(
@@ -65,9 +62,7 @@ public sealed class RecurrenceService(
             throw new SubjectNotFoundException(reference);
         }
 
-        var made = taskSeries is null
-            ? []
-            : await taskSeries.AfterPatternAsync(subject, start, cancellationToken);
+        var made = await taskSeries.AfterPatternAsync(subject, start, cancellationToken);
         return new RecurrenceResult(subject, canonical, made);
     }
 
@@ -76,10 +71,7 @@ public sealed class RecurrenceService(
         string reference, CancellationToken cancellationToken = default)
     {
         var subject = await subjects.ResolveAsync(reference, cancellationToken);
-        if (taskSeries is not null)
-        {
-            await taskSeries.GuardPatternAsync(subject, clearing: true, cancellationToken);
-        }
+        await taskSeries.GuardPatternAsync(subject, clearing: true, cancellationToken);
 
         var updated = await repository.UpdateAttributesAsync(
             subject.Id, "{}", ["recurrence"], cancellationToken);

@@ -248,7 +248,9 @@ public sealed class RewardEarningTests(ClassDatabase classDb) : IClassFixture<Cl
             kernel.Provider.GetRequiredService<IEventStore>(),
             kernel.Rewards,
             new TestClock(new DateTimeOffset(2000, 6, 1, 12, 0, 0, TimeSpan.Zero)),
-            new EventSource(KernelSources.Cli));
+            new EventSource(KernelSources.Cli),
+            kernel.Provider.GetRequiredService<TaskSeriesService>(),
+            kernel.Provider.GetRequiredService<ITimerRepository>());
         var completed = await backdated.ChangeStatusAsync(task.Urn, "Completed", Ct);
 
         Assert.Empty(completed.Awards);

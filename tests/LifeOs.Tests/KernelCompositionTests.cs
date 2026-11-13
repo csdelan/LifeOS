@@ -56,6 +56,29 @@ public sealed class KernelCompositionTests
         Assert.Empty(missing);
     }
 
+    // Code review CR80: a feature's follow-up on a generic verb (a repeating Task's next repetition,
+    // a timer stopped when its Task closes, a space's or metric's name checked on restore) was an
+    // optional parameter defaulting to null, so a verb built without it skipped the follow-up
+    // silently. A dependency the kernel registers is always required, so a missing one fails to build.
+    [Fact]
+    public void No_service_takes_a_registered_dependency_as_optional()
+    {
+        var registered = new ServiceCollection().AddLifeOsKernel(new KernelSettings(NoDatabase))
+            .Select(d => d.ServiceType).ToHashSet();
+
+        var optional = new[] { typeof(SubjectService).Assembly, typeof(NpgsqlEventStore).Assembly }
+            .SelectMany(a => a.GetExportedTypes())
+            .Where(t => t is { IsClass: true, IsAbstract: false })
+            .SelectMany(t => t.GetConstructors().SelectMany(c => c.GetParameters()).Select(p => (Type: t, Parameter: p)))
+            .Where(x => x.Parameter.HasDefaultValue && registered.Contains(x.Parameter.ParameterType))
+            .Select(x => $"{x.Type.Name}({x.Parameter.ParameterType.Name} {x.Parameter.Name})")
+            .Distinct()
+            .Order()
+            .ToList();
+
+        Assert.Empty(optional);
+    }
+
     [Fact]
     public void The_host_settings_reach_the_services_that_take_them()
     {
