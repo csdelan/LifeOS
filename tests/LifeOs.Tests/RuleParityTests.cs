@@ -36,20 +36,23 @@ public sealed class RuleParityTests
             var rule = testCase!["rule"]!.GetValue<string>();
             var args = testCase["args"]!.AsArray();
             var actual = Answer(file, rule, args);
-            if (writing)
-            {
-                testCase["out"] = actual;
-            }
-            else if (!JsonNode.DeepEquals(actual, testCase["out"]))
+            if (!JsonNode.DeepEquals(actual, testCase["out"]))
             {
                 wrong.Add($"{rule}({args.ToJsonString()}) is {actual?.ToJsonString() ?? "null"}, not {testCase["out"]?.ToJsonString() ?? "null"}");
+                testCase["out"] = actual;
             }
         }
 
         if (writing)
         {
-            var text = document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n") + "\n";
-            await File.WriteAllTextAsync(path, text, new UTF8Encoding(false), TestContext.Current.CancellationToken);
+            // Only a file whose answers moved is written, so the rest keep their layout and don't
+            // show as changed.
+            if (wrong.Count > 0)
+            {
+                var text = document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n") + "\n";
+                await File.WriteAllTextAsync(path, text, new UTF8Encoding(false), TestContext.Current.CancellationToken);
+            }
+
             return;
         }
 
