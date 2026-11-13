@@ -483,24 +483,17 @@ public sealed class NewSubjectDialog : Form
             }
 
             _tags.CommitPending();
-            var created = _bsk.RunJson<CreatedSubject>(args.ToArray());
-            BskWrites.ApplyTags(_bsk, created.Urn, _tags.Tags);
-            BskWrites.ApplyLinks(_bsk, created.Urn, _relationships.Pending);
-            if (_currentType is PilotVocab.Habit or PilotVocab.Appointment)
+            var outcome = NewItemWrites.Run(
+                () => _bsk.RunJson<CreatedSubject>(args.ToArray()), created => created.Urn, FollowUps());
+
+            // The item exists now, so the dialog closes on it whatever else failed; a second
+            // Save would make it again (code review CR67).
+            CreatedSubject = outcome.Created;
+            if (NewItemWrites.Report(outcome.Created.Title, outcome.Failed) is { } report)
             {
-                var recur = _recurrence.ToCliArgs();
-                if (_recurrence.IsRecurring)
-                {
-                    BskWrites.ApplyRecurrence(_bsk, created.Urn, recur);
-                }
+                MessageBox.Show(this, report, "New", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
 
-            if (_currentType == PilotVocab.Appointment && _attendee.SelectedUrn is { } person)
-            {
-                _bsk.Run("involve", created.Urn, person, "--role", "attendee");
-            }
-
-            CreatedSubject = created;
             DialogResult = DialogResult.OK;
             Close();
         }
@@ -508,6 +501,30 @@ public sealed class NewSubjectDialog : Form
         {
             Ui.ShowError(this, "Create failed", ex);
         }
+    }
+
+    /// <summary>What finishes the new item after <c>bsk new</c>, each on its own (code review CR67).</summary>
+    private List<NewItemWrites.FollowUp> FollowUps()
+    {
+        var tags = _tags.Tags.ToList();
+        var followUps = new List<NewItemWrites.FollowUp> { new("its tags", urn => BskWrites.ApplyTags(_bsk, urn, tags)) };
+        foreach (var link in _relationships.Pending.ToList())
+        {
+            followUps.Add(new($"its {link.Relation} link to {link.OtherUrn}", urn => BskWrites.ApplyLinks(_bsk, urn, [link])));
+        }
+
+        if (_currentType is PilotVocab.Habit or PilotVocab.Appointment && _recurrence.IsRecurring)
+        {
+            var recur = _recurrence.ToCliArgs();
+            followUps.Add(new("its repeat", urn => BskWrites.ApplyRecurrence(_bsk, urn, recur)));
+        }
+
+        if (_currentType == PilotVocab.Appointment && _attendee.SelectedUrn is { } person)
+        {
+            followUps.Add(new("its attendee", urn => _bsk.Run("involve", urn, person, "--role", "attendee")));
+        }
+
+        return followUps;
     }
 
     private IEnumerable<(string Key, string Value)> CollectAttrs()

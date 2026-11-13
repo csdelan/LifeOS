@@ -17,6 +17,7 @@
   <ItemGroup>
     <Compile Include="..\..\src\LifeOs.Pilot\Shell\BrowserUrl.cs" Link="Pilot\BrowserUrl.cs" />
     <Compile Include="..\..\src\LifeOs.Pilot\Shell\TimerFormat.cs" Link="Pilot\TimerFormat.cs" />
+    <Compile Include="..\..\src\LifeOs.Pilot\Shell\NewItemWrites.cs" Link="Pilot\NewItemWrites.cs" />
   </ItemGroup>
 
   <ItemGroup>
