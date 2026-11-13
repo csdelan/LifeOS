@@ -148,8 +148,12 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - Mock mode sends none of the API's security headers. A feature that uses a browser permission
   (camera, microphone, location) or loads from a new kind of URL also needs
   `src/LifeOs.Api/Http/SecurityHeaders.cs` changed, or it breaks only on staging.
-- With the real API and a database, or in the WinForms Pilot: the recipes are in
-  [docs/agents/verifying.md](docs/agents/verifying.md), including faking sign-in and Oura.
+- With the real API and a database: `./scripts/live-check.ps1 -Name <x> -Seed -Web` makes and
+  migrates `lifeos_check_<x>`, fakes Supabase Auth, Oura, Unsplash and Storage
+  (`scripts/live-check/fakes.mjs`), runs the API as staging does, signs a token and prints the
+  browser sign-in; `-Stop` undoes all of it. The token and URLs are in its `state.json`. The
+  WinForms Pilot, and what the script does step by step, are in
+  [docs/agents/verifying.md](docs/agents/verifying.md).
 
 ## Working with Chris
 
