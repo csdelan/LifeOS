@@ -109,8 +109,46 @@ export const qk = {
   edges: (archived: boolean) => ["edges", archived] as const,
 };
 
-function invalidate(qc: QueryClient, keys: readonly (readonly unknown[])[]) {
+type QueryKeys = readonly (readonly unknown[])[];
+
+function invalidate(qc: QueryClient, keys: QueryKeys) {
   return Promise.all(keys.map((queryKey) => qc.invalidateQueries({ queryKey })));
+}
+
+/**
+ * The reads a kind of write moves, by name. A write refreshes the groups it moves rather than a
+ * list of keys of its own, so a new read joins its group once and every write that moves it
+ * refreshes it, and writes that move the same things (archive and restore) share one list.
+ */
+const moves = {
+  /** One subject's own reads: its detail, its list row and its history (renames and attribute changes leave events). */
+  subject: (id: string): QueryKeys => [qk.subject(id), qk.listItem(id), qk.history(id)],
+  /** Everywhere subjects are listed: the lists, Focus, the Map and its edges. */
+  subjectLists: [qk.subjects, qk.dashboard, ["forest"], ["edges"]] as QueryKeys,
+  /** What an earn or a give-back moves (REWARD-1): the wallet, the ledger and the life domains. */
+  earnings: [qk.wallet, qk.ledger, qk.domains] as QueryKeys,
+  /**
+   * The lists of one type that leave archived subjects out: the Inbox's Ideas and Problems, Habits
+   * and their days, Areas, People, Rewards, repeating Tasks and their timers, Spaces (which leave
+   * the Home Score, HOME-1) and Metrics.
+   */
+  typedLists: [
+    qk.inbox,
+    qk.habits,
+    qk.occurrences,
+    qk.areas,
+    qk.people,
+    qk.rewards,
+    qk.taskSeries,
+    qk.timers,
+    qk.environment,
+    qk.measurements,
+  ] as QueryKeys,
+};
+
+/** What archiving or restoring a subject moves: the same reads either way. */
+function archiveMoves(subject: string): QueryKeys {
+  return [...moves.subject(subject), ...moves.subjectLists, ...moves.typedLists, qk.domains];
 }
 
 /** A food write: announce what it earned, gave back or re-scored, then refresh what it moved. */
@@ -120,7 +158,7 @@ async function foodWrite<T extends Earned>(qc: QueryClient, write: () => Promise
     announceEarned(result);
     return result;
   } finally {
-    await invalidate(qc, [qk.food, qk.wallet, qk.ledger, qk.domains]);
+    await invalidate(qc, [qk.food, ...moves.earnings]);
   }
 }
 
@@ -134,7 +172,7 @@ async function ratingWrite<T extends Earned>(qc: QueryClient, write: () => Promi
     announceEarned(result);
     return result;
   } finally {
-    await invalidate(qc, [qk.environment, qk.domains, qk.wallet, qk.ledger]);
+    await invalidate(qc, [qk.environment, ...moves.earnings]);
   }
 }
 
@@ -147,7 +185,8 @@ async function photoWrite<T>(qc: QueryClient, write: () => Promise<T>): Promise<
   }
 }
 
-function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWriteClient {
+/** The write client with each write refreshing what it moved. Exported for its tests. */
+export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWriteClient {
   return {
     async newSubject(req) {
       const created = await client.newSubject(req);
@@ -163,29 +202,25 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
                 : [];
       // Made under a parent, it's on the parent's Relationships tab too (a replacement Decision's original).
       const parent = req.parent ? [qk.relations(req.parent)] : [];
-      await invalidate(qc, [qk.subjects, qk.dashboard, ["forest"], ["edges"], ...extra, ...parent]);
+      await invalidate(qc, [...moves.subjectLists, ...extra, ...parent]);
       return created;
     },
 
     async promote(source, type, title) {
       const created = await client.promote(source, type, title);
-      await invalidate(qc, [qk.inbox, qk.subjects, qk.dashboard, ["forest"], ["edges"]]);
+      await invalidate(qc, [qk.inbox, ...moves.subjectLists]);
       return created;
     },
 
     async setAttributes(subject, attrs) {
       await client.setAttributes(subject, attrs);
       await invalidate(qc, [
-        qk.subject(subject),
-        qk.listItem(subject),
-        qk.subjects,
-        qk.dashboard,
+        ...moves.subject(subject),
+        ...moves.subjectLists,
         qk.habits,
         qk.areas,
         qk.people,
         qk.rewards,
-        ["forest"],
-        ["edges"],
       ]);
     },
 
@@ -207,60 +242,25 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         // A status change can earn or give back (REWARD-1), so the wallet moves too; a
         // habit's graduates it off the daily list; closing a Task stops its timer.
         await invalidate(qc, [
+          ...moves.subject(subject),
+          ...moves.subjectLists,
+          ...moves.earnings,
           qk.timers,
-          qk.subject(subject),
-          qk.listItem(subject),
-          qk.history(subject),
-          qk.subjects,
-          qk.dashboard,
           qk.inbox,
           qk.habits,
-          qk.wallet,
-          qk.ledger,
-          qk.domains,
           qk.taskSeries,
-          ["forest"],
-          ["edges"],
         ]);
       }
     },
 
     async archive(subject) {
       await client.archive(subject);
-      await invalidate(qc, [
-        // A space leaves the Home Score (HOME-1); a metric stops taking readings.
-        qk.environment,
-        qk.measurements,
-        qk.domains,
-        qk.timers,
-        qk.rewards,
-        qk.taskSeries,
-        qk.subject(subject),
-        qk.listItem(subject),
-        qk.subjects,
-        qk.dashboard,
-        qk.inbox,
-        ["forest"],
-        ["edges"],
-      ]);
+      await invalidate(qc, archiveMoves(subject));
     },
 
     async restore(subject) {
       await client.restore(subject);
-      await invalidate(qc, [
-        qk.environment,
-        qk.measurements,
-        qk.domains,
-        qk.timers,
-        qk.rewards,
-        qk.taskSeries,
-        qk.subject(subject),
-        qk.listItem(subject),
-        qk.subjects,
-        qk.dashboard,
-        ["forest"],
-        ["edges"],
-      ]);
+      await invalidate(qc, archiveMoves(subject));
     },
 
     async tag(item, opts) {
@@ -315,7 +315,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       try {
         await client.drop(item);
       } finally {
-        await invalidate(qc, [qk.inbox, qk.dashboard, qk.subjects, ["forest"], ["edges"]]);
+        await invalidate(qc, [qk.inbox, ...moves.subjectLists]);
       }
     },
 
@@ -326,7 +326,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         announceEarned(earned);
         return earned;
       } finally {
-        await invalidate(qc, [qk.habits, qk.occurrences, qk.dashboard, qk.wallet, qk.ledger, qk.domains]);
+        await invalidate(qc, [qk.habits, qk.occurrences, qk.dashboard, ...moves.earnings]);
       }
     },
 
@@ -334,7 +334,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       const earned = await client.settleDomains();
       announceEarned(earned);
       // The settle pays food days that closed themselves and activity XP that's due, too.
-      if (earned.awards.length > 0) await invalidate(qc, [qk.wallet, qk.ledger, qk.domains, qk.food, qk.activity]);
+      if (earned.awards.length > 0) await invalidate(qc, [...moves.earnings, qk.food, qk.activity]);
       return earned;
     },
 
@@ -346,7 +346,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
       } finally {
         // The exception list sits under ["domains"], so this refreshes it too. An exception
         // day also pauses the home's fades (HOME-3).
-        await invalidate(qc, [qk.domains, qk.wallet, qk.ledger, qk.environment]);
+        await invalidate(qc, [...moves.earnings, qk.environment]);
       }
     },
 
@@ -356,7 +356,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         announceEarned(result, { lostBecause: "The day counts again, and your last 90 days support a lower level." });
         return result;
       } finally {
-        await invalidate(qc, [qk.domains, qk.wallet, qk.ledger, qk.environment]);
+        await invalidate(qc, [...moves.earnings, qk.environment]);
       }
     },
 
@@ -391,7 +391,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async settleFood() {
       const earned = await client.settleFood();
       announceEarned(earned);
-      if (earned.awards.length > 0) await invalidate(qc, [qk.food, qk.wallet, qk.ledger, qk.domains]);
+      if (earned.awards.length > 0) await invalidate(qc, [qk.food, ...moves.earnings]);
       return earned;
     },
 
@@ -419,7 +419,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         return result;
       } finally {
         // A skipped sync that paid nothing changed nothing; a refused one may have marked the connection.
-        if (paid) await invalidate(qc, [qk.activity, qk.wallet, qk.ledger, qk.domains]);
+        if (paid) await invalidate(qc, [qk.activity, ...moves.earnings]);
         else if (ran) await invalidate(qc, [qk.activity]);
       }
     },
@@ -581,28 +581,19 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
     async recur(subject, spec, opts) {
       await client.recur(subject, spec, opts);
       // On a Task it makes (or re-dates) a repetition, which shows in the lists (TASKS-3).
-      await invalidate(qc, [
-        qk.habits,
-        qk.subject(subject),
-        qk.listItem(subject),
-        qk.subjects,
-        qk.dashboard,
-        qk.taskSeries,
-        ["forest"],
-        ["edges"],
-      ]);
+      await invalidate(qc, [...moves.subject(subject), ...moves.subjectLists, qk.habits, qk.taskSeries]);
     },
 
     async materialize(series, through) {
       const result = await client.materialize(series, through);
-      await invalidate(qc, [qk.subjects, qk.dashboard, ["forest"], ["edges"]]);
+      await invalidate(qc, moves.subjectLists);
       return result;
     },
 
     async settleTasks() {
       const result = await client.settleTasks();
       if (result.made.length > 0) {
-        await invalidate(qc, [qk.subjects, qk.dashboard, qk.taskSeries, ["forest"], ["edges"]]);
+        await invalidate(qc, [...moves.subjectLists, qk.taskSeries]);
       }
       return result;
     },
@@ -613,18 +604,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
         announceEarned(result);
         if (action === "complete") {
           // Complete also moves the Task's Status.
-          await invalidate(qc, [
-            qk.subject(task),
-            qk.listItem(task),
-            qk.history(task),
-            qk.subjects,
-            qk.dashboard,
-            qk.wallet,
-            qk.ledger,
-            qk.domains,
-            qk.taskSeries,
-            ["forest"],
-          ]);
+          await invalidate(qc, [...moves.subject(task), ...moves.subjectLists, ...moves.earnings, qk.taskSeries]);
         }
         return result;
       } finally {
@@ -713,13 +693,7 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
 
     async setBounty(req) {
       const result = await client.setBounty(req);
-      await invalidate(qc, [
-        qk.subject(result.subject.id),
-        qk.listItem(result.subject.id),
-        qk.subjects,
-        qk.habits,
-        qk.dashboard,
-      ]);
+      await invalidate(qc, [...moves.subject(result.subject.id), qk.subjects, qk.habits, qk.dashboard]);
       return result;
     },
 
@@ -750,8 +724,8 @@ function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): LifeOsWrite
 }
 
 /** What a cover change moves: the subject, the lists and cards it shows on, and the Map. */
-function coverKeys(id: string): readonly (readonly unknown[])[] {
-  return [qk.subject(id), qk.listItem(id), qk.subjects, qk.dashboard, ["forest"]];
+function coverKeys(id: string): QueryKeys {
+  return [...moves.subject(id), qk.subjects, qk.dashboard, ["forest"]];
 }
 
 function matchesRef(id: string, urn: string, ref: string) {
