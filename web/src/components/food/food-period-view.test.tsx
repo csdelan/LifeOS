@@ -6,7 +6,8 @@ import { FoodPeriodView } from "@/components/food/food-period-view";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { addDays, formatDay, formatDayFull, todayIso } from "@/lib/dates";
 import { foodPeriod, type FoodPeriod } from "@/lib/food-period";
-import { mockFoodDays, mockSettleFood, resetStore } from "@/lib/mock/store";
+import { resetStore } from "@/lib/mock/store";
+import { mockFoodDays, mockSettleFood } from "@/lib/mock/food-store";
 
 beforeEach(() => {
   resetStore();

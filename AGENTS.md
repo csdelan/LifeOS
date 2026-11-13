@@ -121,6 +121,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 
 - Web-only UI: mock mode, `npm --prefix web run dev -- --mode mock --port 5174`. The mock store
   resets on every reload, so make the change and click through it in one page load.
+- The mock is thin for a new feature: it stores rows and returns plausible results, and leaves
+  refusal wording and reward reconcile to the .NET tests (code-review-plan.md, CR10). A feature's
+  mock goes in its own `web/src/lib/mock/<feature>-store.ts`, as food, activity, environment and
+  measurements do; `store.ts` keeps subjects, the ledger and settle.
 - Mock mode sends none of the API's security headers. A feature that uses a browser permission
   (camera, microphone, location) or loads from a new kind of URL also needs
   `src/LifeOs.Api/Http/SecurityHeaders.cs` changed, or it breaks only on staging.

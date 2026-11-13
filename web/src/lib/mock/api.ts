@@ -83,9 +83,6 @@ import {
   mockRewards,
   mockWallet,
   mockDomains,
-  mockFoodDay,
-  mockFoodDays,
-  mockFoodRecent,
   mockDomainDays,
   mockDomainReport,
   mockExceptionDays,
@@ -97,6 +94,7 @@ import {
   withCover,
   withRepeat,
 } from "@/lib/mock/store";
+import { mockFoodDay, mockFoodDays, mockFoodRecent } from "@/lib/mock/food-store";
 import { mockSearchScenes } from "@/lib/mock/covers";
 import {
   mockActivityDay,
@@ -114,7 +112,12 @@ import {
   mockSpaceRatings,
   mockSpaces,
 } from "@/lib/mock/environment-store";
-import { mockLabReportUrl, mockLabVisits, mockMetricDetail, mockMetrics } from "@/lib/mock/measurements-store";
+import {
+  mockLabReportUrl,
+  mockLabVisits,
+  mockMetricDetail,
+  mockMetrics,
+} from "@/lib/mock/measurements-store";
 
 export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
 

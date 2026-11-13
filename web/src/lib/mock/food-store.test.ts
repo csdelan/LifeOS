@@ -4,9 +4,13 @@ import { clearMockActivity } from "@/lib/mock/activity-store";
 import {
   getArtifact,
   getState,
+  mockDomains,
+  mockSettleDomains,
+  resetStore,
+} from "@/lib/mock/store";
+import {
   mockCloseFoodDay,
   mockDeleteFood,
-  mockDomains,
   mockEditFood,
   mockFastAction,
   mockFoodDay,
@@ -15,10 +19,8 @@ import {
   mockLogFood,
   mockRemoveFoodPhoto,
   mockSetFoodPhoto,
-  mockSettleDomains,
   mockSettleFood,
-  resetStore,
-} from "@/lib/mock/store";
+} from "@/lib/mock/food-store";
 
 const HOUR = 3_600_000;
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();

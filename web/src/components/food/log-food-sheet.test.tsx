@@ -4,7 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { LogFoodSheet } from "@/components/food/log-food-sheet";
 import { todayIso } from "@/lib/dates";
-import { mockFoodDay, mockLogFood, mockSetFoodPhoto, resetStore } from "@/lib/mock/store";
+import { resetStore } from "@/lib/mock/store";
+import { mockFoodDay, mockLogFood, mockSetFoodPhoto } from "@/lib/mock/food-store";
 import type { MealRow } from "@/lib/production-ui-types";
 
 vi.mock("sonner", () => ({

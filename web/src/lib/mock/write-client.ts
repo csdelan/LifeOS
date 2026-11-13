@@ -18,15 +18,7 @@ import {
   mockSettleDomains,
   mockMarkException,
   mockUnmarkException,
-  mockCloseFoodDay,
-  mockDeleteFood,
-  mockEditFood,
-  mockFastAction,
-  mockLogFood,
-  mockRemoveFoodPhoto,
-  mockSetFoodPhoto,
   mockSettleActivity,
-  mockSettleFood,
   appendJournal,
   applyTimer,
   applyAttrs,
@@ -60,6 +52,16 @@ import {
   materializeAppointments,
   setTags,
 } from "@/lib/mock/store";
+import {
+  mockCloseFoodDay,
+  mockDeleteFood,
+  mockEditFood,
+  mockFastAction,
+  mockLogFood,
+  mockRemoveFoodPhoto,
+  mockSetFoodPhoto,
+  mockSettleFood,
+} from "@/lib/mock/food-store";
 import { getState } from "@/lib/mock/store";
 import {
   mockAuthorizeOura,
