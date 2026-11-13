@@ -15,6 +15,7 @@ import { useCreateSubject, useWrites } from "@/lib/queries";
 import { deriveTitle } from "@/lib/capture";
 import { todayIso } from "@/lib/dates";
 import type { CaptureKind } from "@/lib/production-ui-types";
+import { errorText } from "@/lib/write-action";
 
 export function QuickCaptureDialog({
   open,
@@ -72,7 +73,7 @@ export function QuickCaptureDialog({
       reset();
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Capture failed. Retry without retyping.");
+      setError(errorText(e, "Capture failed. Retry without retyping."));
     } finally {
       setPending(false);
     }

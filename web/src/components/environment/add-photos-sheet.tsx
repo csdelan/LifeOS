@@ -13,6 +13,7 @@ import { preparePhoto } from "@/lib/photo";
 import type { HomeSpaceRow } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/lib/write-action";
 
 /** One picked photo, shrunk and waiting to be added. */
 interface Pending {
@@ -152,7 +153,7 @@ function AddPhotosForm({
           },
         ]);
       } catch (e) {
-        setError(`${file.name}: ${e instanceof Error ? e.message : "couldn't be read."}`);
+        setError(`${file.name}: ${errorText(e, "couldn't be read.")}`);
       } finally {
         setPreparing((n) => n - 1);
       }
@@ -203,7 +204,7 @@ function AddPhotosForm({
         );
         setProgress(null);
         setError(
-          `The shot ${name} wasn't added, so no photos were: ${e instanceof Error ? e.message : "it didn't save."}`,
+          `The shot ${name} wasn't added, so no photos were: ${errorText(e, "it didn't save.")}`,
         );
         if (made.length > 0)
           toast.success(`Added ${made.length === 1 ? "the shot" : "the shots"} ${namesText(made.map((m) => m.name))}`);
@@ -221,7 +222,7 @@ function AddPhotosForm({
         URL.revokeObjectURL(row.url);
         urls.current.delete(row.url);
       } catch (e) {
-        failed.push({ ...row, error: e instanceof Error ? e.message : "It didn't upload." });
+        failed.push({ ...row, error: errorText(e, "It didn't upload.") });
       }
     }
     setProgress(null);

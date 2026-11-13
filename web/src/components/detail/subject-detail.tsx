@@ -71,6 +71,7 @@ import { TagsTab } from "./tags-tab";
 import { JournalTab } from "./journal-tab";
 import { HistoryTab } from "./history-tab";
 import { EstablishmentPanel } from "./establishment-panel";
+import { errorText, useWriteAction } from "@/lib/write-action";
 
 export function SubjectDetail({
   subjectId,
@@ -97,6 +98,7 @@ export function SubjectDetail({
   const [bountyDraft, setBountyDraft] = useState<BountyDraft>({});
   const [targetDraft, setTargetDraft] = useState<TargetDraft>({});
   const writes = useWrites();
+  const reported = useWriteAction({ report: "toast" });
   const { openNew } = useCreateActions();
 
   const habit = useMemo(
@@ -194,7 +196,7 @@ export function SubjectDetail({
       try {
         await writes.rename(subject.id, nextTitle);
       } catch (err) {
-        toast.error(err instanceof Error && err.message ? err.message : "Could not rename.");
+        toast.error(errorText(err, "Could not rename."));
         return;
       }
     }
@@ -230,7 +232,7 @@ export function SubjectDetail({
           subject.type === "Task" && values.attrs.start ? { start: values.attrs.start } : undefined,
         );
       } catch (err) {
-        toast.error(err instanceof Error && err.message ? err.message : "Could not change the repeat.");
+        toast.error(errorText(err, "Could not change the repeat."));
         return;
       }
     }
@@ -519,7 +521,7 @@ export function SubjectDetail({
                   onRecord={
                     habit && habitStage(habit) === "planned"
                       ? undefined
-                      : (date, state, note) => void writes.adhere(subject.id, state, { on: date, note })
+                      : (date, state, note) => void reported.run(() => writes.adhere(subject.id, state, { on: date, note }))
                   }
                 />
               ) : null}
@@ -536,11 +538,11 @@ export function SubjectDetail({
                     </p>
                     <div className="mt-2">
                       {subject.archived ? (
-                        <Button variant="outline" size="sm" onClick={() => void writes.restore(subject.id)}>
+                        <Button variant="outline" size="sm" onClick={() => void reported.run(() => writes.restore(subject.id))}>
                           Restore
                         </Button>
                       ) : (
-                        <Button variant="outline" size="sm" onClick={() => void writes.archive(subject.id)}>
+                        <Button variant="outline" size="sm" onClick={() => void reported.run(() => writes.archive(subject.id))}>
                           Archive
                         </Button>
                       )}

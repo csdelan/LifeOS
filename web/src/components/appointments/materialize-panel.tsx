@@ -7,6 +7,7 @@ import { todayIso } from "@/lib/dates";
 import { addMonthsClamped, parseRecurrence, recurrenceLabel } from "@/lib/recurrence";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/lib/write-action";
 
 /**
  * A repeating Appointment's Materialize (CAL-1, D10; the Pilot's "Materialize…"): makes its
@@ -39,7 +40,7 @@ export function MaterializePanel({
     try {
       await writes.materialize(seriesId, through);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Materialize failed.");
+      setError(errorText(e, "Materialize failed."));
     } finally {
       setPending(false);
     }

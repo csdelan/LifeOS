@@ -17,6 +17,7 @@ import {
 import { dayNumber } from "@/lib/metric-trend";
 import { useMetricsOver, useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/lib/write-action";
 
 /** The days a row's small trend line covers. */
 const SPARK_DAYS = 90;
@@ -170,7 +171,7 @@ export function ArchivedMetrics({ groups }: { groups: MetricGroup[] }) {
     try {
       for (const m of group.metrics) await writes.restore(m.urn);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "That didn't restore. Nothing was written.");
+      toast.error(errorText(e, "That didn't restore. Nothing was written."));
     } finally {
       setPending(null);
     }

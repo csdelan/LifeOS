@@ -19,6 +19,7 @@ import {
 import type { HomeSpaceRow, SpacePhotoRow } from "@/lib/production-ui-types";
 import { useSpacePhotos, useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { errorText, useWriteAction } from "@/lib/write-action";
 
 /** The native select's look, as the Food Log's meal type. */
 export const SELECT_CLASS =
@@ -89,8 +90,7 @@ function CompareBody({
   const [changing, setChanging] = useState(false);
   const [owning, setOwning] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { run, pending: busy, error, setError } = useWriteAction();
 
   // A side shows the photo picked for it while it's still the shot's, else Then or Now.
   const then = photos.find((p) => p.baseline) ?? shot?.baseline ?? null;
@@ -136,25 +136,12 @@ function CompareBody({
     try {
       await writes.changeSpacePhoto(photo.id, { shot: fresh.id }, { quiet: true });
     } catch (e) {
-      const why = e instanceof Error ? e.message : "it didn't save.";
+      const why = errorText(e, "it didn't save.");
       throw new Error(
         `Added the shot ${fresh.name}, but the photo didn't move: ${why} Move it with Change day or shot.`,
       );
     }
     toast.success(`Moved to its own shot, ${shotTitle(space.name, fresh.name)}`);
-  }
-
-  async function run(write: () => Promise<unknown>, after?: () => void) {
-    setBusy(true);
-    setError(null);
-    try {
-      await write();
-      after?.();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
-    } finally {
-      setBusy(false);
-    }
   }
 
   return (

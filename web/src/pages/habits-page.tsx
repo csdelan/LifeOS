@@ -17,6 +17,7 @@ import { todayIso } from "@/lib/dates";
 import { habitStage, isMaintainedToday, isReadyToEstablish, maintainedDayLabel } from "@/lib/establish";
 import type { CoverRead, HabitOccurrenceRow, HabitRow } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
+import { useWriteAction } from "@/lib/write-action";
 
 export function HabitsPage() {
   const search = useSearch({ from: "/habits" });
@@ -25,6 +26,7 @@ export function HabitsPage() {
   const { data, isLoading, isError } = useHabits();
   const { data: dash } = useDashboard();
   const writes = useWrites();
+  const reported = useWriteAction({ report: "toast" });
   const { setDirty, requestNavigation } = useDirty();
   const today = todayIso();
   const todayById = new Map((dash?.todayHabits ?? []).map((h) => [h.habitId, h]));
@@ -86,7 +88,9 @@ export function HabitsPage() {
                   selected={selected === h.id}
                   onSelect={() => select(h.id)}
                   onPick={(s) =>
-                    void writes.adhere(h.id, s === "not_followed" ? "missed" : s, { on: today })
+                    void reported.run(() =>
+                      writes.adhere(h.id, s === "not_followed" ? "missed" : s, { on: today }),
+                    )
                   }
                 />
               ))}
@@ -97,7 +101,7 @@ export function HabitsPage() {
             covers={coverById}
             selected={selected}
             onSelect={select}
-            onStart={(id) => void writes.setStatus(id, "Building")}
+            onStart={(id) => void reported.run(() => writes.setStatus(id, "Building"))}
           />
           <GraduatedSection
             title="Established"
@@ -108,7 +112,7 @@ export function HabitsPage() {
             onSelect={select}
             maintain={{
               todayById: maintainedById,
-              onPick: (id, pick) => void writes.adhere(id, pick, { on: today }),
+              onPick: (id, pick) => void reported.run(() => writes.adhere(id, pick, { on: today })),
             }}
           />
           <GraduatedSection

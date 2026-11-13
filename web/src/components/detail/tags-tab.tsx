@@ -5,11 +5,13 @@ import { Tag } from "@/components/primitives/tag";
 import { TagInput } from "@/components/primitives/tag-input";
 import { useSubjectTags, useTagUniverse, useWrites } from "@/lib/queries";
 import { splitTags } from "@/lib/tag-suggest";
+import { errorText, useWriteAction } from "@/lib/write-action";
 
 export function TagsTab({ subjectId }: { subjectId: string }) {
   const { data: tags } = useSubjectTags(subjectId);
   const { data: universe } = useTagUniverse();
   const writes = useWrites();
+  const reported = useWriteAction({ report: "toast" });
   const [draft, setDraft] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -17,7 +19,7 @@ export function TagsTab({ subjectId }: { subjectId: string }) {
 
   function addTags(add: string[]) {
     if (add.length === 0) return;
-    void writes.tag(subjectId, { add });
+    void reported.run(() => writes.tag(subjectId, { add }));
     setDraft("");
   }
 
@@ -32,7 +34,7 @@ export function TagsTab({ subjectId }: { subjectId: string }) {
       await writes.renameTag(renaming, next);
       setRenaming(null);
     } catch (err) {
-      toast.error(err instanceof Error && err.message ? err.message : "Could not rename the tag.");
+      toast.error(errorText(err, "Could not rename the tag."));
     }
   }
 
@@ -55,7 +57,7 @@ export function TagsTab({ subjectId }: { subjectId: string }) {
                 setRenaming(t);
                 setRenameDraft(t);
               }}
-              onRemove={() => void writes.tag(subjectId, { remove: [t] })}
+              onRemove={() => void reported.run(() => writes.tag(subjectId, { remove: [t] }))}
             >
               {t}
             </Tag>

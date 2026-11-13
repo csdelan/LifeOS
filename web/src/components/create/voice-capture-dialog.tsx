@@ -15,6 +15,7 @@ import { CaptureKindTabs } from "@/components/create/capture-kind-tabs";
 import { revokeIfBlobUrl } from "@/lib/artifacts";
 import { useWrites } from "@/lib/queries";
 import type { CaptureKind } from "@/lib/production-ui-types";
+import { errorText } from "@/lib/write-action";
 
 type Phase = "idle" | "recording" | "review" | "error";
 
@@ -322,7 +323,7 @@ export function VoiceCaptureDialog({
       onOpenChange(false);
     } catch (e) {
       setPending(false);
-      setError(e instanceof Error ? e.message : "Capture failed. Retry without re-recording.");
+      setError(errorText(e, "Capture failed. Retry without re-recording."));
     }
   }
 

@@ -35,6 +35,7 @@ import type { MetricDayRow, MetricDetailRead, MetricFlag } from "@/lib/productio
 import { useMetricsOver, useWrites } from "@/lib/queries";
 import { loadView, saveView } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/lib/write-action";
 
 /**
  * A day's flag: its reading's, which for a lab result follows the range printed beside it (§4.9);
@@ -160,7 +161,7 @@ export function MetricCard({
       for (const r of set) if (r) await writes.deleteReading(r.id);
       toast.success("Deleted the reading");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "That didn't delete. Nothing was written.");
+      toast.error(errorText(e, "That didn't delete. Nothing was written."));
     }
   }
 

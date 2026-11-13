@@ -8,6 +8,7 @@ import { DIET_RULES, fastingFor, formatDuration, roundHalfUp } from "@/lib/diet-
 import { fastEarningText, formatClock, formatClockOn, fromLocalInput, toLocalInput } from "@/lib/food";
 import type { FastRow, FoodDayRead } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
+import { errorText } from "@/lib/write-action";
 
 const HOUR = 3600;
 
@@ -145,7 +146,7 @@ function RunningFast({ fast }: { fast: FastRow }) {
       await writes.fast({ action: "end", at });
       setEndAt(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
+      setError(errorText(e, "That didn't save. Nothing was written."));
     } finally {
       setPending(false);
     }
@@ -208,7 +209,7 @@ function BeginFast({ day }: { day: FoodDayRead }) {
     try {
       await writes.fast({ action: "begin", at });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
+      setError(errorText(e, "That didn't save. Nothing was written."));
     } finally {
       setPending(false);
     }

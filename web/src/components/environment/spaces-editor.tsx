@@ -12,6 +12,7 @@ import { DEFAULT_PACE, DEFAULT_WEIGHT, NAME_MAX, PACE_MAX, PACE_MIN, WEIGHT_MAX,
 import type { SpaceRequest, SpaceRow } from "@/lib/production-ui-types";
 import { useEnvironment, useSpaces, useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/lib/write-action";
 
 const PACES = Array.from({ length: PACE_MAX - PACE_MIN + 1 }, (_, i) => {
   const id = String(PACE_MIN + i);
@@ -136,7 +137,7 @@ function SpaceForm({
       if (!onCancel) setFields(initial);
       onCancel?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
+      setError(errorText(e, "That didn't save. Nothing was written."));
     } finally {
       setPending(false);
     }
@@ -240,7 +241,7 @@ export function SpacesEditor() {
       if (restore) await writes.restore(space.urn);
       else await writes.archive(space.urn);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
+      setError(errorText(e, "That didn't save. Nothing was written."));
     } finally {
       setBusy(null);
     }

@@ -12,6 +12,7 @@ import {
   targetProblem,
   type TargetDraft,
 } from "@/lib/establish";
+import { useWriteAction } from "@/lib/write-action";
 
 /**
  * Where a habit stands on its way to graduating, and the Establish suggestion; while editing a
@@ -105,13 +106,14 @@ export function EstablishmentPanel({
 /** Moves a Planned habit to Building: tracking starts today. */
 function StartTracking({ habit }: { habit: HabitRow }) {
   const writes = useWrites();
+  const reported = useWriteAction({ report: "toast" });
   return (
     <Button
       type="button"
       size="xs"
       variant="outline"
       aria-label={`Start tracking ${habit.name}`}
-      onClick={() => void writes.setStatus(habit.id, "Building")}
+      onClick={() => void reported.run(() => writes.setStatus(habit.id, "Building"))}
     >
       <PlayIcon aria-hidden /> Start tracking
     </Button>

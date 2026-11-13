@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { addDays, formatDayFull } from "@/lib/dates";
 import { useExceptionDays, useWrites } from "@/lib/queries";
+import { errorText } from "@/lib/write-action";
 
 /** The longest comment, as the API takes it. */
 export const EXCEPTION_COMMENT_MAX = 140;
@@ -37,7 +38,7 @@ export function ExceptionDays({ today }: { today: string }) {
     try {
       await writes.unmarkException(day);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unmarking failed. Try again.");
+      setError(errorText(e, "Unmarking failed. Try again."));
     } finally {
       setUnmarking(null);
     }
@@ -143,7 +144,7 @@ export function MarkExceptionDialog({
       reset();
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Marking failed. Try again.");
+      setError(errorText(e, "Marking failed. Try again."));
     } finally {
       setPending(false);
     }

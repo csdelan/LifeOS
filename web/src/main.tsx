@@ -11,6 +11,7 @@ import { ApiRequestError } from "@/lib/live/http";
 import { isConsentPath } from "@/lib/oauth-consent";
 import { OAuthConsentPage } from "@/pages/oauth-consent-page";
 import { router } from "@/router";
+import { reportUnhandledRejections } from "@/lib/write-action";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -27,6 +28,9 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// A write nothing waited on still says when it fails (code review CR17).
+reportUnhandledRejections(window);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

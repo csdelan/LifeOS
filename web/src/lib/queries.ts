@@ -31,6 +31,7 @@ import type {
   SubjectListItem,
   SubjectType,
 } from "@/lib/production-ui-types";
+import { errorText } from "@/lib/write-action";
 
 function reads(): LifeOsReads {
   return getReads();
@@ -1036,7 +1037,7 @@ export function useAgentAction() {
               await agents.removeGrant(action.clientId);
             } catch (e) {
               throw new Error(
-                `LifeOS refuses it now, but Supabase still lists it: ${e instanceof Error ? e.message : "no answer"}`,
+                `LifeOS refuses it now, but Supabase still lists it: ${errorText(e, "no answer")}`,
               );
             }
           }

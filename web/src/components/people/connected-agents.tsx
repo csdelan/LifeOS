@@ -26,6 +26,7 @@ import {
   usePeople,
   type AgentAction,
 } from "@/lib/queries";
+import { errorText } from "@/lib/write-action";
 
 const NOT_LINKED = "none";
 
@@ -58,7 +59,7 @@ export function ConnectedAgents() {
 
   const run = (next: AgentAction) => {
     setError(null);
-    action.mutate(next, { onError: (e) => setError(e instanceof Error ? e.message : "That didn't work.") });
+    action.mutate(next, { onError: (e) => setError(errorText(e, "That didn't work.")) });
   };
 
   return (

@@ -17,6 +17,11 @@ commit each, and skipped P3.
   (xp-domains-plan.md, Phase 1): screens are still built against the mock first.
 - **CR14:** reads are filtered in SQL and folded once per settle chain. Bounding a write's settle
   to the days it touched would change food-log-plan.md §3.4, so it is not part of this plan.
+- **CR17:** `useWriteAction` (`web/src/lib/write-action.ts`) keeps its own pending and error
+  state rather than `useMutation`'s, because forms also say problems of their own beside a
+  write's (a photo that didn't upload). A form says a failure inline and runs one write at a
+  time; a row's button says it in a toast and lets clicks run side by side. A promise nothing
+  waited on is said in a toast too.
 - **CR24:** a rename or attribute change appends an `attribute_change` event in the same
   transaction, so "what was this habit's recurrence on a date" can be answered later.
 

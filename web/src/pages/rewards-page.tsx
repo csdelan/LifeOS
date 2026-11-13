@@ -28,6 +28,7 @@ import {
 } from "@/lib/rewards";
 import type { RewardRow, Wallet } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
+import { useWriteAction } from "@/lib/write-action";
 
 const RECENT = 8;
 
@@ -470,7 +471,7 @@ function SavingsCard({
 
 function ArchivedRow({ reward }: { reward: RewardRow }) {
   const writes = useWrites();
-  const [pending, setPending] = useState(false);
+  const { run, pending } = useWriteAction({ report: "toast" });
   return (
     <li className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 ring-1 ring-foreground/10">
       <span className="truncate text-sm text-muted-foreground">{reward.name}</span>
@@ -479,10 +480,7 @@ function ArchivedRow({ reward }: { reward: RewardRow }) {
         variant="outline"
         disabled={pending}
         aria-label={`Restore ${reward.name}`}
-        onClick={() => {
-          setPending(true);
-          void writes.restore(reward.id).finally(() => setPending(false));
-        }}
+        onClick={() => void run(() => writes.restore(reward.id))}
       >
         Restore
       </Button>

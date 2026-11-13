@@ -1,14 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useWrites } from "@/lib/queries";
+import { errorText } from "@/lib/write-action";
 
 /** Where Oura sends the browser back to; it must match a redirect URI registered with Oura. */
 export function ouraRedirectUri(): string {
   return `${window.location.origin}/activity/connected`;
-}
-
-export function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 /**
@@ -56,7 +53,7 @@ export function useConnectOura() {
         window.location.assign(target.toString());
       }
     } catch (e) {
-      setError(errorText(e));
+      setError(errorText(e, "Oura didn't answer."));
       setBusy(false);
     }
   }

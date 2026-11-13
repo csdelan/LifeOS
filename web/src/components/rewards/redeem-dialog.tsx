@@ -27,6 +27,7 @@ import {
 } from "@/lib/rewards";
 import type { Redemption, RewardRow, Wallet } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/lib/write-action";
 
 /**
  * Spend currencies (REWARD-3): an instant reward at its price (or a different amount
@@ -114,7 +115,7 @@ function RedeemForm({
       celebrate();
       onDone(redemption);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Redeem failed. Nothing was spent.");
+      setError(errorText(e, "Redeem failed. Nothing was spent."));
     } finally {
       setPending(false);
     }

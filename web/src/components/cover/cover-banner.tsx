@@ -15,6 +15,7 @@ import { BANNER_WIDTH, clampPosition, dragPosition, keyPosition, positionText } 
 import { useWrites } from "@/lib/queries";
 import type { CoverRead } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/lib/write-action";
 
 /** Buttons laid over a photo: white on a dark pill, 4.5:1 over any picture. */
 const ON_PHOTO = "border-0 bg-black/60 text-white shadow-none hover:bg-black/75 hover:text-white aria-expanded:bg-black/75";
@@ -67,7 +68,7 @@ export function CoverBanner({
       if (y !== cover.positionY) await writes.moveCover(subjectId, y);
       setRepositioning(false);
     } catch (err) {
-      toast.error(err instanceof Error && err.message ? err.message : "Couldn't move the cover.");
+      toast.error(errorText(err, "Couldn't move the cover."));
     } finally {
       setBusy(false);
     }
@@ -78,7 +79,7 @@ export function CoverBanner({
     try {
       await writes.clearCover(subjectId);
     } catch (err) {
-      toast.error(err instanceof Error && err.message ? err.message : "Couldn't remove the cover.");
+      toast.error(errorText(err, "Couldn't remove the cover."));
     } finally {
       setBusy(false);
     }

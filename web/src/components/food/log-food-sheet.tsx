@@ -38,6 +38,7 @@ import { jpegName, resizePhoto } from "@/lib/photo";
 import type { FastRow, FoodEntryRequest, FoodMealType, MealRow } from "@/lib/production-ui-types";
 import { useFoodRecent, useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { errorText, useWriteAction } from "@/lib/write-action";
 
 /**
  * The Log food sheet (FOOD-1): a bottom sheet on a phone, a side panel on a desktop.
@@ -161,8 +162,7 @@ function FoodForm({
   const [carbs, setCarbs] = useState(from?.carbsG?.toString() ?? "");
   const [fat, setFat] = useState(from?.fatG?.toString() ?? "");
   const [endFast, setEndFast] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error, setError } = useWriteAction({ onDone });
   const [confirmDelete, setConfirmDelete] = useState(false);
   // The entry's stored photo, kept here: a change saves at once, while `meal` is as it opened.
   const [photoId, setPhotoId] = useState<string | null>(meal?.photoArtifactId ?? null);
@@ -254,7 +254,7 @@ function FoodForm({
         setCarried(null);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That photo didn't save.");
+      setError(errorText(e, "That photo didn't save."));
     } finally {
       setPhotoBusy(null);
     }
@@ -272,22 +272,9 @@ function FoodForm({
       await writes.removeFoodPhoto(meal.id);
       setPhotoId(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The photo is still there: removing it didn't save.");
+      setError(errorText(e, "The photo is still there: removing it didn't save."));
     } finally {
       setPhotoBusy(null);
-    }
-  }
-
-  async function run(write: () => Promise<unknown>) {
-    setError(null);
-    setPending(true);
-    try {
-      await write();
-      onDone();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
-    } finally {
-      setPending(false);
     }
   }
 
@@ -317,7 +304,7 @@ function FoodForm({
         await writes.setFoodPhoto(logged.meal.id, held.blob, held.name);
       } catch (e) {
         // The entry is in; only its photo isn't. Say so, and how to add it again.
-        const why = e instanceof Error ? e.message : "it didn't upload.";
+        const why = errorText(e, "it didn't upload.");
         toast.error(`Logged ${logged.meal.name}, but its photo didn't save: ${why} Open the entry to add it again.`);
       }
     });

@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { SHOT_NAME_MAX, SHOTS_MAX } from "@/lib/environment";
 import type { SpaceShotRow } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
+import { useWriteAction } from "@/lib/write-action";
 
 function photosText(n: number): string {
   return n === 1 ? "1 photo" : `${n} photos`;
@@ -22,23 +23,8 @@ export function ShotsEditor({ spaceId, space, shots }: { spaceId: string; space:
   const [renaming, setRenaming] = useState<string | null>(null);
   const [rename, setRename] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { run, pending: busy, error, setError } = useWriteAction();
   const full = shots.length >= SHOTS_MAX;
-
-  async function run(write: () => Promise<unknown>, after: () => void) {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await write();
-      after();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <div className="space-y-3 rounded-lg bg-muted/60 p-3" data-testid="shots-editor">

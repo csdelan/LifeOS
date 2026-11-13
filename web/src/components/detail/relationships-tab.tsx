@@ -10,6 +10,7 @@ import { DECISION_LINK_GROUPS, decisionLinkWrite, type DecisionLinkGroup } from 
 import { useRelations, useSubjects, useWrites } from "@/lib/queries";
 import { LINK_TARGET_TYPES, typeLabel } from "@/lib/production-ui-types";
 import type { Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
+import { useWriteAction } from "@/lib/write-action";
 
 export function RelationshipsTab({
   subjectId,
@@ -33,6 +34,7 @@ export function RelationshipsTab({
     includeArchived,
   );
   const writes = useWrites();
+  const reported = useWriteAction({ report: "toast" });
 
   const options = useMemo(
     () => (subjects ?? []).filter((s) => s.id !== subjectId),
@@ -59,7 +61,7 @@ export function RelationshipsTab({
 
   function addLink() {
     const edge = decision ? decisionLinkWrite(group, subjectId, to) : { from: subjectId, relation: rel, to };
-    void writes.link(edge.from, edge.relation, edge.to);
+    void reported.run(() => writes.link(edge.from, edge.relation, edge.to));
     setTo("");
   }
 

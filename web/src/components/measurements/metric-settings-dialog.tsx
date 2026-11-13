@@ -23,6 +23,7 @@ import {
 } from "@/lib/measurements";
 import type { MetricBetter, MetricRequest, MetricRow } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
+import { useWriteAction } from "@/lib/write-action";
 
 /**
  * Edit a metric (MEASURE-1 to MEASURE-3, measurements plan §4.8): its name, its unit (only while
@@ -83,8 +84,7 @@ function SettingsForm({ group, metric, onDone }: { group: MetricGroup; metric: M
   const [better, setBetter] = useState<MetricBetter | null>(metric.better);
   const [low, setLow] = useState(show(metric.low, metric.decimals));
   const [high, setHigh] = useState(show(metric.high, metric.decimals));
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error } = useWriteAction({ onDone });
 
   const locked = metric.readings > 0;
   const unitText = unit.trim() ? ` (${unit.trim()})` : "";
@@ -127,19 +127,6 @@ function SettingsForm({ group, metric, onDone }: { group: MetricGroup; metric: M
       }
     }
     return req;
-  }
-
-  async function run(write: () => Promise<unknown>) {
-    setError(null);
-    setPending(true);
-    try {
-      await write();
-      onDone();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
-    } finally {
-      setPending(false);
-    }
   }
 
   function save() {

@@ -57,6 +57,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { errorText } from "@/lib/write-action";
 
 function inboxRef(item: InboxItem): string {
   return item.itemKind === "event" ? item.itemId : (item.subjectUrn ?? item.itemId);
@@ -91,10 +92,6 @@ function resolutionLabel(item: ResolvedInboxItem): string {
 /** The status Back to Inbox re-opens a finished subject to, or "" when none is needed. */
 function reopenStatus(item: ResolvedInboxItem): string {
   return item.subjectStatusTerminal && item.subjectType ? defaultStatus(item.subjectType) : "";
-}
-
-function errorText(e: unknown, fallback: string): string {
-  return e instanceof Error && e.message ? e.message : fallback;
 }
 
 export function InboxPage() {

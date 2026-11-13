@@ -23,6 +23,7 @@ import {
 } from "@/lib/rewards";
 import type { RewardKind, RewardRow } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
+import { useWriteAction } from "@/lib/write-action";
 
 /**
  * Add a catalog Reward, or edit one (REWARD-3): its name, price or target, and
@@ -65,8 +66,7 @@ function RewardForm({ reward, onDone }: { reward: RewardRow | null; onDone: () =
   const [price, setPrice] = useState<AmountDraft>(() => draftFrom(reward?.price ?? {}, SPENDABLE));
   const [target, setTarget] = useState(reward?.targetUsd ? String(reward.targetUsd) : "");
   const [description, setDescription] = useState(reward?.description ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error } = useWriteAction({ onDone, fallback: "Saving failed. Your changes are still here." });
 
   const amounts = amountsFrom(price);
   const priced = Object.keys(amounts).length > 0;
@@ -78,19 +78,6 @@ function RewardForm({ reward, onDone }: { reward: RewardRow | null; onDone: () =
           ? "Give it a price, or archive it."
           : null))
       : targetProblem(target);
-
-  async function run(action: () => Promise<unknown>) {
-    setError(null);
-    setPending(true);
-    try {
-      await action();
-      onDone();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Saving failed. Your changes are still here.");
-    } finally {
-      setPending(false);
-    }
-  }
 
   function save() {
     if (problem || pending) return;

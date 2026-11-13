@@ -10,7 +10,7 @@ import { SleepCard } from "@/components/activity/sleep-card";
 import { StepsCard } from "@/components/activity/steps-card";
 import { TagsCard } from "@/components/activity/tags-card";
 import { TodayCard } from "@/components/activity/today-card";
-import { errorText, returnError, useConnectOura } from "@/components/activity/use-connect-oura";
+import { returnError, useConnectOura } from "@/components/activity/use-connect-oura";
 import { WorkoutSheet } from "@/components/activity/workout-sheet";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton } from "@/components/primitives/skeletons";
@@ -19,6 +19,7 @@ import { asSentence, scopeWords, syncedAgo } from "@/lib/activity";
 import type { OuraStatus, WorkoutRow } from "@/lib/production-ui-types";
 import { useActivitySummary, useWrites } from "@/lib/queries";
 import { useNow } from "@/lib/timer";
+import { errorText } from "@/lib/write-action";
 
 function Banner({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
@@ -70,7 +71,7 @@ export function ActivityPage() {
       try {
         await writes.syncActivity(force);
       } catch (e) {
-        setSyncError(errorText(e));
+        setSyncError(errorText(e, "Oura didn't answer."));
       } finally {
         setSyncing(false);
       }
@@ -215,7 +216,7 @@ export function ActivityConnectedPage() {
         toast.success("Oura connected");
         void navigate({ to: "/activity", replace: true });
       },
-      (e: unknown) => setError(errorText(e)),
+      (e: unknown) => setError(errorText(e, "Oura didn't answer.")),
     );
   }, [search, writes, navigate]);
 

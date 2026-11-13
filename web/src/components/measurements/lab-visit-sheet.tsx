@@ -38,6 +38,7 @@ import { useIsDesktop } from "@/lib/media-query";
 import type { LabPanel, LabVisitRequest, LabVisitRow, MetricRow } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { errorText, useWriteAction } from "@/lib/write-action";
 
 /**
  * The lab visit sheet (MEASURE-4, measurements plan §4.9), for a new visit and for an edit: a
@@ -119,8 +120,7 @@ function VisitForm({
   const [added, setAdded] = useState(0);
   const [file, setFile] = useState<File | null>(null);
   const [removeReport, setRemoveReport] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error } = useWriteAction({ onDone });
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const shown = rows.filter((r) => r.added || panels.has(r.panel));
@@ -150,19 +150,6 @@ function VisitForm({
       return next;
     });
 
-  async function run(write: () => Promise<void>) {
-    setError(null);
-    setPending(true);
-    try {
-      await write();
-      onDone();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
-    } finally {
-      setPending(false);
-    }
-  }
-
   /** An edit sends what changed: a lab or note left as it was is kept, and a blank one clears it. */
   function changed(text: string, was: string | null): string | undefined {
     const now = text.trim();
@@ -186,7 +173,7 @@ function VisitForm({
         else if (removeReport && visit?.report) final = (await writes.removeLabReport(final.id)).visit ?? final;
       } catch (e) {
         toast.success(visitMessage("saved", final, today));
-        toast.error(`The visit is saved, but its report isn't: ${e instanceof Error ? e.message : "it didn't upload"}`);
+        toast.error(`The visit is saved, but its report isn't: ${errorText(e, "it didn't upload")}`);
         return;
       }
       toast.success(visitMessage("saved", final, today));

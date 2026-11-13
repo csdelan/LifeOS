@@ -5,6 +5,7 @@ import { DIET_RULES, drinksLine, formatPart } from "@/lib/diet-score";
 import { formatClock, summaryHeadline } from "@/lib/food";
 import type { FoodDaySummary } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
+import { errorText } from "@/lib/write-action";
 
 function Part({ label, value, max, detail }: { label: string; value: number; max: number; detail?: string }) {
   const share = max > 0 ? Math.min(value / max, 1) : 0;
@@ -50,7 +51,7 @@ export function SummaryCard({ summary, isToday }: { summary: FoodDaySummary; isT
     try {
       await writes.closeFoodDay(summary.day);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The day didn't close. Nothing was written.");
+      setError(errorText(e, "The day didn't close. Nothing was written."));
     } finally {
       setPending(false);
     }

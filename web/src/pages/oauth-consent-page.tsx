@@ -23,6 +23,7 @@ import {
   type ConsentRequest,
 } from "@/lib/oauth-consent";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { errorText } from "@/lib/write-action";
 
 /**
  * `/oauth/consent` (agent-access plan §4.4): an agent Chris is connecting to LifeOS's MCP server
@@ -130,7 +131,7 @@ export function OAuthConsentPage() {
       } catch (e) {
         setError(
           `LifeOS couldn't add ${request.clientName} to its agents, so it wasn't approved: ${
-            e instanceof Error ? e.message : "the API didn't answer."
+            errorText(e, "the API didn't answer.")
           }`,
         );
         setBusy(null);
@@ -143,7 +144,7 @@ export function OAuthConsentPage() {
     try {
       follow(decision === "approve" ? await client.approve(id) : await client.deny(id));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Supabase didn't answer.");
+      setError(errorText(e, "Supabase didn't answer."));
       setBusy(null);
     }
   };

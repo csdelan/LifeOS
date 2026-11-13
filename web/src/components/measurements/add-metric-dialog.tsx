@@ -23,6 +23,7 @@ import {
 } from "@/lib/measurements";
 import type { MetricBetter, MetricRow } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
+import { useWriteAction } from "@/lib/write-action";
 
 /**
  * Add a metric (MEASURE-3, measurements plan §4.8): one of the starter metrics not tracked yet,
@@ -67,8 +68,7 @@ function AddForm({ metrics, onDone }: { metrics: readonly MetricRow[]; onDone: (
   const writes = useWrites();
   const id = useId();
   const choices = starterChoices(metrics);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error } = useWriteAction();
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("");
   const [decimals, setDecimals] = useState(1);
@@ -96,25 +96,13 @@ function AddForm({ metrics, onDone }: { metrics: readonly MetricRow[]; onDone: (
               ? highValue.problem
               : rangeProblem(lowValue.value, highValue.value, decimals);
 
-  async function run(write: () => Promise<string>) {
-    setError(null);
-    setPending(true);
-    try {
-      onDone(await write());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
-    } finally {
-      setPending(false);
-    }
-  }
-
   function addStarter(choice: StarterChoice) {
     void run(async () => {
       const tracked = new Set(metrics.filter((m) => m.archivedAt == null).map((m) => m.catalog));
       // By name, so the kernel fills in the rest; blood pressure adds whichever half is missing.
       for (const t of choice.templates) if (!tracked.has(t.key)) await writes.addMetric({ name: t.name });
       return choice.key;
-    });
+    }, onDone);
   }
 
   function addOwn() {
@@ -130,7 +118,7 @@ function AddForm({ metrics, onDone }: { metrics: readonly MetricRow[]; onDone: (
         high: "value" in highValue && highValue.value != null ? highValue.value : undefined,
       });
       return row.catalog ?? row.id;
-    });
+    }, onDone);
   }
 
   return (

@@ -30,6 +30,7 @@ import { useIsDesktop } from "@/lib/media-query";
 import type { MetricReadingRow } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { useWriteAction } from "@/lib/write-action";
 
 /**
  * The Log sheet (MEASURE-1, MEASURE-3, measurements plan §4.7–§4.8): a bottom sheet on a phone,
@@ -101,8 +102,7 @@ function ReadingForm({
   );
   const [takenAt, setTakenAt] = useState(startAt);
   const [note, setNote] = useState(taken?.note ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error } = useWriteAction({ onDone });
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const single = metrics.length === 1;
@@ -126,19 +126,6 @@ function ReadingForm({
         ? "A reading is taken now or earlier, not in the future."
         : null;
   const numbers = parsed.map((p) => (p != null && "value" in p ? p.value : null));
-
-  async function run(write: () => Promise<void>) {
-    setError(null);
-    setPending(true);
-    try {
-      await write();
-      onDone();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
-    } finally {
-      setPending(false);
-    }
-  }
 
   function submit() {
     if (problem || pending) return;

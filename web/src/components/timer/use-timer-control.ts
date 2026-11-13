@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useWrites } from "@/lib/queries";
 import type { TimerAction } from "@/lib/production-ui-types";
 import { formatTracked } from "@/lib/timer";
+import { errorText } from "@/lib/write-action";
 
 /**
  * Runs timer actions with a pending flag and the user-facing messages: which other
@@ -26,7 +27,7 @@ export function useTimerControl(taskId: string) {
         );
       }
     } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : "The timer did not change.");
+      toast.error(errorText(e, "The timer did not change."));
     } finally {
       setPending(null);
     }

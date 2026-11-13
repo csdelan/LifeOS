@@ -20,6 +20,7 @@ import { useIsDesktop } from "@/lib/media-query";
 import type { WorkoutRow } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/lib/write-action";
 
 type NoteStatus = "idle" | "saving" | "saved" | "error";
 
@@ -66,7 +67,7 @@ function NoteEditor({ workout }: { workout: WorkoutRow }) {
         }
       } catch (e) {
         if (alive.current) {
-          setError(e instanceof Error ? e.message : String(e));
+          setError(errorText(e, "Something went wrong."));
           setStatus("error");
         }
       }

@@ -56,6 +56,7 @@ import {
   subjectFormSchema,
   type SubjectFormValues,
 } from "@/lib/subject-forms";
+import { errorText } from "@/lib/write-action";
 
 export type CreateParent = { id: string; title: string; type: SubjectType };
 
@@ -152,7 +153,7 @@ export function NewSubjectDialog({
     try {
       created = await create.mutateAsync(req);
     } catch (err) {
-      setSubmitError(errorMessage(err, `Could not create the ${typeLabel(t)}.`));
+      setSubmitError(errorText(err, `Could not create the ${typeLabel(t)}.`));
       return;
     }
     // The subject exists now; a failed follow-up must not leave the dialog open,
@@ -161,7 +162,7 @@ export function NewSubjectDialog({
       await applyLink(created, carriesLink);
       await applyFollowUps(created, values, t, primaryParent);
     } catch (err) {
-      toast.error(`Created ${created.title}, but not every detail saved: ${errorMessage(err, "unknown error")}`);
+      toast.error(`Created ${created.title}, but not every detail saved: ${errorText(err, "unknown error")}`);
     }
     onCreated?.(created);
     onOpenChange(false);
@@ -364,10 +365,6 @@ function PendingLinkNote({ link, type }: { link: PendingLink; type: SubjectType 
       </p>
     </div>
   );
-}
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error && err.message ? err.message : fallback;
 }
 
 function collectMessages(errors: unknown): string[] {

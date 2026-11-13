@@ -14,6 +14,7 @@ import { TodayAppointments } from "@/components/appointments/today-appointments"
 import { cn } from "@/lib/utils";
 import { useDashboard, useWrites } from "@/lib/queries";
 import { todayIso } from "@/lib/dates";
+import { useWriteAction } from "@/lib/write-action";
 
 /** The width the focus card's strip is asked for: the card is at most about 600 px wide. */
 const FOCUS_STRIP_WIDTH = 720;
@@ -21,6 +22,7 @@ const FOCUS_STRIP_WIDTH = 720;
 export function FocusPage() {
   const { data, isLoading, isError } = useDashboard();
   const writes = useWrites();
+  const reported = useWriteAction({ report: "toast" });
   const navigate = useNavigate();
   // A repeating Task's date that passed while the app was closed gets its repetition (TASKS-3).
   useTaskSettleOnOpen();
@@ -199,10 +201,8 @@ export function FocusPage() {
                     // The row's own date: left to the server, an evening check-off
                     // would fall on tomorrow's date in UTC.
                     onPick={(s) =>
-                      void writes.adhere(
-                        h.habitId,
-                        s === "not_followed" ? "missed" : s,
-                        { on: h.occurrenceDate },
+                      void reported.run(() =>
+                        writes.adhere(h.habitId, s === "not_followed" ? "missed" : s, { on: h.occurrenceDate }),
                       )
                     }
                   />
@@ -211,7 +211,7 @@ export function FocusPage() {
             </ul>
             <MaintainingGroup
               rows={data.maintainingHabits}
-              onPick={(habitId, pick, on) => void writes.adhere(habitId, pick, { on })}
+              onPick={(habitId, pick, on) => void reported.run(() => writes.adhere(habitId, pick, { on }))}
               onOpen={(habitId) =>
                 void navigate({ to: "/habits", search: { selected: habitId } })
               }

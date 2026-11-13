@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WEIGHT, parseValue } from "@/lib/measurements";
 import { useWrites } from "@/lib/queries";
+import { errorText } from "@/lib/write-action";
 
 /**
  * Before there's a Weight metric (MEASURE-1, measurements plan §4.7): Start tracking weight
@@ -27,7 +28,7 @@ export function StartTrackingCard() {
     try {
       await writes.addMetric({ name: WEIGHT.name, target: parsed && "value" in parsed ? parsed.value : undefined });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
+      setError(errorText(e, "That didn't save. Nothing was written."));
     } finally {
       setPending(false);
     }

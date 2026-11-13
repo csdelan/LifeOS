@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { coverColor, coverQuery, coverSearchMiss, MAX_QUERY } from "@/lib/cover";
 import { useCoverSearch, useWrites } from "@/lib/queries";
 import type { CoverPhoto } from "@/lib/production-ui-types";
+import { errorText } from "@/lib/write-action";
 
 const FALLBACK_UNSPLASH_LINK = "https://unsplash.com/?utm_source=lifeos&utm_medium=referral";
 
@@ -60,7 +61,7 @@ export function CoverPicker({
       await writes.setCover({ subject: subject.id, photoId: photo.id });
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error && err.message ? err.message : "Couldn't set the cover.");
+      toast.error(errorText(err, "Couldn't set the cover."));
     } finally {
       setPicking(null);
     }

@@ -5,6 +5,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { journalExtensions } from "./journal-html";
+import { errorText } from "@/lib/write-action";
 
 /**
  * Writes one journal entry. The text is cleared only once {@link onAppend} has saved it; if the
@@ -113,7 +114,7 @@ export function JournalEditor({
               await onAppend(html);
               editor.commands.clearContent();
             } catch (e) {
-              const why = e instanceof Error && e.message ? e.message : "The entry wasn't saved.";
+              const why = errorText(e, "The entry wasn't saved.");
               toast.error(`${why} It's still in the editor.`);
             } finally {
               setSaving(false);

@@ -13,6 +13,7 @@ import { formatDuration } from "@/lib/diet-score";
 import { fromLocalInput, toLocalInput } from "@/lib/food";
 import type { FastRow } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
+import { useWriteAction } from "@/lib/write-action";
 
 /**
  * Record a past fast, or change or delete one (FOOD-2). The kernel refuses an overlap, a
@@ -68,8 +69,7 @@ function FastForm({
   const [to, setTo] = useState(() =>
     fast?.running ? "" : toLocalInput(fast?.endedAt ?? defaultTo ?? Date.now()),
   );
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error } = useWriteAction({ onDone });
 
   const start = fromLocalInput(from);
   const end = to ? fromLocalInput(to) : null;
@@ -81,19 +81,6 @@ function FastForm({
       : seconds !== null && seconds <= 0
         ? "A fast ends after it starts."
         : null;
-
-  async function run(write: () => Promise<unknown>) {
-    setError(null);
-    setPending(true);
-    try {
-      await write();
-      onDone();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
-    } finally {
-      setPending(false);
-    }
-  }
 
   function submit() {
     if (problem || pending || !start) return;

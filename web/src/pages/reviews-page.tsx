@@ -40,10 +40,7 @@ import {
 } from "@/lib/reviews";
 import type { ReviewBody, ReviewDoc, ReviewKind } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
-
-function errorText(e: unknown, fallback: string): string {
-  return e instanceof Error && e.message ? e.message : fallback;
-}
+import { errorText } from "@/lib/write-action";
 
 /**
  * Daily and weekly reviews (REVIEW-0, REVIEW-1, REVIEW-2, REVIEW-5; reviews plan §3). Weeks run

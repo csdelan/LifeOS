@@ -16,6 +16,7 @@ import { establishmentProgress } from "@/lib/establish";
 import { useSubject, useWrites } from "@/lib/queries";
 import { formatAmounts } from "@/lib/rewards";
 import { cn } from "@/lib/utils";
+import { useWriteAction } from "@/lib/write-action";
 
 /**
  * "Ready to establish" (REWARD-2): the habit met its target, so LifeOS suggests and Chris
@@ -51,6 +52,7 @@ export function EstablishDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const writes = useWrites();
+  const reported = useWriteAction({ report: "toast" });
   const { data: detail } = useSubject(open ? habit.id : undefined);
   const pays = detail?.bounty?.find((l) => l.trigger === "established")?.amounts;
   const paysText = pays && Object.keys(pays).length > 0 ? ` and pays ${formatAmounts(pays)}` : "";
@@ -68,7 +70,7 @@ export function EstablishDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Not yet</AlertDialogCancel>
-          <AlertDialogAction onClick={() => void writes.setStatus(habit.id, "Established")}>
+          <AlertDialogAction onClick={() => void reported.run(() => writes.setStatus(habit.id, "Established"))}>
             Establish
           </AlertDialogAction>
         </AlertDialogFooter>

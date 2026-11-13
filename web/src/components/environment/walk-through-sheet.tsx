@@ -26,6 +26,7 @@ import { preparePhoto, type PreparedPhoto } from "@/lib/photo";
 import type { HomePart, HomeSpaceRow, SpaceRatingRequest, SpaceShotRow } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/lib/write-action";
 
 /** A photo taken or chosen in the sheet, shrunk and held until Save. */
 interface HeldPhoto extends PreparedPhoto {
@@ -197,7 +198,7 @@ function WalkThroughForm({
         );
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save. Nothing was written.");
+      setError(errorText(e, "That didn't save. Nothing was written."));
       setPending(false);
       return;
     }
@@ -215,7 +216,7 @@ function WalkThroughForm({
           });
           added += 1;
         } catch (e) {
-          why ??= e instanceof Error ? e.message : "it didn't upload.";
+          why ??= errorText(e, "it didn't upload.");
         }
       }
     }
@@ -546,7 +547,7 @@ function ShotPhoto({
     try {
       onPhoto(await preparePhoto(file));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't prepare that photo.");
+      setError(errorText(e, "Couldn't prepare that photo."));
     } finally {
       setBusy(false);
     }

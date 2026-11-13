@@ -19,6 +19,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   review to its vault reflection, as `mcp:<client_id>` (`docs/pilot/agent-access-plan.md` §5).
 - `web/`: the React + Vite SPA. With no `VITE_API_BASE_URL` it runs in mock mode on an in-memory
   store.
+  A component runs a write through `useWriteAction` (`web/src/lib/write-action.ts`), which says a
+  failure inline or in a toast; a bare `void writes.x()` loses it.
 - `src/LifeOs.Pilot`: the original WinForms app. Chris still runs it, often against staging. It
   writes to staging, and migrates dev on launch, only with the `bsk` that
   `scripts/install-bsk.ps1` builds from `origin/main` into `%USERPROFILE%\.lifeos\bin\bsk` (or

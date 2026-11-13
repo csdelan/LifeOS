@@ -9,6 +9,7 @@ import type { TaskRepeat, TaskRepetitionRow, TaskSeriesCounts } from "@/lib/prod
 import { useTaskSeriesHistory, useWrites } from "@/lib/queries";
 import { repeatLabel, seriesTally } from "@/lib/task-series";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/lib/write-action";
 
 const FIRST_ROWS = 6;
 
@@ -46,7 +47,7 @@ export function RepeatPanel({
       await writes.setStatus(id, status);
       toast.success(done);
     } catch (err) {
-      toast.error(err instanceof Error && err.message ? err.message : "Couldn't change it.");
+      toast.error(errorText(err, "Couldn't change it."));
     } finally {
       setBusy(false);
     }

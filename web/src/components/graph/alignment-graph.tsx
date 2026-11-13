@@ -38,6 +38,7 @@ import type { AreaRow } from "@/lib/production-ui-types";
 import { typeLabel } from "@/lib/production-ui-types";
 import { motionMs } from "@/lib/media-query";
 import { typeAccent } from "@/lib/subject-meta";
+import { errorText } from "@/lib/write-action";
 
 const nodeTypes = { subject: SubjectGraphNode };
 const edgeTypes = { floating: FloatingEdge };
@@ -146,7 +147,7 @@ function GraphCanvas({
       })
       .catch((err: unknown) => {
         if (gen !== layoutGen.current) return;
-        setLayoutError(err instanceof Error ? err.message : "Graph failed to load");
+        setLayoutError(errorText(err, "Graph failed to load"));
         setLaidOut(true);
       });
   }, [layoutKey]); // layout + membership; color/selection applied below

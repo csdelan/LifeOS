@@ -39,6 +39,7 @@ import {
   isOverdueTask,
 } from "@/lib/task-groups";
 import { loadView, saveView } from "@/lib/view-state";
+import { errorText } from "@/lib/write-action";
 
 type TasksView = {
   status: string;
@@ -161,7 +162,7 @@ export function TasksPage() {
       setDraft("");
       entryRef.current?.focus();
     } catch (e) {
-      setEntryError(e instanceof Error ? e.message : "Could not create the task.");
+      setEntryError(errorText(e, "Could not create the task."));
     }
   }
 
