@@ -3,7 +3,7 @@
 **Status:** CR1 to CR26 built (2026-11-12). CR27 to CR56, the second review's P0, P1 and P2, built
 (2026-11-13), and CR57 for its choice A; choices B and C wait for Chris
 ([Second review](#second-review-2026-11-13)). The third review scored the code 6.1 of 10, and Chris
-chose its P0 and P1, CR58 to CR67 ([Third review](#third-review-2026-11-13)).
+chose its P0 and P1, CR58 to CR67, built (2026-11-13) ([Third review](#third-review-2026-11-13)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
@@ -102,6 +102,23 @@ commit each, and skipped P3 (listed under the second review, so it isn't lost).
                                   bsk.try_to_date(s.attributes->>'start_date'),
                                   (s.created_at AT TIME ZONE bsk.home_zone())::date)) >= 29;
   ```
+
+- **CR65:** an Appointment occurrence carries `attributes.occurrence`, the date of the pattern
+  it stands for, beside `attributes.date`, the day it's on, as a Task repetition does (D16), and
+  migration 0064 keys (series, occurrence). Occurrences made before have no `occurrence` and
+  aren't given one: a migration writing attributes would change items with no event saying so.
+  Materialize treats each as standing for its `date`, which is what it did before, and their
+  (series, NULL) pairs never clash, so the index builds on what staging holds. One run reaches
+  two years past today at home and makes at most 750 (two years of a daily series); a series
+  started long ago whose backlog is bigger is made in steps, an earlier day first.
+- **CR66:** a `bsk` older than the database refuses every verb but `migrate` and `check`, not
+  only the ones that write. Sorting fifty verbs into readers and writers is a list someone would
+  have to keep, and a reader built before a view changed can misread it too. The Pilot reads
+  through Npgsql, not `bsk`, so it only loses its writes until `install-bsk.ps1` runs again, and
+  shows `bsk`'s reason when one is refused. The review's other half, the Pilot comparing the
+  installed copy's commit with `origin/main`, isn't built: it needs a fetch at startup, and the
+  schema check covers the case that does harm (new rules in a migration). A C#-only rule change
+  still reaches the Pilot only through `install-bsk.ps1`, as before.
 
 ## Items
 
@@ -242,20 +259,23 @@ the CRs that came with such a check (CR29, CR52, CR55) held. So each fix below s
 that would have caught it. The numbers are the review's; a proposal gets a CR number when Chris
 chooses it.
 
-### P0 and P1: chosen (CR58 to CR67)
+### P0 and P1: built (CR58 to CR67)
+
+Each shipped with the check that would have caught it. Where that was a test of existing
+behaviour (CR60 to CR63, CR65, CR66), it was run against the code before the fix and failed.
 
 | ID | Review # | Fix |
 |----|----------|-----|
-| CR58 | 1 | A page left open past midnight checks habits off on the home day it is now, not the day it loaded. |
-| CR59 | 2 | `bsk` and the migrate scripts can't reach staging through a connection string left in the environment without saying so; the docs stop telling Chris to keep one there. |
-| CR60 | 3 | The detail panel's Save and the Map's inline create run one write at a time. |
-| CR61 | 4 | "Every N months" repeats count from their start, so one that starts on the 31st doesn't drift to the 28th. |
+| CR58 | 1 | A page left open past midnight checks habits off on the home day it is now, not the day it loaded (`useHomeToday`, `HomeDayRollover`). |
+| CR59 | 2 | `bsk` says on stderr when `BSK_CONNECTION_STRING` points it off this machine; `migrate-staging.ps1` lets `-EnvFile` win over the shell and refuses when they disagree; the docs stop telling Chris to keep the variable set. Chris checks his PCs for a saved one. |
+| CR60 | 3 | The detail panel's Save and the Map's inline create run one write at a time through `useWriteAction`, and say a refusal inline. |
+| CR61 | 4 | "Every N months" repeats count from their start (migration 0063, `tests/rules/recurrence.json`). Run the query in the decisions on staging before the push. |
 | CR62 | 5 | Renaming an appointment series, the domain fold and exception days take today from the home calendar. |
-| CR63 | 6 | A document or voice capture finishes filing once it's stored; `bsk journal` and the Pilot write an entry and its link in one call. |
-| CR64 | 7 | The Connected agents page says whether agents may write. |
-| CR65 | 8 | Making appointment occurrences is bounded, locked per series, and keyed so none is made twice. |
-| CR66 | 9 | A `bsk` older than the database it writes to refuses to write. |
-| CR67 | 10 | The Pilot's New item closes once the item exists, and says which follow-up failed. |
+| CR63 | 6 | `InboxFilingService` stores, files and links a document or voice note to the end, and a re-sent file never triaged is flagged; `bsk journal <item>` writes the entry and its link in one call, and the Pilot uses it. Run `install-bsk.ps1` after the push. |
+| CR64 | 7 | The Connected agents page says whether agents may write, and each agent whether it does and as whom, by the rule `/mcp` applies (`McpWriteAccess.ReadOnlyBecause`). |
+| CR65 | 8 | Making appointment occurrences is bounded (two years, 750 a run), locked per series, and keyed on (series, occurrence) by migration 0064. |
+| CR66 | 9 | A `bsk` older than the database refuses every verb but `migrate` and `check` (`StaleBskGuard`). |
+| CR67 | 10 | The Pilot's New item closes once the item exists, and names each follow-up that failed (`NewItemWrites`). |
 
 ### P2: proposed
 
