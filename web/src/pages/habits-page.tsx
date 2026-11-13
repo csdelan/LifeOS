@@ -12,7 +12,8 @@ import { BountyChip } from "@/components/rewards/bounty-chip";
 import { useDirty } from "@/components/shell/app-shell";
 import { PeekPanel } from "@/components/shell/panels";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
-import { useDashboard, useHabits, useSubjects, useWrites } from "@/lib/queries";
+import { useHabits, useOccurrencesOn, useSubjects, useWrites } from "@/lib/queries";
+import { maintainingHabitRows, todayHabitRows } from "@/lib/derive";
 import { todayIso } from "@/lib/dates";
 import { habitStage, isMaintainedToday, isReadyToEstablish, maintainedDayLabel } from "@/lib/establish";
 import type { CoverRead, HabitOccurrenceRow, HabitRow } from "@/lib/production-ui-types";
@@ -24,13 +25,17 @@ export function HabitsPage() {
   const navigate = useNavigate({ from: "/habits" });
   const selected = search.selected;
   const { data, isLoading, isError } = useHabits();
-  const { data: dash } = useDashboard();
+  const today = todayIso();
+  // Today's rows come from the habits and the day's occurrences, not the whole dashboard, which
+  // would read every subject and edge to find them (code review CR37).
+  const { data: dayRows } = useOccurrencesOn(today);
   const writes = useWrites();
   const reported = useWriteAction({ report: "toast" });
   const { setDirty, requestNavigation } = useDirty();
-  const today = todayIso();
-  const todayById = new Map((dash?.todayHabits ?? []).map((h) => [h.habitId, h]));
-  const maintainedById = new Map((dash?.maintainingHabits ?? []).map((h) => [h.habitId, h]));
+  const todayRows = data && dayRows ? todayHabitRows(data, dayRows, today) : [];
+  const maintainedRows = data && dayRows ? maintainingHabitRows(data, dayRows, today) : [];
+  const todayById = new Map(todayRows.map((h) => [h.habitId, h]));
+  const maintainedById = new Map(maintainedRows.map((h) => [h.habitId, h]));
   // The habits read has no covers; the subject list does (COVER-3), so each row takes its
   // cover from there by id. A habit with no cover, or a list still loading, shows none.
   const { data: habitSubjects } = useSubjects("Habit");

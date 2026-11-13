@@ -1,9 +1,5 @@
 import { todayIso } from "@/lib/dates";
-import {
-  buildAlignmentForest,
-  deriveDashboard,
-  type AlignmentEdge,
-} from "@/lib/derive";
+import { deriveDashboard, type AlignmentEdge } from "@/lib/derive";
 import { api, ApiRequestError, unwrap } from "@/lib/live/http";
 import { normalizeCoverSearch, withNormalCover } from "@/lib/cover";
 import { repeatingSection, type RecapSection } from "@/lib/review-recap";
@@ -21,7 +17,7 @@ import {
 import type { LifeOsReads } from "@/lib/reads";
 import { normalizeDomainDays, normalizeDomainReport, normalizeDomains, normalizeExceptionDays } from "@/lib/domains";
 import { normalizeFoodDay, normalizeFoodDays, normalizeMeal } from "@/lib/food";
-import { mapSubjects, normalizeRepeat, normalizeSeriesRow } from "@/lib/task-series";
+import { normalizeRepeat, normalizeSeriesRow } from "@/lib/task-series";
 import {
   normalizeActivityDays,
   normalizeDayDetail,
@@ -507,15 +503,5 @@ export const liveReads: LifeOsReads = {
       occurrences,
       today,
     });
-  },
-
-  async alignmentForest(opts) {
-    const includeArchived = opts?.includeArchived ?? false;
-    const [subjects, edges] = await Promise.all([
-      this.listSubjects({ includeArchived, includeSeries: true }),
-      this.edges({ includeArchived }),
-    ]);
-    // A repeating Task is one node, its series; its repetitions stay off the Map (TASKS-3).
-    return buildAlignmentForest(mapSubjects(subjects), edges, opts);
   },
 };

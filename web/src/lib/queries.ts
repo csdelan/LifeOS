@@ -16,7 +16,8 @@ import { getAgentsClient } from "@/lib/agents";
 import { isLiveApi } from "@/lib/api-base";
 import { createWriteClient, getReads } from "@/lib/client";
 import { todayIso } from "@/lib/dates";
-import { mapForestStatus, type DashboardRead, type MapLens } from "@/lib/derive";
+import { buildAlignmentForest, type DashboardRead, type MapLens } from "@/lib/derive";
+import { mapSubjects } from "@/lib/task-series";
 import { announceEarned } from "@/lib/earn-feedback";
 import { nextCoverPage } from "@/lib/cover";
 import { fetchMe, meQueryKey } from "@/lib/me";
@@ -104,8 +105,6 @@ export const qk = {
   dashboard: ["dashboard"] as const,
   // Under the dashboard, so every subject write that refreshes Focus refreshes these too.
   appointments: (on: string) => ["dashboard", "appointments", on] as const,
-  forest: (archived: boolean, lens: MapLens) =>
-    ["forest", archived, lens] as const,
   edges: (archived: boolean) => ["edges", archived] as const,
 };
 
@@ -123,8 +122,8 @@ function invalidate(qc: QueryClient, keys: QueryKeys) {
 const moves = {
   /** One subject's own reads: its detail, its list row and its history (renames and attribute changes leave events). */
   subject: (id: string): QueryKeys => [qk.subject(id), qk.listItem(id), qk.history(id)],
-  /** Everywhere subjects are listed: the lists, Focus, the Map and its edges. */
-  subjectLists: [qk.subjects, qk.dashboard, ["forest"], ["edges"]] as QueryKeys,
+  /** Everywhere subjects are listed: the lists, Focus, and the Map's edges (its outline is built from the lists). */
+  subjectLists: [qk.subjects, qk.dashboard, ["edges"]] as QueryKeys,
   /** What an earn or a give-back moves (REWARD-1): the wallet, the ledger and the life domains. */
   earnings: [qk.wallet, qk.ledger, qk.domains] as QueryKeys,
   /**
@@ -280,7 +279,6 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
       await invalidate(qc, [
         qk.relations(from),
         qk.relations(to),
-        ["forest"],
         ["edges"],
         qk.dashboard,
       ]);
@@ -723,9 +721,9 @@ export function decorateWrites(client: LifeOsWriteClient, qc: QueryClient): Life
   };
 }
 
-/** What a cover change moves: the subject, the lists and cards it shows on, and the Map. */
+/** What a cover change moves: the subject, and the lists and cards it shows on (the Map's among them). */
 function coverKeys(id: string): QueryKeys {
-  return [...moves.subject(id), qk.subjects, qk.dashboard, ["forest"]];
+  return [...moves.subject(id), qk.subjects, qk.dashboard];
 }
 
 function matchesRef(id: string, urn: string, ref: string) {
@@ -746,10 +744,6 @@ function optimisticStatus(qc: QueryClient, subject: string, status: string) {
   qc.setQueryData<SubjectListItem | null>(qk.listItem(subject), (old) =>
     old ? { ...old, status } : old,
   );
-  qc.setQueriesData({ queryKey: ["forest"] }, (old) => {
-    if (!Array.isArray(old)) return old;
-    return mapForestStatus(old, subject, status);
-  });
 }
 
 function optimisticInboxRemove(qc: QueryClient, item: string) {
@@ -819,10 +813,16 @@ export function useCoverSearch(query: string, enabled = true) {
 }
 
 /** Subjects by type; a repeating Task's series only with `includeSeries` (TASKS-3). */
-export function useSubjects(type?: SubjectType, includeArchived = false, includeSeries = false) {
+export function useSubjects(
+  type?: SubjectType,
+  includeArchived = false,
+  includeSeries = false,
+  opts: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: [...qk.subjects, type ?? "all", includeArchived, includeSeries],
     queryFn: () => reads().listSubjects({ type, includeArchived, includeSeries }),
+    enabled: opts.enabled ?? true,
   });
 }
 
@@ -1040,11 +1040,26 @@ export function useDashboard() {
   });
 }
 
+/**
+ * The Map's outline, built from the cached subject list and edges rather than read whole, so the
+ * Map page, which reads both for its graph too, asks for each once (code review CR37). A repeating
+ * Task is one node, its series; its repetitions stay off the Map (TASKS-3).
+ */
 export function useAlignmentForest(includeArchived: boolean, lens: MapLens) {
-  return useQuery({
-    queryKey: qk.forest(includeArchived, lens),
-    queryFn: () => reads().alignmentForest({ includeArchived, lens }),
-  });
+  const subjects = useSubjects(undefined, includeArchived, true);
+  const edges = useAlignmentEdges(includeArchived);
+  const data = useMemo(
+    () =>
+      subjects.data && edges.data
+        ? buildAlignmentForest(mapSubjects(subjects.data), edges.data, { includeArchived, lens })
+        : undefined,
+    [subjects.data, edges.data, includeArchived, lens],
+  );
+  return {
+    data,
+    isLoading: subjects.isLoading || edges.isLoading,
+    isError: subjects.isError || edges.isError,
+  };
 }
 
 export function useAlignmentEdges(includeArchived: boolean) {
@@ -1058,6 +1073,14 @@ export function useHabits() {
   return useQuery({
     queryKey: qk.habits,
     queryFn: () => reads().habits(),
+  });
+}
+
+/** Every habit's row for one day, as the dashboard reads them. */
+export function useOccurrencesOn(on: string) {
+  return useQuery({
+    queryKey: [...qk.occurrences, "on", on],
+    queryFn: () => reads().occurrences({ on }),
   });
 }
 

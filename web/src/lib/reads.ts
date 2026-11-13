@@ -4,7 +4,7 @@
  * code never imports the mock, and the production bundle can leave the mock out.
  */
 
-import type { AlignmentEdge, DashboardRead, MapLens } from "@/lib/derive";
+import type { AlignmentEdge, DashboardRead } from "@/lib/derive";
 import type {
   ActivityDayDetailRead,
   ActivityDaysRead,
@@ -195,8 +195,4 @@ export interface LifeOsReads {
    */
   edges(opts?: { includeArchived?: boolean }): Promise<AlignmentEdge[]>;
   dashboard(): Promise<DashboardRead>;
-  alignmentForest(opts?: {
-    includeArchived?: boolean;
-    lens?: MapLens;
-  }): Promise<import("@/lib/derive").AlignmentNode[]>;
 }

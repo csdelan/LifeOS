@@ -1,7 +1,14 @@
-import { QueryClient } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mockReads } from "@/lib/mock/api";
 import type { LifeOsWriteClient } from "@/lib/production-ui-types";
-import { decorateWrites, qk } from "@/lib/queries";
+import { decorateWrites, qk, useAlignmentEdges, useAlignmentForest, useSubjects } from "@/lib/queries";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // Code review CR36: a write refreshes the named groups of reads it moves.
 
@@ -21,7 +28,6 @@ async function staleAfter(write: (writes: LifeOsWriteClient) => Promise<unknown>
 const archivedListKeys = [
   qk.subjects,
   qk.dashboard,
-  ["forest", false, "areas"],
   ["edges", false],
   qk.subject("s1"),
   qk.listItem("s1"),
@@ -57,5 +63,37 @@ describe("write invalidation", () => {
   it("a write leaves the reads it doesn't move alone", async () => {
     const stale = await staleAfter((w) => w.appendJournal("s1", "text"), [qk.journal("s1"), qk.habits, qk.wallet]);
     expect(stale).toEqual(["journal/s1"]);
+  });
+});
+
+// Code review CR37: the Map's outline is built from the reads its graph caches anyway.
+describe("the Map's reads", () => {
+  it("ask for the subject list and the edges once each", async () => {
+    const subjects = vi.spyOn(mockReads, "listSubjects");
+    const edges = vi.spyOn(mockReads, "edges");
+    const client = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
+    const { result } = renderHook(
+      () => ({
+        forest: useAlignmentForest(false, "all"),
+        subjects: useSubjects(undefined, false, true),
+        edges: useAlignmentEdges(false),
+      }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.forest.data?.length).toBeGreaterThan(0));
+    expect(subjects).toHaveBeenCalledTimes(1);
+    expect(edges).toHaveBeenCalledTimes(1);
+  });
+
+  it("a subject list that isn't enabled isn't read, as the palette's while it's closed", async () => {
+    const subjects = vi.spyOn(mockReads, "listSubjects");
+    const client = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
+    const { result } = renderHook(() => useSubjects(undefined, true, false, { enabled: false }), { wrapper });
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(subjects).not.toHaveBeenCalled();
   });
 });

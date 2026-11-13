@@ -8,13 +8,7 @@
 
 import { todayIso } from "@/lib/dates";
 import type { LifeOsReads, SubjectRelations } from "@/lib/reads";
-import {
-  buildAlignmentForest,
-  deriveDashboard,
-  type AlignmentEdge,
-  type DashboardRead,
-  type MapLens,
-} from "@/lib/derive";
+import { deriveDashboard, type AlignmentEdge, type DashboardRead } from "@/lib/derive";
 import type {
   ActivityDayDetailRead,
   ActivityDayRow,
@@ -64,7 +58,6 @@ import type {
 } from "@/lib/production-ui-types";
 import { isTerminal } from "@/lib/production-ui-types";
 import { composeRecap, type RecapSection } from "@/lib/review-recap";
-import { mapSubjects } from "@/lib/task-series";
 import { BOUNTY_DEFAULTS } from "@/lib/bounty";
 import { tagUniverse, toRelationEdge } from "@/lib/mock/seed";
 import {
@@ -494,16 +487,6 @@ export const mockReads: LifeOsReads = {
       primaryFocus: s.primaryFocus,
       objectives: s.objectives,
     });
-  },
-
-  async alignmentForest(opts?: {
-    includeArchived?: boolean;
-    lens?: MapLens;
-  }) {
-    await wait();
-    const s = storeState();
-    // A repeating Task is one node, its series; its repetitions stay off the Map (TASKS-3).
-    return buildAlignmentForest(mapSubjects(s.subjects.map(listed)), s.edges, opts);
   },
 };
 

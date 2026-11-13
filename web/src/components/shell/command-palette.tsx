@@ -66,8 +66,9 @@ export function CommandPalette({
 }) {
   const navigate = useNavigate();
   const { setTheme, theme } = useTheme();
-  // Every subject, archived ones too: the search box finds any item, not the first few.
-  const { data: subjects } = useSubjects(undefined, true);
+  // Every subject, archived ones too: the search box finds any item, not the first few. The
+  // palette is mounted on every page, so it loads them only while it's open.
+  const { data: subjects } = useSubjects(undefined, true, false, { enabled: open });
   const [query, setQuery] = useState("");
   const found = useMemo(() => searchSubjects(subjects ?? [], query), [subjects, query]);
   // Each opening starts with an empty search.

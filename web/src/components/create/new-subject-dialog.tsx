@@ -81,7 +81,8 @@ export function NewSubjectDialog({
 }) {
   const create = useCreateSubject();
   const writes = useWrites();
-  const { data: allSubjects } = useSubjects();
+  // The dialog is mounted on every page, so it loads the subject list only while it's open.
+  const { data: allSubjects } = useSubjects(undefined, false, false, { enabled: open });
   const childTypes = initialParent ? childTypesFor(initialParent.type) : [];
   const typeChoices = initialLink
     ? pendingLinkTypes(initialLink)

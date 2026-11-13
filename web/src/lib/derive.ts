@@ -269,19 +269,3 @@ function rowsFor(
     );
   });
 }
-
-export function mapForestStatus(
-  nodes: AlignmentNode[],
-  subject: string,
-  status: string,
-): AlignmentNode[] {
-  const match = (id: string, urn: string) => id === subject || urn === subject;
-  const walk = (n: AlignmentNode): AlignmentNode => ({
-    ...n,
-    subject: match(n.subject.id, n.subject.urn)
-      ? { ...n.subject, status }
-      : n.subject,
-    children: n.children.map(walk),
-  });
-  return nodes.map(walk);
-}

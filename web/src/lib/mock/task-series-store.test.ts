@@ -16,6 +16,8 @@ import {
   setTags,
 } from "@/lib/mock/store";
 import { mockReads } from "@/lib/mock/api";
+import { buildAlignmentForest } from "@/lib/derive";
+import { mapSubjects } from "@/lib/task-series";
 import { addDays } from "@/lib/dates";
 
 /** Wednesday 21 October 2026, at noon. */
@@ -179,7 +181,8 @@ describe("repeating Tasks in the mock store (TASKS-3, D16)", () => {
   });
 
   it("puts a repeating task on the Map once, under what it serves", async () => {
-    const forest = await mockReads.alignmentForest();
+    const subjects = await mockReads.listSubjects({ includeSeries: true });
+    const forest = buildAlignmentForest(mapSubjects(subjects), await mockReads.edges());
     const flat = (nodes: typeof forest): typeof forest => nodes.flatMap((n) => [n, ...flat(n.children)]);
     const shops = flat(forest).filter((n) => n.subject.title === "Shop for Sunday dinner");
     expect(shops).toHaveLength(1);

@@ -63,7 +63,7 @@ const subjects = [
 
 vi.mock("@/lib/queries", () => ({
   useHabits: () => ({ data: habits, isLoading: false, isError: false }),
-  useDashboard: () => ({ data: undefined }),
+  useOccurrencesOn: () => ({ data: undefined }),
   useSubjects: () => ({ data: subjects, isLoading: false, isError: false }),
   useWrites: () => ({ adhere: vi.fn(), setStatus: vi.fn() }),
 }));
