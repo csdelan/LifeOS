@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ClipboardCheckIcon, MicIcon } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { VoiceCaptureDialog } from "@/components/create/voice-capture-dialog";
@@ -40,7 +39,7 @@ import {
 } from "@/lib/reviews";
 import type { ReviewBody, ReviewDoc, ReviewKind } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/lib/write-action";
+import { errorText, useWriteAction } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
 
 /**
@@ -302,6 +301,7 @@ function ReviewRecap({ period, today }: { period: ReviewPeriod; today: string })
  * picks one day at a time. An unrecorded day stays unrecorded, never a failure.
  */
 function HabitCheckOffs({ period, today }: { period: ReviewPeriod; today: string }) {
+  const checking = useWriteAction({ report: "toast", fallback: "That habit day didn't save." });
   const last = today < period.end ? today : period.end;
   const habits = useHabits();
   const recorded = useOccurrencesBetween(period.start, last);
@@ -365,9 +365,9 @@ function HabitCheckOffs({ period, today }: { period: ReviewPeriod; today: string
                   state={h.state}
                   allowsPartial={h.allowsPartial}
                   onPick={(s) =>
-                    void writes
-                      .adhere(h.habitId, s === "not_followed" ? "missed" : s, { on: h.occurrenceDate })
-                      .catch((e: unknown) => toast.error(errorText(e, "That habit day didn't save.")))
+                    void checking.run(() =>
+                      writes.adhere(h.habitId, s === "not_followed" ? "missed" : s, { on: h.occurrenceDate }),
+                    )
                   }
                 />
               </li>
@@ -438,7 +438,8 @@ function ReviewEditor({
 }) {
   // The page keys this by the review, so another review starts from its own choice.
   const [keepFocus, setKeepFocus] = useState(doc.keepFocus);
-  const [busy, setBusy] = useState(false);
+  const saving = useWriteAction({ report: "toast" });
+  const busy = saving.pending;
   const [dictating, setDictating] = useState(false);
   const { data: dash } = useDashboard();
 
@@ -453,11 +454,7 @@ function ReviewEditor({
   const name = `${doc.kind === "daily" ? "Daily" : "Weekly"} review, ${reviewDay(doc.date)}`;
 
   function run(steps: () => Promise<void>, failure: string) {
-    setBusy(true);
-    void steps()
-      .then(() => onDirty(false))
-      .catch((e: unknown) => toast.error(errorText(e, failure)))
-      .finally(() => setBusy(false));
+    void saving.run(steps, { fallback: failure, onDone: () => onDirty(false) });
   }
 
   return (

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { ImageIcon, MoveVerticalIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,7 +14,7 @@ import { BANNER_WIDTH, clampPosition, dragPosition, keyPosition, positionText } 
 import { useWrites } from "@/lib/queries";
 import type { CoverRead } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 /** Buttons laid over a photo: white on a dark pill, 4.5:1 over any picture. */
 const ON_PHOTO = "border-0 bg-black/60 text-white shadow-none hover:bg-black/75 hover:text-white aria-expanded:bg-black/75";
@@ -38,7 +37,8 @@ export function CoverBanner({
   const writes = useWrites();
   const [repositioning, setRepositioning] = useState(false);
   const [draftY, setDraftY] = useState(cover.positionY);
-  const [busy, setBusy] = useState(false);
+  const action = useWriteAction({ report: "toast" });
+  const busy = action.pending;
   const slider = useRef<HTMLDivElement>(null);
   const focusSlider = useRef(false);
   const drag = useRef<{ pointerId: number; startY: number; clientY: number } | null>(null);
@@ -62,27 +62,17 @@ export function CoverBanner({
   }
 
   async function save() {
-    setBusy(true);
-    try {
-      const y = clampPosition(draftY);
-      if (y !== cover.positionY) await writes.moveCover(subjectId, y);
-      setRepositioning(false);
-    } catch (err) {
-      toast.error(errorText(err, "Couldn't move the cover."));
-    } finally {
-      setBusy(false);
-    }
+    const y = clampPosition(draftY);
+    await action.run(
+      async () => {
+        if (y !== cover.positionY) await writes.moveCover(subjectId, y);
+      },
+      { fallback: "Couldn't move the cover.", onDone: () => setRepositioning(false) },
+    );
   }
 
   async function remove() {
-    setBusy(true);
-    try {
-      await writes.clearCover(subjectId);
-    } catch (err) {
-      toast.error(errorText(err, "Couldn't remove the cover."));
-    } finally {
-      setBusy(false);
-    }
+    await action.run(() => writes.clearCover(subjectId), { fallback: "Couldn't remove the cover." });
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {

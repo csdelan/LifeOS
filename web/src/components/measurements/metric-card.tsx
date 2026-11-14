@@ -36,7 +36,7 @@ import { useWrites } from "@/lib/queries";
 import { useMetricsOver } from "@/lib/features/measurements/queries";
 import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
 
 /**
@@ -106,6 +106,7 @@ export function MetricCard({
 }) {
   const titleId = useId();
   const writes = useWrites();
+  const removing = useWriteAction({ report: "toast", fallback: "That didn't delete. Nothing was written." });
   const view = `measurements.${group.key}`;
   // Labs come months apart, so a lab test opens on all of it; any other metric on 90 days.
   const [range, setRange] = usePersistedChoice<MetricRange>(
@@ -153,12 +154,12 @@ export function MetricCard({
   const noun = group.noun;
 
   async function remove(set: ReadingSet) {
-    try {
-      for (const r of set) if (r) await writes.deleteReading(r.id);
-      toast.success("Deleted the reading");
-    } catch (e) {
-      toast.error(errorText(e, "That didn't delete. Nothing was written."));
-    }
+    await removing.run(
+      async () => {
+        for (const r of set) if (r) await writes.deleteReading(r.id);
+      },
+      () => toast.success("Deleted the reading"),
+    );
   }
 
   const edit = (

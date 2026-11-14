@@ -9,7 +9,7 @@ import type { TaskRepeat, TaskRepetitionRow, TaskSeriesCounts } from "@/lib/prod
 import { useTaskSeriesHistory, useWrites } from "@/lib/queries";
 import { repeatLabel, seriesTally } from "@/lib/task-series";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 const FIRST_ROWS = 6;
 
@@ -33,7 +33,8 @@ export function RepeatPanel({
   const writes = useWrites();
   const { data: history } = useTaskSeriesHistory(repeating.seriesId);
   const [showAll, setShowAll] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const changing = useWriteAction({ report: "toast", fallback: "Couldn't change it." });
+  const busy = changing.pending;
   const counts: TaskSeriesCounts = history?.series ?? repeating;
   const stopped = history?.series.stopped ?? repeating.stopped;
   const rows = history?.repetitions ?? [];
@@ -42,15 +43,7 @@ export function RepeatPanel({
   const label = repeatLabel(repeating.recurrence) ?? "Repeats";
 
   async function move(id: string, status: string, done: string) {
-    setBusy(true);
-    try {
-      await writes.setStatus(id, status);
-      toast.success(done);
-    } catch (err) {
-      toast.error(errorText(err, "Couldn't change it."));
-    } finally {
-      setBusy(false);
-    }
+    await changing.run(() => writes.setStatus(id, status), () => toast.success(done));
   }
 
   return (

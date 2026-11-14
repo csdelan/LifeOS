@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/primitives/tag";
 import { TagInput } from "@/components/primitives/tag-input";
 import { useSubjectTags, useTagUniverse, useWrites } from "@/lib/queries";
 import { splitTags } from "@/lib/tag-suggest";
-import { errorText, useWriteAction } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 export function TagsTab({ subjectId }: { subjectId: string }) {
   const { data: tags } = useSubjectTags(subjectId);
@@ -30,12 +29,10 @@ export function TagsTab({ subjectId }: { subjectId: string }) {
       setRenaming(null);
       return;
     }
-    try {
-      await writes.renameTag(renaming, next);
-      setRenaming(null);
-    } catch (err) {
-      toast.error(errorText(err, "Could not rename the tag."));
-    }
+    await reported.run(() => writes.renameTag(renaming, next), {
+      fallback: "Could not rename the tag.",
+      onDone: () => setRenaming(null),
+    });
   }
 
   return (

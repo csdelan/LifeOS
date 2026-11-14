@@ -93,6 +93,23 @@ describe("useWriteAction", () => {
     expect(result.current.error).toBeNull();
     expect(result.current.pending).toBe(false);
   });
+
+  it("says a write's own fallback in place of the hook's, and calls that write's onDone (code review CR102)", async () => {
+    const { result } = renderHook(() => useWriteAction({ report: "toast", fallback: "The hook's words." }));
+    const onDone = vi.fn();
+    await act(async () => {
+      await result.current.run(() => Promise.reject("not an Error"), { fallback: "Drop failed. It is still in your Inbox." });
+      await result.current.run(() => Promise.reject(new Error("The kernel's refusal.")), { fallback: "Not said." });
+      await result.current.run(() => Promise.reject("not an Error"));
+      await result.current.run(() => Promise.resolve(7), { onDone, fallback: "Not said either." });
+    });
+    expect(vi.mocked(toast.error).mock.calls.map(([m]) => m)).toEqual([
+      "Drop failed. It is still in your Inbox.",
+      "The kernel's refusal.",
+      "The hook's words.",
+    ]);
+    expect(onDone).toHaveBeenCalledWith(7);
+  });
 });
 
 describe("reportUnhandledRejections", () => {
@@ -114,5 +131,36 @@ describe("reportUnhandledRejections", () => {
     stop();
     fire(new Error("after"));
     expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+});
+
+const sources = import.meta.glob<string>(["/src/**/*.{ts,tsx}", "!/src/**/*.test.{ts,tsx}"], {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+
+/**
+ * Where code still says a failure in a toast of its own, and why `useWriteAction` doesn't fit:
+ * mostly a write that went in while a step after it didn't, which the toast says beside the
+ * success.
+ */
+const OWN_FAILURE_TOASTS: Record<string, string> = {
+  "/src/lib/write-action.ts": "the hook itself, and the backstop for a promise nothing waited on",
+  "/src/components/create/new-subject-dialog.tsx": "the item is made, and a detail after it didn't save",
+  "/src/components/environment/walk-through-sheet.tsx": "the ratings are in, and some photos didn't save",
+  "/src/components/food/log-food-sheet.tsx": "the meal is logged, and its photo didn't save",
+  "/src/components/measurements/lab-visit-sheet.tsx": "the visit is saved, and its report didn't upload",
+  "/src/components/journal/journal-editor.tsx": "it adds to the refusal that the entry is still in the editor",
+  "/src/pages/gallery-page.tsx": "the gallery shows what a failure toast looks like",
+};
+
+describe("a write's failure is said through useWriteAction (code review CR102)", () => {
+  it("leaves failure toasts of their own to the writes that went in only in part", () => {
+    const own = Object.entries(sources)
+      .filter(([, source]) => /\btoast\.error\(/.test(source))
+      .map(([file]) => file)
+      .sort();
+    expect(own).toEqual(Object.keys(OWN_FAILURE_TOASTS).sort());
   });
 });

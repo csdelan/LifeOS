@@ -53,7 +53,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
 
 function inboxRef(item: InboxItem): string {
@@ -107,6 +107,7 @@ export function InboxPage() {
   const selectedId = search.item ?? (isDesktop ? rows?.[0]?.itemId : undefined);
   const selected = rows?.find((i) => i.itemId === selectedId);
   const writes = useWrites();
+  const reported = useWriteAction({ report: "toast" });
   const [dropOpen, setDropOpen] = useState(false);
   const [focusAction, setFocusAction] = useState<"promote" | "relate" | "dismiss" | "drop">(
     "promote",
@@ -141,48 +142,41 @@ export function InboxPage() {
 
   async function dismiss(item: InboxItem) {
     const ref = inboxRef(item);
-    try {
-      await writes.dismiss(ref);
-    } catch (e) {
-      toast.error(errorText(e, "Dismiss failed. It is still in your Inbox."));
-      return;
-    }
-    toast.success("Dismissed", {
-      description: "Find it again under Resolved.",
-      // Long enough to reach for Undo; the default 4s is gone before you look.
-      duration: 10_000,
-      action: {
-        label: "Undo",
-        onClick: () => {
-          writes.flag(ref).catch((e: unknown) => toast.error(errorText(e, "Undo failed.")));
-        },
+    await reported.run(() => writes.dismiss(ref), {
+      fallback: "Dismiss failed. It is still in your Inbox.",
+      onDone: () => {
+        toast.success("Dismissed", {
+          description: "Find it again under Resolved.",
+          // Long enough to reach for Undo; the default 4s is gone before you look.
+          duration: 10_000,
+          action: {
+            label: "Undo",
+            onClick: () => void reported.run(() => writes.flag(ref), { fallback: "Undo failed." }),
+          },
+        });
+        afterResolve(item);
       },
     });
-    afterResolve(item);
   }
 
   async function drop(item: InboxItem) {
-    try {
-      await writes.drop(inboxRef(item));
-    } catch (e) {
-      toast.error(errorText(e, "Drop failed. It is still in your Inbox."));
-      return;
-    }
-    afterResolve(item);
+    await reported.run(() => writes.drop(inboxRef(item)), {
+      fallback: "Drop failed. It is still in your Inbox.",
+      onDone: () => afterResolve(item),
+    });
   }
 
   async function backToInbox(item: ResolvedInboxItem) {
     const ref = inboxRef(item);
     const reopen = reopenStatus(item);
-    try {
-      // The Inbox hides finished subjects, so a bare re-flag would surface nothing.
-      if (reopen) await writes.setStatus(ref, reopen);
-      await writes.flag(ref);
-    } catch (e) {
-      toast.error(errorText(e, "Couldn't return it to the Inbox."));
-      return;
-    }
-    void navigate({ search: { item: item.itemId } });
+    await reported.run(
+      async () => {
+        // The Inbox hides finished subjects, so a bare re-flag would surface nothing.
+        if (reopen) await writes.setStatus(ref, reopen);
+        await writes.flag(ref);
+      },
+      { fallback: "Couldn't return it to the Inbox.", onDone: () => void navigate({ search: { item: item.itemId } }) },
+    );
   }
 
   useEffect(() => {
@@ -404,30 +398,25 @@ function InboxRow({ item }: { item: InboxItem }) {
 function TagEditor({ item, hint }: { item: InboxItem; hint: string }) {
   const writes = useWrites();
   const [draft, setDraft] = useState("");
-  const [pending, setPending] = useState(false);
+  const tagging = useWriteAction({ report: "toast", fallback: "Couldn't save the tag." });
+  const pending = tagging.pending;
   const tags = item.tags ?? [];
   const ref = inboxRef(item);
 
-  async function apply(opts: { add?: string[]; remove?: string[] }, done: string) {
-    setPending(true);
-    try {
-      await writes.tag(ref, opts);
-      toast.success(done);
-      return true;
-    } catch (e) {
-      toast.error(errorText(e, "Couldn't save the tag."));
-      return false;
-    } finally {
-      setPending(false);
-    }
+  function apply(opts: { add?: string[]; remove?: string[] }, done: string, after?: () => void) {
+    return tagging.run(
+      () => writes.tag(ref, opts),
+      () => {
+        toast.success(done);
+        after?.();
+      },
+    );
   }
 
   function add(added: string[]) {
     if (added.length === 0 || pending) return;
     const label = added.map((t) => `#${t}`).join(", ");
-    void apply({ add: added }, `Tagged ${label}`).then((ok) => {
-      if (ok) setDraft("");
-    });
+    void apply({ add: added }, `Tagged ${label}`, () => setDraft(""));
   }
 
   return (
@@ -521,15 +510,10 @@ function InboxPreview({
   // Starts from the item's own title; a new read of the same item (it was tagged) keeps what's typed.
   const [promoteTitle, setPromoteTitle] = useState(() => inboxItemTitle(item));
   const [relateTo, setRelateTo] = useState("");
+  const resolving = useWriteAction({ report: "toast" });
 
   async function resolveWith(write: () => Promise<unknown>, failure: string) {
-    try {
-      await write();
-    } catch (e) {
-      toast.error(errorText(e, failure));
-      return;
-    }
-    onResolved();
+    await resolving.run(write, { fallback: failure, onDone: () => onResolved() });
   }
 
   return (

@@ -1,6 +1,5 @@
 import { useId, useState } from "react";
 import { ChevronRightIcon, PlusIcon } from "lucide-react";
-import { toast } from "sonner";
 import { MetricCard } from "@/components/measurements/metric-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,7 @@ import {
 import { useWrites } from "@/lib/queries";
 import { useMetricsOver } from "@/lib/features/measurements/queries";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 /** The days a row's small trend line covers. */
 const SPARK_DAYS = 90;
@@ -165,16 +164,14 @@ export function ArchivedMetrics({ groups }: { groups: MetricGroup[] }) {
   const writes = useWrites();
   const titleId = useId();
   const [pending, setPending] = useState<string | null>(null);
+  const restoring = useWriteAction({ report: "toast", fallback: "That didn't restore. Nothing was written." });
 
   async function restore(group: MetricGroup) {
     setPending(group.key);
-    try {
+    await restoring.run(async () => {
       for (const m of group.metrics) await writes.restore(m.urn);
-    } catch (e) {
-      toast.error(errorText(e, "That didn't restore. Nothing was written."));
-    } finally {
-      setPending(null);
-    }
+    });
+    setPending(null);
   }
 
   return (

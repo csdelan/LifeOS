@@ -1,6 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
 import { LoaderCircleIcon, SearchIcon } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { coverColor, coverQuery, coverSearchMiss, MAX_QUERY } from "@/lib/cover";
 import { useCoverSearch, useWrites } from "@/lib/queries";
 import type { CoverPhoto } from "@/lib/production-ui-types";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 const FALLBACK_UNSPLASH_LINK = "https://unsplash.com/?utm_source=lifeos&utm_medium=referral";
 
@@ -39,6 +38,7 @@ export function CoverPicker({
   const writes = useWrites();
   const inputId = useId();
   const search = useCoverSearch(query, open);
+  const setting = useWriteAction({ report: "toast", fallback: "Couldn't set the cover." });
 
   const pages = search.data?.pages ?? [];
   const first = pages[0];
@@ -57,14 +57,8 @@ export function CoverPicker({
   async function pick(photo: CoverPhoto) {
     if (picking) return;
     setPicking(photo.id);
-    try {
-      await writes.setCover({ subject: subject.id, photoId: photo.id });
-      onOpenChange(false);
-    } catch (err) {
-      toast.error(errorText(err, "Couldn't set the cover."));
-    } finally {
-      setPicking(null);
-    }
+    await setting.run(() => writes.setCover({ subject: subject.id, photoId: photo.id }), () => onOpenChange(false));
+    setPicking(null);
   }
 
   return (

@@ -23,12 +23,21 @@ export interface WriteActionOptions {
   onDone?: () => void;
 }
 
+/** What one write says besides the hook's: its own `onDone`, and its own fallback. */
+export interface RunOptions<T> {
+  /** Called with the answer when the write succeeds, in place of the hook's `onDone`. */
+  onDone?: (result: T) => void;
+  /** Said when this write's failure carries no words of its own, in place of the hook's. */
+  fallback?: string;
+}
+
 export interface WriteAction {
   /**
    * Runs one write. Its failure is said, never thrown, and the answer comes back, or undefined
-   * when it failed or (inline) another was still running.
+   * when it failed or (inline) another was still running. `then` is the write's `onDone`, or
+   * its options, when one hook runs writes that fail in words of their own (Dismiss, Drop).
    */
-  run<T>(write: () => Promise<T>, onDone?: (result: T) => void): Promise<T | undefined>;
+  run<T>(write: () => Promise<T>, then?: ((result: T) => void) | RunOptions<T>): Promise<T | undefined>;
   /** A write is running. */
   pending: boolean;
   /** The last failure, inline; null while a write runs and after one succeeds. */
@@ -47,7 +56,8 @@ export function useWriteAction({ report = "inline", fallback, onDone: done }: Wr
   const inFlight = useRef(0);
 
   const run = useCallback(
-    async <T>(write: () => Promise<T>, onDone?: (result: T) => void): Promise<T | undefined> => {
+    async <T>(write: () => Promise<T>, then?: ((result: T) => void) | RunOptions<T>): Promise<T | undefined> => {
+      const { onDone, fallback: own } = typeof then === "function" ? { onDone: then, fallback: undefined } : (then ?? {});
       if (report === "inline" && inFlight.current > 0) return undefined;
       inFlight.current += 1;
       setRunning((n) => n + 1);
@@ -56,7 +66,7 @@ export function useWriteAction({ report = "inline", fallback, onDone: done }: Wr
       try {
         result = await write();
       } catch (e) {
-        const message = errorText(e, fallback);
+        const message = errorText(e, own ?? fallback);
         if (report === "toast") toast.error(message);
         else setError(message);
         return undefined;
