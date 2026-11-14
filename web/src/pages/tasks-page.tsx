@@ -41,6 +41,7 @@ import {
 } from "@/lib/task-groups";
 import { loadView, saveView } from "@/lib/view-state";
 import { errorText } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 type TasksView = {
   status: string;
@@ -81,10 +82,11 @@ export function TasksPage() {
   const repeatingView = filters.status === "repeating";
   // Active, the view it opens on, shows open Tasks only, so it reads only those and not every
   // repetition ever done; the other views read every Task (code review CR76).
-  const { data, isLoading, isError } = useSubjects("Task", !activeView, false, {
+  const tasks = useSubjects("Task", !activeView, false, {
     status: activeView ? "open" : undefined,
     enabled: !repeatingView,
   });
+  const { data, isLoading } = tasks;
   const [draft, setDraft] = useState("");
   const [entryError, setEntryError] = useState<string | null>(null);
   const entryRef = useRef<HTMLInputElement>(null);
@@ -281,14 +283,13 @@ export function TasksPage() {
           ) : (
             <>
               {isLoading ? <ListSkeleton rows={8} /> : null}
-              {isError ? (
-                <EmptyState
-                  tone="error"
-                  icon={ListTodoIcon}
-                  title="Tasks failed to load"
-                  description="This is not an empty list — the reader never returned."
-                />
-              ) : null}
+              <ReadFailed
+                read={tasks}
+                what="Tasks"
+                notEmpty="an empty list"
+                size="page"
+                icon={ListTodoIcon}
+              />
               {!isLoading && filtered.length === 0 ? (
                 <EmptyState
                   icon={ListTodoIcon}

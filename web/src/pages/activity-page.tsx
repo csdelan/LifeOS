@@ -20,6 +20,7 @@ import type { OuraStatus, WorkoutRow } from "@/lib/production-ui-types";
 import { useActivitySummary, useWrites } from "@/lib/queries";
 import { useNow } from "@/lib/timer";
 import { errorText } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 function Banner({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
@@ -114,14 +115,13 @@ export function ActivityPage() {
             <CardSkeleton />
           </div>
         ) : null}
-        {summary.isError ? (
-          <EmptyState
-            tone="error"
-            icon={ActivityIcon}
-            title="Activity failed to load"
-            description="This is not an empty record — the reader never returned."
-          />
-        ) : null}
+        <ReadFailed
+          read={summary}
+          what="Activity"
+          notEmpty="an empty record"
+          size="page"
+          icon={ActivityIcon}
+        />
 
         {data && oura ? (
           <>

@@ -60,6 +60,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { errorText } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 function inboxRef(item: InboxItem): string {
   return item.itemKind === "event" ? item.itemId : (item.subjectUrn ?? item.itemId);
@@ -105,7 +106,8 @@ export function InboxPage() {
   const [resolvedLimit, setResolvedLimit] = useState(RESOLVED_PAGE);
   const resolved = useResolvedInbox(resolvedView, resolvedLimit);
   const olderLeft = resolvedView && !!resolved.data && resolved.data.length >= resolvedLimit && resolvedLimit < RESOLVED_MAX;
-  const { data, isLoading, isError } = resolvedView ? resolved : open;
+  const shownRead = resolvedView ? resolved : open;
+  const { data, isLoading } = shownRead;
   const rows: InboxItem[] | undefined = data;
   const isDesktop = useIsDesktop();
   const selectedId = search.item ?? (isDesktop ? rows?.[0]?.itemId : undefined);
@@ -307,14 +309,13 @@ export function InboxPage() {
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {isLoading ? <div className="p-3"><ListSkeleton /></div> : null}
-          {isError ? (
-            <EmptyState
-              tone="error"
-              icon={InboxIcon}
-              title={resolvedView ? "Resolved items failed to load" : "Inbox failed to load"}
-              description="This is not Inbox Zero."
-            />
-          ) : null}
+          <ReadFailed
+            read={shownRead}
+            what={resolvedView ? "Resolved items" : "Inbox"}
+            notEmpty={resolvedView ? "an empty list" : "Inbox Zero"}
+            size="page"
+            icon={InboxIcon}
+          />
           {!isLoading && rows?.length === 0 ? (
             resolvedView ? (
               <EmptyState

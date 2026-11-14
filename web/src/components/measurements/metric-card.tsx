@@ -37,6 +37,7 @@ import { useMetricsOver } from "@/lib/features/measurements/queries";
 import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 import { errorText } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 /**
  * A day's flag: its reading's, which for a lab result follows the range printed beside it (§4.9);
@@ -261,11 +262,7 @@ export function MetricCard({
       </div>
 
       {read.isLoading ? <ListSkeleton rows={3} /> : null}
-      {read.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          {group.name}'s {noun}s failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={read} what={`${group.name}'s ${noun}s`} />
 
       {reads ? (
         <div

@@ -2,9 +2,11 @@ import { CompassIcon } from "lucide-react";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { useAreas } from "@/lib/queries";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 export function AreasPage() {
-  const { data, isLoading, isError } = useAreas();
+  const areas = useAreas();
+  const { data, isLoading } = areas;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -15,14 +17,13 @@ export function AreasPage() {
           Areas classify work. They are not alignment edges, and they are not archived.
         </p>
         {isLoading ? <ListSkeleton /> : null}
-        {isError ? (
-          <EmptyState
-            tone="error"
-            icon={CompassIcon}
-            title="Areas failed to load"
-            description="This is not an empty list — the reader never returned."
-          />
-        ) : null}
+        <ReadFailed
+          read={areas}
+          what="Areas"
+          notEmpty="an empty list"
+          size="page"
+          icon={CompassIcon}
+        />
         <ul className="mt-8 space-y-3">
           {(data ?? []).map((a) => (
             <li key={a.id} className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">

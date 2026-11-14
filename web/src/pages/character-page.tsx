@@ -6,7 +6,6 @@ import { useOuraSyncOnOpen } from "@/components/activity/use-oura-sync-on-open";
 import { DomainDailyChart } from "@/components/character/domain-daily-chart";
 import { DomainReports } from "@/components/character/domain-reports";
 import { ExceptionDays } from "@/components/character/exception-days";
-import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton } from "@/components/primitives/skeletons";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -32,6 +31,7 @@ import type { DomainConsistency, DomainCurrent, DomainLifetime, DomainRow } from
 import { useDomains, useWrites } from "@/lib/queries";
 import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 /**
  * The Character page (REWARD-7 / REWARD-8, xp-domains plan §7.4.9): each configured life
@@ -98,14 +98,13 @@ export function CharacterPage() {
             <CardSkeleton />
           </div>
         ) : null}
-        {domains.isError ? (
-          <EmptyState
-            tone="error"
-            icon={MedalIcon}
-            title="Your domains failed to load"
-            description="This is not an empty character — the reader never returned."
-          />
-        ) : null}
+        <ReadFailed
+          read={domains}
+          what="Your domains"
+          notEmpty="an empty character"
+          size="page"
+          icon={MedalIcon}
+        />
 
         {configured.map((d) => (
           <div key={d.key} className="space-y-6">

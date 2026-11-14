@@ -13,6 +13,7 @@ import type { SpaceRequest, SpaceRow } from "@/lib/production-ui-types";
 import { useEnvironment, useSpaces, useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { errorText } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const PACES = Array.from({ length: PACE_MAX - PACE_MIN + 1 }, (_, i) => {
   const id = String(PACE_MIN + i);
@@ -254,11 +255,7 @@ export function SpacesEditor() {
       </h2>
 
       {spaces.isLoading ? <ListSkeleton rows={3} /> : null}
-      {spaces.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          The spaces failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={spaces} what="The spaces" />
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}

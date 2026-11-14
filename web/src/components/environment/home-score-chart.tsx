@@ -14,6 +14,7 @@ import { shownScore } from "@/lib/environment";
 import { useEnvironmentDays } from "@/lib/queries";
 import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const RANGES = [
   { id: "30", label: "30 days" },
@@ -89,11 +90,7 @@ export function HomeScoreChart({ levelBar }: { levelBar?: LevelBarLine }) {
       </div>
 
       {read.isLoading ? <ListSkeleton rows={3} /> : null}
-      {read.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          The Home Score's days failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={read} what="The Home Score's days" />
 
       {read.data ? (
         <div

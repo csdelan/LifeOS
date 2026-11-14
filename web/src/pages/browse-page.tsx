@@ -76,6 +76,7 @@ import {
 import { useSubjects } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { loadView, saveView } from "@/lib/view-state";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 type BrowseStored = BrowseFilters & { type?: string; selected?: string };
 
@@ -118,7 +119,8 @@ export function BrowsePage() {
   const [filters, setFilters] = useState<BrowseFilters>(() => storedFilters(stored));
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [created, setCreated] = useState<CreatedSubject | null>(null);
-  const { data, isLoading, isError } = useSubjects(undefined, true);
+  const subjects = useSubjects(undefined, true);
+  const { data, isLoading, isError } = subjects;
   const type: BrowseType = search.type ?? "all";
   const selected = search.selected;
   const today = todayIso();
@@ -295,14 +297,13 @@ export function BrowsePage() {
             </div>
           ) : null}
           {isLoading ? <ListSkeleton rows={8} /> : null}
-          {isError ? (
-            <EmptyState
-              tone="error"
-              icon={LibraryIcon}
-              title="Items failed to load"
-              description="This is not an empty list — the reader never returned."
-            />
-          ) : null}
+          <ReadFailed
+            read={subjects}
+            what="Items"
+            notEmpty="an empty list"
+            size="page"
+            icon={LibraryIcon}
+          />
           {!isLoading && !isError && typed.length === 0 ? (
             <EmptyState
               icon={LibraryIcon}

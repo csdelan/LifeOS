@@ -4,6 +4,7 @@ import { ListSkeleton } from "@/components/primitives/skeletons";
 import { appointmentWhen } from "@/lib/appointments";
 import { useAppointments } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 /**
  * Today's appointments on Focus (CAL-1): in calendar order, each with its time, title and
@@ -18,7 +19,8 @@ export function TodayAppointments({
   onOpen: (id: string) => void;
   className?: string;
 }) {
-  const { data, isLoading, isError } = useAppointments(today);
+  const appointments = useAppointments(today);
+  const { data, isLoading, isError } = appointments;
 
   return (
     <section className={cn("rounded-xl bg-card p-4 ring-1 ring-foreground/10", className)}>
@@ -26,7 +28,7 @@ export function TodayAppointments({
       {isLoading ? (
         <ListSkeleton rows={2} />
       ) : isError ? (
-        <p className="text-sm text-destructive">Appointments didn't load.</p>
+        <ReadFailed read={appointments} what="Appointments" />
       ) : !data || data.length === 0 ? (
         <p className="text-sm text-muted-foreground">No appointments today.</p>
       ) : (

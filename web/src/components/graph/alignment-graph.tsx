@@ -147,7 +147,7 @@ function GraphCanvas({
       })
       .catch((err: unknown) => {
         if (gen !== layoutGen.current) return;
-        setLayoutError(errorText(err, "Graph failed to load"));
+        setLayoutError(errorText(err, "The graph couldn't be laid out"));
         setLaidOut(true);
       });
   }, [layoutKey]); // layout + membership; color/selection applied below
@@ -236,8 +236,8 @@ function GraphCanvas({
         <EmptyState
           tone="error"
           icon={NetworkIcon}
-          title="Graph failed to load"
-          description="This is not an empty graph — layout never returned."
+          title="The graph couldn't be laid out"
+          description="This is not an empty graph: its layout never finished."
         />
       </div>
     );

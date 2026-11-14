@@ -18,6 +18,7 @@ import type { ActivitySummaryRead, ActivityTagRow } from "@/lib/production-ui-ty
 import { useActivityTags } from "@/lib/queries";
 import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const VIEW = "activity.tags";
 
@@ -83,11 +84,7 @@ export function TagsCard({
       </ActivityCardTitle>
 
       {tags.isLoading ? <ListSkeleton rows={3} /> : null}
-      {tags.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          The tags failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={tags} what="The tags" />
 
       {tags.data ? (
         <div

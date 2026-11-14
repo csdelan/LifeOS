@@ -16,12 +16,14 @@ import { useDashboard, useWrites } from "@/lib/queries";
 import { isOverdue, todayIso } from "@/lib/dates";
 import { isTerminal } from "@/lib/production-ui-types";
 import { useWriteAction } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 /** The width the focus card's strip is asked for: the card is at most about 600 px wide. */
 const FOCUS_STRIP_WIDTH = 720;
 
 export function FocusPage() {
-  const { data, isLoading, isError } = useDashboard();
+  const dashboard = useDashboard();
+  const { data, isLoading, isError } = dashboard;
   const writes = useWrites();
   const reported = useWriteAction({ report: "toast" });
   const navigate = useNavigate();
@@ -42,13 +44,7 @@ export function FocusPage() {
   }
 
   if (isError || !data) {
-    return (
-      <EmptyState
-        tone="error"
-        title="Focus failed to load"
-        description="This is not a clear day — the composed read never returned."
-      />
-    );
+    return <ReadFailed read={dashboard} what="Focus" notEmpty="a clear day" size="page" />;
   }
 
   const today = todayIso();

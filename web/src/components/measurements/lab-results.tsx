@@ -22,6 +22,7 @@ import type { LabVisitRow, MetricRow, MetricTemplate } from "@/lib/features/meas
 import { useArtifactBytesUrl } from "@/lib/queries";
 import { useLabVisits } from "@/lib/features/measurements/queries";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 /** A visit's key in the page's remembered open rows. */
 function visitKey(id: string): string {
@@ -75,11 +76,7 @@ export function LabResults({
       </div>
 
       {read.isLoading ? <ListSkeleton rows={2} /> : null}
-      {read.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          Lab visits failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={read} what="Lab visits" />
       {read.data && visits.length === 0 ? (
         <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
           Log a lab visit when you have blood drawn: the day, the lab, each result with the range printed beside it, and
@@ -313,12 +310,12 @@ function OpenReport({ visit }: { visit: LabVisitRow }) {
       variant="outline"
       size="sm"
       className="min-h-11 md:min-h-0"
-      disabled={!url.data}
-      aria-label={`Open the report, ${name}`}
-      onClick={() => openArtifactUrl(url.data)}
+      disabled={!url.data && !url.isError}
+      aria-label={url.isError ? `Retry loading the report, ${name}` : `Open the report, ${name}`}
+      onClick={() => (url.isError ? void url.refetch() : openArtifactUrl(url.data))}
     >
       <ExternalLinkIcon />
-      {url.isError ? "Report didn't load" : "Open report"}
+      {url.isError ? "Retry the report" : "Open report"}
     </Button>
   );
 }

@@ -19,6 +19,7 @@ import { useIsDesktop } from "@/lib/media-query";
 import type { ActivityDayDetailRead } from "@/lib/production-ui-types";
 import { useActivityDay } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -185,11 +186,7 @@ export function DaySheet({
         </SheetHeader>
         <div className="px-4 pb-6">
           {detail.isLoading ? <ListSkeleton rows={4} /> : null}
-          {detail.isError ? (
-            <p role="alert" className="text-sm text-destructive">
-              This day failed to load.
-            </p>
-          ) : null}
+          <ReadFailed read={detail} what="This day" />
           {detail.data && detail.data.day === day ? <DayDetail key={day} detail={detail.data} /> : null}
         </div>
       </SheetContent>

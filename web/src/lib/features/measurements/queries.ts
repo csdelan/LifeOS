@@ -37,6 +37,9 @@ export function useMetricsOver(metrics: readonly string[], days: number | null, 
       data: results.every((r) => r.data) ? results.map((r) => r.data!) : undefined,
       isLoading: results.some((r) => r.isLoading),
       isError: results.some((r) => r.isError),
+      isFetching: results.some((r) => r.isFetching),
+      /** Reads again each metric that failed. */
+      refetch: () => Promise.all(results.filter((r) => r.isError).map((r) => r.refetch())),
       isPlaceholderData: results.some((r) => r.isPlaceholderData),
     }),
   });

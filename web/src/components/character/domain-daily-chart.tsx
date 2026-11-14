@@ -8,6 +8,7 @@ import type { DomainDayRow } from "@/lib/production-ui-types";
 import { useDomainDays } from "@/lib/queries";
 import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const RANGES = [
   { id: "30", label: "30 days" },
@@ -143,11 +144,7 @@ export function DomainDailyChart({ domain, name }: { domain: string; name: strin
       </div>
 
       {days.isLoading ? <ListSkeleton rows={3} /> : null}
-      {days.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          The daily chart failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={days} what="The daily chart" />
 
       {data ? (
         <div className={cn("space-y-2 transition-opacity", days.isPlaceholderData && "opacity-60")}>

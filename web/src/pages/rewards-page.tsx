@@ -28,6 +28,7 @@ import {
 import type { RewardRow, Wallet } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
 import { useWriteAction } from "@/lib/write-action";
+import { ReadFailed, type Read } from "@/components/primitives/read-state";
 
 const RECENT = 8;
 
@@ -111,17 +112,16 @@ export function RewardsPage() {
         </TabsContent>
 
         <TabsContent value="wallet" className="min-h-0 flex-1 space-y-8 overflow-y-auto px-4 py-5 md:px-6">
-          <WalletSection wallet={wallet.data} isLoading={wallet.isLoading} isError={wallet.isError} />
+          <WalletSection wallet={wallet.data} isLoading={wallet.isLoading} read={wallet} />
 
           {rewards.isLoading ? <ListSkeleton rows={3} /> : null}
-          {rewards.isError ? (
-            <EmptyState
-              tone="error"
-              icon={GiftIcon}
-              title="The catalog failed to load"
-              description="This is not an empty catalog — the reader never returned."
-            />
-          ) : null}
+          <ReadFailed
+            read={rewards}
+            what="The catalog"
+            notEmpty="an empty catalog"
+            size="page"
+            icon={GiftIcon}
+          />
           {!rewards.isLoading && !rewards.isError && live.length === 0 ? (
             <EmptyState
               icon={GiftIcon}
@@ -185,11 +185,7 @@ export function RewardsPage() {
               </Button>
             </div>
             {ledger.isLoading ? <ListSkeleton rows={4} /> : null}
-            {ledger.isError ? (
-              <p role="alert" className="text-sm text-destructive">
-                The ledger failed to load.
-              </p>
-            ) : null}
+            <ReadFailed read={ledger} what="The ledger" />
             {ledger.data && ledger.data.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Nothing yet. Complete a task or follow a habit to start earning.
@@ -263,11 +259,11 @@ export function RewardsPage() {
 function WalletSection({
   wallet,
   isLoading,
-  isError,
+  read,
 }: {
   wallet?: Wallet;
   isLoading: boolean;
-  isError: boolean;
+  read: Read;
 }) {
   return (
     <section aria-labelledby="rewards-wallet">
@@ -281,11 +277,7 @@ function WalletSection({
           <CardSkeleton />
         </div>
       ) : null}
-      {isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          The wallet failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={read} what="The wallet" />
       {wallet ? (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {/* Every currency the kernel has, in its order, with its label: the web adds only the

@@ -24,6 +24,7 @@ import { typeAccent } from "@/lib/subject-meta";
 import { NodeBackdrop } from "@/components/graph/node-backdrop";
 import { TypeIcon } from "@/components/primitives/type-icon";
 import "@/components/graph/graph.css";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const GALLERY_TYPES: SubjectType[] = [
   "Value",
@@ -216,13 +217,7 @@ export function GalleryPage() {
               title="Inbox is genuinely clear"
               description="Nothing needs a decision right now."
             />
-            <EmptyState
-              icon={InboxIcon}
-              tone="error"
-              title="Inbox failed to load"
-              description="The reader never returned. This is not Inbox Zero."
-              action={<Button size="sm">Retry</Button>}
-            />
+            <ReadFailed read={{ isError: true, refetch: () => undefined }} what="Inbox" notEmpty="Inbox Zero" size="page" icon={InboxIcon} />
           </div>
         </Section>
 

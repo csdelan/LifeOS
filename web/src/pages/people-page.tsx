@@ -5,9 +5,11 @@ import { EmptyState } from "@/components/primitives/empty-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { usePeople } from "@/lib/queries";
 import { Badge } from "@/components/ui/badge";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 export function PeoplePage() {
-  const { data, isLoading, isError } = usePeople();
+  const people = usePeople();
+  const { data, isLoading } = people;
   const navigate = useNavigate();
 
   return (
@@ -19,14 +21,13 @@ export function PeoplePage() {
           Humans and AI agents share one directory (GEN-15). Associations, not alignment edges.
         </p>
         {isLoading ? <ListSkeleton /> : null}
-        {isError ? (
-          <EmptyState
-            tone="error"
-            icon={UsersIcon}
-            title="People failed to load"
-            description="This is not an empty directory — the reader never returned."
-          />
-        ) : null}
+        <ReadFailed
+          read={people}
+          what="People"
+          notEmpty="an empty directory"
+          size="page"
+          icon={UsersIcon}
+        />
         <ul className="mt-8 space-y-2">
           {(data ?? []).map((p) => (
             <li key={p.id}>

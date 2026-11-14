@@ -7,7 +7,6 @@ import { LogReadingSheet } from "@/components/measurements/log-reading-sheet";
 import { MetricCard } from "@/components/measurements/metric-card";
 import { ArchivedMetrics, MetricListRow } from "@/components/measurements/metric-list";
 import { StartTrackingCard } from "@/components/measurements/start-tracking-card";
-import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton } from "@/components/primitives/skeletons";
 import { Button } from "@/components/ui/button";
 import { todayIso } from "@/lib/dates";
@@ -23,6 +22,7 @@ import {
 import type { LabVisitRow } from "@/lib/features/measurements/types";
 import { useLabVisits, useMetricCatalog, useMetrics } from "@/lib/features/measurements/queries";
 import { loadView, saveView } from "@/lib/view-state";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const OPEN_VIEW = "measurements.open";
 
@@ -104,14 +104,13 @@ export function MeasurementsPage() {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
         <div className="mx-auto max-w-4xl space-y-6">
           {metrics.isLoading || catalog.isLoading ? <CardSkeleton /> : null}
-          {metrics.isError || catalog.isError ? (
-            <EmptyState
-              tone="error"
-              icon={WeightIcon}
-              title="Measurements failed to load"
-              description="This is not an empty list — the reader never returned."
-            />
-          ) : null}
+          <ReadFailed
+            read={[metrics, catalog]}
+            what="Measurements"
+            notEmpty="an empty list"
+            size="page"
+            icon={WeightIcon}
+          />
           {ready && !tracking && weightTemplate ? <StartTrackingCard weight={weightTemplate} /> : null}
           {weightGroup ? (
             <MetricCard

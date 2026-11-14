@@ -361,6 +361,9 @@ export function useAlignmentForest(includeArchived: boolean, lens: MapLens) {
     data,
     isLoading: subjects.isLoading || edges.isLoading,
     isError: subjects.isError || edges.isError,
+    isFetching: subjects.isFetching || edges.isFetching,
+    /** Reads again whichever of the two failed. */
+    refetch: () => Promise.all([subjects, edges].filter((r) => r.isError).map((r) => r.refetch())),
   };
 }
 

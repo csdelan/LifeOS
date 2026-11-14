@@ -19,12 +19,14 @@ import { habitStage, isMaintainedToday, isReadyToEstablish, maintainedDayLabel }
 import type { CoverRead, HabitOccurrenceRow, HabitRow } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
 import { useWriteAction } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 export function HabitsPage() {
   const search = useSearch({ from: "/habits" });
   const navigate = useNavigate({ from: "/habits" });
   const selected = search.selected;
-  const { data, isLoading, isError } = useHabits();
+  const habitsRead = useHabits();
+  const { data, isLoading } = habitsRead;
   // The day it is now, not the day the page opened, so a check-off after midnight lands on the new
   // day (code review CR58).
   const today = useHomeToday();
@@ -69,14 +71,13 @@ export function HabitsPage() {
         </header>
         <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4">
           {isLoading ? <ListSkeleton rows={6} /> : null}
-          {isError ? (
-            <EmptyState
-              tone="error"
-              icon={RepeatIcon}
-              title="Habits failed to load"
-              description="This is not an empty list — the reader never returned."
-            />
-          ) : null}
+          <ReadFailed
+            read={habitsRead}
+            what="Habits"
+            notEmpty="an empty list"
+            size="page"
+            icon={RepeatIcon}
+          />
           {habits.length === 0 && !isLoading ? (
             <EmptyState
               icon={RepeatIcon}

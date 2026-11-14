@@ -12,6 +12,7 @@ import { addDays } from "@/lib/dates";
 import type { ActivityDayRow, ActivitySummaryRead, WorkoutRow } from "@/lib/production-ui-types";
 import { useActivityDay } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 /** "over the minimum" → "Over the minimum." */
 function sentence(words: string): string {
@@ -231,9 +232,7 @@ export function TodayCard({
           onOpenDay={onOpenDay}
         />
       ) : detail.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          This day failed to load.
-        </p>
+        <ReadFailed read={detail} what="This day" />
       ) : (
         <ListSkeleton rows={4} />
       )}

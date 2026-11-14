@@ -10,6 +10,7 @@ import { CardSkeleton } from "@/components/primitives/skeletons";
 import { Button } from "@/components/ui/button";
 import type { DomainDaysRead, DomainRow } from "@/lib/production-ui-types";
 import { useDomainDays, useDomains, useEnvironment } from "@/lib/queries";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 /** The chart's longest range: a year of Environment's days carries the bar for every range. */
 const BAR_DAYS = 365;
@@ -72,14 +73,13 @@ export function EnvironmentPage() {
             <CardSkeleton />
           </div>
         ) : null}
-        {home.isError ? (
-          <EmptyState
-            tone="error"
-            icon={HouseIcon}
-            title="The home failed to load"
-            description="This is not an empty home — the reader never returned."
-          />
-        ) : null}
+        <ReadFailed
+          read={home}
+          what="The home"
+          notEmpty="an empty home"
+          size="page"
+          icon={HouseIcon}
+        />
 
         {data && !hasSpaces ? (
           <div className="mx-auto max-w-xl space-y-4">

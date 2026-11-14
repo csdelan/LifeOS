@@ -37,6 +37,7 @@ import type { ActivityDayRow, ActivitySummaryRead } from "@/lib/production-ui-ty
 import { useActivityDays } from "@/lib/queries";
 import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const VIEW = "activity.steps";
 
@@ -160,11 +161,7 @@ export function StepsCard({ summary }: { summary: ActivitySummaryRead }) {
       </ActivityCardTitle>
 
       {days.isLoading ? <ListSkeleton rows={3} /> : null}
-      {days.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          The steps failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={days} what="The steps" />
 
       {days.data ? (
         <div

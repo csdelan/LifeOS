@@ -3,6 +3,7 @@ import { EyeIcon } from "lucide-react";
 import { CoverCredit } from "@/components/cover/cover-credit";
 import { CoverImage } from "@/components/cover/cover-image";
 import { EmptyState } from "@/components/primitives/empty-state";
+import { ReadFailed } from "@/components/primitives/read-state";
 import { TypeIcon } from "@/components/primitives/type-icon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSubjects } from "@/lib/queries";
@@ -51,10 +52,13 @@ export function VisionPage() {
         </div>
 
         <TabsContent value="identity" className="mt-6">
-          <Loading
-            isLoading={statements.isLoading}
-            isError={statements.isError}
-            failed="Identity statements failed to load"
+          {statements.isLoading ? <ListSkeleton /> : null}
+          <ReadFailed
+            read={statements}
+            what="Identity statements"
+            notEmpty="an empty vision"
+            size="page"
+            icon={EyeIcon}
           />
           {(statements.data ?? []).length > 0 ? (
             <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -78,7 +82,8 @@ export function VisionPage() {
         </TabsContent>
 
         <TabsContent value="goals" className="mt-6">
-          <Loading isLoading={goals.isLoading} isError={goals.isError} failed="Goals failed to load" />
+          {goals.isLoading ? <ListSkeleton /> : null}
+          <ReadFailed read={goals} what="Goals" notEmpty="an empty list of goals" size="page" icon={EyeIcon} />
           {longTerm.length > 0 ? (
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {longTerm.map((g) => (
@@ -108,22 +113,6 @@ export function VisionPage() {
       </Tabs>
     </div>
   );
-}
-
-/** A tab's skeleton while its read is out, or the error that says it never came back. */
-function Loading({ isLoading, isError, failed }: { isLoading: boolean; isError: boolean; failed: string }) {
-  if (isLoading) return <ListSkeleton />;
-  if (isError) {
-    return (
-      <EmptyState
-        tone="error"
-        icon={EyeIcon}
-        title={failed}
-        description="This is not an empty vision — the reader never returned."
-      />
-    );
-  }
-  return null;
 }
 
 /**

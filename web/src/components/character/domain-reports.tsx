@@ -8,6 +8,7 @@ import type { DomainReportRow, DomainRow } from "@/lib/production-ui-types";
 import { useDomainReport, useDomains } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { usePersistedChoice } from "@/lib/view-state";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const PERIODS = [
   { id: "7", label: "7 days" },
@@ -122,11 +123,7 @@ export function DomainReports() {
         </div>
 
         {report.isLoading ? <ListSkeleton rows={2} /> : null}
-        {report.isError ? (
-          <p role="alert" className="text-sm text-destructive">
-            The report failed to load.
-          </p>
-        ) : null}
+        <ReadFailed read={report} what="The report" />
         {report.data ? (
           <div
             className={cn(

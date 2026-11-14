@@ -39,6 +39,7 @@ import { loadExpanded, saveExpanded, loadView, saveView } from "@/lib/view-state
 import { mapSubjects } from "@/lib/task-series";
 import { MapIcon } from "lucide-react";
 import { useWriteAction } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 // The graph engine (React Flow and ELK) is most of the Map's weight, so it loads only when the
 // graph is shown: the Outline, the default view, never fetches it (code review CR84).
@@ -83,7 +84,8 @@ export function MapPage() {
   const area = search.area;
   const colorByArea = Boolean(search.colorByArea);
   const show: MapShow = search.show ?? DEFAULT_MAP_SHOW;
-  const { data, isLoading, isError } = useAlignmentForest(archived, lens);
+  const forestRead = useAlignmentForest(archived, lens);
+  const { data, isLoading } = forestRead;
   // Show hides finished work; the selected item stays, so marking it Completed doesn't
   // make it vanish from under you.
   const shown = useMemo(
@@ -406,14 +408,13 @@ export function MapPage() {
                 <GraphSkeleton />
               </div>
             ) : null}
-            {graphError ? (
-              <EmptyState
-                tone="error"
-                icon={MapIcon}
-                title="Graph failed to load"
-                description="This is not an empty graph — the reader never returned."
-              />
-            ) : null}
+            <ReadFailed
+              read={[subjectsQuery, edgesQuery]}
+              what="The graph"
+              notEmpty="an empty graph"
+              size="page"
+              icon={MapIcon}
+            />
             {!graphLoading && !graphError ? (
               <>
                 <p className="sr-only">
@@ -451,14 +452,13 @@ export function MapPage() {
               Expand all
             </label>
             {isLoading ? <TreeSkeleton /> : null}
-            {isError ? (
-              <EmptyState
-                tone="error"
-                icon={MapIcon}
-                title="Map failed to load"
-                description="This is not an empty graph — the reader never returned."
-              />
-            ) : null}
+            <ReadFailed
+              read={forestRead}
+              what="Map"
+              notEmpty="an empty graph"
+              size="page"
+              icon={MapIcon}
+            />
             {data && data.length === 0 ? (
               <EmptyState
                 icon={MapIcon}

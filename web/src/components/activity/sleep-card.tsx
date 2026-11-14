@@ -43,6 +43,7 @@ import type { ActivitySummaryRead, ActivityWeekRow } from "@/lib/production-ui-t
 import { useActivityDay, useActivityDays } from "@/lib/queries";
 import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const VIEW = "activity.sleep";
 
@@ -66,13 +67,7 @@ function LastNight({ today, onOpenDay }: { today: string; onOpenDay: (day: strin
   const detail = useActivityDay(today);
 
   if (detail.isLoading) return <ListSkeleton rows={2} />;
-  if (detail.isError) {
-    return (
-      <p role="alert" className="text-sm text-destructive">
-        Last night failed to load.
-      </p>
-    );
-  }
+  if (detail.isError) return <ReadFailed read={detail} what="Last night" />;
   const data = detail.data;
   if (!data) return null;
   const { summary: day, night } = data;
@@ -293,11 +288,7 @@ export function SleepCard({
       </div>
 
       {days.isLoading ? <ListSkeleton rows={3} /> : null}
-      {days.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          Sleep and readiness failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={days} what="Sleep and readiness" />
 
       {days.data ? (
         <div

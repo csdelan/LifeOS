@@ -13,6 +13,7 @@ import { addDays, formatDay, startOfWeekMonday } from "@/lib/dates";
 import type { ActivitySummaryRead, ActivityWeekRow, WorkoutRow } from "@/lib/production-ui-types";
 import { useActivityDays, useActivityWorkouts } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 function minutes(seconds: number): number {
   return Math.round(seconds / 60);
@@ -127,11 +128,7 @@ export function ExerciseCard({
       <WeekCompare thisWeek={summary.thisWeek} lastWeek={summary.lastWeek} xp={compareXp} />
 
       {workouts.isLoading ? <ListSkeleton rows={4} /> : null}
-      {workouts.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          The workouts failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={workouts} what="The workouts" />
 
       {workouts.data ? (
         <div

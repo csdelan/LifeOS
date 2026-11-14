@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { BeerIcon, CalendarDaysIcon } from "lucide-react";
-import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton } from "@/components/primitives/skeletons";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -13,6 +12,7 @@ import { useFoodDays } from "@/lib/queries";
 import { monthCells } from "@/lib/rewards-history";
 import { daysText, drinkThatDay, sobrietyHeadline } from "@/lib/sobriety";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -83,14 +83,7 @@ export function FoodPeriodView({
     );
   }
   if (range.isError) {
-    return (
-      <EmptyState
-        tone="error"
-        icon={CalendarDaysIcon}
-        title={`This ${unit} failed to load`}
-        description="This is not an empty period — the reader never returned."
-      />
-    );
+    return <ReadFailed read={range} what={`This ${unit}`} notEmpty="an empty period" size="page" icon={CalendarDaysIcon} />;
   }
 
   return (

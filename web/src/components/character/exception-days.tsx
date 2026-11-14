@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { addDays, formatDayFull } from "@/lib/dates";
 import { useExceptionDays, useWrites } from "@/lib/queries";
 import { errorText } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 /** The longest comment, as the API takes it. */
 export const EXCEPTION_COMMENT_MAX = 140;
@@ -61,7 +62,7 @@ export function ExceptionDays({ today }: { today: string }) {
       </p>
       <div className="px-4 pt-3 pb-4">
         {list.isError ? (
-          <p className="text-sm text-destructive">Your exception days failed to load.</p>
+          <ReadFailed read={list} what="Your exception days" />
         ) : marked.length === 0 ? (
           <p className="text-sm text-muted-foreground">{list.isLoading ? "Loading…" : "None in the last 90 days."}</p>
         ) : (

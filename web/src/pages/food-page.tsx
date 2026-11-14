@@ -8,7 +8,6 @@ import { LogFoodSheet } from "@/components/food/log-food-sheet";
 import { MealGallery } from "@/components/food/meal-gallery";
 import { SobrietyCard } from "@/components/food/sobriety-card";
 import { SummaryCard } from "@/components/food/summary-card";
-import { EmptyState } from "@/components/primitives/empty-state";
 import { CardSkeleton } from "@/components/primitives/skeletons";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
 import { Button } from "@/components/ui/button";
@@ -16,6 +15,7 @@ import { formatDayFull, todayIso } from "@/lib/dates";
 import { foodPeriod, foodPeriodTitle, holdsToday, stepFoodDate, type FoodView } from "@/lib/food-period";
 import type { MealRow } from "@/lib/production-ui-types";
 import { useFoodDay, useWrites } from "@/lib/queries";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const VIEWS: { id: FoodView; label: string }[] = [
   { id: "day", label: "Day" },
@@ -129,14 +129,13 @@ export function FoodPage() {
                 <CardSkeleton />
               </div>
             ) : null}
-            {food.isError ? (
-              <EmptyState
-                tone="error"
-                icon={UtensilsIcon}
-                title="The Food Log failed to load"
-                description="This is not an empty day — the reader never returned."
-              />
-            ) : null}
+            <ReadFailed
+              read={food}
+              what="The Food Log"
+              notEmpty="an empty day"
+              size="page"
+              icon={UtensilsIcon}
+            />
             {day ? (
               <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
                 <div className="space-y-4">

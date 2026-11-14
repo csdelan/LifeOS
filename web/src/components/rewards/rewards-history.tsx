@@ -43,6 +43,7 @@ import {
 } from "@/lib/rewards-history";
 import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const VIEW_KEY = "rewards.history";
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -138,11 +139,7 @@ export function RewardsHistory({ onOpenSubject }: { onOpenSubject: (subjectId: s
         />
       </div>
 
-      {daily.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          The history failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={daily} what="The history" />
 
       <div
         className={cn(
@@ -568,11 +565,7 @@ function PeriodReport({
       </div>
 
       {ledger.isLoading ? <ListSkeleton rows={4} /> : null}
-      {ledger.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          The entries failed to load.
-        </p>
-      ) : null}
+      <ReadFailed read={ledger} what="The entries" />
       {ledger.data && !stale && rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {all.length === 0 ? "No entries." : "No entries match these filters."}

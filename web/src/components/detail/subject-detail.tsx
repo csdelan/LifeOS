@@ -70,6 +70,7 @@ import { TagsTab } from "./tags-tab";
 import { HistoryTab } from "./history-tab";
 import { EstablishmentPanel } from "./establishment-panel";
 import { useWriteAction } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 // The journal (tiptap's editor and its HTML schema) is fetched when the Journal tab is first
 // opened, not with every page that shows an item (code review CR23).
@@ -90,7 +91,8 @@ export function SubjectDetail({
   /** Opens another subject here: a repeating Task's series, or one of its repetitions. */
   onOpenSubject?: (id: string) => void;
 }) {
-  const { data, isLoading, isError } = useSubject(subjectId);
+  const subjectRead = useSubject(subjectId);
+  const { data, isLoading, isError } = subjectRead;
   const { data: list } = useListItem(subjectId);
   const { data: rels } = useRelations(subjectId);
   const { data: tags } = useSubjectTags(subjectId);
@@ -164,13 +166,7 @@ export function SubjectDetail({
     );
   }
   if (isError) {
-    return (
-      <EmptyState
-        tone="error"
-        title="Couldn't load this subject"
-        description="The reader failed. Retry from the Map."
-      />
-    );
+    return <ReadFailed read={subjectRead} what="This item" size="page" />;
   }
   if (!data) {
     return (

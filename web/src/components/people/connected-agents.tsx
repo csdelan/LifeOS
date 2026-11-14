@@ -34,6 +34,7 @@ import {
   type AgentAction,
 } from "@/lib/queries";
 import { errorText } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 const NOT_LINKED = "none";
 
@@ -92,11 +93,12 @@ export function ConnectedAgents() {
 
       {overview.isLoading ? <ListSkeleton /> : null}
       {overview.isError ? (
-        <EmptyState
-          tone="error"
+        <ReadFailed
+          read={overview}
+          size="page"
           icon={BotIcon}
-          title="Connected agents failed to load"
-          description={overview.error instanceof Error ? overview.error.message : "LifeOS didn't answer."}
+          what="Connected agents"
+          detail={overview.error instanceof Error ? overview.error.message : "LifeOS didn't answer."}
         />
       ) : null}
       {grants.isError ? (
@@ -400,11 +402,7 @@ function RecentCalls({ id, clientId }: { id: string; clientId: string }) {
   return (
     <div id={id} className="mt-3 border-t border-border pt-3">
       {calls.isLoading ? <p className="text-sm text-muted-foreground">Loading calls…</p> : null}
-      {calls.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          The calls didn&apos;t load: {calls.error instanceof Error ? calls.error.message : "no answer"}
-        </p>
-      ) : null}
+      <ReadFailed read={calls} what="The calls" detail={calls.error instanceof Error ? calls.error.message : "no answer"} />
       {calls.data?.length === 0 ? <p className="text-sm text-muted-foreground">No calls in the last 90 days.</p> : null}
       {calls.data && calls.data.length > 0 ? (
         <ol className="space-y-2" aria-label="Recent calls, newest first">

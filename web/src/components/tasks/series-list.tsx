@@ -8,6 +8,7 @@ import type { TaskSeriesRow } from "@/lib/production-ui-types";
 import { useTaskSeries } from "@/lib/queries";
 import { repeatLabel, seriesTally } from "@/lib/task-series";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 /**
  * Every repeating Task (TASKS-3), the Tasks page's Repeating view: how each repeats, how it
@@ -24,17 +25,11 @@ export function SeriesList({
   selected?: string;
   onSelect: (id: string) => void;
 }) {
-  const { data, isLoading, isError } = useTaskSeries();
+  const series = useTaskSeries();
+  const { data, isLoading, isError } = series;
   if (isLoading) return <ListSkeleton rows={4} />;
   if (isError) {
-    return (
-      <EmptyState
-        tone="error"
-        icon={RepeatIcon}
-        title="Repeating tasks failed to load"
-        description="This is not an empty list — the reader never returned."
-      />
-    );
+    return <ReadFailed read={series} what="Repeating tasks" notEmpty="an empty list" size="page" icon={RepeatIcon} />;
   }
   const rows = (data ?? []).filter((r) => !area || r.area === area);
   if (rows.length === 0) {

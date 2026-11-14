@@ -41,6 +41,7 @@ import {
 import type { ReviewBody, ReviewDoc, ReviewKind } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
 import { errorText } from "@/lib/write-action";
+import { ReadFailed } from "@/components/primitives/read-state";
 
 /**
  * Daily and weekly reviews (REVIEW-0, REVIEW-1, REVIEW-2, REVIEW-5; reviews plan §3). Weeks run
@@ -57,7 +58,8 @@ export function ReviewsPage() {
   // Both kinds read the Monday-to-Sunday week holding the review: its dailies and its weekly.
   const weekStart = startOfWeekMonday(period.date);
   const weekEnd = endOfWeekSunday(period.date);
-  const { data, isLoading, isError } = useReviews(weekStart, weekEnd);
+  const reviews = useReviews(weekStart, weekEnd);
+  const { data, isLoading, isError } = reviews;
   const writes = useWrites();
   const { setDirty } = useDirty();
   const docs = data ?? [];
@@ -150,14 +152,13 @@ export function ReviewsPage() {
 
         <div className="mt-4">
           {isLoading ? <ListSkeleton rows={2} /> : null}
-          {isError ? (
-            <EmptyState
-              tone="error"
-              icon={ClipboardCheckIcon}
-              title="Reviews failed to load"
-              description="This is not an empty review: the reader never returned."
-            />
-          ) : null}
+          <ReadFailed
+            read={reviews}
+            what="Reviews"
+            notEmpty="an empty review"
+            size="page"
+            icon={ClipboardCheckIcon}
+          />
           {!isLoading && !isError && !doc ? (
             <ReviewNotOpen
               period={period}
@@ -277,7 +278,8 @@ function ReviewNotOpen({
 /** What was recorded over the days the review looks back on (REVIEW-1, REVIEW-2). */
 function ReviewRecap({ period, today }: { period: ReviewPeriod; today: string }) {
   const asOf = today < period.end ? today : period.end;
-  const { data, isLoading, isError } = useRecap(period.start, period.end, asOf);
+  const recap = useRecap(period.start, period.end, asOf);
+  const { data, isLoading, isError } = recap;
   // Habit days have their own check-offs below, so the recap leaves them out.
   const sections = (data ?? []).filter((s) => s.id !== "habits");
   return (
@@ -288,14 +290,7 @@ function ReviewRecap({ period, today }: { period: ReviewPeriod; today: string })
         remembered to write.
       </p>
       {isLoading ? <ListSkeleton rows={4} /> : null}
-      {isError ? (
-        <EmptyState
-          tone="error"
-          title="The recap failed to load"
-          description="This is not an empty recap: the reader never returned."
-          className="py-6"
-        />
-      ) : null}
+      <ReadFailed read={recap} what="The recap" notEmpty="an empty recap" size="page" className="py-6" />
       {!isLoading && !isError ? <RecapList sections={sections} /> : null}
     </section>
   );
@@ -321,14 +316,7 @@ function HabitCheckOffs({ period, today }: { period: ReviewPeriod; today: string
         Record or correct each day here, the same as on Focus.
       </p>
       {habits.isLoading || recorded.isLoading ? <ListSkeleton rows={3} /> : null}
-      {habits.isError || recorded.isError ? (
-        <EmptyState
-          tone="error"
-          title="Habits failed to load"
-          description="This is not an empty list: the reader never returned."
-          className="py-6"
-        />
-      ) : null}
+      <ReadFailed read={[habits, recorded]} what="Habits" notEmpty="an empty list" size="page" className="py-6" />
       {days.length > 1 ? (
         <div className="mt-3 flex flex-wrap gap-1" role="group" aria-label="Habit day">
           {days.map((d) => {
