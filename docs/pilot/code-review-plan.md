@@ -3,8 +3,8 @@
 **Status:** CR1 to CR26 built (2026-11-12). CR27 to CR56, the second review's P0, P1 and P2, built
 (2026-11-13), and CR57 for its choice A; choices B and C wait for Chris
 ([Second review](#second-review-2026-11-13)). The third review scored the code 6.1 of 10, and Chris
-chose its P0 and P1, CR58 to CR67, built (2026-11-13), then its P2, CR68 to CR90
-([Third review](#third-review-2026-11-13)).
+chose its P0 and P1, CR58 to CR67, built (2026-11-13), then its P2, CR68 to CR90, built
+(2026-11-13) ([Third review](#third-review-2026-11-13)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
@@ -278,7 +278,10 @@ behaviour (CR60 to CR63, CR65, CR66), it was run against the code before the fix
 | CR66 | 9 | A `bsk` older than the database refuses every verb but `migrate` and `check` (`StaleBskGuard`). |
 | CR67 | 10 | The Pilot's New item closes once the item exists, and names each follow-up that failed (`NewItemWrites`). |
 
-### P2: chosen (CR68 to CR90)
+### P2: built (CR68 to CR90)
+
+Each shipped with the check that would have caught it, run against the code before the fix, where
+it failed. CR76 took a second commit, a longer timeout for Browse's two thousand-item tests.
 
 | ID | Review # | Fix |
 |----|----------|-----|
@@ -299,12 +302,35 @@ behaviour (CR60 to CR63, CR65, CR66), it was run against the code before the fix
 | CR82 | 25 | Every live call goes through `fits()`; the normalizers stop converting numbers (CR9, CR38). |
 | CR83 | 26 | Generated types aliased in one line, with a ratchet; a folder per web feature; `decorateWrites` as a table of effects. |
 | CR84 | 27 | The bundle: the graph and closed dialogs load lazily, mock-only code moves under `lib/mock`, unused packages go. |
-| CR85 | 28 | A `ReadState` component with Retry. |
-| CR86 | 29 | `DomainDailyChart` moves onto `DailyMetricChart`. |
-| CR87 | 30 | Keyboard access for the Map outline, "+ child" and the resize handle. |
+| CR85 | 28 | `ReadFailed`, one way to say a read failed, with a Retry that reads it again, in every view. |
+| CR86 | 29 | `DomainDailyChart` moves onto `DailyMetricChart`, with sleep stacked on top; both Character charts let a phone scroll past them. |
+| CR87 | 30 | Keyboard access: the Map outline as nested lists, Enter adding only under the selected item, "+ child" shown on focus, and the resize edges as window splitters. |
 | CR88 | 31 | Test kernels in their database's zone; tests of a global fold get their own database; one UTC+14 test of every home-date column. |
 | CR89 | 32 | `bsk --json` emits the API's DTOs. |
 | CR90 | 33 | One image built per commit and deployed by digest; `/health/ready` checked after a deploy. |
+
+At the push that carries them:
+
+- **CR90** is the new deploy's first run. Staging pushes CI's image to its Fly registry with the
+  `FLY_API_TOKEN` it already has, and whether that token may push is known only then. A refused push
+  stops the release before it migrates; `scripts/fly-setup.ps1` mints a new token, which takes
+  effect at the next deploy. Production has 7 days to be approved before CI's image expires, after
+  which Deploy is run again. A deploy run by hand (`migrate.yml`) now names an image's digest, and
+  that is how a rollback goes. A deploy that doesn't answer `/health/ready` fails without rolling
+  back. Each of these is Chris's to change.
+- **CR89:** run `scripts/install-bsk.ps1`. `bsk --json` now prints the API's shapes, so the output
+  of domains, food, home, metrics, reviews, oura steps and workouts, tags, recur, bounty, task
+  settle and cover search changed; nothing in the repo reads the old shapes.
+
+Left for later, by design:
+
+- **CR80:** the follow-up hook each feature registers waits for a second feature that follows the
+  generic verbs; the repeating Task is the only one today.
+- **CR83:** the other web features move into `lib/features/<feature>` as they are next worked on,
+  as Measurements did.
+- **CR84:** 45 exports only the mock and the tests use, the kernel rules the mock ports, are counted
+  exactly in `bundle.test.ts` (`MOCK_ONLY`), so a new one fails it; each goes under `lib/mock` as
+  its feature moves, and the count is lowered with it.
 
 ### P3: when working in that area
 
