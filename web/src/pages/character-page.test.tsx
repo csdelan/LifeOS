@@ -211,8 +211,8 @@ describe("Character page (xp-domains plan §7.4.9)", () => {
     expect(card.getByRole("button", { name: "Hide the daily chart" })).toHaveAttribute("aria-expanded", "true");
 
     const chart = within(await card.findByRole("region", { name: "Health XP by day" }));
-    expect(await chart.findAllByTestId("day-bar")).toHaveLength(30);
-    expect(chart.getAllByTestId("day-column").filter((c) => c.dataset.exception === "true")).toHaveLength(1);
+    expect(await chart.findAllByTestId("metric-column")).toHaveLength(30);
+    expect(chart.getAllByTestId("metric-column").filter((c) => c.dataset.marked === "")).toHaveLength(1);
     expect(chart.getByText(/^\d+ of the last 30 days active$/)).toBeInTheDocument();
     expect(chart.getByText("· 1 exception day")).toBeInTheDocument();
 

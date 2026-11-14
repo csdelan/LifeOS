@@ -23,7 +23,7 @@ test.describe("accessibility: the Character page", () => {
       await expect(show).toHaveCount(2, { timeout: 10_000 });
       await show.first().click();
       await show.first().click();
-      await expect(page.getByTestId("day-bar")).toHaveCount(60, { timeout: 10_000 });
+      await expect(page.getByTestId("metric-column")).toHaveCount(60, { timeout: 10_000 });
       const chart = await scan();
       expect(chart, JSON.stringify(chart, null, 2)).toEqual([]);
 

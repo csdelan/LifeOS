@@ -97,3 +97,44 @@ describe("MetricTable", () => {
     expect(within(table).getByRole("cell", { name: "3,000" })).toHaveClass("text-right");
   });
 });
+
+describe("a stacked part (code review CR86)", () => {
+  it("sits on top of its bar in its own tone, and the axis makes room for both", () => {
+    const stacked: MetricBar[] = [
+      { key: "a", value: 90, tone: "bg-chart-earned", stack: { value: 30, tone: "bg-chart-3/55" }, title: "Oct 20", text: "90 action XP + 30 sleep", axis: "Oct 20" },
+      { key: "b", value: 40, tone: "bg-chart-earned/35", title: "Today", text: "40 action XP", axis: "Today" },
+    ];
+    render(<DailyMetricChart label="Health XP by day" bars={stacked} steps={[20, 25]} stepsLabel="25" legend={[]} />);
+    const [first] = screen.getAllByTestId("metric-column");
+    const parts = [...first.children] as HTMLElement[];
+    expect(parts.map((p) => p.dataset.testid)).toEqual(["metric-stack", "metric-bar"]);
+    expect(parts[0]).toHaveClass("bg-chart-3/55", "rounded-t-[4px]");
+    expect(parts[1]).not.toHaveClass("rounded-t-[4px]");
+    const percent = (el: HTMLElement) => Number(/([\d.]+)%/.exec(el.style.height)![1]);
+    expect(percent(parts[0]) + percent(parts[1])).toBeLessThanOrEqual(100);
+    // The step line's latest value is on the axis.
+    expect(screen.getByText("25")).toBeInTheDocument();
+  });
+});
+
+// A chart read by pointer and arrow keys is drawn by DailyMetricChart or TrendChart, so each has
+// the same reading, keys and phone behaviour; and every such chart lets a phone scroll the page
+// past it (touch-pan-y), where touch-none trapped the scroll on the Character page.
+describe("the charts in the views", () => {
+  const views = import.meta.glob<string>(["/src/**/*.tsx", "!/src/**/*.test.tsx"], {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  });
+  const charts = Object.entries(views).filter(([, text]) => text.includes("onPointerMove") && text.includes('role="group"'));
+
+  it("are the shared ones, the rank chart's lines aside", () => {
+    // The rank over time is a line per domain against rank titles, which neither shared chart draws.
+    const own = charts.map(([path]) => path).filter((p) => !p.startsWith("/src/components/charts/"));
+    expect(own).toEqual(["/src/components/character/domain-reports.tsx"]);
+  });
+
+  it("let a phone scroll the page past them", () => {
+    expect(charts.filter(([, text]) => text.includes("touch-none")).map(([path]) => path)).toEqual([]);
+  });
+});

@@ -19,6 +19,8 @@ export interface MetricBar {
   partial?: boolean;
   /** A marked day (an exception day): its column is hatched behind the bar. */
   marked?: boolean;
+  /** A second part stacked on top in its own tone: a domain's sleep XP above its action XP. */
+  stack?: { value: number; tone: string };
   /** The readout's first words: "Today", "Tue, Oct 21", "Week of Oct 6". */
   title: string;
   /** The readout: "6,240 steps, over the minimum, 1,260 short of the goal". */
@@ -97,9 +99,10 @@ function LegendSwatch({ item }: { item: MetricLegendItem }) {
 }
 
 /**
- * The daily-metric chart (activity plan §3.7), grown from `DomainDailyChart` for the Activity
- * page's steps, sleep and readiness: bars toned by band, a rolling-average line, labelled
- * threshold lines, and a hatched bar for a day or week still going. Hover or the arrow keys
+ * The daily-metric chart (activity plan §3.7): the Activity page's steps, sleep and readiness,
+ * the Home Score's days and a domain's XP by day (code review CR86). Bars toned by band, a part
+ * stacked on top, a rolling-average line, labelled threshold lines, a step line for a threshold
+ * that moves, hatched columns for marked days, and a hatched bar for a day or week still going. Hover or the arrow keys
  * read a bar in words; Enter (or a click) opens it when `onSelect` is given. The card around
  * it owns the range switch and the Table view ({@link MetricTable}).
  */
@@ -109,6 +112,7 @@ export function DailyMetricChart({
   average,
   references = [],
   steps,
+  stepsLabel,
   legend,
   onSelect,
   top: fixedTop,
@@ -123,6 +127,8 @@ export function DailyMetricChart({
   references?: MetricReference[];
   /** A threshold that moves by day, one value per bar (null where there's none): a dashed step line. */
   steps?: (number | null)[];
+  /** The step line's latest value as the axis says it ("20", "57.5+"), at its height. */
+  stepsLabel?: string;
   legend: MetricLegendItem[];
   onSelect?: (index: number) => void;
   /** A fixed axis top (a score's 100); otherwise a clean number above the tallest mark. */
@@ -134,7 +140,7 @@ export function DailyMetricChart({
   const [hovered, setHovered] = useState<number | null>(null);
   const readoutId = useId();
 
-  const values = bars.map((b) => b.value ?? 0);
+  const values = bars.map((b) => (b.value ?? 0) + (b.stack?.value ?? 0));
   const averages = [...(average ?? []), ...(steps ?? [])].filter((v): v is number => v != null);
   // A little headroom above the tallest mark, so it never touches the top line.
   const top = fixedTop ?? niceTop(Math.max(...references.map((r) => r.value), ...values, ...averages, 1) * 1.1);
@@ -142,6 +148,7 @@ export function DailyMetricChart({
   const shown = hovered != null ? bars[hovered] : null;
   const runs = average ? lineRuns(average, top) : [];
   const step = steps ? stepPath(steps, top) : "";
+  const lastStep = steps?.findLast((v) => v != null) ?? null;
 
   function pick(clientX: number, el: HTMLElement) {
     const box = el.getBoundingClientRect();
@@ -184,6 +191,11 @@ export function DailyMetricChart({
               {formatValue(r.value)}
             </span>
           ))}
+          {stepsLabel && lastStep != null ? (
+            <span className="absolute right-0 translate-y-1/2 font-semibold text-foreground" style={{ bottom: `${(lastStep / top) * 100}%` }}>
+              {stepsLabel}
+            </span>
+          ) : null}
           <span className="absolute bottom-0 right-0 translate-y-1/2">0</span>
         </div>
         <div
@@ -214,10 +226,18 @@ export function DailyMetricChart({
             {bars.map((b, i) => (
               <div
                 key={b.key}
+                data-testid="metric-column"
                 data-marked={b.marked ? "" : undefined}
-                className="flex h-full min-w-0 flex-1 items-end justify-center"
+                className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
                 style={b.marked ? { backgroundImage: MARKED_HATCH } : undefined}
               >
+                {b.stack && b.stack.value > 0 ? (
+                  <div
+                    data-testid="metric-stack"
+                    className={cn("w-full max-w-6", !dense && "rounded-t-[4px]", b.stack.tone)}
+                    style={{ height: `max(1px, ${(b.stack.value / top) * 100}%)` }}
+                  />
+                ) : null}
                 {b.value != null && b.value > 0 ? (
                   <div
                     data-metric-bar=""
@@ -225,7 +245,7 @@ export function DailyMetricChart({
                     data-partial={b.partial ? "" : undefined}
                     className={cn(
                       "w-full max-w-6",
-                      !dense && "rounded-t-[4px]",
+                      !dense && !(b.stack && b.stack.value > 0) && "rounded-t-[4px]",
                       b.tone,
                       b.partial && "metric-so-far",
                       hovered === i && "brightness-110 ring-2 ring-foreground/40",

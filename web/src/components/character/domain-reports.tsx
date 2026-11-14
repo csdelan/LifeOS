@@ -282,7 +282,7 @@ export function RankChart({ series, periodLabel: label }: { series: RankSeries[]
               onPointerMove={(e) => pick(e.clientX, e.currentTarget)}
               onPointerLeave={() => setHovered(null)}
               data-testid="rank-chart"
-              className="relative min-w-0 flex-1 touch-none rounded-sm border-b border-foreground/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="relative min-w-0 flex-1 touch-pan-y rounded-sm border-b border-foreground/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               style={{ height: CHART_HEIGHT }}
             >
               <div className="absolute inset-0 flex" aria-hidden>
