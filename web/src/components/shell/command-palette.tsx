@@ -15,28 +15,12 @@ import { useSubjectSearch } from "@/lib/queries";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { typeLabel } from "@/lib/production-ui-types";
 import { BROWSE_TYPE_ORDER, openTarget, type SubjectSearch } from "@/lib/browse";
+import { PAGES } from "@/components/shell/pages";
 import {
-  ActivityIcon,
-  CompassIcon,
-  GiftIcon,
-  HouseIcon,
-  MedalIcon,
-  InboxIcon,
-  LayoutDashboardIcon,
-  LibraryIcon,
-  ListTodoIcon,
-  MapIcon,
   MicIcon,
   MoonIcon,
   PlusIcon,
-  RepeatIcon,
-  UtensilsIcon,
-  SparklesIcon,
   SunIcon,
-  UsersIcon,
-  EyeIcon,
-  ClipboardCheckIcon,
-  WeightIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -102,57 +86,15 @@ export function CommandPalette({
       <CommandList>
         <CommandEmpty>Nothing matches.</CommandEmpty>
         <CommandGroup heading="Navigate">
-          <CommandItem onSelect={() => go("/")}>
-            <LayoutDashboardIcon /> Focus <CommandShortcut>G F</CommandShortcut>
-          </CommandItem>
-          <CommandItem onSelect={() => go("/inbox")}>
-            <InboxIcon /> Inbox
-          </CommandItem>
-          <CommandItem onSelect={() => go("/map")}>
-            <MapIcon /> Map
-          </CommandItem>
-          <CommandItem onSelect={() => go("/browse")}>
-            <LibraryIcon /> Browse
-          </CommandItem>
-          <CommandItem onSelect={() => go("/tasks")}>
-            <ListTodoIcon /> Tasks
-          </CommandItem>
-          <CommandItem onSelect={() => go("/habits")}>
-            <RepeatIcon /> Habits
-          </CommandItem>
-          <CommandItem onSelect={() => go("/food")}>
-            <UtensilsIcon /> Food Log
-          </CommandItem>
-          <CommandItem onSelect={() => go("/activity")}>
-            <ActivityIcon /> Activity
-          </CommandItem>
-          <CommandItem onSelect={() => go("/measurements")}>
-            <WeightIcon /> Measurements
-          </CommandItem>
-          <CommandItem onSelect={() => go("/environment")}>
-            <HouseIcon /> Environment
-          </CommandItem>
-          <CommandItem onSelect={() => go("/rewards")}>
-            <GiftIcon /> Rewards
-          </CommandItem>
-          <CommandItem onSelect={() => go("/character")}>
-            <MedalIcon /> Character
-          </CommandItem>
-          <CommandItem onSelect={() => go("/vision")}>
-            <EyeIcon /> Vision
-          </CommandItem>
-          <CommandItem onSelect={() => go("/reviews")}>
-            <ClipboardCheckIcon /> Reviews
-          </CommandItem>
-          <CommandItem onSelect={() => go("/people")}>
-            <UsersIcon /> People
-          </CommandItem>
-          <CommandItem onSelect={() => go("/areas")}>
-            <CompassIcon /> Areas
-          </CommandItem>
-          <CommandItem onSelect={() => go("/gallery")}>
-            <SparklesIcon /> Component gallery
-          </CommandItem>
+          {PAGES.map((page) => {
+            const Icon = page.icon;
+            return (
+              <CommandItem key={page.to} onSelect={() => go(page.to)}>
+                <Icon /> {page.label}
+                {"shortcut" in page ? <CommandShortcut>{page.shortcut}</CommandShortcut> : null}
+              </CommandItem>
+            );
+          })}
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading="Actions">

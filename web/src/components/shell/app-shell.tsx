@@ -2,31 +2,15 @@ import { Link, Outlet, useBlocker, useRouterState } from "@tanstack/react-router
 import { useTheme } from "next-themes";
 import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIcon,
-  ClipboardCheckIcon,
-  CompassIcon,
-  GiftIcon,
-  HouseIcon,
-  InboxIcon,
-  LayoutDashboardIcon,
-  LibraryIcon,
-  ListTodoIcon,
   LogOutIcon,
-  MapIcon,
-  MedalIcon,
   MenuIcon,
   MicIcon,
   MoonIcon,
   PenLineIcon,
   PlusIcon,
-  RepeatIcon,
-  UtensilsIcon,
   SearchIcon,
   SparklesIcon,
   SunIcon,
-  UsersIcon,
-  EyeIcon,
-  WeightIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +25,7 @@ import { OnceOpened } from "@/components/shell/once-opened";
 import { UnsavedEditsCtx, type UnsavedEdits } from "@/components/shell/unsaved-edits";
 import { ResizeHandle } from "@/components/shell/panels";
 import { usePersistedWidth } from "@/components/shell/use-persisted-width";
+import { NAV_PAGES } from "@/components/shell/pages";
 import { CreateActions, type CreateOpts } from "@/components/create/create-context";
 import { RunningTimer } from "@/components/timer/running-timer";
 import { useAuth } from "@/components/auth/auth-context";
@@ -65,25 +50,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-
-const NAV = [
-  { to: "/", label: "Focus", icon: LayoutDashboardIcon },
-  { to: "/inbox", label: "Inbox", icon: InboxIcon },
-  { to: "/map", label: "Map", icon: MapIcon },
-  { to: "/browse", label: "Browse", icon: LibraryIcon },
-  { to: "/tasks", label: "Tasks", icon: ListTodoIcon },
-  { to: "/habits", label: "Habits", icon: RepeatIcon },
-  { to: "/food", label: "Food Log", icon: UtensilsIcon },
-  { to: "/activity", label: "Activity", icon: ActivityIcon },
-  { to: "/measurements", label: "Measurements", icon: WeightIcon },
-  { to: "/environment", label: "Environment", icon: HouseIcon },
-  { to: "/rewards", label: "Rewards", icon: GiftIcon },
-  { to: "/character", label: "Character", icon: MedalIcon },
-  { to: "/vision", label: "Vision", icon: EyeIcon },
-  { to: "/reviews", label: "Reviews", icon: ClipboardCheckIcon },
-  { to: "/people", label: "People", icon: UsersIcon },
-  { to: "/areas", label: "Areas", icon: CompassIcon },
-] as const;
 
 // The palette and the create dialogs are closed until asked for, so each loads after the first
 // page, when the browser is idle or on its first open, rather than with every page (code review CR84).
@@ -383,7 +349,7 @@ function NavBody({
         </div>
       </div>
       <nav className="flex flex-1 flex-col gap-0.5 px-2" aria-label="Primary">
-        {NAV.map((item) => {
+        {NAV_PAGES.map((item) => {
           const active =
             item.to === "/"
               ? pathname === "/"

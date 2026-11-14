@@ -173,7 +173,7 @@ Defects the fixes turned up, each fixed in a commit of its own that says where i
 For the record, since they weren't written down when Chris skipped them:
 
 - Adding a web screen means editing four lists (router, nav, palette, a11y spec), and the
-  list-plus-detail wiring is repeated per page.
+  list-plus-detail wiring is repeated per page. The four lists are one since CR97.
 - Eight or more day parsers with different strictness (a bad `from=` silently returns something).
 - `v_subject_current` reads a table that lags until `bsk rebuild`; the Pilot still reads it.
 - The Pilot has no retirement trigger, and its 25 SQL reader methods are untested.
@@ -378,13 +378,14 @@ number when Chris chooses it.
 | CR92 | 8 | Discard in "Unsaved edits" asks once: the router's blocker reads the flag where Discard has already cleared it. Discard throws the edit away when the move keeps the same item open (the panel and the review editor key themselves by it), so the shell and what holds the edit agree. Escape is Stay, and lets the router go: before, the move stayed blocked and every later link did nothing. The guard has a module of its own (`components/shell/unsaved-edits.ts`), and three golden paths cover it. |
 | CR93 | 9 | A page opened before a deploy copes with the files the deploy removed. Every lazily loaded piece (the pages, the palette, the dialogs, the Map's graph, the journal) reloads once when its file is gone (`lib/new-build.ts`, Vite's `vite:preloadError`), and each page has its own error view inside the shell, which says "LifeOS was updated" with a Reload button when a reload didn't help. A removed `/assets` file answers 404; it got the sign-in's 401, not the app's page as the review said. Every copy of the app's page says not to cache it: only a literal `/index.html` did, not `/` or a link to a page. |
 
-### P2 and P3: built so far (CR94 to CR96)
+### P2 and P3: built so far (CR94 to CR97)
 
 | ID | Review # | Fix |
 |----|----------|-----|
 | CR94 | P3 | Lint warnings fail: `npm run lint` is `oxlint --deny-warnings`, which CI runs. The 25 warnings went first. Shared hooks and helpers left the component files that exported them (`useAuth` to `auth/auth-context.ts`, `usePersistedWidth` to `shell/use-persisted-width.ts`, `oversizedFile` to `lib/artifacts.ts`), so fast refresh works there; the shadcn `*Variants` exports are allowed by name. State worked out from other state is no longer set in an effect (the phone's navigation, the Unsaved edits dialog, the Relationships target); refs are no longer written during render (the panel width, the graph's edges); a file's icon is drawn by `ContentTypeIcon`; the forms read a field with `useWatch`. Six effects stay as they are, each with a disable comment that says why: the restores on opening Browse and the Map, Expand all, the voice dialog's recording, the New dialog's reset and the graph's layout. |
 | CR95 | 33 | Tab leaves the Map's inline create as it does anywhere else; it used to change the type, so the keyboard couldn't reach Add or anything past it. The type buttons are a group named "New item's type", each saying with `aria-pressed` whether it's chosen. A golden path tabs to Add and chooses a type from the keyboard. |
 | CR96 | 31 | The seven form and record sheets (food, readings, lab visits, photos, the walk-through, workouts, days) open through one `ResponsiveSheet` (`components/primitives`): a bottom sheet on a phone, a side panel on a desktop. Once something in it is typed or chosen, Escape, the close button or a tap outside asks "Unsaved edits" first, with Stay and Discard; its own Save or Cancel closes it without asking. The workout and day sheets don't ask: a day only shows, and a workout's note saves as the sheet closes. A test lists the sheets that still open shadcn's sheet themselves, each with why, so a new form sheet can't skip the guard; a golden path covers Log food. |
+| CR97 | First review's P3 | The pages are one table, `components/shell/pages.ts`, which the navigation and the command palette list; before, each kept its own list, and the router and the a11y spec two more. `pages.test.ts` checks the table names every route the router serves (Oura's return page listed apart, with why) and no other, and that an accessibility spec opens each page, so a page can't be added to one and missed in another. |
 
 ### P1: proposed
 
