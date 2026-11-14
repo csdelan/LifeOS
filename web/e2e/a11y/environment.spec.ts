@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { settled } from "../support";
+import { discardSheet, settled } from "../support";
 
 test.describe("accessibility: Environment", () => {
   // The Environment page (HOME-1..3): the Home Score, Fix next, the space cards, the chart with a
@@ -36,7 +36,7 @@ test.describe("accessibility: Environment", () => {
       const walk = await scan();
       expect(walk, JSON.stringify(walk, null, 2)).toEqual([]);
 
-      await page.keyboard.press("Escape");
+      await discardSheet(page);
       await expect(sheet).toBeHidden();
       await page.getByRole("button", { name: "Rate Kitchen", exact: true }).click();
       const quick = page.getByRole("dialog", { name: "Rate Kitchen" });
@@ -121,7 +121,7 @@ test.describe("accessibility: Environment", () => {
       await add.getByLabel("New shot's name").fill("Sink");
       const sheet = await scan();
       expect(sheet, JSON.stringify(sheet, null, 2)).toEqual([]);
-      await page.keyboard.press("Escape");
+      await discardSheet(page);
       await expect(add).toBeHidden();
 
       await page.getByRole("button", { name: "Walk-through" }).click();
@@ -133,7 +133,7 @@ test.describe("accessibility: Environment", () => {
       await expect(walk.getByRole("img", { name: "New photo of Kitchen · Counters" })).toBeVisible();
       const walkThrough = await scan();
       expect(walkThrough, JSON.stringify(walkThrough, null, 2)).toEqual([]);
-      await page.keyboard.press("Escape");
+      await discardSheet(page);
       await expect(walk).toBeHidden();
 
       const editor = page.getByRole("region", { name: "Manage spaces" });

@@ -45,3 +45,14 @@ export async function settled(page: Page) {
     )
     .toBe(0);
 }
+
+/**
+ * Closes a sheet with something typed in it: Escape, then Discard in the Unsaved edits it asks
+ * (code review CR96).
+ */
+export async function discardSheet(page: Page) {
+  await page.keyboard.press("Escape");
+  const asked = page.getByRole("alertdialog", { name: "Unsaved edits" });
+  await asked.getByRole("button", { name: "Discard" }).click();
+  await expect(asked).toBeHidden();
+}

@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { settled } from "../support";
+import { discardSheet, settled } from "../support";
 
 test.describe("accessibility: Measurements", () => {
   // The Measurements page (MEASURE-1, MEASURE-2): the Weight card with the chart focused and a
@@ -35,7 +35,7 @@ test.describe("accessibility: Measurements", () => {
       await expect(sheet.getByText(/takes at most 1 decimal place/)).toBeVisible();
       const log = await scan();
       expect(log, JSON.stringify(log, null, 2)).toEqual([]);
-      await page.keyboard.press("Escape");
+      await discardSheet(page);
       await expect(sheet).toBeHidden();
 
       await page.getByRole("button", { name: "Edit Weight" }).click();
@@ -99,7 +99,7 @@ test.describe("accessibility: Measurements", () => {
       await expect(sheet.getByText(/takes a whole number/)).toBeVisible();
       const log = await scan();
       expect(log, JSON.stringify(log, null, 2)).toEqual([]);
-      await page.keyboard.press("Escape");
+      await discardSheet(page);
       await expect(sheet).toBeHidden();
 
       await card.getByRole("button", { name: "Edit Blood pressure" }).click();
