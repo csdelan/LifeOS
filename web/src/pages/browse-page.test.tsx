@@ -8,7 +8,8 @@ import { createWriteClient } from "@/lib/client";
 import { createSubject, resetStore } from "@/lib/mock/store";
 import { mockReads } from "@/lib/mock/api";
 import type { SubjectListItem, SubjectType } from "@/lib/production-ui-types";
-import { BROWSE_PAGE, BrowsePage } from "@/pages/browse-page";
+import { LIST_PAGE } from "@/components/primitives/use-paged";
+import { BrowsePage } from "@/pages/browse-page";
 
 const router = vi.hoisted(() => {
   let search: Record<string, unknown> = {};
@@ -269,7 +270,7 @@ describe("Browse page with thousands of items (code review CR76)", { timeout: 20
     // By title, Repetition 229 sorts past the first page; it's open, so the list draws down to it.
     const list = await listOf("Task");
     const drawn = within(list).getAllByRole("listitem").length;
-    expect(drawn).toBeGreaterThan(BROWSE_PAGE);
+    expect(drawn).toBeGreaterThan(LIST_PAGE);
     expect(drawn).toBeLessThan(tasks);
     expect(within(list).getByRole("button", { name: /Repetition 229/ })).toBeInTheDocument();
 
@@ -285,11 +286,11 @@ describe("Browse page with thousands of items (code review CR76)", { timeout: 20
     renderPage({ type: "Task" });
     const list = await listOf("Task");
     await user.click(screen.getByRole("button", { name: /^Show \d+ more$/ }));
-    expect(within(list).getAllByRole("listitem")).toHaveLength(2 * BROWSE_PAGE);
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2 * LIST_PAGE);
 
     await user.type(screen.getByRole("searchbox"), "Repetition");
 
-    expect(within(await listOf("Task")).getAllByRole("listitem")).toHaveLength(BROWSE_PAGE);
+    expect(within(await listOf("Task")).getAllByRole("listitem")).toHaveLength(LIST_PAGE);
   });
 });
 

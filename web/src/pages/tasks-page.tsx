@@ -13,6 +13,8 @@ import {
 import { EmptyState } from "@/components/primitives/empty-state";
 import { ListRow } from "@/components/primitives/list-row";
 import { ListSkeleton } from "@/components/primitives/skeletons";
+import { ShowMore } from "@/components/primitives/show-more";
+import { usePaged } from "@/components/primitives/use-paged";
 import { SubjectDetail } from "@/components/detail/subject-detail";
 import { useCreateActions } from "@/components/create/create-context";
 import { useDirty } from "@/components/shell/unsaved-edits";
@@ -38,6 +40,7 @@ import {
   groupTasks,
   isHiddenTaskStatus,
   isOverdueTask,
+  type TaskGroup,
 } from "@/lib/task-groups";
 import { loadView, saveView } from "@/lib/view-state";
 import { errorText } from "@/lib/write-action";
@@ -74,22 +77,19 @@ export function TasksPage() {
   const { data: areas } = useAreas();
   const { data: tags } = useTagUniverse();
   const { data: timers } = useTimers();
-  const create = useCreateSubject();
-  const { openNew } = useCreateActions();
   const { setDirty, requestNavigation } = useDirty();
   const [filters, setFilters] = useState<TasksView>(() => loadView("tasks", DEFAULT_VIEW));
   const activeView = filters.status === "active";
   const repeatingView = filters.status === "repeating";
-  // Active, the view it opens on, shows open Tasks only, so it reads only those and not every
-  // repetition ever done; the other views read every Task (code review CR76).
+  // Active, the view it opens on, reads open Tasks only, and a view of one status reads that
+  // status only, not every repetition ever done; All alone reads every Task (code review CR76,
+  // CR99). A Task with no status yet is Not started, which only the open read finds.
+  const oneStatus = !activeView && !repeatingView && filters.status !== "all" ? filters.status : undefined;
   const tasks = useSubjects("Task", !activeView, false, {
-    status: activeView ? "open" : undefined,
+    status: activeView || oneStatus === defaultStatus("Task") ? "open" : oneStatus,
     enabled: !repeatingView,
   });
   const { data, isLoading } = tasks;
-  const [draft, setDraft] = useState("");
-  const [entryError, setEntryError] = useState<string | null>(null);
-  const entryRef = useRef<HTMLInputElement>(null);
   const today = todayIso();
   // A repeating Task's date that passed while the app was closed gets its repetition (TASKS-3).
   useTaskSettleOnOpen();
@@ -144,7 +144,21 @@ export function TasksPage() {
     return rows;
   }, [data, filters, tagFilter, parentOf, today]);
 
-  const grouped = groupTasks(filtered, today);
+  // Grouped and sorted once per change to the list, not on every render (code review CR99).
+  const grouped = useMemo(() => groupTasks(filtered, today), [filtered, today]);
+  const ordered = useMemo(() => TASK_GROUPS.flatMap((g) => grouped[g]), [grouped]);
+  const paged = usePaged(
+    ordered,
+    [filters.status, filters.due, filters.scheduled, filters.area, filters.parent, tagFilter].join("|"),
+    selected,
+  );
+  // The groups share the page in their order: a group past it waits for Show more.
+  const drawnIn = {} as Record<TaskGroup, number>;
+  let drawLeft = paged.drawn;
+  for (const g of TASK_GROUPS) {
+    drawnIn[g] = Math.max(0, Math.min(grouped[g].length, drawLeft));
+    drawLeft -= grouped[g].length;
+  }
   const timerById = useMemo(
     () => new Map((timers ?? []).map((t) => [t.subjectId, t])),
     [timers],
@@ -154,23 +168,6 @@ export function TasksPage() {
     requestNavigation(() => {
       void navigate({ search: { selected: id } });
     });
-  }
-
-  async function quickCreate() {
-    const title = draft.trim();
-    if (!title) return;
-    setEntryError(null);
-    try {
-      await create.mutateAsync({
-        type: "Task",
-        title,
-        attrs: { priority: "Medium" },
-      });
-      setDraft("");
-      entryRef.current?.focus();
-    } catch (e) {
-      setEntryError(errorText(e, "Could not create the task."));
-    }
   }
 
   return (
@@ -183,34 +180,7 @@ export function TasksPage() {
             Overdue, Today, Upcoming, Unscheduled. Each task once; a repeating task shows its
             current repetition. Title-only Enter creates a standalone Task.
           </p>
-          <form
-            className="mt-3 flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void quickCreate();
-            }}
-          >
-            <Input
-              ref={entryRef}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="New task — Enter to create"
-              aria-label="New task title"
-              className="flex-1"
-            />
-            <Button type="submit" size="sm" disabled={!draft.trim() || create.isPending}>
-              Add
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => openNew({ type: "Task", title: draft })}
-            >
-              More…
-            </Button>
-          </form>
-          {entryError ? <p className="mt-1 text-xs text-destructive">{entryError}</p> : null}
+          <QuickTaskEntry />
           <div className="mt-3 flex flex-wrap gap-2">
             <FilterSelect
               label="Status"
@@ -298,13 +268,13 @@ export function TasksPage() {
                 />
               ) : null}
               {TASK_GROUPS.map((g) =>
-                grouped[g].length === 0 ? null : (
+                drawnIn[g] === 0 ? null : (
                   <section key={g} className="mb-5">
                     <h2 className="type-scale-section mb-1 px-2 text-muted-foreground">
                       {TASK_GROUP_LABEL[g]}
                       <span className="ml-2 tabular-nums">{grouped[g].length}</span>
                     </h2>
-                    {grouped[g].map((item) => (
+                    {grouped[g].slice(0, drawnIn[g]).map((item) => (
                       <ListRow
                         key={item.id}
                         item={item}
@@ -316,6 +286,7 @@ export function TasksPage() {
                   </section>
                 ),
               )}
+              <ShowMore {...paged} />
             </>
           )}
         </div>
@@ -343,6 +314,69 @@ export function TasksPage() {
         ) : null}
       </PeekPanel>
     </div>
+  );
+}
+
+/**
+ * The title-only entry: Enter makes a standalone Task, More… opens the New dialog with the title.
+ * It holds what's typed itself, so typing redraws the entry alone, not every Task listed under it
+ * (code review CR99).
+ */
+function QuickTaskEntry() {
+  const create = useCreateSubject();
+  const { openNew } = useCreateActions();
+  const [draft, setDraft] = useState("");
+  const [entryError, setEntryError] = useState<string | null>(null);
+  const entryRef = useRef<HTMLInputElement>(null);
+
+  async function quickCreate() {
+    const title = draft.trim();
+    if (!title) return;
+    setEntryError(null);
+    try {
+      await create.mutateAsync({
+        type: "Task",
+        title,
+        attrs: { priority: "Medium" },
+      });
+      setDraft("");
+      entryRef.current?.focus();
+    } catch (e) {
+      setEntryError(errorText(e, "Could not create the task."));
+    }
+  }
+
+  return (
+    <>
+      <form
+        className="mt-3 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void quickCreate();
+        }}
+      >
+        <Input
+          ref={entryRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="New task — Enter to create"
+          aria-label="New task title"
+          className="flex-1"
+        />
+        <Button type="submit" size="sm" disabled={!draft.trim() || create.isPending}>
+          Add
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => openNew({ type: "Task", title: draft })}
+        >
+          More…
+        </Button>
+      </form>
+      {entryError ? <p className="mt-1 text-xs text-destructive">{entryError}</p> : null}
+    </>
   );
 }
 

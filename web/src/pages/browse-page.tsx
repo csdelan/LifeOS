@@ -37,6 +37,8 @@ import { SubjectDetail } from "@/components/detail/subject-detail";
 import { useCreateActions } from "@/components/create/create-context";
 import { useDirty } from "@/components/shell/unsaved-edits";
 import { PeekPanel } from "@/components/shell/panels";
+import { ShowMore } from "@/components/primitives/show-more";
+import { usePaged } from "@/components/primitives/use-paged";
 import {
   DEFAULT_BROWSE_FILTERS,
   DUE_OPTIONS,
@@ -694,14 +696,11 @@ const COLUMN_SORT: Record<BrowseColumn, BrowseSort> = {
   entered: "entered",
 };
 
-/** How many rows the list draws at first, and how many more each Show more adds (code review CR76). */
-export const BROWSE_PAGE = 200;
-
 /**
  * The list: a grid with sortable column headers when there's room, stacked rows when there
- * isn't (the list's own width decides, so an open detail panel narrows it too). It draws the
- * first `BROWSE_PAGE` rows, and the open item's, and Show more draws the next ones: thousands
- * of finished repetitions don't all reach the page at once (code review CR76).
+ * isn't (the list's own width decides, so an open detail panel narrows it too). It draws a page
+ * of rows at a time and the open item's (`usePaged`), so thousands of finished repetitions don't
+ * all reach the page at once (code review CR76).
  */
 function BrowseList({
   pagedFor,
@@ -723,15 +722,7 @@ function BrowseList({
   onSort: (update: (f: BrowseFilters) => BrowseFilters) => void;
 }) {
   const template = ["minmax(0,1fr)", ...columns.map((c) => COLUMN_WIDTH[c])].join(" ");
-  const [pages, setPages] = useState(1);
-  const [pagesFor, setPagesFor] = useState(pagedFor);
-  if (pagesFor !== pagedFor) {
-    setPagesFor(pagedFor);
-    setPages(1);
-  }
-  const selectedAt = selected ? rows.findIndex((r) => r.id === selected) : -1;
-  const drawn = Math.max(pages * BROWSE_PAGE, selectedAt + 1);
-  const left = rows.length - drawn;
+  const paged = usePaged(rows, pagedFor, selected);
   return (
     <div style={{ "--browse-cols": template } as CSSProperties}>
       <div className="hidden items-center gap-x-3 px-3 pb-1 @xl:grid @xl:grid-cols-(--browse-cols)">
@@ -748,7 +739,7 @@ function BrowseList({
         })}
       </div>
       <ul aria-label={`${label} list`} className="space-y-0.5">
-        {rows.slice(0, drawn).map((item) => (
+        {rows.slice(0, paged.drawn).map((item) => (
           <li key={item.id}>
             <BrowseRow
               item={item}
@@ -760,16 +751,7 @@ function BrowseList({
           </li>
         ))}
       </ul>
-      {left > 0 ? (
-        <div className="flex items-center gap-3 px-3 pt-3 text-xs text-muted-foreground">
-          <span>
-            {drawn} of {rows.length} shown
-          </span>
-          <Button variant="outline" size="sm" onClick={() => setPages(Math.ceil(drawn / BROWSE_PAGE) + 1)}>
-            Show {Math.min(left, BROWSE_PAGE)} more
-          </Button>
-        </div>
-      ) : null}
+      <ShowMore {...paged} />
     </div>
   );
 }
