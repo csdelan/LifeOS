@@ -107,6 +107,12 @@ public interface ISubjectRepository
     /// wins), or <c>null</c> when it has none.
     /// </summary>
     Task<string?> GetStatusAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Whether the habit has a day on <paramref name="day"/> (<c>bsk_derived.habit_occurrence_source</c>):
+    /// one its pattern schedules, up to today, or one something has already been recorded on.
+    /// </summary>
+    Task<bool> HasHabitDayAsync(Guid habitId, DateOnly day, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Repeating appointments in the store (CAL-1 / D10).</summary>

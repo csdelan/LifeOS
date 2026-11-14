@@ -3,19 +3,16 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DashboardRead } from "@/lib/derive";
-import type {
-  AppointmentRow,
-  CoverRead,
-  HabitOccurrenceRow,
-  SubjectListItem,
-} from "@/lib/production-ui-types";
+import type { HabitDay } from "@/lib/habit-days";
+import type { AppointmentRow, CoverRead, SubjectListItem } from "@/lib/production-ui-types";
 import { FocusPage } from "@/pages/focus-page";
 
 const adhere = vi.fn();
 const settleTasks = vi.fn(() => Promise.resolve({ series: 0, made: [] }));
 
-function row(name: string, occurrenceDate: string): HabitOccurrenceRow {
+function row(name: string, occurrenceDate: string, listed = true): HabitDay {
   return {
+    listed,
     habitId: name.toLowerCase(),
     habitUrn: `urn:bsk:habit:${name.toLowerCase()}`,
     habitName: name,
@@ -69,6 +66,19 @@ describe("FocusPage habit check-offs", () => {
       ["walk", "followed", { on: "2026-10-20" }],
       ["floss", "followed", { on: "2026-10-20" }],
     ]);
+  });
+
+  it("offers Not followed only on a day the kernel lists for the habit (code review, web data #1)", () => {
+    // Walk is due today; Swim isn't, so it can log a swim done anyway but never miss one.
+    dashboard = { ...base, todayHabits: [row("Walk", "2026-10-20"), row("Swim", "2026-10-20", false)] };
+    render(<FocusPage />);
+
+    const walk = screen.getByText("Walk").closest("li")!;
+    expect(within(walk).getByRole("button", { name: "Not followed" })).toBeInTheDocument();
+    const swim = screen.getByText("Swim").closest("li")!;
+    expect(within(swim).getByText("Not due today")).toBeInTheDocument();
+    expect(within(swim).getByRole("button", { name: "Followed" })).toBeInTheDocument();
+    expect(within(swim).queryByRole("button", { name: "Not followed" })).toBeNull();
   });
 
   it("catches up repeating tasks once when it opens (TASKS-3)", () => {

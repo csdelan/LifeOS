@@ -51,6 +51,29 @@ test.describe("golden paths: habits and rewards", () => {
     await expect(mobility.getByText("Not logged today")).toBeVisible();
   });
 
+  test("a habit that isn't daily can be missed only on its days (code review, web data #1)", async ({ page }) => {
+    // A Saturday. Trade journal runs Monday to Friday, so today isn't one of its days.
+    await page.clock.install({ time: new Date("2026-11-14T10:00:00") });
+    await page.goto("/habits");
+    const building = page.getByRole("list", { name: "Building" });
+    const journal = building.getByRole("listitem").filter({ hasText: "Trade journal" });
+    await expect(journal.getByText(/Not due today/)).toBeVisible();
+    await expect(journal.getByRole("button", { name: "Followed", exact: true })).toBeVisible();
+    await expect(journal.getByRole("button", { name: "Not followed" })).toHaveCount(0);
+    const inbox = building.getByRole("listitem").filter({ hasText: "Inbox Zero pass" });
+    await expect(inbox.getByRole("button", { name: "Not followed" })).toBeVisible();
+
+    // Its month: a Sunday can log a session done anyway but not be missed; a Friday, one of its days, can.
+    await journal.getByText("Trade journal").click();
+    const day = page.getByRole("dialog").filter({ hasText: "Optional note" });
+    await page.getByRole("button", { name: "Nov 8: not due" }).click();
+    await expect(day.getByRole("button", { name: "Followed" })).toBeVisible();
+    await expect(day.getByRole("button", { name: "Missed" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Nov 13: followed" }).click();
+    await expect(day.getByRole("button", { name: "Missed" })).toBeVisible();
+  });
+
   test("Today keeps established habits in a collapsed Maintaining group", async ({ page }) => {
     await page.goto("/habits");
     await page.getByRole("button", { name: "Ready to establish Morning mobility" }).click();

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Resolver } from "react-hook-form";
 import {
@@ -140,7 +140,6 @@ function ItemDetail({
     resolver: zodResolver(subjectFormSchema) as Resolver<SubjectFormValues>,
     defaultValues: emptyFormValues("Task", "edit"),
   });
-  const typedRecurrence = useWatch({ control: form.control, name: "attrs.recurrence" });
 
   useEffect(() => {
     if (!data || editing) return;
@@ -555,9 +554,6 @@ function ItemDetail({
               {subject.type === "Habit" ? (
                 <StreakGrid
                   occurrences={occurrences ?? []}
-                  recurrence={habit?.recurrence ?? typedRecurrence}
-                  startDate={habit?.startDate}
-                  endDate={habit?.endDate}
                   allowsPartial={habit?.allowsPartial ?? true}
                   onRecord={
                     habit && habitStage(habit) === "planned"

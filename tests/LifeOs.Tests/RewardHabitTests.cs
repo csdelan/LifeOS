@@ -311,6 +311,9 @@ public sealed class RewardHabitTests(ClassDatabase classDb) : IClassFixture<Clas
     public async Task A_day_recorded_before_the_wallet_opened_never_pays()
     {
         var kernel = Build();
+        // Recorded a moment before the wallet opens, on its day: a recording dated after its own
+        // clock's today would be of a day that hadn't come.
+        var beforeOpening = DateTimeOffset.UtcNow.AddSeconds(-1);
         await kernel.Rewards.OpenAsync(cancellationToken: Ct);
         var habit = await HabitAsync(kernel, startOffset: 1);
         var backdated = new AdherenceService(
@@ -318,11 +321,12 @@ public sealed class RewardHabitTests(ClassDatabase classDb) : IClassFixture<Clas
             kernel.Provider.GetRequiredService<ISubjectRepository>(),
             kernel.Provider.GetRequiredService<IActivityWriter>(),
             kernel.Rewards,
-            new TestClock(new DateTimeOffset(2000, 6, 1, 12, 0, 0, TimeSpan.Zero)),
+            new TestClock(beforeOpening),
             kernel.Provider.GetRequiredService<IHomeCalendar>(),
             new EventSource(KernelSources.Cli));
 
-        var recorded = await backdated.RecordAsync(habit.Urn, AdherenceResults.Followed, Today, cancellationToken: Ct);
+        var recorded = await backdated.RecordAsync(
+            habit.Urn, AdherenceResults.Followed, DateOnly.FromDateTime(beforeOpening.UtcDateTime), cancellationToken: Ct);
 
         Assert.Empty(recorded.Awards);
         Assert.Empty(await PaidAsync(kernel, habit));

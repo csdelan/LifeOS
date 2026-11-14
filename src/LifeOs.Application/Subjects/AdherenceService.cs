@@ -14,7 +14,8 @@ namespace LifeOs.Application.Subjects;
 /// correction is simply a newer recording for the same date (GEN-5, latest wins);
 /// nothing is mutated. Partial is fixed half-credit and is only allowed when the
 /// habit's <c>allows_partial</c> flag is set. A Planned habit isn't tracked yet, so it
-/// takes no recording.
+/// takes no recording. Nor does a day that hasn't come, and a miss is recorded only on a day
+/// the habit has: one its pattern schedules, or one already recorded, which it corrects.
 /// <para>
 /// Every recording then reconciles the habit's rewards (REWARD-2, rewards plan §3.3): a
 /// followed day earns, a partial one earns half, a run reaching 7 / 30 / 100 earns its
@@ -64,7 +65,24 @@ public sealed class AdherenceService(
         }
 
         var now = clock.UtcNow;
-        var day = occurrence ?? await calendar.DateAtAsync(now, cancellationToken);
+        var today = await calendar.DateAtAsync(now, cancellationToken);
+        var day = occurrence ?? today;
+
+        if (day > today)
+        {
+            throw new InvalidOperationException(
+                $"{day:yyyy-MM-dd} hasn't come yet, so there's nothing to record for habit '{habit.Title}' on it.");
+        }
+
+        // A miss is of a day the habit had: one its pattern schedules, or one already recorded, which
+        // the miss corrects (an extra session logged by mistake, a maintained day undone). A miss on
+        // any other day would give the habit a day it never had, counted against it for good.
+        if (normalizedResult == AdherenceResults.Missed
+            && !await repository.HasHabitDayAsync(habit.Id, day, cancellationToken))
+        {
+            throw new InvalidOperationException(
+                $"Habit '{habit.Title}' isn't scheduled on {day:yyyy-MM-dd}, so that day can't be missed. Record it as followed if you did it anyway.");
+        }
 
         // Followed and partial support the habit; a miss violates it. The full/partial
         // distinction lives in the payload, keeping the edge vocabulary binary (D2).

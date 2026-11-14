@@ -7,34 +7,31 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { addDays, addMonths, daysInMonth, formatDay, startOfMonth, todayIso, weekdayIndex } from "@/lib/dates";
-import { DAILY, isOccurrenceDate, parseRecurrence } from "@/lib/recurrence";
-import type { AdherenceState, HabitOccurrenceRow, RecurrenceSpec } from "@/lib/production-ui-types";
+import { addDays, addMonths, daysInMonth, formatDay, startOfMonth, weekdayIndex } from "@/lib/dates";
+import { useHomeToday } from "@/lib/home-day";
+import type { AdherenceState, HabitOccurrenceRow } from "@/lib/production-ui-types";
 import { HABIT_STATE_SURFACE } from "@/components/habits/habit-state-styles";
 import { cn } from "@/lib/utils";
 
 const WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+/**
+ * A month of a habit's days. The days it has are the kernel's (`occurrences`, `lib/habit-days.ts`):
+ * the ones its pattern schedules, up to today, and any with something recorded. Any other day up
+ * to today is faded, and can log a session done anyway but not be missed.
+ */
 export function StreakGrid({
   occurrences,
-  recurrence,
-  startDate,
-  endDate,
   allowsPartial,
   onRecord,
 }: {
   occurrences: HabitOccurrenceRow[];
-  recurrence?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
   allowsPartial: boolean;
   /** Records a day; left out, the grid only shows the days (a Planned habit takes none). */
   onRecord?: (date: string, state: "followed" | "partial" | "missed", note?: string) => void;
 }) {
-  const today = todayIso();
+  const today = useHomeToday();
   const [month, setMonth] = useState(startOfMonth(today));
-  // A habit without a pattern reads as daily, as it always has on this grid.
-  const spec = parseRecurrence(recurrence) ?? DAILY;
   const byDate = useMemo(() => {
     const map = new Map<string, HabitOccurrenceRow>();
     for (const o of occurrences) map.set(o.occurrenceDate, o);
@@ -83,9 +80,6 @@ export function StreakGrid({
               key={iso}
               iso={iso}
               today={today}
-              spec={spec}
-              startDate={startDate}
-              endDate={endDate}
               row={byDate.get(iso)}
               allowsPartial={allowsPartial}
               onRecord={onRecord}
@@ -102,92 +96,69 @@ export function StreakGrid({
 function DayCell({
   iso,
   today,
-  spec,
-  startDate,
-  endDate,
   row,
   allowsPartial,
   onRecord,
 }: {
   iso: string;
   today: string;
-  spec: RecurrenceSpec;
-  startDate?: string | null;
-  endDate?: string | null;
+  /** The kernel's day, when the habit has one here. */
   row?: HabitOccurrenceRow;
   allowsPartial: boolean;
   onRecord?: (date: string, state: "followed" | "partial" | "missed", note?: string) => void;
 }) {
-  const expected = isOccurrenceDate(spec, iso, startDate, endDate);
   const future = iso > today;
-  const state: AdherenceState = row?.state ?? (expected && iso < today ? "unrecorded" : "unrecorded");
+  const state: AdherenceState = row?.state ?? "unrecorded";
+  const said = row ? state.replace("_", " ") : future ? "to come" : "not due";
   const [note, setNote] = useState(row?.note ?? "");
   const [open, setOpen] = useState(false);
   const dayNum = Number(iso.slice(-2));
   const cell = cn(
     "flex aspect-square min-h-11 min-w-11 items-center justify-center rounded-md text-[0.6875rem] font-medium tabular-nums",
     HABIT_STATE_SURFACE[state],
-    !expected && "opacity-40",
+    !row && "opacity-40",
     future && "cursor-not-allowed opacity-30",
     iso === today && "ring-2 ring-ring/50",
   );
 
   if (!onRecord) {
     return (
-      <div role="img" aria-label={`${formatDay(iso)}: ${state.replace("_", " ")}`} className={cell}>
+      <div role="img" aria-label={`${formatDay(iso)}: ${said}`} className={cell}>
         {dayNum}
       </div>
     );
   }
 
+  const record = (s: "followed" | "partial" | "missed") => {
+    onRecord(iso, s, note || undefined);
+    setOpen(false);
+  };
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        disabled={future}
-        aria-label={`${formatDay(iso)}: ${state.replace("_", " ")}`}
-        className={cell}
-      >
+      <PopoverTrigger disabled={future} aria-label={`${formatDay(iso)}: ${said}`} className={cell}>
         {dayNum}
       </PopoverTrigger>
       <PopoverContent className="w-56" align="start">
         <p className="text-xs font-medium">{formatDay(iso)}</p>
         <p className="text-[0.6875rem] text-muted-foreground capitalize">
-          {state.replace("_", " ")}
+          {said}
           {row?.note ? ` · ${row.note}` : ""}
         </p>
         <div className="mt-2 flex flex-col gap-1">
-          <Button
-            size="sm"
-            variant={state === "followed" ? "default" : "outline"}
-            onClick={() => {
-              onRecord(iso, "followed", note || undefined);
-              setOpen(false);
-            }}
-          >
+          <Button size="sm" variant={state === "followed" ? "default" : "outline"} onClick={() => record("followed")}>
             Followed
           </Button>
           {allowsPartial ? (
-            <Button
-              size="sm"
-              variant={state === "partial" ? "default" : "outline"}
-              onClick={() => {
-                onRecord(iso, "partial", note || undefined);
-                setOpen(false);
-              }}
-            >
+            <Button size="sm" variant={state === "partial" ? "default" : "outline"} onClick={() => record("partial")}>
               Partial
             </Button>
           ) : null}
-          <Button
-            size="sm"
-            variant={state === "not_followed" ? "default" : "outline"}
-            onClick={() => {
-              onRecord(iso, "missed", note || undefined);
-              setOpen(false);
-            }}
-          >
-            Missed
-          </Button>
+          {/* Only a day the habit has can be missed: AdherenceService refuses any other. */}
+          {row ? (
+            <Button size="sm" variant={state === "not_followed" ? "default" : "outline"} onClick={() => record("missed")}>
+              Missed
+            </Button>
+          ) : null}
         </div>
         <div className="mt-2 space-y-1">
           <Label className="text-[0.6875rem]">Optional note</Label>

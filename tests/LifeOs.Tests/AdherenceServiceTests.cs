@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Dapper;
 using LifeOs.Api.Read;
 using LifeOs.Application.Abstractions;
@@ -29,10 +30,16 @@ public sealed class AdherenceServiceTests(ClassDatabase classDb) : IClassFixture
         return connection;
     }
 
-    private async Task<SubjectRef> MakeHabitAsync(IServiceProvider provider, bool allowsPartial = false)
+    private async Task<SubjectRef> MakeHabitAsync(IServiceProvider provider, bool allowsPartial = false, object? recurrence = null)
     {
-        var attrs = allowsPartial ? """{"allows_partial":"true"}""" : "{}";
-        return await provider.CreateTrackedHabitAsync($"habit {Guid.NewGuid():N}", attrs, Ct);
+        // Tracked daily from 2026-01-05, a Monday, so the days these tests record on are days it has.
+        var attrs = new Dictionary<string, object>
+        {
+            ["start"] = "2026-01-05",
+            ["recurrence"] = recurrence ?? new { freq = "daily" },
+        };
+        if (allowsPartial) attrs["allows_partial"] = "true";
+        return await provider.CreateTrackedHabitAsync($"habit {Guid.NewGuid():N}", JsonSerializer.Serialize(attrs), Ct);
     }
 
     private async Task<(string Result, string Relation)> ReadAdherenceAsync(NpgsqlConnection c, Guid eventId)
@@ -90,6 +97,44 @@ public sealed class AdherenceServiceTests(ClassDatabase classDb) : IClassFixture
         var (storedResult, relation) = await ReadAdherenceAsync(c, result.EventId);
         Assert.Equal("missed", storedResult);
         Assert.Equal(SubjectEventRelations.Violates, relation);
+    }
+
+    [Fact]
+    public async Task A_day_that_hasnt_come_takes_no_recording()
+    {
+        var provider = Provider();
+        var habit = await MakeHabitAsync(provider);
+        var adherence = provider.GetRequiredService<AdherenceService>();
+        var today = await provider.GetRequiredService<IHomeCalendar>().DateAtAsync(DateTimeOffset.UtcNow, Ct);
+
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await adherence.RecordAsync(habit.Urn, AdherenceResults.Followed, today.AddDays(1), cancellationToken: Ct));
+        Assert.Contains("hasn't come yet", refused.Message);
+    }
+
+    [Fact]
+    public async Task A_miss_is_only_of_a_day_the_habit_has()
+    {
+        var provider = Provider();
+        var adherence = provider.GetRequiredService<AdherenceService>();
+        var mondays = await MakeHabitAsync(provider, recurrence: new { freq = "weekly", on = new[] { "mon" } });
+        var monday = new DateOnly(2026, 1, 12);
+        var tuesday = monday.AddDays(1);
+
+        // Not one of its days: there's nothing to miss, though a session done anyway can be logged.
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await adherence.RecordAsync(mondays.Urn, AdherenceResults.Missed, tuesday, cancellationToken: Ct));
+        Assert.Contains("isn't scheduled on 2026-01-13", refused.Message);
+        await adherence.RecordAsync(mondays.Urn, AdherenceResults.Followed, tuesday, cancellationToken: Ct);
+        // Once logged the day is the habit's, and a miss corrects it; a scheduled day can be missed.
+        await adherence.RecordAsync(mondays.Urn, AdherenceResults.Missed, tuesday, cancellationToken: Ct);
+        await adherence.RecordAsync(mondays.Urn, AdherenceResults.Missed, monday, cancellationToken: Ct);
+
+        // A habit with no pattern is scheduled on no day.
+        var unpatterned = await provider.CreateTrackedHabitAsync(
+            $"habit {Guid.NewGuid():N}", """{"start":"2026-01-05"}""", Ct);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await adherence.RecordAsync(unpatterned.Urn, AdherenceResults.Missed, monday, cancellationToken: Ct));
     }
 
     [Fact]

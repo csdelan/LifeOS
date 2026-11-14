@@ -122,9 +122,18 @@ describe("today's habit rows (REWARD-2 maintenance)", () => {
   });
 
   it("reads a maintained habit's logged day, and an unlogged one as unrecorded, never missed", () => {
-    expect(maintainingHabitRows(habits, [logged], today)).toEqual([logged]);
+    expect(maintainingHabitRows(habits, [logged], today)).toEqual([{ ...logged, listed: true }]);
     expect(maintainingHabitRows(habits, [], today)).toEqual([
-      expect.objectContaining({ habitId: "established", state: "unrecorded", allowsPartial: true }),
+      expect.objectContaining({ habitId: "established", state: "unrecorded", allowsPartial: true, listed: false }),
+    ]);
+  });
+
+  // Code review, web data #1: the kernel's days, not the web's reckoning of a pattern.
+  it("takes a Building habit's day from the kernel, and offers one it doesn't list only to log", () => {
+    const due: HabitOccurrenceRow = { ...logged, habitId: "building", habitName: "building", state: "unrecorded" };
+    expect(todayHabitRows(habits, [due], today)).toEqual([{ ...due, listed: true }]);
+    expect(todayHabitRows(habits, [], today)).toEqual([
+      expect.objectContaining({ habitId: "building", state: "unrecorded", listed: false }),
     ]);
   });
 });

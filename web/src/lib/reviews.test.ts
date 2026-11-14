@@ -185,6 +185,18 @@ describe("habit check-offs (REVIEW-5)", () => {
     expect(days[1].rows.map((r) => r.habitName)).toEqual(["kept", "late"]);
   });
 
+  // Code review, web data #1: only a day the kernel lists can be missed.
+  it("says which days the kernel lists, the only ones a habit can miss", () => {
+    const missed: HabitOccurrenceRow = { ...followed("walk", "2026-11-03"), state: "not_followed" };
+    const days = reviewHabitDays([habit("walk")], [followed("walk", "2026-11-02"), missed], "2026-11-02", "2026-11-04", "2026-11-08");
+    expect(days.map((d) => d.rows.map((r) => [r.state, r.listed]))).toEqual([
+      [["followed", true]],
+      [["not_followed", true]],
+      // Not one of its days: a session done anyway can be logged, but not missed.
+      [["unrecorded", false]],
+    ]);
+  });
+
   it("still shows a day that was recorded for a habit no longer tracked", () => {
     const days = reviewHabitDays([], [followed("old", "2026-11-02")], "2026-11-02", "2026-11-02", "2026-11-08");
     expect(days[0].rows.map((r) => r.habitName)).toEqual(["old"]);

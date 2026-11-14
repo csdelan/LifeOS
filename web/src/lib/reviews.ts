@@ -1,5 +1,6 @@
 import { addDays, endOfWeekSunday, formatTimestamp, localDateFromTimestamp } from "@/lib/dates";
 import { habitStage } from "@/lib/establish";
+import { habitDay, type HabitDay } from "@/lib/habit-days";
 import type {
   HabitOccurrenceRow,
   HabitRow,
@@ -115,14 +116,15 @@ export function reviewStanding(doc: ReviewDoc, today: string): string {
 /** A day a review looks back on, with a row for each habit it can check off. */
 export interface ReviewHabitDay {
   day: string;
-  rows: HabitOccurrenceRow[];
+  rows: HabitDay[];
 }
 
 /**
  * The habit days a review can check off (REVIEW-5): each day it looks back on up to today, with
- * a row for every habit tracked that day, recorded or not. A habit counts while Building or
- * Established, from its start date (or the day it was made) to its end date. A day already
- * recorded always shows. An unrecorded day stays unrecorded, never a failure.
+ * a row for every habit tracked that day. A habit counts while Building or Established, from its
+ * start date (or the day it was made) to its end date. Each row is the kernel's day, or, on a day
+ * the kernel doesn't list for the habit, one to log a session on but not to miss
+ * (`lib/habit-days.ts`). A day the kernel lists always shows.
  */
 export function reviewHabitDays(
   habits: HabitRow[],
@@ -134,22 +136,10 @@ export function reviewHabitDays(
   const last = end < today ? end : today;
   const days: ReviewHabitDay[] = [];
   for (let day = start; day <= last; day = addDays(day, 1)) {
-    const recorded = occurrences.filter((o) => o.occurrenceDate === day);
-    const rows: HabitOccurrenceRow[] = habits
-      .filter((h) => tracksOn(h, day))
-      .map(
-        (h) =>
-          recorded.find((o) => o.habitId === h.id) ?? {
-            habitId: h.id,
-            habitUrn: h.urn,
-            habitName: h.name,
-            occurrenceDate: day,
-            state: "unrecorded" as const,
-            allowsPartial: h.allowsPartial,
-          },
-      );
-    for (const o of recorded) {
-      if (!rows.some((r) => r.habitId === o.habitId)) rows.push(o);
+    const listed = occurrences.filter((o) => o.occurrenceDate === day);
+    const rows = habits.filter((h) => tracksOn(h, day)).map((h) => habitDay(h, day, listed));
+    for (const o of listed) {
+      if (!rows.some((r) => r.habitId === o.habitId)) rows.push({ ...o, listed: true });
     }
     rows.sort((a, b) => a.habitName.localeCompare(b.habitName));
     days.push({ day, rows });

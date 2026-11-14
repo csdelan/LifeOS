@@ -238,6 +238,20 @@ public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource, EventSo
             new { id }, cancellationToken: cancellationToken));
     }
 
+    public async Task<bool> HasHabitDayAsync(Guid habitId, DateOnly day, CancellationToken cancellationToken = default)
+    {
+        await using var connection = dataSource.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM bsk_derived.habit_occurrence_source
+                WHERE habit_id = @habitId AND occurrence_date = @day::date);
+            """,
+            new { habitId, day = day.ToString("yyyy-MM-dd") }, cancellationToken: cancellationToken));
+    }
+
     public async Task<(Guid NewId, Guid EdgeId)> CreateWithIncomingEdgeAsync(
         NewSubject newSubject, string relation, Guid fromId, string provenance,
         CancellationToken cancellationToken = default)

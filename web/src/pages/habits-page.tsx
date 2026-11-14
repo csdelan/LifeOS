@@ -16,7 +16,8 @@ import { useHabits, useOccurrencesOn, useSubjects, useWrites } from "@/lib/queri
 import { maintainingHabitRows, todayHabitRows } from "@/lib/derive";
 import { useHomeToday } from "@/lib/home-day";
 import { habitStage, isMaintainedToday, isReadyToEstablish, maintainedDayLabel } from "@/lib/establish";
-import type { CoverRead, HabitOccurrenceRow, HabitRow } from "@/lib/production-ui-types";
+import type { CoverRead, HabitRow } from "@/lib/production-ui-types";
+import type { HabitDay } from "@/lib/habit-days";
 import { cn } from "@/lib/utils";
 import { useWriteAction } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
@@ -184,7 +185,7 @@ function HabitItem({
 }: {
   habit: HabitRow;
   cover?: CoverRead;
-  today?: HabitOccurrenceRow;
+  today?: HabitDay;
   selected: boolean;
   onSelect: () => void;
   onPick: (s: "followed" | "partial" | "not_followed") => void;
@@ -203,6 +204,7 @@ function HabitItem({
             <span className="block text-[0.6875rem] text-muted-foreground">
               Streak {h.currentStreak}
               {h.lastState ? ` · ${h.lastState.replace("_", " ")}` : ""}
+              {today && !today.listed ? " · Not due today" : ""}
               {h.cue ? ` · Cue: ${h.cue}` : ""}
             </span>
           </HabitName>
@@ -211,7 +213,12 @@ function HabitItem({
           {isReadyToEstablish(h) ? <ReadyToEstablish habit={h} /> : null}
           <BountyChip amounts={h.bounty} suffix="a day" />
           {today ? (
-            <AdherenceButtons state={today.state} allowsPartial={today.allowsPartial} onPick={onPick} />
+            <AdherenceButtons
+              state={today.state}
+              allowsPartial={today.allowsPartial}
+              canMiss={today.listed}
+              onPick={onPick}
+            />
           ) : null}
         </div>
       </div>
@@ -300,7 +307,7 @@ function GraduatedSection({
   onSelect: (id: string) => void;
   /** Established habits: today's logged state and the one-tap check-off. */
   maintain?: {
-    todayById: Map<string, HabitOccurrenceRow>;
+    todayById: Map<string, HabitDay>;
     onPick: (id: string, pick: MaintainPick) => void;
   };
 }) {

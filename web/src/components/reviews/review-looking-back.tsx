@@ -4,6 +4,7 @@ import { AdherenceButtons } from "@/components/habits/adherence-buttons";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
 import { useHabits, useOccurrencesBetween, useRecap, useWrites } from "@/lib/queries";
 import { addDays, formatTimestamp } from "@/lib/dates";
+import { habitDayLabel } from "@/lib/habit-days";
 import type { RecapSection } from "@/lib/review-recap";
 import { reviewDay, reviewHabitDays, type ReviewPeriod } from "@/lib/reviews";
 import type { ReviewDoc } from "@/lib/production-ui-types";
@@ -34,7 +35,7 @@ export function ReviewRecap({ period, today }: { period: ReviewPeriod; today: st
 
 /**
  * The habit days the review looks back on, with the same buttons as Focus (REVIEW-5). A week
- * picks one day at a time. An unrecorded day stays unrecorded, never a failure.
+ * picks one day at a time, each counting the days the kernel lists for its habits.
  */
 export function HabitCheckOffs({ period, today }: { period: ReviewPeriod; today: string }) {
   const checking = useWriteAction({ report: "toast", fallback: "That habit day didn't save." });
@@ -57,7 +58,8 @@ export function HabitCheckOffs({ period, today }: { period: ReviewPeriod; today:
       {days.length > 1 ? (
         <div className="mt-3 flex flex-wrap gap-1" role="group" aria-label="Habit day">
           {days.map((d) => {
-            const done = d.rows.filter((r) => r.state !== "unrecorded").length;
+            const due = d.rows.filter((r) => r.listed);
+            const done = due.filter((r) => r.state !== "unrecorded").length;
             return (
               <button
                 key={d.day}
@@ -70,9 +72,7 @@ export function HabitCheckOffs({ period, today }: { period: ReviewPeriod; today:
                 onClick={() => setPicked(d.day)}
               >
                 <span className="block font-medium">{reviewDay(d.day)}</span>
-                <span className="block">
-                  {done} of {d.rows.length} recorded
-                </span>
+                <span className="block">{due.length === 0 ? "Nothing due" : `${done} of ${due.length} recorded`}</span>
               </button>
             );
           })}
@@ -93,13 +93,12 @@ export function HabitCheckOffs({ period, today }: { period: ReviewPeriod; today:
               >
                 <div>
                   <p className="text-sm font-medium">{h.habitName}</p>
-                  <p className="text-[0.6875rem] text-muted-foreground">
-                    {h.state === "unrecorded" ? "Unrecorded" : h.state.replace("_", " ")}
-                  </p>
+                  <p className="text-[0.6875rem] text-muted-foreground">{habitDayLabel(h, today)}</p>
                 </div>
                 <AdherenceButtons
                   state={h.state}
                   allowsPartial={h.allowsPartial}
+                  canMiss={h.listed}
                   onPick={(s) =>
                     void checking.run(() =>
                       writes.adhere(h.habitId, s === "not_followed" ? "missed" : s, { on: h.occurrenceDate }),

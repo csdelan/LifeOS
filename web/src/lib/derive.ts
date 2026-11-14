@@ -7,6 +7,7 @@
  */
 
 import { habitStage } from "@/lib/establish";
+import { habitDay, type HabitDay } from "@/lib/habit-days";
 import { isTerminal } from "@/lib/production-ui-types";
 import type {
   CoverRead,
@@ -43,12 +44,13 @@ export interface DashboardRead {
   dueAndOverdue: SubjectListItem[];
   nextActions: SubjectListItem[];
   inboxCount: number;
-  todayHabits: HabitOccurrenceRow[];
+  /** Building habits, each with today as the kernel lists it, or a day to log on when it doesn't. */
+  todayHabits: HabitDay[];
   /**
    * Established habits, each with today's logged state (REWARD-2 maintenance): one-tap
    * check-offs that keep paying, never scheduled, so never missed.
    */
-  maintainingHabits: HabitOccurrenceRow[];
+  maintainingHabits: HabitDay[];
   activeGoals: SubjectListItem[];
   activeProjects: SubjectListItem[];
 }
@@ -217,12 +219,15 @@ export function deriveDashboard(input: {
   };
 }
 
-/** Today's row for each Building habit: the daily tracking. */
+/**
+ * Today's row for each Building habit: the daily tracking. A habit whose day today the kernel
+ * doesn't list still has a row, to log a session done anyway, but not one it can miss.
+ */
 export function todayHabitRows(
   habits: HabitRow[],
   occurrences: HabitOccurrenceRow[],
   today: string,
-): HabitOccurrenceRow[] {
+): HabitDay[] {
   // A Planned habit isn't tracked yet; a graduated (or abandoned) one has left daily
   // tracking, and Established ones are maintained.
   return rowsFor(
@@ -240,7 +245,7 @@ export function maintainingHabitRows(
   habits: HabitRow[],
   occurrences: HabitOccurrenceRow[],
   today: string,
-): HabitOccurrenceRow[] {
+): HabitDay[] {
   return rowsFor(
     habits.filter((h) => !h.archived && habitStage(h) === "established"),
     occurrences,
@@ -248,24 +253,6 @@ export function maintainingHabitRows(
   );
 }
 
-function rowsFor(
-  habits: HabitRow[],
-  occurrences: HabitOccurrenceRow[],
-  today: string,
-): HabitOccurrenceRow[] {
-  return habits.map((h) => {
-    const recorded = occurrences.find(
-      (o) => o.habitId === h.id && o.occurrenceDate === today,
-    );
-    return (
-      recorded ?? {
-        habitId: h.id,
-        habitUrn: h.urn,
-        habitName: h.name,
-        occurrenceDate: today,
-        state: "unrecorded" as const,
-        allowsPartial: h.allowsPartial,
-      }
-    );
-  });
+function rowsFor(habits: HabitRow[], occurrences: HabitOccurrenceRow[], today: string): HabitDay[] {
+  return habits.map((h) => habitDay(h, today, occurrences));
 }

@@ -7,10 +7,13 @@ import { cn } from "@/lib/utils";
 export function AdherenceButtons({
   state,
   allowsPartial,
+  canMiss,
   onPick,
 }: {
   state: AdherenceState;
   allowsPartial: boolean;
+  /** Whether the day is one the kernel lists for the habit, so it can be missed (`lib/habit-days.ts`). */
+  canMiss: boolean;
   onPick: (s: "followed" | "partial" | "not_followed") => void;
 }) {
   return (
@@ -33,14 +36,16 @@ export function AdherenceButtons({
           <MinusIcon className="size-3.5" />
         </HabitBtn>
       ) : null}
-      <HabitBtn
-        label="Not followed"
-        tone="not_followed"
-        active={state === "not_followed"}
-        onClick={() => onPick("not_followed")}
-      >
-        <CircleDashedIcon className="size-3.5" />
-      </HabitBtn>
+      {canMiss ? (
+        <HabitBtn
+          label="Not followed"
+          tone="not_followed"
+          active={state === "not_followed"}
+          onClick={() => onPick("not_followed")}
+        >
+          <CircleDashedIcon className="size-3.5" />
+        </HabitBtn>
+      ) : null}
     </div>
   );
 }

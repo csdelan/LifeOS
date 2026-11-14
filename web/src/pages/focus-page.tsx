@@ -14,6 +14,7 @@ import { TodayAppointments } from "@/components/appointments/today-appointments"
 import { cn } from "@/lib/utils";
 import { useDashboard, useWrites } from "@/lib/queries";
 import { isOverdue, todayIso } from "@/lib/dates";
+import { habitDayLabel } from "@/lib/habit-days";
 import { isTerminal } from "@/lib/production-ui-types";
 import { useWriteAction } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
@@ -192,13 +193,12 @@ export function FocusPage() {
                     }
                   >
                     <p className="text-sm font-medium">{h.habitName}</p>
-                    <p className="text-[0.6875rem] text-muted-foreground">
-                      {h.state === "unrecorded" ? "Unrecorded" : h.state.replace("_", " ")}
-                    </p>
+                    <p className="text-[0.6875rem] text-muted-foreground">{habitDayLabel(h, h.occurrenceDate)}</p>
                   </button>
                   <AdherenceButtons
                     state={h.state}
                     allowsPartial={h.allowsPartial}
+                    canMiss={h.listed}
                     // The row's own date: left to the server, an evening check-off
                     // would fall on tomorrow's date in UTC.
                     onPick={(s) =>

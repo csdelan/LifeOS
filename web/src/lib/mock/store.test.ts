@@ -22,7 +22,8 @@ import {
   timerFor,
 } from "@/lib/mock/store";
 import { todayHabitRows } from "@/lib/derive";
-import { todayIso } from "@/lib/dates";
+import { addDays, todayIso } from "@/lib/dates";
+import { isOccurrenceDate } from "@/lib/recurrence";
 import { isTerminal } from "@/lib/production-ui-types";
 import { mockReads } from "@/lib/mock/api";
 import { createMockWriteClient } from "@/lib/mock/write-client";
@@ -83,6 +84,27 @@ describe("mock store reducers", () => {
     expect(mockHabits().find((h) => h.id === created.id)?.establishment).toMatchObject({ concluded: 0 });
     adhereHabit(created.id, "followed");
     expect(getState().occurrences.find((o) => o.habitId === created.id)?.state).toBe("followed");
+  });
+
+  it("starts tracking a habit today only when its pattern has today, and misses only its days", () => {
+    const today = todayIso();
+    const other = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].find(
+      (d) => !isOccurrenceDate({ freq: "weekly", on: [d] }, today),
+    )!;
+    const created = createSubject({
+      type: "Habit",
+      title: "Long run",
+      attrs: { recurrence: JSON.stringify({ freq: "weekly", on: [other] }) },
+    });
+    setStatus(created.id, "Building");
+
+    expect(getState().occurrences.filter((o) => o.habitId === created.id)).toEqual([]);
+    expect(() => adhereHabit(created.id, "missed")).toThrow("isn't scheduled on");
+    expect(() => adhereHabit(created.id, "followed", addDays(today, 1))).toThrow("hasn't come yet");
+    // A run done anyway is logged, and then the day is the habit's, which a miss corrects.
+    adhereHabit(created.id, "followed");
+    adhereHabit(created.id, "missed");
+    expect(getState().occurrences.find((o) => o.habitId === created.id)?.state).toBe("not_followed");
   });
 
   it("drops a subject to a terminal status and clears Inbox", () => {

@@ -1169,6 +1169,15 @@ export function earnDay(
     );
   }
   const date = on ?? todayIso();
+  // AdherenceService's refusals, in its words: the mock's stored days stand in for the kernel's.
+  if (date > todayIso()) {
+    throw new Error(`${date} hasn't come yet, so there's nothing to record for habit '${habit.name}' on it.`);
+  }
+  if (adherence === "missed" && !state.occurrences.some((o) => o.habitId === habit.id && o.occurrenceDate === date)) {
+    throw new Error(
+      `Habit '${habit.name}' isn't scheduled on ${date}, so that day can't be missed. Record it as followed if you did it anyway.`,
+    );
+  }
   const mapped = adherence === "missed" ? "not_followed" : adherence;
   state.occurrences = state.occurrences.map((o) =>
     o.habitId === habit.id && o.occurrenceDate === date
@@ -2348,11 +2357,16 @@ function isPlanned(status: string | null | undefined): boolean {
   return (status ?? "").trim().toLowerCase() === "planned";
 }
 
-/** Today's open occurrence for a habit that starts being tracked, as the kernel's schedule would show it. */
+/**
+ * Today's open occurrence for a habit that starts being tracked, as the kernel's schedule would
+ * show it: only when its pattern has today, and a habit with no pattern has no days.
+ */
 function scheduleToday(habitId: string): void {
   const habit = state.habits.find((h) => h.id === habitId);
   const today = todayIso();
   if (!habit || state.occurrences.some((o) => o.habitId === habitId && o.occurrenceDate === today)) return;
+  const spec = parseRecurrence(habit.recurrence);
+  if (!spec || !isOccurrenceDate(spec, today, habit.startDate, habit.endDate)) return;
   state.occurrences = [
     ...state.occurrences,
     {

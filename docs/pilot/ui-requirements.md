@@ -657,6 +657,11 @@ Build:      built
   (4) habit fields are just attributes (free).
 - Implications: "Habit" never appears in storage — it's a Commitment the UI dresses up. A
   missed day is an absence / `violates`, shown as a broken streak, not a breach.
+- A day can be missed only when the habit has it: its pattern schedules it, or something is
+  already recorded on it, which the miss corrects. A day that hasn't come takes no recording.
+  On a day that isn't one of its occurrences, a session done anyway can still be logged as
+  followed. A habit with no pattern has no scheduled days. The app offers only the kernel's
+  days (code review CR105).
 - Open decisions: partial as a new edge relation vs an activity-event attribute; materialize
   "not-followed at window close" or leave it purely projected.
 
