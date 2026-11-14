@@ -1,5 +1,6 @@
-import { useId, useState } from "react";
+import { useId } from "react";
 import { cn } from "@/lib/utils";
+import { useChartCursor } from "@/components/charts/use-chart-cursor";
 
 /** A clean axis top at or above `n`: 100, 125, 150, 200, 250, 300, 400, 500, 600, 800, 1,000… */
 function niceTop(n: number): number {
@@ -137,7 +138,8 @@ export function DailyMetricChart({
   formatValue?: (n: number) => string;
   className?: string;
 }) {
-  const [hovered, setHovered] = useState<number | null>(null);
+  const cursor = useChartCursor({ count: bars.length, onSelect });
+  const hovered = cursor.at;
   const readoutId = useId();
 
   const values = bars.map((b) => (b.value ?? 0) + (b.stack?.value ?? 0));
@@ -149,31 +151,6 @@ export function DailyMetricChart({
   const runs = average ? lineRuns(average, top) : [];
   const step = steps ? stepPath(steps, top) : "";
   const lastStep = steps?.findLast((v) => v != null) ?? null;
-
-  function pick(clientX: number, el: HTMLElement) {
-    const box = el.getBoundingClientRect();
-    if (bars.length === 0 || box.width === 0) return null;
-    const i = Math.floor(((clientX - box.left) / box.width) * bars.length);
-    const at = Math.min(Math.max(i, 0), bars.length - 1);
-    setHovered(at);
-    return at;
-  }
-
-  function onKey(e: React.KeyboardEvent) {
-    if (bars.length === 0) return;
-    const last = bars.length - 1;
-    const now = hovered ?? last;
-    if (e.key === "Enter" && onSelect) {
-      e.preventDefault();
-      onSelect(now);
-      return;
-    }
-    const next =
-      e.key === "ArrowLeft" ? now - 1 : e.key === "ArrowRight" ? now + 1 : e.key === "Home" ? 0 : e.key === "End" ? last : null;
-    if (next == null) return;
-    e.preventDefault();
-    setHovered(Math.min(Math.max(next, 0), last));
-  }
 
   const middle = bars.length > 2 ? bars[Math.floor(bars.length / 2)] : null;
 
@@ -202,20 +179,7 @@ export function DailyMetricChart({
           role="group"
           aria-label={`${label}. Use the arrow keys to read a bar${onSelect ? ", and Enter to open it" : ""}.`}
           aria-describedby={readoutId}
-          tabIndex={0}
-          onKeyDown={onKey}
-          onFocus={() => setHovered((h) => h ?? bars.length - 1)}
-          onBlur={() => setHovered(null)}
-          onPointerMove={(e) => pick(e.clientX, e.currentTarget)}
-          onPointerLeave={() => setHovered(null)}
-          onClick={
-            onSelect
-              ? (e) => {
-                  const at = pick(e.clientX, e.currentTarget);
-                  if (at != null) onSelect(at);
-                }
-              : undefined
-          }
+          {...cursor.props}
           className={cn(
             "relative h-48 min-w-0 flex-1 touch-pan-y rounded-sm border-b border-foreground/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
             onSelect && "cursor-pointer",

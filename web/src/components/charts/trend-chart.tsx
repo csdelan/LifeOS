@@ -1,6 +1,7 @@
-import { useId, useState } from "react";
+import { useId } from "react";
 import { dayNumber } from "@/lib/dates";
 import { cn } from "@/lib/utils";
+import { useChartCursor } from "@/components/charts/use-chart-cursor";
 
 /** One day with a value in a series: a dot, and the trend through it. */
 export interface TrendChartPoint {
@@ -138,7 +139,6 @@ export function TrendChart({
   axisLabel: (day: string) => string;
   className?: string;
 }) {
-  const [hovered, setHovered] = useState<number | null>(null);
   const readoutId = useId();
 
   const days = [...new Set(series.flatMap((s) => s.points.map((p) => p.day)))].sort();
@@ -152,34 +152,25 @@ export function TrendChart({
   const yOf = (v: number) => ((hi - v) / (hi - lo)) * HEIGHT;
   const left = (day: string) => `${(xOf(day) / slots) * 100}%`;
   const top = (v: number) => `${(yOf(v) / HEIGHT) * 100}%`;
+  // A day's place is its date, not its order, so the pointer reads the day nearest it.
+  const cursor = useChartCursor({
+    count: days.length,
+    nearest: (fraction) => {
+      const at = fraction * slots;
+      let best = 0;
+      days.forEach((d, i) => {
+        if (Math.abs(xOf(d) - at) < Math.abs(xOf(days[best]) - at)) best = i;
+      });
+      return best;
+    },
+  });
+  const hovered = cursor.at;
   const shownDay = hovered != null ? days[hovered] : null;
   const shown = shownDay ? readout(shownDay) : null;
   const dense = days.length > 120;
   const middle = Math.floor((first + first + slots - 1) / 2);
   const middleDay = new Date(middle * 86_400_000).toISOString().slice(0, 10);
   const banded = series.some((s) => s.band && (s.band.low != null || s.band.high != null));
-
-  function pick(clientX: number, el: HTMLElement) {
-    const box = el.getBoundingClientRect();
-    if (days.length === 0 || box.width === 0) return;
-    const at = ((clientX - box.left) / box.width) * slots;
-    let best = 0;
-    days.forEach((d, i) => {
-      if (Math.abs(xOf(d) - at) < Math.abs(xOf(days[best]) - at)) best = i;
-    });
-    setHovered(best);
-  }
-
-  function onKey(e: React.KeyboardEvent) {
-    if (days.length === 0) return;
-    const last = days.length - 1;
-    const now = hovered ?? last;
-    const next =
-      e.key === "ArrowLeft" ? now - 1 : e.key === "ArrowRight" ? now + 1 : e.key === "Home" ? 0 : e.key === "End" ? last : null;
-    if (next == null) return;
-    e.preventDefault();
-    setHovered(Math.min(Math.max(next, 0), last));
-  }
 
   /** A band clipped to the axis: from its high end (or the top) down to its low end (or the bottom). */
   function bandBox(band: { low: number | null; high: number | null }) {
@@ -208,12 +199,7 @@ export function TrendChart({
           role="group"
           aria-label={`${label}. Use the arrow keys to read a day.`}
           aria-describedby={readoutId}
-          tabIndex={0}
-          onKeyDown={onKey}
-          onFocus={() => setHovered((h) => h ?? (days.length > 0 ? days.length - 1 : null))}
-          onBlur={() => setHovered(null)}
-          onPointerMove={(e) => pick(e.clientX, e.currentTarget)}
-          onPointerLeave={() => setHovered(null)}
+          {...cursor.props}
           data-testid="trend-chart"
           className="relative h-48 min-w-0 flex-1 touch-pan-y rounded-sm border-b border-foreground/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >

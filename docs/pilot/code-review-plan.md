@@ -378,7 +378,7 @@ number when Chris chooses it.
 | CR92 | 8 | Discard in "Unsaved edits" asks once: the router's blocker reads the flag where Discard has already cleared it. Discard throws the edit away when the move keeps the same item open (the panel and the review editor key themselves by it), so the shell and what holds the edit agree. Escape is Stay, and lets the router go: before, the move stayed blocked and every later link did nothing. The guard has a module of its own (`components/shell/unsaved-edits.ts`), and three golden paths cover it. |
 | CR93 | 9 | A page opened before a deploy copes with the files the deploy removed. Every lazily loaded piece (the pages, the palette, the dialogs, the Map's graph, the journal) reloads once when its file is gone (`lib/new-build.ts`, Vite's `vite:preloadError`), and each page has its own error view inside the shell, which says "LifeOS was updated" with a Reload button when a reload didn't help. A removed `/assets` file answers 404; it got the sign-in's 401, not the app's page as the review said. Every copy of the app's page says not to cache it: only a literal `/index.html` did, not `/` or a link to a page. |
 
-### P2 and P3: built so far (CR94 to CR97)
+### P2 and P3: built so far (CR94 to CR98)
 
 | ID | Review # | Fix |
 |----|----------|-----|
@@ -386,6 +386,7 @@ number when Chris chooses it.
 | CR95 | 33 | Tab leaves the Map's inline create as it does anywhere else; it used to change the type, so the keyboard couldn't reach Add or anything past it. The type buttons are a group named "New item's type", each saying with `aria-pressed` whether it's chosen. A golden path tabs to Add and chooses a type from the keyboard. |
 | CR96 | 31 | The seven form and record sheets (food, readings, lab visits, photos, the walk-through, workouts, days) open through one `ResponsiveSheet` (`components/primitives`): a bottom sheet on a phone, a side panel on a desktop. Once something in it is typed or chosen, Escape, the close button or a tap outside asks "Unsaved edits" first, with Stay and Discard; its own Save or Cancel closes it without asking. The workout and day sheets don't ask: a day only shows, and a workout's note saves as the sheet closes. A test lists the sheets that still open shadcn's sheet themselves, each with why, so a new form sheet can't skip the guard; a golden path covers Log food. |
 | CR97 | First review's P3 | The pages are one table, `components/shell/pages.ts`, which the navigation and the command palette list; before, each kept its own list, and the router and the a11y spec two more. `pages.test.ts` checks the table names every route the router serves (Oura's return page listed apart, with why) and no other, and that an accessibility spec opens each page, so a page can't be added to one and missed in another. |
+| CR98 | 32 | The bar chart, the trend chart and the rank chart read their points through one `useChartCursor` (`components/charts`): hover reads the point under the pointer, focus starts at the newest, the arrow keys, Home and End move it, Enter or a click opens it where the chart can, and leaving or blurring clears it. The copies had drifted: the bar and rank charts read point -1 when focused with nothing to show. The charts' class check now finds them by the hook and fails on any component that handles the arrow keys and the pointer itself. |
 
 ### P1: proposed
 
@@ -426,7 +427,7 @@ number when Chris chooses it.
 | 29 | Web screens | `@tanstack/react-table` is about 110 kB of the Inbox's 124 kB chunk, for a one-column list. | | S |
 | 30 | Web screens | The whole `supabase-js` client loads with the first page, about 100 kB, for auth alone. | | S–M |
 | 31 | Web screens | Built as CR96. Seven copies of the side or bottom sheet, none guarding typed input when it closes: `ResponsiveSheet`. | | M |
-| 32 | Web screens | Three copies of the chart cursor: `useChartCursor`. | | M |
+| 32 | Web screens | Built as CR98. Three copies of the chart cursor: `useChartCursor`. | | M |
 | 33 | Web screens | Built as CR95. The Map's inline create traps Tab, and its type buttons don't say which is pressed. | CR87 | S |
 
 ### P3: when working in that area

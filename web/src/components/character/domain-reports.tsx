@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { useChartCursor } from "@/components/charts/use-chart-cursor";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
 import { formatDay } from "@/lib/dates";
@@ -192,9 +193,10 @@ const CHART_HEIGHT = 176;
  */
 export function RankChart({ series, periodLabel: label }: { series: RankSeries[]; periodLabel: string }) {
   const [mode, setMode] = useState<"chart" | "table">("chart");
-  const [hovered, setHovered] = useState<number | null>(null);
   const readoutId = useId();
   const length = Math.max(...series.map((s) => s.days.length), 0);
+  const cursor = useChartCursor({ count: length });
+  const hovered = cursor.at;
   const titles = series.reduce<string[]>((a, s) => (s.titles.length > a.length ? s.titles : a), []);
   const topRank = Math.max(titles.length - 1, 1);
   const ceiling = Math.min(
@@ -208,24 +210,6 @@ export function RankChart({ series, periodLabel: label }: { series: RankSeries[]
 
   const stepPath = (values: number[]) =>
     values.map((v, i) => `${i === 0 ? "M" : "L"}${i},${y(v)} L${i + 1},${y(v)}`).join(" ");
-
-  function pick(clientX: number, el: HTMLElement) {
-    const box = el.getBoundingClientRect();
-    if (length === 0 || box.width === 0) return;
-    const i = Math.floor(((clientX - box.left) / box.width) * length);
-    setHovered(Math.min(Math.max(i, 0), length - 1));
-  }
-
-  function onKey(e: React.KeyboardEvent) {
-    if (length === 0) return;
-    const last = length - 1;
-    const now = hovered ?? last;
-    const next =
-      e.key === "ArrowLeft" ? now - 1 : e.key === "ArrowRight" ? now + 1 : e.key === "Home" ? 0 : e.key === "End" ? last : null;
-    if (next == null) return;
-    e.preventDefault();
-    setHovered(Math.min(Math.max(next, 0), last));
-  }
 
   const readout = (i: number) =>
     series
@@ -275,12 +259,7 @@ export function RankChart({ series, periodLabel: label }: { series: RankSeries[]
               role="group"
               aria-label={`Rank over the last ${label}. ${summary} Use the arrow keys to read a day.`}
               aria-describedby={readoutId}
-              tabIndex={0}
-              onKeyDown={onKey}
-              onFocus={() => setHovered((h) => h ?? length - 1)}
-              onBlur={() => setHovered(null)}
-              onPointerMove={(e) => pick(e.clientX, e.currentTarget)}
-              onPointerLeave={() => setHovered(null)}
+              {...cursor.props}
               data-testid="rank-chart"
               className="relative min-w-0 flex-1 touch-pan-y rounded-sm border-b border-foreground/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               style={{ height: CHART_HEIGHT }}

@@ -117,16 +117,25 @@ describe("a stacked part (code review CR86)", () => {
   });
 });
 
-// A chart read by pointer and arrow keys is drawn by DailyMetricChart or TrendChart, so each has
-// the same reading, keys and phone behaviour; and every such chart lets a phone scroll the page
-// past it (touch-pan-y), where touch-none trapped the scroll on the Character page.
+// A chart read by pointer and arrow keys is drawn by DailyMetricChart or TrendChart, and reads its
+// points through useChartCursor (code review CR98), so each has the same reading, keys and phone
+// behaviour; and every such chart lets a phone scroll the page past it (touch-pan-y), where
+// touch-none trapped the scroll on the Character page.
 describe("the charts in the views", () => {
   const views = import.meta.glob<string>(["/src/**/*.tsx", "!/src/**/*.test.tsx"], {
     query: "?raw",
     import: "default",
     eager: true,
   });
-  const charts = Object.entries(views).filter(([, text]) => text.includes("onPointerMove") && text.includes('role="group"'));
+  const charts = Object.entries(views).filter(([, text]) => text.includes("useChartCursor("));
+
+  it("read their points through useChartCursor, and none by keys and pointer of its own", () => {
+    const own = Object.entries(views)
+      .filter(([, text]) => text.includes("onPointerMove") && text.includes("ArrowLeft"))
+      .map(([path]) => path);
+    expect(own).toEqual([]);
+    expect(charts.length).toBeGreaterThanOrEqual(3);
+  });
 
   it("are the shared ones, the rank chart's lines aside", () => {
     // The rank over time is a line per domain against rank titles, which neither shared chart draws.
