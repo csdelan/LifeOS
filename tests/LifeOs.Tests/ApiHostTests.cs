@@ -156,7 +156,45 @@ public sealed class ApiHostTests
     {
         Assert.True(SpaFallback.IsReserved("/api/subjects"));
         Assert.True(SpaFallback.IsReserved("/health/ready"));
+        Assert.True(SpaFallback.IsReserved("/assets/browse-page-Ab12.js"));
         Assert.False(SpaFallback.IsReserved("/inbox"));
+    }
+
+    /// <summary>
+    /// After a deploy, a page loaded from the old build asks for files the new one doesn't have.
+    /// Each must answer 404, not the app's page, and every copy of the app's page must say not to
+    /// cache it, a link straight to a page included (code review CR93).
+    /// </summary>
+    [Fact]
+    public async Task A_removed_build_file_is_404_and_no_copy_of_the_page_is_cached()
+    {
+        var webRoot = Directory.CreateTempSubdirectory("lifeos-webroot-");
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(webRoot.FullName, "index.html"), "<!doctype html><title>LifeOS</title>", Ct);
+            Directory.CreateDirectory(Path.Combine(webRoot.FullName, "assets"));
+            await File.WriteAllTextAsync(Path.Combine(webRoot.FullName, "assets", "app-New1.js"), "export {};", Ct);
+            await using var host = await StartAsync(Ct, webRoot: webRoot.FullName);
+
+            var kept = await host.Client.GetAsync("assets/app-New1.js", Ct);
+            Assert.Equal(HttpStatusCode.OK, kept.StatusCode);
+            Assert.Contains("immutable", kept.Headers.CacheControl?.ToString() ?? "", StringComparison.Ordinal);
+
+            var removed = await host.Client.GetAsync("assets/browse-page-Old1.js", Ct);
+            Assert.Equal(HttpStatusCode.NotFound, removed.StatusCode);
+
+            foreach (var page in new[] { "", "index.html", "browse?selected=goal-lifeos", "inbox" })
+            {
+                var response = await host.Client.GetAsync(page, Ct);
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+                Assert.True(response.Headers.CacheControl?.NoStore, $"/{page} may be cached: {response.Headers.CacheControl}");
+            }
+        }
+        finally
+        {
+            webRoot.Delete(recursive: true);
+        }
     }
 
     [Fact]
@@ -170,12 +208,13 @@ public sealed class ApiHostTests
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private static WebApplicationBuilder CreateBuilder(string environmentName, bool includeAuth)
+    private static WebApplicationBuilder CreateBuilder(string environmentName, bool includeAuth, string? webRoot = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             EnvironmentName = environmentName,
             ApplicationName = "LifeOs.Api.HostTests",
+            WebRootPath = webRoot,
         });
         builder.Logging.ClearProviders();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -201,9 +240,10 @@ public sealed class ApiHostTests
 
     private static async Task<TestHost> StartAsync(
         CancellationToken cancellationToken,
-        string environmentName = "Development")
+        string environmentName = "Development",
+        string? webRoot = null)
     {
-        var builder = CreateBuilder(environmentName, includeAuth: true);
+        var builder = CreateBuilder(environmentName, includeAuth: true, webRoot);
         ApiHost.ConfigureServices(builder);
         builder.Logging.ClearProviders();
         var app = builder.Build();

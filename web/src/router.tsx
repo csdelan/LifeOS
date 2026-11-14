@@ -3,7 +3,6 @@ import {
   createRoute,
   createRouter,
   lazyRouteComponent,
-  type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/app-shell";
 // Focus, the landing page, loads with the app; every other page is fetched when it is first
@@ -14,7 +13,7 @@ import type { MapLens } from "@/lib/derive";
 import type { GraphLayoutKind, MapViewMode, OrphanFilter } from "@/lib/graph-model";
 import { parseMapShow, type MapShow } from "@/lib/map-show";
 import { parseBrowseType, type BrowseType } from "@/lib/browse";
-import { Button } from "@/components/ui/button";
+import { ErrorView } from "@/components/shell/error-view";
 
 export type MapSearch = {
   selected?: string;
@@ -85,18 +84,7 @@ export type ReviewsSearch = {
   date?: string;
 };
 
-function ErrorView({ error }: ErrorComponentProps) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-      <p className="font-heading text-2xl">Something broke</p>
-      <p className="max-w-md text-sm text-muted-foreground">
-        {error instanceof Error ? error.message : "Unknown error"}
-      </p>
-      <Button onClick={() => window.location.assign("/")}>Back to Focus</Button>
-    </div>
-  );
-}
-
+// The shell's own failures; a page's show inside the shell (defaultErrorComponent, code review CR93).
 const rootRoute = createRootRoute({
   component: AppShell,
   errorComponent: ErrorView,
@@ -302,6 +290,8 @@ export const router = createRouter({
   routeTree,
   defaultPreload: "intent",
   scrollRestoration: true,
+  // Each page fails on its own, inside the shell, so the navigation stays (code review CR93).
+  defaultErrorComponent: ErrorView,
 });
 
 declare module "@tanstack/react-router" {

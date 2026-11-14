@@ -148,6 +148,23 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     await expect(dialog).toBeHidden();
   });
 
+  test("a page whose file is gone after an update says so, inside the shell (code review CR93)", async ({ page }) => {
+    // As after a deploy: the page's file, fetched the first time it's opened, is no longer there.
+    await page.route(/\/src\/pages\/browse-page\.tsx/, (route) => route.abort());
+    await page.goto("/");
+    await page.getByRole("link", { name: "Browse" }).click();
+
+    // It reloads once to get the new build; when that doesn't help, it says so and offers Reload.
+    const failed = page.getByRole("alert").filter({ hasText: "LifeOS was updated" });
+    await expect(failed).toBeVisible({ timeout: 15_000 });
+    await expect(failed.getByRole("button", { name: "Reload" })).toBeVisible();
+
+    // The shell stays, so another page still opens.
+    await page.getByRole("link", { name: "Inbox" }).click();
+    await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
+    await expect(failed).toBeHidden();
+  });
+
   test("Inbox keyboard triage: arrows, Enter, Drop confirm", async ({ page }) => {
     await page.goto("/inbox");
     await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
