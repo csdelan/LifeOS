@@ -142,10 +142,12 @@ export function FocusPage() {
               />
             ) : (
               <div className="space-y-1">
+                {/* Half the page wide on a desktop: the title gets a line of its own. */}
                 {overdue.map((t) => (
                   <ListRow
                     key={t.id}
                     item={t}
+                    stacked
                     onSelect={() =>
                       void navigate({ to: "/map", search: { selected: t.id } })
                     }
@@ -155,6 +157,7 @@ export function FocusPage() {
                   <ListRow
                     key={t.id}
                     item={t}
+                    stacked
                     onSelect={() =>
                       void navigate({ to: "/map", search: { selected: t.id } })
                     }

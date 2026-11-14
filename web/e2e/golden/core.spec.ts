@@ -251,4 +251,19 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     await expect(page).toHaveURL(/inbox/);
     await expect(page.getByRole("dialog", { name: "Navigation" })).toBeHidden();
   });
+
+  test("Focus's Due & overdue shows each title whole, its details on the line under it", async ({ page }) => {
+    // The narrowest desktop: the section is half the page, about 300 px.
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await page.goto("/");
+    const section = page.locator("section").filter({ has: page.getByRole("heading", { name: "Due & overdue" }) });
+    const row = section.getByRole("button", { name: /Buy race shoes/ });
+    const title = row.getByText("Buy race shoes", { exact: true });
+    const due = row.getByText(/overdue/);
+    await expect(due).toBeVisible();
+    expect(await title.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    const titleBox = (await title.boundingBox())!;
+    const dueBox = (await due.boundingBox())!;
+    expect(dueBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height - 1);
+  });
 });

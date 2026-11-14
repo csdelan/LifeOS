@@ -67,6 +67,34 @@ describe("ListRow dates", () => {
     expect(screen.queryByText(/overdue/)).not.toBeInTheDocument();
     expect(screen.getByText(`Do ${formatDay("2026-09-14")}`)).toBeInTheDocument();
   });
+
+  it("stacked, gives the title a line of its own and puts everything else under it", () => {
+    const item: SubjectListItem = {
+      ...trash,
+      title: "Call the county assessor about the property tax appeal before the deadline",
+      areaName: "Home",
+      scheduled: "2026-10-20",
+      bounty: { coins: 2 },
+    };
+    render(<ListRow item={item} stacked />);
+    const title = screen.getByText(item.title);
+    // It wraps rather than being cut off.
+    expect(title).not.toHaveClass("truncate");
+    const titleLine = title.parentElement!;
+    expect(titleLine).toHaveTextContent(new RegExp(`^${item.title}$`));
+    const details = titleLine.nextElementSibling as HTMLElement;
+    for (const text of ["Task", "Home", "42 days overdue", "Do 8 days overdue", "Not started", "Pays 2 Coins"]) {
+      expect(details).toContainElement(screen.getByText(text));
+    }
+    // Nothing sits beside the two lines to take the title's width.
+    expect(screen.getByRole("button").children).toHaveLength(1);
+  });
+
+  it("unstacked, keeps the chips beside the title as every other list does", () => {
+    render(<ListRow item={trash} />);
+    expect(screen.getByText("Take out trash")).toHaveClass("truncate");
+    expect(screen.getByRole("button").children).toHaveLength(2);
+  });
 });
 
 describe("ListRow covers (COVER-3)", () => {
