@@ -365,11 +365,13 @@ choose. So each fix below ships with a check over the class: every cast of a fre
 door that answers a rule, every read that lists. The numbers are the review's; a proposal gets a CR
 number when Chris chooses it.
 
-### P0
+### P0: built (CR91)
 
-| # | Area | Problem and fix | Finishes | Size |
-|---|------|-----------------|----------|------|
-| 1 | Web screens | The detail panel keeps one item's edit state when another opens. `SubjectDetail` has no `key` at its five call sites (Browse, Habits, the Map, Rewards, Tasks) and `editing` is never reset, so Save writes item A's form onto item B. The journal draft and the Inbox preview carry over the same way. Key each panel by its item, drop unsaved state when it closes, and test opening a second item mid-edit. | | S–M |
+| ID | Review # | Fix |
+|----|----------|-----|
+| CR91 | 1 | The detail panel keys everything typed by its item, inside `SubjectDetail`, so none of its five pages can forget: an edit, a bounty or establish target, a journal entry being written and a relationship being chosen start afresh with the next item, and only the open tab stays. It says nothing is unsaved once it's gone. The Inbox preview is keyed by its item the same way, and a typed promote title now survives the item being tagged. The sheets that edit a record already keyed their forms by it. |
+
+Found while checking it: Discard in the unsaved-edits dialog does ask twice (P1, 8).
 
 ### P1
 

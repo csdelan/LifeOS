@@ -79,18 +79,33 @@ const JournalTab = lazy(() => import("./journal-tab").then((m) => ({ default: m.
 /** A save is several writes, so one that fails with no words of its own may have kept some. */
 const SAVE_FAILED = "That didn't all save. The item shows what was kept.";
 
-export function SubjectDetail({
-  subjectId,
-  onDirtyChange,
-  onClose,
-  onOpenSubject,
-}: {
+type SubjectDetailProps = {
   subjectId: string;
   onDirtyChange?: (dirty: boolean) => void;
   onClose?: () => void;
   /** Opens another subject here: a repeating Task's series, or one of its repetitions. */
   onOpenSubject?: (id: string) => void;
-}) {
+};
+
+/**
+ * One item's detail. A page keeps the panel open and changes the item it shows, so everything
+ * typed here (the edit, a bounty, an establish target, a journal entry) belongs to the item and
+ * starts afresh with the next: kept, an edit begun on one item was saved onto the next (code
+ * review CR91). Only the open tab stays.
+ */
+export function SubjectDetail(props: SubjectDetailProps) {
+  const [tab, setTab] = useState("overview");
+  return <ItemDetail key={props.subjectId} {...props} tab={tab} onTabChange={setTab} />;
+}
+
+function ItemDetail({
+  subjectId,
+  onDirtyChange,
+  onClose,
+  onOpenSubject,
+  tab,
+  onTabChange,
+}: SubjectDetailProps & { tab: string; onTabChange: (tab: string) => void }) {
   const subjectRead = useSubject(subjectId);
   const { data, isLoading, isError } = subjectRead;
   const { data: list } = useListItem(subjectId);
@@ -139,14 +154,6 @@ export function SubjectDetail({
     );
   }, [data, list, habit, rels, tags, editing, form]);
 
-  // A new subject starts with nothing typed into its bounty or establish target.
-  useEffect(() => {
-    setBountyDraft({});
-    setTargetDraft({});
-    setChoosingCover(false);
-    setSaveError(null);
-  }, [subjectId, setSaveError]);
-
   const bountyLines = data?.bounty ?? [];
   const dirty = isDetailDirty(
     editing,
@@ -157,6 +164,9 @@ export function SubjectDetail({
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
+  // What was typed goes with the panel, so once it's gone nothing is held: left set, the page
+  // would ask about unsaved edits that no longer exist.
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   if (isLoading) {
     return (
@@ -455,7 +465,7 @@ export function SubjectDetail({
         ) : null}
       </header>
 
-      <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col gap-0">
+      <Tabs value={tab} onValueChange={onTabChange} className="flex min-h-0 flex-1 flex-col gap-0">
         <div className="shrink-0 border-b px-5">
           <TabsList variant="line" className="w-full justify-start">
             <TabsTrigger value="overview">

@@ -253,11 +253,14 @@ export function InboxPage() {
     getRowId: (row) => row.itemId,
   });
 
+  // Keyed by the item, so what was typed for one (a tag, a title, a subject to relate it to) is
+  // never offered for the next (code review CR91).
   function preview(item: InboxItem, onBack?: () => void) {
     return isResolved(item) ? (
-      <ResolvedPreview item={item} onBackToInbox={() => backToInbox(item)} onBack={onBack} />
+      <ResolvedPreview key={item.itemId} item={item} onBackToInbox={() => backToInbox(item)} onBack={onBack} />
     ) : (
       <InboxPreview
+        key={item.itemId}
         item={item}
         focusAction={focusAction}
         setFocusAction={setFocusAction}
@@ -541,12 +544,9 @@ function InboxPreview({
   const writes = useWrites();
   const { data: subjects } = useSubjects();
   const [promoteType, setPromoteType] = useState<SubjectType>("Task");
-  const [promoteTitle, setPromoteTitle] = useState(inboxItemTitle(item));
+  // Starts from the item's own title; a new read of the same item (it was tagged) keeps what's typed.
+  const [promoteTitle, setPromoteTitle] = useState(() => inboxItemTitle(item));
   const [relateTo, setRelateTo] = useState("");
-
-  useEffect(() => {
-    setPromoteTitle(inboxItemTitle(item));
-  }, [item]);
 
   async function resolveWith(write: () => Promise<unknown>, failure: string) {
     try {
