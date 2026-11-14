@@ -726,11 +726,8 @@ public sealed class McpServerTests(PostgresFixture postgres, ClassDatabase class
     [Fact]
     public void Tools_are_built_from_the_readers_only_and_write_only_through_the_agent_writes()
     {
-        var readers = new HashSet<Type>
-        {
-            typeof(SubjectReader), typeof(RewardReader), typeof(FoodReader), typeof(EnvironmentReader),
-            typeof(ActivityReader), typeof(McpReads), typeof(McpOptions),
-        };
+        // Every reader the reader kernel builds, on the bsk_reader connection, and the options.
+        var readers = new HashSet<Type>([.. ReaderKernel.Readers, typeof(McpOptions)]);
         var toolTypes = typeof(McpHost).Assembly.GetTypes()
             .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null)
             .ToList();

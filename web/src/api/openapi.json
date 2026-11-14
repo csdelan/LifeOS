@@ -525,6 +525,26 @@
         }
       }
     },
+    "/api/focus": {
+      "get": {
+        "tags": [
+          "Reads"
+        ],
+        "operationId": "GetFocus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardRead"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/areas": {
       "get": {
         "tags": [
@@ -7568,6 +7588,71 @@
           }
         }
       },
+      "DashboardRead": {
+        "required": [
+          "primaryFocus",
+          "objectives",
+          "dueAndOverdue",
+          "nextActions",
+          "inboxCount",
+          "todayHabits",
+          "maintainingHabits",
+          "activeGoals",
+          "activeProjects"
+        ],
+        "type": "object",
+        "properties": {
+          "primaryFocus": {
+            "$ref": "#/components/schemas/FocusGoal"
+          },
+          "objectives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FocusObjective"
+            }
+          },
+          "dueAndOverdue": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubjectListItem"
+            }
+          },
+          "nextActions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubjectListItem"
+            }
+          },
+          "inboxCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "todayHabits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HabitDay"
+            }
+          },
+          "maintainingHabits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HabitDay"
+            }
+          },
+          "activeGoals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubjectListItem"
+            }
+          },
+          "activeProjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubjectListItem"
+            }
+          }
+        }
+      },
       "DomainBackOnTrack": {
         "type": "object",
         "properties": {
@@ -8791,6 +8876,56 @@
           }
         }
       },
+      "FocusGoal": {
+        "required": [
+          "title",
+          "subjectId",
+          "kind"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "cover": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CoverRead"
+              }
+            ]
+          }
+        }
+      },
+      "FocusObjective": {
+        "required": [
+          "id",
+          "title",
+          "subjectId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "FoodAwardPaidRow": {
         "type": "object",
         "properties": {
@@ -9243,6 +9378,49 @@
             "items": {
               "$ref": "#/components/schemas/DomainChangeRow"
             }
+          }
+        }
+      },
+      "HabitDay": {
+        "required": [
+          "habitId",
+          "habitUrn",
+          "habitName",
+          "occurrenceDate",
+          "state",
+          "allowsPartial",
+          "listed"
+        ],
+        "type": "object",
+        "properties": {
+          "habitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "habitUrn": {
+            "type": "string"
+          },
+          "habitName": {
+            "type": "string"
+          },
+          "occurrenceDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "state": {
+            "type": "string"
+          },
+          "allowsPartial": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "listed": {
+            "type": "boolean"
           }
         }
       },

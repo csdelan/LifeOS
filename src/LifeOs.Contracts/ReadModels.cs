@@ -285,6 +285,84 @@ public sealed class HabitOccurrenceRow
     public string? Note { get; set; }
 }
 
+/// <summary>
+/// A tracked habit's day as the app offers it (code review CR105): the kernel's occurrence when it
+/// lists one, which can then be missed, or an unrecorded day to log a session done anyway on.
+/// </summary>
+public sealed class HabitDay
+{
+    public Guid HabitId { get; set; }
+    public string HabitUrn { get; set; } = "";
+    public string HabitName { get; set; } = "";
+    public DateOnly OccurrenceDate { get; set; }
+    public string State { get; set; } = "";
+    public bool AllowsPartial { get; set; }
+    public string? Note { get; set; }
+
+    /// <summary>The kernel lists the day (its pattern schedules it, or it's recorded), so it can be missed.</summary>
+    public bool Listed { get; set; }
+
+    /// <summary>The kernel's <paramref name="row"/> for <paramref name="habit"/> on <paramref name="day"/>, or an unrecorded one.</summary>
+    public static HabitDay Of(HabitRow habit, DateOnly day, HabitOccurrenceRow? row) => row is null
+        ? new()
+        {
+            HabitId = habit.Id, HabitUrn = habit.Urn, HabitName = habit.Name, OccurrenceDate = day,
+            State = "unrecorded", AllowsPartial = habit.AllowsPartial,
+        }
+        : new()
+        {
+            HabitId = row.HabitId, HabitUrn = row.HabitUrn, HabitName = row.HabitName, OccurrenceDate = row.OccurrenceDate,
+            State = row.State, AllowsPartial = row.AllowsPartial, Note = row.Note, Listed = true,
+        };
+}
+
+/// <summary>The Focus page (<c>GET /api/focus</c>), worked out by <c>FocusReader</c>.</summary>
+public sealed class DashboardRead
+{
+    /// <summary>The Active goal with the nearest target date, or a stand-in with no subject when there is none.</summary>
+    public required FocusGoal PrimaryFocus { get; set; }
+
+    /// <summary>Up to three Active projects that result in the focus, or any Active ones when none do.</summary>
+    public IReadOnlyList<FocusObjective> Objectives { get; set; } = [];
+
+    /// <summary>Open Tasks due today or late, or whose do-date has come, soonest first (TASKS-1).</summary>
+    public IReadOnlyList<SubjectListItem> DueAndOverdue { get; set; } = [];
+
+    /// <summary>Up to four open Tasks In progress that aren't due.</summary>
+    public IReadOnlyList<SubjectListItem> NextActions { get; set; } = [];
+
+    public int InboxCount { get; set; }
+
+    /// <summary>Each Building habit's day today.</summary>
+    public IReadOnlyList<HabitDay> TodayHabits { get; set; } = [];
+
+    /// <summary>Each Established habit's day today (REWARD-2 maintenance): never scheduled, so never missed.</summary>
+    public IReadOnlyList<HabitDay> MaintainingHabits { get; set; } = [];
+
+    public IReadOnlyList<SubjectListItem> ActiveGoals { get; set; } = [];
+    public IReadOnlyList<SubjectListItem> ActiveProjects { get; set; } = [];
+}
+
+/// <summary>
+/// What Focus is on: a goal, or a stand-in titled so with an empty subject id. Its members are
+/// <c>required</c> because the web document marks a response's fields present only on a type
+/// reached at the top or in a list, and this one is reached only as <see cref="DashboardRead.PrimaryFocus"/>.
+/// </summary>
+public sealed class FocusGoal
+{
+    public required string Title { get; set; }
+    public required string SubjectId { get; set; }
+    public required string Kind { get; set; }
+    public CoverRead? Cover { get; set; }
+}
+
+public sealed class FocusObjective
+{
+    public Guid Id { get; set; }
+    public string Title { get; set; } = "";
+    public Guid SubjectId { get; set; }
+}
+
 public sealed class AppointmentRow
 {
     public Guid Id { get; set; }

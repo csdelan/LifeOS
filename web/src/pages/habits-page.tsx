@@ -13,7 +13,7 @@ import { useDirty } from "@/components/shell/unsaved-edits";
 import { PeekPanel } from "@/components/shell/panels";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
 import { useHabits, useOccurrencesOn, useSubjects, useWrites } from "@/lib/queries";
-import { maintainingHabitRows, todayHabitRows } from "@/lib/derive";
+import { maintainingHabitRows, todayHabitRows } from "@/lib/habit-days";
 import { useHomeToday } from "@/lib/home-day";
 import { habitStage, isMaintainedToday, isReadyToEstablish, maintainedDayLabel } from "@/lib/establish";
 import type { CoverRead, HabitRow } from "@/lib/production-ui-types";

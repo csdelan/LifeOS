@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addDays, todayIso } from "@/lib/dates";
-import { maintainingHabitRows, todayHabitRows } from "@/lib/derive";
+import { maintainingHabitRows, todayHabitRows } from "@/lib/habit-days";
 import {
   adhereHabit,
   applyTimer,

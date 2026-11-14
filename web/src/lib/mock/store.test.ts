@@ -21,7 +21,7 @@ import {
   setTags,
   timerFor,
 } from "@/lib/mock/store";
-import { todayHabitRows } from "@/lib/derive";
+import { todayHabitRows } from "@/lib/habit-days";
 import { addDays, todayIso } from "@/lib/dates";
 import { isOccurrenceDate } from "@/lib/recurrence";
 import { isTerminal } from "@/lib/production-ui-types";

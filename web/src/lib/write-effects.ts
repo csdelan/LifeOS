@@ -17,7 +17,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { materializedMessage } from "@/lib/appointments";
 import { todayIso } from "@/lib/dates";
-import type { DashboardRead } from "@/lib/derive";
+import type { DashboardRead } from "@/lib/reads";
 import { exceptionMarkedMessage, exceptionUnmarkedMessage } from "@/lib/domains";
 import { announceEarned } from "@/lib/earn-feedback";
 import { ratedMessage } from "@/lib/environment";

@@ -8,7 +8,7 @@ namespace LifeOs.Api.Mcp.Tools;
 
 /// <summary>The call an agent starts with (agent-access plan §4.3).</summary>
 [McpServerToolType]
-public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, McpReads reads, McpOptions options)
+public sealed class SnapshotTools(SubjectReader subjects, FocusReader focus, RewardReader rewards, McpReads reads, McpOptions options)
 {
     /// <summary>The most rows each list in the snapshot carries.</summary>
     public const int SectionLimit = 25;
@@ -28,10 +28,10 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
         var today = McpResults.Day(stamp.Today);
         var truncated = new List<string>();
 
-        // Only what's open, in SQL (code review CR54): a finished item, such as each repetition
-        // of a daily chore Chris has done, never shows here, so it isn't read either.
-        var all = await subjects.ListSubjectsAsync(
-            new SubjectFilter { Status = SubjectFilter.Open, HiddenTypes = options.HiddenTypes }, cancellationToken);
+        // Today as Focus sees it (code review CR106): what's open, the Tasks due and in progress,
+        // each tracked habit's day and the Inbox count.
+        var day = await focus.DayAsync(stamp.Today, options.HiddenTypes, cancellationToken);
+        var all = day.Open;
 
         IReadOnlyList<T> Section<T>(string name, IEnumerable<T> rows)
         {
@@ -56,7 +56,7 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
         // project with no status set included. Active ones first.
         IEnumerable<SubjectListItem> Open(string type) => all
             .Where(s => s.Type == type && !StatusVocabulary.IsTerminal(s.Status))
-            .OrderBy(s => Is(s.Status, "Active") ? 0 : 1)
+            .OrderBy(s => FocusReader.Is(s.Status, "Active") ? 0 : 1)
             .ThenBy(s => s.TargetDate ?? "9999", StringComparer.Ordinal)
             .ThenBy(s => s.Title, StringComparer.OrdinalIgnoreCase);
         var openGoals = Open(SubjectTypes.Goal).ToList();
@@ -66,23 +66,14 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
             .Where(t => options.AllowsType(t.Type))
             .ToLookup(t => t.FromId);
 
-        var openTasks = all.Where(s => s.Type == SubjectTypes.Task && !StatusVocabulary.IsTerminal(s.Status)).ToList();
-        var due = openTasks
-            .Where(s => IsOnOrBefore(s.Due, today) || IsOnOrBefore(s.Scheduled, today))
-            .OrderBy(s => s.Due ?? s.Scheduled, StringComparer.Ordinal)
-            .ToList();
-        var dueIds = due.Select(s => s.Id).ToHashSet();
-        var inProgress = openTasks.Where(s => !dueIds.Contains(s.Id) && Is(s.Status, "In progress"));
+        var due = day.DueAndOverdue;
 
-        var habits = (await subjects.GetHabitsAsync(cancellationToken: cancellationToken)).ToList();
-        var todayStates = (await subjects.GetHabitOccurrencesAsync(on: stamp.Today, cancellationToken: cancellationToken)).ToDictionary(o => o.HabitId, o => o.State);
-        var building = habits
-            .Where(h => !StatusVocabulary.IsTerminal(h.Status) && !StatusVocabulary.IsPlanned(h.Status)
-                        && todayStates.ContainsKey(h.Id))
-            .Select(h => new { h.Id, h.Urn, h.Name, Today = todayStates[h.Id], h.CurrentStreak });
-        var maintained = habits
-            .Where(h => Is(h.Status, "Established"))
-            .Select(h => new { h.Id, h.Urn, h.Name, Today = todayStates.GetValueOrDefault(h.Id) });
+        // The habits due today: a Building habit's day the kernel lists. An Established one is
+        // never due, and shows today's check-off if it has one.
+        var dueHabits = day.Building.Where(h => h.Day.Listed).ToList();
+        var building = dueHabits.Select(h => new { h.Habit.Id, h.Habit.Urn, h.Habit.Name, Today = h.Day.State, h.Habit.CurrentStreak });
+        var maintained = day.Maintaining
+            .Select(h => new { h.Habit.Id, h.Habit.Urn, h.Habit.Name, Today = h.Day.Listed ? h.Day.State : null });
 
         var weekEnd = McpResults.Day(stamp.Today.AddDays(6));
         var appointments = (await subjects.GetAppointmentsBetweenAsync(today, weekEnd, cancellationToken))
@@ -129,11 +120,11 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
             {
                 Overdue = string.CompareOrdinal(s.Due ?? s.Scheduled, today) < 0 ? true : null,
             })),
-            InProgress = Section("in_progress", inProgress.Select(ItemRef.From)),
+            InProgress = Section("in_progress", day.InProgress.Select(ItemRef.From)),
             HabitsToday = Section("habits_today", building),
             HabitsMaintained = Section("habits_maintained", maintained),
             AppointmentsNext7Days = Section("appointments_next_7_days", appointments),
-            InboxCount = (await subjects.GetInboxCountAsync(cancellationToken: cancellationToken)),
+            InboxCount = day.InboxCount,
             RunningTimers = Section("running_timers", timers),
             DomainXp = domains,
             Diagnostics = new
@@ -154,16 +145,10 @@ public sealed class SnapshotTools(SubjectReader subjects, RewardReader rewards, 
         };
 
         var summary = $"Snapshot for {today}: {McpResults.Plural(openGoals.Count, "open goal")} "
-                      + $"({openGoals.Count(s => Is(s.Status, "Active"))} Active), "
+                      + $"({openGoals.Count(s => FocusReader.Is(s.Status, "Active"))} Active), "
                       + $"{McpResults.Plural(due.Count, "task")} due or overdue, "
-                      + $"{McpResults.Plural(todayStates.Count, "habit")} scheduled today, "
+                      + $"{McpResults.Plural(dueHabits.Count, "habit")} scheduled today, "
                       + $"{McpResults.Plural(body.InboxCount, "inbox item")}.";
         return McpResults.Ok(stamp, summary, body);
     }
-
-    internal static bool IsOnOrBefore(string? day, string today)
-        => !string.IsNullOrEmpty(day) && string.CompareOrdinal(day, today) <= 0;
-
-    internal static bool Is(string? status, string wanted)
-        => string.Equals(status?.Trim(), wanted, StringComparison.OrdinalIgnoreCase);
 }

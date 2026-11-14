@@ -1,10 +1,9 @@
-import { todayIso } from "@/lib/dates";
-import { deriveDashboard, type AlignmentEdge } from "@/lib/derive";
+import type { AlignmentEdge } from "@/lib/derive";
 import { fits, type ArtifactAppSide } from "@/lib/live/fits";
 import { api, ApiRequestError, unwrap, unwrapBlob, unwrapOrNull } from "@/lib/live/http";
-import { normalizeCoverSearch, withNormalCover } from "@/lib/cover";
+import { normalizeCover, normalizeCoverSearch, withNormalCover } from "@/lib/cover";
 import { repeatingSection, type RecapSection } from "@/lib/review-recap";
-import type { LifeOsReads } from "@/lib/reads";
+import type { DashboardRead, LifeOsReads } from "@/lib/reads";
 import { liveMeasurementReads } from "@/lib/features/measurements/reads";
 import type { SubjectSearch } from "@/lib/browse";
 import { seriesFromDue } from "@/lib/task-series";
@@ -420,22 +419,16 @@ export const liveReads: LifeOsReads = {
   },
 
   async dashboard() {
-    const today = todayIso();
-    // Focus shows open items only and the Inbox's size, so it reads just those (code review CR76).
-    const [subjects, edges, inboxCount, habits, occurrences] = await Promise.all([
-      this.listSubjects({ status: "open" }),
-      this.edges(),
-      this.inboxCount(),
-      this.habits(),
-      this.occurrences({ on: today }),
-    ]);
-    return deriveDashboard({
-      subjects,
-      edges,
-      inboxCount,
-      habits,
-      occurrences,
-      today,
-    });
+    // One read the API works out, as life_snapshot does (code review CR106), where Focus had read
+    // every open item, every edge, the habits and today's occurrences to put it together here.
+    const data = fits<DashboardRead>()(await unwrap(api().GET("/api/focus")));
+    return {
+      ...data,
+      primaryFocus: { ...data.primaryFocus, cover: normalizeCover(data.primaryFocus.cover) },
+      dueAndOverdue: data.dueAndOverdue.map(withNormalCover),
+      nextActions: data.nextActions.map(withNormalCover),
+      activeGoals: data.activeGoals.map(withNormalCover),
+      activeProjects: data.activeProjects.map(withNormalCover),
+    };
   },
 };

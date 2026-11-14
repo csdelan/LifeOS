@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DashboardRead } from "@/lib/derive";
+import type { DashboardRead } from "@/lib/reads";
 import type { HabitDay } from "@/lib/habit-days";
 import type { AppointmentRow, CoverRead, SubjectListItem } from "@/lib/production-ui-types";
 import { FocusPage } from "@/pages/focus-page";

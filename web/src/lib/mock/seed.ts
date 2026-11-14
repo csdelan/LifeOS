@@ -122,7 +122,7 @@ export interface MockState {
   /** Food Log events, in write order (FOOD-1..3): entries, fasts and day closes. */
   foodEvents: MockFoodEvent[];
   primaryFocus: { title: string; subjectId: string; kind: "goal" };
-  objectives: { id: string; title: string; subjectId?: string }[];
+  objectives: { id: string; title: string; subjectId: string }[];
 }
 
 function isoAgo(hours: number): string {
@@ -1714,7 +1714,7 @@ export function createSeed(): MockState {
     },
     objectives: [
       { id: "obj-1", title: "Land the Map graph beside the outline", subjectId: "task-graph" },
-      { id: "obj-2", title: "Clear Inbox before noon" },
+      { id: "obj-2", title: "Clear Inbox before noon", subjectId: "cmt-inbox" },
       { id: "obj-3", title: "Long run, easy pace", subjectId: "task-longrun" },
     ],
   };

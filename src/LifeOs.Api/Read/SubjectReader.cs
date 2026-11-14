@@ -745,12 +745,6 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
             splitOn: "id")).AsList();
     }
 
-    public async Task<int> GetInboxCountAsync(CancellationToken cancellationToken = default)
-    {
-        await using var db = await OpenAsync(cancellationToken);
-        return await db.ExecuteScalarAsync<int>(new CommandDefinition("SELECT count(*) FROM bsk.v_inbox", cancellationToken: cancellationToken));
-    }
-
     /// <summary>The item's status changes, newest first; at most <paramref name="limit"/> when given (code review CR54).</summary>
     public async Task<IReadOnlyList<StatusHistoryEntry>> GetStatusHistoryAsync(
         Guid id, int? limit = null, CancellationToken cancellationToken = default)

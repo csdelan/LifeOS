@@ -3,12 +3,14 @@
  *
  * This is the swap seam: `lib/client.ts` selects mock vs live from
  * `VITE_API_BASE_URL`. Return shapes stay the types in `production-ui-types.ts`.
- * Forest / dashboard composition lives in `lib/derive.ts` so it is shared with live.
+ * The Map's forest is folded in `lib/derive.ts`, which the live reads share; Focus is the API's
+ * (`GET /api/focus`), copied for the mock in `lib/mock/dashboard.ts`.
  */
 
 import { todayIso } from "@/lib/dates";
-import type { LifeOsReads, ListSubjectsOptions, SubjectRelations } from "@/lib/reads";
-import { deriveDashboard, type AlignmentEdge, type DashboardRead } from "@/lib/derive";
+import type { DashboardRead, LifeOsReads, ListSubjectsOptions, SubjectRelations } from "@/lib/reads";
+import type { AlignmentEdge } from "@/lib/derive";
+import { deriveDashboard } from "@/lib/mock/dashboard";
 import type {
   ActivityDayDetailRead,
   ActivityDayRow,
@@ -118,7 +120,8 @@ import {
 } from "@/lib/mock/measurements-store";
 import { METRIC_CATALOG } from "@/lib/mock/metric-catalog";
 
-export type { AlignmentEdge, AlignmentNode, DashboardRead, MapLens } from "@/lib/derive";
+export type { AlignmentEdge, AlignmentNode, MapLens } from "@/lib/derive";
+export type { DashboardRead } from "@/lib/reads";
 
 const wait = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 

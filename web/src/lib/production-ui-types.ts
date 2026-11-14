@@ -22,6 +22,12 @@ import type { PeopleWrites } from "@/lib/features/people/writes";
 /** The API's generated type for the schema named `N` (`src/api/schema.d.ts`). */
 export type ApiSchema<N extends keyof components["schemas"]> = components["schemas"][N];
 
+/**
+ * The generated type `T` with the fields `R` restates in the app's narrower types (code review
+ * CR106): a read the API composes keeps the rest of its fields generated.
+ */
+export type Retyped<T, R extends { [K in keyof R]: K extends keyof T ? unknown : never }> = Omit<T, keyof R> & R;
+
 // ---------------------------------------------------------------------------
 // Vocabulary (interim mirror of PilotVocab / the Domain). Presentation-facing.
 // ---------------------------------------------------------------------------

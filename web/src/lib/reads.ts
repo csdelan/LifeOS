@@ -4,7 +4,8 @@
  * code never imports the mock, and the production bundle can leave the mock out.
  */
 
-import type { AlignmentEdge, DashboardRead } from "@/lib/derive";
+import type { AlignmentEdge } from "@/lib/derive";
+import type { HabitDay } from "@/lib/habit-days";
 import type { MeasurementReads } from "@/lib/features/measurements/reads";
 import type {
   ActivityDayDetailRead,
@@ -51,6 +52,27 @@ import type {
   TaskTimer,
   Wallet,
 } from "@/lib/production-ui-types";
+import type { ApiSchema, CoverRead, Retyped } from "@/lib/production-ui-types";
+
+/**
+ * The Focus page (`GET /api/focus`, code review CR106), worked out by the API as an agent's
+ * `life_snapshot` works out today: the focus goal with its cover (COVER-3), the projects under it,
+ * the Tasks due (TASKS-1) and in progress, each tracked habit's day and the Inbox count.
+ */
+export type DashboardRead = Retyped<
+  ApiSchema<"DashboardRead">,
+  {
+    primaryFocus: Retyped<ApiSchema<"FocusGoal">, { kind: "goal"; cover?: CoverRead | null }>;
+    dueAndOverdue: SubjectListItem[];
+    nextActions: SubjectListItem[];
+    /** Building habits, each with today as the kernel lists it, or a day to log on when it doesn't. */
+    todayHabits: HabitDay[];
+    /** Established habits, each with today's logged state: one-tap check-offs, never missed. */
+    maintainingHabits: HabitDay[];
+    activeGoals: SubjectListItem[];
+    activeProjects: SubjectListItem[];
+  }
+>;
 import type { RecapSection } from "@/lib/review-recap";
 import type { SubjectSearch } from "@/lib/browse";
 import type { SubjectType } from "@/lib/production-ui-types";

@@ -228,6 +228,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/focus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetFocus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/areas": {
         parameters: {
             query?: never;
@@ -2526,6 +2542,18 @@ export interface components {
             type: string;
             title: string;
         };
+        DashboardRead: {
+            primaryFocus: components["schemas"]["FocusGoal"];
+            objectives: components["schemas"]["FocusObjective"][];
+            dueAndOverdue: components["schemas"]["SubjectListItem"][];
+            nextActions: components["schemas"]["SubjectListItem"][];
+            /** Format: int32 */
+            inboxCount: number;
+            todayHabits: components["schemas"]["HabitDay"][];
+            maintainingHabits: components["schemas"]["HabitDay"][];
+            activeGoals: components["schemas"]["SubjectListItem"][];
+            activeProjects: components["schemas"]["SubjectListItem"][];
+        };
         DomainBackOnTrack: {
             /** Format: int32 */
             days?: number;
@@ -2881,6 +2909,19 @@ export interface components {
             /** Format: double */
             drag: number;
         };
+        FocusGoal: {
+            title: string;
+            subjectId: string;
+            kind: string;
+            cover?: null | components["schemas"]["CoverRead"];
+        };
+        FocusObjective: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: uuid */
+            subjectId: string;
+        };
         FoodAwardPaidRow: {
             /** Format: int64 */
             base?: number;
@@ -3003,6 +3044,18 @@ export interface components {
             days: string[];
             awards: components["schemas"]["AwardRow"][];
             progress: components["schemas"]["DomainChangeRow"][];
+        };
+        HabitDay: {
+            /** Format: uuid */
+            habitId: string;
+            habitUrn: string;
+            habitName: string;
+            /** Format: date */
+            occurrenceDate: string;
+            state: string;
+            allowsPartial: boolean;
+            note?: null | string;
+            listed: boolean;
         };
         HabitEstablishment: {
             /** Format: double */
@@ -4486,6 +4539,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxCount"];
+                };
+            };
+        };
+    };
+    GetFocus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardRead"];
                 };
             };
         };

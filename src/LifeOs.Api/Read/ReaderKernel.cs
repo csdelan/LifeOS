@@ -23,6 +23,7 @@ public sealed class ReaderKernel : IAsyncDisposable, IDisposable
         typeof(ArtifactReader),
         typeof(ChangeReader),
         typeof(EnvironmentReader),
+        typeof(FocusReader),
         typeof(FoodReader),
         typeof(MeasurementReader),
         typeof(McpReads),

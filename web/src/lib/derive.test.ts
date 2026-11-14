@@ -1,18 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildAlignmentForest,
-  deriveDashboard,
-  maintainingHabitRows,
-  todayHabitRows,
-  type AlignmentEdge,
-} from "@/lib/derive";
-import type {
-  CoverRead,
-  HabitOccurrenceRow,
-  HabitRow,
-  SubjectListItem,
-  SubjectType,
-} from "@/lib/production-ui-types";
+import { buildAlignmentForest, type AlignmentEdge } from "@/lib/derive";
+import type { SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 
 function item(
   id: string,
@@ -82,98 +70,5 @@ describe("buildAlignmentForest", () => {
     walk(forest);
     expect(titles.filter((id) => id === "p").length).toBeGreaterThan(0);
     expect(titles.length).toBeLessThan(20);
-  });
-});
-
-describe("today's habit rows (REWARD-2 maintenance)", () => {
-  const habit = (id: string, status: string | null, extra: Partial<HabitRow> = {}): HabitRow => ({
-    id,
-    urn: `urn:bsk:habit:${id}`,
-    name: id,
-    allowsPartial: false,
-    recurrence: "daily",
-    archived: false,
-    createdAt: "2026-01-01T00:00:00.000Z",
-    currentStreak: 0,
-    lastState: null,
-    status,
-    ...extra,
-  });
-  const habits = [
-    habit("building", null),
-    habit("planned", "Planned"),
-    habit("established", "Established", { allowsPartial: true }),
-    habit("abandoned", "Abandoned"),
-    habit("archived-established", "Established", { archived: true }),
-  ];
-  const today = "2026-10-21";
-  const logged: HabitOccurrenceRow = {
-    habitId: "established",
-    habitUrn: "urn:bsk:habit:established",
-    habitName: "established",
-    occurrenceDate: today,
-    state: "partial",
-    allowsPartial: true,
-  };
-
-  it("tracks Building habits daily and maintains Established ones, leaving Planned and Abandoned out", () => {
-    expect(todayHabitRows(habits, [], today).map((h) => h.habitId)).toEqual(["building"]);
-    expect(maintainingHabitRows(habits, [], today).map((h) => h.habitId)).toEqual(["established"]);
-  });
-
-  it("reads a maintained habit's logged day, and an unlogged one as unrecorded, never missed", () => {
-    expect(maintainingHabitRows(habits, [logged], today)).toEqual([{ ...logged, listed: true }]);
-    expect(maintainingHabitRows(habits, [], today)).toEqual([
-      expect.objectContaining({ habitId: "established", state: "unrecorded", allowsPartial: true, listed: false }),
-    ]);
-  });
-
-  // Code review, web data #1: the kernel's days, not the web's reckoning of a pattern.
-  it("takes a Building habit's day from the kernel, and offers one it doesn't list only to log", () => {
-    const due: HabitOccurrenceRow = { ...logged, habitId: "building", habitName: "building", state: "unrecorded" };
-    expect(todayHabitRows(habits, [due], today)).toEqual([{ ...due, listed: true }]);
-    expect(todayHabitRows(habits, [], today)).toEqual([
-      expect.objectContaining({ habitId: "building", state: "unrecorded", listed: false }),
-    ]);
-  });
-});
-
-describe("deriveDashboard's primary focus cover (COVER-3)", () => {
-  const cover = { photographer: "Mina Cho", url: "https://images.unsplash.com/photo-1" } as CoverRead;
-  const base = { edges: [], inboxCount: 0, habits: [], occurrences: [], today: "2026-10-23" };
-
-  it("carries the focus subject's cover from the list it was given", () => {
-    const subjects = [item("g", "Goal", "Ship", { status: "Active", cover })];
-    expect(deriveDashboard({ ...base, subjects }).primaryFocus).toMatchObject({ subjectId: "g", cover });
-    const chosen = deriveDashboard({
-      ...base,
-      subjects,
-      primaryFocus: { title: "Ship", subjectId: "g", kind: "goal" },
-    });
-    expect(chosen.primaryFocus.cover).toBe(cover);
-  });
-
-  it("has none for a focus without a cover, or with no goal at all", () => {
-    expect(deriveDashboard({ ...base, subjects: [item("g", "Goal", "Ship", { status: "Active" })] }).primaryFocus.cover).toBeNull();
-    expect(deriveDashboard({ ...base, subjects: [] }).primaryFocus).toMatchObject({ subjectId: "", cover: null });
-  });
-});
-
-describe("deriveDashboard's Due & overdue list (TASKS-1)", () => {
-  const base = { edges: [], inboxCount: 0, habits: [], occurrences: [], today: "2026-10-28" };
-  const task = (id: string, extra: Partial<SubjectListItem>) =>
-    item(id, "Task", id, { status: "Not started", ...extra });
-
-  it("holds a Task once its do-date arrives, until it's done, beside the late and due-today ones", () => {
-    const subjects = [
-      task("week-chore", { scheduled: "2026-10-26", due: "2026-11-01" }),
-      task("yesterday", { scheduled: "2026-10-27" }),
-      task("late", { due: "2026-10-20" }),
-      task("due-today", { due: "2026-10-28" }),
-      task("next-week", { scheduled: "2026-11-02" }),
-      task("done", { scheduled: "2026-10-26", status: "Completed" }),
-    ];
-    const ids = deriveDashboard({ ...base, subjects }).dueAndOverdue.map((t) => t.id);
-    expect(ids.sort()).toEqual(["due-today", "late", "week-chore", "yesterday"]);
   });
 });

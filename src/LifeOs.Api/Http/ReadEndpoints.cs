@@ -6,9 +6,9 @@ namespace LifeOs.Api.Http;
 /// <summary>
 /// Read endpoints over <c>bsk.v_*</c> via the <c>bsk_reader</c> connection.
 /// The OpenAPI document is the contract for their shapes; the web checks its own types
-/// against the generated ones (<c>web/src/lib/live/fits.ts</c>). Composed reads
-/// (alignment forest, dashboard) stay in <c>web/src/lib/derive.ts</c> — this
-/// surface returns the primitives those functions consume.
+/// against the generated ones (<c>web/src/lib/live/fits.ts</c>). Focus is composed here
+/// (<see cref="FocusReader"/>), as an agent's <c>life_snapshot</c> sees it; the Map's alignment
+/// forest is still folded in <c>web/src/lib/derive.ts</c> from these primitives.
 /// </summary>
 public static class ReadEndpoints
 {
@@ -44,6 +44,8 @@ public static class ReadEndpoints
             .Produces<IReadOnlyList<ResolvedInboxItem>>();
         api.MapGet("/inbox/count", CountInbox).WithName("CountInbox")
             .Produces<InboxCount>();
+        api.MapGet("/focus", GetFocus).WithName("GetFocus")
+            .Produces<DashboardRead>();
         api.MapGet("/areas", GetAreas).WithName("GetAreas")
             .Produces<IReadOnlyList<AreaRow>>();
         api.MapGet("/people", GetPeople).WithName("GetPeople")
@@ -142,6 +144,10 @@ public static class ReadEndpoints
     /// <summary>How many items wait in the Inbox: Focus shows the number, not the rows (code review CR76).</summary>
     private static async Task<IResult> CountInbox(SubjectReader reader, CancellationToken cancellationToken)
         => Results.Ok(new InboxCount { Count = await reader.CountInboxAsync(cancellationToken) });
+
+    /// <summary>The Focus page, worked out as <c>life_snapshot</c> works out today (code review CR106).</summary>
+    private static async Task<IResult> GetFocus(FocusReader focus, CancellationToken cancellationToken)
+        => Results.Ok(await focus.DashboardAsync(cancellationToken));
 
     private static async Task<IResult> GetAreas(SubjectReader reader, CancellationToken cancellationToken)
         => Results.Ok((await reader.GetAreasAsync(cancellationToken: cancellationToken)));

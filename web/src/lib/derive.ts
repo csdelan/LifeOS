@@ -1,21 +1,10 @@
 /**
- * Shared composition for Map forest and Focus dashboard.
- *
- * Both the mock reader and the live API client call these so the tree /
- * dashboard logic is not duplicated or trapped in the mock. The API returns
- * primitives (subjects + relation edges + inbox/habits); this module folds them.
+ * The Map's alignment forest, folded from the subjects and the edges among them, which the mock
+ * and the live reads both answer. Focus is worked out by the API (`GET /api/focus`, code review
+ * CR106); the mock's copy of it is `lib/mock/dashboard.ts`.
  */
 
-import { habitStage } from "@/lib/establish";
-import { habitDay, type HabitDay } from "@/lib/habit-days";
-import { isTerminal } from "@/lib/production-ui-types";
-import type {
-  CoverRead,
-  HabitOccurrenceRow,
-  HabitRow,
-  Relation,
-  SubjectListItem,
-} from "@/lib/production-ui-types";
+import type { Relation, SubjectListItem } from "@/lib/production-ui-types";
 import { ALIGNMENT_TYPES } from "@/lib/subject-meta";
 
 export type MapLens = "all" | "Goal" | "Project" | "Task";
@@ -35,24 +24,6 @@ export interface AlignmentNode {
   extraParents: { id: string; title: string; type: SubjectListItem["type"] }[];
   children: AlignmentNode[];
   depth: number;
-}
-
-export interface DashboardRead {
-  /** The focus, with its subject's cover for the card's strip (COVER-3), when it has one. */
-  primaryFocus: { title: string; subjectId: string; kind: "goal"; cover?: CoverRead | null };
-  objectives: { id: string; title: string; subjectId?: string }[];
-  dueAndOverdue: SubjectListItem[];
-  nextActions: SubjectListItem[];
-  inboxCount: number;
-  /** Building habits, each with today as the kernel lists it, or a day to log on when it doesn't. */
-  todayHabits: HabitDay[];
-  /**
-   * Established habits, each with today's logged state (REWARD-2 maintenance): one-tap
-   * check-offs that keep paying, never scheduled, so never missed.
-   */
-  maintainingHabits: HabitDay[];
-  activeGoals: SubjectListItem[];
-  activeProjects: SubjectListItem[];
 }
 
 export function buildAlignmentForest(
@@ -147,112 +118,4 @@ function filterLens(nodes: AlignmentNode[], lens: MapLens): AlignmentNode[] {
     return { ...n, children: kids };
   };
   return nodes.map(keep).filter((x): x is AlignmentNode => x !== null);
-}
-
-export function deriveDashboard(input: {
-  subjects: SubjectListItem[];
-  edges: AlignmentEdge[];
-  inboxCount: number;
-  habits: HabitRow[];
-  occurrences: HabitOccurrenceRow[];
-  today: string;
-  primaryFocus?: { title: string; subjectId: string; kind: "goal" };
-  objectives?: { id: string; title: string; subjectId?: string }[];
-}): DashboardRead {
-  const { subjects, edges, inboxCount, habits, occurrences, today } = input;
-  const openTasks = subjects.filter(
-    (x) => x.type === "Task" && !x.archived && !isTerminal(x.status),
-  );
-  // TASKS-1: due today or late, or its do-date has arrived (the Tasks page's Overdue and Today).
-  const dueAndOverdue = openTasks
-    .filter((x) => (x.due && x.due <= today) || (x.scheduled && x.scheduled <= today))
-    .sort((a, b) =>
-      (a.due ?? a.scheduled ?? "").localeCompare(b.due ?? b.scheduled ?? ""),
-    );
-  const overdueIds = new Set(dueAndOverdue.map((x) => x.id));
-  const nextActions = openTasks
-    .filter((x) => !overdueIds.has(x.id) && x.status === "In progress")
-    .slice(0, 4);
-
-  const activeGoals = subjects.filter(
-    (x) => x.type === "Goal" && x.status === "Active" && !x.archived,
-  );
-  const activeProjects = subjects.filter(
-    (x) => x.type === "Project" && x.status === "Active" && !x.archived,
-  );
-
-  const primary =
-    [...activeGoals].sort(
-      (a, b) =>
-        (a.targetDate ?? "9999").localeCompare(b.targetDate ?? "9999") ||
-        a.title.localeCompare(b.title),
-    )[0] ?? null;
-
-  const childProjectIds = new Set(
-    edges
-      .filter((e) => primary && e.toId === primary.id && e.relation === "results_in")
-      .map((e) => e.fromId),
-  );
-  const fromProjects = activeProjects.filter((p) => childProjectIds.has(p.id));
-  const objectives = (fromProjects.length > 0 ? fromProjects : activeProjects)
-    .slice(0, 3)
-    .map((p) => ({ id: p.id, title: p.title, subjectId: p.id }));
-
-  const focus: DashboardRead["primaryFocus"] = input.primaryFocus ?? (primary
-    ? { title: primary.title, subjectId: primary.id, kind: "goal" }
-    : { title: "No active goal yet", subjectId: "", kind: "goal" });
-  const focusCover = focus.subjectId
-    ? (subjects.find((x) => x.id === focus.subjectId)?.cover ?? null)
-    : null;
-
-  return {
-    primaryFocus: { ...focus, cover: focusCover },
-    objectives:
-      input.objectives && input.objectives.length > 0 ? input.objectives : objectives,
-    dueAndOverdue,
-    nextActions,
-    inboxCount,
-    todayHabits: todayHabitRows(habits, occurrences, today),
-    maintainingHabits: maintainingHabitRows(habits, occurrences, today),
-    activeGoals,
-    activeProjects,
-  };
-}
-
-/**
- * Today's row for each Building habit: the daily tracking. A habit whose day today the kernel
- * doesn't list still has a row, to log a session done anyway, but not one it can miss.
- */
-export function todayHabitRows(
-  habits: HabitRow[],
-  occurrences: HabitOccurrenceRow[],
-  today: string,
-): HabitDay[] {
-  // A Planned habit isn't tracked yet; a graduated (or abandoned) one has left daily
-  // tracking, and Established ones are maintained.
-  return rowsFor(
-    habits.filter((h) => !h.archived && habitStage(h) === "building"),
-    occurrences,
-    today,
-  );
-}
-
-/**
- * Today's row for each Established habit (REWARD-2 maintenance): a day it's logged pays its
- * day price, and a day it isn't is simply unlogged.
- */
-export function maintainingHabitRows(
-  habits: HabitRow[],
-  occurrences: HabitOccurrenceRow[],
-  today: string,
-): HabitDay[] {
-  return rowsFor(
-    habits.filter((h) => !h.archived && habitStage(h) === "established"),
-    occurrences,
-    today,
-  );
-}
-
-function rowsFor(habits: HabitRow[], occurrences: HabitOccurrenceRow[], today: string): HabitDay[] {
-  return habits.map((h) => habitDay(h, today, occurrences));
 }
