@@ -92,6 +92,7 @@ import {
   withRepeat,
 } from "@/lib/mock/store";
 import { mockFoodDay, mockFoodDays, mockFoodRecent } from "@/lib/mock/food-store";
+import { detailWithPhoto, withPersonPhoto } from "@/lib/mock/people-store";
 import { mockSearchScenes } from "@/lib/mock/covers";
 import {
   mockActivityDay,
@@ -199,7 +200,7 @@ export const mockReads: LifeOsReads = {
   async getSubject(id: string): Promise<SubjectDetail | null> {
     await wait();
     const detail = storeState().details[id];
-    return detail ? withCover(detailWithBounty(detail)) : null;
+    return detail ? detailWithPhoto(withCover(detailWithBounty(detail))) : null;
   },
 
   async getListItem(id: string): Promise<SubjectListItem | null> {
@@ -296,7 +297,7 @@ export const mockReads: LifeOsReads = {
 
   async people(): Promise<PersonRow[]> {
     await wait();
-    return storeState().people;
+    return storeState().people.map(withPersonPhoto);
   },
 
   async habits(): Promise<HabitRow[]> {

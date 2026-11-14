@@ -1,4 +1,5 @@
 using LifeOs.Application.Rewards;
+using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 
 namespace LifeOs.Api.Mcp;
@@ -200,12 +201,13 @@ public static class McpAreas
 
     /// <summary>
     /// Every payload key the core's own writes use: status, archive, triage and attribute changes,
-    /// timers, habit check-offs, activity text, idea sessions, review reflections and an agent's
-    /// Person. A capture's payload is empty.
+    /// timers, habit check-offs, activity text, idea sessions, review reflections, an agent's
+    /// Person and a Person's photo. A capture's payload is empty.
     /// </summary>
     public static readonly IReadOnlyList<string> CorePayloadKeys =
     [
         "subject_id", "status", "archived", "timer", "item_kind", "item_id", "state", "title", "attributes",
         "occurrence", "result", "note", "text", "problem", "ideas", ReviewReflections.PayloadKey, AgentWrites.PersonField,
+        PersonPhotoService.PayloadKey,
     ];
 }

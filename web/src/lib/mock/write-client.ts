@@ -94,6 +94,7 @@ import {
   mockLogReadings,
   mockSetMetric,
 } from "@/lib/mock/measurements-store";
+import { mockRemovePersonPhoto, mockSetPersonPhoto } from "@/lib/mock/people-store";
 
 const wait = (ms = 90) => new Promise((r) => setTimeout(r, ms));
 
@@ -260,6 +261,20 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
     async removeFoodPhoto(meal) {
       await wait();
       const result = mockRemoveFoodPhoto(meal);
+      bump();
+      return result;
+    },
+
+    async setPersonPhoto(person, photo, filename) {
+      await wait();
+      const result = mockSetPersonPhoto(person, photo, filename ?? (photo instanceof File ? photo.name : undefined));
+      bump();
+      return result;
+    },
+
+    async removePersonPhoto(person) {
+      await wait();
+      const result = mockRemovePersonPhoto(person);
       bump();
       return result;
     },

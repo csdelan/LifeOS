@@ -70,6 +70,7 @@ internal sealed record BskRoot(RootCommand Command, Option<string?> Connection, 
         rootCommand.Subcommands.Add(RewardsCommand.Create(connectionOption, jsonOption));
         rootCommand.Subcommands.Add(DomainsCommand.Create(connectionOption, jsonOption));
         rootCommand.Subcommands.Add(InvolveCommand.Create(connectionOption, jsonOption));
+        rootCommand.Subcommands.Add(PersonCommand.Create(connectionOption, jsonOption));
         rootCommand.Subcommands.Add(MaterializeCommand.Create(connectionOption, jsonOption));
         rootCommand.Subcommands.Add(RelateCommand.Create(connectionOption, jsonOption));
         rootCommand.Subcommands.Add(TagCommand.Create(connectionOption, jsonOption));

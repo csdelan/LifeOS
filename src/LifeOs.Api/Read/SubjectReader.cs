@@ -277,7 +277,9 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
                    s.attributes->>'target_date' AS target_date,
                    s.expected_cadence, s.next_review_at, s.scope, s.statement, s.created_at,
                    s.archived, s.area, a.name AS area_name,
-                   s.attributes::text AS attributes
+                   s.attributes::text AS attributes,
+                   CASE WHEN s.type = 'Person' AND bsk.is_uuid_text(s.attributes->>'photo')
+                        THEN (s.attributes->>'photo')::uuid END AS photo_artifact_id
             FROM bsk.v_subject s
             LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = s.id
             LEFT JOIN bsk.v_area a ON a.urn = s.area
@@ -935,7 +937,8 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
             SELECT s.id, s.urn, s.title,
                    s.attributes->>'person_kind' AS person_kind,
                    s.attributes->>'role' AS role,
-                   s.archived
+                   s.archived,
+                   CASE WHEN bsk.is_uuid_text(s.attributes->>'photo') THEN (s.attributes->>'photo')::uuid END AS photo_artifact_id
             FROM bsk.v_subject s
             WHERE s.type = 'Person'
               AND (@includeArchived OR NOT s.archived)

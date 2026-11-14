@@ -35,6 +35,7 @@ import { MaterializePanel } from "@/components/appointments/materialize-panel";
 import { RepeatPanel } from "@/components/tasks/repeat-panel";
 import { CoverBanner } from "@/components/cover/cover-banner";
 import { CoverPicker } from "@/components/cover/cover-picker";
+import { PersonPhotoControl } from "@/components/people/person-photo";
 import { canHaveCover } from "@/lib/cover";
 import { DecisionActions, RecordDecisionAction } from "@/components/detail/decision-relationships";
 import { canStartDecisionFrom, type LinkedItem } from "@/lib/decisions";
@@ -445,6 +446,17 @@ function ItemDetail({
             />
           ) : null}
         </div>
+        {subject.type === "Person" ? (
+          <PersonPhotoControl
+            person={{
+              id: subject.id,
+              title: subject.title,
+              photoArtifactId: subject.photoArtifactId,
+              kind: list?.personKind,
+            }}
+            editing={editing}
+          />
+        ) : null}
         {editing && saving.error ? (
           <p role="alert" className="mt-2 text-sm text-destructive">
             {saving.error}

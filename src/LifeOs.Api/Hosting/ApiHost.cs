@@ -182,6 +182,7 @@ public static class ApiHost
         app.MapOuraEndpoints();
         app.MapActivityEndpoints();
         app.MapCoverEndpoints();
+        app.MapPeopleEndpoints();
         app.MapAgentEndpoints();
         app.MapLifeOsMcp();
         app.MapSpaFallback();

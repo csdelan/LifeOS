@@ -91,6 +91,12 @@ public sealed class SubjectDetail
 
     /// <summary>Its cover image (COVER-1), or null — always null for a type that can't have one.</summary>
     public CoverRead? Cover { get; set; }
+
+    /// <summary>
+    /// A Person's photo (GEN-15): the artifact whose bytes <c>/api/artifacts/{id}/content</c>
+    /// answers, or null. Always null for anything but a Person.
+    /// </summary>
+    public Guid? PhotoArtifactId { get; set; }
 }
 
 /// <summary>One alignment-graph edge, in whichever direction it was queried.</summary>
@@ -318,6 +324,9 @@ public sealed class PersonRow
     public string? PersonKind { get; set; }
     public string? Role { get; set; }
     public bool Archived { get; set; }
+
+    /// <summary>Its photo (GEN-15): the artifact whose bytes <c>/api/artifacts/{id}/content</c> answers, or null.</summary>
+    public Guid? PhotoArtifactId { get; set; }
 }
 
 public sealed class JournalEntry

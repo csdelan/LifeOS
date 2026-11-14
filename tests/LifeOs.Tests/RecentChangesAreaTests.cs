@@ -45,13 +45,15 @@ public sealed class RecentChangesAreaTests(PostgresFixture postgres)
         var problem = (await db.Get<SubjectCreationService>().CreateAsync(SubjectTypes.Problem, "The gate sticks", "{}", cancellationToken: Ct)).Subject;
         await capture.CaptureIdeaSessionAsync(problem.Id, "The gate sticks", ["Plane the edge"], Ct);
         await db.Get<ActivityService>().LogAsync(new ActivityInput("Walked the dog"), Ct);
+        var friend = (await db.Get<SubjectCreationService>().CreateAsync(SubjectTypes.Person, "Sam", "{}", cancellationToken: Ct)).Subject;
+        await db.Get<PersonPhotoService>().SetAsync(friend.Urn, FoodPhotoTests.Jpeg(), cancellationToken: Ct);
 
         var reader = TestReaders.Changes(db.ConnectionString);
         var everything = (await reader.GetChangesAsync(since, null, NoneOff, 500, cancellationToken: Ct));
         var core = (await reader.GetChangesAsync(since, null, AllOff, 500, cancellationToken: Ct));
 
         Assert.Equal(
-            ["activity", "archive_change", "attribute_change", "idea_session", "journal", "note", "state_change", "triage", "voice"],
+            ["activity", "archive_change", "attribute_change", "idea_session", "journal", "note", "observation", "state_change", "triage", "voice"],
             everything.Select(r => r.Kind).Distinct().Order(StringComparer.Ordinal));
         Assert.Equal(
             everything.Select(r => $"{r.Kind} {r.Id}").Order(StringComparer.Ordinal),

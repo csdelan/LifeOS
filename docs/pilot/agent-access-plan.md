@@ -708,7 +708,11 @@ with LifeOS's list, so each agent is in one of four states:
   first) or **Remove** (removes Supabase's grant).
 - **Disconnected** (allowed here, but Supabase no longer lists it): **Revoke**.
 - **Revoked**, or **Refused** for a client LifeOS never allowed and knows only by its
-  refused calls.
+  refused calls. None of these can call, so they're hidden until Chris turns on **Show
+  revoked (N)** (2026-11-13, his ask); each visit starts with them hidden. A card he revokes
+  leaves the list with a line saying where it went.
+
+Each card shows the photo of the Person the agent acts as (GEN-15), or a bot without one.
 
 **Revoke** takes the agent off LifeOS's list first, so `/mcp` refuses its next call, and
 then removes Supabase's grant so it can't get new tokens. If Supabase fails, the section

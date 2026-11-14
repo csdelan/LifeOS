@@ -17,6 +17,7 @@
 
 import type { components } from "@/api/schema";
 import type { MeasurementWrites } from "@/lib/features/measurements/writes";
+import type { PeopleWrites } from "@/lib/features/people/writes";
 
 /** The API's generated type for the schema named `N` (`src/api/schema.d.ts`). */
 export type ApiSchema<N extends keyof components["schemas"]> = components["schemas"][N];
@@ -353,6 +354,8 @@ export interface SubjectDetail {
   repeating?: TaskRepeat | null;
   /** Its cover photo (COVER-1); null when it has none, always for a type that can't have one. */
   cover?: CoverRead | null;
+  /** A Person's photo (GEN-15): the artifact whose bytes show it; null when it has none, always for anything else. */
+  photoArtifactId?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1920,7 +1923,7 @@ export interface HomeDaysRead {
  * The write client the UI calls. Every method maps to a bsk verb / API endpoint.
  * Mock all of these for the first pass; return shapes match the real API.
  */
-export interface LifeOsWriteClient extends MeasurementWrites {
+export interface LifeOsWriteClient extends MeasurementWrites, PeopleWrites {
   newSubject(req: NewSubjectRequest): Promise<CreatedSubject>;
   /** source = event id (capture→subject) or subject ref (Idea→work via results_in). */
   promote(source: string, type: SubjectType, title: string): Promise<CreatedSubject>;

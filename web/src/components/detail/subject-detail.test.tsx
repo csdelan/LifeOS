@@ -8,6 +8,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { getState, mockTaskSeriesHistory, resetStore } from "@/lib/mock/store";
 import { tagUniverse } from "@/lib/mock/seed";
 
+// jsdom can't decode a photo, so one picked is sent as it is.
+vi.mock("@/lib/photo", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/photo")>()),
+  resizePhoto: async (file: Blob) => file,
+}));
+
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), {
     success: vi.fn(),
@@ -431,5 +437,51 @@ describe("SubjectDetail Decisions (GEN-13)", () => {
     // A Problem's Relationships stay Parents and Children.
     await user.click(screen.getByRole("tab", { name: /Relationships/ }));
     expect(await screen.findByRole("heading", { name: "Parents" }, { timeout: 4000 })).toBeInTheDocument();
+  });
+});
+
+describe("A Person's photo (GEN-15)", () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  it("adds a photo to a Person, changes it, and takes it off; nothing but a Person offers one", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderDetail("person-sam");
+    await screen.findByRole("heading", { name: "Sam" }, { timeout: 4000 });
+    expect(screen.getByText("Optional.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove photo" })).not.toBeInTheDocument();
+
+    await user.upload(screen.getByLabelText("Photo of Sam"), new File([new Uint8Array(500)], "sam.png", { type: "image/png" }));
+    expect(await screen.findByRole("button", { name: /Change photo/ }, { timeout: 4000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View the photo of Sam" })).toBeInTheDocument();
+    const photo = getState().details["person-sam"]?.attributes;
+    expect(JSON.parse(photo ?? "{}").photo).toEqual(expect.any(String));
+
+    // Editing the Person leaves the photo alone: its buttons wait for Save or Cancel.
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.queryByRole("button", { name: /Change photo/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await user.click(screen.getByRole("button", { name: "Remove photo" }));
+    expect(await screen.findByRole("button", { name: /Add photo/ }, { timeout: 4000 })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "View the photo of Sam" })).not.toBeInTheDocument();
+    unmount();
+
+    renderDetail("goal-lifeos");
+    await screen.findByRole("heading", { name: /Ship LifeOS production UI/i }, { timeout: 4000 });
+    expect(screen.queryByRole("button", { name: /Add photo/ })).not.toBeInTheDocument();
+  });
+
+  it("says why a photo didn't save, and keeps the Person as it was", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    renderDetail("person-sam");
+    await screen.findByRole("heading", { name: "Sam" }, { timeout: 4000 });
+
+    await user.upload(screen.getByLabelText("Photo of Sam"), new File(["GIF89a"], "sam.gif", { type: "image/gif" }));
+    expect(await screen.findByRole("alert", {}, { timeout: 4000 })).toHaveTextContent(
+      "That isn't a photo: send a JPEG, PNG or WebP image.",
+    );
+    expect(screen.getByRole("button", { name: /Add photo/ })).toBeInTheDocument();
   });
 });

@@ -23,7 +23,7 @@ test.describe("golden paths: connected agents", () => {
 
   // Connected agents (agent-access plan §4.5), with the mock's Claude (allowed) and a helper
   // Supabase lists but LifeOS doesn't allow (fix 3).
-  test("allow an agent, read its calls, and revoke it", async ({ page }) => {
+  test("allow an agent, read its calls, and revoke it, which then waits under Show revoked", async ({ page }) => {
     await page.goto("/people");
     const helper = page.getByRole("article", { name: "Research helper" });
     await expect(helper.getByText("Not allowed")).toBeVisible();
@@ -36,7 +36,13 @@ test.describe("golden paths: connected agents", () => {
     await expect(claude.getByRole("list", { name: "Recent calls, newest first" }).getByText("life_snapshot")).toBeVisible();
     await claude.getByRole("button", { name: "Revoke" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Revoke" }).click();
+    // Revoked agents are hidden until asked for.
+    await expect(page.getByRole("status")).toHaveText("Revoked Claude. Show revoked lists it.");
+    await expect(claude).toHaveCount(0);
+    await page.getByRole("switch", { name: "Show revoked (1)" }).click();
     await expect(claude.getByText("Revoked", { exact: true })).toBeVisible();
+    await page.getByRole("switch", { name: "Show revoked (1)" }).click();
+    await expect(claude).toHaveCount(0);
   });
 
   test("an expired consent request says to start again", async ({ page }) => {

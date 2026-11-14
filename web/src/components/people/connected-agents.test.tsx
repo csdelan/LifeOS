@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectedAgents } from "@/components/people/connected-agents";
 import type { AgentRecord } from "@/lib/agents";
 import { CLAUDE_CALLBACK, mockAgentsClient, resetMockAgents } from "@/lib/mock/agents";
+import { mockSetPersonPhoto } from "@/lib/mock/people-store";
+import { resetStore } from "@/lib/mock/store";
 
 const { overrides } = vi.hoisted(() => ({
   overrides: {
@@ -59,6 +61,7 @@ function card(name: string) {
 describe("ConnectedAgents", () => {
   beforeEach(() => {
     resetMockAgents();
+    resetStore();
     overrides.mcpEnabled = true;
     overrides.grantsError = null;
     overrides.writes = "off";
@@ -87,7 +90,8 @@ describe("ConnectedAgents", () => {
     });
     const user = userEvent.setup();
     renderSection();
-    await screen.findAllByRole("article", { name: "Claude" });
+    await user.click(await screen.findByRole("switch", { name: "Show revoked (1)" }));
+    await waitFor(() => expect(screen.getAllByRole("article", { name: "Claude" })).toHaveLength(2));
     const [replaced] = screen
       .getAllByRole("article", { name: "Claude" })
       .filter((a) => within(a).queryByText(/when Claude connected again/));
@@ -109,15 +113,70 @@ describe("ConnectedAgents", () => {
     expect(within(card("Research helper")).getByRole("combobox", { name: "Person Research helper acts as" })).toBeInTheDocument();
   });
 
-  it("revokes a connected agent", async () => {
+  it("revokes a connected agent, which then waits under Show revoked", async () => {
     const user = userEvent.setup();
     renderSection();
     await user.click(await within(await screen.findByRole("article", { name: "Claude" })).findByRole("button", { name: "Revoke" }));
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog).toHaveTextContent("LifeOS refuses its next call");
     await user.click(within(dialog).getByRole("button", { name: "Revoke" }));
-    await waitFor(() => expect(within(card("Claude")).getByText("Revoked")).toBeInTheDocument());
+    expect(await screen.findByRole("status")).toHaveTextContent("Revoked Claude. Show revoked lists it.");
+    await waitFor(() => expect(screen.queryByRole("article", { name: "Claude" })).not.toBeInTheDocument());
+    await user.click(screen.getByRole("switch", { name: "Show revoked (1)" }));
+    expect(within(card("Claude")).getByText("Revoked")).toBeInTheDocument();
     expect(within(card("Claude")).queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
+  });
+
+  it("hides revoked agents until asked, and says so when they're all there is", async () => {
+    // Revoked as the page does it: off LifeOS's list and out of Supabase's.
+    await mockAgentsClient().revoke("mock-claude");
+    await mockAgentsClient().removeGrant("mock-claude");
+    const user = userEvent.setup();
+    const first = renderSection();
+    const toggle = await screen.findByRole("switch", { name: "Show revoked (1)" });
+    expect(toggle).not.toBeChecked();
+    // The helper still waits on Chris, so it stays; revoked Claude doesn't.
+    expect(screen.getByRole("article", { name: "Research helper" })).toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "Claude" })).not.toBeInTheDocument();
+    await user.click(toggle);
+    expect(within(card("Claude")).getByText("Revoked")).toBeInTheDocument();
+    await user.click(toggle);
+    expect(screen.queryByRole("article", { name: "Claude" })).not.toBeInTheDocument();
+
+    // Once the helper's gone too, nothing can call, and the page says so rather than show nothing.
+    await mockAgentsClient().removeGrant("mock-helper");
+    first.unmount();
+    renderSection();
+    expect(await screen.findByText(/No agent can call LifeOS now: every one here is revoked/)).toBeInTheDocument();
+    expect(screen.queryByText("No agents yet")).not.toBeInTheDocument();
+  });
+
+  it("shows the photo of the Person an agent acts as, and a bot without one", async () => {
+    const photo = mockSetPersonPhoto("person-agent", new Blob([new Uint8Array(100)], { type: "image/jpeg" })).photoArtifactId;
+    overrides.claude = { personId: "person-agent", personName: "Cursor Grok" };
+    renderSection();
+    const claude = await screen.findByRole("article", { name: "Claude" });
+    await waitFor(() => expect(claude.querySelector("img")).not.toBeNull());
+    expect(claude.querySelector("img")?.getAttribute("src")).toMatch(/^blob:/);
+    expect(photo).toBeTruthy();
+    // The helper acts as no one yet, so a bot stands in.
+    expect(card("Research helper").querySelector("img")).toBeNull();
+  });
+
+  it("clears what it said about a revoke once Show revoked is used", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await within(await screen.findByRole("article", { name: "Claude" })).findByRole("button", { name: "Revoke" }));
+    await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Revoke" }));
+    await screen.findByRole("status");
+    await user.click(await screen.findByRole("switch", { name: "Show revoked (1)" }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("shows no toggle while nothing is revoked", async () => {
+    renderSection();
+    await screen.findByRole("article", { name: "Claude" });
+    expect(screen.queryByRole("switch", { name: /Show revoked/ })).not.toBeInTheDocument();
   });
 
   it("removes an agent it doesn't allow from Supabase", async () => {
@@ -125,8 +184,9 @@ describe("ConnectedAgents", () => {
     renderSection();
     await user.click(await within(await screen.findByRole("article", { name: "Research helper" })).findByRole("button", { name: "Remove" }));
     await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Remove" }));
-    // LifeOS never allowed it, so it only knows the client by the calls it refused.
+    // LifeOS never allowed it, so it only knows the client by the calls it refused, among the revoked.
     await waitFor(() => expect(screen.queryByRole("article", { name: "Research helper" })).not.toBeInTheDocument());
+    await user.click(screen.getByRole("switch", { name: "Show revoked (1)" }));
     const unknown = card("An unknown agent");
     expect(within(unknown).getByText("Refused")).toBeInTheDocument();
     expect(within(unknown).getByText(/Never allowed in LifeOS/)).toBeInTheDocument();

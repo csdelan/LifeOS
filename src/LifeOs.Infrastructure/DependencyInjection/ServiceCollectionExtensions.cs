@@ -214,6 +214,15 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<EventSource>(),
             reportsEnabled: StoresPhotos(sp, settings)));
 
+        // A Person's photo (GEN-15), stored as food and space photos are.
+        services.AddSingleton(sp => new PersonPhotoService(
+            sp.GetRequiredService<IArtifactBlobStore>(),
+            sp.GetRequiredService<SubjectService>(),
+            sp.GetRequiredService<ISubjectRepository>(),
+            sp.GetRequiredService<IClock>(),
+            sp.GetRequiredService<EventSource>(),
+            enabled: StoresPhotos(sp, settings)));
+
         // Daily and weekly reviews (REVIEW-1, REVIEW-2) and their vault reflections (§4.1).
         services.AddSingleton<ReviewService>();
         services.AddSingleton<ReflectionService>();

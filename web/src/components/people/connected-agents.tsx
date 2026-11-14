@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   accessText,
@@ -35,6 +37,7 @@ import {
 } from "@/lib/queries";
 import { errorText } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
+import { PersonAvatar } from "@/components/people/person-photo";
 
 const NOT_LINKED = "none";
 
@@ -62,12 +65,28 @@ export function ConnectedAgents() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [showGone, setShowGone] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
   const rows = agentRows(grants.data ?? [], overview.data?.agents ?? []);
+  const gone = rows.filter((r) => r.status === "gone").length;
+  const shown = showGone ? rows : rows.filter((r) => r.status !== "gone");
   const aiPeople = (people.data ?? []).filter((p) => p.personKind === "ai" && !p.archived);
+  // An agent shows the photo of the Person it acts as.
+  const photoOf = (personId: string | null | undefined) =>
+    (people.data ?? []).find((p) => p.id === personId)?.photoArtifactId ?? null;
 
   const run = (next: AgentAction) => {
     setError(null);
-    action.mutate(next, { onError: (e) => setError(errorText(e, "That didn't work.")) });
+    setNotice(null);
+    const name = rows.find((r) => r.clientId === next.clientId)?.name;
+    action.mutate(next, {
+      onError: (e) => setError(errorText(e, "That didn't work.")),
+      // A revoked agent leaves the list while revoked ones are hidden, so say where it went.
+      onSuccess: () => {
+        if (next.kind === "revoke" && !showGone) setNotice(`Revoked ${name ?? "the agent"}. Show revoked lists it.`);
+      },
+    });
   };
 
   return (
@@ -114,6 +133,30 @@ export function ConnectedAgents() {
         </p>
       ) : null}
 
+      {notice ? (
+        <p role="status" className="mt-4 text-sm text-muted-foreground">
+          {notice}
+        </p>
+      ) : null}
+
+      {/* Revoked agents, replaced clients and ones LifeOS only ever refused can't call, so they
+          stay out of the way unless asked for. */}
+      {gone > 0 ? (
+        <div className="mt-4 flex items-center gap-3">
+          <Switch
+            id="connected-agents-show-gone"
+            checked={showGone}
+            onCheckedChange={(on) => {
+              setShowGone(on);
+              setNotice(null);
+            }}
+          />
+          <Label htmlFor="connected-agents-show-gone" className="font-normal">
+            Show revoked ({gone})
+          </Label>
+        </div>
+      ) : null}
+
       {overview.data && !grants.isLoading && rows.length === 0 ? (
         <EmptyState
           icon={BotIcon}
@@ -121,12 +164,18 @@ export function ConnectedAgents() {
           description="When you connect one and approve it on LifeOS's consent page, it shows here."
         />
       ) : null}
+      {overview.data && !grants.isLoading && rows.length > 0 && shown.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          No agent can call LifeOS now: every one here is revoked. Show revoked lists them.
+        </p>
+      ) : null}
 
       <ul className="mt-6 space-y-3">
-        {rows.map((row) => (
+        {shown.map((row) => (
           <li key={row.clientId}>
             <AgentCard
               row={row}
+              photoArtifactId={photoOf(row.record?.personId)}
               writes={overview.data?.writes ?? "off"}
               aiPeople={aiPeople}
               busy={action.isPending}
@@ -163,6 +212,7 @@ export function ConnectedAgents() {
 
 function AgentCard({
   row,
+  photoArtifactId,
   writes,
   aiPeople,
   busy,
@@ -170,6 +220,7 @@ function AgentCard({
   onLink,
 }: {
   row: AgentRow;
+  photoArtifactId: string | null;
   writes: string;
   aiPeople: { id: string; title: string }[];
   busy: boolean;
@@ -194,13 +245,16 @@ function AgentCard({
       className="rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 id={titleId} className="font-medium">
-            {row.name}
-          </h3>
-          <p className="truncate font-mono text-xs text-muted-foreground">
-            {row.uri ? hostOf(row.uri) : row.clientId}
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <PersonAvatar photoArtifactId={photoArtifactId} kind="ai" />
+          <div className="min-w-0">
+            <h3 id={titleId} className="font-medium">
+              {row.name}
+            </h3>
+            <p className="truncate font-mono text-xs text-muted-foreground">
+              {row.uri ? hostOf(row.uri) : row.clientId}
+            </p>
+          </div>
         </div>
         <Badge variant={row.status === "connected" ? "secondary" : row.status === "not-allowed" ? "destructive" : "outline"}>
           {label}

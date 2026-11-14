@@ -224,6 +224,27 @@ public sealed class BskJsonTests(PostgresFixture postgres)
             new { collectedAt = DateTimeOffset.UtcNow, lab = "Labcorp", results = new[] { new { metric = "LDL", value = 131m, high = 99m } } });
 
         await Pair("review", ["review", "open", "daily"], "/api/reviews/open", new { kind = "daily", date = Iso(today.AddDays(-1)) });
+
+        // A Person's photo goes up as a file to bsk and as multipart to the API.
+        var bskFriend = (await BskAsync(db, ["new", "person", "Bsk friend"]))!["urn"]!.GetValue<string>();
+        var apiFriend = (await Api("/api/subjects", new { type = SubjectTypes.Person, title = "Api friend" }))!["id"]!.GetValue<string>();
+        var picture = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllBytesAsync(picture, FoodPhotoTests.Jpeg(), Ct);
+            using var form = new MultipartFormDataContent { { new ByteArrayContent(FoodPhotoTests.Jpeg()), "photo", "friend.jpg" } };
+            var upload = await host.Client.PostAsync($"/api/people/{apiFriend}/photo", form, Ct);
+            var uploaded = await upload.Content.ReadAsStringAsync(Ct);
+            Assert.True(upload.IsSuccessStatusCode, uploaded);
+            writes.Add(("bsk person photo --file ↔ POST /api/people/{id}/photo (person photo)",
+                await BskAsync(db, ["person", "photo", bskFriend, "--file", picture]), JsonNode.Parse(uploaded)));
+        }
+        finally
+        {
+            File.Delete(picture);
+        }
+
+        await Pair("person photo --remove", ["person", "photo", bskFriend, "--remove"], $"/api/people/{apiFriend}/photo/delete", new { });
         return writes;
     }
 

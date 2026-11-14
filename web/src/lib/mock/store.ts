@@ -335,6 +335,9 @@ export function applyAttrs(subjectId: string, attrs: Record<string, string>) {
     throw new Error("Cover is set with `bsk cover` (a photo from Unsplash), not `bsk set`.");
   }
   const list = byId(subjectId);
+  if (list?.type === "Person" && Object.keys(attrs).some((key) => key.trim().toLowerCase() === "photo")) {
+    throw new Error("A Person's photo is set with `bsk person photo` or on its page, not `bsk set`.");
+  }
   const detail = state.details[subjectId];
   if (!list || !detail) return;
   // A repeating Task's edit follows to its open repetitions still holding the old value (D16).
@@ -1740,6 +1743,19 @@ function normalizeTarget(target: number): number {
 }
 
 /** Write a Reward's catalog attributes; `undefined` removes a key. */
+/** A subject's stored attributes, the whole bag, as a verb's own service reads them. */
+export function storedAttrs(id: string): Record<string, unknown> {
+  return rawAttrs(state.details[id]?.attributes);
+}
+
+/**
+ * Writes stored attributes as a verb's own service does, past `applyAttrs`'s refusals; `undefined`
+ * removes one. A feature's half of the mock (a Person's photo) writes through it.
+ */
+export function patchStoredAttrs(id: string, patch: Record<string, unknown>) {
+  writeRewardAttrs(id, patch);
+}
+
 function writeRewardAttrs(id: string, patch: Record<string, unknown>) {
   const detail = state.details[id];
   if (!detail) return;

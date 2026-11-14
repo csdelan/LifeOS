@@ -53,6 +53,10 @@ public static class ReservedAttributes
         new(SubjectTypes.Review, ReviewPeriods.ReservedKeys,
             "A review's kind and period are set when it's opened (`bsk review open`), not with `bsk set`."),
 
+        // A Person's photo names a stored artifact (GEN-15), so only its upload sets it.
+        new(SubjectTypes.Person, [PersonPhotoService.AttributeKey],
+            "A Person's photo is set with `bsk person photo` or on its page, not `bsk set`."),
+
         // What an instant reward costs is a checked price (REWARD-3).
         new(SubjectTypes.Reward, [RewardAttributes.Price],
             "An instant reward's price is set with `bsk rewards price`, not `bsk set`."),

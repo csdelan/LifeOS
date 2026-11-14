@@ -1485,6 +1485,11 @@ Build:      built
   Tasks / Appointments / delegated work are reads over incoming relations.
 - Kernel delta: none of its own — Person exists; the human / AI split is one attribute;
   archive is D9.
+- A Person's photo (added 2026-11-13, Chris's ask): optional, for a human or an AI agent. It's
+  an artifact with bytes, as a food photo is, and `attributes.photo` holds its id. Only its own
+  verb writes it (`bsk person photo`, `POST /api/people/{id}/photo`, the Person's page), so
+  `ReservedAttributes` refuses it to `bsk set` and the edit form. It shows on the People page,
+  the Person's page and the Connected agents card of an agent acting as that Person.
 - Implications: one directory backs every Person selector — Commitment owner (GEN-12), Inbox
   Delegate (INBOX-3), Appointment attendees (CAL-1), and AI-authored captures (CAP-3) all point
   here. Contact details are plain attributes (fine for a single-user local Pilot). AI agents
