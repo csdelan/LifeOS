@@ -6,7 +6,6 @@ import {
   initialPanels,
   labsUsed,
   lineProblem,
-  normalizeLabVisit,
   reportOrder,
   reportProblem,
   resultRange,
@@ -20,7 +19,7 @@ import {
   type VisitTestRow,
 } from "@/lib/labs";
 import { METRIC_CATALOG } from "@/lib/mock/metric-catalog";
-import type { LabPanel, LabVisitRow, MetricReadingRow, MetricRow } from "@/lib/production-ui-types";
+import type { LabPanel, MetricReadingRow, MetricRow } from "@/lib/production-ui-types";
 
 function test(name: string, panel: LabPanel | null, catalog: string | null, more: Partial<MetricRow> = {}): MetricRow {
   return {
@@ -251,26 +250,5 @@ describe("checking the visit sheet as the kernel does", () => {
     expect(reportProblem({ size: 2048, type: "text/plain" })).toBe(
       "That isn't a PDF or a photo: send the report as a PDF, or a JPEG, PNG or WebP photo of it.",
     );
-  });
-});
-
-describe("the live API's lab visits", () => {
-  it("reads numbers sent as strings as numbers", () => {
-    const raw = {
-      id: "v1",
-      lab: "Quest Diagnostics",
-      note: null,
-      collectedAt: "2026-07-11T15:15:00Z",
-      collectedOn: "2026-07-11",
-      collectedLocal: "2026-07-11T08:15:00",
-      report: { id: "a1", filename: "results.pdf", contentType: "application/pdf", byteSize: "2048" },
-      results: [{ ...result(glucose, 104, 65, 99), value: "104", low: "65", high: "99", flag: "high" }],
-      outside: "1",
-      loggedAt: "2026-07-12T00:00:00Z",
-      versions: "2",
-    } as unknown as LabVisitRow;
-    const visit = normalizeLabVisit(raw);
-    expect(visit).toMatchObject({ outside: 1, versions: 2, report: { byteSize: 2048 } });
-    expect(visit.results[0]).toMatchObject({ value: 104, low: 65, high: 99, flag: "high", visitId: "v1" });
   });
 });

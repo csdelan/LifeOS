@@ -7,6 +7,7 @@
 
 import { isLiveApi } from "@/lib/api-base";
 import { mockState } from "@/lib/client";
+import { fits } from "@/lib/live/fits";
 import { api, unwrap } from "@/lib/live/http";
 import { getSupabase } from "@/lib/supabase";
 
@@ -217,53 +218,6 @@ export function carriedPerson(replaced: AgentRecord[]): { id: string; name: stri
   return from?.personId ? { id: from.personId, name: from.personName ?? "an AI agent" } : null;
 }
 
-function num(value: unknown): number {
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function str(value: unknown): string | null {
-  return typeof value === "string" && value !== "" ? value : null;
-}
-
-export function normalizeAgent(raw: unknown): AgentRecord {
-  const r = (raw ?? {}) as Record<string, unknown>;
-  return {
-    clientId: String(r.clientId ?? ""),
-    name: str(r.name),
-    clientUri: str(r.clientUri),
-    redirectUri: str(r.redirectUri),
-    allowed: r.allowed === true,
-    allowedAt: str(r.allowedAt),
-    revokedAt: str(r.revokedAt),
-    replacedBy: str(r.replacedBy),
-    personId: str(r.personId),
-    personName: str(r.personName),
-    actsAsAgentPerson: r.actsAsAgentPerson === true,
-    mayWrite: r.mayWrite === true,
-    readOnlyBecause: str(r.readOnlyBecause),
-    lastCallAt: str(r.lastCallAt),
-    callsThisWeek: num(r.callsThisWeek),
-    lastRefusedAt: str(r.lastRefusedAt),
-    refusedThisWeek: num(r.refusedThisWeek),
-  };
-}
-
-export function normalizeCall(raw: unknown): AgentCallRow {
-  const r = (raw ?? {}) as Record<string, unknown>;
-  const outcome = r.outcome === "ok" || r.outcome === "refused" ? r.outcome : "error";
-  return {
-    id: num(r.id),
-    calledAt: String(r.calledAt ?? ""),
-    clientId: String(r.clientId ?? ""),
-    tool: str(r.tool),
-    arguments: str(r.arguments),
-    outcome,
-    items: r.items === null || r.items === undefined ? null : num(r.items),
-    durationMs: num(r.durationMs),
-  };
-}
-
 /** An agent's website is its own say, so only a web address is kept; anything else is null. */
 export function webAddress(uri: string | null | undefined): string | null {
   return uri && /^https?:\/\/[^\s]+$/i.test(uri.trim()) ? uri.trim() : null;
@@ -277,12 +231,7 @@ function fail(error: { message?: string } | null, fallback: string): never {
 export function liveAgentsClient(): AgentsClient {
   return {
     async overview() {
-      const data = (await unwrap(api().GET("/api/agents"))) as Record<string, unknown>;
-      return {
-        mcpEnabled: data.mcpEnabled === true,
-        writes: typeof data.writes === "string" ? data.writes : "off",
-        agents: Array.isArray(data.agents) ? data.agents.map(normalizeAgent) : [],
-      };
+      return fits<AgentsOverview>()(await unwrap(api().GET("/api/agents")));
     },
     async grants() {
       const { data, error } = await getSupabase().auth.oauth.listGrants();
@@ -296,13 +245,13 @@ export function liveAgentsClient(): AgentsClient {
       }));
     },
     async calls(clientId, limit = 20) {
-      const data = (await unwrap(
-        api().GET("/api/agents/calls", { params: { query: { clientId, limit } } }),
-      )) as Record<string, unknown>;
-      return Array.isArray(data.calls) ? data.calls.map(normalizeCall) : [];
+      const read = fits<{ calls: AgentCallRow[] }>()(
+        await unwrap(api().GET("/api/agents/calls", { params: { query: { clientId, limit } } })),
+      );
+      return read.calls;
     },
     async allow(clientId, name, clientUri, options) {
-      return normalizeAgent(
+      return fits<AgentRecord>()(
         await unwrap(
           api().PUT("/api/agents/{clientId}", {
             params: { path: { clientId } },
@@ -317,7 +266,7 @@ export function liveAgentsClient(): AgentsClient {
       );
     },
     async revoke(clientId) {
-      return normalizeAgent(
+      return fits<AgentRecord>()(
         await unwrap(api().POST("/api/agents/{clientId}/revoke", { params: { path: { clientId } } })),
       );
     },
@@ -326,7 +275,7 @@ export function liveAgentsClient(): AgentsClient {
       if (error) fail(error, "Supabase didn't remove the agent.");
     },
     async linkPerson(clientId, personId) {
-      return normalizeAgent(
+      return fits<AgentRecord>()(
         await unwrap(
           api().PUT("/api/agents/{clientId}/person", {
             params: { path: { clientId } },

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { endOfWeekSunday, startOfWeekMonday } from "@/lib/dates";
 import {
-  normalizeReview,
   obsidianUrl,
   reviewHabitDays,
   reviewPeriod,
@@ -97,7 +96,20 @@ describe("due at the end of its day, missed after (D8)", () => {
 
 describe("the review's standing in words", () => {
   const doc = (extra: Partial<ReviewDoc>): ReviewDoc => ({
-    ...normalizeReview({ id: "r", kind: "daily", date: "2026-11-08", dueOn: "2026-11-08" }),
+    id: "r",
+    kind: "daily",
+    date: "2026-11-08",
+    weekStart: "2026-11-02",
+    weekEnd: "2026-11-08",
+    planStart: "2026-11-09",
+    planEnd: "2026-11-09",
+    dueOn: "2026-11-08",
+    status: "Open",
+    completedAt: null,
+    missed: false,
+    completedLate: false,
+    keepFocus: true,
+    reflection: null,
     ...extra,
   });
 
@@ -110,53 +122,7 @@ describe("the review's standing in words", () => {
   });
 });
 
-describe("the API's review row", () => {
-  it("reads every field the page needs, with no reflection until one is linked", () => {
-    const doc = normalizeReview({
-      id: "6f1c",
-      urn: "urn:bsk:review:6f1c",
-      title: "Weekly review, Sun Nov 8",
-      kind: "weekly",
-      date: "2026-11-08",
-      weekStart: "2026-11-02",
-      weekEnd: "2026-11-08",
-      planStart: "2026-11-09",
-      planEnd: "2026-11-15",
-      dueOn: "2026-11-08",
-      status: "Completed",
-      missed: true,
-      completedLate: true,
-      completedAt: "2026-11-09T18:00:00Z",
-      keepFocus: false,
-    });
-    expect(doc).toMatchObject({
-      kind: "weekly",
-      date: "2026-11-08",
-      planEnd: "2026-11-15",
-      status: "Completed",
-      missed: true,
-      completedLate: true,
-      keepFocus: false,
-      reflection: null,
-    });
-  });
-
-  it("keeps focus unless told otherwise, and reads an unknown status as Open", () => {
-    expect(normalizeReview({ kind: "daily", status: "Weird" })).toMatchObject({ status: "Open", keepFocus: true });
-  });
-
-  it("reads a linked reflection, and a link missing its path or vault as none (reviews plan §4.1)", () => {
-    const reflection = {
-      path: "10 Reflections/2026-11-12 Daily reflection.md",
-      vault: "Chris2.0",
-      summary: "A calm day.",
-      linkedAt: "2026-11-13T11:00:00Z",
-    };
-    expect(normalizeReview({ kind: "daily", reflection }).reflection).toEqual(reflection);
-    expect(normalizeReview({ kind: "daily", reflection: { ...reflection, path: "" } }).reflection).toBeNull();
-    expect(normalizeReview({ kind: "daily", reflection: { summary: "No place" } }).reflection).toBeNull();
-  });
-
+describe("a review's reflection", () => {
   it("opens a reflection in Obsidian by its vault and path, spaces and all", () => {
     expect(obsidianUrl({ vault: "Chris2.0", path: "10 Reflections/2026-11-12 Daily reflection.md" })).toBe(
       "obsidian://open?vault=Chris2.0&file=10%20Reflections%2F2026-11-12%20Daily%20reflection.md",

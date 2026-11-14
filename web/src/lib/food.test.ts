@@ -4,7 +4,6 @@ import {
   foodWriteMessage,
   fromLocalInput,
   mealTypeWord,
-  normalizeFoodSummary,
   summaryHeadline,
   toLocalInput,
 } from "@/lib/food";
@@ -128,14 +127,7 @@ describe("local times", () => {
   });
 });
 
-describe("shapes", () => {
-  it("reads the API's decimals as numbers", () => {
-    const raw = { ...summary(), quality: "28" as unknown as number, fasting: "7.33" as unknown as number };
-    const s = normalizeFoodSummary(raw);
-    expect(s.quality).toBe(28);
-    expect(s.fasting).toBeCloseTo(7.33);
-  });
-
+describe("meal types", () => {
   it("names meal types", () => {
     expect(mealTypeWord("breakfast")).toBe("Breakfast");
     expect(mealTypeWord("drink")).toBe("Drink");

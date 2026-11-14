@@ -174,7 +174,7 @@ export function readStoredCover(raw: unknown): CoverRead | null {
     source: typeof c.source === "string" ? c.source : "unsplash",
     photoId: typeof c.photo_id === "string" ? c.photo_id : "",
     url: c.url,
-    color: coverColor(c.color),
+    color: coverColor(typeof c.color === "string" ? c.color : null),
     width: typeof c.width === "number" ? c.width : MOCK_SCENE_WIDTH,
     height: typeof c.height === "number" ? c.height : MOCK_SCENE_HEIGHT,
     alt: typeof c.alt === "string" ? c.alt : null,

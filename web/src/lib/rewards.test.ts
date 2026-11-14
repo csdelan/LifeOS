@@ -7,9 +7,6 @@ import {
   formatAmounts,
   ledgerLabel,
   multipliedLabel,
-  normalizeAward,
-  normalizeRedemption,
-  normalizeReward,
   priceProblem,
   redeemProblem,
   redemptionMessage,
@@ -17,7 +14,7 @@ import {
   shortfall,
   targetProblem,
 } from "@/lib/rewards";
-import type { RewardRow, Wallet } from "@/lib/production-ui-types";
+import type { Award, RewardRow, Wallet } from "@/lib/production-ui-types";
 
 const wallet: Wallet = {
   openedAt: "2026-10-10T00:00:00Z",
@@ -135,46 +132,20 @@ describe("amount drafts", () => {
   });
 });
 
-describe("API normalization", () => {
-  it("turns the API's int64 / decimal strings into numbers", () => {
-    const row = normalizeReward({
-      ...reward({ kind: "savings", price: {} }),
-      targetUsd: "500.00" as unknown as number,
-      dollarsRedeemed: "5.00" as unknown as number,
-      percentOfTarget: "1.0" as unknown as number,
-      redemptions: "1" as unknown as number,
-    });
-    expect([row.targetUsd, row.dollarsRedeemed, row.percentOfTarget, row.redemptions]).toEqual([500, 5, 1, 1]);
-
-    const redemption = normalizeRedemption({
-      id: "e",
-      amounts: { coins: "4" as unknown as number },
-      dollars: "2.00" as unknown as number,
-      coinRate: null,
-      reward: null,
-      wallet: { ...wallet, coinValueUsd: "0.50" as unknown as number },
-    });
-    expect([redemption.amounts.coins, redemption.dollars, redemption.coinRate, redemption.wallet.coinValueUsd]).toEqual(
-      [4, 2, null, 0.5],
-    );
-  });
-
-  it("reads an award's base and multipliers as numbers, and says how it was multiplied", () => {
-    const earn = normalizeAward({
+describe("multiplied awards", () => {
+  it("says how an award's life-domain XP was multiplied", () => {
+    const earn: Award = {
       id: "e",
       entry: "earn",
       trigger: "followed",
       awardKey: "day:h:2026-10-20:followed",
       subject: null,
-      amounts: { health_xp: "78" as unknown as number, freedom: 5 },
-      base: { health_xp: "60" as unknown as number },
-      multipliers: { health_xp: "1.3" as unknown as number },
-    });
-    expect([earn.amounts.health_xp, earn.base?.health_xp, earn.multipliers?.health_xp]).toEqual([78, 60, 1.3]);
+      amounts: { health_xp: 78, freedom: 5 },
+      base: { health_xp: 60 },
+      multipliers: { health_xp: 1.3 },
+    };
     expect(multipliedLabel(earn)).toBe("❤️ 60 × 1.3");
-
-    const plain = normalizeAward({ ...earn, base: undefined, multipliers: undefined });
-    expect([plain.base, plain.multipliers, multipliedLabel(plain)]).toEqual([null, null, ""]);
+    expect(multipliedLabel({ ...earn, base: null, multipliers: null })).toBe("");
   });
 });
 

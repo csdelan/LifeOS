@@ -1,22 +1,16 @@
 /**
- * The Measurements page's words and the API's shapes (MEASURE-1 to MEASURE-4, D20, measurements
+ * The Measurements page's words (MEASURE-1 to MEASURE-4, D20, measurements
  * plan §2–§4.9): the kernel's limits, the starter list's keys (the list is the API's, CR73), how a value, a reading's time, the goal
  * date and the normal range read, the checks a typed value goes through (in the kernel's words),
- * how the page groups metrics (blood pressure's two are one), and the live API's numbers
- * (`number | string`) as numbers. The trend itself is `lib/metric-trend.ts`.
+ * and how the page groups metrics (blood pressure's two are one). The trend itself is
+ * `lib/metric-trend.ts`.
  */
 import { formatDay } from "@/lib/dates";
 import type {
-  LabPanel,
-  MetricBetter,
-  MetricDayRow,
-  MetricDetailRead,
   MetricFlag,
   MetricGoalRow,
   MetricGoalStatus,
-  MetricReadingResult,
   MetricReadingRow,
-  MetricReadingsResult,
   MetricRow,
   MetricTemplate,
 } from "@/lib/production-ui-types";
@@ -406,109 +400,6 @@ export function goalText(
     default:
       return null;
   }
-}
-
-// ---------------------------------------------------------------------------
-// The live API's shapes: numbers may arrive as strings (`number | string`)
-// ---------------------------------------------------------------------------
-
-function num(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function numOrNull(value: unknown): number | null {
-  return value === null || value === undefined || value === "" ? null : num(value);
-}
-
-function better(value: unknown): MetricBetter | null {
-  return value === "lower" || value === "higher" ? value : null;
-}
-
-function flag(value: unknown): MetricFlag | null {
-  return value === "low" || value === "high" ? value : null;
-}
-
-export function normalizeReading(raw: MetricReadingRow): MetricReadingRow {
-  return {
-    id: raw.id,
-    metricId: raw.metricId,
-    value: num(raw.value),
-    unit: raw.unit ?? "",
-    note: raw.note ?? null,
-    takenAt: raw.takenAt,
-    takenOn: raw.takenOn,
-    takenLocal: raw.takenLocal,
-    loggedAt: raw.loggedAt,
-    versions: num(raw.versions),
-    flag: flag(raw.flag),
-    visitId: raw.visitId ?? null,
-    low: numOrNull(raw.low),
-    high: numOrNull(raw.high),
-  };
-}
-
-function panel(value: unknown): LabPanel | null {
-  return value === "cmp" || value === "lipids" || value === "a1c" || value === "other" ? value : null;
-}
-
-export function normalizeMetric(raw: MetricRow): MetricRow {
-  return {
-    id: raw.id,
-    urn: raw.urn ?? "",
-    name: raw.name ?? "",
-    unit: raw.unit ?? "",
-    decimals: num(raw.decimals),
-    target: numOrNull(raw.target),
-    better: better(raw.better),
-    catalog: raw.catalog ?? null,
-    archivedAt: raw.archivedAt ?? null,
-    archivedOn: raw.archivedOn ?? null,
-    low: numOrNull(raw.low),
-    high: numOrNull(raw.high),
-    panel: panel(raw.panel),
-    readings: num(raw.readings),
-    lastReading: raw.lastReading ? normalizeReading(raw.lastReading) : null,
-  };
-}
-
-function normalizeDay(raw: MetricDayRow): MetricDayRow {
-  return { day: raw.day, value: num(raw.value), trend: num(raw.trend), readingId: raw.readingId };
-}
-
-function normalizeGoal(raw: MetricGoalRow): MetricGoalRow {
-  return {
-    status: (raw.status ?? "no_target") as MetricGoalStatus,
-    target: numOrNull(raw.target),
-    direction: better(raw.direction),
-    now: numOrNull(raw.now),
-    ratePerWeek: numOrNull(raw.ratePerWeek),
-    reachedBy: raw.reachedBy ?? null,
-    basis: {
-      days: num(raw.basis?.days),
-      from: raw.basis?.from ?? null,
-      to: raw.basis?.to ?? null,
-    },
-  };
-}
-
-export function normalizeMetricDetail(raw: MetricDetailRead): MetricDetailRead {
-  return {
-    today: raw.today,
-    from: raw.from ?? null,
-    metric: normalizeMetric(raw.metric),
-    readings: (raw.readings ?? []).map(normalizeReading),
-    days: (raw.days ?? []).map(normalizeDay),
-    goal: normalizeGoal(raw.goal),
-  };
-}
-
-export function normalizeReadingResult(raw: MetricReadingResult): MetricReadingResult {
-  return { reading: raw.reading ? normalizeReading(raw.reading) : null };
-}
-
-export function normalizeReadingsResult(raw: MetricReadingsResult): MetricReadingsResult {
-  return { readings: (raw.readings ?? []).map(normalizeReading) };
 }
 
 /** The toast after a reading write: "Logged 192.4 lb", "Saved 192.2 lb", "Deleted the reading". */

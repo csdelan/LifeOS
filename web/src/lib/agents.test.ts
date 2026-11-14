@@ -4,8 +4,6 @@ import {
   CLAUDE_CALLBACK,
   carriedPerson,
   mockAgentsClient,
-  normalizeAgent,
-  normalizeCall,
   replaceable,
   resetMockAgents,
   startOfWeek,
@@ -69,24 +67,6 @@ describe("agentRows", () => {
     );
     expect(rows[0]).toMatchObject({ clientId: "r", status: "not-allowed", name: "Revoked one" });
     expect(rows[1]).toMatchObject({ clientId: "u", status: "gone", name: "An unknown agent" });
-  });
-});
-
-describe("normalize", () => {
-  it("reads the API's loose numbers and empty strings", () => {
-    expect(normalizeAgent({ clientId: "c", allowed: true, callsThisWeek: "3", name: "" })).toMatchObject({
-      clientId: "c",
-      allowed: true,
-      callsThisWeek: 3,
-      name: null,
-      refusedThisWeek: 0,
-    });
-    expect(normalizeCall({ id: "7", outcome: "weird", items: null, durationMs: "12" })).toMatchObject({
-      id: 7,
-      outcome: "error",
-      items: null,
-      durationMs: 12,
-    });
   });
 });
 

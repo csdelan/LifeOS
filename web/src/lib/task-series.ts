@@ -1,15 +1,12 @@
 import { addDays, startOfWeekMonday } from "@/lib/dates";
 import { addMonthsClamped, isOccurrenceDate, parseRecurrence, recurrenceLabel } from "@/lib/recurrence";
-import { normalizeAmounts } from "@/lib/rewards";
 import { defaultStatus } from "@/lib/production-ui-types";
 import type {
   RecurrenceSpec,
   SeriesRepetitionDue,
   SeriesRepetitions,
   SubjectListItem,
-  TaskRepeat,
   TaskSeriesCounts,
-  TaskSeriesRow,
 } from "@/lib/production-ui-types";
 
 /**
@@ -183,25 +180,4 @@ export function periodReading(row: SeriesPeriod): string {
   if (row.aheadCount) parts.push(`${row.aheadCount} still to do`);
   if (row.skippedCount) parts.push(`${row.skippedCount} skipped`);
   return parts.join(" · ");
-}
-
-/** The API types int64 as `number | string`; the counts are numbers here. */
-function counted<T extends TaskSeriesCounts>(raw: T): T {
-  return {
-    ...raw,
-    openCount: Number(raw.openCount) || 0,
-    completedCount: Number(raw.completedCount) || 0,
-    missedCount: Number(raw.missedCount) || 0,
-    cancelledCount: Number(raw.cancelledCount) || 0,
-  };
-}
-
-/** A detail's `repeating`, its counts as numbers. */
-export function normalizeRepeat(raw: TaskRepeat | null | undefined): TaskRepeat | null {
-  return raw ? counted(raw) : null;
-}
-
-/** A series row, its counts and price as numbers. */
-export function normalizeSeriesRow(raw: TaskSeriesRow): TaskSeriesRow {
-  return { ...counted(raw), bounty: raw.bounty ? normalizeAmounts(raw.bounty) : null };
 }

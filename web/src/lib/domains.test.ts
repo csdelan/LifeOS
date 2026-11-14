@@ -9,12 +9,6 @@ import {
   multiplierLabel,
   needParts,
   needText,
-  normalizeDomainDays,
-  normalizeDomainReport,
-  normalizeDomainRow,
-  normalizeEarned,
-  normalizeExceptionDays,
-  normalizeExceptionResult,
   periodLabel,
   progressMessage,
   rankHoldText,
@@ -25,8 +19,6 @@ import {
 import type {
   DomainConsistencyNeed,
   DomainCurrent,
-  DomainDaysRead,
-  DomainReportRead,
   DomainRow,
 } from "@/lib/production-ui-types";
 
@@ -229,87 +221,5 @@ describe("progressMessage (xp-domains plan §7.4.7)", () => {
       kind: "lost",
       text: "Health down to level 11",
     });
-  });
-});
-
-describe("normalizing domain reads", () => {
-  it("reads an earning answer's int64 fields from strings, and an older answer's bests as the level", () => {
-    const earned = normalizeEarned({
-      awards: [{ id: "a", entry: "earn", trigger: "rank", awardKey: "rank:health_xp:10", subject: null, amounts: { gems: "1" } }],
-      progress: [
-        { domain: "health_xp", levelFrom: "9", levelTo: "10", rankFrom: "0", rankTo: "1", rankTitle: "Apprentice", bestLevelFrom: "9", bestLevelTo: "10", bestRankFrom: "0", bestRankTo: "1" },
-        { domain: "health_xp", levelFrom: "12", levelTo: "11", rankFrom: "1", rankTo: "1", rankTitle: "Apprentice" },
-      ],
-    });
-    expect(earned.awards[0].amounts).toEqual({ gems: 1 });
-    expect(earned.progress).toEqual([
-      { domain: "health_xp", levelFrom: 9, levelTo: 10, rankFrom: 0, rankTo: 1, rankTitle: "Apprentice", bestLevelFrom: 9, bestLevelTo: 10, bestRankFrom: 0, bestRankTo: 1 },
-      { domain: "health_xp", levelFrom: 12, levelTo: 11, rankFrom: 1, rankTo: 1, rankTitle: "Apprentice", bestLevelFrom: 12, bestLevelTo: 11, bestRankFrom: 1, bestRankTo: 1 },
-    ]);
-    expect(normalizeEarned(undefined)).toEqual({ awards: [], progress: [] });
-  });
-
-  it("reads a domain row's numbers from strings and its missing parts as null", () => {
-    const raw = {
-      ...row({ exact: "43.27", level: "44", fallingFrom: "47" } as never),
-      totalXp: "60000",
-      lifetime: { start: "2025-01-01", level: "52", levelXp: "2400", xpIntoLevel: "1160", xpToNext: "1240" },
-    } as unknown as DomainRow;
-    const read = normalizeDomainRow(raw);
-    expect(read.totalXp).toBe(60_000);
-    expect(read.lifetime).toMatchObject({ level: 52, xpToNext: 1_240 });
-    expect(read.shown).toMatchObject({ level: 44, exact: 43.27, fallingFrom: 47 });
-    const bare = normalizeDomainRow({ key: "social_xp", label: "Social XP", name: "Social", totalXp: "40", configured: false } as unknown as DomainRow);
-    expect(bare).toMatchObject({ totalXp: 40, lifetime: null, consistency: null, shown: null, best: null, current: null, ranks: null });
-  });
-
-  it("reads a report's numbers from strings, and an unconfigured row's progression as null", () => {
-    const raw = {
-      today: "2026-10-25",
-      days: "30",
-      domains: [
-        { key: "health_xp", label: "Health XP", name: "Health", configured: true, from: "2026-09-24", to: "2026-10-23", base: "2100", paid: "2310", daysCounted: "28", exceptionDays: "2", activeDays: "25", activeShare: "0.8929", averageBase: "73.6", levelFrom: "12", levelTo: "17", rankFrom: "1", rankTo: "1", rankTitle: "Apprentice", bestLevelFrom: "12", bestLevelTo: "17", bestRank: "1", bestRankTitle: "Apprentice", ranksReached: [{ rank: "1", title: "Apprentice", qualifiedOn: "2026-10-14" }], ranks: [{ day: "2026-10-23", level: "17", rank: "1", bestRank: "1", exception: false }] },
-        { key: "social_xp", label: "Social XP", name: "Social", configured: false, from: "2026-09-26", to: "2026-10-25", base: "20", paid: "20" },
-      ],
-    } as unknown as DomainReportRead;
-    const report = normalizeDomainReport(raw);
-    expect(report.days).toBe(30);
-    expect(report.domains[0]).toMatchObject({
-      paid: 2310,
-      exceptionDays: 2,
-      activeShare: 0.8929,
-      levelTo: 17,
-      bestRank: 1,
-      ranksReached: [{ rank: 1 }],
-      ranks: [{ level: 17, rank: 1, bestRank: 1, exception: false }],
-    });
-    expect(report.domains[1]).toMatchObject({ paid: 20, daysCounted: null, activeShare: null, rankTitle: null, ranksReached: null, ranks: null });
-  });
-
-  it("reads a domain's days with null standings for an unconfigured domain", () => {
-    const raw = {
-      key: "social_xp",
-      label: "Social XP",
-      name: "Social",
-      configured: false,
-      today: "2026-10-25",
-      days: [{ day: "2026-10-25", base: "20", paid: "20" }],
-    } as unknown as DomainDaysRead;
-    expect(normalizeDomainDays(raw)).toMatchObject({
-      settledThrough: null,
-      days: [{ day: "2026-10-25", base: 20, action: 0, passive: 0, paid: 20, exception: null, counted: null, active: null, level: null }],
-    });
-  });
-
-  it("reads exception days and a mark's answer", () => {
-    expect(
-      normalizeExceptionDays({ today: "2026-10-25", from: "2026-07-28", exceptions: [{ day: "2026-10-11", comment: "Sick" }] } as never),
-    ).toEqual({ today: "2026-10-25", from: "2026-07-28", exceptions: [{ day: "2026-10-11", comment: "Sick", markedAt: "" }] });
-    expect(normalizeExceptionResult({ exception: { day: "2026-10-11", comment: "Sick", markedAt: "x" } })).toEqual({
-      exception: { day: "2026-10-11", comment: "Sick", markedAt: "x" },
-      awards: [],
-      progress: [],
-    });
-    expect(normalizeExceptionResult(undefined)).toEqual({ exception: null, awards: [], progress: [] });
   });
 });

@@ -1,3 +1,5 @@
+import type { Unchecked } from "@/lib/live/http";
+
 /**
  * Checks the API's responses against the app's types at build time (code review CR38).
  *
@@ -44,12 +46,12 @@ type Missing<G, T, AppSide extends string, P extends string = ""> = T extends re
  * The API's response as the type the app reads, checked by tsc rather than cast (code review
  * CR38): the response's generated type must fit the app's as `Widened` says it, and carry every
  * field the app's type names except the app-side ones listed, which the app fills in itself.
- * `fits<InboxItem[], "bytesUrl">()(data)`. A field the API drops, renames or retypes then fails
+ * `fits<InboxItem[], "bytesUrl">()(await unwrap(...))`. A field the API drops, renames or retypes then fails
  * the build here, where an `as` cast let it read as undefined.
  */
 export function fits<T, AppSide extends string = never>() {
   return <G extends Widened<T>>(
-    value: G,
+    value: Unchecked<G>,
     ..._missing: [G] extends [never]
       ? ["The API's type for this response is never, so there is nothing to check"]
       : unknown extends G

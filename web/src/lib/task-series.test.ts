@@ -5,7 +5,6 @@ import {
   datesFor,
   mapSubjects,
   nextOccurrence,
-  normalizeSeriesRow,
   periodReading,
   repeatKind,
   repeatLabel,
@@ -93,25 +92,6 @@ describe("the readings", () => {
   it("tallies the done against the done and missed", () => {
     expect(seriesTally({ completedCount: 3, missedCount: 1 })).toBe("3 of 4 done");
     expect(seriesTally({ completedCount: 0, missedCount: 0 })).toBe("None closed yet");
-  });
-
-  it("reads the API's int64 counts as numbers", () => {
-    const row = normalizeSeriesRow({
-      id: "s",
-      urn: "urn:bsk:task:s",
-      title: "S",
-      recurrence: "{}",
-      archived: false,
-      stopped: false,
-      openCount: "1" as unknown as number,
-      completedCount: "3" as unknown as number,
-      missedCount: 0,
-      cancelledCount: 0,
-      bounty: { xp: "4" as unknown as number },
-    } satisfies TaskSeriesRow);
-    expect(row.openCount).toBe(1);
-    expect(row.completedCount).toBe(3);
-    expect(row.bounty).toEqual({ xp: 4 });
   });
 });
 

@@ -1,27 +1,17 @@
 /**
  * The Environment page's words and the API's shapes (HOME-1..4, D18, environment plan §4.8,
  * §8): the parts' names, the HOME-2 rating examples, how a score, a drag, "rated 3 days ago"
- * and a photo's caption read, the walk-through's order, and the live API's numbers
- * (`number | string`) as numbers. The score itself is `lib/home-score.ts`.
+ * and a photo's caption read, and the walk-through's order. The score itself is
+ * `lib/home-score.ts`.
  */
 import { formatDay } from "@/lib/dates";
-import { normalizeEarned } from "@/lib/domains";
 import { HOME_PARTS, shownPoints } from "@/lib/home-score";
 import type {
-  EnvironmentRead,
   FixNextRow,
-  HomeDayRow,
-  HomeDaysRead,
   HomePart,
-  HomePartRow,
   HomeSpaceRow,
-  SpacePhotoResult,
   SpacePhotoRow,
-  SpacePhotosRead,
   SpaceRatingResult,
-  SpaceRatingRow,
-  SpaceRatingsRead,
-  SpaceRow,
   SpaceShotRow,
 } from "@/lib/production-ui-types";
 
@@ -211,167 +201,4 @@ export function walkThroughOrder(spaces: readonly HomeSpaceRow[], today: string)
   return [...spaces].sort(
     (a, b) => since(b) - since(a) || spaceDrag(b) - spaceDrag(a) || a.name.localeCompare(b.name),
   );
-}
-
-// ---------------------------------------------------------------------------
-// The API's numbers
-// ---------------------------------------------------------------------------
-
-function num(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function numOrNull(value: unknown): number | null {
-  return value === null || value === undefined || value === "" ? null : num(value);
-}
-
-function part(value: unknown): HomePart {
-  return HOME_PARTS.includes(value as HomePart) ? (value as HomePart) : "tidiness";
-}
-
-export function normalizeSpace(raw: SpaceRow): SpaceRow {
-  return {
-    id: raw.id,
-    urn: raw.urn ?? "",
-    name: raw.name ?? "",
-    weight: num(raw.weight),
-    pace: num(raw.pace),
-    share: numOrNull(raw.share),
-    archivedAt: raw.archivedAt ?? null,
-    archivedOn: raw.archivedOn ?? null,
-  };
-}
-
-export function normalizeSpaceRating(raw: SpaceRatingRow): SpaceRatingRow {
-  return {
-    id: raw.id,
-    spaceId: raw.spaceId,
-    space: raw.space ?? "",
-    day: raw.day,
-    tidiness: numOrNull(raw.tidiness),
-    cleanliness: numOrNull(raw.cleanliness),
-    aesthetics: numOrNull(raw.aesthetics),
-    note: raw.note ?? null,
-    ratedAt: raw.ratedAt ?? "",
-  };
-}
-
-export function normalizeSpaceRatings(raw: SpaceRatingsRead): SpaceRatingsRead {
-  return { today: raw.today, from: raw.from, ratings: (raw.ratings ?? []).map(normalizeSpaceRating) };
-}
-
-export function normalizeSpaceRatingResult(raw: unknown): SpaceRatingResult {
-  const r = (raw ?? {}) as Partial<SpaceRatingResult>;
-  return { ratings: (r.ratings ?? []).map(normalizeSpaceRating), ...normalizeEarned(raw) };
-}
-
-function normalizePart(raw: Partial<HomePartRow> | null | undefined): HomePartRow {
-  return {
-    rated: numOrNull(raw?.rated),
-    ratedOn: raw?.ratedOn ?? null,
-    now: numOrNull(raw?.now),
-    drag: num(raw?.drag),
-  };
-}
-
-function normalizeParts(raw: unknown): Record<HomePart, HomePartRow> {
-  const parts = (raw ?? {}) as Partial<Record<HomePart, HomePartRow>>;
-  return {
-    tidiness: normalizePart(parts.tidiness),
-    cleanliness: normalizePart(parts.cleanliness),
-    aesthetics: normalizePart(parts.aesthetics),
-  };
-}
-
-export function normalizeSpacePhoto(raw: SpacePhotoRow): SpacePhotoRow {
-  return {
-    id: raw.id,
-    spaceId: raw.spaceId,
-    space: raw.space ?? "",
-    shotId: raw.shotId ?? MAIN_SHOT,
-    shot: raw.shot ?? null,
-    day: raw.day,
-    artifactId: raw.artifactId,
-    addedAt: raw.addedAt ?? "",
-    baseline: raw.baseline === true,
-    score: numOrNull(raw.score),
-    parts: normalizeParts(raw.parts),
-  };
-}
-
-export function normalizeShot(raw: SpaceShotRow): SpaceShotRow {
-  return {
-    id: raw.id,
-    name: raw.name ?? "",
-    photos: num(raw.photos),
-    baseline: raw.baseline ? normalizeSpacePhoto(raw.baseline) : null,
-    newest: raw.newest ? normalizeSpacePhoto(raw.newest) : null,
-  };
-}
-
-export function normalizeSpacePhotos(raw: SpacePhotosRead): SpacePhotosRead {
-  return {
-    spaceId: raw.spaceId,
-    space: raw.space ?? "",
-    shots: (raw.shots ?? []).map(normalizeShot),
-    photos: (raw.photos ?? []).map(normalizeSpacePhoto),
-  };
-}
-
-export function normalizeSpacePhotoResult(raw: unknown): SpacePhotoResult {
-  const r = (raw ?? {}) as Partial<SpacePhotoResult>;
-  return {
-    photo: r.photo ? normalizeSpacePhoto(r.photo) : null,
-    spaceId: r.spaceId ?? "",
-    shots: (r.shots ?? []).map(normalizeShot),
-  };
-}
-
-export function normalizeHomeSpace(raw: HomeSpaceRow): HomeSpaceRow {
-  return {
-    id: raw.id,
-    name: raw.name ?? "",
-    weight: num(raw.weight),
-    pace: num(raw.pace),
-    share: numOrNull(raw.share),
-    score: numOrNull(raw.score),
-    lastRatedOn: raw.lastRatedOn ?? null,
-    parts: normalizeParts(raw.parts),
-    shots: (raw.shots ?? []).map(normalizeShot),
-  };
-}
-
-export function normalizeEnvironment(raw: EnvironmentRead): EnvironmentRead {
-  return {
-    today: raw.today,
-    settledThrough: raw.settledThrough ?? raw.today,
-    homeScore: numOrNull(raw.homeScore),
-    spaces: (raw.spaces ?? []).map(normalizeHomeSpace),
-    fixNext: (raw.fixNext ?? []).map((x) => ({
-      spaceId: x.spaceId,
-      space: x.space ?? "",
-      part: part(x.part),
-      drag: num(x.drag),
-    })),
-  };
-}
-
-function normalizeHomeDay(raw: HomeDayRow): HomeDayRow {
-  return {
-    day: raw.day,
-    homeScore: numOrNull(raw.homeScore),
-    exception: raw.exception ?? null,
-    spaces: (raw.spaces ?? []).map((s) => ({ spaceId: s.spaceId, score: numOrNull(s.score) })),
-  };
-}
-
-export function normalizeHomeDays(raw: HomeDaysRead): HomeDaysRead {
-  return {
-    today: raw.today,
-    settledThrough: raw.settledThrough ?? raw.today,
-    from: raw.from,
-    spaces: (raw.spaces ?? []).map(normalizeSpace),
-    days: (raw.days ?? []).map(normalizeHomeDay),
-  };
 }

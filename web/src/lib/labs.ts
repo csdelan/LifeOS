@@ -1,7 +1,6 @@
 /**
  * Lab results (MEASURE-4, D20, measurements plan §4.9): the panels, how a visit and its results
- * read, the visit sheet's rows and its checks (in the kernel's words), and the live API's visits
- * with their numbers as numbers. The tests themselves are metrics, on the starter list the API
+ * read, and the visit sheet's rows and its checks (in the kernel's words). The tests themselves are metrics, on the starter list the API
  * serves (`GET /api/measurements/catalog`, code review CR73); a test's range follows its newest
  * report.
  */
@@ -11,7 +10,6 @@ import {
   NAME_MAX,
   NOTE_MAX,
   UNIT_MAX,
-  normalizeReading,
   parseValue,
   rangeProblem,
   rangeText,
@@ -21,11 +19,8 @@ import {
 } from "@/lib/measurements";
 import type {
   LabPanel,
-  LabReportRow,
   LabResultRequest,
-  LabVisitResult,
   LabVisitRow,
-  LabVisitsRead,
   MetricReadingRow,
   MetricRow,
 } from "@/lib/production-ui-types";
@@ -416,42 +411,4 @@ export function reportProblem(file: Pick<File, "size" | "type">): string | null 
     return "That isn't a PDF or a photo: send the report as a PDF, or a JPEG, PNG or WebP photo of it.";
   }
   return null;
-}
-
-// ---------------------------------------------------------------------------
-// The live API's shapes: numbers may arrive as strings (`number | string`)
-// ---------------------------------------------------------------------------
-
-function report(raw: LabReportRow | null | undefined): LabReportRow | null {
-  if (!raw) return null;
-  return {
-    id: raw.id,
-    filename: raw.filename ?? null,
-    contentType: raw.contentType ?? "application/octet-stream",
-    byteSize: Number(raw.byteSize) || 0,
-  };
-}
-
-export function normalizeLabVisit(raw: LabVisitRow): LabVisitRow {
-  return {
-    id: raw.id,
-    lab: raw.lab ?? null,
-    note: raw.note ?? null,
-    collectedAt: raw.collectedAt,
-    collectedOn: raw.collectedOn,
-    collectedLocal: raw.collectedLocal,
-    report: report(raw.report),
-    results: (raw.results ?? []).map(normalizeReading),
-    outside: Number(raw.outside) || 0,
-    loggedAt: raw.loggedAt,
-    versions: Number(raw.versions) || 0,
-  };
-}
-
-export function normalizeLabVisits(raw: LabVisitsRead): LabVisitsRead {
-  return { today: raw.today, visits: (raw.visits ?? []).map(normalizeLabVisit) };
-}
-
-export function normalizeLabVisitResult(raw: LabVisitResult): LabVisitResult {
-  return { visit: raw.visit ? normalizeLabVisit(raw.visit) : null };
 }

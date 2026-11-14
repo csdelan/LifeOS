@@ -13,10 +13,6 @@ import {
   formatTime,
   formatWeekday,
   metricWeeks,
-  normalizeActivityDays,
-  normalizeDayDetail,
-  normalizeSummary,
-  normalizeTags,
   orderedContributors,
   ouraScoreWords,
   rangeFrom,
@@ -49,12 +45,8 @@ import {
 } from "@/lib/activity";
 import { exerciseVerdict } from "@/lib/exercise-rules";
 import type {
-  ActivityDayDetailRead,
   ActivityDayRow,
-  ActivitySummaryRead,
-  ActivityDaysRead,
   ActivityTagRow,
-  ActivityTagsRead,
   SleepPeriodRow,
   WorkoutRow,
 } from "@/lib/production-ui-types";
@@ -345,36 +337,6 @@ describe("asSentence", () => {
   });
 });
 
-describe("normalizers", () => {
-  it("turns the API's string numbers into numbers and fills the defaults", () => {
-    const days = normalizeActivityDays({
-      from: "2026-10-22",
-      to: "2026-10-22",
-      today: "2026-10-22",
-      minimumSteps: "5000",
-      goalSteps: "7500",
-      days: [{ ...day("2026-10-22", null), steps: "6100", napCount: "1", asleepS: undefined } as unknown as ActivityDayRow],
-    } as unknown as ActivityDaysRead);
-    expect(days.minimumSteps).toBe(5_000);
-    expect(days.days[0]).toMatchObject({ steps: 6_100, napCount: 1, asleepS: null });
-
-    const summary = normalizeSummary({
-      today: "2026-10-22",
-      minimumSteps: 5_000,
-      goalSteps: 7_500,
-      todaySoFar: day("2026-10-22", 100),
-      todayWorkouts: [{ ...workout("w", "2026-10-22"), seconds: "600" } as unknown as WorkoutRow],
-      thisWeek: { from: "a", to: "b", averageSteps: "6000", stepDays: "3" },
-      lastWeek: { from: "a", to: "b" },
-      oura: { state: "something new" },
-    } as unknown as ActivitySummaryRead);
-    expect(summary.todayWorkouts[0].seconds).toBe(600);
-    expect(summary.thisWeek).toMatchObject({ averageSteps: 6_000, stepDays: 3, sessions: 0, averageSleep: null });
-    expect(summary.lastWeek.averageSteps).toBeNull();
-    expect(summary.oura).toMatchObject({ state: "not_connected", connected: false, scopes: [] });
-  });
-});
-
 describe("the charts' ranges", () => {
   const today = "2026-10-22"; // a Thursday
   it("asks for six days before the first one shown, for the 7-day average", () => {
@@ -543,46 +505,6 @@ describe("a night's stages and temperature", () => {
   });
 });
 
-describe("normalizeDayDetail", () => {
-  it("turns the API's string numbers into numbers and fills what's missing", () => {
-    const detail = normalizeDayDetail({
-      day: "2026-10-21",
-      today: "2026-10-22",
-      minimumSteps: "5000",
-      goalSteps: "7500",
-      summary: { ...day("2026-10-21", null), steps: "6100", sleepScore: "73" },
-      sleepContributors: { total_sleep: "88", timing: null },
-      readinessContributors: null,
-      temperatureDeviation: "-0.2",
-      temperatureTrendDeviation: null,
-      night: {
-        id: "n",
-        startedAt: "2026-10-20T23:00:00Z",
-        endedAt: "2026-10-21T07:00:00Z",
-        inBedS: "28800",
-        asleepS: "25200",
-        deepS: "5000",
-        lowestHr: "48",
-      },
-    } as unknown as ActivityDayDetailRead);
-    expect(detail).toMatchObject({ minimumSteps: 5_000, goalSteps: 7_500, temperatureDeviation: -0.2 });
-    expect(detail.summary).toMatchObject({ steps: 6_100, sleepScore: 73 });
-    expect(detail.sleepContributors).toEqual({ total_sleep: 88, timing: null });
-    expect(detail.readinessContributors).toEqual({});
-    expect(detail.night).toMatchObject({
-      type: "",
-      inBedS: 28_800,
-      asleepS: 25_200,
-      deepS: 5_000,
-      remS: null,
-      lowestHr: 48,
-    });
-    expect(detail.naps).toEqual([]);
-    expect(detail.workouts).toEqual([]);
-    expect(detail.tags).toEqual([]);
-  });
-});
-
 /** A local instant on 2026-10-`date` at `hh:mm`, as the API sends it. */
 function local(date: number, hour: number, minute = 0): string {
   return new Date(2026, 9, date, hour, minute).toISOString();
@@ -606,29 +528,6 @@ function tag(id: string, extra: Partial<ActivityTagRow> = {}): ActivityTagRow {
 }
 
 describe("tags from the Oura app", () => {
-  it("normalizes the API's tags, and a day's", () => {
-    const read = normalizeTags({
-      from: "2026-09-22",
-      to: "2026-10-21",
-      today: "2026-10-21",
-      tags: [
-        { ...tag("a"), seconds: "1200", endedAt: local(21, 18, 50), comment: undefined },
-        { ...tag("b"), name: "  ", typeCode: undefined, customName: undefined, endDay: undefined },
-      ],
-    } as unknown as ActivityTagsRead);
-    expect(read.tags[0]).toMatchObject({ seconds: 1_200, comment: null });
-    expect(read.tags[1]).toMatchObject({ name: "Tag", typeCode: null, customName: null, endDay: null, seconds: null });
-    expect(normalizeTags({ from: "a", to: "b", today: "b" } as unknown as ActivityTagsRead).tags).toEqual([]);
-
-    const detail = normalizeDayDetail({
-      day: "2026-10-21",
-      today: "2026-10-21",
-      summary: day("2026-10-21", null),
-      tags: [{ ...tag("c"), seconds: "300" }],
-    } as unknown as ActivityDayDetailRead);
-    expect(detail.tags).toEqual([tag("c", { seconds: 300 })]);
-  });
-
   it("says when a tag was: a moment, a length, or over days", () => {
     expect(tagWhen(tag("a"))).toBe(formatTime(local(21, 7, 5)));
     expect(

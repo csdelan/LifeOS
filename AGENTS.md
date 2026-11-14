@@ -34,8 +34,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   once, in `decorateWrites` (`lib/queries.ts`), never in a write client. App code reaches the mock only
   through `lib/client.ts` (a lint rule says so), so the production bundle leaves it out; the read
   seam's types are in `lib/reads.ts`. Pages load lazily (`lazyRouteComponent` in `router.tsx`).
-  A live read or write returns the API's data through `fits<T>()(data)` (`lib/live/fits.ts`),
-  never an `as` cast, so tsc checks the generated type against the app's.
+  A live read or write returns the API's data through `fits<T>()(await unwrap(...))`
+  (`lib/live/fits.ts`): `unwrap` answers an `Unchecked` that only `fits` opens, so tsc checks the
+  generated type against the app's, and `lib/live/seam.test.ts` finds the ways round it. The API
+  sends numbers as numbers, so nothing converts them.
 - `src/LifeOs.Pilot`: the original WinForms app. Chris still runs it, often against staging. It
   writes to staging, and migrates dev on launch, only with the `bsk` that
   `scripts/install-bsk.ps1` builds from `origin/main` into `%USERPROFILE%\.lifeos\bin\bsk` (or

@@ -15,7 +15,7 @@ import {
   objectPosition,
   positionText,
 } from "@/lib/cover";
-import type { CoverSearchRead } from "@/lib/production-ui-types";
+import type { CoverPhoto, CoverRead, CoverSearchRead } from "@/lib/production-ui-types";
 
 const RAW = "https://images.unsplash.com/photo-1417325384643-aac51acc9e5d?ixid=M3w2NTQ3";
 
@@ -142,49 +142,53 @@ describe("the picker's words", () => {
 });
 
 describe("reading the API", () => {
-  it("makes numbers numbers and keeps a cover it can show", () => {
-    const cover = normalizeCover({
-      source: "unsplash",
-      photoId: "Dwu85P9SOIk",
-      url: RAW,
-      color: "#6E633A",
-      width: "2448",
-      height: 3264,
-      photographer: "Joe Example",
-      photographerLink: "https://unsplash.com/@joe?utm_source=lifeos&utm_medium=referral",
-      photoLink: "https://unsplash.com/photos/x?utm_source=lifeos&utm_medium=referral",
-      unsplashLink: "https://unsplash.com/?utm_source=lifeos&utm_medium=referral",
-      positionY: "30",
-      setAt: "2026-10-23T18:04:00Z",
-    })!;
-    expect(cover.width).toBe(2448);
-    expect(cover.positionY).toBe(30);
-    expect(cover.color).toBe("#6e633a");
-    expect(cover.alt).toBeNull();
+  const stored: CoverRead = {
+    source: "unsplash",
+    photoId: "Dwu85P9SOIk",
+    url: RAW,
+    color: "#6E633A",
+    width: 2448,
+    height: 3264,
+    alt: null,
+    photographer: "Joe Example",
+    photographerLink: "https://unsplash.com/@joe?utm_source=lifeos&utm_medium=referral",
+    photoLink: "https://unsplash.com/photos/x?utm_source=lifeos&utm_medium=referral",
+    unsplashLink: "https://unsplash.com/?utm_source=lifeos&utm_medium=referral",
+    positionY: 30,
+    setAt: "2026-10-23T18:04:00Z",
+  };
+
+  it("keeps a cover it can show, its colour as a box background and its position on the frame", () => {
+    expect(normalizeCover(stored)).toEqual({ ...stored, color: "#6e633a" });
+    expect(normalizeCover({ ...stored, color: "red", positionY: 140 })).toMatchObject({ color: "#808080", positionY: 100 });
   });
 
   it("reads a cover with no image or credit as none", () => {
     expect(normalizeCover(null)).toBeNull();
-    expect(normalizeCover({ url: RAW })).toBeNull();
-    expect(normalizeCover({ photographer: "Joe" })).toBeNull();
-    expect(normalizeCover({ url: RAW, photographer: "Joe", color: "red", positionY: "x" })).toMatchObject({
-      color: "#808080",
-      positionY: 50,
-    });
+    expect(normalizeCover({ ...stored, url: "" })).toBeNull();
+    expect(normalizeCover({ ...stored, photographer: " " })).toBeNull();
   });
 
   it("leaves out search results it can't show", () => {
+    const photo: CoverPhoto = {
+      id: "a",
+      thumbUrl: RAW,
+      color: "#6E633A",
+      alt: null,
+      width: 400,
+      height: 300,
+      photographer: "Joe Example",
+      photographerLink: "https://unsplash.com/@joe",
+    };
     const read = normalizeCoverSearch({
       configured: true,
       query: "hills",
-      page: "1",
-      total: "3",
-      totalPages: "1",
-      photos: [{ id: "a", thumbUrl: RAW }, { id: "b" }, null],
+      page: 1,
+      total: 3,
+      totalPages: 1,
+      unsplashLink: "https://unsplash.com/",
+      photos: [photo, { ...photo, id: "b", thumbUrl: "" }, { ...photo, id: "" }],
     });
-    expect(read.page).toBe(1);
-    expect(read.total).toBe(3);
-    expect(read.photos.map((p) => p.id)).toEqual(["a"]);
-    expect(normalizeCoverSearch(undefined)).toMatchObject({ configured: false, photos: [] });
+    expect(read.photos).toEqual([{ ...photo, color: "#6e633a" }]);
   });
 });

@@ -1,123 +1,14 @@
 /**
- * The Food Log's shapes and words (FOOD-1..4): the API's numbers as numbers (it types int64
- * and decimals as `number | string`), and what a food write says when it lands.
+ * The Food Log's words (FOOD-1..4): what a food write says when it lands, and how a day's
+ * score reads.
  */
 import { DIET_RULES, fastingFor, formatDuration, formatPart } from "@/lib/diet-score";
-import { multiplierLabel, normalizeEarned } from "@/lib/domains";
+import { multiplierLabel } from "@/lib/domains";
 import type {
-  FastRow,
-  FoodAwardPaid,
-  FoodDayRead,
-  FoodDaysRead,
   FoodDaySummary,
-  FoodPaid,
   FoodMealType,
   FoodWriteResult,
-  MealRow,
-  SobrietyRow,
 } from "@/lib/production-ui-types";
-
-function num(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function numOrNull(value: unknown): number | null {
-  return value === null || value === undefined || value === "" ? null : num(value);
-}
-
-export function normalizeMeal(raw: MealRow): MealRow {
-  return {
-    ...raw,
-    score: num(raw.score),
-    calories: num(raw.calories),
-    proteinG: numOrNull(raw.proteinG),
-    carbsG: numOrNull(raw.carbsG),
-    fatG: numOrNull(raw.fatG),
-    photoArtifactId: raw.photoArtifactId ?? null,
-    alcoholic: raw.alcoholic === true,
-    duringFast: raw.duringFast ?? null,
-    versions: num(raw.versions),
-  };
-}
-
-export function normalizeFast(raw: FastRow): FastRow {
-  return {
-    ...raw,
-    endedAt: raw.endedAt ?? null,
-    endedOn: raw.endedOn ?? null,
-    seconds: numOrNull(raw.seconds),
-    mealsDuring: num(raw.mealsDuring),
-  };
-}
-
-function normalizeAwardPaid(raw: FoodAwardPaid | null | undefined): FoodAwardPaid | null {
-  return raw ? { base: num(raw.base), paid: num(raw.paid), multiplier: numOrNull(raw.multiplier) } : null;
-}
-
-function normalizePaid(raw: FoodPaid | null | undefined): FoodPaid {
-  return {
-    fast: normalizeAwardPaid(raw?.fast),
-    diet: normalizeAwardPaid(raw?.diet),
-    total: num(raw?.total),
-    baseTotal: num(raw?.baseTotal),
-  };
-}
-
-export function normalizeFoodSummary(raw: FoodDaySummary): FoodDaySummary {
-  return {
-    ...raw,
-    meals: num(raw.meals),
-    calories: num(raw.calories),
-    averageScore: numOrNull(raw.averageScore),
-    longestFastSeconds: numOrNull(raw.longestFastSeconds),
-    closedAt: raw.closedAt ?? null,
-    quality: num(raw.quality),
-    caloriesPart: num(raw.caloriesPart),
-    fasting: num(raw.fasting),
-    foodAward: num(raw.foodAward),
-    fastAward: num(raw.fastAward),
-    total: num(raw.total),
-    cap: num(raw.cap),
-    drinks: num(raw.drinks),
-    drinkFactor: raw.drinkFactor === undefined || raw.drinkFactor === null ? 1 : num(raw.drinkFactor),
-    paid: normalizePaid(raw.paid),
-  };
-}
-
-export function normalizeSobriety(raw: SobrietyRow | null | undefined): SobrietyRow | null {
-  return raw
-    ? { ...raw, days: num(raw.days), bestDays: num(raw.bestDays), lastDrinkOn: raw.lastDrinkOn ?? null }
-    : null;
-}
-
-export function normalizeFoodDay(raw: FoodDayRead): FoodDayRead {
-  return {
-    ...raw,
-    meals: (raw.meals ?? []).map(normalizeMeal),
-    fasts: (raw.fasts ?? []).map(normalizeFast),
-    running: raw.running ? normalizeFast(raw.running) : null,
-    lastMeal: raw.lastMeal ? normalizeMeal(raw.lastMeal) : null,
-    summary: normalizeFoodSummary(raw.summary),
-    sobriety: normalizeSobriety(raw.sobriety),
-  };
-}
-
-export function normalizeFoodDays(raw: FoodDaysRead): FoodDaysRead {
-  return { ...raw, days: (raw.days ?? []).map(normalizeFoodSummary), sobriety: normalizeSobriety(raw.sobriety) };
-}
-
-export function normalizeFoodWrite(raw: unknown): FoodWriteResult {
-  const r = (raw ?? {}) as FoodWriteResult;
-  return {
-    ...normalizeEarned(r),
-    action: r.action,
-    meal: r.meal ? normalizeMeal(r.meal) : null,
-    fast: r.fast ? normalizeFast(r.fast) : null,
-    day: r.day ?? null,
-    days: r.days ?? [],
-  };
-}
 
 /** What a food write says when it lands: "Logged Salmon salad", "Fast ended · 23 h 05 m". */
 export function foodWriteMessage(result: FoodWriteResult): string {

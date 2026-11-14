@@ -7,20 +7,10 @@
 import type {
   Amounts,
   Award,
-  BountyLine,
-  BountyResult,
-  BountyTypeDefaults,
-  HabitRow,
-  HabitTargetResult,
-  LedgerDay,
   LedgerRow,
   Redemption,
   RewardRow,
-  SubjectDetail,
-  SubjectListItem,
-  TimerActionResult,
   Wallet,
-  WalletLine,
 } from "@/lib/production-ui-types";
 
 /**
@@ -235,85 +225,6 @@ export function triggerLabel(trigger: string): string {
   return streak ? `${streak[1]}-day streak` : trigger;
 }
 
-// ---------------------------------------------------------------------------
-// The API types int64 / decimal as `number | string`; the UI needs numbers.
-// ---------------------------------------------------------------------------
-
-function num(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function numOrNull(value: unknown): number | null {
-  return value === null || value === undefined || value === "" ? null : num(value);
-}
-
-export function normalizeAmounts(raw: unknown): Amounts {
-  const out: Amounts = {};
-  if (raw && typeof raw === "object") {
-    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) out[k] = num(v);
-  }
-  return out;
-}
-
-export function normalizeWallet(raw: Wallet): Wallet {
-  return {
-    openedAt: raw.openedAt ?? null,
-    coinValueUsd: num(raw.coinValueUsd),
-    balances: (raw.balances ?? []).map(
-      (b): WalletLine => ({
-        ...b,
-        earned: num(b.earned),
-        reversed: num(b.reversed),
-        spent: num(b.spent),
-        balance: num(b.balance),
-      }),
-    ),
-  };
-}
-
-export function normalizeLedgerRow(raw: LedgerRow): LedgerRow {
-  return {
-    ...raw,
-    amounts: normalizeAmounts(raw.amounts),
-    dollars: numOrNull(raw.dollars),
-    coinRate: numOrNull(raw.coinRate),
-  };
-}
-
-export function normalizeLedgerDay(raw: LedgerDay): LedgerDay {
-  return {
-    date: raw.date,
-    earned: normalizeAmounts(raw.earned),
-    reversed: normalizeAmounts(raw.reversed),
-    spent: normalizeAmounts(raw.spent),
-    net: normalizeAmounts(raw.net),
-  };
-}
-
-export function normalizeReward(raw: RewardRow): RewardRow {
-  return {
-    ...raw,
-    kind: raw.kind === "savings" ? "savings" : "instant",
-    price: normalizeAmounts(raw.price),
-    targetUsd: numOrNull(raw.targetUsd),
-    redemptions: num(raw.redemptions),
-    coinsRedeemed: num(raw.coinsRedeemed),
-    dollarsRedeemed: num(raw.dollarsRedeemed),
-    percentOfTarget: numOrNull(raw.percentOfTarget),
-    remainingUsd: numOrNull(raw.remainingUsd),
-  };
-}
-
-export function normalizeAward(raw: Award): Award {
-  return {
-    ...raw,
-    amounts: normalizeAmounts(raw.amounts),
-    base: raw.base ? normalizeAmounts(raw.base) : null,
-    multipliers: raw.multipliers ? normalizeAmounts(raw.multipliers) : null,
-  };
-}
-
 /**
  * How an award's life-domain XP was multiplied (xp-domains plan §3.6): "❤️ 60 × 1.3" for each
  * currency paid at a multiplier, or "" when none was.
@@ -323,75 +234,4 @@ export function multipliedLabel(award: Award): string {
     .filter(([key]) => award.base?.[key] !== undefined)
     .map(([key, m]) => `${currency(key)?.symbol ?? currencyLabel(key)} ${award.base![key]} × ${m}`)
     .join(", ");
-}
-
-/** The `awards` of an earning write's response (`{ awards }`), as numbers. */
-export function normalizeAwards(raw: unknown): Award[] {
-  const awards = (raw as { awards?: Award[] } | null | undefined)?.awards;
-  return Array.isArray(awards) ? awards.map(normalizeAward) : [];
-}
-
-export function normalizeTimerAwards(raw: TimerActionResult): TimerActionResult {
-  return { ...raw, awards: (raw.awards ?? []).map(normalizeAward) };
-}
-
-export function normalizeBountyLine(raw: BountyLine): BountyLine {
-  return {
-    ...raw,
-    amounts: normalizeAmounts(raw.amounts),
-    default: normalizeAmounts(raw.default),
-    ...(raw.everyMinutes != null ? { everyMinutes: Number(raw.everyMinutes) } : {}),
-  };
-}
-
-export function normalizeBountyResult(raw: BountyResult): BountyResult {
-  return { ...raw, lines: (raw.lines ?? []).map(normalizeBountyLine) };
-}
-
-export function normalizeBountyDefaults(raw: BountyTypeDefaults[]): BountyTypeDefaults[] {
-  return raw.map((d) => ({ ...d, lines: (d.lines ?? []).map(normalizeBountyLine) }));
-}
-
-export function normalizeListBounty(raw: SubjectListItem): SubjectListItem {
-  return raw.bounty ? { ...raw, bounty: normalizeAmounts(raw.bounty) } : raw;
-}
-
-export function normalizeDetailBounty(raw: SubjectDetail): SubjectDetail {
-  return raw.bounty ? { ...raw, bounty: raw.bounty.map(normalizeBountyLine) } : raw;
-}
-
-export function normalizeHabit(raw: HabitRow): HabitRow {
-  const e = raw.establishment;
-  return {
-    ...raw,
-    bounty: raw.bounty ? normalizeAmounts(raw.bounty) : null,
-    establishment: e
-      ? {
-          ...e,
-          minAdherence: num(e.minAdherence),
-          windowDays: num(e.windowDays),
-          followed: num(e.followed),
-          partial: num(e.partial),
-          missed: num(e.missed),
-          concluded: num(e.concluded),
-          adherence: numOrNull(e.adherence),
-          ageDays: num(e.ageDays),
-        }
-      : null,
-  };
-}
-
-export function normalizeHabitTarget(raw: HabitTargetResult): HabitTargetResult {
-  return { ...raw, minAdherence: num(raw.minAdherence), windowDays: num(raw.windowDays) };
-}
-
-export function normalizeRedemption(raw: Redemption): Redemption {
-  return {
-    ...raw,
-    amounts: normalizeAmounts(raw.amounts),
-    dollars: numOrNull(raw.dollars),
-    coinRate: numOrNull(raw.coinRate),
-    reward: raw.reward ? normalizeReward(raw.reward) : null,
-    wallet: normalizeWallet(raw.wallet),
-  };
 }

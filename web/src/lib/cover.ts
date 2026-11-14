@@ -3,7 +3,7 @@
  * stored Unsplash photo is sized for a box, where a banner is centred, and the words the
  * picker shows when a search finds nothing.
  */
-import type { CoverPhoto, CoverRead, CoverSearchRead, SubjectType } from "@/lib/production-ui-types";
+import type { CoverRead, CoverSearchRead, SubjectType } from "@/lib/production-ui-types";
 
 /** Identity statements, goals, projects and habits have covers; nothing else does (D15). */
 export const COVER_TYPES: readonly SubjectType[] = ["Value", "Goal", "Project", "Habit"];
@@ -142,78 +142,31 @@ export function nextCoverPage(last: CoverSearchRead): number | undefined {
 
 const COLOR = /^#[0-9a-f]{6}$/i;
 
-function num(value: unknown, fallback = 0): number {
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function str(value: unknown): string | null {
-  return typeof value === "string" && value.trim() !== "" ? value : null;
-}
-
 /** A photo's colour as a box background: its own when it's `#rrggbb`, else grey. */
-export function coverColor(color: unknown): string {
+export function coverColor(color: string | null | undefined): string {
   return typeof color === "string" && COLOR.test(color) ? color.toLowerCase() : DEFAULT_COVER_COLOR;
 }
 
-/** A cover as the API sends it, numbers made numbers; null when it can't be shown. */
-export function normalizeCover(raw: unknown): CoverRead | null {
-  if (!raw || typeof raw !== "object") return null;
-  const c = raw as Record<string, unknown>;
-  const url = str(c.url);
-  const photographer = str(c.photographer);
-  if (!url || !photographer) return null;
-  return {
-    source: str(c.source) ?? "unsplash",
-    photoId: str(c.photoId) ?? "",
-    url,
-    color: coverColor(c.color),
-    width: num(c.width),
-    height: num(c.height),
-    alt: str(c.alt),
-    photographer,
-    photographerLink: str(c.photographerLink) ?? "",
-    photoLink: str(c.photoLink) ?? "",
-    unsplashLink: str(c.unsplashLink) ?? "",
-    positionY: clampPosition(num(c.positionY, DEFAULT_POSITION_Y)),
-    setAt: str(c.setAt) ?? "",
-  };
+/**
+ * A cover the page can show: null without a photo or a photographer to credit (D15), its
+ * colour a `#rrggbb` and its position on the frame.
+ */
+export function normalizeCover(cover: CoverRead | null | undefined): CoverRead | null {
+  if (!cover?.url.trim() || !cover.photographer.trim()) return null;
+  return { ...cover, color: coverColor(cover.color), positionY: clampPosition(cover.positionY) };
 }
 
-/** A list item or detail with its cover normalized (or null). */
+/** A list item or detail with a cover it can show, or null. */
 export function withNormalCover<T extends { cover?: CoverRead | null }>(raw: T): T {
   return { ...raw, cover: normalizeCover(raw.cover) };
 }
 
-function normalizePhoto(raw: unknown): CoverPhoto | null {
-  if (!raw || typeof raw !== "object") return null;
-  const p = raw as Record<string, unknown>;
-  const id = str(p.id);
-  const thumbUrl = str(p.thumbUrl);
-  if (!id || !thumbUrl) return null;
+/** A search page with the photos it can't show left out, and each one's colour checked. */
+export function normalizeCoverSearch(read: CoverSearchRead): CoverSearchRead {
   return {
-    id,
-    thumbUrl,
-    color: coverColor(p.color),
-    alt: str(p.alt),
-    width: num(p.width),
-    height: num(p.height),
-    photographer: str(p.photographer) ?? "Unknown",
-    photographerLink: str(p.photographerLink) ?? "",
-  };
-}
-
-/** A search page as the API sends it, numbers made numbers and unusable photos left out. */
-export function normalizeCoverSearch(raw: unknown): CoverSearchRead {
-  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const photos = Array.isArray(r.photos) ? r.photos.map(normalizePhoto).filter((p): p is CoverPhoto => p !== null) : [];
-  return {
-    configured: r.configured === true,
-    query: typeof r.query === "string" ? r.query : "",
-    page: num(r.page, 1),
-    total: num(r.total),
-    totalPages: num(r.totalPages),
-    unsplashLink: str(r.unsplashLink) ?? "https://unsplash.com/?utm_source=lifeos&utm_medium=referral",
-    photos,
+    ...read,
+    photos: read.photos
+      .filter((p) => p.id.trim() !== "" && p.thumbUrl.trim() !== "")
+      .map((p) => ({ ...p, color: coverColor(p.color) })),
   };
 }
