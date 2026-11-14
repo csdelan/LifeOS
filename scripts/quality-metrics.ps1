@@ -10,7 +10,8 @@
 
     Areas:
       kernel       src/LifeOs.Domain, Application, Infrastructure (.cs)
-      api          src/LifeOs.Api (.cs)
+      api          src/LifeOs.Api, and src/LifeOs.Contracts, its shapes, which were in
+                   src/LifeOs.Api/Read until code review CR89 (.cs)
       cli          src/LifeOs.Cli (.cs)
       pilot        src/LifeOs.Pilot (.cs)
       web-app      web/src, not tests, not the mock (.ts, .tsx, .css)
@@ -52,7 +53,7 @@ function Get-Area([string]$path) {
     if ($generated -contains $path) { return $null }
     switch -Regex ($path) {
         '^src/LifeOs\.(Domain|Application|Infrastructure)/.*\.cs$' { return 'kernel' }
-        '^src/LifeOs\.Api/.*\.cs$' { return 'api' }
+        '^src/LifeOs\.(Api|Contracts)/.*\.cs$' { return 'api' }
         '^src/LifeOs\.Cli/.*\.cs$' { return 'cli' }
         '^src/LifeOs\.Pilot/.*\.cs$' { return 'pilot' }
         '^tests/.*\.cs$' { return 'dotnet-tests' }

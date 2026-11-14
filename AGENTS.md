@@ -220,7 +220,8 @@ that fits:
 
 - a fact about this code goes here, or in a doc linked from here;
 - a procedure done by hand for the third time becomes a script;
-- a mistake that got through becomes a test.
+- a mistake that got through becomes a test, of its whole class (every view that casts the
+  attribute, every door that answers the rule) and not only the place it was found.
 
 Keep this file short. When you add something, delete what's no longer true. The `retro` skill
 walks through this.

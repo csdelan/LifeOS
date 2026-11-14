@@ -52,7 +52,7 @@ The same six areas every time, so each can be compared with its own past:
 | Area | Covers |
 |---|---|
 | Kernel | `src/LifeOs.Domain`, `src/LifeOs.Application`, `src/LifeOs.Infrastructure` |
-| API and MCP | `src/LifeOs.Api` |
+| API and MCP | `src/LifeOs.Api`, `src/LifeOs.Contracts` (its shapes, in `src/LifeOs.Api/Read` until CR89) |
 | Database and .NET tests | `db/`, `tests/` |
 | CLI, Pilot and ops | `src/LifeOs.Cli`, `src/LifeOs.Pilot`, `scripts/`, `.github/`, Docker and Fly config |
 | Web data layer | `web/src/lib`, `web/src/api` |
@@ -78,18 +78,45 @@ Overall per area (mean of its six dimensions) and the repo score (mean of the ar
 | Date | Commit | Rater | Kernel | API, MCP | DB, tests | CLI, Pilot, ops | Web data | Web screens | Repo |
 |---|---|---|---|---|---|---|---|---|---|
 | 2026-11-13 | 308b96d | Claude Opus 5.5, third review's area reviewers | 6.8 | 6.3 | 6.4 | 6.0 | 5.6 | 5.6 | **6.1** |
+| 2026-11-13 | 6152b61 | Claude Opus 5.5, fourth review's area reviewers | 6.7 | 6.9 | 6.3 | 6.4 | 6.2 | 6.0 | **6.4** |
 
 Each dimension, as the mean of the six areas:
 
-| Date | Structure | Single source | Safeguards | Scalability | Extendibility | Readability |
-|---|---|---|---|---|---|---|
-| 2026-11-13 | 6.3 | 5.5 | 6.7 | 5.4 | 5.5 | 7.3 |
+| Date | Commit | Structure | Single source | Safeguards | Scalability | Extendibility | Readability |
+|---|---|---|---|---|---|---|---|
+| 2026-11-13 | 308b96d | 6.3 | 5.5 | 6.7 | 5.4 | 5.5 | 7.3 |
+| 2026-11-13 | 6152b61 | 6.5 | 5.8 | 6.8 | 5.8 | 6.1 | 7.4 |
+
+Each area's six scores at 6152b61 (Structure, Single source, Safeguards, Scalability,
+Extendibility, Readability):
+
+| Area | Scores | Overall |
+|---|---|---|
+| Kernel | 7, 6.5, 7, 6, 6, 7.5 | 6.7 |
+| API and MCP | 7, 6.5, 7.5, 6, 6.5, 8 | 6.9 |
+| Database and .NET tests | 6.5, 5.5, 7.5, 5.5, 5.5, 7.5 | 6.3 |
+| CLI, Pilot and ops | 6.5, 5.5, 6.5, 6, 6.5, 7.5 | 6.4 |
+| Web data layer | 6, 5.5, 7, 5.5, 6, 7 | 6.2 |
+| Web screens | 6, 5.5, 5.5, 6, 6, 7 | 6.0 |
 
 Notes for 2026-11-13: each rater put their own uncertainty at ±0.5 (web data ±0.5 to ±1). The
 split scores were database 6.5 and tests 6.2; CLI 6.0, Pilot 5.0 and ops 6.5; live web data 6.0
 and the mock 4.5. The weakest dimensions are the three this repo weights most: scalability (lists
 and views that read all history), single source (copies in the doors, the CLI and the web), and
 extendibility (shared files every feature edits).
+
+Notes for 6152b61 (after CR58 to CR90): the same method, model and prompts as the first scores, with
+the context brought up to CR90; each reviewer was asked not to start from the earlier scores, though
+the plan they read names the 6.1. Each again put their uncertainty at ±0.5. The repo rose 0.3, under
+the one point that counts as more than noise on its own, but the measured numbers moved the same way
+(big-file share 26.3% to 22.2%, both test ratios up). The areas the P2 work touched rose: API 6.3 to
+6.9, web data 5.6 to 6.2, web screens 5.6 to 6.0, CLI, Pilot and ops 6.0 to 6.4; the kernel (6.8 to
+6.7) and the database and tests (6.4 to 6.3) held within noise. By dimension, extendibility rose most
+(5.5 to 6.1), then scalability (5.4 to 5.8). The splits: database 6.4 and tests 6.3; CLI 6.8, Pilot
+5.3 and ops 6.8; live web data 6.8 and the mock 5.0. No area is at 7 yet; single source of truth and
+scalability (5.8 each) are still the weakest. Twelve of the fourth review's proposals finish a CR
+built that day, each because its check covered the one case it fixed rather than the class
+(`docs/pilot/code-review-plan.md`, Fourth review).
 
 ### Measured numbers
 
@@ -103,3 +130,10 @@ worked out afterwards from git.
 | 2026-11-12 | a39c712 | Before the first review | 106,117 | 0.60 | 0.32 | 40 | 28.7% | 10,641 | production-ui-types.ts (2442) |
 | 2026-11-13 | ce29ce3 | After CR1–CR26 | 107,181 | 0.62 | 0.32 | 38 | 26.4% | 10,547 | production-ui-types.ts (2443) |
 | 2026-11-13 | 308b96d | After CR27–CR57; first scores | 107,901 | 0.63 | 0.33 | 38 | 25.9% | 10,472 | production-ui-types.ts (2460) |
+| 2026-11-13 | da72df9 | After CR58–CR67 (third review's P0, P1) | 108,537 | 0.64 | 0.33 | 39 | 26.3% | 10,474 | production-ui-types.ts (2460) |
+| 2026-11-13 | 6152b61 | After CR68–CR90 (its P2); second scores | 104,556 | 0.68 | 0.35 | 34 | 22.2% | 12,722 | production-ui-types.ts (2097) |
+
+From 6152b61 the API's count includes `src/LifeOs.Contracts`, which CR89 made from `src/LifeOs.Api/Read`.
+Part of that row's fall in prod lines, and the mock's rise, is CR84 moving about 2,200 lines that only
+the mock and tests used (the domain fold, the metric trend, the habit streak, the exercise rules, the
+agents and consent stand-ins, the review recap) into `lib/mock`; the rest is code deleted.

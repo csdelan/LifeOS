@@ -348,3 +348,93 @@ photo picker; a shared page-test harness; "in real money" from the daily read; o
   `barText` from it. Of 34 commits to the kernel's rule files since October, 12 also had to edit the
   web copies, and the Health and Environment fold rules have no shared cases.
 - **C:** unchanged.
+
+## Fourth review (2026-11-13)
+
+A fourth pass at 6152b61, after CR58 to CR90, with the same weighting and method: six Opus 5.5
+reviewers, one area each, findings first and scores second. It scored the code 6.4, up from 6.1
+(`docs/agents/quality-scorecard.md`). Its 62 findings merge into 33 proposals in three tiers and a P3
+list. The P0 was checked by hand before it was written here.
+
+Twelve of the proposals finish a CR built earlier the same day: CR68, CR70, CR74, CR76 (twice),
+CR77, CR80, CR87, CR88, CR89 (twice) and CR90. Unlike the third review's half-done CRs, these came
+with a check, but each check covered the one case it fixed rather than the class: CR70 guarded
+`allows_partial` in `v_habit` and not the other casts of a free attribute; CR74 made one `isOverdue`
+for the web while `/mcp` kept its own; CR89 paired the verbs it changed, and nothing makes a new verb
+choose. So each fix below ships with a check over the class: every cast of a free attribute, every
+door that answers a rule, every read that lists. The numbers are the review's; a proposal gets a CR
+number when Chris chooses it.
+
+### P0
+
+| # | Area | Problem and fix | Finishes | Size |
+|---|------|-----------------|----------|------|
+| 1 | Web screens | The detail panel keeps one item's edit state when another opens. `SubjectDetail` has no `key` at its five call sites (Browse, Habits, the Map, Rewards, Tasks) and `editing` is never reset, so Save writes item A's form onto item B. The journal draft and the Inbox preview carry over the same way. Key each panel by its item, drop unsaved state when it closes, and test opening a second item mid-edit. | | S–M |
+
+### P1
+
+| # | Area | Problem and fix | Finishes | Size |
+|---|------|-----------------|----------|------|
+| 2 | Kernel | A write that commits can still fail its request, when a follow-up after the commit throws, and the refusal then says nothing was written. `bsk` has no zone check at start. Follow-ups run best effort and say what failed, the wording says what was written, and `bsk` checks the zone as the API does. | CR88 | M |
+| 3 | Kernel | Filing an Inbox item runs in three transactions, so a retry after a failure makes a second Idea; the voice door's duplicate check is a rule in a door. File in one transaction, with the check in Application. | CR68 | M |
+| 4 | Web data | The web works out habit due days itself (`todayHabitRows`, `tracksOn`, the streak grid), and they differ from the kernel's occurrences, so Missed is offered on days the kernel doesn't schedule. Writing it is a permanent event that lowers adherence and XP. Use the kernel's occurrences, with a golden path on a habit that isn't daily. | | M |
+| 5 | Database | `SubjectReader`'s list casts `vision_order` with an unguarded `::int`, for the API and the Pilot, so one bad value breaks every list. Guard it, and add a test that writes junk to every free attribute a view or reader casts, then reads every list. | CR70 | S–M |
+| 6 | Ops | A rollback run by hand (`migrate.yml`) runs main's newest migrations before deploying the old image, and doesn't check the digest is in the registry before it migrates; each job builds its own `bsk`. Check the digest first, migrate only when asked (`bsk migrate --pending` to say what would run), and publish `bsk` from CI beside the image. | CR90 | M |
+| 7 | Ops | The backup and restore scripts run the working tree's `bsk`, and the nightly `rebuild --verify` has raised false alarms since CR66. Build `bsk` from `origin/main` as `install-bsk.ps1` does, and fix the verify and the stale dev-migrate notes. | | M |
+| 8 | Web screens | Discard in the unsaved-edits dialog asks twice, because the blocker holds a stale dirty flag, and the page's two dirty flags can disagree. One flag. | | S |
+| 9 | Web screens, API | One error boundary, at the root. The lazy pieces (the palette, the dialogs, the graph, the journal tab) don't reload when a deploy has removed their chunk, and `/assets` falls back to `index.html`, so a missing chunk answers HTML. A deep link's `index.html` has no cache header. A boundary per page, a lazy import that reloads once, a 404 for a missing asset, and `no-cache` on `index.html`. | | M |
+| 10 | API | With the rewards area off, the bounty still reaches agents through `get_item`'s attributes and series and `recent_changes`' attribute changes. Hide reward attributes through `McpAreas`, with a test over every tool that answers attributes. | | S–M |
+
+### P2
+
+| # | Area | Problem and fix | Finishes | Size |
+|---|------|-----------------|----------|------|
+| 11 | API | `/mcp`'s overdue uses `due ?? scheduled`; the app uses `due`. One rule in Domain, with `tests/rules/overdue.json`. | CR74 | S |
+| 12 | API | `RewardReader` is still in the API and copies `RewardService`'s range check; the 731-day cap is only in the API's door; defaults differ by door (30 or 14 days, 27 or 28 reviews, no cap in `bsk`); `BskJsonTests` always passes arguments. The reader in Contracts, caps and defaults in Application, and pairs with no arguments. | CR89 | M |
+| 13 | Web data | Reads still unscoped: the shell's Inbox badge reads the whole Inbox (`inboxCount` exists, unused); the Relate picker, the New dialog and the Relationships tab read every subject; the Map reads every repetition. | CR76 | M |
+| 14 | Web screens | The Tasks views read and draw every Task, and regroup them on every render. | CR76 | M |
+| 15 | API | The alignment tool reads every subject and edge on each call, and `recent_changes` builds its whole window before its limit. | | M |
+| 16 | Web data | The live Focus page is five reads, every edge among them, worked out in the browser with a copy of `life_snapshot`'s rule: `GET /api/focus`. | | M |
+| 17 | Database, kernel | `EventIndexTests` checks one direction (each index has a read, not each lookup an index); `GetLatestSubjectEventAsync` scans the log; `v_workout`'s lookups miss its key. | CR77 | M |
+| 18 | Database | Views copy C# vocabularies, limits and defaults (review kinds, a metric's panel, direction and decimals, a space's bounds, establishment's 0.8 and 60) with nothing checking them. | | M |
+| 19 | Database | The newest-version view is copied 13 times and has drifted (`v_workout`, `v_sleep_period`, `v_oura_tag`). A recipe, and a test of each such view's shape. | | M |
+| 20 | Database | Nothing measures cost at volume: a scale template seeded with years of data, and timed hot reads. | | L |
+| 21 | Tests | No shared test support (33 copies of opening a connection, 9 of a refusal check, 7 of inserting a subject, 10 kernel bundles); `TaskSeriesTests` settles every row of a shared database. | | M |
+| 22 | Kernel | Home-zone conversions outside `IHomeCalendar`: the food, metric and space repositories, and three in the API. | | M |
+| 23 | Kernel | Spaces and Metrics copy their resolve and name checks, have drifted (short ids) and check then act; `ArchiveService` branches by type. CR80's wait for a second feature is over: three follow the pattern. | CR80 | M |
+| 24 | Web data | `lib/features` stops at the mock, so a feature still edits eight shared files. One record per feature, spread from one index. | | M |
+| 25 | Web data | The type-copy ratchet matches exact names only and misses about 52 copies with a suffix. | | S |
+| 26 | Ops | `BskJsonTests`' pairs are a hand list (21 reads and 18 writes of 49 verbs); nothing makes a new verb be paired or listed as `bsk`'s own. | CR89 | S |
+| 27 | Pilot | The Pilot's 30 or so `bsk` command lines are checked by nothing. One `BskVerbs.cs`, parsed by `BskRoot` in a test. | | M |
+| 28 | Ops (latent) | `deploy.yml`'s concurrency group covers the whole run, so once production is on, staging waits behind the last production approval. | | S |
+| 29 | Web screens | `@tanstack/react-table` is about 110 kB of the Inbox's 124 kB chunk, for a one-column list. | | S |
+| 30 | Web screens | The whole `supabase-js` client loads with the first page, about 100 kB, for auth alone. | | S–M |
+| 31 | Web screens | Seven copies of the side or bottom sheet, none guarding typed input when it closes: `ResponsiveSheet`. | | M |
+| 32 | Web screens | Three copies of the chart cursor: `useChartCursor`. | | M |
+| 33 | Web screens | The Map's inline create traps Tab, and its type buttons don't say which is pressed. | CR87 | S |
+
+### P3: when working in that area
+
+Day-award sources as one `IDayAwardSource` list; stale Dapper comments and seven `ParseDay` copies;
+rating a space reads every rating; a lab visit's range sync reads every reading and makes metrics in
+transactions of their own; fast overlap uses the database's clock; a missing URN answers 400 in
+`ResolveOrCreateAsync`, 404 elsewhere; `ReadFailed` over shown data when a refetch fails; the e2e
+specs on a preview build, with one timeout, one scan helper, named asides and lint warnings that
+fail; the mock clients' wrapper boilerplate and the `bump` and `emit` nobody hears; the review recap
+in two halves; `setAttributes` not refreshing the task series, and typed reads listed by hand;
+unused seam members and a stale `TODO(api)`; `v_fast.meals_during`; an index on `subject(type)` and
+`v_task_series`' aggregate; the shared SQL folds spelled again; `RuleParityTests`' file list; keyset
+paging for Resolved; the extra connection pools (CR18); a declared shape for `/mcp`'s answers;
+`MeasurementReader`'s re-reads; small repeats (the Monday week start five times, upload intake four,
+the Inbox count, the `bounty` literal, config read twice); CR59's notice heading the Pilot's error
+dialogs and printing the owner and pooler host in CI logs; `v*` tags not checked against `main`; the
+Pilot's `bsk` calls on the UI thread and its unbounded polled reads; the CLI's time parsing in
+`FoodCommand`; text and JSON printed from different reads.
+
+### Evidence for Chris's open choices
+
+- **B:** the mock's copy of the reward economy is about 3,750 lines, with about 1,700 lines of
+  tests; CR84 moved it under `lib/mock`, so the live bundle no longer ships it. Since October 1, 11
+  commits touched the copied folds, 5 of them alongside a kernel change. The mock keeps
+  economy-aware handlers for two writes no screen calls.
+- **C:** unchanged.
