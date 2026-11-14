@@ -378,7 +378,7 @@ number when Chris chooses it.
 | CR92 | 8 | Discard in "Unsaved edits" asks once: the router's blocker reads the flag where Discard has already cleared it. Discard throws the edit away when the move keeps the same item open (the panel and the review editor key themselves by it), so the shell and what holds the edit agree. Escape is Stay, and lets the router go: before, the move stayed blocked and every later link did nothing. The guard has a module of its own (`components/shell/unsaved-edits.ts`), and three golden paths cover it. |
 | CR93 | 9 | A page opened before a deploy copes with the files the deploy removed. Every lazily loaded piece (the pages, the palette, the dialogs, the Map's graph, the journal) reloads once when its file is gone (`lib/new-build.ts`, Vite's `vite:preloadError`), and each page has its own error view inside the shell, which says "LifeOS was updated" with a Reload button when a reload didn't help. A removed `/assets` file answers 404; it got the sign-in's 401, not the app's page as the review said. Every copy of the app's page says not to cache it: only a literal `/index.html` did, not `/` or a link to a page. |
 
-### P2 and P3: built so far (CR94 to CR99)
+### P2 and P3: built so far (CR94 to CR100)
 
 | ID | Review # | Fix |
 |----|----------|-----|
@@ -388,6 +388,7 @@ number when Chris chooses it.
 | CR97 | First review's P3 | The pages are one table, `components/shell/pages.ts`, which the navigation and the command palette list; before, each kept its own list, and the router and the a11y spec two more. `pages.test.ts` checks the table names every route the router serves (Oura's return page listed apart, with why) and no other, and that an accessibility spec opens each page, so a page can't be added to one and missed in another. |
 | CR98 | 32 | The bar chart, the trend chart and the rank chart read their points through one `useChartCursor` (`components/charts`): hover reads the point under the pointer, focus starts at the newest, the arrow keys, Home and End move it, Enter or a click opens it where the chart can, and leaving or blurring clears it. The copies had drifted: the bar and rank charts read point -1 when focused with nothing to show. The charts' class check now finds them by the hook and fails on any component that handles the arrow keys and the pointer itself. |
 | CR99 | 14 | The Tasks page reads only what its view shows: Active its open Tasks as before, a view of one status that status alone (Not started the open ones, since a Task with no status yet is Not started), and All alone every Task. It groups and sorts the list once per change to it, not on every render, and the new-task entry holds its own text, so typing a title no longer redraws every Task under it. The list draws a page at a time across its groups, with Show more, through the paging Browse used, now shared (`usePaged` and `ShowMore` in `components/primitives`). A page test checks each, and fails on the old page all three ways. |
+| CR100 | 29 | The Inbox draws its list as plain rows (`InboxRow`), and `@tanstack/react-table`, which it used for one column, is gone from the app. The Inbox's chunk is 13.5 kB, where the review measured 124 kB. |
 
 ### P1: proposed
 
@@ -425,7 +426,7 @@ number when Chris chooses it.
 | 26 | Ops | `BskJsonTests`' pairs are a hand list (21 reads and 18 writes of 49 verbs); nothing makes a new verb be paired or listed as `bsk`'s own. | CR89 | S |
 | 27 | Pilot | The Pilot's 30 or so `bsk` command lines are checked by nothing. One `BskVerbs.cs`, parsed by `BskRoot` in a test. | | M |
 | 28 | Ops (latent) | `deploy.yml`'s concurrency group covers the whole run, so once production is on, staging waits behind the last production approval. | | S |
-| 29 | Web screens | `@tanstack/react-table` is about 110 kB of the Inbox's 124 kB chunk, for a one-column list. | | S |
+| 29 | Web screens | Built as CR100. `@tanstack/react-table` is about 110 kB of the Inbox's 124 kB chunk, for a one-column list. | | S |
 | 30 | Web screens | The whole `supabase-js` client loads with the first page, about 100 kB, for auth alone. | | S–M |
 | 31 | Web screens | Built as CR96. Seven copies of the side or bottom sheet, none guarding typed input when it closes: `ResponsiveSheet`. | | M |
 | 32 | Web screens | Built as CR98. Three copies of the chart cursor: `useChartCursor`. | | M |

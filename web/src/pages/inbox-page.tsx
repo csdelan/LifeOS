@@ -1,11 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { flexRender } from "@tanstack/react-table";
-import {
-  getCoreRowModel,
-  useLegacyTable,
-  type LegacyColumnDef,
-} from "@tanstack/react-table/legacy";
 import { toast } from "sonner";
 import { InboxIcon, Undo2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -218,41 +212,6 @@ export function InboxPage() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const columns = useMemo<LegacyColumnDef<InboxItem>[]>(
-    () => [
-      {
-        accessorKey: "preview",
-        header: "Item",
-        cell: ({ row }) => {
-          const item = row.original;
-          const tags = item.tags ?? [];
-          return (
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{inboxItemTitle(item)}</p>
-              <p className="truncate text-[0.6875rem] text-muted-foreground">
-                {inboxKindLabel(item)}
-                {" · "}
-                {isResolved(item)
-                  ? `${resolutionLabel(item)} ${formatTimestamp(item.resolvedAt)}`
-                  : formatTimestamp(item.triagedAt)}
-                {tags.length ? ` · ${tags.map((t) => `#${t}`).join(" ")}` : null}
-              </p>
-              {item.attachment ? <AttachmentChip artifact={item.attachment} compact /> : null}
-            </div>
-          );
-        },
-      },
-    ],
-    [],
-  );
-
-  const table = useLegacyTable({
-    data: rows ?? [],
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: (row) => row.itemId,
-  });
-
   // Keyed by the item, so what was typed for one (a tag, a title, a subject to relate it to) is
   // never offered for the next (code review CR91).
   function preview(item: InboxItem, onBack?: () => void) {
@@ -335,24 +294,18 @@ export function InboxPage() {
             )
           ) : null}
           <ul aria-label={resolvedView ? "Resolved items" : "Inbox items"} className="divide-y divide-border/60">
-            {table.getRowModel().rows.map((row) => (
-              <li key={row.id}>
+            {(rows ?? []).map((item) => (
+              <li key={item.itemId}>
                 <button
                   type="button"
-                  onClick={() => select(row.original.itemId)}
-                  aria-current={selected?.itemId === row.original.itemId ? "true" : undefined}
+                  onClick={() => select(item.itemId)}
+                  aria-current={selected?.itemId === item.itemId ? "true" : undefined}
                   className={cn(
                     "flex min-h-11 w-full cursor-pointer px-4 py-3 text-left focus-visible:ring-2 focus-visible:ring-ring/50",
-                    selected?.itemId === row.original.itemId
-                      ? "bg-primary/8"
-                      : "hover:bg-muted/50",
+                    selected?.itemId === item.itemId ? "bg-primary/8" : "hover:bg-muted/50",
                   )}
                 >
-                  {row.getVisibleCells().map((cell) => (
-                    <div key={cell.id} className="min-w-0 flex-1">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </div>
-                  ))}
+                  <InboxRow item={item} />
                 </button>
               </li>
             ))}
@@ -427,6 +380,27 @@ export function InboxPage() {
  * The item's real tags with add / remove. Each write is confirmed by the server
  * before the toast, and a failure says so and keeps the draft for a retry.
  */
+/**
+ * A row of the Inbox list: what it is, its kind, when it was captured or resolved, its tags and
+ * any attachment. A plain list, where a table library weighed most of the page's code (code
+ * review CR100).
+ */
+function InboxRow({ item }: { item: InboxItem }) {
+  const tags = item.tags ?? [];
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="truncate text-sm font-medium">{inboxItemTitle(item)}</p>
+      <p className="truncate text-[0.6875rem] text-muted-foreground">
+        {inboxKindLabel(item)}
+        {" · "}
+        {isResolved(item) ? `${resolutionLabel(item)} ${formatTimestamp(item.resolvedAt)}` : formatTimestamp(item.triagedAt)}
+        {tags.length ? ` · ${tags.map((t) => `#${t}`).join(" ")}` : null}
+      </p>
+      {item.attachment ? <AttachmentChip artifact={item.attachment} compact /> : null}
+    </div>
+  );
+}
+
 function TagEditor({ item, hint }: { item: InboxItem; hint: string }) {
   const writes = useWrites();
   const [draft, setDraft] = useState("");
