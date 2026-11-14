@@ -1,11 +1,12 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CoverRead, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { VisionPage } from "@/pages/vision-page";
 
-const navigate = vi.fn();
+const router = vi.hoisted(() => ({ search: {} as { view?: "goals" }, navigate: vi.fn() }));
+const navigate = router.navigate;
 
 function cover(photographer: string, positionY = 50): CoverRead {
   return {
@@ -57,13 +58,49 @@ vi.mock("@/lib/queries", () => ({
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="#">{children}</a>,
-  useNavigate: () => navigate,
+  useNavigate: () => router.navigate,
+  useSearch: () => router.search,
 }));
+
+beforeEach(() => {
+  router.search = {};
+  navigate.mockClear();
+});
+
+describe("VisionPage tabs (GEN-16)", () => {
+  it("opens on the identity statements, with the goals a tab away", () => {
+    render(<VisionPage />);
+    expect(screen.getByRole("tab", { name: "Identity statements" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Goals" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("heading", { name: "Steward of my health" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Ship LifeOS" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the tab in the address, so coming back from a goal lands on the goals", async () => {
+    render(<VisionPage />);
+    await userEvent.click(screen.getByRole("tab", { name: "Goals" }));
+    const { search } = navigate.mock.calls[0][0] as { search: (prev: object) => object };
+    expect(search({})).toEqual({ view: "goals" });
+    expect(search({ view: "goals" })).toEqual({ view: "goals" });
+  });
+
+  it("shows the goals, and only them, when the address asks for them", async () => {
+    router.search = { view: "goals" };
+    render(<VisionPage />);
+    expect(screen.getByRole("tab", { name: "Goals" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Ship LifeOS" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Steward of my health" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Identity statements" }));
+    const { search } = navigate.mock.calls[0][0] as { search: (prev: object) => object };
+    expect(search({ view: "goals" })).toEqual({ view: undefined });
+  });
+});
 
 describe("VisionPage gallery (COVER-3, Chris's \"Vision page convert to gallery view\")", () => {
   it("lays identity statements out as a gallery: the photo across a tile's top, then the title, area and credit", async () => {
     render(<VisionPage />);
-    const gallery = screen.getByRole("region", { name: "Identity statements" });
+    const gallery = screen.getByRole("tabpanel", { name: "Identity statements" });
     expect(within(gallery).getByRole("list")).toHaveClass("sm:grid-cols-2", "lg:grid-cols-3");
     const tile = within(gallery).getByRole("heading", { name: "Steward of my health" }).closest("article")!;
     const photo = within(tile).getByTestId("cover-image");
@@ -94,8 +131,9 @@ describe("VisionPage gallery (COVER-3, Chris's \"Vision page convert to gallery 
   });
 
   it("shows long-term goals as smaller tiles in the same style, credited, each opening its goal", async () => {
+    router.search = { view: "goals" };
     render(<VisionPage />);
-    const goalsGallery = screen.getByRole("region", { name: "Long-term goals" });
+    const goalsGallery = screen.getByRole("tabpanel", { name: "Goals" });
     expect(within(goalsGallery).getByRole("list")).toHaveClass("grid-cols-2", "sm:grid-cols-3", "lg:grid-cols-4");
     const ship = within(goalsGallery).getByRole("heading", { name: "Ship LifeOS" }).closest("article")!;
     expect(ship.firstElementChild).toBe(within(ship).getByTestId("cover-image"));
@@ -112,6 +150,6 @@ describe("VisionPage gallery (COVER-3, Chris's \"Vision page convert to gallery 
   it("no longer says it isn't a mood board", () => {
     render(<VisionPage />);
     expect(screen.queryByText(/mood board/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Identity Statements first/)).toBeInTheDocument();
+    expect(screen.getByText(/the long-horizon Goals that serve them/)).toBeInTheDocument();
   });
 });

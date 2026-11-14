@@ -318,79 +318,31 @@ export function SubjectDetail({
         />
       ) : null}
       <header className="shrink-0 border-b px-5 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <TypeBadge type={subject.type} />
-              {/* Beside the type, not with the buttons, so the title keeps its width. */}
-              {coverable && !cover && !editing ? (
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="-my-1 text-muted-foreground"
-                  onClick={chooseCover}
-                >
-                  <ImagePlusIcon aria-hidden /> Add cover
-                </Button>
-              ) : null}
-              {/* Off while editing, so a replacement's Cancelled isn't undone by the Save. */}
-              {!editing && subject.type === "Decision" ? (
-                <DecisionActions decision={linked} openNew={openNew} />
-              ) : null}
-              {!editing && canStartDecisionFrom(subject.type) ? (
-                <RecordDecisionAction item={linked} openNew={openNew} />
-              ) : null}
-            </div>
-            {editing ? (
-              <div className="mt-1 space-y-1">
-                <Input
-                  aria-label={cfg.titleLabel}
-                  aria-invalid={form.formState.errors.title ? true : undefined}
-                  className="h-auto py-0.5 font-heading text-2xl leading-tight md:text-2xl"
-                  {...form.register("title")}
-                />
-                {form.formState.errors.title ? (
-                  <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
-                ) : null}
-              </div>
-            ) : (
-              <h2 className="mt-1 font-heading text-2xl leading-tight">{subject.title}</h2>
-            )}
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <StatusPill status={subject.status || defaultStatus(subject.type) || null} />
-              <DateChip
-                date={
-                  subject.type === "Goal" || subject.type === "Project"
-                    ? subject.targetDate
-                    : series
-                      ? repeating?.nextDue
-                      : subject.due
-                }
-                kind={subject.type === "Goal" || subject.type === "Project" ? "target" : "due"}
-                // A series' date is its open repetition's, which a stopped series can still owe.
-                closed={!series && isTerminal(subject.status)}
-              />
-              {repeats ? (
-                <span className="inline-flex items-center gap-1 text-[0.75rem] text-muted-foreground">
-                  <RepeatIcon className="size-3" aria-hidden />
-                  {repeats}
-                </span>
-              ) : null}
-              {subject.areaName ? (
-                <span className="text-[0.75rem] text-muted-foreground">{subject.areaName}</span>
-              ) : null}
-              {subject.archived ? (
-                <span className="text-[0.75rem] text-muted-foreground">Archived</span>
-              ) : null}
-              {headline && !isTerminal(subject.status) ? (
-                <BountyChip
-                  amounts={headline.amounts}
-                  suffix={headline.trigger === "followed" ? "a day" : undefined}
-                />
-              ) : null}
-            </div>
+        {/* The buttons share the type's row, so the title below has the panel's whole width: beside
+            them, on a phone, it wrapped every word or two. When they'd leave the type less than
+            8rem (editing, on a phone), they drop to a row of their own. */}
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+          <div className="flex min-h-8 min-w-32 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+            <TypeBadge type={subject.type} className="whitespace-nowrap" />
+            {coverable && !cover && !editing ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                className="-my-1 text-muted-foreground"
+                onClick={chooseCover}
+              >
+                <ImagePlusIcon aria-hidden /> Add cover
+              </Button>
+            ) : null}
+            {/* Off while editing, so a replacement's Cancelled isn't undone by the Save. */}
+            {!editing && subject.type === "Decision" ? (
+              <DecisionActions decision={linked} openNew={openNew} />
+            ) : null}
+            {!editing && canStartDecisionFrom(subject.type) ? (
+              <RecordDecisionAction item={linked} openNew={openNew} />
+            ) : null}
           </div>
-          <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+          <div className="ml-auto flex flex-wrap justify-end gap-1.5">
             {childTypes.length > 0 ? (
               <Button
                 variant="outline"
@@ -435,6 +387,54 @@ export function SubjectDetail({
             ) : null}
           </div>
         </div>
+        {editing ? (
+          <div className="mt-2 space-y-1">
+            <Input
+              aria-label={cfg.titleLabel}
+              aria-invalid={form.formState.errors.title ? true : undefined}
+              className="h-auto py-0.5 font-heading text-2xl leading-tight md:text-2xl"
+              {...form.register("title")}
+            />
+            {form.formState.errors.title ? (
+              <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
+            ) : null}
+          </div>
+        ) : (
+          <h2 className="mt-2 font-heading text-2xl leading-tight">{subject.title}</h2>
+        )}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <StatusPill status={subject.status || defaultStatus(subject.type) || null} />
+          <DateChip
+            date={
+              subject.type === "Goal" || subject.type === "Project"
+                ? subject.targetDate
+                : series
+                  ? repeating?.nextDue
+                  : subject.due
+            }
+            kind={subject.type === "Goal" || subject.type === "Project" ? "target" : "due"}
+            // A series' date is its open repetition's, which a stopped series can still owe.
+            closed={!series && isTerminal(subject.status)}
+          />
+          {repeats ? (
+            <span className="inline-flex items-center gap-1 text-[0.75rem] text-muted-foreground">
+              <RepeatIcon className="size-3" aria-hidden />
+              {repeats}
+            </span>
+          ) : null}
+          {subject.areaName ? (
+            <span className="text-[0.75rem] text-muted-foreground">{subject.areaName}</span>
+          ) : null}
+          {subject.archived ? (
+            <span className="text-[0.75rem] text-muted-foreground">Archived</span>
+          ) : null}
+          {headline && !isTerminal(subject.status) ? (
+            <BountyChip
+              amounts={headline.amounts}
+              suffix={headline.trigger === "followed" ? "a day" : undefined}
+            />
+          ) : null}
+        </div>
         {editing && saving.error ? (
           <p role="alert" className="mt-2 text-sm text-destructive">
             {saving.error}
@@ -461,7 +461,7 @@ export function SubjectDetail({
 
       <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col gap-0">
         <div className="shrink-0 border-b px-5">
-          <TabsList variant="line" className="w-full justify-start overflow-x-auto">
+          <TabsList variant="line" className="w-full justify-start">
             <TabsTrigger value="overview">
               <LayoutListIcon /> Overview
             </TabsTrigger>

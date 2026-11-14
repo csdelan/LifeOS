@@ -47,9 +47,12 @@ test.describe("accessibility: covers", () => {
       await page.goto("/vision");
       await expect(page.locator("html")).toHaveClass(new RegExp(theme));
       await expect(page.getByText("Photo by Ines Vale on Unsplash")).toBeVisible({ timeout: 10_000 });
-      await expect(page.getByText("Photo by Mina Cho on Unsplash")).toBeVisible();
       const vision = await scan();
       expect(vision, JSON.stringify(vision, null, 2)).toEqual([]);
+      await page.getByRole("tab", { name: "Goals" }).click();
+      await expect(page.getByText("Photo by Mina Cho on Unsplash")).toBeVisible();
+      const visionGoals = await scan();
+      expect(visionGoals, JSON.stringify(visionGoals, null, 2)).toEqual([]);
 
       await page.goto("/");
       await expect(page.getByText("Photo by Mina Cho on Unsplash")).toBeVisible({ timeout: 10_000 });

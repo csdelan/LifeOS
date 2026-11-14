@@ -1,9 +1,10 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { EyeIcon } from "lucide-react";
 import { CoverCredit } from "@/components/cover/cover-credit";
 import { CoverImage } from "@/components/cover/cover-image";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { TypeIcon } from "@/components/primitives/type-icon";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSubjects } from "@/lib/queries";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import type { SubjectListItem, SubjectType } from "@/lib/production-ui-types";
@@ -18,40 +19,46 @@ const GOAL_PHOTO_WIDTH = 300;
 
 /**
  * The Vision page as a gallery (Chris's LifeOS task "Vision page convert to gallery view", after
- * "Sort of like Gallery View in Notion" for the earlier cards): identity statements as tiles
- * with their photo across the top, then the long-term goals as smaller tiles in the same style.
+ * "Sort of like Gallery View in Notion" for the earlier cards), in two tabs: the identity
+ * statements, shown first, as tiles with their photo across the top, and the long-term goals as
+ * smaller tiles in the same style. The tab is in the address (`?view=goals`), so coming back
+ * from a goal's detail lands on the goals again.
  */
 export function VisionPage() {
-  const { data, isLoading, isError } = useSubjects("Value");
-  const { data: goals } = useSubjects("Goal");
-  const navigate = useNavigate();
-  const longTerm = (goals ?? []).filter((g) => !g.archived);
+  const search = useSearch({ from: "/vision" });
+  const navigate = useNavigate({ from: "/vision" });
+  const view = search.view === "goals" ? "goals" : "identity";
+  const statements = useSubjects("Value");
+  const goals = useSubjects("Goal");
+  const longTerm = (goals.data ?? []).filter((g) => !g.archived);
   const open = (id: string) => void navigate({ to: "/map", search: { selected: id } });
+  const showView = (next: string) =>
+    void navigate({ search: (prev) => ({ ...prev, view: next === "goals" ? "goals" : undefined }) });
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-6xl px-4 py-10 md:px-8">
+      <Tabs value={view} onValueChange={showView} className="mx-auto max-w-6xl gap-0 px-4 py-10 md:px-8">
         <p className="type-scale-section text-primary">Vision</p>
         <h1 className="type-scale-display mt-1">Who I'm becoming</h1>
         <p className="mt-2 text-muted-foreground">
-          Identity Statements first, then the long-horizon Goals that serve them.
+          My Identity Statements, and the long-horizon Goals that serve them.
         </p>
-        {isLoading ? <ListSkeleton /> : null}
-        {isError ? (
-          <EmptyState
-            tone="error"
-            icon={EyeIcon}
-            title="Vision failed to load"
-            description="This is not an empty vision — the reader never returned."
+        <div className="mt-6 border-b">
+          <TabsList variant="line" className="-mb-px">
+            <TabsTrigger value="identity">Identity statements</TabsTrigger>
+            <TabsTrigger value="goals">Goals</TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="identity" className="mt-6">
+          <Loading
+            isLoading={statements.isLoading}
+            isError={statements.isError}
+            failed="Identity statements failed to load"
           />
-        ) : null}
-        {(data ?? []).length > 0 ? (
-          <section className="mt-8" aria-labelledby="vision-statements">
-            <h2 id="vision-statements" className="type-scale-section text-muted-foreground">
-              Identity statements
-            </h2>
-            <ul className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {(data ?? []).map((v) => (
+          {(statements.data ?? []).length > 0 ? (
+            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {(statements.data ?? []).map((v) => (
                 <li key={v.id} className="flex">
                   <GalleryTile
                     item={v}
@@ -64,14 +71,16 @@ export function VisionPage() {
                 </li>
               ))}
             </ul>
-          </section>
-        ) : null}
-        {longTerm.length > 0 ? (
-          <section className="mt-12" aria-labelledby="vision-goals">
-            <h2 id="vision-goals" className="type-scale-section text-muted-foreground">
-              Long-term goals
-            </h2>
-            <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          ) : null}
+          {statements.data?.length === 0 ? (
+            <EmptyState icon={EyeIcon} title="No identity statements yet" />
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="goals" className="mt-6">
+          <Loading isLoading={goals.isLoading} isError={goals.isError} failed="Goals failed to load" />
+          {longTerm.length > 0 ? (
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {longTerm.map((g) => (
                 <li key={g.id} className="flex">
                   <GalleryTile
@@ -86,20 +95,35 @@ export function VisionPage() {
                 </li>
               ))}
             </ul>
-          </section>
-        ) : null}
+          ) : null}
+          {goals.data && longTerm.length === 0 ? <EmptyState icon={EyeIcon} title="No goals yet" /> : null}
+        </TabsContent>
+
         <p className="mt-10 text-xs text-muted-foreground">
           Full composition per GEN-16 ships in a later pass.{" "}
           <Link to="/map" className="underline">
             Open the Map
           </Link>
         </p>
-        {data?.length === 0 ? (
-          <EmptyState icon={EyeIcon} title="No identity statements yet" />
-        ) : null}
-      </div>
+      </Tabs>
     </div>
   );
+}
+
+/** A tab's skeleton while its read is out, or the error that says it never came back. */
+function Loading({ isLoading, isError, failed }: { isLoading: boolean; isError: boolean; failed: string }) {
+  if (isLoading) return <ListSkeleton />;
+  if (isError) {
+    return (
+      <EmptyState
+        tone="error"
+        icon={EyeIcon}
+        title={failed}
+        description="This is not an empty vision — the reader never returned."
+      />
+    );
+  }
+  return null;
 }
 
 /**
@@ -147,7 +171,7 @@ function GalleryTile({
         </div>
       )}
       <div className={cn("flex min-w-0 flex-1 flex-col", compact ? "gap-0.5 p-3" : "gap-1 p-4")}>
-        <h3 className="leading-snug">
+        <h2 className="leading-snug">
           <button
             type="button"
             className="cursor-pointer text-left outline-none after:absolute after:inset-0 after:content-['']"
@@ -155,7 +179,7 @@ function GalleryTile({
           >
             {title}
           </button>
-        </h3>
+        </h2>
         {detail ? <p className="text-xs text-muted-foreground">{detail}</p> : null}
         {item.cover ? <CoverCredit cover={item.cover} variant="line" className="mt-auto pt-1" /> : null}
       </div>

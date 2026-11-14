@@ -81,6 +81,11 @@ test.describe("golden paths: Browse and Decisions", () => {
     // Making its work doesn't move the Decision: it's still Open.
     await expect(list.getByRole("button", { name: /No caffeine after noon/ })).toContainText("Open");
 
+    // The "Created" toast sits over the panel's link row until it goes; a toast under the pointer
+    // waits, so the pointer moves off first.
+    await page.mouse.move(0, 0);
+    await expect(page.getByText("Created Switch to decaf after lunch")).toBeHidden({ timeout: 10_000 });
+
     // An existing Idea added to Context later.
     await page.getByRole("combobox", { name: "Target type" }).click();
     await page.getByRole("option", { name: "Idea", exact: true }).click();

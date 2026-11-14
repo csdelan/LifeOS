@@ -1539,6 +1539,12 @@ Build:      built
 - Open decisions: where the manual ordering lives (per-item `vision_order` attribute vs one
   ordered-list setting) — a "view-ordering" question that may recur.
 
+**Update (2026-11-13 — Vision in two tabs):** Chris, from his phone: "separate out Identity
+and Goals as different tabs at the top. by default, the 'Identity Statements' are shown, but I
+can click goals to see my goals instead." The page's two groups are now tabs, **Identity
+statements** (the default) and **Goals**, each the same gallery as before. The tab is in the
+address (`/vision?view=goals`), so coming back from a goal's detail lands on the goals again.
+
 
 ### GEN-17 — Combine in-system relations and external links in one "Connections" section
 Horizon:    Production

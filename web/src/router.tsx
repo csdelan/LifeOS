@@ -70,6 +70,11 @@ export type ActivityConnectedSearch = {
   error_description?: string;
 };
 
+export type VisionSearch = {
+  /** "goals" opens the Goals tab; absent is the identity statements. */
+  view?: "goals";
+};
+
 export type CharacterSearch = {
   /** "reports" opens the Reports tab (xp-domains plan §3.13); absent is the domain cards. */
   view?: "reports";
@@ -157,6 +162,9 @@ const browseRoute = createRoute({
 const visionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/vision",
+  validateSearch: (search: Record<string, unknown>): VisionSearch => ({
+    view: search.view === "goals" ? "goals" : undefined,
+  }),
   component: lazyRouteComponent(() => import("@/pages/vision-page"), "VisionPage"),
 });
 
