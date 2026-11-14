@@ -2,6 +2,32 @@ import { expect, test } from "@playwright/test";
 import { beforeActivityXp, bigPng } from "../support";
 
 test.describe("golden paths: the Food Log", () => {
+  test("Log food asks before it throws away what's typed (code review CR96)", async ({ page }) => {
+    await page.goto("/food");
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Log food", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Log food" });
+    const asked = page.getByRole("alertdialog", { name: "Unsaved edits" });
+    await sheet.getByLabel("Name").fill("Half-typed lunch");
+
+    // Escape asks, and Stay keeps the entry as it was.
+    await page.keyboard.press("Escape");
+    await expect(asked).toBeVisible();
+    await asked.getByRole("button", { name: "Stay" }).click();
+    await expect(asked).toBeHidden();
+    await expect(sheet.getByLabel("Name")).toHaveValue("Half-typed lunch");
+
+    // So does the close button; Discard closes it, and it opens again empty.
+    await sheet.getByRole("button", { name: "Close" }).click();
+    await asked.getByRole("button", { name: "Discard" }).click();
+    await expect(sheet).toBeHidden();
+    await page.getByRole("button", { name: "Log food", exact: true }).click();
+    await expect(sheet.getByLabel("Name")).toHaveValue("");
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await expect(asked).toBeHidden();
+  });
+
   test("record a fast, log food and close the day for diet XP", async ({ page }) => {
     await beforeActivityXp(page);
     await page.goto("/food");

@@ -1,10 +1,10 @@
-import { useRef } from "react";
 import { MoonIcon } from "lucide-react";
 import { ContributorMeter, NightFacts, ScoreFigure, StageBar } from "@/components/activity/sleep-parts";
 import { TagLine } from "@/components/activity/tags-card";
 import { ActivityXpList } from "@/components/activity/xp-parts";
 import { ListSkeleton } from "@/components/primitives/skeletons";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ResponsiveSheet } from "@/components/primitives/responsive-sheet";
 import {
   bedToWake,
   dayName,
@@ -15,10 +15,8 @@ import {
   SLEEP_CONTRIBUTORS,
 } from "@/lib/activity";
 import { dayXp } from "@/lib/activity-xp";
-import { useIsDesktop } from "@/lib/media-query";
 import type { ActivityDayDetailRead } from "@/lib/production-ui-types";
 import { useActivityDay } from "@/lib/queries";
-import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/primitives/read-state";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -161,35 +159,24 @@ export function DaySheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const desktop = useIsDesktop();
-  const content = useRef<HTMLDivElement>(null);
   const detail = useActivityDay(day, open);
   const night = detail.data?.day === day ? detail.data?.night : null;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        ref={content}
-        side={desktop ? "right" : "bottom"}
-        className={cn("gap-0 overflow-y-auto", desktop ? "w-full sm:max-w-md" : "max-h-[92dvh] rounded-t-2xl")}
-        onOpenAutoFocus={(e) => {
-          e.preventDefault();
-          content.current?.focus();
-        }}
-      >
-        <SheetHeader className="pb-2">
-          <SheetTitle>{day ? dayName(day, today) : "A day"}</SheetTitle>
-          <SheetDescription>
-            {day === today ? "Last night, ending this morning" : "The night ending that morning"}
-            {night ? `: ${bedToWake(night)}` : ""}
-          </SheetDescription>
-        </SheetHeader>
-        <div className="px-4 pb-6">
-          {detail.isLoading ? <ListSkeleton rows={4} /> : null}
-          <ReadFailed read={detail} what="This day" />
-          {detail.data && detail.data.day === day ? <DayDetail key={day} detail={detail.data} /> : null}
-        </div>
-      </SheetContent>
-    </Sheet>
+    // A day only shows what Oura recorded, so closing has nothing to ask about.
+    <ResponsiveSheet open={open} onOpenChange={onOpenChange} focusSheet guard={false} className="overflow-y-auto">
+      <SheetHeader className="pb-2">
+        <SheetTitle>{day ? dayName(day, today) : "A day"}</SheetTitle>
+        <SheetDescription>
+          {day === today ? "Last night, ending this morning" : "The night ending that morning"}
+          {night ? `: ${bedToWake(night)}` : ""}
+        </SheetDescription>
+      </SheetHeader>
+      <div className="px-4 pb-6">
+        {detail.isLoading ? <ListSkeleton rows={4} /> : null}
+        <ReadFailed read={detail} what="This day" />
+        {detail.data && detail.data.day === day ? <DayDetail key={day} detail={detail.data} /> : null}
+      </div>
+    </ResponsiveSheet>
   );
 }

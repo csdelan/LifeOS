@@ -16,7 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ResponsiveSheet } from "@/components/primitives/responsive-sheet";
 import { Switch } from "@/components/ui/switch";
 import {
   CALORIE_SIZES,
@@ -37,7 +38,6 @@ import { useIsDesktop } from "@/lib/media-query";
 import { jpegName, resizePhoto } from "@/lib/photo";
 import type { FastRow, FoodEntryRequest, FoodMealType, MealRow } from "@/lib/production-ui-types";
 import { useFoodRecent, useWrites } from "@/lib/queries";
-import { cn } from "@/lib/utils";
 import { errorText, useWriteAction } from "@/lib/write-action";
 
 /**
@@ -83,25 +83,20 @@ export function LogFoodSheet({
 }) {
   const desktop = useIsDesktop();
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side={desktop ? "right" : "bottom"}
-        className={cn("gap-0", desktop ? "w-full sm:max-w-md" : "max-h-[92dvh] rounded-t-2xl")}
-      >
-        {open ? (
-          <FoodForm
-            key={meal?.id ?? (template ? `another-${template.id}` : "new")}
-            meal={meal}
-            template={meal ? null : template}
-            day={day}
-            today={today}
-            running={running}
-            camera={!desktop}
-            onDone={() => onOpenChange(false)}
-          />
-        ) : null}
-      </SheetContent>
-    </Sheet>
+    <ResponsiveSheet open={open} onOpenChange={onOpenChange}>
+      {open ? (
+        <FoodForm
+          key={meal?.id ?? (template ? `another-${template.id}` : "new")}
+          meal={meal}
+          template={meal ? null : template}
+          day={day}
+          today={today}
+          running={running}
+          camera={!desktop}
+          onDone={() => onOpenChange(false)}
+        />
+      ) : null}
+    </ResponsiveSheet>
   );
 }
 

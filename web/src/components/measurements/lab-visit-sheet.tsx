@@ -14,7 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ResponsiveSheet } from "@/components/primitives/responsive-sheet";
 import { formatBytes } from "@/lib/artifacts";
 import {
   LAB_MAX,
@@ -34,7 +35,6 @@ import {
   type VisitTestRow,
 } from "@/lib/features/measurements/labs";
 import { NAME_MAX, NOTE_MAX, SKEW_MS, UNIT_MAX } from "@/lib/features/measurements/measurements";
-import { useIsDesktop } from "@/lib/media-query";
 import type {
   LabPanel,
   LabVisitRequest,
@@ -76,26 +76,20 @@ export function LabVisitSheet({
   catalog: readonly MetricTemplate[];
   today: string;
 }) {
-  const desktop = useIsDesktop();
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side={desktop ? "right" : "bottom"}
-        className={cn("gap-0", desktop ? "w-full data-[side=right]:sm:max-w-xl" : "max-h-[92dvh] rounded-t-2xl")}
-      >
-        {open ? (
-          <VisitForm
-            key={visit?.id ?? "new"}
-            visit={visit}
-            visits={visits}
-            metrics={metrics}
-            catalog={catalog}
-            today={today}
-            onDone={() => onOpenChange(false)}
-          />
-        ) : null}
-      </SheetContent>
-    </Sheet>
+    <ResponsiveSheet open={open} onOpenChange={onOpenChange} wide>
+      {open ? (
+        <VisitForm
+          key={visit?.id ?? "new"}
+          visit={visit}
+          visits={visits}
+          metrics={metrics}
+          catalog={catalog}
+          today={today}
+          onDone={() => onOpenChange(false)}
+        />
+      ) : null}
+    </ResponsiveSheet>
   );
 }
 

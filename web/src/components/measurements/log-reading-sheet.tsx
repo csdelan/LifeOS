@@ -13,7 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ResponsiveSheet } from "@/components/primitives/responsive-sheet";
 import { fromLocalInput, toLocalInput } from "@/lib/food";
 import {
   NOTE_MAX,
@@ -26,7 +27,6 @@ import {
   readingsMessage,
   type MetricGroup,
 } from "@/lib/features/measurements/measurements";
-import { useIsDesktop } from "@/lib/media-query";
 import type { MetricReadingRow } from "@/lib/features/measurements/types";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -54,24 +54,18 @@ export function LogReadingSheet({
   readings: (MetricReadingRow | null)[] | null;
   today: string;
 }) {
-  const desktop = useIsDesktop();
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side={desktop ? "right" : "bottom"}
-        className={cn("gap-0", desktop ? "w-full sm:max-w-md" : "max-h-[92dvh] rounded-t-2xl")}
-      >
-        {open ? (
-          <ReadingForm
-            key={readings?.map((r) => r?.id ?? "-").join() ?? `new-${group.key}`}
-            group={group}
-            readings={readings}
-            today={today}
-            onDone={() => onOpenChange(false)}
-          />
-        ) : null}
-      </SheetContent>
-    </Sheet>
+    <ResponsiveSheet open={open} onOpenChange={onOpenChange}>
+      {open ? (
+        <ReadingForm
+          key={readings?.map((r) => r?.id ?? "-").join() ?? `new-${group.key}`}
+          group={group}
+          readings={readings}
+          today={today}
+          onDone={() => onOpenChange(false)}
+        />
+      ) : null}
+    </ResponsiveSheet>
   );
 }
 

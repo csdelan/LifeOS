@@ -4,7 +4,8 @@ import { WorkoutIcon } from "@/components/activity/workout-parts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ResponsiveSheet } from "@/components/primitives/responsive-sheet";
 import {
   NOTE_MAX,
   dayName,
@@ -16,7 +17,6 @@ import {
   sourceWords,
   workoutName,
 } from "@/lib/activity";
-import { useIsDesktop } from "@/lib/media-query";
 import type { WorkoutRow } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -215,22 +215,11 @@ export function WorkoutSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const desktop = useIsDesktop();
-  const content = useRef<HTMLDivElement>(null);
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        ref={content}
-        side={desktop ? "right" : "bottom"}
-        className={cn("gap-0 overflow-y-auto", desktop ? "w-full sm:max-w-md" : "max-h-[92dvh] rounded-t-2xl")}
-        // Open on the workout, not in the note box: on a phone that would raise the keyboard.
-        onOpenAutoFocus={(e) => {
-          e.preventDefault();
-          content.current?.focus();
-        }}
-      >
-        {workout ? <WorkoutDetail key={workout.id} workout={workout} today={today} /> : null}
-      </SheetContent>
-    </Sheet>
+    // Opens on the workout, not in the note box, which on a phone would raise the keyboard. The note
+    // saves itself as the sheet closes, so closing has nothing to ask about.
+    <ResponsiveSheet open={open} onOpenChange={onOpenChange} focusSheet guard={false} className="overflow-y-auto">
+      {workout ? <WorkoutDetail key={workout.id} workout={workout} today={today} /> : null}
+    </ResponsiveSheet>
   );
 }

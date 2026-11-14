@@ -6,7 +6,8 @@ import { HalfPointPicker } from "@/components/primitives/half-point-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ResponsiveSheet } from "@/components/primitives/responsive-sheet";
 import { Switch } from "@/components/ui/switch";
 import { formatDay } from "@/lib/dates";
 import {
@@ -109,23 +110,18 @@ export function WalkThroughSheet({
 }) {
   const desktop = useIsDesktop();
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side={desktop ? "right" : "bottom"}
-        className={cn("gap-0", desktop ? "w-full sm:max-w-md" : "max-h-[92dvh] rounded-t-2xl")}
-      >
-        {open ? (
-          <WalkThroughForm
-            key={only ?? "all"}
-            spaces={spaces}
-            today={today}
-            only={only}
-            camera={!desktop}
-            onDone={() => onOpenChange(false)}
-          />
-        ) : null}
-      </SheetContent>
-    </Sheet>
+    <ResponsiveSheet open={open} onOpenChange={onOpenChange}>
+      {open ? (
+        <WalkThroughForm
+          key={only ?? "all"}
+          spaces={spaces}
+          today={today}
+          only={only}
+          camera={!desktop}
+          onDone={() => onOpenChange(false)}
+        />
+      ) : null}
+    </ResponsiveSheet>
   );
 }
 

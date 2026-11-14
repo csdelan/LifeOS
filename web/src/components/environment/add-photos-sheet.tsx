@@ -5,14 +5,14 @@ import { SELECT_CLASS } from "@/components/environment/photo-compare-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ResponsiveSheet } from "@/components/primitives/responsive-sheet";
 import { formatDay } from "@/lib/dates";
 import { addedMessage, SHOT_NAME_MAX, SHOTS_MAX } from "@/lib/environment";
 import { useIsDesktop } from "@/lib/media-query";
 import { preparePhoto } from "@/lib/photo";
 import type { HomeSpaceRow } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
-import { cn } from "@/lib/utils";
 import { errorText } from "@/lib/write-action";
 
 /** One picked photo, shrunk and waiting to be added. */
@@ -67,23 +67,18 @@ export function AddPhotosSheet({
 }) {
   const desktop = useIsDesktop();
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side={desktop ? "right" : "bottom"}
-        className={cn("gap-0", desktop ? "w-full sm:max-w-md" : "max-h-[92dvh] rounded-t-2xl")}
-      >
-        {open ? (
-          <AddPhotosForm
-            key={`${space.id}-${shotId}`}
-            space={space}
-            shotId={shotId}
-            today={today}
-            camera={!desktop}
-            onDone={() => onOpenChange(false)}
-          />
-        ) : null}
-      </SheetContent>
-    </Sheet>
+    <ResponsiveSheet open={open} onOpenChange={onOpenChange}>
+      {open ? (
+        <AddPhotosForm
+          key={`${space.id}-${shotId}`}
+          space={space}
+          shotId={shotId}
+          today={today}
+          camera={!desktop}
+          onDone={() => onOpenChange(false)}
+        />
+      ) : null}
+    </ResponsiveSheet>
   );
 }
 
