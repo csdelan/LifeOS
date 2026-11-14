@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   useAlignmentEdges,
@@ -23,7 +23,6 @@ import { TreeNode } from "@/components/primitives/tree-node";
 import { TreeSkeleton, GraphSkeleton } from "@/components/primitives/skeletons";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { SubjectDetail } from "@/components/detail/subject-detail";
-import { AlignmentGraph } from "@/components/graph/alignment-graph";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -40,6 +39,12 @@ import { loadExpanded, saveExpanded, loadView, saveView } from "@/lib/view-state
 import { mapSubjects } from "@/lib/task-series";
 import { MapIcon } from "lucide-react";
 import { useWriteAction } from "@/lib/write-action";
+
+// The graph engine (React Flow and ELK) is most of the Map's weight, so it loads only when the
+// graph is shown: the Outline, the default view, never fetches it (code review CR84).
+const AlignmentGraph = lazy(() =>
+  import("@/components/graph/alignment-graph").then((m) => ({ default: m.AlignmentGraph })),
+);
 
 const LENSES: { id: MapLens; label: string }[] = [
   { id: "all", label: "All" },
@@ -415,14 +420,22 @@ export function MapPage() {
                   The graph is a visual enhancement. Switch to Outline view for a fully
                   keyboard and screen-reader accessible map.
                 </p>
-                <AlignmentGraph
-                model={graphModel}
-                areas={areasQuery.data ?? EMPTY_AREAS}
-                colorByArea={colorByArea}
-                layout={layout}
-                selected={selected}
-                onSelect={select}
-              />
+                <Suspense
+                  fallback={
+                    <div className="h-full p-6">
+                      <GraphSkeleton />
+                    </div>
+                  }
+                >
+                  <AlignmentGraph
+                    model={graphModel}
+                    areas={areasQuery.data ?? EMPTY_AREAS}
+                    colorByArea={colorByArea}
+                    layout={layout}
+                    selected={selected}
+                    onSelect={select}
+                  />
+                </Suspense>
               </>
             ) : null}
           </div>

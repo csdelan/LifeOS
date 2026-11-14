@@ -1,3 +1,4 @@
+import { barText } from "@/lib/home-score";
 import { describe, expect, it } from "vitest";
 import {
   activeDaysNeededFor,
@@ -5,7 +6,6 @@ import {
   ageNeededFor,
   applyMultiplier,
   averageFor,
-  barText,
   costToNext,
   dayMinimumFor,
   describeRule,
@@ -31,7 +31,7 @@ import {
   totalFor,
   type DomainDay,
   type DomainStanding,
-} from "@/lib/domain-fold";
+} from "@/lib/mock/domain-fold";
 
 // The C# tests' examples (DomainLevelTests, DomainShownLevelTests, DomainProgressTests,
 // DomainReportTests), so the mock reads Health the way the API does (xp-domains plan §7).

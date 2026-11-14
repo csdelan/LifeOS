@@ -11,7 +11,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { getAgentsClient } from "@/lib/agents";
+import { getAgentsClient } from "@/lib/client";
 import { isLiveApi } from "@/lib/api-base";
 import { createWriteClient, getReads } from "@/lib/client";
 import { buildAlignmentForest, type MapLens } from "@/lib/derive";
@@ -220,14 +220,6 @@ export function useResolvedInbox(enabled = true, limit = RESOLVED_PAGE) {
     queryFn: () => reads().inboxResolved(limit),
     enabled,
     placeholderData: keepPreviousData,
-  });
-}
-
-export function useArtifact(id: string | undefined) {
-  return useQuery({
-    queryKey: qk.artifact(id ?? ""),
-    queryFn: () => reads().artifact(id!),
-    enabled: !!id,
   });
 }
 
@@ -563,15 +555,6 @@ export function useSpaces(enabled = true) {
   return useQuery({
     queryKey: qk.spaces,
     queryFn: () => reads().spaces(),
-    enabled,
-  });
-}
-
-/** The ratings among the last `days`, of one space (its id) when given, newest first. */
-export function useSpaceRatings(space: string | null, days = 90, enabled = true) {
-  return useQuery({
-    queryKey: qk.spaceRatings(space ?? "", days),
-    queryFn: () => reads().spaceRatings({ space: space ?? undefined, days }),
     enabled,
   });
 }

@@ -98,8 +98,8 @@ import {
   toDomainDays,
   toDomainReportRow,
   toDomainRow,
-} from "@/lib/domain-fold";
-import { applyStreakToHabit } from "@/lib/habit-streak";
+} from "@/lib/mock/domain-fold";
+import { applyStreakToHabit } from "@/lib/mock/habit-streak";
 import { isOccurrenceDate, parseRecurrence, serializeRecurrence } from "@/lib/recurrence";
 import { sortAppointments } from "@/lib/appointments";
 import { taskPatternProblem } from "@/lib/task-series";

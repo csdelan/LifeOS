@@ -12,8 +12,7 @@ import type {
   DomainRow,
 } from "@/lib/production-ui-types";
 import { formatDay } from "@/lib/dates";
-import { barText } from "@/lib/domain-fold";
-import { shownPoints } from "@/lib/home-score";
+import { barText, shownPoints } from "@/lib/home-score";
 import { currency } from "@/lib/rewards";
 
 // --- Words ----------------------------------------------------------------------

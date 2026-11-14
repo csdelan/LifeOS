@@ -1,6 +1,6 @@
+import { BOUNTY_DEFAULTS } from "@/lib/mock/bounty-defaults";
 import { describe, expect, it } from "vitest";
 import {
-  BOUNTY_DEFAULTS,
   bountyDirty,
   bountyJson,
   bountyProblem,

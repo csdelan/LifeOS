@@ -3,7 +3,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectedAgents } from "@/components/people/connected-agents";
-import { CLAUDE_CALLBACK, mockAgentsClient, resetMockAgents, type AgentRecord } from "@/lib/agents";
+import type { AgentRecord } from "@/lib/agents";
+import { CLAUDE_CALLBACK, mockAgentsClient, resetMockAgents } from "@/lib/mock/agents";
 
 const { overrides } = vi.hoisted(() => ({
   overrides: {
@@ -15,12 +16,13 @@ const { overrides } = vi.hoisted(() => ({
 }));
 
 // The mock agents, with the MCP switch and Supabase's answer under the test's control.
-vi.mock("@/lib/agents", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@/lib/agents")>();
+vi.mock("@/lib/client", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/client")>();
+  const mock = await import("@/lib/mock/agents");
   return {
     ...real,
     getAgentsClient: () => {
-      const client = real.mockAgentsClient();
+      const client = mock.mockAgentsClient();
       return {
         ...client,
         overview: async () => {

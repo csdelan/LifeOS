@@ -277,3 +277,9 @@ export function toUnits(points: number): number {
 export function shownPoints(points: number): string {
   return (Math.floor(toUnits(points) / 1_000) / 10).toFixed(1);
 }
+
+/** A Home Score bar as shown: rounded up to a tenth, "68.2" (`HomeConditionRule.Text`). */
+export function barText(bar: number): string {
+  const tenThousandths = Math.round(bar * HOME_RULES.unit);
+  return (Math.ceil(tenThousandths / 1_000) / 10).toFixed(1);
+}

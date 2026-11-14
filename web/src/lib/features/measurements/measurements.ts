@@ -3,7 +3,7 @@
  * plan §2–§4.9): the kernel's limits, the starter list's keys (the list is the API's, CR73), how a value, a reading's time, the goal
  * date and the normal range read, the checks a typed value goes through (in the kernel's words),
  * and how the page groups metrics (blood pressure's two are one). The trend itself is
- * `lib/metric-trend.ts`.
+ * `lib/mock/metric-trend.ts`.
  */
 import { formatDay } from "@/lib/dates";
 import type {

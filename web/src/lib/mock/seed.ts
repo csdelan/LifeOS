@@ -29,7 +29,7 @@ import { defaultStatus } from "@/lib/production-ui-types";
 import type { TimerEvent } from "@/lib/timer";
 import type { MockFoodEvent } from "@/lib/mock/food-fold";
 import { sceneById, storedCoverOf } from "@/lib/mock/covers";
-import { applyMultiplier, DomainProgress, gemsFor, HEALTH, rankAwardKey, type DomainDay } from "@/lib/domain-fold";
+import { applyMultiplier, DomainProgress, gemsFor, HEALTH, rankAwardKey, type DomainDay } from "@/lib/mock/domain-fold";
 import { ensureSeries, repetitionRows } from "@/lib/mock/task-series";
 
 export interface MockEvent {

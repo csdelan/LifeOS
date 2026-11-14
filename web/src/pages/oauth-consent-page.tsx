@@ -6,7 +6,8 @@ import { AuthChrome, AuthConfigError, AuthReachError, AuthSplash, Mark } from "@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { carriedPerson, getAgentsClient, replaceable, type AgentRecord } from "@/lib/agents";
+import { carriedPerson, replaceable, type AgentRecord } from "@/lib/agents";
+import { getAgentsClient, getConsentClient } from "@/lib/client";
 import { isLiveApi } from "@/lib/api-base";
 import { formatTimestamp } from "@/lib/dates";
 import { ApiRequestError } from "@/lib/live/http";
@@ -15,7 +16,6 @@ import {
   authorizationIdFrom,
   browser,
   forgetPendingConsent,
-  getConsentClient,
   hostOf,
   isFollowable,
   rememberPendingConsent,

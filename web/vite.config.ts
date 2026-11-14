@@ -20,6 +20,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
+    // A stylesheet read as text keeps its text (bundle.test.ts reads what it imports); the rest stay empty.
+    css: { include: [/\.css\?raw$/] },
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     env: {
       VITE_API_BASE_URL: "",

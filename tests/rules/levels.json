@@ -1,5 +1,5 @@
 {
-  "about": "Level curves (xp-domains plan): CubicCurve on LifeDomains.Health and .Environment in C#, totalFor and levelFor with HEALTH and ENVIRONMENT in lib/domain-fold.ts.",
+  "about": "Level curves (xp-domains plan): CubicCurve on LifeDomains.Health and .Environment in C#, totalFor and levelFor with HEALTH and ENVIRONMENT in lib/mock/domain-fold.ts.",
   "cases": [
     {
       "rule": "totalFor",

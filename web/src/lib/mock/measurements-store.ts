@@ -10,7 +10,7 @@
  * outside them, and a report. It answers as `/api/measurements` does, with the kernel's refusals
  * word for word, flags a lab result against its printed range and any other reading against its
  * metric's range as it is now, has each test's range follow its newest report, and works out the
- * day values, trend and goal with `lib/metric-trend.ts`, the kernel's own formulas. The mock's
+ * day values, trend and goal with `lib/mock/metric-trend.ts`, the kernel's own formulas. The mock's
  * home zone is the browser's.
  */
 import { dataUrlFor, objectUrlFor } from "@/lib/artifacts";
@@ -45,7 +45,7 @@ import {
   WEIGHT,
   findTemplate,
 } from "@/lib/mock/metric-catalog";
-import { dayValues, goal, roundAway, trend } from "@/lib/metric-trend";
+import { dayValues, goal, roundAway, trend } from "@/lib/mock/metric-trend";
 import type {
   LabPanel,
   LabReportRow,

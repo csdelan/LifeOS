@@ -8,8 +8,8 @@ import {
   isScore,
   scoreDay,
 } from "@/lib/diet-score";
-import { ENVIRONMENT, HEALTH, levelFor, totalFor } from "@/lib/domain-fold";
-import { exerciseVerdict } from "@/lib/exercise-rules";
+import { ENVIRONMENT, HEALTH, levelFor, totalFor } from "@/lib/mock/domain-fold";
+import { exerciseVerdict } from "@/lib/mock/exercise-rules";
 import { fade, partDrag, partValue, ratingPoints, spaceScore } from "@/lib/home-score";
 import { STATUS_BY_TYPE, initialStatus, isTerminal } from "@/lib/production-ui-types";
 import type { HomePart, ReviewKind, SubjectType } from "@/lib/production-ui-types";

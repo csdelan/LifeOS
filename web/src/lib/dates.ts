@@ -55,10 +55,6 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function compareIsoDate(a: string, b: string): number {
-  return a.localeCompare(b);
-}
-
 export function formatDay(iso: string | null | undefined): string {
   if (!iso) return "";
   const [y, m, d] = iso.split("-").map(Number);
@@ -172,4 +168,10 @@ export function slugify(title: string): string {
     .replace(/^-|-$/g, "")
     .slice(0, 40);
   return slug || "item";
+}
+
+/** A `yyyy-MM-dd` day as a whole number of days, so gaps and slopes count days. */
+export function dayNumber(day: string): number {
+  const [y, m, d] = day.split("-").map(Number);
+  return Math.round(Date.UTC(y, m - 1, d) / 86_400_000);
 }

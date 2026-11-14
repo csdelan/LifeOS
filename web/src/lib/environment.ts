@@ -7,7 +7,6 @@
 import { formatDay } from "@/lib/dates";
 import { HOME_PARTS, shownPoints } from "@/lib/home-score";
 import type {
-  FixNextRow,
   HomePart,
   HomeSpaceRow,
   SpacePhotoRow,
@@ -125,11 +124,6 @@ export function dragText(drag: number): string {
   return `−${shownPoints(drag)}`;
 }
 
-/** A Fix next line: "Office tidiness −6.3". */
-export function fixNextText(row: FixNextRow): string {
-  return `${row.space} ${row.part} ${dragText(row.drag)}`;
-}
-
 /** A walk-through or quick check's toast: "Rated Office", "Rated 9 spaces". */
 export function ratedMessage(result: SpaceRatingResult): string {
   const n = result.ratings.length;
@@ -168,13 +162,6 @@ export function photoCaption(label: string, photo: SpacePhotoRow): string {
 /** A shot's full name: "Office" for the shot named after its space, else "Office · Desk". */
 export function shotTitle(space: string, shot: string): string {
   return shot.localeCompare(space, undefined, { sensitivity: "base" }) === 0 ? space : `${space} · ${shot}`;
-}
-
-/** The newest photo day among a space's shots, or null when it has none. */
-export function newestPhotoDay(shots: readonly SpaceShotRow[]): string | null {
-  let newest: string | null = null;
-  for (const s of shots) if (s.newest && (newest == null || s.newest.day > newest)) newest = s.newest.day;
-  return newest;
 }
 
 /** The shot a space card shows first: the first with photos, else the first. */

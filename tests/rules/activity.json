@@ -1,5 +1,5 @@
 {
-  "about": "Activity XP (activity plan \u00A73.8): ActivityRules.Default and ExerciseRules in C#, lib/activity-score.ts and lib/exercise-rules.ts in the web.",
+  "about": "Activity XP (activity plan \u00A73.8): ActivityRules.Default and ExerciseRules in C#, lib/activity-score.ts and lib/mock/exercise-rules.ts in the web.",
   "cases": [
     {
       "rule": "stepsXp",

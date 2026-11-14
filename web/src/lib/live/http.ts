@@ -32,10 +32,6 @@ export function api() {
   return cached;
 }
 
-export function resetApiClient() {
-  cached = null;
-}
-
 declare const unchecked: unique symbol;
 
 /**

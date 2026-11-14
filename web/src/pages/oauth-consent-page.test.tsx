@@ -46,9 +46,10 @@ const { signInWithGoogle, signOut, authState, client, browser, agents } = vi.hoi
   },
 }));
 
-vi.mock("@/lib/agents", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/agents")>()),
+vi.mock("@/lib/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/client")>()),
   getAgentsClient: () => agents,
+  getConsentClient: () => client,
 }));
 
 vi.mock("@/components/auth/auth-provider", () => ({
@@ -68,7 +69,6 @@ vi.mock("@/lib/me", () => ({
 
 vi.mock("@/lib/oauth-consent", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/oauth-consent")>()),
-  getConsentClient: () => client,
   browser,
 }));
 

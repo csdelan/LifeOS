@@ -30,7 +30,7 @@
             "paths": [
               {
                 "name": "sonner",
-                "message": "A write's success is said once, in decorateWrites (lib/queries.ts), for both write clients (code review CR55)."
+                "message": "A write's success is said once, in its writeEffects entry (lib/write-effects.ts), for both write clients (code review CR55, CR83)."
               }
             ],
             "patterns": [
@@ -52,7 +52,7 @@
             "paths": [
               {
                 "name": "sonner",
-                "message": "A write's success is said once, in decorateWrites (lib/queries.ts), for both write clients (code review CR55)."
+                "message": "A write's success is said once, in its writeEffects entry (lib/write-effects.ts), for both write clients (code review CR55, CR83)."
               }
             ]
           }

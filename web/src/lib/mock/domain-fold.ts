@@ -15,6 +15,7 @@ import type {
   DomainReportRow,
   DomainRow,
 } from "@/lib/production-ui-types";
+import { barText } from "@/lib/home-score";
 
 // --- Rules -------------------------------------------------------------------
 
@@ -282,11 +283,6 @@ export function homeThreshold(rule: HomeConditionRule, level: number): number {
 /** The bar of `level` in points, exact to four places (57.5, 34.4898). */
 export function homeBar(rule: HomeConditionRule, level: number): number {
   return homeThreshold(rule, level) / HOME_UNIT;
-}
-
-/** A bar as shown: rounded up to a tenth, "68.2" (`HomeConditionRule.Text`). */
-export function barText(bar: number): string {
-  return (ceilDiv(Math.round(bar * HOME_UNIT), 1_000) / 10).toFixed(1);
 }
 
 /** The kept-up days `level` needs in a window of `days`: `⌈P(L) · N⌉`, exactly. */

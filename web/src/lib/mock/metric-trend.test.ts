@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "@/lib/dates";
-import { dayValues, goal, roundAway, trend, type DayValue } from "@/lib/metric-trend";
+import { dayValues, goal, roundAway, trend, type DayValue } from "@/lib/mock/metric-trend";
 
 // The same cases as the kernel's MetricTrendTests, so the mock store and the API agree.
 const START = "2026-11-01";

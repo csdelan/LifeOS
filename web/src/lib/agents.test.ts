@@ -1,12 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { CLAUDE_CALLBACK, mockAgentsClient, resetMockAgents, startOfWeek } from "@/lib/mock/agents";
 import {
   agentRows,
-  CLAUDE_CALLBACK,
   carriedPerson,
-  mockAgentsClient,
   replaceable,
-  resetMockAgents,
-  startOfWeek,
   webAddress,
   type AgentGrant,
   type AgentRecord,

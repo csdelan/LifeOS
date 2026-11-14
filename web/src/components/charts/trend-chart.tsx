@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { dayNumber } from "@/lib/metric-trend";
+import { dayNumber } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 /** One day with a value in a series: a dot, and the trend through it. */

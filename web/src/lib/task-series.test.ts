@@ -15,7 +15,7 @@ import {
   taskPatternProblem,
   weekOf,
 } from "@/lib/task-series";
-import { composeRecap } from "@/lib/review-recap";
+import { composeRecap } from "@/lib/mock/review-recap";
 import type {
   SubjectListItem,
   TaskRepetitionRow,

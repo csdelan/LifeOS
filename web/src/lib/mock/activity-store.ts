@@ -19,7 +19,7 @@ import {
   summarizeWeek,
 } from "@/lib/activity";
 import { addDays, nowIso, startOfWeekMonday, todayIso } from "@/lib/dates";
-import { exerciseVerdict } from "@/lib/exercise-rules";
+import { exerciseVerdict } from "@/lib/mock/exercise-rules";
 import type {
   ActivityDayDetailRead,
   ActivityDayRow,

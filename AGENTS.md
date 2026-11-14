@@ -34,8 +34,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   itself (the reads it refreshes, its success toast, its earnings, an optimistic change) is its
   entry in `writeEffects` (`lib/write-effects.ts`), never in a write client; a failed write
   refreshes only when it was optimistic, got a 409 or its entry says why. App code reaches the mock only
-  through `lib/client.ts` (a lint rule says so), so the production bundle leaves it out; the read
-  seam's types are in `lib/reads.ts`. A feature's types, reads, writes, effects, query keys and
+  through `lib/client.ts` (a lint rule says so), so the production bundle leaves it out, and what
+  only the mock and tests use lives under `lib/mock` too (`src/bundle.test.ts` checks that, the
+  packages, and that the Map's graph and the shell's dialogs load lazily); the read seam's types
+  are in `lib/reads.ts`. A feature's types, reads, writes, effects, query keys and
   hooks live in `lib/features/<feature>/` and are spread into the shared seams
   (`features/measurements` is the pattern; the other features move there as they're next
   worked on). Pages load lazily (`lazyRouteComponent` in `router.tsx`).

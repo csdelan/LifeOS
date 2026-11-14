@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { MetricCard } from "@/components/measurements/metric-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDay, todayIso } from "@/lib/dates";
+import { dayNumber, formatDay, todayIso } from "@/lib/dates";
 import {
   flagsText,
   groupValue,
@@ -14,7 +14,6 @@ import {
   type MetricGroup,
   type ReadingSet,
 } from "@/lib/features/measurements/measurements";
-import { dayNumber } from "@/lib/metric-trend";
 import { useWrites } from "@/lib/queries";
 import { useMetricsOver } from "@/lib/features/measurements/queries";
 import { cn } from "@/lib/utils";

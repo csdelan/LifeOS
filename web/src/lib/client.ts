@@ -9,7 +9,9 @@
  * rest of the app from importing `@/lib/mock`.
  */
 
+import { liveAgentsClient, type AgentsClient } from "@/lib/agents";
 import { isLiveApi } from "@/lib/api-base";
+import { liveConsentClient, type ConsentClient } from "@/lib/oauth-consent";
 import { liveReads } from "@/lib/live/reads";
 import { createLiveWriteClient } from "@/lib/live/write-client";
 import type { LifeOsWriteClient } from "@/lib/production-ui-types";
@@ -50,7 +52,16 @@ export function createWriteClient(): LifeOsWriteClient {
     : lazily<LifeOsWriteClient>(() => import("@/lib/mock/write-client").then((m) => m.createMockWriteClient()));
 }
 
-/** The mock store's state, for a mock-mode stand-in that isn't one of the seams (Settings' connected agents). */
-export async function mockState() {
-  return (await import("@/lib/mock/store")).getState();
+const mockAgents = lazily<AgentsClient>(() => import("@/lib/mock/agents").then((m) => m.mockAgentsClient()));
+
+/** Connected agents (Settings and the consent page): Supabase's grants and LifeOS's list, or the mock's stand-in. */
+export function getAgentsClient(): AgentsClient {
+  return isLiveApi() ? liveAgentsClient() : mockAgents;
+}
+
+const mockConsent = lazily<ConsentClient>(() => import("@/lib/mock/oauth-consent").then((m) => m.mockConsentClient()));
+
+/** The consent page's client: Supabase's OAuth server, or the mock's pretend request from Claude. */
+export function getConsentClient(): ConsentClient {
+  return isLiveApi() ? liveConsentClient() : mockConsent;
 }

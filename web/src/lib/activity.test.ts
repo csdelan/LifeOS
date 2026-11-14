@@ -43,7 +43,7 @@ import {
   workoutName,
   workoutWeeks,
 } from "@/lib/activity";
-import { exerciseVerdict } from "@/lib/exercise-rules";
+import { exerciseVerdict } from "@/lib/mock/exercise-rules";
 import type {
   ActivityDayRow,
   ActivityTagRow,

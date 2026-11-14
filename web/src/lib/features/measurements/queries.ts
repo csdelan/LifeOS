@@ -22,21 +22,8 @@ export function useMetrics(enabled = true) {
 }
 
 /**
- * One metric over the last `days` days (all history when null): the chart, the table and the
- * goal; the last range stays up while the next loads.
- */
-export function useMetric(metric: string | null, days: number | null, enabled = true) {
-  return useQuery({
-    queryKey: measurementKeys.metric(metric ?? "", days),
-    queryFn: () => getReads().metric(metric!, days),
-    enabled: enabled && metric != null,
-    placeholderData: keepPreviousData,
-  });
-}
-
-/**
  * Several metrics over the same range, read together: blood pressure's two on one card and in
- * one row (MEASURE-3). Each shares `useMetric`'s cache, so a card and its row read once.
+ * one row (MEASURE-3). Each reads under `measurementKeys.metric`, so a card and its row read once.
  */
 export function useMetricsOver(metrics: readonly string[], days: number | null, enabled = true) {
   return useQueries({

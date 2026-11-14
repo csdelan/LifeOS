@@ -65,10 +65,6 @@ function panelOrder(key: LabPanel | null): number {
   return i < 0 ? PANELS.length : i;
 }
 
-export function isLabTest(metric: Pick<MetricRow, "panel">): boolean {
-  return metric.panel != null;
-}
-
 type Ordered = Pick<MetricRow, "panel" | "catalog" | "name">;
 
 /**

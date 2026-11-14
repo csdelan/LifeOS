@@ -4,6 +4,7 @@
  * the C# step for step, rounding included, and `metric-trend.test.ts` checks the same cases as
  * `MetricTrendTests`, so the mock and the API agree.
  */
+import { dayNumber } from "@/lib/dates";
 import type { MetricBetter, MetricGoalStatus } from "@/lib/features/measurements/types";
 
 /** How far each day's value pulls the trend after a one-day step (§2.2). */
@@ -48,12 +49,6 @@ export interface Goal {
   basisDays: number;
   basisFrom: string | null;
   basisTo: string | null;
-}
-
-/** A `yyyy-MM-dd` day as a whole number of days, so gaps and slopes count days. */
-export function dayNumber(day: string): number {
-  const [y, m, d] = day.split("-").map(Number);
-  return Math.round(Date.UTC(y, m - 1, d) / 86_400_000);
 }
 
 function fromDayNumber(n: number): string {

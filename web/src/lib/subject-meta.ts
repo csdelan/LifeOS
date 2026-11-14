@@ -44,43 +44,6 @@ export function typeTone(type: SubjectType): string {
   }
 }
 
-export function typeSurface(type: SubjectType): string {
-  switch (type) {
-    case "Value":
-      return "bg-[var(--type-value)]/12 text-[var(--type-value)]";
-    case "Goal":
-      return "bg-[var(--type-goal)]/12 text-[var(--type-goal)]";
-    case "Project":
-      return "bg-[var(--type-project)]/12 text-[var(--type-project)]";
-    case "Task":
-      return "bg-[var(--type-task)]/12 text-[var(--type-task)]";
-    case "Idea":
-      return "bg-[var(--type-idea)]/12 text-[var(--type-idea)]";
-    case "Problem":
-      return "bg-[var(--type-problem)]/12 text-[var(--type-problem)]";
-    case "Decision":
-      return "bg-[var(--type-decision)]/12 text-[var(--type-decision)]";
-    case "Commitment":
-      return "bg-[var(--type-commitment)]/12 text-[var(--type-commitment)]";
-    case "Constraint":
-      return "bg-[var(--type-constraint)]/12 text-[var(--type-constraint)]";
-    case "Person":
-      return "bg-[var(--type-person)]/12 text-[var(--type-person)]";
-    case "Area":
-      return "bg-[var(--type-area)]/12 text-[var(--type-area)]";
-    case "Season":
-      return "bg-[var(--type-season)]/12 text-[var(--type-season)]";
-    case "Habit":
-      return "bg-[var(--type-habit)]/12 text-[var(--type-habit)]";
-    case "Appointment":
-      return "bg-[var(--type-appointment)]/12 text-[var(--type-appointment)]";
-    case "Reward":
-      return "bg-[var(--type-reward)]/12 text-[var(--type-reward)]";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-}
-
 /** CSS accent for graph nodes and MiniMap chips. */
 export function typeAccent(type: SubjectType): string {
   switch (type) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyStreakToHabit, recomputeStreak } from "@/lib/habit-streak";
+import { applyStreakToHabit, recomputeStreak } from "@/lib/mock/habit-streak";
 import type { HabitOccurrenceRow, HabitRow } from "@/lib/production-ui-types";
 
 function occ(

@@ -1,6 +1,6 @@
 /**
  * The mock's `v_award_credit` (migration 0032) and the life-domain reads over it: what each
- * paid award credits, and to which day, folded under `lib/domain-fold.ts`.
+ * paid award credits, and to which day, folded under `lib/mock/domain-fold.ts`.
  *
  * - Every award key whose net in a currency is positive counts, on the credited day of its
  *   latest earn; a reversal takes it off its day; earning it again files it on the new day.
@@ -15,7 +15,7 @@ import {
   PASSIVE_TRIGGERS,
   shiftDay,
   type DomainDay,
-} from "@/lib/domain-fold";
+} from "@/lib/mock/domain-fold";
 import type { Amounts } from "@/lib/production-ui-types";
 import type { MockLedgerEntry } from "@/lib/mock/seed";
 

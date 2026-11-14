@@ -1,17 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isLiveApi } from "@/lib/api-base";
+import { getConsentClient } from "@/lib/client";
+import { MOCK_EXPIRED_ID, mockConsentClient } from "@/lib/mock/oauth-consent";
 import {
-  MOCK_EXPIRED_ID,
   PENDING_CONSENT_MS,
   authorizationIdFrom,
   consentUrl,
   forgetPendingConsent,
-  getConsentClient,
   hostOf,
   isConsentPath,
   isFollowable,
   liveConsentClient,
-  mockConsentClient,
   rememberPendingConsent,
   scopeWords,
   takePendingConsent,

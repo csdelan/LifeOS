@@ -61,8 +61,9 @@ import type {
 } from "@/lib/features/measurements/types";
 import { isTerminal, type SubjectType } from "@/lib/production-ui-types";
 import { searchSubjects, type SubjectSearch } from "@/lib/browse";
-import { composeRecap, type RecapSection } from "@/lib/review-recap";
-import { BOUNTY_DEFAULTS } from "@/lib/bounty";
+import { composeRecap } from "@/lib/mock/review-recap";
+import type { RecapSection } from "@/lib/review-recap";
+import { BOUNTY_DEFAULTS } from "@/lib/mock/bounty-defaults";
 import { tagUniverse, toRelationEdge } from "@/lib/mock/seed";
 import {
   appointmentsOn,

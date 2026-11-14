@@ -8,9 +8,10 @@
  * it; default 1) the timer recorded before the task was completed, on top of `completed`.
  * It is opt-in: no default, and nothing for a task done without the timer.
  *
- * `BOUNTY_TRIGGERS` and `BOUNTY_DEFAULTS` mirror `BountyTriggers` / `BountyDefaults` in
- * LifeOs.Domain for mock mode only: live mode reads the defaults from
- * `GET /api/bounty/defaults`, so retuning them never needs a web change.
+ * `BOUNTY_TRIGGERS` and the defaults mirror `BountyTriggers` / `BountyDefaults` in
+ * LifeOs.Domain for mock mode only (`lib/mock/bounty-defaults.ts` answers the mock's
+ * `GET /api/bounty/defaults`): live mode reads the defaults from the API, so retuning them
+ * never needs a web change.
  */
 import type {
   Amounts,
@@ -65,11 +66,6 @@ export function earns(type: SubjectType): boolean {
 export function defaultBounty(type: SubjectType, trigger: string): Amounts {
   return { ...(DEFAULTS[type]?.[trigger] ?? {}) };
 }
-
-/** The mock's `GET /api/bounty/defaults`. */
-export const BOUNTY_DEFAULTS: BountyTypeDefaults[] = (["Goal", "Habit", "Project", "Task"] as const).map(
-  (type) => ({ type, lines: linesFor(type, {}) }),
-);
 
 /** The stored bounty, read leniently as the kernel does (`Bounty.Parse`). */
 export function parseBounty(raw: unknown): Record<string, Amounts> {

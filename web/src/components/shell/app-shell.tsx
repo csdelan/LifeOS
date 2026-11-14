@@ -2,6 +2,7 @@ import { Link, Outlet, useBlocker, useRouterState } from "@tanstack/react-router
 import { useTheme } from "next-themes";
 import {
   createContext,
+  lazy,
   useCallback,
   useContext,
   useEffect,
@@ -45,15 +46,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CommandPalette } from "@/components/shell/command-palette";
+import { OnceOpened } from "@/components/shell/once-opened";
 import { ResizeHandle, usePersistedWidth } from "@/components/shell/panels";
-import { NewSubjectDialog } from "@/components/create/new-subject-dialog";
-import { QuickCaptureDialog } from "@/components/create/quick-capture-dialog";
-import { VoiceCaptureDialog } from "@/components/create/voice-capture-dialog";
 import { CreateActions, type CreateOpts } from "@/components/create/create-context";
 import { RunningTimer } from "@/components/timer/running-timer";
 import { useAuth } from "@/components/auth/auth-provider";
 import { isLiveApi } from "@/lib/api-base";
+import { useIdleAfterFirstPage } from "@/lib/idle";
 import { useInbox, useMe } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import {
@@ -103,6 +102,19 @@ const NAV = [
   { to: "/areas", label: "Areas", icon: CompassIcon },
 ] as const;
 
+// The palette and the create dialogs are closed until asked for, so each loads after the first
+// page, when the browser is idle or on its first open, rather than with every page (code review CR84).
+const CommandPalette = lazy(() => import("@/components/shell/command-palette").then((m) => ({ default: m.CommandPalette })));
+const NewSubjectDialog = lazy(() =>
+  import("@/components/create/new-subject-dialog").then((m) => ({ default: m.NewSubjectDialog })),
+);
+const QuickCaptureDialog = lazy(() =>
+  import("@/components/create/quick-capture-dialog").then((m) => ({ default: m.QuickCaptureDialog })),
+);
+const VoiceCaptureDialog = lazy(() =>
+  import("@/components/create/voice-capture-dialog").then((m) => ({ default: m.VoiceCaptureDialog })),
+);
+
 export function AppShell() {
   const [palette, setPalette] = useState(false);
   const [createOpts, setCreateOpts] = useState<CreateOpts | null>(null);
@@ -110,6 +122,7 @@ export function AppShell() {
   const [voice, setVoice] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const idle = useIdleAfterFirstPage();
   const pendingNav = useRef<(() => void) | null>(null);
   const { resolvedTheme, setTheme } = useTheme();
   const { data: inbox } = useInbox();
@@ -276,26 +289,34 @@ export function AppShell() {
         <Outlet />
       </main>
       </div>
-      <CommandPalette
-        open={palette}
-        onOpenChange={setPalette}
-        onNew={() => setCreateOpts({})}
-        onCapture={() => setCapturing(true)}
-        onVoice={() => setVoice(true)}
-      />
-      <NewSubjectDialog
-        open={createOpts !== null}
-        onOpenChange={(o) => {
-          if (!o) setCreateOpts(null);
-        }}
-        initialType={createOpts?.type}
-        initialParent={createOpts?.parent}
-        initialTitle={createOpts?.title}
-        initialLink={createOpts?.link}
-        onCreated={createOpts?.onCreated}
-      />
-      <QuickCaptureDialog open={capturing} onOpenChange={setCapturing} />
-      <VoiceCaptureDialog open={voice} onOpenChange={setVoice} />
+      <OnceOpened open={palette || idle}>
+        <CommandPalette
+          open={palette}
+          onOpenChange={setPalette}
+          onNew={() => setCreateOpts({})}
+          onCapture={() => setCapturing(true)}
+          onVoice={() => setVoice(true)}
+        />
+      </OnceOpened>
+      <OnceOpened open={createOpts !== null || idle}>
+        <NewSubjectDialog
+          open={createOpts !== null}
+          onOpenChange={(o) => {
+            if (!o) setCreateOpts(null);
+          }}
+          initialType={createOpts?.type}
+          initialParent={createOpts?.parent}
+          initialTitle={createOpts?.title}
+          initialLink={createOpts?.link}
+          onCreated={createOpts?.onCreated}
+        />
+      </OnceOpened>
+      <OnceOpened open={capturing || idle}>
+        <QuickCaptureDialog open={capturing} onOpenChange={setCapturing} />
+      </OnceOpened>
+      <OnceOpened open={voice || idle}>
+        <VoiceCaptureDialog open={voice} onOpenChange={setVoice} />
+      </OnceOpened>
       <AlertDialog open={stayOpen} onOpenChange={setStayOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

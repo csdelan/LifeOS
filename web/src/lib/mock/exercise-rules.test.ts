@@ -4,7 +4,7 @@ import {
   UNKNOWN_SOURCE_REASON,
   WALK_REASON,
   exerciseVerdict,
-} from "@/lib/exercise-rules";
+} from "@/lib/mock/exercise-rules";
 
 // The kernel's table (ActivityRulesTests.Only_workouts_Chris_records_count_and_never_a_walk),
 // row for row, so the mock and the API agree.

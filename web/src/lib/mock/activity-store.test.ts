@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { stepBand, summarizeWeek } from "@/lib/activity";
 import { addDays, startOfWeekMonday, todayIso } from "@/lib/dates";
 import { exerciseSeconds, exerciseXp, sleepXp, stepsXp } from "@/lib/activity-score";
-import { exerciseVerdict } from "@/lib/exercise-rules";
+import { exerciseVerdict } from "@/lib/mock/exercise-rules";
 import {
   MAX_RANGE_DAYS,
   SEEDED_DAYS,

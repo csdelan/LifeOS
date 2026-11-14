@@ -109,11 +109,6 @@ export const SCORE_TILE: Record<number, string> = {
   5: "bg-score-5 text-score-ink-high",
 };
 
-/** Whether an award is diet XP (a day's food or its fast), which belongs to no item. */
-export function isFoodAward(award: { trigger: string }): boolean {
-  return award.trigger === "diet" || award.trigger === "fast";
-}
-
 const MEAL_WORDS: Record<FoodMealType, string> = {
   breakfast: "Breakfast",
   lunch: "Lunch",
