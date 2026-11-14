@@ -256,7 +256,9 @@ describe("Browse page (BROWSE-2)", () => {
   });
 });
 
-describe("Browse page with thousands of items (code review CR76)", () => {
+// Each makes hundreds of subjects and draws two hundred rows: about two seconds alone, and more
+// than the default five while the whole suite runs alongside.
+describe("Browse page with thousands of items (code review CR76)", { timeout: 20_000 }, () => {
   it("draws the first two hundred rows, the open one too, and Show more draws the next", async () => {
     let last = "";
     for (let i = 0; i < 230; i++) last = createSubject({ type: "Task", title: `Repetition ${String(i).padStart(3, "0")}` }).id;
