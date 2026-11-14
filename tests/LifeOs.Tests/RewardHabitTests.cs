@@ -311,10 +311,11 @@ public sealed class RewardHabitTests(ClassDatabase classDb) : IClassFixture<Clas
     public async Task A_day_recorded_before_the_wallet_opened_never_pays()
     {
         var kernel = Build();
-        // Recorded a moment before the wallet opens, on its day: a recording dated after its own
-        // clock's today would be of a day that hadn't come.
-        var beforeOpening = DateTimeOffset.UtcNow.AddSeconds(-1);
-        await kernel.Rewards.OpenAsync(cancellationToken: Ct);
+        // Recorded a moment before the wallet opened, on its day: a recording dated after its own
+        // clock's today would be of a day that hadn't come. The class shares its database, so the
+        // wallet may have opened in an earlier test: what counts is when it did.
+        var opening = await kernel.Rewards.OpenAsync(cancellationToken: Ct);
+        var beforeOpening = opening.OpenedAt.AddSeconds(-1);
         var habit = await HabitAsync(kernel, startOffset: 1);
         var backdated = new AdherenceService(
             kernel.Subjects,

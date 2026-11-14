@@ -79,7 +79,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - A database test takes a `DomainTestDatabase` of its own (a copy of the migrated template), or
   its class takes `IClassFixture<ClassDatabase>`, one copy its tests share. A kernel on either
   comes from its `Kernel` or `Services()`, in the database's zone. A test that reads a total over
-  every row (the wallet, a day's ledger or domain credit) takes its own. There's no serial
+  every row (the wallet, a day's ledger or domain credit) takes its own; on a shared one, the
+  wallet may have opened in an earlier test, so read when from `OpenAsync`. There's no serial
   collection: every class runs alongside the others. Fake time with `TestClock`.
 - Web, from `web/`: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`. Playwright:
   `npm run test:e2e` and `npm run a11y`, one spec per feature in `web/e2e/golden` and
