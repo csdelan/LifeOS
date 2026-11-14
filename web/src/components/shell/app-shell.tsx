@@ -39,10 +39,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { OnceOpened } from "@/components/shell/once-opened";
 import { UnsavedEditsCtx, type UnsavedEdits } from "@/components/shell/unsaved-edits";
-import { ResizeHandle, usePersistedWidth } from "@/components/shell/panels";
+import { ResizeHandle } from "@/components/shell/panels";
+import { usePersistedWidth } from "@/components/shell/use-persisted-width";
 import { CreateActions, type CreateOpts } from "@/components/create/create-context";
 import { RunningTimer } from "@/components/timer/running-timer";
-import { useAuth } from "@/components/auth/auth-provider";
+import { useAuth } from "@/components/auth/auth-context";
 import { isLiveApi } from "@/lib/api-base";
 import { useIdleAfterFirstPage } from "@/lib/idle";
 import { useInbox, useMe } from "@/lib/queries";
@@ -121,9 +122,12 @@ export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navPanel = usePersistedWidth("layout.navWidth", 248, { min: 176, max: 400 });
 
-  useEffect(() => {
+  // A move to another page closes the phone's navigation, as the render that sees it.
+  const [navPath, setNavPath] = useState(pathname);
+  if (navPath !== pathname) {
+    setNavPath(pathname);
     setNavOpen(false);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -155,10 +159,10 @@ export function AppShell() {
     enableBeforeUnload: dirty,
   });
 
-  const [stayOpen, setStayOpen] = useState(false);
-  useEffect(() => {
-    if (blocker.status === "blocked") setStayOpen(true);
-  }, [blocker.status]);
+  // Asked by a move the shell makes itself (requestNavigation); the router's own moves ask by
+  // being blocked.
+  const [asked, setAsked] = useState(false);
+  const stayOpen = asked || blocker.status === "blocked";
 
   const requestNavigation = useCallback((proceed: () => void) => {
     if (!dirtyRef.current) {
@@ -166,7 +170,7 @@ export function AppShell() {
       return;
     }
     pendingNav.current = proceed;
-    setStayOpen(true);
+    setAsked(true);
   }, []);
 
   /**
@@ -175,7 +179,7 @@ export function AppShell() {
    * After Discard it finds nothing left to drop.
    */
   function stay() {
-    setStayOpen(false);
+    setAsked(false);
     pendingNav.current = null;
     if (blocker.status === "blocked") blocker.reset?.();
   }
@@ -185,7 +189,7 @@ export function AppShell() {
     pendingNav.current = null;
     setDirty(false);
     setDiscards((n) => n + 1);
-    setStayOpen(false);
+    setAsked(false);
     if (blocker.status === "blocked") blocker.proceed?.();
     else next?.();
   }
@@ -323,7 +327,7 @@ export function AppShell() {
       </OnceOpened>
       {/* Closing it any way but Discard (Stay, Escape) is staying. Discard's click runs before
           the dialog closes, so the stay that follows finds nothing left to drop. */}
-      <AlertDialog open={stayOpen} onOpenChange={(open) => (open ? setStayOpen(true) : stay())}>
+      <AlertDialog open={stayOpen} onOpenChange={(open) => (open ? setAsked(true) : stay())}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Unsaved edits</AlertDialogTitle>

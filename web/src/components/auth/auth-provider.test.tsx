@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { AuthProvider, useAuth } from "@/components/auth/auth-provider";
+import { AuthProvider } from "@/components/auth/auth-provider";
+import { useAuth } from "@/components/auth/auth-context";
 
 const { signInWithOAuth } = vi.hoisted(() => ({
   signInWithOAuth: vi.fn(async () => ({ data: {}, error: null })),

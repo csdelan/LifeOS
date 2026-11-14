@@ -257,6 +257,8 @@ export function VoiceCaptureDialog({
       }
     }
 
+    // Each opening starts a new recording, so the last one's state goes as the microphone starts.
+    // oxlint-disable-next-line react/set-state-in-effect
     setPhase("recording");
     setError(null);
     setTranscript("");

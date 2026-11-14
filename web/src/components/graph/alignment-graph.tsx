@@ -81,8 +81,12 @@ function GraphCanvas({
   const [laidOut, setLaidOut] = useState(false);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const layoutGen = useRef(0);
+  // The edges as last drawn, for the highlight below, which mustn't run again on every change to
+  // them. Declared before it, so it's current by the time the highlight runs.
   const edgesRef = useRef(rfEdges);
-  edgesRef.current = rfEdges;
+  useEffect(() => {
+    edgesRef.current = rfEdges;
+  }, [rfEdges]);
 
   const layoutKey = useMemo(() => {
     const ids = model.nodes.map((n) => n.subject.id).join(",");
@@ -92,6 +96,8 @@ function GraphCanvas({
 
   useEffect(() => {
     const gen = ++layoutGen.current;
+    // The layout runs elsewhere and answers later, so what shows while it runs is set here.
+    // oxlint-disable-next-line react/set-state-in-effect
     setLayoutError(null);
     if (model.nodes.length === 0) {
       setNodes([]);
@@ -150,7 +156,10 @@ function GraphCanvas({
         setLayoutError(errorText(err, "The graph couldn't be laid out"));
         setLaidOut(true);
       });
-  }, [layoutKey]); // layout + membership; color/selection applied below
+    // Laid out again only when the layout or the members change (layoutKey); color, selection and
+    // the latest read of each subject are applied below without moving anything.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutKey]);
 
   // The latest read of each subject too, so a new title or cover shows without a new layout.
   useEffect(() => {

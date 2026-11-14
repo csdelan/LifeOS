@@ -378,6 +378,12 @@ number when Chris chooses it.
 | CR92 | 8 | Discard in "Unsaved edits" asks once: the router's blocker reads the flag where Discard has already cleared it. Discard throws the edit away when the move keeps the same item open (the panel and the review editor key themselves by it), so the shell and what holds the edit agree. Escape is Stay, and lets the router go: before, the move stayed blocked and every later link did nothing. The guard has a module of its own (`components/shell/unsaved-edits.ts`), and three golden paths cover it. |
 | CR93 | 9 | A page opened before a deploy copes with the files the deploy removed. Every lazily loaded piece (the pages, the palette, the dialogs, the Map's graph, the journal) reloads once when its file is gone (`lib/new-build.ts`, Vite's `vite:preloadError`), and each page has its own error view inside the shell, which says "LifeOS was updated" with a Reload button when a reload didn't help. A removed `/assets` file answers 404; it got the sign-in's 401, not the app's page as the review said. Every copy of the app's page says not to cache it: only a literal `/index.html` did, not `/` or a link to a page. |
 
+### P3: built so far (CR94)
+
+| ID | Review # | Fix |
+|----|----------|-----|
+| CR94 | P3 | Lint warnings fail: `npm run lint` is `oxlint --deny-warnings`, which CI runs. The 25 warnings went first. Shared hooks and helpers left the component files that exported them (`useAuth` to `auth/auth-context.ts`, `usePersistedWidth` to `shell/use-persisted-width.ts`, `oversizedFile` to `lib/artifacts.ts`), so fast refresh works there; the shadcn `*Variants` exports are allowed by name. State worked out from other state is no longer set in an effect (the phone's navigation, the Unsaved edits dialog, the Relationships target); refs are no longer written during render (the panel width, the graph's edges); a file's icon is drawn by `ContentTypeIcon`; the forms read a field with `useWatch`. Six effects stay as they are, each with a disable comment that says why: the restores on opening Browse and the Map, Expand all, the voice dialog's recording, the New dialog's reset and the graph's layout. |
+
 ### P1: proposed
 
 | # | Area | Problem and fix | Finishes | Size |
@@ -426,8 +432,8 @@ Day-award sources as one `IDayAwardSource` list; stale Dapper comments and seven
 rating a space reads every rating; a lab visit's range sync reads every reading and makes metrics in
 transactions of their own; fast overlap uses the database's clock; a missing URN answers 400 in
 `ResolveOrCreateAsync`, 404 elsewhere; `ReadFailed` over shown data when a refetch fails; the e2e
-specs on a preview build, with one timeout, one scan helper, named asides and lint warnings that
-fail; the mock clients' wrapper boilerplate and the `bump` and `emit` nobody hears; the review recap
+specs on a preview build, with one timeout, one scan helper and named asides (lint warnings fail
+since CR94); the mock clients' wrapper boilerplate and the `bump` and `emit` nobody hears; the review recap
 in two halves; `setAttributes` not refreshing the task series, and typed reads listed by hand;
 unused seam members and a stale `TODO(api)`; `v_fast.meals_during`; an index on `subject(type)` and
 `v_task_series`' aggregate; the shared SQL folds spelled again; `RuleParityTests`' file list; keyset

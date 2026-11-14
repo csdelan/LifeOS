@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SubjectCombobox } from "@/components/subject-combobox";
@@ -41,9 +41,8 @@ export function RelationshipsTab({
     [subjects, subjectId],
   );
 
-  useEffect(() => {
-    if (to && !options.some((s) => s.id === to)) setTo("");
-  }, [to, options]);
+  // A choice the filters no longer list (another type, archived hidden) isn't the one Add links.
+  const target = to && options.some((s) => s.id === to) ? to : "";
 
   const typed = targetType !== "any";
   const targetLabel = useCallback(
@@ -60,7 +59,7 @@ export function RelationshipsTab({
   const grouped = groupByType(data?.children ?? []);
 
   function addLink() {
-    const edge = decision ? decisionLinkWrite(group, subjectId, to) : { from: subjectId, relation: rel, to };
+    const edge = decision ? decisionLinkWrite(group, subjectId, target) : { from: subjectId, relation: rel, to: target };
     void reported.run(() => writes.link(edge.from, edge.relation, edge.to));
     setTo("");
   }
@@ -178,7 +177,7 @@ export function RelationshipsTab({
           <SubjectCombobox
             className="min-w-48 flex-1"
             options={options}
-            value={to}
+            value={target}
             onChange={setTo}
             ariaLabel="Target subject"
             placeholder={subjectPlaceholder}
@@ -191,7 +190,7 @@ export function RelationshipsTab({
             />
             Archived
           </label>
-          <Button size="sm" disabled={!to} onClick={addLink}>
+          <Button size="sm" disabled={!target} onClick={addLink}>
             Link
           </Button>
         </div>

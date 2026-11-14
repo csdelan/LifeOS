@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
@@ -139,7 +139,9 @@ export function BrowsePage() {
       }),
       replace: true,
     });
-  }, []); // restore once
+    // Once, on opening: later changes to the link are the user's own moves, not a visit to restore.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     saveView<BrowseStored>("browse", { ...filters, type, selected });
@@ -195,11 +197,12 @@ export function BrowsePage() {
 
   // A new item is selected once it's in the list and the filters show it (BROWSE-2);
   // otherwise the filters stay as they are and a note says it was made.
+  const shownCreated = useRef<string | null>(null);
   useEffect(() => {
-    if (!created) return;
+    if (!created || shownCreated.current === created.id) return;
     const item = all.find((i) => i.id === created.id);
     if (!item) return; // not read back yet
-    setCreated(null);
+    shownCreated.current = created.id;
     if (rows.some((r) => r.id === item.id)) {
       void navigate({ search: (prev) => ({ ...prev, selected: item.id }) });
     } else {

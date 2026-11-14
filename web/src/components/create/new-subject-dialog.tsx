@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FieldErrors, Resolver } from "react-hook-form";
@@ -98,7 +98,7 @@ export function NewSubjectDialog({
     defaultValues: seedValues(startType, initialParent, initialTitle),
   });
 
-  const type = form.watch("type");
+  const type = useWatch({ control: form.control, name: "type" });
   const cfg = formConfig(type);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // The bounty starts on the type's defaults; only triggers Chris changes are saved.
@@ -109,6 +109,8 @@ export function NewSubjectDialog({
   useEffect(() => {
     if (!open) return;
     form.reset(seedValues(startType, initialParent, initialTitle));
+    // Each opening starts from its seed: the form's own store is reset here, and the rest with it.
+    // oxlint-disable-next-line react/set-state-in-effect
     setSubmitError(null);
     setBountyDraft({});
   }, [open, startType, initialParent, initialTitle, form]);

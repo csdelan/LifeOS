@@ -1,14 +1,6 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
-  type ReactNode,
-} from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { loadView, saveView } from "@/lib/view-state";
+import { usePersistedWidth, type PanelWidth } from "@/components/shell/use-persisted-width";
 import { useIsDesktop } from "@/lib/media-query";
 import {
   Sheet,
@@ -17,70 +9,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-
-function clamp(n: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, n));
-}
-
-export function usePersistedWidth(
-  key: string,
-  initial: number,
-  range: { min: number; max: number },
-) {
-  const [width, setWidth] = useState(() =>
-    clamp(loadView(key, { width: initial }).width, range.min, range.max),
-  );
-  const [dragging, setDragging] = useState(false);
-  const widthRef = useRef(width);
-  widthRef.current = width;
-  const rangeRef = useRef(range);
-  rangeRef.current = range;
-
-  useEffect(() => {
-    if (dragging) return;
-    saveView(key, { width });
-  }, [dragging, key, width]);
-
-  const onPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>, invert = false) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const pointerId = event.pointerId;
-    const startX = event.clientX;
-    const startW = widthRef.current;
-    setDragging(true);
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-
-    const onMove = (e: PointerEvent) => {
-      if (e.pointerId !== pointerId) return;
-      const dx = invert ? startX - e.clientX : e.clientX - startX;
-      const { min, max } = rangeRef.current;
-      setWidth(clamp(startW + dx, min, max));
-    };
-    const onUp = (e: PointerEvent) => {
-      if (e.pointerId !== pointerId) return;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      setDragging(false);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  }, []);
-
-  const resize = useCallback((next: number) => {
-    const { min, max } = rangeRef.current;
-    setWidth(clamp(next, min, max));
-  }, []);
-
-  return { width, dragging, onPointerDown, resize, min: range.min, max: range.max };
-}
-
-/** A panel's width and the ways to change it, as `usePersistedWidth` hands them out. */
-export type PanelWidth = ReturnType<typeof usePersistedWidth>;
 
 /** How far an arrow key moves a panel's edge, and with Shift held. */
 const STEP = 16;

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { BotIcon, Loader2Icon, ShieldXIcon, TriangleAlertIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useAuth } from "@/components/auth/auth-provider";
+import { useAuth } from "@/components/auth/auth-context";
 import { AuthChrome, AuthConfigError, AuthReachError, AuthSplash, Mark } from "@/components/auth/auth-screens";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";

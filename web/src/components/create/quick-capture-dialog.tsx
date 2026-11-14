@@ -8,9 +8,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { AttachmentPicker, oversizedFile } from "@/components/artifacts/attachment-picker";
+import { AttachmentPicker } from "@/components/artifacts/attachment-picker";
 import { CaptureKindTabs } from "@/components/create/capture-kind-tabs";
-import { formatBytes, MAX_ARTIFACT_BYTES } from "@/lib/artifacts";
+import { formatBytes, MAX_ARTIFACT_BYTES, oversizedFile } from "@/lib/artifacts";
 import { useWrites } from "@/lib/queries";
 import type { CaptureKind } from "@/lib/production-ui-types";
 import { errorText } from "@/lib/write-action";

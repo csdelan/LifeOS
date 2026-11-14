@@ -35,7 +35,7 @@ const { signInWithGoogle, signOut, authState, browser } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/components/auth/auth-provider", () => ({
+vi.mock("@/components/auth/auth-context", () => ({
   useAuth: () => ({
     session: authState.session,
     user: authState.session?.user ?? null,

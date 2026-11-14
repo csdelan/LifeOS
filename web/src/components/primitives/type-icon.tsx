@@ -28,7 +28,7 @@ import type { SubjectType } from "@/lib/production-ui-types";
 import { typeTone } from "@/lib/subject-meta";
 import { cn } from "@/lib/utils";
 
-export const TYPE_ICONS: Record<SubjectType, LucideIcon> = {
+const TYPE_ICONS: Record<SubjectType, LucideIcon> = {
   Value: FingerprintIcon,
   Goal: TargetIcon,
   Project: FolderKanbanIcon,

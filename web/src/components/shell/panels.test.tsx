@@ -1,7 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { ResizeHandle, usePersistedWidth } from "@/components/shell/panels";
+import { ResizeHandle } from "@/components/shell/panels";
+import { usePersistedWidth } from "@/components/shell/use-persisted-width";
 
 function Panel({ invert = false }: { invert?: boolean }) {
   const panel = usePersistedWidth("test.panelWidth", 300, { min: 200, max: 400 });

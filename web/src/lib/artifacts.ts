@@ -110,3 +110,8 @@ export function downloadArtifactUrl(
   a.click();
   a.remove();
 }
+
+/** Over the size an upload may be, so it is refused before anything is sent. */
+export function oversizedFile(file: File | null): boolean {
+  return !!file && file.size > MAX_ARTIFACT_BYTES;
+}

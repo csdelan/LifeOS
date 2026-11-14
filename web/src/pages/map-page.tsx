@@ -163,10 +163,15 @@ export function MapPage() {
       }),
       replace: true,
     });
-  }, []); // restore once
+    // Once, on opening: later changes to the link are the user's own moves, not a visit to restore.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!data || !expandAll) return;
+    // Kept as the set itself, not worked out from the switch: turning Expand all off leaves every
+    // row open, to be closed one by one, and the set saved is the one shown.
+    // oxlint-disable-next-line react/set-state-in-effect
     setExpanded(collectNodeIds(data));
   }, [data, expandAll]);
 

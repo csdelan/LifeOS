@@ -4,11 +4,11 @@ import {
   downloadArtifactUrl,
   formatBytes,
   formatDuration,
-  iconForContentType,
   openArtifactUrl,
 } from "@/lib/artifacts";
 import type { ArtifactRecord } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
+import { ContentTypeIcon } from "@/components/artifacts/content-type-icon";
 
 export function AttachmentChip({
   artifact,
@@ -20,7 +20,6 @@ export function AttachmentChip({
   compact?: boolean;
   className?: string;
 }) {
-  const Icon = iconForContentType(artifact.contentType);
   const name = artifact.filename || "Attachment";
   const isAudio = artifact.contentType.startsWith("audio/");
   const meta = [
@@ -40,7 +39,7 @@ export function AttachmentChip({
           className,
         )}
       >
-        <Icon className="size-3 shrink-0" aria-hidden />
+        <ContentTypeIcon contentType={artifact.contentType} className="size-3 shrink-0" aria-hidden />
         <span className="truncate">{isAudio && artifact.durationSeconds != null ? meta : name}</span>
       </span>
     );
@@ -55,7 +54,7 @@ export function AttachmentChip({
       )}
     >
       <div className="flex items-start gap-2">
-        <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <ContentTypeIcon contentType={artifact.contentType} className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{name}</p>
           <p className="text-[0.6875rem] text-muted-foreground">{meta}</p>
