@@ -378,11 +378,12 @@ number when Chris chooses it.
 | CR92 | 8 | Discard in "Unsaved edits" asks once: the router's blocker reads the flag where Discard has already cleared it. Discard throws the edit away when the move keeps the same item open (the panel and the review editor key themselves by it), so the shell and what holds the edit agree. Escape is Stay, and lets the router go: before, the move stayed blocked and every later link did nothing. The guard has a module of its own (`components/shell/unsaved-edits.ts`), and three golden paths cover it. |
 | CR93 | 9 | A page opened before a deploy copes with the files the deploy removed. Every lazily loaded piece (the pages, the palette, the dialogs, the Map's graph, the journal) reloads once when its file is gone (`lib/new-build.ts`, Vite's `vite:preloadError`), and each page has its own error view inside the shell, which says "LifeOS was updated" with a Reload button when a reload didn't help. A removed `/assets` file answers 404; it got the sign-in's 401, not the app's page as the review said. Every copy of the app's page says not to cache it: only a literal `/index.html` did, not `/` or a link to a page. |
 
-### P3: built so far (CR94)
+### P2 and P3: built so far (CR94, CR95)
 
 | ID | Review # | Fix |
 |----|----------|-----|
 | CR94 | P3 | Lint warnings fail: `npm run lint` is `oxlint --deny-warnings`, which CI runs. The 25 warnings went first. Shared hooks and helpers left the component files that exported them (`useAuth` to `auth/auth-context.ts`, `usePersistedWidth` to `shell/use-persisted-width.ts`, `oversizedFile` to `lib/artifacts.ts`), so fast refresh works there; the shadcn `*Variants` exports are allowed by name. State worked out from other state is no longer set in an effect (the phone's navigation, the Unsaved edits dialog, the Relationships target); refs are no longer written during render (the panel width, the graph's edges); a file's icon is drawn by `ContentTypeIcon`; the forms read a field with `useWatch`. Six effects stay as they are, each with a disable comment that says why: the restores on opening Browse and the Map, Expand all, the voice dialog's recording, the New dialog's reset and the graph's layout. |
+| CR95 | 33 | Tab leaves the Map's inline create as it does anywhere else; it used to change the type, so the keyboard couldn't reach Add or anything past it. The type buttons are a group named "New item's type", each saying with `aria-pressed` whether it's chosen. A golden path tabs to Add and chooses a type from the keyboard. |
 
 ### P1: proposed
 
@@ -424,7 +425,7 @@ number when Chris chooses it.
 | 30 | Web screens | The whole `supabase-js` client loads with the first page, about 100 kB, for auth alone. | | S–M |
 | 31 | Web screens | Seven copies of the side or bottom sheet, none guarding typed input when it closes: `ResponsiveSheet`. | | M |
 | 32 | Web screens | Three copies of the chart cursor: `useChartCursor`. | | M |
-| 33 | Web screens | The Map's inline create traps Tab, and its type buttons don't say which is pressed. | CR87 | S |
+| 33 | Web screens | Built as CR95. The Map's inline create traps Tab, and its type buttons don't say which is pressed. | CR87 | S |
 
 ### P3: when working in that area
 

@@ -39,6 +39,36 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     await expect(page.getByLabel(/New (project|task|goal)/i)).toHaveCount(0);
   });
 
+  test("Tab leaves the Map's inline create, and its type buttons say which is chosen (code review CR95)", async ({
+    page,
+  }) => {
+    await page.goto("/map");
+    await expect(page.getByRole("list", { name: "Alignment outline" })).toBeVisible();
+    await page.getByRole("button", { name: "Run a half-marathon", exact: true }).click();
+    await page.keyboard.press("Enter");
+    const types = page.getByRole("group", { name: "New item's type", exact: true }).getByRole("button");
+    await expect(types.first()).toHaveAttribute("aria-pressed", "true");
+    const first = (await types.first().textContent())!;
+    const last = (await types.last().textContent())!;
+    expect(last).not.toBe(first);
+
+    const title = page.getByLabel(/^New .+ title$/);
+    await title.fill("Long run every Sunday");
+    await title.press("Tab");
+    await expect(page.getByRole("button", { name: "Add", exact: true })).toBeFocused();
+    await expect(page.getByLabel(`New ${first} title`)).toBeVisible();
+
+    // Back past the field to the type buttons, and choose one there.
+    await page.keyboard.press("Shift+Tab");
+    await expect(title).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(types.last()).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(types.last()).toHaveAttribute("aria-pressed", "true");
+    await expect(types.first()).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByLabel(`New ${last} title`)).toHaveValue("Long run every Sunday");
+  });
+
   test("Enter pressed twice in the Map's inline create makes one item", async ({ page }) => {
     await page.goto("/map");
     await expect(page.getByRole("list", { name: "Alignment outline" })).toBeVisible();

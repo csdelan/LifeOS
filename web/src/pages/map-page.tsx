@@ -650,11 +650,12 @@ function InlineCreate({
 
   return (
     <div className="flex flex-wrap items-center gap-2 py-1 pr-2" style={{ paddingLeft: 8 + depth * 18 }}>
-      <div className="flex gap-1">
+      <div role="group" aria-label="New item's type" className="flex gap-1">
         {types.map((t) => (
           <button
             key={t}
             type="button"
+            aria-pressed={type === t}
             onClick={() => setType(t)}
             className={`min-h-11 rounded-md px-1.5 py-0.5 text-[0.6875rem] md:min-h-0 ${
               type === t ? "bg-primary/12 text-primary" : "text-muted-foreground"
@@ -676,14 +677,12 @@ function InlineCreate({
             e.preventDefault();
             save();
           }
+          // Tab leaves the field as it does anywhere else; the type is chosen by its buttons,
+          // before the field. Tab used to change the type, so the keyboard couldn't reach Add or
+          // anything past it (code review CR95).
           if (e.key === "Escape") {
             e.preventDefault();
             onDone();
-          }
-          if (e.key === "Tab" && types.length > 1) {
-            e.preventDefault();
-            const i = types.indexOf(type);
-            setType(types[(i + 1) % types.length]);
           }
         }}
       />
