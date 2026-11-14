@@ -1,7 +1,6 @@
 using Dapper;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -20,7 +19,7 @@ public sealed class HabitProjectionTests(ClassDatabase classDb) : IClassFixture<
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {

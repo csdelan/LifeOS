@@ -5,7 +5,6 @@ using LifeOs.Application.Capture;
 using LifeOs.Application.Subjects;
 using LifeOs.Cli.Commands;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -22,7 +21,7 @@ public sealed class CaptureFilingTests(ClassDatabase classDb) : IClassFixture<Cl
 
     private ServiceProvider Kernel(Action<IServiceCollection>? more = null)
     {
-        var services = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone);
+        var services = classDb.Services();
         more?.Invoke(services);
         return services.BuildServiceProvider();
     }

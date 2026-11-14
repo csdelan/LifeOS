@@ -3,7 +3,6 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Capture;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -22,7 +21,7 @@ public sealed class SplitPromoteTests(ClassDatabase classDb) : IClassFixture<Cla
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {

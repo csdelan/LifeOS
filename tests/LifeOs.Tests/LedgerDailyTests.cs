@@ -5,7 +5,6 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 using LifeOs.Infrastructure;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LifeOs.Tests;
@@ -13,11 +12,10 @@ namespace LifeOs.Tests;
 /// <summary>
 /// REWARD-5 (rewards plan R7): the rewards history by local day —
 /// <c>RewardService.GetDailyAsync</c> (<c>bsk ledger --daily</c>) and
-/// <c>GET /api/ledger/daily</c>. Each test writes its entries on its own days in 2003, where
-/// nothing else in the shared database lands, so it can assert exact totals; everything a
-/// test spends it first earns, so the shared wallet never drops.
+/// <c>GET /api/ledger/daily</c>. A day's totals are over every entry in the database, so each
+/// test takes a database of its own (code review CR88) and asserts exact totals.
 /// </summary>
-public sealed class LedgerDailyTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
+public sealed class LedgerDailyTests(PostgresFixture postgres)
 {
     private const string Chicago = "America/Chicago";
 
@@ -25,9 +23,6 @@ public sealed class LedgerDailyTests(ClassDatabase classDb) : IClassFixture<Clas
     private static readonly TimeSpan Cst = TimeSpan.FromHours(-6);
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
-
-    private ServiceProvider Kernel()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
 
     // Stored as the instant it is (Npgsql writes only UTC offsets).
     private static DateTimeOffset InChicago(DateOnly day, int hour, int minute)
@@ -87,7 +82,8 @@ public sealed class LedgerDailyTests(ClassDatabase classDb) : IClassFixture<Clas
     [Fact]
     public async Task Each_entry_is_filed_on_the_day_it_happened_where_the_viewer_is()
     {
-        await using var provider = Kernel();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var provider = db.Kernel;
         var day = new DateOnly(2003, 1, 15);
         await SeedAsync(provider, day);
         var rewards = provider.GetRequiredService<RewardService>();
@@ -113,7 +109,8 @@ public sealed class LedgerDailyTests(ClassDatabase classDb) : IClassFixture<Clas
     [Fact]
     public async Task A_backwards_or_too_long_range_or_an_unknown_zone_is_refused()
     {
-        await using var provider = Kernel();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var provider = db.Kernel;
         var rewards = provider.GetRequiredService<RewardService>();
         var day = new DateOnly(2003, 3, 1);
 
@@ -137,10 +134,11 @@ public sealed class LedgerDailyTests(ClassDatabase classDb) : IClassFixture<Clas
     [Fact]
     public async Task The_daily_endpoint_reads_days_in_the_viewers_zone()
     {
-        await using var provider = Kernel();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var provider = db.Kernel;
         var day = new DateOnly(2003, 2, 12);
         await SeedAsync(provider, day);
-        await using var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct);
 
         var days = (await host.Client.GetFromJsonAsync<JsonElement>(
             "/api/ledger/daily?from=2003-02-12&to=2003-02-14&tz=America/Chicago", Ct)).EnumerateArray().ToList();
@@ -159,7 +157,8 @@ public sealed class LedgerDailyTests(ClassDatabase classDb) : IClassFixture<Clas
     [Fact]
     public async Task The_daily_endpoint_refuses_a_missing_or_bad_range_and_an_unknown_zone()
     {
-        await using var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct);
 
         async Task<(HttpStatusCode, string)> Refused(string path)
         {

@@ -3,8 +3,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace LifeOs.Tests;
 
@@ -12,10 +10,10 @@ namespace LifeOs.Tests;
 /// The rewards HTTP surface (rewards plan R5): the wallet, the ledger and the catalog
 /// reads, redeeming, the catalog writes, and the <c>awards</c> every earning write returns
 /// for REWARD-4's feedback. Requests are what the web client sends — subjects named by id.
-/// The wallet is global and the database shared, so each test reasons about the change
-/// it made.
+/// The class's database is shared, so each test reasons about its own items; a test that reads
+/// a balance, a total over every entry, takes a database of its own (code review CR88).
 /// </summary>
-public sealed class RewardEndpointsTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
+public sealed class RewardEndpointsTests(PostgresFixture postgres, ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -23,6 +21,8 @@ public sealed class RewardEndpointsTests(ClassDatabase classDb) : IClassFixture<
 
     private Task<ApiTestHost> StartAsync(IReadOnlyDictionary<string, string?>? configuration = null)
         => ApiTestHost.StartAsync(classDb.ConnectionString, Ct, configuration);
+
+    private static Task<ApiTestHost> StartAsync(DomainTestDatabase db) => ApiTestHost.StartAsync(db.ConnectionString, Ct);
 
     private static async Task<JsonElement> PostAsync(HttpClient client, string path, object body)
     {
@@ -73,7 +73,8 @@ public sealed class RewardEndpointsTests(ClassDatabase classDb) : IClassFixture<
     [Fact]
     public async Task Changing_a_status_returns_what_it_earned_and_what_it_gave_back()
     {
-        await using var host = await StartAsync();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await StartAsync(db);
         var task = await NewTaskAsync(host.Client);
         var before = await BalanceAsync(host.Client, Currencies.Xp);
 
@@ -102,7 +103,7 @@ public sealed class RewardEndpointsTests(ClassDatabase classDb) : IClassFixture<
     {
         await using var host = await StartAsync();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        await using var kernel = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        await using var kernel = classDb.Kernel();
         var habit = await kernel.CreateTrackedHabitAsync(
             Unique("api habit"),
             JsonSerializer.Serialize(new { start = today.AddDays(-1).ToString("yyyy-MM-dd"), recurrence = new { freq = "daily" } }),
@@ -221,7 +222,8 @@ public sealed class RewardEndpointsTests(ClassDatabase classDb) : IClassFixture<
     [Fact]
     public async Task Redemptions_the_record_cannot_support_are_400s_with_the_reason()
     {
-        await using var host = await StartAsync();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await StartAsync(db);
         var gems = await BalanceAsync(host.Client, Currencies.Gems);
         var trip = (await PostAsync(host.Client, "/api/rewards", new
         {

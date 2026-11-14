@@ -3,8 +3,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace LifeOs.Tests;
 
@@ -221,7 +219,7 @@ public sealed class BountyEndpointsTests(ClassDatabase classDb) : IClassFixture<
     {
         await using var host = await StartAsync();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        await using var kernel = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        await using var kernel = classDb.Kernel();
         var habit = await kernel.CreateTrackedHabitAsync(
             Unique("ready habit"),
             JsonSerializer.Serialize(new

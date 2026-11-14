@@ -38,12 +38,30 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
         this.zone = zone;
         this.ct = ct;
         ConnectionString = connectionString;
-        Kernel = new ServiceCollection().AddLifeOsKernel(connectionString, homeTimeZone: zone).BuildServiceProvider();
+        Kernel = Services().BuildServiceProvider();
     }
 
     public string ConnectionString { get; }
 
+    /// <summary>A kernel on this database, in its zone.</summary>
     public ServiceProvider Kernel { get; }
+
+    /// <summary>
+    /// The kernel's services on this database, in its zone (code review CR88), for a test to add a
+    /// clock or a fake to or to build as another source.
+    /// </summary>
+    public IServiceCollection Services(string sourceId = KernelSources.Cli, decimal? coinValueUsd = null)
+        => new ServiceCollection().AddLifeOsKernel(ConnectionString, sourceId, coinValueUsd, homeTimeZone: zone);
+
+    /// <summary>
+    /// A kernel on this database whose sessions, and so the views it reads, are in
+    /// <paramref name="sessionZone"/> rather than the database's zone (<see cref="PostgresFixture.InZone"/>),
+    /// for a test that reads one database's rows from two zones.
+    /// </summary>
+    public ServiceProvider KernelIn(string sessionZone)
+        => new ServiceCollection()
+            .AddLifeOsKernel(PostgresFixture.InZone(ConnectionString, sessionZone), homeTimeZone: sessionZone)
+            .BuildServiceProvider();
 
     public T Get<T>() where T : notnull => Kernel.GetRequiredService<T>();
 

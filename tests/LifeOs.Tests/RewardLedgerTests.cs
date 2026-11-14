@@ -5,7 +5,6 @@ using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure;
-using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -15,16 +14,16 @@ namespace LifeOs.Tests;
 /// <summary>
 /// REWARD-1 / REWARD-3 / D11 (migration 0025): the rewards ledger. Every earn and
 /// redemption is an append-only ledger event; balances are folded by bsk.v_wallet.
-/// The wallet is global and the database is shared, so each test reasons about the
-/// change it made, never an absolute balance.
+/// The wallet is a total over every entry in the database, so each test takes a database of
+/// its own (code review CR88).
 /// </summary>
-public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
+public sealed class RewardLedgerTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private (RewardService Rewards, RedemptionService Redemptions, ServiceProvider Provider) Build()
+    private static (RewardService Rewards, RedemptionService Redemptions, ServiceProvider Provider) Build(DomainTestDatabase db)
     {
-        var provider = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        var provider = db.Kernel;
         return (provider.GetRequiredService<RewardService>(), provider.GetRequiredService<RedemptionService>(), provider);
     }
 
@@ -68,9 +67,9 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
         return ids[0];
     }
 
-    private async Task<long> LedgerEventCountAsync()
+    private async Task<long> LedgerEventCountAsync(DomainTestDatabase db)
     {
-        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.event WHERE kind = 'ledger';", cancellationToken: Ct));
@@ -82,7 +81,8 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task The_wallet_lists_every_currency_in_display_order_with_tracked_ones_marked()
     {
-        var (rewards, _, _) = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, _, _) = Build(db);
 
         var wallet = await rewards.GetWalletAsync(Ct);
 
@@ -101,7 +101,8 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task Earnings_and_redemptions_fold_into_the_balance()
     {
-        var (rewards, redemptions, provider) = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, redemptions, provider) = Build(db);
         var before = await rewards.GetWalletAsync(Ct);
 
         await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Freedom] = 30, [Currencies.Xp] = 10 });
@@ -119,7 +120,8 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task A_redemption_is_a_declared_ledger_entry_with_its_note_and_negative_amounts()
     {
-        var (rewards, redemptions, provider) = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, redemptions, provider) = Build(db);
         await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Coins] = 5 });
 
         var redemption = await redemptions.RedeemAsync(
@@ -128,7 +130,7 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
         Assert.Equal(5, redemption.Amounts[Currencies.Coins]);
         Assert.Equal("Toward the bike", redemption.Note);
 
-        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
         await connection.OpenAsync(Ct);
         var row = await connection.QuerySingleAsync<(string Kind, string Provenance, string Entry, long Coins, string Note)>(
             new CommandDefinition(
@@ -150,7 +152,8 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task An_earn_reads_back_with_the_item_that_earned_it()
     {
-        var (rewards, _, provider) = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, _, provider) = Build(db);
         var earnId = await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Xp] = 7, [Currencies.Coins] = 1 });
 
         var entry = Assert.Single(await rewards.GetLedgerAsync(limit: 50, cancellationToken: Ct), e => e.EventId == earnId);
@@ -168,10 +171,11 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task Redeeming_more_than_the_balance_is_refused_and_writes_nothing()
     {
-        var (rewards, redemptions, provider) = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, redemptions, provider) = Build(db);
         await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Gems] = 2 });
         var balance = (await rewards.GetWalletAsync(Ct)).BalanceOf(Currencies.Gems);
-        var events = await LedgerEventCountAsync();
+        var events = await LedgerEventCountAsync(db);
 
         var refused = await Assert.ThrowsAsync<InsufficientBalanceException>(() =>
             redemptions.RedeemAsync(new Dictionary<string, long> { [Currencies.Gems] = balance + 1 }, "A road trip", Ct));
@@ -180,14 +184,15 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
         Assert.Equal(balance, refused.Balance);
         Assert.Equal(balance + 1, refused.Requested);
         Assert.Equal($"You have {balance} Gems; this needs {balance + 1}.", refused.Message);
-        Assert.Equal(events, await LedgerEventCountAsync());
+        Assert.Equal(events, await LedgerEventCountAsync(db));
         Assert.Equal(balance, (await rewards.GetWalletAsync(Ct)).BalanceOf(Currencies.Gems));
     }
 
     [Fact]
     public async Task A_refused_redemption_leaves_its_other_currencies_untouched_too()
     {
-        var (rewards, redemptions, provider) = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, redemptions, provider) = Build(db);
         await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Freedom] = 10, [Currencies.Karma] = 1 });
         var before = await rewards.GetWalletAsync(Ct);
 
@@ -210,15 +215,16 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
     [InlineData(Currencies.Resolve)]
     public async Task Tracked_currencies_cannot_be_redeemed(string currency)
     {
-        var (rewards, redemptions, provider) = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, redemptions, provider) = Build(db);
         await EarnAsync(provider, new Dictionary<string, long> { [currency] = 50 });
-        var events = await LedgerEventCountAsync();
+        var events = await LedgerEventCountAsync(db);
 
         var refused = await Assert.ThrowsAsync<ArgumentException>(() =>
             redemptions.RedeemAsync(new Dictionary<string, long> { [currency] = 1 }, "Spend the unspendable", Ct));
 
         Assert.Contains("tracked, not spent", refused.Message);
-        Assert.Equal(events, await LedgerEventCountAsync());
+        Assert.Equal(events, await LedgerEventCountAsync(db));
     }
 
     [Theory]
@@ -229,19 +235,21 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
     public async Task A_redemption_needs_a_known_currency_a_positive_amount_and_a_note(
         string currency, long amount, string note)
     {
-        var (rewards, redemptions, _) = Build();
-        var events = await LedgerEventCountAsync();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, redemptions, _) = Build(db);
+        var events = await LedgerEventCountAsync(db);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             redemptions.RedeemAsync(new Dictionary<string, long> { [currency] = amount }, note, Ct));
 
-        Assert.Equal(events, await LedgerEventCountAsync());
+        Assert.Equal(events, await LedgerEventCountAsync(db));
     }
 
     [Fact]
     public async Task A_currency_named_twice_in_one_redemption_is_refused()
     {
-        var (rewards, redemptions, _) = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, redemptions, _) = Build(db);
 
         var refused = await Assert.ThrowsAsync<ArgumentException>(() => redemptions.RedeemAsync(
             new Dictionary<string, long> { ["freedom"] = 1, ["Freedom"] = 2 }, "Twice", Ct));
@@ -252,7 +260,8 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task Two_redemptions_racing_for_the_same_balance_cannot_both_land()
     {
-        var (rewards, redemptions, provider) = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, redemptions, provider) = Build(db);
         await EarnAsync(provider, new Dictionary<string, long> { [Currencies.Karma] = 7 });
         var balance = (await rewards.GetWalletAsync(Ct)).BalanceOf(Currencies.Karma);
         var spendAll = new Dictionary<string, long> { [Currencies.Karma] = balance };
@@ -279,7 +288,8 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task Opening_the_wallet_is_idempotent()
     {
-        var (rewards, _, _) = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, _, _) = Build(db);
 
         var first = await rewards.OpenAsync(cancellationToken: Ct);
         var second = await rewards.OpenAsync(cancellationToken: Ct);
@@ -288,7 +298,7 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
         Assert.Equal(first.OpenedAt, second.OpenedAt);
         Assert.Equal(first.OpenedAt, (await rewards.GetWalletAsync(Ct)).OpenedAt);
 
-        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
         await connection.OpenAsync(Ct);
         var opens = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.event WHERE kind = 'ledger' AND payload->>'entry' = 'open';",
@@ -299,7 +309,8 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task Ledger_entries_read_newest_first_within_a_range_and_a_limit()
     {
-        var (rewards, _, provider) = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var (rewards, _, provider) = Build(db);
         // A stretch of the past no other test writes to.
         var t0 = new DateTimeOffset(2001, 3, 1, 9, 0, 0, TimeSpan.Zero);
         var first = await AppendEarnAtAsync(provider, new Dictionary<string, long> { [Currencies.Xp] = 1 }, t0);
@@ -320,7 +331,8 @@ public sealed class RewardLedgerTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task The_reader_role_can_read_the_ledger_and_wallet()
     {
-        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(classDb.ConnectionString));
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var reader = new NpgsqlConnection(BskReader.ConnectionStringFrom(db.ConnectionString));
         await reader.OpenAsync(Ct);
 
         foreach (var sql in new[]

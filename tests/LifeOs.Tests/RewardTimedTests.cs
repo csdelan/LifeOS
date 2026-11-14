@@ -4,7 +4,6 @@ using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LifeOs.Tests;
@@ -29,7 +28,7 @@ public sealed class RewardTimedTests(ClassDatabase classDb) : IClassFixture<Clas
 
     private Kernel Build()
     {
-        var provider = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        var provider = classDb.Kernel();
         return new Kernel(
             provider,
             provider.GetRequiredService<SubjectService>(),

@@ -2,7 +2,6 @@ using Dapper;
 using LifeOs.Application.Capture;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -18,7 +17,7 @@ public sealed class PromotionServiceTests(ClassDatabase classDb) : IClassFixture
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     // A canonical snapshot of a single event row, for byte-identity comparison.
     private async Task<string> EventSnapshotAsync(NpgsqlConnection connection, Guid id)

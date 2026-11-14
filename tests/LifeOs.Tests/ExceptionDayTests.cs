@@ -169,7 +169,7 @@ public sealed class ExceptionDayTests(PostgresFixture postgres)
             foreach (var (hour, minute, settled) in new[] { (3, 59, 13), (LifeDomains.SettleHour, 0, 14) })
             {
                 var clock = new TestClock(new DateTimeOffset(2026, 1, 15, hour, minute, 0, TimeSpan.FromHours(offset)));
-                var credit = await new NpgsqlDomainCreditReader(KernelDataSource.For(db.ConnectionString), clock, zone)
+                var credit = await new NpgsqlDomainCreditReader(KernelDataSource.For(PostgresFixture.InZone(db.ConnectionString, zone)), clock, zone)
                     .GetDomainDaysAsync([Currencies.HealthXp], Ct);
                 Assert.Equal(
                     (new DateOnly(2026, 1, 15), new DateOnly(2026, 1, settled)),

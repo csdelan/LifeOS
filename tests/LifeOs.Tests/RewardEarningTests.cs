@@ -6,7 +6,6 @@ using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure;
-using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Migrations;
 using LifeOs.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,10 +17,11 @@ namespace LifeOs.Tests;
 /// REWARD-1 / REWARD-2 / D11 (rewards plan R2, migration 0026): earning on work.
 /// Completing a Task, Project or Goal earns its bounty — its own price or the type
 /// default — through the reconcile every status change runs; moving it off Completed
-/// gives back exactly what it paid. The wallet is global and the database shared, so
-/// each test reasons about its own items and the change it made.
+/// gives back exactly what it paid. The class's database is shared, so each test reasons about
+/// its own items; a test that reads the wallet, a total over every item, takes a database of its
+/// own (code review CR88).
 /// </summary>
-public sealed class RewardEarningTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
+public sealed class RewardEarningTests(PostgresFixture postgres, ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -29,11 +29,10 @@ public sealed class RewardEarningTests(ClassDatabase classDb) : IClassFixture<Cl
         ServiceProvider Provider, SubjectService Subjects, StatusService Status, RewardService Rewards,
         BountyService Bounties, ILedgerRepository Ledger);
 
-    private Kernel Build(string? connectionString = null)
+    /// <summary>A kernel on <paramref name="db"/>, or on the class's database, in its zone.</summary>
+    private Kernel Build(DomainTestDatabase? db = null)
     {
-        var provider = new ServiceCollection()
-            .AddLifeOsKernel(connectionString ?? classDb.ConnectionString)
-            .BuildServiceProvider();
+        var provider = db is null ? classDb.Kernel() : db.Services().BuildServiceProvider();
         return new Kernel(
             provider,
             provider.GetRequiredService<SubjectService>(),
@@ -81,7 +80,8 @@ public sealed class RewardEarningTests(ClassDatabase classDb) : IClassFixture<Cl
     [Fact]
     public async Task Completing_a_task_earns_its_type_default()
     {
-        var kernel = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var kernel = Build(db);
         var task = await CreateAsync(kernel, SubjectTypes.Task);
         var before = await kernel.Rewards.GetWalletAsync(Ct);
 
@@ -100,7 +100,7 @@ public sealed class RewardEarningTests(ClassDatabase classDb) : IClassFixture<Cl
         }
 
         // The earn is derived from the completion and concerns the task.
-        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
         await connection.OpenAsync(Ct);
         var row = await connection.QuerySingleAsync<(string Provenance, Guid[] DerivedFrom, long Edges)>(
             new CommandDefinition(
@@ -415,56 +415,36 @@ public sealed class RewardEarningTests(ClassDatabase classDb) : IClassFixture<Cl
     [Fact]
     public async Task On_a_fresh_wallet_the_first_paying_completion_opens_it_and_history_stays_unpaid()
     {
-        var database = $"reward_fresh_{Guid.NewGuid():N}";
-        await using (var admin = new NpgsqlConnection(classDb.ConnectionString))
-        {
-            await admin.OpenAsync(Ct);
-            await admin.ExecuteAsync(new CommandDefinition($"CREATE DATABASE {database};", cancellationToken: Ct));
-        }
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var kernel = Build(db);
+        await using var _ = kernel.Provider;
 
-        var connectionString = new NpgsqlConnectionStringBuilder(classDb.ConnectionString) { Database = database }
-            .ConnectionString;
-        try
-        {
-            await new MigrationRunner(connectionString).ApplyAsync(Ct);
-            var kernel = Build(connectionString);
-            await using var _ = kernel.Provider;
+        // History from before launch: completed, never reconciled.
+        var old = await CreateAsync(kernel, SubjectTypes.Task);
+        await RecordStatusWithoutReconcileAsync(kernel, old, "Completed");
+        Assert.Empty(await kernel.Rewards.ReconcileAllAsync(Ct));
+        Assert.Null((await kernel.Rewards.GetWalletAsync(Ct)).OpenedAt);
 
-            // History from before launch: completed, never reconciled.
-            var old = await CreateAsync(kernel, SubjectTypes.Task);
-            await RecordStatusWithoutReconcileAsync(kernel, old, "Completed");
-            Assert.Empty(await kernel.Rewards.ReconcileAllAsync(Ct));
-            Assert.Null((await kernel.Rewards.GetWalletAsync(Ct)).OpenedAt);
+        // A change that pays nothing (and an item priced at nothing) opens nothing.
+        var task = await CreateAsync(kernel, SubjectTypes.Task);
+        Assert.Empty((await kernel.Status.ChangeStatusAsync(task.Urn, "In progress", Ct)).Awards);
+        var unpriced = await CreateAsync(kernel, SubjectTypes.Task);
+        await kernel.Bounties.SetNothingAsync(unpriced.Urn, null, cancellationToken: Ct);
+        Assert.Empty((await kernel.Status.ChangeStatusAsync(unpriced.Urn, "Completed", Ct)).Awards);
+        Assert.Null((await kernel.Rewards.GetWalletAsync(Ct)).OpenedAt);
 
-            // A change that pays nothing (and an item priced at nothing) opens nothing.
-            var task = await CreateAsync(kernel, SubjectTypes.Task);
-            Assert.Empty((await kernel.Status.ChangeStatusAsync(task.Urn, "In progress", Ct)).Awards);
-            var unpriced = await CreateAsync(kernel, SubjectTypes.Task);
-            await kernel.Bounties.SetNothingAsync(unpriced.Urn, null, cancellationToken: Ct);
-            Assert.Empty((await kernel.Status.ChangeStatusAsync(unpriced.Urn, "Completed", Ct)).Awards);
-            Assert.Null((await kernel.Rewards.GetWalletAsync(Ct)).OpenedAt);
+        // The first completion that pays opens the wallet at that completion, and pays.
+        var completed = await kernel.Status.ChangeStatusAsync(task.Urn, "Completed", Ct);
+        var earn = Assert.Single(completed.Awards);
+        var wallet = await kernel.Rewards.GetWalletAsync(Ct);
+        var triggeredAt = Assert.Single(await kernel.Ledger.GetDueAsync(task.Id, Ct)).TriggeredAt;
+        Assert.Equal(triggeredAt, wallet.OpenedAt);
+        Assert.Equal(Default(SubjectTypes.Task)[Currencies.Xp], wallet.BalanceOf(Currencies.Xp));
+        Assert.Equal(LedgerEntries.Earn, earn.Entry);
 
-            // The first completion that pays opens the wallet at that completion, and pays.
-            var completed = await kernel.Status.ChangeStatusAsync(task.Urn, "Completed", Ct);
-            var earn = Assert.Single(completed.Awards);
-            var wallet = await kernel.Rewards.GetWalletAsync(Ct);
-            var triggeredAt = Assert.Single(await kernel.Ledger.GetDueAsync(task.Id, Ct)).TriggeredAt;
-            Assert.Equal(triggeredAt, wallet.OpenedAt);
-            Assert.Equal(Default(SubjectTypes.Task)[Currencies.Xp], wallet.BalanceOf(Currencies.Xp));
-            Assert.Equal(LedgerEntries.Earn, earn.Entry);
-
-            // The pre-launch completion still never pays.
-            Assert.Empty(await kernel.Rewards.ReconcileAllAsync(Ct));
-            Assert.Equal(0, await LedgerEntriesForAsync(old, connectionString));
-        }
-        finally
-        {
-            NpgsqlConnection.ClearAllPools();
-            await using var admin = new NpgsqlConnection(classDb.ConnectionString);
-            await admin.OpenAsync(Ct);
-            await admin.ExecuteAsync(new CommandDefinition(
-                $"DROP DATABASE IF EXISTS {database} WITH (FORCE);", cancellationToken: Ct));
-        }
+        // The pre-launch completion still never pays.
+        Assert.Empty(await kernel.Rewards.ReconcileAllAsync(Ct));
+        Assert.Equal(0, await LedgerEntriesForAsync(old, db.ConnectionString));
     }
 
     [Fact]

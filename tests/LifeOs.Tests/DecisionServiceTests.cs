@@ -1,7 +1,6 @@
 using Dapper;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -17,7 +16,7 @@ public sealed class DecisionServiceTests(ClassDatabase classDb) : IClassFixture<
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     [Fact]
     public async Task A_decision_that_results_in_nothing_still_persists_with_its_prediction()

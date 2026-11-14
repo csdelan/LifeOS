@@ -2,7 +2,6 @@ using Dapper;
 using LifeOs.Application.Capture;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -17,7 +16,7 @@ public sealed class RelateServiceTests(ClassDatabase classDb) : IClassFixture<Cl
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     private async Task<int> EdgeCount(Guid eventId, Guid subjectId, string relation)
     {

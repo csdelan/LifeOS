@@ -72,7 +72,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   no `scripts/test.ps1`). The tests need Docker for Testcontainers. Run one class with
   `./test.ps1 --filter-class LifeOs.Tests.<Class>`.
 - A database test takes a `DomainTestDatabase` of its own (a copy of the migrated template), or
-  its class takes `IClassFixture<ClassDatabase>`, one copy its tests share. There's no serial
+  its class takes `IClassFixture<ClassDatabase>`, one copy its tests share. A kernel on either
+  comes from its `Kernel` or `Services()`, in the database's zone. A test that reads a total over
+  every row (the wallet, a day's ledger or domain credit) takes its own. There's no serial
   collection: every class runs alongside the others. Fake time with `TestClock`.
 - Web, from `web/`: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`. Playwright:
   `npm run test:e2e` and `npm run a11y`, one spec per feature in `web/e2e/golden` and
@@ -148,8 +150,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   it's `IHomeCalendar.TodayAsync()`, by the kernel's `IClock`, so a `TestClock` moves it; a view's
   `bsk.home_today()` reads the database's clock, which no test can move.
 - The zone is set twice, `Rewards:HomeTimeZone` and the database's `bsk.home_zone`, and the API
-  won't start, nor the calendar answer, while they disagree (`HomeZoneCheck`). A test kernel on
-  another zone needs a `DomainTestDatabase` made in that zone. The web's `todayIso()` counts in
+  won't start, nor the calendar, the ledger or the domain credit answer, while they disagree
+  (`HomeZoneCheck`). A test kernel on another zone needs a `DomainTestDatabase` made in that zone.
+  A view that reads `bsk.home_zone()` or `bsk.home_today()` goes in `HomeZoneDateTests`, which
+  reads every home date at UTC+14. The web's `todayIso()` counts in
   the zone `public-config.js` names, or the browser's own in mock mode. A page that writes with
   today's date takes it from `useHomeToday()` (`lib/home-day.ts`), which turns at midnight, and
   `HomeDayRollover` resets every cached read when the day turns, so a page left open overnight

@@ -24,7 +24,7 @@ namespace LifeOs.Tests;
 /// The database is shared, so each test reasons about its own items. The zone tests read
 /// triggers from 2003, which are before the wallet opened: they write no ledger entries.
 /// </summary>
-public sealed class RewardDomainTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
+public sealed class RewardDomainTests(PostgresFixture postgres, ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -37,11 +37,11 @@ public sealed class RewardDomainTests(ClassDatabase classDb) : IClassFixture<Cla
         public RedemptionService Redemptions => Provider.GetRequiredService<RedemptionService>();
     }
 
-    private Kernel Build(string? homeTimeZone = null)
+    /// <summary>A kernel on the class's database, in its zone.</summary>
+    private Kernel Build() => From(classDb.Kernel());
+
+    private static Kernel From(ServiceProvider provider)
     {
-        var provider = new ServiceCollection()
-            .AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: homeTimeZone)
-            .BuildServiceProvider();
         return new Kernel(
             provider,
             provider.GetRequiredService<SubjectService>(),
@@ -203,22 +203,24 @@ public sealed class RewardDomainTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task A_completion_counts_on_its_date_in_the_home_zone()
     {
-        var kernel = Build();
-        var task = await TaskAsync(kernel);
-        // 06:30 UTC on 15 Feb 2003 is 10:30 pm on the 14th in Pacific time.
-        await RecordStatusAtAsync(kernel, task, "Completed", new DateTimeOffset(2003, 2, 15, 6, 30, 0, TimeSpan.Zero));
+        // A database at home in Pacific time, and the class's in UTC, each with a kernel in its zone.
+        await using var pacificDb = await DomainTestDatabase.CreateAsync(postgres, Ct, HomeZone.Default);
+        var credited = new List<DateOnly?>();
+        foreach (var kernel in new[] { From(pacificDb.Kernel), Build() })
+        {
+            var task = await TaskAsync(kernel);
+            // 06:30 UTC on 15 Feb 2003 is 10:30 pm on the 14th in Pacific time.
+            await RecordStatusAtAsync(kernel, task, "Completed", new DateTimeOffset(2003, 2, 15, 6, 30, 0, TimeSpan.Zero));
+            credited.Add(Assert.Single(await kernel.Ledger.GetTriggersAsync(task.Id, Ct)).CreditedOn);
+        }
 
-        var pacific = Assert.Single(await kernel.Ledger.GetTriggersAsync(task.Id, Ct));
-        var utc = Assert.Single(await Build(homeTimeZone: "UTC").Ledger.GetTriggersAsync(task.Id, Ct));
-
-        Assert.Equal(new DateOnly(2003, 2, 14), pacific.CreditedOn);
-        Assert.Equal(new DateOnly(2003, 2, 15), utc.CreditedOn);
+        Assert.Equal([new DateOnly(2003, 2, 14), new DateOnly(2003, 2, 15)], credited);
     }
 
     [Fact]
     public async Task A_completion_earned_now_is_stamped_with_todays_date_in_the_home_zone()
     {
-        var kernel = Build(homeTimeZone: "UTC");
+        var kernel = Build();
         var task = await TaskAsync(kernel);
 
         var before = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -265,7 +267,9 @@ public sealed class RewardDomainTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task A_home_zone_the_database_doesnt_know_fails_loudly_on_first_use()
     {
-        var kernel = Build(homeTimeZone: "Mars/Olympus");
+        var kernel = From(new ServiceCollection()
+            .AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: "Mars/Olympus")
+            .BuildServiceProvider());
         var task = await TaskAsync(kernel);
         await RecordStatusAtAsync(kernel, task, "Completed", new DateTimeOffset(2003, 3, 1, 12, 0, 0, TimeSpan.Zero));
 

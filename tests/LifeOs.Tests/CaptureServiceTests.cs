@@ -1,6 +1,5 @@
 using Dapper;
 using LifeOs.Application.Capture;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -18,9 +17,7 @@ public sealed class CaptureServiceTests(ClassDatabase classDb) : IClassFixture<C
     [Fact]
     public async Task Capture_runs_service_to_repository_to_postgres_and_back()
     {
-        await using var provider = new ServiceCollection()
-            .AddLifeOsKernel(classDb.ConnectionString)
-            .BuildServiceProvider();
+        await using var provider = classDb.Kernel();
 
         var capture = provider.GetRequiredService<CaptureService>();
 
@@ -49,9 +46,7 @@ public sealed class CaptureServiceTests(ClassDatabase classDb) : IClassFixture<C
     [Fact]
     public async Task Empty_capture_text_is_rejected_before_touching_the_store()
     {
-        await using var provider = new ServiceCollection()
-            .AddLifeOsKernel(classDb.ConnectionString)
-            .BuildServiceProvider();
+        await using var provider = classDb.Kernel();
 
         var capture = provider.GetRequiredService<CaptureService>();
 

@@ -16,11 +16,11 @@ namespace LifeOs.Tests;
 /// instant reward with a price or a savings goal with a dollar target; redeeming against
 /// one is a ledger redeem entry naming it, and bsk.v_reward folds what has been redeemed.
 /// Coins are real money: every redemption that spends them stamps the dollars and the
-/// rate, so a savings goal's progress never moves when the rate does. The wallet is global
-/// and the database shared, so each test earns what it spends and reasons about its own
-/// Rewards and the change it made.
+/// rate, so a savings goal's progress never moves when the rate does. The class's database is
+/// shared, so each test reasons about its own Rewards; a test that reads the wallet, a total
+/// over every entry, takes a database of its own (code review CR88).
 /// </summary>
-public sealed class RewardCatalogTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
+public sealed class RewardCatalogTests(PostgresFixture postgres, ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -30,11 +30,12 @@ public sealed class RewardCatalogTests(ClassDatabase classDb) : IClassFixture<Cl
         public RedemptionService Redemptions => Provider.GetRequiredService<RedemptionService>();
     }
 
-    private Kernel Build(decimal? coinValueUsd = null)
+    /// <summary>A kernel on <paramref name="db"/>, or on the class's database, in its zone.</summary>
+    private Kernel Build(DomainTestDatabase? db = null, decimal? coinValueUsd = null)
     {
-        var provider = new ServiceCollection()
-            .AddLifeOsKernel(classDb.ConnectionString, coinValueUsd: coinValueUsd)
-            .BuildServiceProvider();
+        var provider = db is null
+            ? classDb.Kernel(coinValueUsd: coinValueUsd)
+            : db.Services(coinValueUsd: coinValueUsd).BuildServiceProvider();
         return new Kernel(
             provider,
             provider.GetRequiredService<RewardService>(),
@@ -64,17 +65,18 @@ public sealed class RewardCatalogTests(ClassDatabase classDb) : IClassFixture<Cl
     private static (long, long, decimal, decimal?, decimal?) Progress(CatalogReward reward)
         => (reward.Redemptions, reward.CoinsRedeemed, reward.DollarsRedeemed, reward.PercentOfTarget, reward.RemainingUsd);
 
-    private async Task<long> LedgerEventCountAsync()
+    private async Task<long> LedgerEventCountAsync(DomainTestDatabase? db = null)
     {
-        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await using var connection = new NpgsqlConnection(db?.ConnectionString ?? classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.event WHERE kind = 'ledger';", cancellationToken: Ct));
     }
 
-    private async Task<(string? SubjectId, string? Note, decimal? Dollars, decimal? CoinRate)> PayloadAsync(Guid eventId)
+    private async Task<(string? SubjectId, string? Note, decimal? Dollars, decimal? CoinRate)> PayloadAsync(
+        Guid eventId, DomainTestDatabase? db = null)
     {
-        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await using var connection = new NpgsqlConnection(db?.ConnectionString ?? classDb.ConnectionString);
         await connection.OpenAsync(Ct);
         return await connection.QuerySingleAsync<(string?, string?, decimal?, decimal?)>(new CommandDefinition(
             """
@@ -88,7 +90,8 @@ public sealed class RewardCatalogTests(ClassDatabase classDb) : IClassFixture<Cl
     [Fact]
     public async Task A_savings_goal_tracks_coins_dollars_and_progress_toward_its_target()
     {
-        var kernel = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var kernel = Build(db);
         var goal = await kernel.Catalog.AddAsync(Unique("Bike fund"), RewardKinds.Savings, targetUsd: 100m, cancellationToken: Ct);
         Assert.Equal((RewardKinds.Savings, 100m, 0L, 0m, 0m), (goal.Kind, goal.TargetUsd, goal.Redemptions, goal.DollarsRedeemed, goal.PercentOfTarget));
 
@@ -123,14 +126,15 @@ public sealed class RewardCatalogTests(ClassDatabase classDb) : IClassFixture<Cl
     [Fact]
     public async Task A_coin_rate_change_never_rewrites_past_deposits()
     {
-        var atHalf = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var atHalf = Build(db);
         var goal = await atHalf.Catalog.AddAsync(Unique("Trip fund"), RewardKinds.Savings, targetUsd: 60m, cancellationToken: Ct);
         await EarnAsync(atHalf, Spend(Currencies.Coins, 40));
 
         var early = await atHalf.Redemptions.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 20), null, Ct);
 
         // The rate is raised to a dollar a coin; the next deposit is worth twice as much…
-        var atDollar = Build(coinValueUsd: 1.00m);
+        var atDollar = Build(db, coinValueUsd: 1.00m);
         var late = await atDollar.Redemptions.RedeemAsync(goal.Reward.Urn, Spend(Currencies.Coins, 20), null, Ct);
 
         Assert.Equal((10.00m, 0.50m), (early.Dollars, early.CoinRate));
@@ -142,7 +146,7 @@ public sealed class RewardCatalogTests(ClassDatabase classDb) : IClassFixture<Cl
         Assert.Equal(30.00m, progress.DollarsRedeemed);
         Assert.Equal(50.0m, progress.PercentOfTarget);
         Assert.Equal(Progress(progress), Progress(await atHalf.Catalog.GetAsync(goal.Reward.Urn, Ct)));
-        var stored = await PayloadAsync(early.EventId);
+        var stored = await PayloadAsync(early.EventId, db);
         Assert.Equal((10.00m, 0.50m), (stored.Dollars!.Value, stored.CoinRate!.Value));
         Assert.Equal(1.00m, (await atDollar.Rewards.GetWalletAsync(Ct)).CoinValueUsd);
     }
@@ -150,7 +154,8 @@ public sealed class RewardCatalogTests(ClassDatabase classDb) : IClassFixture<Cl
     [Fact]
     public async Task An_instant_reward_redeems_at_its_catalog_price_with_no_note_needed()
     {
-        var kernel = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var kernel = Build(db);
         var movie = await kernel.Catalog.AddAsync(
             Unique("Movie night"), price: Spend(Currencies.Freedom, 40), cancellationToken: Ct);
         Assert.Equal(RewardKinds.Instant, movie.Kind);
@@ -166,8 +171,8 @@ public sealed class RewardCatalogTests(ClassDatabase classDb) : IClassFixture<Cl
         Assert.Null(redemption.Reward.PercentOfTarget);
 
         // No Coins, so no dollars; the entry names the reward and concerns it.
-        Assert.Equal((movie.Reward.Id.ToString(), (string?)null, (decimal?)null, (decimal?)null), await PayloadAsync(redemption.EventId));
-        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        Assert.Equal((movie.Reward.Id.ToString(), (string?)null, (decimal?)null, (decimal?)null), await PayloadAsync(redemption.EventId, db));
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
         await connection.OpenAsync(Ct);
         var edge = await connection.QuerySingleAsync<(string Relation, string Provenance)>(new CommandDefinition(
             "SELECT relation, provenance FROM bsk.subject_event WHERE event_id = @id AND subject_id = @reward;",
@@ -275,17 +280,18 @@ public sealed class RewardCatalogTests(ClassDatabase classDb) : IClassFixture<Cl
     [Fact]
     public async Task A_catalog_price_the_balance_cannot_cover_is_refused()
     {
-        var kernel = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var kernel = Build(db);
         var balance = (await kernel.Rewards.GetWalletAsync(Ct)).BalanceOf(Currencies.Gems);
         var trip = await kernel.Catalog.AddAsync(
             Unique("Road trip"), price: Spend(Currencies.Gems, balance + 1), cancellationToken: Ct);
-        var events = await LedgerEventCountAsync();
+        var events = await LedgerEventCountAsync(db);
 
         var refused = await Assert.ThrowsAsync<InsufficientBalanceException>(() =>
             kernel.Redemptions.RedeemAsync(trip.Reward.Urn, amounts: null, note: null, Ct));
 
         Assert.Equal(balance + 1, refused.Requested);
-        Assert.Equal(events, await LedgerEventCountAsync());
+        Assert.Equal(events, await LedgerEventCountAsync(db));
         Assert.Equal(0, (await kernel.Catalog.GetAsync(trip.Reward.Urn, Ct)).Redemptions);
     }
 

@@ -1,6 +1,5 @@
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LifeOs.Tests;
@@ -14,8 +13,7 @@ public sealed class SubjectServiceTests(ClassDatabase classDb) : IClassFixture<C
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private SubjectService Service()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString)
-            .BuildServiceProvider().GetRequiredService<SubjectService>();
+        => classDb.Kernel().GetRequiredService<SubjectService>();
 
     [Fact]
     public async Task Creates_a_new_subject_then_reuses_it_by_title()

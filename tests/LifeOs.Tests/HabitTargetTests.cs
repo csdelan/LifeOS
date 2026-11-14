@@ -5,7 +5,6 @@ using Dapper;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -22,7 +21,7 @@ public sealed class HabitTargetTests(ClassDatabase classDb) : IClassFixture<Clas
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Kernel()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     // A habit is tracked, so the establishment view reads it (a Planned one has no progress).
     private static Task<SubjectRef> NewAsync(ServiceProvider kernel, string type, string? attributesJson = null)

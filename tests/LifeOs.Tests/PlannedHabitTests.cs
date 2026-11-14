@@ -5,7 +5,6 @@ using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -33,7 +32,7 @@ public sealed class PlannedHabitTests(ClassDatabase classDb) : IClassFixture<Cla
     private static string Unique(string name) => $"{name} {Guid.NewGuid():N}";
 
     private ServiceProvider Kernel()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     private static string Daily(int startOffset)
         => JsonSerializer.Serialize(new

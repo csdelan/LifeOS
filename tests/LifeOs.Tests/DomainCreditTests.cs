@@ -5,7 +5,6 @@ using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -17,12 +16,12 @@ namespace LifeOs.Tests;
 /// <c>DomainService</c>. A day holds what the ledger pays now for the awards credited to it,
 /// so a reversal takes its credit away and earning again files it on the new day.
 /// <para>
-/// The database is shared and no other test pays Environment XP, so these tests price their
-/// items in it and compare before and after. The one test that writes a ledger entry by hand
-/// rolls it back.
+/// A day's credit is a total over every award in the database, so each test takes a database of
+/// its own (code review CR88), in UTC unless it reads from another zone. The one test that writes
+/// a ledger entry by hand rolls it back.
 /// </para>
 /// </summary>
-public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
+public sealed class DomainCreditTests(PostgresFixture postgres)
 {
     // UTC+14 and UTC−11: at any instant their dates are at least a day apart.
     private const string Kiritimati = "Pacific/Kiritimati";
@@ -36,11 +35,10 @@ public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<Cla
         SubjectService Subjects, StatusService Status, AdherenceService Adherence, BountyService Bounties,
         IDomainCreditReader Ledger, DomainService Domains);
 
-    private Kernel Build(string homeTimeZone = "UTC")
+    /// <summary>A kernel on <paramref name="db"/>, in its zone or reading from <paramref name="zone"/>.</summary>
+    private static Kernel Build(DomainTestDatabase db, string? zone = null)
     {
-        var provider = new ServiceCollection()
-            .AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: homeTimeZone)
-            .BuildServiceProvider();
+        var provider = zone is null ? db.Kernel : db.KernelIn(zone);
         return new Kernel(
             provider.GetRequiredService<SubjectService>(),
             provider.GetRequiredService<StatusService>(),
@@ -72,10 +70,10 @@ public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<Cla
 
     /// <summary>The view's rows for one award key, read on <paramref name="connection"/> (and its transaction).</summary>
     private async Task<List<CreditRow>> CreditRowsAsync(
-        string awardKey, NpgsqlConnection? connection = null, NpgsqlTransaction? transaction = null)
+        DomainTestDatabase db, string awardKey, NpgsqlConnection? connection = null, NpgsqlTransaction? transaction = null)
     {
         var owned = connection is null;
-        connection ??= new NpgsqlConnection(classDb.ConnectionString);
+        connection ??= new NpgsqlConnection(db.ConnectionString);
         try
         {
             if (owned)
@@ -100,9 +98,9 @@ public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<Cla
         }
     }
 
-    private async Task<DateOnly> CreditedOnAsync(Guid ledgerEventId)
+    private async Task<DateOnly> CreditedOnAsync(DomainTestDatabase db, Guid ledgerEventId)
     {
-        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
         await connection.OpenAsync(Ct);
         var day = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
             "SELECT payload->>'credited_on' FROM bsk.event WHERE id = @id;", new { id = ledgerEventId }, cancellationToken: Ct));
@@ -114,38 +112,40 @@ public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<Cla
     {
         // Completed where it's already tomorrow, reopened, then completed again where it's
         // still yesterday: the same award, earned on two different days.
-        var ahead = Build(Kiritimati);
-        var behind = Build(PagoPago);
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var ahead = Build(db, Kiritimati);
+        var behind = Build(db, PagoPago);
         var task = await PricedTaskAsync(ahead, xp: 7);
         var key = AwardKeys.Completed(task.Id);
         var before = await EnvironmentDaysAsync(ahead);
 
         var first = Assert.Single(
             (await ahead.Status.ChangeStatusAsync(task.Urn, "Completed", Ct)).Awards);
-        var firstDay = await CreditedOnAsync(first.EventId);
+        var firstDay = await CreditedOnAsync(db, first.EventId);
         Assert.Equal(PaidOn(before, firstDay) + 7, PaidOn(await EnvironmentDaysAsync(ahead), firstDay));
 
         Assert.Equal(LedgerEntries.Reversal, Assert.Single(
             (await ahead.Status.ChangeStatusAsync(task.Urn, "In progress", Ct)).Awards).Entry);
-        Assert.DoesNotContain(await CreditRowsAsync(key), r => r.Currency == Currencies.EnvironmentXp);
+        Assert.DoesNotContain(await CreditRowsAsync(db, key), r => r.Currency == Currencies.EnvironmentXp);
         Assert.Equal(PaidOn(before, firstDay), PaidOn(await EnvironmentDaysAsync(ahead), firstDay));
 
         var second = Assert.Single(
             (await behind.Status.ChangeStatusAsync(task.Urn, "Completed", Ct)).Awards);
-        var secondDay = await CreditedOnAsync(second.EventId);
+        var secondDay = await CreditedOnAsync(db, second.EventId);
         Assert.True(secondDay < firstDay, $"{secondDay} should be before {firstDay}");
 
         var after = await EnvironmentDaysAsync(ahead);
         Assert.Equal(PaidOn(before, firstDay), PaidOn(after, firstDay));
         Assert.Equal(PaidOn(before, secondDay) + 7, PaidOn(after, secondDay));
-        var row = Assert.Single(await CreditRowsAsync(key), r => r.Currency == Currencies.EnvironmentXp);
+        var row = Assert.Single(await CreditRowsAsync(db, key), r => r.Currency == Currencies.EnvironmentXp);
         Assert.Equal((7L, 7L, secondDay.ToString("yyyy-MM-dd"), second.EventId), (row.Base, row.Paid, row.CreditedOn, row.EventId));
     }
 
     [Fact]
     public async Task A_habit_day_logged_late_is_credited_to_its_own_day_until_its_undone()
     {
-        var kernel = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var kernel = Build(db);
         var habit = await kernel.Subjects.CreateAsync(
             SubjectTypes.Habit, $"credit habit {Guid.NewGuid():N}",
             JsonSerializer.Serialize(new { start = TodayUtc.AddDays(-4).ToString("yyyy-MM-dd"), recurrence = new { freq = "daily" } }),
@@ -174,7 +174,8 @@ public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<Cla
     {
         // Phase X5 stamps `base` on an earn a multiplier raised. Written by hand here, and
         // rolled back, since no flow writes one yet.
-        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
         await connection.OpenAsync(Ct);
         await using var transaction = await connection.BeginTransactionAsync(Ct);
         var (multiplied, malformed) = ($"test:{Guid.NewGuid():N}", $"test:{Guid.NewGuid():N}");
@@ -203,8 +204,8 @@ public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<Cla
                 cancellationToken: Ct));
         }
 
-        var rows = await CreditRowsAsync(multiplied, connection, transaction);
-        var odd = Assert.Single(await CreditRowsAsync(malformed, connection, transaction));
+        var rows = await CreditRowsAsync(db, multiplied, connection, transaction);
+        var odd = Assert.Single(await CreditRowsAsync(db, malformed, connection, transaction));
         await transaction.RollbackAsync(Ct);
 
         // Base where the earn says it; otherwise what it paid.
@@ -214,13 +215,14 @@ public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<Cla
         // A base that isn't an object reads as absent; a bad date as none (the reader then
         // files it on the earn's own date).
         Assert.Equal((4L, 4L, (string?)null), (odd.Base, odd.Paid, odd.CreditedOn));
-        Assert.Empty(await CreditRowsAsync(multiplied));
+        Assert.Empty(await CreditRowsAsync(db, multiplied));
     }
 
     [Fact]
     public async Task Domains_without_rules_report_their_xp_and_nothing_else()
     {
-        var kernel = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var kernel = Build(db);
         var before = await kernel.Domains.GetAsync(Ct);
         var task = await PricedTaskAsync(kernel, xp: 12, Currencies.SocialXp);
 
@@ -250,7 +252,8 @@ public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task A_configured_domains_series_says_which_days_were_active()
     {
-        var kernel = Build();
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var kernel = Build(db);
 
         var series = await kernel.Domains.GetDaysAsync("Health XP", 5, Ct);
 
@@ -264,8 +267,9 @@ public sealed class DomainCreditTests(ClassDatabase classDb) : IClassFixture<Cla
     [Fact]
     public async Task Today_is_the_date_in_the_home_zone()
     {
-        var aheadToday = (await Build(Kiritimati).Ledger.GetDomainDaysAsync([Currencies.HealthXp], Ct)).Today;
-        var behindToday = (await Build(PagoPago).Ledger.GetDomainDaysAsync([Currencies.HealthXp], Ct)).Today;
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var aheadToday = (await Build(db, Kiritimati).Ledger.GetDomainDaysAsync([Currencies.HealthXp], Ct)).Today;
+        var behindToday = (await Build(db, PagoPago).Ledger.GetDomainDaysAsync([Currencies.HealthXp], Ct)).Today;
 
         Assert.InRange(aheadToday.DayNumber - behindToday.DayNumber, 1, 2);
     }

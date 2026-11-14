@@ -4,7 +4,6 @@ using LifeOs.Application.Capture;
 using LifeOs.Application.Reviews;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -26,9 +25,7 @@ public sealed class RequestRetryTests(ClassDatabase classDb) : IClassFixture<Cla
     private ServiceProvider Kernel(out string source)
     {
         source = $"mcp:retry-{Guid.NewGuid():N}";
-        return new ServiceCollection()
-            .AddLifeOsKernel(classDb.ConnectionString, sourceId: source, homeTimeZone: PostgresFixture.HabitViewZone)
-            .BuildServiceProvider();
+        return classDb.Kernel(sourceId: source);
     }
 
     [Fact]

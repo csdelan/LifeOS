@@ -1,7 +1,6 @@
 using Dapper;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -19,7 +18,7 @@ public sealed class ActivityServiceTests(ClassDatabase classDb) : IClassFixture<
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     [Fact]
     public async Task Activity_evidences_a_commitment_and_is_recorded_in_the_payload()

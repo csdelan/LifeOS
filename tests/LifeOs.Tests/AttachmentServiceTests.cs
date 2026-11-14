@@ -3,7 +3,6 @@ using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Capture;
 using LifeOs.Infrastructure;
-using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -22,7 +21,7 @@ public sealed class AttachmentServiceTests(ClassDatabase classDb) : IClassFixtur
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider BuildProvider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {

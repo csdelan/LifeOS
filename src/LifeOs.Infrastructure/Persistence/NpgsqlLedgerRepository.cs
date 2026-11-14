@@ -24,7 +24,9 @@ namespace LifeOs.Infrastructure.Persistence;
 /// <paramref name="homeTimeZone"/> (an IANA name, <see cref="HomeZone"/>) files each due
 /// award on a local day — the day it counts on (xp-domains plan §3.3): its own date when it
 /// has one (a habit day), else its trigger's instant read in that zone. Postgres does the
-/// conversion; a zone it doesn't know fails the read loudly.
+/// conversion; a zone it doesn't know fails the read loudly, and so does one that isn't the
+/// database's own <c>bsk.home_zone</c> (<see cref="HomeZoneCheck"/>, code review CR88), read in
+/// the same round trip, since the views date the same events in that one.
 /// </para>
 /// </summary>
 public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string homeTimeZone = HomeZone.Default)
@@ -429,10 +431,11 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
     {
         await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
-        IEnumerable<AwardRow> rows;
+        List<AwardRow> rows;
         try
         {
-            rows = await connection.QueryAsync<AwardRow>(new CommandDefinition(
+            // The awards first, so a zone Postgres doesn't know says so before the check does.
+            await using var grid = await connection.QueryMultipleAsync(new CommandDefinition(
                 $"""
                 SELECT award_key AS awardkey, trigger, source_event_ids AS sourceeventids,
                        triggered_at AS triggeredat, timed_seconds AS timedseconds,
@@ -441,9 +444,12 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
                 FROM {view}
                 WHERE subject_id = @subjectId
                 ORDER BY award_key;
+                SELECT bsk.home_zone();
                 """,
                 new { subjectId, tz = homeTimeZone },
                 cancellationToken: cancellationToken));
+            rows = (await grid.ReadAsync<AwardRow>()).ToList();
+            HomeZoneCheck.Ensure(homeTimeZone, await grid.ReadSingleAsync<string>());
         }
         catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
         {

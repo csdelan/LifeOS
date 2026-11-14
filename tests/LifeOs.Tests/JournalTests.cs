@@ -3,7 +3,6 @@ using LifeOs.Application.Capture;
 using LifeOs.Application.Subjects;
 using LifeOs.Cli.Editor;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -48,7 +47,7 @@ public sealed class CaptureAndJournalDbTests(ClassDatabase classDb) : IClassFixt
     private CaptureService Capture() => Get<CaptureService>();
 
     private T Get<T>() where T : notnull
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider().GetRequiredService<T>();
+        => classDb.Kernel().GetRequiredService<T>();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {

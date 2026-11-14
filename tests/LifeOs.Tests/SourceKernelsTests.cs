@@ -23,8 +23,7 @@ public sealed class SourceKernelsTests(ClassDatabase classDb) : IClassFixture<Cl
     public async Task Each_source_gets_the_hosts_kernel_with_only_its_source_changed()
     {
         var clock = new TestClock(DateTimeOffset.UtcNow);
-        await using var host = new ServiceCollection()
-            .AddLifeOsKernel(classDb.ConnectionString, sourceId: KernelSources.Api)
+        await using var host = classDb.Services(sourceId: KernelSources.Api)
             .AddSingleton<IClock>(clock)
             .BuildServiceProvider();
         await using var kernels = new SourceKernels(host.GetRequiredService<KernelSettings>(), host.GetRequiredService<IClock>());

@@ -1,7 +1,6 @@
 using Dapper;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -18,7 +17,7 @@ public sealed class AreaTypeTests(ClassDatabase classDb) : IClassFixture<ClassDa
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {

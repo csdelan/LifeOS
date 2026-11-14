@@ -2,7 +2,6 @@ using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -21,7 +20,7 @@ public sealed class AppointmentTests(ClassDatabase classDb) : IClassFixture<Clas
     // Materialize reads today from the home calendar, so the kernel's zone is the database's.
     private IServiceProvider Provider(IClock? clock = null)
     {
-        var services = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone);
+        var services = classDb.Services();
         if (clock is not null)
         {
             services.AddSingleton(clock);

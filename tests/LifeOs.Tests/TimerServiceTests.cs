@@ -3,7 +3,6 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure;
-using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -23,7 +22,7 @@ public sealed class TimerServiceTests(ClassDatabase classDb) : IClassFixture<Cla
 
     private (TimerService Timers, SubjectService Subjects, TestClock Clock) Build()
     {
-        var provider = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        var provider = classDb.Kernel();
         var subjects = provider.GetRequiredService<SubjectService>();
         var clock = new TestClock(DateTimeOffset.UtcNow);
         var timers = new TimerService(
@@ -239,7 +238,7 @@ public sealed class TimerServiceTests(ClassDatabase classDb) : IClassFixture<Cla
     {
         // Closed as the kernel did before closing stopped the timer: the status change alone.
         var (timers, subjects, clock) = Build();
-        var provider = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        var provider = classDb.Kernel();
         var task = await TaskAsync(subjects);
         await timers.ApplyAsync(task.Urn, TimerActions.Start, Ct);
         clock.Advance(TimeSpan.FromSeconds(10));
@@ -259,7 +258,7 @@ public sealed class TimerServiceTests(ClassDatabase classDb) : IClassFixture<Cla
     /// clock so its stop lands after the timer events the test wrote.
     /// </summary>
     private StatusService Status(IClock clock)
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).AddSingleton(clock).BuildServiceProvider()
+        => classDb.Services().AddSingleton(clock).BuildServiceProvider()
             .GetRequiredService<StatusService>();
 
     [Fact]

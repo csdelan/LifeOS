@@ -3,7 +3,6 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Covers;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -23,7 +22,7 @@ public sealed class CoverServiceTests(ClassDatabase classDb) : IClassFixture<Cla
 
     private ServiceProvider Provider(FakeUnsplashClient? unsplash)
     {
-        var services = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString);
+        var services = classDb.Services();
         services.AddSingleton<IClock>(new TestClock(Now));
         if (unsplash is not null)
         {

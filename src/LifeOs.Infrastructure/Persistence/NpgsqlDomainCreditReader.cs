@@ -14,7 +14,9 @@ namespace LifeOs.Infrastructure.Persistence;
 /// <see cref="NpgsqlLedgerRepository"/>'s (code review CR47).
 /// <para>
 /// <paramref name="homeTimeZone"/> (an IANA name, <see cref="HomeZone"/>) puts each credit on a
-/// local day: its own credited day when it has one, else its instant read in that zone.
+/// local day: its own credited day when it has one, else its instant read in that zone. Each
+/// read also fails loudly when that zone isn't the database's own <c>bsk.home_zone</c>
+/// (<see cref="HomeZoneCheck"/>, code review CR88), as the calendar does.
 /// </para>
 /// <para>
 /// Today and the last settled day are <paramref name="clock"/>'s, read in that zone, the way
@@ -60,10 +62,12 @@ public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, IClock
                 """
                 SELECT to_char((@now AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS today,
                        to_char((bsk.ledger_opened_at() AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS openedon,
-                       to_char(((@now AT TIME ZONE @tz) - make_interval(hours => @settle))::date - 1, 'YYYY-MM-DD') AS settledthrough;
+                       to_char(((@now AT TIME ZONE @tz) - make_interval(hours => @settle))::date - 1, 'YYYY-MM-DD') AS settledthrough,
+                       bsk.home_zone() AS zone;
                 """,
                 new { now = clock.UtcNow.ToUniversalTime(), tz = homeTimeZone, settle = LifeDomains.SettleHour },
                 transaction, cancellationToken: cancellationToken));
+            HomeZoneCheck.Ensure(homeTimeZone, dates.Zone);
             var rows = await connection.QueryAsync<CreditRow>(new CommandDefinition(
                 daysSql,
                 new { tz = homeTimeZone, currencies = currencies.ToArray(), passive = LifeDomains.PassiveTriggers.ToArray() },
@@ -100,9 +104,11 @@ public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, IClock
         await connection.OpenAsync(cancellationToken);
         try
         {
-            var today = ParseDay(await connection.QuerySingleAsync<string>(new CommandDefinition(
-                "SELECT to_char((@now AT TIME ZONE @tz)::date, 'YYYY-MM-DD');",
-                new { now = clock.UtcNow.ToUniversalTime(), tz = homeTimeZone }, cancellationToken: cancellationToken)));
+            var now = await connection.QuerySingleAsync<(string Day, string Zone)>(new CommandDefinition(
+                "SELECT to_char((@now AT TIME ZONE @tz)::date, 'YYYY-MM-DD'), bsk.home_zone();",
+                new { now = clock.UtcNow.ToUniversalTime(), tz = homeTimeZone }, cancellationToken: cancellationToken));
+            HomeZoneCheck.Ensure(homeTimeZone, now.Zone);
+            var today = ParseDay(now.Day);
             var rows = await connection.QueryAsync<ExceptionRow>(new CommandDefinition(
                 """
                 SELECT to_char(x.day, 'YYYY-MM-DD') AS day, x.comment, x.marked_at AS markedat
@@ -134,17 +140,20 @@ public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, IClock
         await connection.OpenAsync(cancellationToken);
         try
         {
-            return await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition(
+            var row = await connection.QuerySingleAsync<(string Zone, Guid? EventId)>(new CommandDefinition(
                 """
-                SELECT c.event_id
-                FROM bsk.v_award_credit c
-                CROSS JOIN LATERAL (SELECT coalesce(c.credited_on, (c.occurred_at AT TIME ZONE @tz)::date) AS day) d
-                WHERE c.currency = @currency AND d.day <= @day::date
-                ORDER BY d.day DESC, c.occurred_at DESC, c.event_id DESC
-                LIMIT 1;
+                SELECT bsk.home_zone(),
+                       (SELECT c.event_id
+                        FROM bsk.v_award_credit c
+                        CROSS JOIN LATERAL (SELECT coalesce(c.credited_on, (c.occurred_at AT TIME ZONE @tz)::date) AS day) d
+                        WHERE c.currency = @currency AND d.day <= @day::date
+                        ORDER BY d.day DESC, c.occurred_at DESC, c.event_id DESC
+                        LIMIT 1);
                 """,
                 new { tz = homeTimeZone, currency, day = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
                 cancellationToken: cancellationToken));
+            HomeZoneCheck.Ensure(homeTimeZone, row.Zone);
+            return row.EventId;
         }
         catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
         {
@@ -163,6 +172,7 @@ public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, IClock
         public string Today { get; set; } = "";
         public string? OpenedOn { get; set; }
         public string SettledThrough { get; set; } = "";
+        public string? Zone { get; set; }
     }
 
     private sealed class CreditRow

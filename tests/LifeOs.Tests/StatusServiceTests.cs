@@ -2,7 +2,6 @@ using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Rebuild;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -20,7 +19,7 @@ public sealed class StatusServiceTests(ClassDatabase classDb) : IClassFixture<Cl
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     [Fact]
     public async Task Status_writes_a_state_change_event_and_the_projection_reflects_it_after_rebuild()
@@ -66,8 +65,7 @@ public sealed class StatusServiceTests(ClassDatabase classDb) : IClassFixture<Cl
     {
         // A hand-advanced clock so the two state_change events have distinct,
         // ordered timestamps and "latest wins" is deterministic, not a race.
-        var provider = new ServiceCollection()
-            .AddLifeOsKernel(classDb.ConnectionString)
+        var provider = classDb.Services()
             .AddSingleton<IClock>(TestClock.Ticking(new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero)))
             .BuildServiceProvider();
         var subjects = provider.GetRequiredService<SubjectService>();

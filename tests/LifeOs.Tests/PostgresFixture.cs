@@ -77,5 +77,13 @@ public sealed class PostgresFixture : IAsyncLifetime
     internal static string On(string connectionString, string database)
         => new NpgsqlConnectionStringBuilder(connectionString) { Database = database }.ConnectionString;
 
+    /// <summary>
+    /// <paramref name="connectionString"/> with each session's home zone (<c>bsk.home_zone</c>) set
+    /// to <paramref name="zone"/> as it connects, for a test that reads one database in many zones
+    /// without a copy for each. A kernel on it is in that zone too (code review CR88).
+    /// </summary>
+    internal static string InZone(string connectionString, string zone)
+        => new NpgsqlConnectionStringBuilder(connectionString) { Options = $"-c bsk.home_zone={zone}" }.ConnectionString;
+
     public async ValueTask DisposeAsync() => await _container.DisposeAsync();
 }

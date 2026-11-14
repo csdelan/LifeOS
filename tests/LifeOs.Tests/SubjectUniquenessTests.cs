@@ -2,7 +2,6 @@ using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -19,7 +18,7 @@ public sealed class SubjectUniquenessTests(ClassDatabase classDb) : IClassFixtur
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     [Fact]
     public async Task Titles_that_differ_only_by_whitespace_resolve_to_the_same_problem()

@@ -27,7 +27,12 @@ public sealed class HomeCalendarTests(PostgresFixture postgres, ClassDatabase cl
 
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private ServiceProvider Kernel(string homeTimeZone)
+    /// <summary>
+    /// A kernel in <paramref name="homeTimeZone"/> on the class's UTC database, as a host set up with
+    /// a zone that isn't the database's own would build it, for the tests of what refuses that.
+    /// Every other kernel is in its database's zone (code review CR88).
+    /// </summary>
+    private ServiceProvider KernelOutOfZone(string homeTimeZone)
         => new ServiceCollection()
             .AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: homeTimeZone)
             .BuildServiceProvider();
@@ -77,8 +82,7 @@ public sealed class HomeCalendarTests(PostgresFixture postgres, ClassDatabase cl
     public async Task Today_is_the_date_at_the_kernels_clock_for_every_service()
     {
         var clock = new TestClock(new DateTimeOffset(2026, 1, 15, 6, 30, 0, TimeSpan.Zero));
-        await using var kernel = new ServiceCollection()
-            .AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone)
+        await using var kernel = classDb.Services()
             .AddSingleton<IClock>(clock)
             .BuildServiceProvider();
 
@@ -98,8 +102,7 @@ public sealed class HomeCalendarTests(PostgresFixture postgres, ClassDatabase cl
         await using var db = await DatabaseAsync(DomainTestDatabase.Zone);
         // 03:30 UTC on Jan 15: before the 4 a.m. settle, so Jan 13 is the last settled day.
         var clock = new TestClock(new DateTimeOffset(2026, 1, 15, 3, 30, 0, TimeSpan.Zero));
-        await using var kernel = new ServiceCollection()
-            .AddLifeOsKernel(db.ConnectionString, homeTimeZone: DomainTestDatabase.Zone)
+        await using var kernel = db.Services()
             .AddSingleton<IClock>(clock)
             .BuildServiceProvider();
 
@@ -123,8 +126,7 @@ public sealed class HomeCalendarTests(PostgresFixture postgres, ClassDatabase cl
         await using var db = await DatabaseAsync(pacific);
         // 8 pm on Jan 15 in Los Angeles is 04:00 UTC on Jan 16.
         var clock = new TestClock(new DateTimeOffset(2026, 1, 16, 4, 0, 0, TimeSpan.Zero));
-        await using var kernel = new ServiceCollection()
-            .AddLifeOsKernel(db.ConnectionString, homeTimeZone: pacific)
+        await using var kernel = db.Services()
             .AddSingleton<IClock>(clock)
             .BuildServiceProvider();
         var subjects = kernel.GetRequiredService<SubjectService>();
@@ -150,7 +152,7 @@ public sealed class HomeCalendarTests(PostgresFixture postgres, ClassDatabase cl
     [Fact]
     public async Task A_zone_the_database_doesnt_know_fails_loudly()
     {
-        await using var kernel = Kernel("Mars/Olympus");
+        await using var kernel = KernelOutOfZone("Mars/Olympus");
 
         var refused = await Assert.ThrowsAsync<InvalidOperationException>(
             () => kernel.GetRequiredService<IHomeCalendar>().DateAtAsync(DateTimeOffset.UtcNow, Ct));
@@ -159,17 +161,42 @@ public sealed class HomeCalendarTests(PostgresFixture postgres, ClassDatabase cl
         Assert.Contains(HomeZone.ConfigurationKey, refused.Message);
     }
 
+    // Code review CR88: the ledger dated a due award's day, and the domain credit a credit's, in
+    // the kernel's zone without asking the database's, so a kernel in another zone than its
+    // database (as most test kernels were) filed days the views and the API didn't. Every read that
+    // dates in the kernel's zone now refuses one that isn't the database's, as the calendar does.
     [Fact]
-    public async Task A_zone_that_isnt_the_databases_own_is_refused()
+    public async Task A_zone_that_isnt_the_databases_own_is_refused_by_every_read_that_dates_in_it()
     {
-        // The test database's bsk.home_zone is UTC.
-        await using var kernel = Kernel(Kiritimati);
+        // The class's database's bsk.home_zone is UTC.
+        await using var kernel = KernelOutOfZone(Kiritimati);
+        var task = await kernel.GetRequiredService<SubjectService>().CreateAsync(
+            SubjectTypes.Task, $"zone task {Guid.NewGuid():N}", "{}", cancellationToken: Ct);
+        var ledger = kernel.GetRequiredService<ILedgerRepository>();
+        var credit = kernel.GetRequiredService<IDomainCreditReader>();
+        var reads = new (string Name, Func<Task> Read)[]
+        {
+            ("the calendar", () => kernel.GetRequiredService<IHomeCalendar>().DateAtAsync(DateTimeOffset.UtcNow, Ct)),
+            ("the due awards", () => ledger.GetDueAsync(task.Id, Ct)),
+            ("the triggers", () => ledger.GetTriggersAsync(task.Id, Ct)),
+            ("the domain days", () => credit.GetDomainDaysAsync([Currencies.HealthXp], Ct)),
+            ("the exception days", () => credit.GetExceptionDaysAsync(7, Ct)),
+            ("the latest credit", () => credit.GetLatestCreditEventAsync(Currencies.HealthXp, new DateOnly(2026, 1, 15), Ct)),
+        };
 
-        var refused = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => kernel.GetRequiredService<IHomeCalendar>().DateAtAsync(DateTimeOffset.UtcNow, Ct));
+        var unrefused = new List<string>();
+        foreach (var (name, read) in reads)
+        {
+            var refused = await Record.ExceptionAsync(read);
+            if (refused is not InvalidOperationException { Message: var message }
+                || !message.Contains($"{HomeZone.ConfigurationKey} is '{Kiritimati}'", StringComparison.Ordinal)
+                || !message.Contains($"bsk.home_zone is '{PostgresFixture.HabitViewZone}'", StringComparison.Ordinal))
+            {
+                unrefused.Add($"{name}: {refused?.Message ?? "not refused"}");
+            }
+        }
 
-        Assert.Contains($"{HomeZone.ConfigurationKey} is '{Kiritimati}'", refused.Message);
-        Assert.Contains($"bsk.home_zone is '{PostgresFixture.HabitViewZone}'", refused.Message);
+        Assert.True(unrefused.Count == 0, string.Join(Environment.NewLine, unrefused));
     }
 
     [Fact]
@@ -203,7 +230,8 @@ public sealed class HomeCalendarTests(PostgresFixture postgres, ClassDatabase cl
     [Fact]
     public async Task A_check_off_with_a_date_keeps_it()
     {
-        await using var kernel = Kernel(Kiritimati);
+        await using var db = await DatabaseAsync(Kiritimati);
+        var kernel = db.Kernel;
         var habit = await HabitAsync(kernel);
         var twoDaysAgo = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-2);
 

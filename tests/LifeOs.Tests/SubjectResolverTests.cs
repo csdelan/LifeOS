@@ -1,7 +1,6 @@
 using Dapper;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -17,8 +16,7 @@ public sealed class SubjectResolverTests(ClassDatabase classDb) : IClassFixture<
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private SubjectService Service()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString)
-            .BuildServiceProvider().GetRequiredService<SubjectService>();
+        => classDb.Kernel().GetRequiredService<SubjectService>();
 
     private static string ShortIdOf(string urn) => urn[(urn.LastIndexOfAny(['-', ':']) + 1)..];
 

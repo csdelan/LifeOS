@@ -2,7 +2,6 @@ using System.Text.Json;
 using Dapper;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -21,7 +20,7 @@ public sealed class ArchiveServiceTests(ClassDatabase classDb) : IClassFixture<C
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     private DiagnosticRunner Runner => new(classDb.ConnectionString);
 

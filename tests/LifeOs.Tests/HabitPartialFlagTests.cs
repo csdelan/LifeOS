@@ -1,7 +1,6 @@
 using Dapper;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -61,9 +60,7 @@ public sealed class HabitPartialFlagTests(ClassDatabase classDb) : IClassFixture
     /// <summary>A habit whose <c>allows_partial</c> is the JSON <paramref name="flag"/>, or has none.</summary>
     private async Task<SubjectRef> HabitAsync(string? flag)
     {
-        await using var kernel = new ServiceCollection()
-            .AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone)
-            .BuildServiceProvider();
+        await using var kernel = classDb.Kernel();
         var attributes = flag is null ? "{}" : $$"""{"{{AdherenceResults.AllowsPartialKey}}": {{flag}}}""";
         return await kernel.GetRequiredService<SubjectService>().CreateAsync(
             SubjectTypes.Habit, $"Stretch {Guid.NewGuid():N}", attributes, cancellationToken: Ct);

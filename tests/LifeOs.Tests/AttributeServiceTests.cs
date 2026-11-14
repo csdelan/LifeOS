@@ -1,7 +1,6 @@
 using Dapper;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -16,7 +15,7 @@ public sealed class AttributeServiceTests(ClassDatabase classDb) : IClassFixture
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     private async Task<string?> ReadAttribute(Guid id, string key)
     {

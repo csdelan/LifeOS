@@ -3,7 +3,6 @@ using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -31,7 +30,7 @@ public sealed class HabitTodayTests(PostgresFixture postgres, ClassDatabase clas
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Kernel()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString).BuildServiceProvider();
+        => classDb.Kernel();
 
     /// <summary>A session whose home zone is <paramref name="zone"/> (null: the database's), for one transaction.</summary>
     private sealed class Session(NpgsqlConnection connection, NpgsqlTransaction transaction) : IAsyncDisposable

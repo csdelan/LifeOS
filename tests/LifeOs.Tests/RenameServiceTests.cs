@@ -2,7 +2,6 @@ using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -21,7 +20,7 @@ public sealed class RenameServiceTests(ClassDatabase classDb) : IClassFixture<Cl
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private ServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone).BuildServiceProvider();
+        => classDb.Kernel();
 
     private async Task<string?> ReadTitle(Guid id)
     {

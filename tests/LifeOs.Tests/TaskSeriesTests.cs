@@ -3,7 +3,6 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -40,7 +39,7 @@ public sealed class TaskSeriesTests(ClassDatabase classDb) : IClassFixture<Class
     {
         var clock = TestClock.Ticking();
         clock.On(on ?? Monday);
-        var services = new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone);
+        var services = classDb.Services();
         if (!realClock)
         {
             services.AddSingleton<IClock>(clock);

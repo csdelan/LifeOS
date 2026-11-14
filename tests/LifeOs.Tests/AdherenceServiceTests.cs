@@ -3,7 +3,6 @@ using LifeOs.Api.Read;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
-using LifeOs.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -21,7 +20,7 @@ public sealed class AdherenceServiceTests(ClassDatabase classDb) : IClassFixture
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private IServiceProvider Provider()
-        => new ServiceCollection().AddLifeOsKernel(classDb.ConnectionString, homeTimeZone: PostgresFixture.HabitViewZone).BuildServiceProvider();
+        => classDb.Kernel();
 
     private async Task<NpgsqlConnection> OpenAsync()
     {
