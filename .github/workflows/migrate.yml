@@ -1,10 +1,17 @@
 name: Release environment
 
 # Reusable job: apply schema with `bsk migrate` (the only schema authority),
-# then optionally build and deploy the Fly app. Staging and production both
-# use this workflow. Production is gated by the GitHub Environment reviewer.
+# then optionally deploy the Fly app. Staging and production both use this
+# workflow. Production is gated by the GitHub Environment reviewer.
 #
 # Order is migrate-then-deploy on purpose. The running API never migrates.
+#
+# It builds nothing. A deploy runs either the image CI built in this run (the
+# image_artifact Deploy passes, pushed to this app's Fly registry as it is, and
+# refused unless it comes to the digest CI named) or, run by hand, an image
+# already in that registry, named by its digest (image_digest), to deploy it
+# again. Either way Fly gets registry.fly.io/<app>@<digest>, and the job ends
+# with /health/ready answering ready.
 
 on:
   workflow_call:
@@ -23,6 +30,16 @@ on:
         required: false
         type: string
         default: fly.toml
+      image_artifact:
+        description: This run's artifact holding the image to deploy (CI's lifeos-image)
+        required: false
+        type: string
+        default: ""
+      image_digest:
+        description: The image's digest (sha256:...). With image_artifact, what the push must come to; without it, an image already in the app's Fly registry
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       environment:
@@ -43,6 +60,11 @@ on:
         required: false
         type: string
         default: fly.toml
+      image_digest:
+        description: To deploy, the digest (sha256:...) of an image already in the app's Fly registry (fly releases --image)
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -70,6 +92,79 @@ jobs:
               ;;
           esac
 
+      - name: Check what to deploy
+        id: target
+        if: ${{ inputs.deploy }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_CONFIG: ${{ inputs.fly_config }}
+          IMAGE_ARTIFACT: ${{ inputs.image_artifact }}
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::FLY_API_TOKEN is not set on the '${{ inputs.environment }}' environment. Run scripts/fly-setup.ps1 for this environment (it mints an app-scoped deploy token and stores it here)."
+            exit 1
+          fi
+          if [ -z "$IMAGE_ARTIFACT" ] && [ -z "$IMAGE_DIGEST" ]; then
+            echo "::error::A deploy needs an image, and this job builds none. A push to main runs Deploy, which builds one; to deploy one again, give image_digest (fly releases --image)."
+            exit 1
+          fi
+          case "$IMAGE_DIGEST" in
+            ""|sha256:*) ;;
+            *) echo "::error::image_digest is a digest, sha256:..., not '$IMAGE_DIGEST'."; exit 1 ;;
+          esac
+          app=$(sed -n 's/^app *= *"\([^"]*\)".*/\1/p' "$FLY_CONFIG")
+          if [ -z "$app" ]; then
+            echo "::error::$FLY_CONFIG names no app."
+            exit 1
+          fi
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+
+      - name: Set up flyctl
+        if: ${{ inputs.deploy }}
+        # A commit on master, pinned by hand (Dependabot leaves it alone): the last release,
+        # 1.5, still runs on Node 20, which GitHub is retiring. Bump it to a newer commit or a
+        # release on Node 24.
+        uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master, 2026-10-30
+
+      - name: Fetch the image CI built
+        if: ${{ inputs.deploy && inputs.image_artifact != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.image_artifact }}
+          path: ${{ runner.temp }}/image
+
+      # Before the migration, so a registry or token problem stops the release with the schema untouched.
+      - name: Push the image to the app's Fly registry
+        id: image
+        if: ${{ inputs.deploy }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          APP: ${{ steps.target.outputs.app }}
+          IMAGE_ARTIFACT: ${{ inputs.image_artifact }}
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          if [ -z "$IMAGE_ARTIFACT" ]; then
+            echo "Deploying $IMAGE_DIGEST again, from registry.fly.io/$APP."
+            echo "digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          command -v skopeo >/dev/null || { sudo apt-get update && sudo apt-get install -y skopeo; }
+          flyctl auth docker
+          # --preserve-digests copies the layers and manifest as they are, so the digest can't change.
+          skopeo copy --preserve-digests \
+            --dest-authfile "$HOME/.docker/config.json" \
+            --digestfile "$RUNNER_TEMP/pushed-digest" \
+            "oci-archive:$RUNNER_TEMP/image/lifeos-image.tar" \
+            "docker://registry.fly.io/$APP:$GITHUB_SHA"
+          pushed=$(cat "$RUNNER_TEMP/pushed-digest")
+          if [ -n "$IMAGE_DIGEST" ] && [ "$pushed" != "$IMAGE_DIGEST" ]; then
+            echo "::error::The push came to $pushed, not the $IMAGE_DIGEST CI built."
+            exit 1
+          fi
+          echo "Pushed $pushed to registry.fly.io/$APP." >> "$GITHUB_STEP_SUMMARY"
+          echo "digest=$pushed" >> "$GITHUB_OUTPUT"
+
       - name: Set up .NET (from global.json)
         uses: actions/setup-dotnet@v4
         with:
@@ -85,22 +180,35 @@ jobs:
           fi
           dotnet run --project src/LifeOs.Cli/LifeOs.Cli.csproj --configuration Release -- migrate --json
 
-      - name: Set up flyctl
-        if: ${{ inputs.deploy }}
-        # A commit on master, pinned by hand (Dependabot leaves it alone): the last release,
-        # 1.5, still runs on Node 20, which GitHub is retiring. Bump it to a newer commit or a
-        # release on Node 24.
-        uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master, 2026-10-30
-
       - name: Deploy to Fly
         if: ${{ inputs.deploy }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_CONFIG: ${{ inputs.fly_config }}
+          APP: ${{ steps.target.outputs.app }}
+          DIGEST: ${{ steps.image.outputs.digest }}
         run: |
-          if [ -z "$FLY_API_TOKEN" ]; then
-            echo "::error::FLY_API_TOKEN is not set on the '${{ inputs.environment }}' environment. Run scripts/fly-setup.ps1 for this environment (it mints an app-scoped deploy token and stores it here)."
-            exit 1
-          fi
           flyctl deploy \
-            --config "${{ inputs.fly_config }}" \
-            --remote-only
+            --config "$FLY_CONFIG" \
+            --image "registry.fly.io/$APP@$DIGEST"
+          echo "Deployed registry.fly.io/$APP@$DIGEST." >> "$GITHUB_STEP_SUMMARY"
+
+      # Fly's own check is /health, the process; this one reaches the database as owner and reader.
+      - name: Check /health/ready
+        if: ${{ inputs.deploy }}
+        env:
+          APP: ${{ steps.target.outputs.app }}
+        run: |
+          url="https://$APP.fly.dev/health/ready"
+          for attempt in $(seq 1 24); do
+            body=""
+            if body=$(curl -sS --max-time 10 "$url"); then
+              case "$body" in
+                *'"status":"ready"'*) echo "$url: $body"; exit 0 ;;
+              esac
+            fi
+            echo "Not ready yet (try $attempt of 24): ${body:-no answer}"
+            sleep 5
+          done
+          echo "::error::$url didn't answer ready within two minutes of the deploy. The new image is live: read fly logs --app $APP, and roll back (docs/pilot/deploy.md, Rollback) if it can't reach the database."
+          exit 1

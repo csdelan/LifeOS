@@ -5,6 +5,10 @@ name: Deploy
 # required reviewer. Schema is applied with `bsk migrate` before the new image
 # goes live. The API never migrates on startup.
 #
+# The image is built once, by CI, and kept as this run's lifeos-image artifact.
+# Each environment pushes those bytes to its own Fly registry, deploys them by
+# digest, and checks /health/ready, so production runs what staging ran.
+#
 # Production is skipped (not failed) until the repository variable
 # DEPLOY_PRODUCTION is "true". Set it only once the production Supabase project,
 # Fly app secrets, environment secrets and required reviewer all exist
@@ -27,6 +31,8 @@ jobs:
   ci:
     name: CI
     uses: ./.github/workflows/ci.yml
+    with:
+      keep_image: true
 
   staging:
     name: Staging migrate and deploy
@@ -36,6 +42,8 @@ jobs:
       environment: staging
       deploy: true
       fly_config: fly.staging.toml
+      image_artifact: lifeos-image
+      image_digest: ${{ needs.ci.outputs.image_digest }}
     secrets: inherit
 
   production:
@@ -47,4 +55,6 @@ jobs:
       environment: production
       deploy: true
       fly_config: fly.toml
+      image_artifact: lifeos-image
+      image_digest: ${{ needs.ci.outputs.image_digest }}
     secrets: inherit

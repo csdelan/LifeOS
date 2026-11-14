@@ -18,10 +18,15 @@ Browser ── HTTPS ──▶ Fly.io (LifeOs.Api + wwwroot SPA, same origin)
 
 GitHub Actions
   PR:     test + web build + docker build (no push)
-  main:   bsk migrate (staging) → fly deploy staging
-          bsk migrate (production, required reviewer) → fly deploy production
+  main:   test + web build + docker build, the image kept (artifact lifeos-image)
+          staging: push the image → bsk migrate → fly deploy <app>@<digest> → /health/ready
+          production (required reviewer): the same, with the same image
           (production is skipped until the repo variable DEPLOY_PRODUCTION=true)
 ```
+
+The image is built once per commit, by CI, and every environment deploys those bytes by
+digest (code review CR90), so production runs exactly what staging ran, and a release can't
+pick up a different npm or apt package than the one CI built and tested.
 
 Same origin means no CORS in production. Bearer tokens stay on the app origin.
 The browser never holds a database credential.
@@ -82,8 +87,8 @@ Templates: [`.env.example`](../../.env.example), `src/LifeOs.Api/appsettings.jso
 | Workflow | Trigger | What it does |
 |---|---|---|
 | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | pull request | `dotnet` tests (`test.ps1` equivalent), web lint/test/build, `docker build` with placeholder VITE_* (no push) |
-| [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) | merge to `main`, tag `v*` | CI, then staging migrate+deploy, then production migrate+deploy (skipped unless repo variable `DEPLOY_PRODUCTION` is `true`) |
-| [`.github/workflows/migrate.yml`](../../.github/workflows/migrate.yml) | reusable + manual dispatch | `bsk migrate` against the chosen GitHub Environment; optional `flyctl deploy` **after** migrate |
+| [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) | merge to `main`, tag `v*` | CI (which keeps the image it built, the `lifeos-image` artifact, for 7 days), then staging migrate+deploy, then production migrate+deploy (skipped unless repo variable `DEPLOY_PRODUCTION` is `true`) |
+| [`.github/workflows/migrate.yml`](../../.github/workflows/migrate.yml) | reusable + manual dispatch | `bsk migrate` against the chosen GitHub Environment; with `deploy`, first pushes the image to the app's Fly registry as it is (`skopeo copy --preserve-digests`, refused unless it comes to CI's digest), then after migrating `flyctl deploy --image registry.fly.io/<app>@<digest>`, then waits up to two minutes for `/health/ready` to answer ready. It builds nothing: run by hand, it deploys an image already in the registry, by `image_digest` |
 
 Staging uses GitHub Environment `staging` and [`fly.staging.toml`](../../fly.staging.toml)
 (Fly app `lifeos-mz55-staging`; plain `lifeos-staging` is someone else's app).
@@ -100,14 +105,20 @@ last night's copy.
 
 ## Rollback
 
-Redeploy the previous Fly image; do **not** reverse migrations.
+Redeploy the previous Fly image by its digest; do **not** reverse migrations.
 
 ```powershell
-fly releases --app lifeos-mz55-w
-fly deploy --app lifeos-mz55-w --image registry.fly.io/lifeos-mz55-w:<previous-tag>
-# or:
+fly releases --image --app lifeos-mz55-w
+gh workflow run migrate.yml -f environment=production -f deploy=true -f fly_config=fly.toml -f image_digest=sha256:<previous>
+# or, from your own machine (no readiness check):
+fly deploy --app lifeos-mz55-w --image registry.fly.io/lifeos-mz55-w@sha256:<previous>
 fly releases rollback --app lifeos-mz55-w
 ```
+
+For staging, the same with `-f environment=staging -f fly_config=fly.staging.toml` and the
+app `lifeos-mz55-staging`. Production must be approved within 7 days of the push: after
+that the image artifact is gone and its job fails before it migrates. Re-run Deploy from the
+start then; it builds the image again and staging runs it first.
 
 Kernel migrations are **forward-only**. An image rollback leaves any already-applied
 SQL in place. If a release mixed a breaking schema change with an old image that
@@ -120,7 +131,9 @@ problem.
 - `GET /health` — liveness (process is up). Fly's HTTP check uses this.
 - `GET /health/ready` — owner + reader can `SELECT 1`. Returns 503 if either
   connection fails. Do not use this as the Fly machine check (a brief DB blip
-  would take the machine out of rotation).
+  would take the machine out of rotation). Each release job checks it after its
+  deploy and fails when it hasn't answered ready within two minutes, so a staging
+  release that can't reach its database stops production's.
 
 ## First deploy: staging (Chris only)
 

@@ -5,12 +5,27 @@ name: CI
 # Does not migrate and does not deploy. The image does not need Supabase public values at
 # build time; those are runtime env / Fly secrets.
 #
+# This is the only build of the image. Deploy asks it to keep the image (keep_image): the
+# lifeos-image artifact, which each environment's release job pushes to its Fly registry as
+# it is and deploys by the digest named here (image_digest), so staging and production run
+# the same bytes CI built.
+#
 # The .NET and unit tests run in UTC; Playwright runs in Chris's zone (playwright.config.ts
 # sets timezoneId), so a date bug shows up in one or the other.
 
 on:
   pull_request:
   workflow_call:
+    inputs:
+      keep_image:
+        description: Keep the built image as this run's lifeos-image artifact, for the release jobs
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      image_digest:
+        description: The kept image's manifest digest (sha256:...); empty unless keep_image
+        value: ${{ jobs.docker.outputs.digest }}
 
 permissions:
   contents: read
@@ -114,6 +129,8 @@ jobs:
     name: Docker build (no push)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -126,6 +143,38 @@ jobs:
         with:
           context: .
           push: false
+          # One manifest and no attestations, so the digest a release pushes is the one built here.
+          provenance: false
+          sbom: false
           tags: lifeos:ci
           build-args: |
             VITE_API_BASE_URL=/
+          # For a deploy, keep the image itself, its layers compressed as they will be pushed.
+          outputs: ${{ inputs.keep_image && 'type=oci,dest=/tmp/lifeos-image.tar' || '' }}
+
+      - name: Name the image by its digest
+        id: digest
+        if: ${{ inputs.keep_image }}
+        run: |
+          entry=$(tar -tf /tmp/lifeos-image.tar | grep -E '^(\./)?index\.json$')
+          index=$(tar -xOf /tmp/lifeos-image.tar "$entry")
+          count=$(jq '.manifests | length' <<<"$index")
+          kind=$(jq -r '.manifests[0].mediaType' <<<"$index")
+          if [ "$count" != "1" ] || [ "$kind" != "application/vnd.oci.image.manifest.v1+json" ]; then
+            echo "::error::The image should be one image manifest; index.json lists $count, the first a $kind."
+            exit 1
+          fi
+          digest=$(jq -r '.manifests[0].digest' <<<"$index")
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Built the image $digest." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the image for the release jobs
+        if: ${{ inputs.keep_image }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifeos-image
+          path: /tmp/lifeos-image.tar
+          if-no-files-found: error
+          # Long enough for production's reviewer; the layers are compressed already.
+          retention-days: 7
+          compression-level: 0

@@ -66,7 +66,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   instead ([docs/agents/verifying.md](docs/agents/verifying.md)).
 - **Staging:** Fly app `lifeos-mz55-staging` and the Supabase project `lifeos`. **It holds
   Chris's real data.** A push to `main` runs the Deploy workflow: CI, then migrate and deploy
-  staging.
+  staging. Only CI builds the image; each environment deploys it by digest and then checks
+  `/health/ready` (`DeployWorkflowTests` holds the workflows to that).
 - **Production:** not set up yet. Its deploy job is skipped until the repo variable
   `DEPLOY_PRODUCTION=true`. See [docs/pilot/deploy.md](docs/pilot/deploy.md).
 
