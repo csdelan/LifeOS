@@ -11,7 +11,7 @@
     <PackageVersion Include="Dapper" Version="2.1.79" />
 
     <!-- CLI -->
-    <PackageVersion Include="System.CommandLine" Version="2.0.11" />
+    <PackageVersion Include="System.CommandLine" Version="3.0.0" />
 
     <!-- Composition / configuration -->
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
