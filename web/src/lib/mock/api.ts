@@ -185,12 +185,16 @@ export type { LifeOsReads, SubjectRelations };
 export const mockReads: LifeOsReads = {
   async listSubjects(opts?: ListSubjectsOptions): Promise<SubjectListItem[]> {
     await wait();
-    return listOf(opts?.type, opts?.includeArchived, opts?.includeSeries, opts?.status, opts?.limit);
+    const rows = listOf(opts?.type, opts?.includeArchived, opts?.includeSeries, opts?.status);
+    // The Map's read: a repeating Task's repetitions left out, as the API leaves them (code review CR107).
+    const shown = opts?.excludeRepetitions ? rows.filter((s) => !s.seriesId || s.isSeries) : rows;
+    return opts?.limit == null ? shown : shown.slice(0, opts.limit);
   },
 
   async searchSubjects(query: string, opts?: { types?: readonly SubjectType[]; limit?: number }): Promise<SubjectSearch> {
     await wait();
-    const types = opts?.types;
+    // Every type when none are named, as the API reads an empty list.
+    const types = opts?.types?.length ? opts.types : undefined;
     const rows = listOf(undefined, true).filter((s) => !types || types.includes(s.type));
     return searchSubjects(rows, query, opts?.limit);
   },

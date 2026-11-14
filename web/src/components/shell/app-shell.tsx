@@ -31,7 +31,7 @@ import { RunningTimer } from "@/components/timer/running-timer";
 import { useAuth } from "@/components/auth/auth-context";
 import { isLiveApi } from "@/lib/api-base";
 import { useIdleAfterFirstPage } from "@/lib/idle";
-import { useInbox, useMe } from "@/lib/queries";
+import { useInboxCount, useMe } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -82,7 +82,7 @@ export function AppShell() {
   const idle = useIdleAfterFirstPage();
   const pendingNav = useRef<(() => void) | null>(null);
   const { resolvedTheme, setTheme } = useTheme();
-  const { data: inbox } = useInbox();
+  const { data: inboxCount } = useInboxCount();
   const { data: me } = useMe();
   const { signOut } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -177,7 +177,7 @@ export function AppShell() {
   const nav = (
     <NavBody
       pathname={pathname}
-      inboxCount={inbox?.length}
+      inboxCount={inboxCount}
       onNew={() => setCreateOpts({})}
       onCapture={() => setCapturing(true)}
       onVoice={() => setVoice(true)}

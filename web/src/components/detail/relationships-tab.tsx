@@ -1,13 +1,13 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { SubjectCombobox } from "@/components/subject-combobox";
+import { SubjectSearchCombobox } from "@/components/subject-search-combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { DecisionRelationships } from "@/components/detail/decision-relationships";
 import { DECISION_LINK_GROUPS, decisionLinkWrite, type DecisionLinkGroup } from "@/lib/decisions";
-import { useRelations, useSubjects, useWrites } from "@/lib/queries";
+import { useRelations, useWrites } from "@/lib/queries";
 import { LINK_TARGET_TYPES, typeLabel } from "@/lib/production-ui-types";
 import type { Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { useWriteAction } from "@/lib/write-action";
@@ -28,21 +28,20 @@ export function RelationshipsTab({
   const [group, setGroup] = useState<DecisionLinkGroup>("context");
   const [targetType, setTargetType] = useState<SubjectType | "any">("any");
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [to, setTo] = useState("");
-  const { data: subjects } = useSubjects(
-    targetType === "any" ? undefined : targetType,
-    includeArchived,
-  );
+  // The picker searches on the server (code review CR107), so it holds the item chosen.
+  const [picked, setPicked] = useState<SubjectListItem | null>(null);
   const writes = useWrites();
   const reported = useWriteAction({ report: "toast" });
 
-  const options = useMemo(
-    () => (subjects ?? []).filter((s) => s.id !== subjectId),
-    [subjects, subjectId],
-  );
-
-  // A choice the filters no longer list (another type, archived hidden) isn't the one Add links.
-  const target = to && options.some((s) => s.id === to) ? to : "";
+  // A choice the filters no longer allow (another type, archived hidden) isn't the one Add links.
+  const chosen =
+    picked &&
+    picked.id !== subjectId &&
+    (targetType === "any" || picked.type === targetType) &&
+    (includeArchived || !picked.archived)
+      ? picked
+      : null;
+  const target = chosen?.id ?? "";
 
   const typed = targetType !== "any";
   const targetLabel = useCallback(
@@ -61,7 +60,7 @@ export function RelationshipsTab({
   function addLink() {
     const edge = decision ? decisionLinkWrite(group, subjectId, target) : { from: subjectId, relation: rel, to: target };
     void reported.run(() => writes.link(edge.from, edge.relation, edge.to));
-    setTo("");
+    setPicked(null);
   }
 
   return (
@@ -174,11 +173,13 @@ export function RelationshipsTab({
               ))}
             </SelectContent>
           </Select>
-          <SubjectCombobox
+          <SubjectSearchCombobox
             className="min-w-48 flex-1"
-            options={options}
-            value={target}
-            onChange={setTo}
+            value={chosen}
+            onChange={setPicked}
+            types={typed ? [targetType] : undefined}
+            includeArchived={includeArchived}
+            exclude={subjectId}
             ariaLabel="Target subject"
             placeholder={subjectPlaceholder}
             label={targetLabel}

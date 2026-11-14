@@ -72,12 +72,12 @@ public static class ReadEndpoints
     /// </summary>
     private static async Task<IResult> ListSubjects(
         SubjectReader reader, CancellationToken cancellationToken, string? type, bool includeArchived = false,
-        bool includeSeries = false, string? status = null, int? limit = null)
+        bool includeSeries = false, string? status = null, int? limit = null, bool excludeRepetitions = false)
         => Results.Ok(await reader.ListSubjectsAsync(
             new SubjectFilter
             {
                 Type = type, IncludeArchived = includeArchived, IncludeSeries = includeSeries,
-                Status = status, Limit = HistoryLimit(limit)
+                ExcludeRepetitions = excludeRepetitions, Status = status, Limit = HistoryLimit(limit)
             },
             cancellationToken));
 

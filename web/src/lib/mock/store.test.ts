@@ -388,6 +388,8 @@ describe("mock subject reads, as the API narrows them (code review CR76)", () =>
   it("searches among the types asked for, counts the Inbox and cuts Resolved", async () => {
     expect((await mockReads.searchSubjects("blazor", { types: ["Decision"] })).matches.map((s) => s.id)).toContain("dec-blazor");
     expect((await mockReads.searchSubjects("blazor", { types: ["Task", "Goal"] })).total).toBe(0);
+    // No types named is every type, as the API reads it (the pickers' search, code review CR107).
+    expect((await mockReads.searchSubjects("blazor", { types: [] })).matches.map((s) => s.id)).toContain("dec-blazor");
     expect(await mockReads.inboxCount()).toBe((await mockReads.inbox()).length);
     expect(await mockReads.inboxResolved(1)).toHaveLength(1);
   });

@@ -4214,6 +4214,7 @@ export interface operations {
                 includeSeries?: boolean;
                 status?: string;
                 limit?: number;
+                excludeRepetitions?: boolean;
             };
             header?: never;
             path?: never;

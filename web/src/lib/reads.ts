@@ -88,6 +88,8 @@ export interface ListSubjectsOptions {
   type?: SubjectListItem["type"];
   includeArchived?: boolean;
   includeSeries?: boolean;
+  /** Leaves out a repeating Task's repetitions, as the Map draws it, once (code review CR107). */
+  excludeRepetitions?: boolean;
   /** `open`, `closed`, or one status; every status when left out. */
   status?: string;
   /** At most this many, from 1 to 1000. */

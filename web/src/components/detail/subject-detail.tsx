@@ -42,7 +42,6 @@ import { canStartDecisionFrom, type LinkedItem } from "@/lib/decisions";
 import {
   useHabits,
   useListItem,
-  useOccurrences,
   useRelations,
   useSubject,
   useSubjectFiles,
@@ -117,7 +116,6 @@ function ItemDetail({
   const { data: tags } = useSubjectTags(subjectId);
   const { data: files } = useSubjectFiles(subjectId);
   const { data: habits } = useHabits();
-  const { data: occurrences } = useOccurrences(subjectId);
   const [editing, setEditing] = useState(false);
   const [choosingCover, setChoosingCover] = useState(false);
   const [coverPicks, setCoverPicks] = useState(0);
@@ -553,7 +551,7 @@ function ItemDetail({
               ) : null}
               {subject.type === "Habit" ? (
                 <StreakGrid
-                  occurrences={occurrences ?? []}
+                  habitId={subject.id}
                   allowsPartial={habit?.allowsPartial ?? true}
                   onRecord={
                     habit && habitStage(habit) === "planned"

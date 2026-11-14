@@ -406,6 +406,7 @@ function optimisticInboxRemove(qc: QueryClient, item: string) {
   qc.setQueryData<DashboardRead>(qk.dashboard, (old) =>
     old ? { ...old, inboxCount: Math.max(0, old.inboxCount - 1) } : old,
   );
+  qc.setQueryData<number>(qk.inboxCount, (old) => (old === undefined ? old : Math.max(0, old - 1)));
 }
 
 function optimisticAdhere(qc: QueryClient, habit: string, state: Exclude<AdherenceState, "unrecorded">, on?: string) {

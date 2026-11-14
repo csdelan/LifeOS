@@ -46,7 +46,7 @@ import {
   type PendingLink,
 } from "@/lib/decisions";
 import { bountyProblem, bountyWrites, defaultLines, type BountyDraft } from "@/lib/bounty";
-import { useBountyDefaults, useCreateSubject, useSubjects, useWrites } from "@/lib/queries";
+import { useBountyDefaults, useCreateSubject, useFetchListItem, useWrites } from "@/lib/queries";
 import {
   attrsToWrite,
   emptyFormValues,
@@ -81,8 +81,7 @@ export function NewSubjectDialog({
 }) {
   const create = useCreateSubject();
   const writes = useWrites();
-  // The dialog is mounted on every page, so it loads the subject list only while it's open.
-  const { data: allSubjects } = useSubjects(undefined, false, false, { enabled: open });
+  const fetchListItem = useFetchListItem();
   const childTypes = initialParent ? childTypesFor(initialParent.type) : [];
   const typeChoices = initialLink
     ? pendingLinkTypes(initialLink)
@@ -131,9 +130,9 @@ export function NewSubjectDialog({
     const t = values.type;
     const parents = selectedParentIds(values);
     const primaryParent = initialParent?.id || values.parent || parents[0];
+    // The chosen parent's type, from one read of it (code review CR107).
     const parentType =
-      initialParent?.type ||
-      allSubjects?.find((s) => s.id === primaryParent)?.type;
+      initialParent?.type || (primaryParent ? (await fetchListItem(primaryParent))?.type : undefined);
     // Habit → Goal / Identity Statement has no canonical pair; it serves, as the
     // extra parents linked below do.
     const relation =

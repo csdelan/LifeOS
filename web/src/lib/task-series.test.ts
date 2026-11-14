@@ -3,7 +3,6 @@ import { parseRecurrence, recurrenceLabel, sameRecurrence, serializeRecurrence }
 import {
   afterCompletion,
   datesFor,
-  mapSubjects,
   nextOccurrence,
   periodReading,
   repeatKind,
@@ -204,16 +203,6 @@ describe("a review's repeating tasks (TASKS-3)", () => {
 describe("a repeating task on the Map (TASKS-3)", () => {
   const task = (id: string, extra: Partial<SubjectListItem>): SubjectListItem =>
     ({ id, urn: `urn:bsk:task:${id}`, type: "Task", title: id, ...extra }) as SubjectListItem;
-
-  it("is one node, its series: the repetitions are left out", () => {
-    const subjects = [
-      task("series", { isSeries: true, seriesId: null, status: "Not started" }),
-      task("this-week", { isSeries: false, seriesId: "series" }),
-      task("last-week", { isSeries: false, seriesId: "series" }),
-      task("one-off", { isSeries: false, seriesId: null }),
-    ];
-    expect(mapSubjects(subjects).map((s) => s.id)).toEqual(["series", "one-off"]);
-  });
 
   it("reads Repeating, or Stopped once Cancelled or hidden; other subjects keep their status", () => {
     expect(shownStatus(task("s", { isSeries: true, status: "Not started" }))).toBe("Repeating");

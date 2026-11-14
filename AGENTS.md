@@ -45,6 +45,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   hooks live in `lib/features/<feature>/` and are spread into the shared seams
   (`features/measurements` is the pattern; the other features move there as they're next
   worked on). Pages load lazily (`lazyRouteComponent` in `router.tsx`).
+  A screen reads what it shows: a picker over every item searches on the server
+  (`SubjectSearchCombobox`), and `src/lib/scoped-reads.test.ts` lists each read of every subject
+  with why. Focus is the API's (`GET /api/focus`, `FocusReader`, which `life_snapshot` shares).
   A live read or write returns the API's data through `fits<T>()(await unwrap(...))`
   (`lib/live/fits.ts`): `unwrap` answers an `Unchecked` that only `fits` opens, so tsc checks the
   generated type against the app's, and `lib/live/seam.test.ts` finds the ways round it. The API

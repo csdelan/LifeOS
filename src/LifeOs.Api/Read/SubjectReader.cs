@@ -99,6 +99,7 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
             type = filter.Type,
             includeArchived = filter.IncludeArchived,
             includeSeries = filter.IncludeSeries,
+            excludeRepetitions = filter.ExcludeRepetitions,
             hidden = filter.HiddenTypes.ToArray(),
             open = string.Equals(status, SubjectFilter.Open, StringComparison.OrdinalIgnoreCase),
             closed = string.Equals(status, SubjectFilter.Closed, StringComparison.OrdinalIgnoreCase),
@@ -117,6 +118,7 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
             WHERE (@type::text IS NULL OR s.type = @type)
               AND (@includeArchived OR NOT s.archived)
               AND (@includeSeries OR NOT bsk.is_task_series(s.type, s.attributes))
+              AND NOT (@excludeRepetitions AND ser.id IS NOT NULL AND NOT bsk.is_task_series(s.type, s.attributes))
               AND NOT (s.type = ANY(@hidden))
               AND (NOT @open OR NOT bsk.is_terminal_status(c.status))
               AND (NOT @closed OR bsk.is_terminal_status(c.status))
@@ -1011,6 +1013,12 @@ public sealed record SubjectFilter
 
     /// <summary>Include a repeating Task's series; its repetitions are the Tasks to do (D16).</summary>
     public bool IncludeSeries { get; init; }
+
+    /// <summary>
+    /// Leave out a repeating Task's repetitions: the Map draws a repeating Task once, as its series
+    /// (TASKS-3), and had read every repetition ever made to drop them (code review CR107).
+    /// </summary>
+    public bool ExcludeRepetitions { get; init; }
 
     /// <summary>Types left out whatever else is asked (an agent's switched-off areas).</summary>
     public IReadOnlyCollection<string> HiddenTypes { get; init; } = [];

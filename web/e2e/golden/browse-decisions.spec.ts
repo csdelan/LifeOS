@@ -87,7 +87,9 @@ test.describe("golden paths: Browse and Decisions", () => {
     // An existing Idea added to Context later.
     await page.getByRole("combobox", { name: "Target type" }).click();
     await page.getByRole("option", { name: "Idea", exact: true }).click();
+    // The picker searches on the server as you type (code review CR107).
     await page.getByRole("combobox", { name: "Target subject" }).click();
+    await page.getByRole("combobox", { name: "Search target subject" }).fill("wind-down");
     await page.getByRole("option", { name: "Wind-down without screens" }).click();
     await page.getByRole("button", { name: "Link", exact: true }).click();
     await expect(context).toContainText("Wind-down without screens");

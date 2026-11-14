@@ -10,12 +10,11 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { getAgentsClient } from "@/lib/client";
 import { isLiveApi } from "@/lib/api-base";
 import { createWriteClient, getReads } from "@/lib/client";
 import { buildAlignmentForest, type MapLens } from "@/lib/derive";
-import { mapSubjects } from "@/lib/task-series";
 import { nextCoverPage } from "@/lib/cover";
 import { fetchMe } from "@/lib/me";
 import type { LifeOsReads } from "@/lib/reads";
@@ -62,6 +61,8 @@ export interface SubjectListScope {
   /** `open`, `closed`, or one status. */
   status?: string;
   limit?: number;
+  /** Leaves out a repeating Task's repetitions, as the Map draws it (code review CR107). */
+  excludeRepetitions?: boolean;
 }
 
 function subjectListKey(
@@ -70,7 +71,15 @@ function subjectListKey(
   includeSeries: boolean,
   scope: SubjectListScope,
 ) {
-  return [...qk.subjects, type ?? "all", includeArchived, includeSeries, scope.status ?? "any", scope.limit ?? "all"];
+  return [
+    ...qk.subjects,
+    type ?? "all",
+    includeArchived,
+    includeSeries,
+    scope.status ?? "any",
+    scope.limit ?? "all",
+    scope.excludeRepetitions ? "series" : "repetitions",
+  ];
 }
 
 /**
@@ -87,7 +96,14 @@ export function useSubjects(
   return useQuery({
     queryKey: subjectListKey(type, includeArchived, includeSeries, opts),
     queryFn: () =>
-      reads().listSubjects({ type, includeArchived, includeSeries, status: opts.status, limit: opts.limit }),
+      reads().listSubjects({
+        type,
+        includeArchived,
+        includeSeries,
+        excludeRepetitions: opts.excludeRepetitions,
+        status: opts.status,
+        limit: opts.limit,
+      }),
     enabled: opts.enabled ?? true,
   });
 }
@@ -162,6 +178,18 @@ export function useListItem(id: string | undefined) {
   });
 }
 
+/**
+ * Reads one item's list row when it's needed, sharing `useListItem`'s cache: the New dialog's
+ * chosen parent, where it had read every subject to find it (code review CR107).
+ */
+export function useFetchListItem() {
+  const qc = useQueryClient();
+  return useCallback(
+    (id: string) => qc.fetchQuery({ queryKey: qk.listItem(id), queryFn: () => reads().getListItem(id) }),
+    [qc],
+  );
+}
+
 export function useRelations(id: string | undefined) {
   return useQuery({
     queryKey: qk.relations(id ?? ""),
@@ -205,6 +233,14 @@ export function useInbox() {
   return useQuery({
     queryKey: qk.inbox,
     queryFn: () => reads().inbox(),
+  });
+}
+
+/** How many items wait in the Inbox: the shell's badge reads the number, not the rows (code review CR107). */
+export function useInboxCount() {
+  return useQuery({
+    queryKey: qk.inboxCount,
+    queryFn: () => reads().inboxCount(),
   });
 }
 
@@ -342,18 +378,21 @@ export function useDashboard() {
   });
 }
 
+/** What the Map reads: a repeating Task once, as its series, and none of its repetitions (TASKS-3, code review CR107). */
+export const MAP_SCOPE: SubjectListScope = { excludeRepetitions: true };
+
 /**
  * The Map's outline, built from the cached subject list and edges rather than read whole, so the
  * Map page, which reads both for its graph too, asks for each once (code review CR37). A repeating
  * Task is one node, its series; its repetitions stay off the Map (TASKS-3).
  */
 export function useAlignmentForest(includeArchived: boolean, lens: MapLens) {
-  const subjects = useSubjects(undefined, includeArchived, true);
+  const subjects = useSubjects(undefined, includeArchived, true, MAP_SCOPE);
   const edges = useAlignmentEdges(includeArchived);
   const data = useMemo(
     () =>
       subjects.data && edges.data
-        ? buildAlignmentForest(mapSubjects(subjects.data), edges.data, { includeArchived, lens })
+        ? buildAlignmentForest(subjects.data, edges.data, { includeArchived, lens })
         : undefined,
     [subjects.data, edges.data, includeArchived, lens],
   );
@@ -389,10 +428,11 @@ export function useOccurrencesOn(on: string) {
   });
 }
 
-export function useOccurrences(habitId?: string) {
+/** One habit's days from `from` to `to`: the month its streak grid shows, not its whole history (code review CR107). */
+export function useOccurrences(habitId: string, from: string, to: string) {
   return useQuery({
-    queryKey: [...qk.occurrences, habitId ?? "all"],
-    queryFn: () => reads().occurrences(habitId ? { habitId } : undefined),
+    queryKey: [...qk.occurrences, habitId, from, to],
+    queryFn: () => reads().occurrences({ habitId, from, to }),
   });
 }
 

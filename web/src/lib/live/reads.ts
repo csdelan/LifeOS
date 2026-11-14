@@ -84,6 +84,7 @@ export const liveReads: LifeOsReads = {
             type: opts?.type,
             includeArchived: opts?.includeArchived,
             includeSeries: opts?.includeSeries,
+            excludeRepetitions: opts?.excludeRepetitions,
             status: opts?.status,
             limit: opts?.limit,
           },

@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/popover";
 import { addDays, addMonths, daysInMonth, formatDay, startOfMonth, weekdayIndex } from "@/lib/dates";
 import { useHomeToday } from "@/lib/home-day";
+import { useOccurrences } from "@/lib/queries";
 import type { AdherenceState, HabitOccurrenceRow } from "@/lib/production-ui-types";
 import { HABIT_STATE_SURFACE } from "@/components/habits/habit-state-styles";
 import { cn } from "@/lib/utils";
@@ -18,27 +19,29 @@ const WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 /**
  * A month of a habit's days. The days it has are the kernel's (`occurrences`, `lib/habit-days.ts`):
  * the ones its pattern schedules, up to today, and any with something recorded. Any other day up
- * to today is faded, and can log a session done anyway but not be missed.
+ * to today is faded, and can log a session done anyway but not be missed. It reads the month it
+ * shows, not the habit's whole history (code review CR107).
  */
 export function StreakGrid({
-  occurrences,
+  habitId,
   allowsPartial,
   onRecord,
 }: {
-  occurrences: HabitOccurrenceRow[];
+  habitId: string;
   allowsPartial: boolean;
   /** Records a day; left out, the grid only shows the days (a Planned habit takes none). */
   onRecord?: (date: string, state: "followed" | "partial" | "missed", note?: string) => void;
 }) {
   const today = useHomeToday();
   const [month, setMonth] = useState(startOfMonth(today));
+  const dim = daysInMonth(month);
+  const { data: occurrences } = useOccurrences(habitId, month, addDays(month, dim - 1));
   const byDate = useMemo(() => {
     const map = new Map<string, HabitOccurrenceRow>();
-    for (const o of occurrences) map.set(o.occurrenceDate, o);
+    for (const o of occurrences ?? []) map.set(o.occurrenceDate, o);
     return map;
   }, [occurrences]);
 
-  const dim = daysInMonth(month);
   const firstWeekday = weekdayIndex(month);
   const cells: (string | null)[] = [
     ...Array.from({ length: firstWeekday }, () => null),

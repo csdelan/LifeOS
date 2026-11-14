@@ -19,6 +19,8 @@ export const qk = {
   inbox: ["inbox"] as const,
   // Nested under ["inbox"], so every Inbox invalidation refreshes it too.
   inboxResolved: ["inbox", "resolved"] as const,
+  // The shell's badge: nested under ["inbox"] too.
+  inboxCount: ["inbox", "count"] as const,
   artifact: (id: string) => ["artifact", id] as const,
   files: (id: string) => ["files", id] as const,
   areas: ["areas"] as const,

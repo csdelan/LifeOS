@@ -80,20 +80,6 @@ export function seriesTally(counts: Pick<TaskSeriesCounts, "completedCount" | "m
   return owed === 0 ? "None closed yet" : `${done} of ${owed} done`;
 }
 
-/** One repetition of a repeating Task, as the lists carry it (not the series itself). */
-export function isRepetition(item: Pick<SubjectListItem, "isSeries" | "seriesId">): boolean {
-  return !!item.seriesId && !item.isSeries;
-}
-
-/**
- * The subjects the Map draws (TASKS-3): a repeating Task is one node, the series, which holds
- * its pattern, price and links; its repetitions, one a week for a weekly chore, are left out.
- * Give it a list read with `includeSeries`.
- */
-export function mapSubjects(subjects: SubjectListItem[]): SubjectListItem[] {
-  return subjects.filter((s) => !isRepetition(s));
-}
-
 /**
  * What a subject's status pill says. A repeating Task's own status is only Not started or
  * Cancelled (D16), so the series reads "Repeating", or "Stopped" once Cancelled or archived.

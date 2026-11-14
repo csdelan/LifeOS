@@ -91,6 +91,11 @@ public sealed class TaskEndpointTests(ClassDatabase classDb) : IClassFixture<Cla
         Assert.Contains("\"weekly\"", seriesRow.GetProperty("repeat").GetString());
         Assert.Null(Find(await GetAsync(c, "/api/subjects"), series));
 
+        // The Map's read: the series, and none of its repetitions (code review CR107).
+        var mapped = await GetAsync(c, "/api/subjects?type=Task&includeSeries=true&excludeRepetitions=true");
+        Assert.NotNull(Find(mapped, series));
+        Assert.Null(Find(mapped, repetition));
+
         var listItem = await GetAsync(c, $"/api/subjects/{repetition}/list-item");
         Assert.Equal(series, listItem.GetProperty("seriesId").GetGuid());
 

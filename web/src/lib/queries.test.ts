@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockReads } from "@/lib/mock/api";
 import { createMockWriteClient } from "@/lib/mock/write-client";
 import type { LifeOsWriteClient } from "@/lib/production-ui-types";
-import { qk, useAlignmentEdges, useAlignmentForest, useSubjects } from "@/lib/queries";
+import { MAP_SCOPE, qk, useAlignmentEdges, useAlignmentForest, useSubjects } from "@/lib/queries";
 import { decorateWrites } from "@/lib/write-effects";
 
 afterEach(() => {
@@ -126,7 +126,7 @@ describe("the Map's reads", () => {
     const { result } = renderHook(
       () => ({
         forest: useAlignmentForest(false, "all"),
-        subjects: useSubjects(undefined, false, true),
+        subjects: useSubjects(undefined, false, true, MAP_SCOPE),
         edges: useAlignmentEdges(false),
       }),
       { wrapper },
@@ -134,6 +134,8 @@ describe("the Map's reads", () => {
 
     await waitFor(() => expect(result.current.forest.data?.length).toBeGreaterThan(0));
     expect(subjects).toHaveBeenCalledTimes(1);
+    // Without a repeating Task's repetitions, which the Map draws once, as its series (code review CR107).
+    expect(subjects).toHaveBeenCalledWith(expect.objectContaining({ includeSeries: true, excludeRepetitions: true }));
     expect(edges).toHaveBeenCalledTimes(1);
   });
 

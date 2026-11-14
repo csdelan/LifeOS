@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { useAlignmentEdges, useAlignmentForest, useAreas, useSubjects } from "@/lib/queries";
+import { MAP_SCOPE, useAlignmentEdges, useAlignmentForest, useAreas, useSubjects } from "@/lib/queries";
 import type { AlignmentEdge, MapLens } from "@/lib/derive";
 import { buildAlignmentGraph } from "@/lib/graph-model";
 import type { GraphLayoutKind, MapViewMode, OrphanFilter } from "@/lib/graph-model";
@@ -20,7 +20,6 @@ import {
 import { useDirty } from "@/components/shell/unsaved-edits";
 import { PeekPanel } from "@/components/shell/panels";
 import { loadExpanded, saveExpanded, loadView, saveView } from "@/lib/view-state";
-import { mapSubjects } from "@/lib/task-series";
 import { MapIcon } from "lucide-react";
 import { ReadFailed } from "@/components/primitives/read-state";
 import { MapBranch } from "@/components/map/map-branch";
@@ -79,12 +78,9 @@ export function MapPage() {
     [data, show, selected],
   );
   const forest = shown?.nodes;
-  // A repeating Task is one node, its series; its repetitions stay off the Map (TASKS-3).
-  const subjectsQuery = useSubjects(undefined, archived, true);
-  const graphSubjects = useMemo(
-    () => mapSubjects(subjectsQuery.data ?? EMPTY_SUBJECTS),
-    [subjectsQuery.data],
-  );
+  // A repeating Task is one node, its series; the API leaves its repetitions out (TASKS-3).
+  const subjectsQuery = useSubjects(undefined, archived, true, MAP_SCOPE);
+  const graphSubjects = subjectsQuery.data ?? EMPTY_SUBJECTS;
   const edgesQuery = useAlignmentEdges(archived);
   const areasQuery = useAreas();
   const graphModel = useMemo(

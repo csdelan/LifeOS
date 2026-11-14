@@ -10,16 +10,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SubjectCombobox } from "@/components/subject-combobox";
+import { SubjectSearchCombobox } from "@/components/subject-search-combobox";
 import { Tag } from "@/components/primitives/tag";
 import { TagInput } from "@/components/primitives/tag-input";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { AttachmentChip } from "@/components/artifacts/attachment-chip";
 import { Badge } from "@/components/ui/badge";
 import { CREATABLE_TYPES, typeLabel } from "@/lib/production-ui-types";
-import type { InboxItem, ResolvedInboxItem, SubjectType } from "@/lib/production-ui-types";
+import type { InboxItem, ResolvedInboxItem, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { inboxItemBody, inboxItemTitle } from "@/lib/capture";
-import { useSubjects, useWrites } from "@/lib/queries";
+import { useWrites } from "@/lib/queries";
 import { formatTimestamp } from "@/lib/dates";
 import { splitTags } from "@/lib/tag-suggest";
 import { cn } from "@/lib/utils";
@@ -136,11 +136,11 @@ export function InboxPreview({
   onBack?: () => void;
 }) {
   const writes = useWrites();
-  const { data: subjects } = useSubjects();
   const [promoteType, setPromoteType] = useState<SubjectType>("Task");
   // Starts from the item's own title; a new read of the same item (it was tagged) keeps what's typed.
   const [promoteTitle, setPromoteTitle] = useState(() => inboxItemTitle(item));
-  const [relateTo, setRelateTo] = useState("");
+  // Searched on the server as Chris types (code review CR107), not every subject read here.
+  const [relateTo, setRelateTo] = useState<SubjectListItem | null>(null);
   const resolving = useWriteAction({ report: "toast" });
 
   async function resolveWith(write: () => Promise<unknown>, failure: string) {
@@ -210,9 +210,8 @@ export function InboxPreview({
           hint="File against an existing subject — still a resolution"
         >
           <div className="flex gap-2">
-            <SubjectCombobox
+            <SubjectSearchCombobox
               className="flex-1"
-              options={subjects ?? []}
               value={relateTo}
               onChange={setRelateTo}
               ariaLabel="Relate to subject"
@@ -222,9 +221,9 @@ export function InboxPreview({
               size="sm"
               variant="outline"
               disabled={!relateTo}
-              onClick={() =>
-                void resolveWith(() => writes.relate(item.itemId, relateTo), "Relate failed.")
-              }
+              onClick={() => {
+                if (relateTo) void resolveWith(() => writes.relate(item.itemId, relateTo.id), "Relate failed.");
+              }}
             >
               Relate
             </Button>
