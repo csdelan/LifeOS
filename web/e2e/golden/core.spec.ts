@@ -252,18 +252,24 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     await expect(page.getByRole("dialog", { name: "Navigation" })).toBeHidden();
   });
 
-  test("Focus's Due & overdue shows each title whole, its details on the line under it", async ({ page }) => {
-    // The narrowest desktop: the section is half the page, about 300 px.
+  test("Focus's half-width lists show each title whole, its details on the line under it", async ({ page }) => {
+    // The narrowest desktop: each section is half the page, about 300 px.
     await page.setViewportSize({ width: 1024, height: 800 });
     await page.goto("/");
-    const section = page.locator("section").filter({ has: page.getByRole("heading", { name: "Due & overdue" }) });
-    const row = section.getByRole("button", { name: /Buy race shoes/ });
-    const title = row.getByText("Buy race shoes", { exact: true });
-    const due = row.getByText(/overdue/);
-    await expect(due).toBeVisible();
-    expect(await title.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-    const titleBox = (await title.boundingBox())!;
-    const dueBox = (await due.boundingBox())!;
-    expect(dueBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height - 1);
+    for (const [heading, name, detail] of [
+      ["Due & overdue", "Buy race shoes", /overdue/],
+      ["Active goals", "Run a half-marathon", /^Active$/],
+      ["Active projects", "12-week base build", /^Active$/],
+    ] as const) {
+      const section = page.locator("section").filter({ has: page.getByRole("heading", { name: heading }) });
+      const row = section.getByRole("button", { name: new RegExp(name) });
+      const title = row.getByText(name, { exact: true });
+      const chip = row.getByText(detail);
+      await expect(chip).toBeVisible();
+      expect(await title.evaluate((el) => el.scrollWidth <= el.clientWidth), `${name} is cut off`).toBe(true);
+      const titleBox = (await title.boundingBox())!;
+      const chipBox = (await chip.boundingBox())!;
+      expect(chipBox.y, `${name}'s details sit beside it`).toBeGreaterThanOrEqual(titleBox.y + titleBox.height - 1);
+    }
   });
 });

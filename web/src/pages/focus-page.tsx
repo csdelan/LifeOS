@@ -142,7 +142,8 @@ export function FocusPage() {
               />
             ) : (
               <div className="space-y-1">
-                {/* Half the page wide on a desktop: the title gets a line of its own. */}
+                {/* This section, Active goals and Active projects are half the page wide on a
+                    desktop: each row's title gets a line of its own. */}
                 {overdue.map((t) => (
                   <ListRow
                     key={t.id}
@@ -230,6 +231,7 @@ export function FocusPage() {
                   key={g.id}
                   item={g}
                   withCover
+                  stacked
                   onSelect={() =>
                     void navigate({ to: "/map", search: { selected: g.id } })
                   }
@@ -247,6 +249,7 @@ export function FocusPage() {
                   key={p.id}
                   item={p}
                   withCover
+                  stacked
                   onSelect={() =>
                     void navigate({ to: "/map", search: { selected: p.id } })
                   }
