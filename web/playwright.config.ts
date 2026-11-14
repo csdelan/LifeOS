@@ -16,6 +16,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
+  // One wait for every check, where the specs each named ten seconds 139 times (code review
+  // CR104). A check that needs longer says so and why (GRAPH_DRAWN in e2e/support.ts).
+  expect: { timeout: 10_000 },
   use: {
     baseURL: "http://127.0.0.1:5177",
     trace: "on-first-retry",
@@ -23,8 +26,13 @@ export default defineConfig({
     timezoneId: "America/Los_Angeles",
     locale: "en-US",
   },
+  // A build in mock mode, served as a build is, rather than the dev server: the specs check the
+  // code that ships, a page loads its files as it does on staging, and nothing compiles a page
+  // the first time it's opened, mid-test (code review CR104). It builds into dist-e2e, so a
+  // run leaves `npm run build`'s dist alone.
   webServer: {
-    command: "npx vite --host 127.0.0.1 --port 5177 --strictPort",
+    command:
+      "npx vite build --outDir dist-e2e --emptyOutDir --logLevel warn && npx vite preview --outDir dist-e2e --host 127.0.0.1 --port 5177 --strictPort",
     url: "http://127.0.0.1:5177",
     reuseExistingServer: false,
     timeout: 120_000,

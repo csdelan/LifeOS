@@ -36,7 +36,7 @@ test.describe("golden paths: Browse and Decisions", () => {
     const dialog = page.getByRole("dialog", { name: "New Decision" });
     await dialog.getByRole("textbox", { name: "Title" }).fill("Use SQLite for local storage");
     await dialog.getByRole("button", { name: "Save" }).click();
-    await expect(dialog).toBeHidden({ timeout: 10_000 });
+    await expect(dialog).toBeHidden();
     await expect(list.getByRole("button", { name: /Use SQLite for local storage/ })).toHaveAttribute(
       "aria-current",
       "true",
@@ -49,15 +49,13 @@ test.describe("golden paths: Browse and Decisions", () => {
   }) => {
     // Recorded from a Problem, a Decision shows the Problem as its Context before Save.
     await page.goto("/browse?type=Problem&selected=prob-sleep");
-    await expect(page.getByRole("heading", { name: "How do I sleep through the night?" })).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(page.getByRole("heading", { name: "How do I sleep through the night?" })).toBeVisible();
     await page.getByRole("button", { name: "Record decision" }).click();
     const newDecision = page.getByRole("dialog", { name: "New Decision" });
     await expect(newDecision.getByRole("group", { name: "Context" })).toContainText("How do I sleep through the night?");
     await newDecision.getByRole("textbox", { name: "Title" }).fill("No caffeine after noon");
     await newDecision.getByRole("button", { name: "Save" }).click();
-    await expect(newDecision).toBeHidden({ timeout: 10_000 });
+    await expect(newDecision).toBeHidden();
 
     const filters = page.getByRole("complementary", { name: "Browse filters" });
     await filters.getByRole("button", { name: /^Decision\s*3$/ }).click();
@@ -75,7 +73,7 @@ test.describe("golden paths: Browse and Decisions", () => {
     await expect(newTask.getByRole("group", { name: "Resulting work of" })).toContainText("No caffeine after noon");
     await newTask.getByRole("textbox", { name: "Title" }).fill("Switch to decaf after lunch");
     await newTask.getByRole("button", { name: "Save" }).click();
-    await expect(newTask).toBeHidden({ timeout: 10_000 });
+    await expect(newTask).toBeHidden();
     const work = page.getByRole("region", { name: "Resulting work" });
     await expect(work.getByRole("button", { name: "Switch to decaf after lunch" })).toBeVisible();
     // Making its work doesn't move the Decision: it's still Open.
@@ -84,7 +82,7 @@ test.describe("golden paths: Browse and Decisions", () => {
     // The "Created" toast sits over the panel's link row until it goes; a toast under the pointer
     // waits, so the pointer moves off first.
     await page.mouse.move(0, 0);
-    await expect(page.getByText("Created Switch to decaf after lunch")).toBeHidden({ timeout: 10_000 });
+    await expect(page.getByText("Created Switch to decaf after lunch")).toBeHidden();
 
     // An existing Idea added to Context later.
     await page.getByRole("combobox", { name: "Target type" }).click();
@@ -100,7 +98,7 @@ test.describe("golden paths: Browse and Decisions", () => {
     await expect(newDecision.getByRole("group", { name: "Replaces" })).toContainText("Saving marks it Cancelled");
     await newDecision.getByRole("textbox", { name: "Title" }).fill("No caffeine after 10am");
     await newDecision.getByRole("button", { name: "Save" }).click();
-    await expect(newDecision).toBeHidden({ timeout: 10_000 });
+    await expect(newDecision).toBeHidden();
     await expect(page.getByRole("heading", { name: "No caffeine after noon" })).toBeVisible();
     await expect(list.getByRole("button", { name: /No caffeine after noon/ })).toContainText("Cancelled");
     const replacedBy = page.getByRole("region", { name: "Replaced by" });

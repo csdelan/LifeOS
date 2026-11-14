@@ -4,7 +4,7 @@ import { beforeActivityXp, bigPng } from "../support";
 test.describe("golden paths: the Food Log", () => {
   test("Log food asks before it throws away what's typed (code review CR96)", async ({ page }) => {
     await page.goto("/food");
-    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "Log food", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Log food" });
     const asked = page.getByRole("alertdialog", { name: "Unsaved edits" });
@@ -31,7 +31,7 @@ test.describe("golden paths: the Food Log", () => {
   test("record a fast, log food and close the day for diet XP", async ({ page }) => {
     await beforeActivityXp(page);
     await page.goto("/food");
-    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible();
 
     // A 23-hour fast ending now: 7 base Health XP, 8 at the mock's ×1.2 today.
     await page.getByRole("button", { name: "Record a past fast" }).click();
@@ -44,7 +44,7 @@ test.describe("golden paths: the Food Log", () => {
     await fast.getByLabel("Began").fill(began);
     await expect(fast.getByText("A fast of 23 h 00 m")).toBeVisible();
     await fast.getByRole("button", { name: "Save fast" }).click();
-    await expect(page.getByText("Earned +8 Health XP")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Earned +8 Health XP")).toBeVisible();
     await expect(page.getByRole("list", { name: "Fasts that ended this day" })).toContainText("23 h 00 m");
 
     // A very healthy 1,200-calorie entry: 28 for quality and 4 for calories, with the fast's 7.
@@ -55,12 +55,12 @@ test.describe("golden paths: the Food Log", () => {
     await sheet.getByLabel("Calories").fill("1200");
     await sheet.getByRole("button", { name: "Log", exact: true }).click();
     await expect(sheet).toBeHidden();
-    await expect(page.getByText("On track for 39 of 40")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("On track for 39 of 40")).toBeVisible();
     await expect(page.getByRole("list", { name: "Entries for today" }).getByRole("button", { name: /^Salmon salad/ })).toBeVisible();
 
     // Closing the day pays the food: 32 base, 38 at ×1.2.
     await page.getByRole("button", { name: "Close day" }).click();
-    await expect(page.getByText("Earned +38 Health XP")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Earned +38 Health XP")).toBeVisible();
     await expect(page.getByText("39 base → 46 Health XP (×1.2)")).toBeVisible();
   });
 
@@ -68,7 +68,7 @@ test.describe("golden paths: the Food Log", () => {
     await page.setViewportSize({ width: 375, height: 812 });
     await beforeActivityXp(page);
     await page.goto("/food");
-    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible();
 
     // The halves sit in a row of smaller buttons, each under the gap between its neighbours.
     await page.getByRole("button", { name: "Log food", exact: true }).click();
@@ -93,14 +93,14 @@ test.describe("golden paths: the Food Log", () => {
     await sheet.getByLabel("Calories").fill("1200");
     await sheet.getByRole("button", { name: "Log", exact: true }).click();
     await expect(sheet).toBeHidden();
-    await expect(page.getByText("On track for 22 of 40")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("On track for 22 of 40")).toBeVisible();
     const entries = page.getByRole("list", { name: "Entries for today" });
     await expect(entries.getByRole("button", { name: /^Turkey wrap, / })).toContainText("3.5 · average to good");
 
     // Log again keeps the half. On a phone the "Logged" toast sits over the Log food button
     // until it goes; a toast under the pointer waits, so the pointer moves off first.
     await page.mouse.move(0, 0);
-    await expect(page.getByText("Logged Turkey wrap")).toBeHidden({ timeout: 10_000 });
+    await expect(page.getByText("Logged Turkey wrap")).toBeHidden();
     await page.getByRole("button", { name: "Log food", exact: true }).click();
     await sheet.getByRole("button", { name: "Log again: Turkey wrap · 3.5 · 1,200 cal" }).click();
     await expect(sheet.getByRole("radio", { name: "3.5 · average to good" })).toBeChecked();
@@ -111,7 +111,7 @@ test.describe("golden paths: the Food Log", () => {
   }) => {
     await beforeActivityXp(page);
     await page.goto("/food");
-    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible();
     await expect(page.getByRole("region", { name: "Sobriety streak" })).toContainText(/\d+ days sober/);
 
     // An alcoholic drink scores 1, greyed out, and is typed as a drink.
@@ -129,7 +129,7 @@ test.describe("golden paths: the Food Log", () => {
     await sheet.getByRole("button", { name: "Log", exact: true }).click();
     await expect(sheet).toBeHidden();
     const entries = page.getByRole("list", { name: "Entries for today" });
-    await expect(entries.getByRole("button", { name: /^IPA \(alcoholic drink\), / })).toBeVisible({ timeout: 10_000 });
+    await expect(entries.getByRole("button", { name: /^IPA \(alcoholic drink\), / })).toBeVisible();
     await expect(page.getByRole("region", { name: "Sobriety streak" })).toContainText("A drink today");
 
     // Three more with Log again: four drinks take 40% off the day.
@@ -140,7 +140,7 @@ test.describe("golden paths: the Food Log", () => {
       await sheet.getByRole("button", { name: "Log", exact: true }).click();
       await expect(sheet).toBeHidden();
     }
-    await expect(page.getByText("4 drinks · 40% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("4 drinks · 40% off the day's diet XP")).toBeVisible();
 
     // The four show as one card (FOOD-7). Have another adds a fifth; deleting a copy takes it back.
     const card = entries.getByRole("button", { name: /^IPA ×4 \(alcoholic drink\), .+: show the 4 entries$/ });
@@ -154,7 +154,7 @@ test.describe("golden paths: the Food Log", () => {
     await expect(sheet.getByLabel("Calories")).toHaveValue("200");
     await sheet.getByRole("button", { name: "Log", exact: true }).click();
     await expect(sheet).toBeHidden();
-    await expect(page.getByText("5 drinks · 50% off the day's diet XP")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("5 drinks · 50% off the day's diet XP")).toBeVisible();
 
     await entries.getByRole("button", { name: /^IPA ×5 / }).click();
     await page.getByRole("dialog", { name: "IPA ×5" }).getByRole("list", { name: "Each IPA" }).getByRole("button").first().click();
@@ -162,13 +162,13 @@ test.describe("golden paths: the Food Log", () => {
     await change.getByRole("button", { name: "Delete" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
     await expect(change).toBeHidden();
-    await expect(entries.getByRole("button", { name: /^IPA ×4 / })).toBeVisible({ timeout: 10_000 });
+    await expect(entries.getByRole("button", { name: /^IPA ×4 / })).toBeVisible();
     await expect(page.getByText("4 drinks · 40% off the day's diet XP")).toBeVisible();
 
     // The week counts them, and the streak as of today.
     await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Week" }).click();
     const totals = page.getByRole("definition");
-    await expect(totals.filter({ hasText: /^4 drinks$/ })).toBeVisible({ timeout: 10_000 });
+    await expect(totals.filter({ hasText: /^4 drinks$/ })).toBeVisible();
     await expect(totals.filter({ hasText: /^Drink-free \d+ of \d+ days$/ })).toBeVisible();
     await expect(totals.filter({ hasText: /^A drink today · best \d+ days$/ })).toBeVisible();
     await page.getByRole("button", { name: "Table", exact: true }).click();
@@ -178,7 +178,7 @@ test.describe("golden paths: the Food Log", () => {
   test("Food Log: switch to the week, step back a month, and open a day", async ({ page }) => {
     await beforeActivityXp(page);
     await page.goto("/food");
-    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible();
 
     await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Week" }).click();
     await expect(page).toHaveURL(/view=week/);
@@ -195,18 +195,18 @@ test.describe("golden paths: the Food Log", () => {
       await page.getByRole("button", { name: "Previous month" }).click();
     }
     const day = page.getByRole("group", { name: "Diet XP each day" }).getByRole("button", { name: /: 46 Health XP paid \(39 base\)/ });
-    await expect(day).toBeVisible({ timeout: 10_000 });
+    await expect(day).toBeVisible();
     await day.click();
 
     await expect(page).not.toHaveURL(/view=/);
-    await expect(page.getByText("39 base → 46 Health XP (×1.2)")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("39 base → 46 Health XP (×1.2)")).toBeVisible();
     await expect(page.getByRole("list", { name: /^Entries for / }).getByRole("listitem")).toHaveCount(2);
   });
 
   test("Food Log: log an entry with a photo, see it full size, and remove it", async ({ page }) => {
     await beforeActivityXp(page);
     await page.goto("/food");
-    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible();
     const png = await bigPng(page);
 
     await page.getByRole("button", { name: "Log food", exact: true }).click();
@@ -221,7 +221,7 @@ test.describe("golden paths: the Food Log", () => {
     await expect(sheet.getByText("It's saved with the entry when you log it.")).toBeVisible();
     await sheet.getByRole("button", { name: "Log", exact: true }).click();
     await expect(sheet).toBeHidden();
-    await expect(page.getByText("Photo added to Grain bowl")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Photo added to Grain bowl")).toBeVisible();
 
     // The entry's thumbnail opens the photo full size, shrunk to 1,200 px.
     const entries = page.getByRole("list", { name: "Entries for today" });
@@ -240,7 +240,7 @@ test.describe("golden paths: the Food Log", () => {
     await picker.getByRole("button", { name: "Change or delete" }).click();
     const edit = page.getByRole("dialog", { name: "Change Grain bowl" });
     await edit.getByRole("button", { name: "Remove photo" }).click();
-    await expect(page.getByText("Photo removed from Grain bowl")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Photo removed from Grain bowl")).toBeVisible();
     await expect(edit.getByRole("button", { name: "Choose photo" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(entries.getByRole("button", { name: /^Grain bowl/ })).toBeVisible();
@@ -250,7 +250,7 @@ test.describe("golden paths: the Food Log", () => {
   test("Food Log: Log again and Have another carry the photo, and each entry's photo is its own", async ({ page }) => {
     await beforeActivityXp(page);
     await page.goto("/food");
-    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Today", level: 1 })).toBeVisible();
     const png = await bigPng(page);
 
     await page.getByRole("button", { name: "Log food", exact: true }).click();
@@ -264,10 +264,10 @@ test.describe("golden paths: the Food Log", () => {
     await expect(sheet.getByRole("button", { name: "Show the photo of Sausage burrito full size" })).toBeVisible();
     await sheet.getByRole("button", { name: "Log", exact: true }).click();
     await expect(sheet).toBeHidden();
-    await expect(page.getByText("Photo added to Sausage burrito")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Photo added to Sausage burrito")).toBeVisible();
     // A toast under the pointer waits, and this one sits over Log food on a phone.
     await page.mouse.move(0, 0);
-    await expect(page.getByText("Photo added to Sausage burrito")).toBeHidden({ timeout: 10_000 });
+    await expect(page.getByText("Photo added to Sausage burrito")).toBeHidden();
 
     // Log again fills in the photo too: the one already stored.
     await page.getByRole("button", { name: "Log food", exact: true }).click();
@@ -280,7 +280,7 @@ test.describe("golden paths: the Food Log", () => {
     // The two show as one card. The copy has the photo; removing it leaves the first's.
     const entries = page.getByRole("list", { name: "Entries for today" });
     const card = entries.getByRole("button", { name: /^Sausage burrito ×2, / });
-    await expect(card).toBeVisible({ timeout: 10_000 });
+    await expect(card).toBeVisible();
     await card.click();
     const copies = page.getByRole("dialog", { name: "Sausage burrito ×2" });
     const each = copies.getByRole("list", { name: "Each Sausage burrito" }).getByRole("button");
@@ -289,7 +289,7 @@ test.describe("golden paths: the Food Log", () => {
     const change = page.getByRole("dialog", { name: "Change Sausage burrito" });
     await expect(change.getByRole("button", { name: "Show the photo of Sausage burrito full size" })).toBeVisible();
     await change.getByRole("button", { name: "Remove photo" }).click();
-    await expect(page.getByText("Photo removed from Sausage burrito")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Photo removed from Sausage burrito")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(change).toBeHidden();
     await expect(entries.getByRole("button", { name: "Show the photo of Sausage burrito full size" })).toBeVisible();
@@ -301,6 +301,6 @@ test.describe("golden paths: the Food Log", () => {
     await expect(sheet.getByRole("button", { name: "Show the photo of Sausage burrito full size" })).toBeVisible();
     await sheet.getByRole("button", { name: "Log", exact: true }).click();
     await expect(sheet).toBeHidden();
-    await expect(entries.getByRole("button", { name: /^Sausage burrito ×3, / })).toBeVisible({ timeout: 10_000 });
+    await expect(entries.getByRole("button", { name: /^Sausage burrito ×3, / })).toBeVisible();
   });
 });

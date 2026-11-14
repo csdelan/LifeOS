@@ -10,7 +10,7 @@ test.describe("golden paths: Measurements", () => {
     await expect(page).toHaveURL(/\/measurements$/);
     await expect(page.getByRole("heading", { name: "Your measurements" })).toBeVisible();
 
-    await expect(page.getByTestId("weight-trend")).toHaveText(/^\d+\.\d lb$/, { timeout: 10_000 });
+    await expect(page.getByTestId("weight-trend")).toHaveText(/^\d+\.\d lb$/);
     await expect(page.getByTestId("weight-goal")).toHaveText(/^185\.0 lb by .+ at [\d.]+ lb a week, from \d+ weigh-ins\.$/);
     const chart = page.getByRole("group", { name: /^Weight by day, last 90 days/ });
     const dots = chart.getByTestId("trend-dot");
@@ -60,7 +60,7 @@ test.describe("golden paths: Measurements", () => {
   test("Measurements: change the goal, and narrow the chart to 30 days", async ({ page }) => {
     await page.clock.install({ time: new Date("2026-11-07T08:30:00") });
     await page.goto("/measurements");
-    await expect(page.getByTestId("weight-goal")).toHaveText(/^185\.0 lb by /, { timeout: 10_000 });
+    await expect(page.getByTestId("weight-goal")).toHaveText(/^185\.0 lb by /);
     await page.getByRole("button", { name: "Edit Weight" }).click();
     const dialog = page.getByRole("dialog", { name: "Edit weight" });
     await dialog.getByLabel("Goal (lb), optional").fill("180");
@@ -75,7 +75,7 @@ test.describe("golden paths: Measurements", () => {
     await expect.poll(() => page.getByTestId("trend-dot").count()).toBeLessThan(ninety);
     // The range is remembered.
     await page.reload();
-    await expect(page.getByRole("group", { name: /^Weight by day, last 30 days/ })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("group", { name: /^Weight by day, last 30 days/ })).toBeVisible();
   });
 
   // Any metric (MEASURE-3, measurements plan §4.8): the mock seeds blood pressure (its newest
@@ -85,7 +85,7 @@ test.describe("golden paths: Measurements", () => {
     await page.goto("/measurements");
     const list = page.getByRole("list", { name: "Your metrics" });
     const bp = list.getByTestId("metric-list-row").filter({ has: page.getByRole("heading", { name: /^Blood pressure/ }) });
-    await expect(bp.getByTestId("metric-row-value")).toHaveText("121/78 mmHg", { timeout: 10_000 });
+    await expect(bp.getByTestId("metric-row-value")).toHaveText("121/78 mmHg");
     await expect(bp.getByTestId("metric-row-flag")).toHaveText("High");
 
     await bp.getByRole("button", { name: "Log blood pressure" }).click();
@@ -116,7 +116,7 @@ test.describe("golden paths: Measurements", () => {
     await expect(table.getByTestId("metric-row").first()).toContainText("left arm");
     // The open row is remembered.
     await page.reload();
-    await expect(page.getByRole("region", { name: "Blood pressure" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("region", { name: "Blood pressure" })).toBeVisible();
   });
 
   test("Measurements: add a metric of your own, give it a normal range, then archive and restore it", async ({ page }) => {
@@ -172,7 +172,7 @@ test.describe("golden paths: Measurements", () => {
     await page.goto("/measurements");
     const labs = page.getByRole("region", { name: "Lab results" });
     const visits = labs.getByRole("list", { name: "Visits" });
-    await expect(visits.getByTestId("lab-visit")).toHaveCount(1, { timeout: 10_000 });
+    await expect(visits.getByTestId("lab-visit")).toHaveCount(1);
     await expect(visits.getByTestId("lab-visit-summary")).toHaveText("21 results, 3 outside the range");
 
     await labs.getByRole("button", { name: "Log a lab visit" }).click();

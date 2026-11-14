@@ -4,7 +4,7 @@ test.describe("golden paths: Activity", () => {
   test("Activity: steps over 90 days as a table, the workouts not counted, and a note on a run", async ({ page }) => {
     await page.goto("/activity");
     const steps = page.getByRole("region", { name: "Steps" });
-    await expect(steps.getByRole("group", { name: /^Steps by day, last 30 days/ })).toBeVisible({ timeout: 10_000 });
+    await expect(steps.getByRole("group", { name: /^Steps by day, last 30 days/ })).toBeVisible();
     await expect(page.getByText(/^Synced from Oura /)).toBeVisible();
 
     // Steps: 90 days, then the Table, a row a day.
@@ -42,7 +42,7 @@ test.describe("golden paths: Activity", () => {
   test("Activity: tags from the Oura app counted, over 90 days, and a day's tags in its sheet", async ({ page }) => {
     await page.goto("/activity");
     const tags = page.getByRole("region", { name: "Tags", exact: true });
-    await expect(tags.getByTestId("tag-counts")).toContainText(/Caffeine \d+ · Alcohol \d+/, { timeout: 10_000 });
+    await expect(tags.getByTestId("tag-counts")).toContainText(/Caffeine \d+ · Alcohol \d+/);
     await expect(tags.getByTestId("tag-day")).toHaveCount(7);
 
     // 90 days: the few days of a cold a month back come into the counts.
@@ -66,7 +66,7 @@ test.describe("golden paths: Activity", () => {
   test("Activity: last night, the sleep chart as Readiness, and a night in full with its contributors", async ({ page }) => {
     await page.goto("/activity");
     const sleep = page.getByRole("region", { name: "Sleep and readiness", exact: true });
-    await expect(sleep.getByRole("list", { name: "Stages" })).toBeVisible({ timeout: 10_000 });
+    await expect(sleep.getByRole("list", { name: "Stages" })).toBeVisible();
     await expect(sleep.getByRole("group", { name: /^Sleep score by day, last 30 days/ })).toBeVisible();
 
     // Switch the sleep chart to Readiness: Oura's lines at 70 and 85 stay.
@@ -97,7 +97,7 @@ test.describe("golden paths: Activity", () => {
 
     // The sync on opening pays last night's sleep; today's steps and run wait for 4 a.m.
     const xp = page.getByRole("region", { name: "Health XP today" });
-    await expect(xp.getByTestId("activity-xp-sleep")).toContainText("earned", { timeout: 10_000 });
+    await expect(xp.getByTestId("activity-xp-sleep")).toContainText("earned");
     await expect(xp.getByTestId("activity-xp-steps")).toContainText(/\d+ of 25 projected/);
     await expect(xp.getByTestId("activity-xp-steps")).toContainText("Pays when the day ends, at 4 a.m.");
     await expect(xp.getByTestId("activity-xp-total")).toHaveText(/^\d+ Health XP: \d+ earned, \d+ projected$/);

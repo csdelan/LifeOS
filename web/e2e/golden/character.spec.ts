@@ -6,7 +6,7 @@ test.describe("golden paths: the Character page", () => {
     await beforeActivityXp(page);
     await page.goto("/character");
     const health = page.getByRole("region", { name: "Health", exact: true });
-    await expect(health.getByText("Level 9", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(health.getByText("Level 9", { exact: true })).toBeVisible();
     await expect(health.getByText("Novice", { exact: true })).toBeVisible();
 
     // In-app navigation keeps the mock's state. The seeded Health history is 33 XP short of
@@ -14,10 +14,10 @@ test.describe("golden paths: the Character page", () => {
     await page.getByRole("link", { name: "Habits" }).first().click();
     const mobility = page.getByRole("list", { name: "Building" }).getByRole("listitem").filter({ hasText: "Morning mobility" });
     await mobility.getByRole("button", { name: "Followed", exact: true }).click();
-    await expect(page.getByText("You're now a Health Apprentice.")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("You're now a Health Apprentice.")).toBeVisible();
 
     await page.getByRole("link", { name: "Character" }).first().click();
-    await expect(health.getByText("Level 10", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(health.getByText("Level 10", { exact: true })).toBeVisible();
     await expect(health.getByText("Apprentice", { exact: true })).toBeVisible();
     await expect(health.getByRole("img", { name: "Today: 90 of 20 action XP, active" })).toBeVisible();
     const ranks = page.getByRole("region", { name: "Health ranks" }).getByRole("listitem");
@@ -30,14 +30,12 @@ test.describe("golden paths: the Character page", () => {
     await page.getByRole("tab", { name: "Reports" }).click();
     await expect(page).toHaveURL(/view=reports/);
     const chart = page.getByTestId("rank-chart");
-    await expect(chart).toHaveAccessibleName(/^Rank over the last 30 days\. Health: Novice throughout, best Novice\./, {
-      timeout: 10_000,
-    });
+    await expect(chart).toHaveAccessibleName(/^Rank over the last 30 days\. Health: Novice throughout, best Novice\./);
     // The seeded sick day, 14 days ago, is hatched.
     await expect(page.getByTestId("exception-band")).toHaveCount(1);
 
     await page.getByRole("button", { name: "3 months" }).click();
-    await expect(chart).toHaveAccessibleName(/^Rank over the last 3 months\./, { timeout: 10_000 });
+    await expect(chart).toHaveAccessibleName(/^Rank over the last 3 months\./);
     await expect(page.getByRole("heading", { name: "By domain, last 3 months" })).toBeVisible();
     await page.getByRole("button", { name: "Table", exact: true }).click();
     await expect(page.getByRole("region", { name: "Rank over the last 3 months, as a table" })).toBeVisible();
@@ -48,7 +46,7 @@ test.describe("golden paths: the Character page", () => {
     await page.goto("/character");
     const section = page.getByRole("region", { name: "Exception days" });
     const marks = section.getByRole("list", { name: "Exception days, last 90 days" }).getByRole("listitem");
-    await expect(marks).toHaveCount(1, { timeout: 10_000 });
+    await expect(marks).toHaveCount(1);
     await expect(marks.first()).toContainText("Sick with a cold");
 
     await section.getByRole("button", { name: "Mark a day as an exception" }).click();

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { settled } from "../support";
 
 test.describe("golden paths: vision", () => {
   // Chris's notes from his phone: Vision opens on his identity statements with the goals a tab
@@ -11,7 +12,7 @@ test.describe("golden paths: vision", () => {
     await page.goto("/vision");
     const statements = page.getByRole("tab", { name: "Identity statements" });
     const goals = page.getByRole("tab", { name: "Goals" });
-    await expect(statements).toHaveAttribute("aria-selected", "true", { timeout: 10_000 });
+    await expect(statements).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("heading", { name: "Steward of my health" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Ship LifeOS production UI" })).toHaveCount(0);
 
@@ -22,7 +23,9 @@ test.describe("golden paths: vision", () => {
 
     const sheet = page.getByRole("dialog");
     const title = sheet.locator("header").getByRole("heading", { name: "Ship LifeOS production UI" });
-    await expect(title).toBeVisible({ timeout: 10_000 });
+    await expect(title).toBeVisible();
+    // Measured once the sheet has slid in: mid-way it's a fraction of a pixel wider than the screen.
+    await settled(page);
     const sheetBox = (await sheet.boundingBox())!;
     const titleBox = (await title.boundingBox())!;
     const lineHeight = await title.evaluate((h) => parseFloat(getComputedStyle(h).lineHeight));
@@ -48,6 +51,6 @@ test.describe("golden paths: vision", () => {
 
     // Back from the goal lands on the goals.
     await page.goBack();
-    await expect(goals).toHaveAttribute("aria-selected", "true", { timeout: 10_000 });
+    await expect(goals).toHaveAttribute("aria-selected", "true");
   });
 });

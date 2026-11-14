@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page } from "@playwright/test";
 
 // What more than one spec uses. The specs are split by feature (code review CR56) so two workers
@@ -56,3 +57,23 @@ export async function discardSheet(page: Page) {
   await asked.getByRole("button", { name: "Discard" }).click();
   await expect(asked).toBeHidden();
 }
+
+/**
+ * Checks the page against WCAG 2.1 AA once it has settled, and fails on anything axe calls
+ * serious or critical, naming each (code review CR104). `exclude` leaves a part of the page out
+ * of the scan; say why beside the call.
+ */
+export async function expectAccessible(page: Page, { exclude }: { exclude?: string } = {}) {
+  await settled(page);
+  let axe = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]);
+  if (exclude) axe = axe.exclude(exclude);
+  const { violations } = await axe.analyze();
+  const blocking = violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+  expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
+}
+
+/**
+ * The Map's graph lays out in a worker, and with covers it loads each photo: its first draw can
+ * take longer than a check's usual wait (`expect.timeout` in playwright.config.ts).
+ */
+export const GRAPH_DRAWN = { timeout: 20_000 };

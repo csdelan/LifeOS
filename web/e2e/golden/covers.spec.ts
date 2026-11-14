@@ -1,11 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { GRAPH_DRAWN } from "../support";
 
 test.describe("golden paths: covers", () => {
   test("Covers: add one to a goal from search, see its credit, reposition it with the keyboard, and remove it", async ({
     page,
   }) => {
     await page.goto("/map?selected=goal-half");
-    await expect(page.getByRole("heading", { name: "Run a half-marathon" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Run a half-marathon" })).toBeVisible();
     await page.getByRole("button", { name: "Add cover" }).click();
 
     const picker = page.getByRole("dialog", { name: "Choose a cover" });
@@ -52,13 +53,13 @@ test.describe("golden paths: covers", () => {
     await page.goto("/map?view=graph");
     const half = page.getByTestId("rf__node-goal-half");
     const lifeos = page.getByTestId("rf__node-goal-lifeos");
-    await expect(lifeos.locator(".lifeos-node")).toHaveClass(/has-cover/, { timeout: 20_000 });
+    await expect(lifeos.locator(".lifeos-node")).toHaveClass(/has-cover/, GRAPH_DRAWN);
     await expect(lifeos.locator(".lifeos-node__shell")).toHaveAttribute("title", "Photo by Mina Cho on Unsplash");
     await expect(half.locator(".lifeos-node")).not.toHaveClass(/has-cover/);
 
     // A cover picked in the panel shows on its node at once, with no new layout.
     await half.click();
-    await expect(page.getByRole("heading", { name: "Run a half-marathon" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Run a half-marathon" })).toBeVisible();
     await page.getByRole("button", { name: "Add cover" }).click();
     const picker = page.getByRole("dialog", { name: "Choose a cover" });
     await picker.getByRole("searchbox", { name: "Search Unsplash" }).fill("meadow");
@@ -71,7 +72,7 @@ test.describe("golden paths: covers", () => {
     // And one removed leaves it.
     await lifeos.click();
     const banner = page.getByTestId("cover-banner");
-    await expect(banner).toContainText("Photo by Mina Cho on Unsplash", { timeout: 10_000 });
+    await expect(banner).toContainText("Photo by Mina Cho on Unsplash");
     await banner.getByRole("button", { name: "Cover options" }).click();
     await page.getByRole("menuitem", { name: "Remove cover" }).click();
     await expect(banner).toBeHidden();
@@ -105,8 +106,6 @@ test.describe("golden paths: covers", () => {
     await expect(tile(/Ship LifeOS production UI/).getByTestId("cover-placeholder")).toBeVisible();
     await page.getByRole("tab", { name: "Identity statements" }).click();
     await steward.getByRole("button", { name: "Steward of my health" }).click();
-    await expect(page.getByTestId("cover-banner")).toContainText("Photo by Ines Vale on Unsplash", {
-      timeout: 10_000,
-    });
+    await expect(page.getByTestId("cover-banner")).toContainText("Photo by Ines Vale on Unsplash");
   });
 });

@@ -12,13 +12,13 @@ test.describe("golden paths: repeating tasks and timers", () => {
     }
     await expect(days.getByRole("button", { name: "Wednesday" })).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
     await expect(page.getByRole("tabpanel", { name: "Overview" }).getByText("Every Wednesday", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Edit" }).click();
     await page.getByRole("group", { name: "Repeat" }).getByRole("button", { name: "Doesn't repeat" }).click();
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
     await expect(page.getByRole("tabpanel", { name: "Overview" }).getByText("Every Wednesday", { exact: true })).toBeHidden();
   });
 
@@ -41,12 +41,12 @@ test.describe("golden paths: repeating tasks and timers", () => {
     await expect(dialog.getByLabel("Due", { exact: true })).toHaveCount(0);
     await dialog.getByLabel("Repeats from").fill("2026-10-14");
     await dialog.getByRole("button", { name: "Save" }).click();
-    await expect(dialog).toBeHidden({ timeout: 10_000 });
+    await expect(dialog).toBeHidden();
 
     const group = (name: string) => page.locator("section", { has: page.getByRole("heading", { name }) });
     const overdue = group(/^Overdue/).getByRole("button", { name: /Water plants/ });
     const today = group(/^Today/).getByRole("button", { name: /Water plants/ });
-    await expect(overdue).toContainText("Every Wednesday", { timeout: 10_000 });
+    await expect(overdue).toContainText("Every Wednesday");
     await expect(overdue).toContainText("7 days overdue");
     await expect(today).toContainText("Every Wednesday");
 
@@ -60,17 +60,15 @@ test.describe("golden paths: repeating tasks and timers", () => {
     await detail.getByRole("combobox", { name: "Status" }).click();
     await page.getByRole("option", { name: "Completed", exact: true }).click();
     await detail.getByRole("button", { name: "Save" }).click();
-    await expect(detail.getByRole("button", { name: "Edit" })).toBeVisible({ timeout: 10_000 });
-    await expect(group(/^Upcoming/).getByRole("button", { name: /Water plants/ })).toContainText("Oct 28", {
-      timeout: 10_000,
-    });
+    await expect(detail.getByRole("button", { name: "Edit" })).toBeVisible();
+    await expect(group(/^Upcoming/).getByRole("button", { name: /Water plants/ })).toContainText("Oct 28");
 
     // Close the late one myself: missed, not paid, and gone from the working view.
     await overdue.click();
     await expect(detail.getByRole("region", { name: "Timer" })).toBeVisible();
     await expect(repeats.getByRole("listitem").filter({ hasText: "This one" })).toContainText("due Oct 14");
     await repeats.getByRole("button", { name: "Mark missed" }).click();
-    await expect(page.getByText("Marked missed")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Marked missed")).toBeVisible();
     await expect(group(/^Overdue/).getByRole("button", { name: /Water plants/ })).toHaveCount(0);
 
     // The Repeating view lists the task itself, with how it's gone.
@@ -87,7 +85,7 @@ test.describe("golden paths: repeating tasks and timers", () => {
 
   test("time a task, stop for now and start again, then Complete only after it asks", async ({ page }) => {
     await page.goto("/browse?type=Task&selected=task-shoes");
-    await expect(page.getByRole("heading", { name: "Buy race shoes" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Buy race shoes" })).toBeVisible();
     const timer = page.getByRole("region", { name: "Timer", exact: true });
     await timer.getByRole("button", { name: "Start" }).click();
     await expect(timer.getByText("Running", { exact: true })).toBeVisible();
@@ -107,7 +105,7 @@ test.describe("golden paths: repeating tasks and timers", () => {
     await ask.getByRole("button", { name: "Complete" }).click();
 
     // A closed task isn't timed until it's reopened.
-    await expect(timer.getByText("Reopen the task to time it.")).toBeVisible({ timeout: 10_000 });
+    await expect(timer.getByText("Reopen the task to time it.")).toBeVisible();
     await expect(timer.getByRole("button", { name: "Start" })).toHaveCount(0);
   });
 
@@ -125,15 +123,13 @@ test.describe("golden paths: repeating tasks and timers", () => {
     await expect(shop).toContainText("Every Saturday");
     await expect(shop).toContainText("Repeating");
     await title.click();
-    await expect(page.getByRole("region", { name: "Repeats" }).getByRole("button", { name: "Stop repeating" })).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(page.getByRole("region", { name: "Repeats" }).getByRole("button", { name: "Stop repeating" })).toBeVisible();
 
     // The week before: the trash and the shop each done once.
     await page.goto("/reviews?kind=weekly");
     await page.getByRole("button", { name: "Previous" }).click();
     const repeating = page.locator("div", { has: page.getByRole("heading", { name: "Repeating tasks" }) }).last();
-    await expect(repeating).toContainText("Take out trash — 1 of 1 done", { timeout: 10_000 });
+    await expect(repeating).toContainText("Take out trash — 1 of 1 done");
     await expect(repeating).toContainText("Shop for Sunday dinner — 1 of 1 done");
   });
 });

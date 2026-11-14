@@ -9,7 +9,7 @@ test.describe("golden paths: Environment", () => {
     await page.getByRole("link", { name: "Environment" }).first().click();
     await expect(page.getByRole("heading", { name: "Your home", level: 1 })).toBeVisible();
     const score = page.getByTestId("home-score");
-    await expect(score).toHaveText(/^\d+\.\d$/, { timeout: 10_000 });
+    await expect(score).toHaveText(/^\d+\.\d$/);
     const before = Number(await score.textContent());
     await expect(page.getByTestId("space-card")).toHaveCount(9);
     await expect(page.getByTestId("fix-next").getByRole("listitem")).toHaveCount(3);
@@ -37,7 +37,7 @@ test.describe("golden paths: Environment", () => {
     await sheet.getByRole("button", { name: "Save", exact: true }).click();
     await expect(sheet).toBeHidden();
     await expect(page.getByText("Rated 2 spaces")).toBeVisible();
-    await expect.poll(async () => Number(await score.textContent()), { timeout: 10_000 }).toBeGreaterThan(before);
+    await expect.poll(async () => Number(await score.textContent())).toBeGreaterThan(before);
     const garage = page.getByRole("article", { name: "Garage" });
     await expect(garage).toContainText("rated today");
 
@@ -58,7 +58,7 @@ test.describe("golden paths: Environment", () => {
     page,
   }) => {
     await page.goto("/environment");
-    await expect(page.getByTestId("home-score")).toHaveText(/^\d+\.\d$/, { timeout: 10_000 });
+    await expect(page.getByTestId("home-score")).toHaveText(/^\d+\.\d$/);
     const png = await bigPng(page);
     const office = page.getByRole("article", { name: "Office" });
     await expect(office.getByTestId("then-and-now")).toContainText("2 photos");
@@ -78,7 +78,7 @@ test.describe("golden paths: Environment", () => {
     await expect(sheet.getByText("Nothing rated yet · 1 photo to add")).toBeVisible();
     await sheet.getByRole("button", { name: "Save", exact: true }).click();
     await expect(sheet).toBeHidden();
-    await expect(page.getByText("Added a photo of Office")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Added a photo of Office")).toBeVisible();
     await expect(office.getByTestId("then-and-now")).toContainText("photo today · 3 photos");
 
     // Now is today's photo, shrunk to 1,200 px; the compare dialog opens on it, Then beside it.
@@ -90,7 +90,7 @@ test.describe("golden paths: Environment", () => {
     const now = compare.getByTestId("compare-right").locator("img");
     await expect.poll(() => now.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1200);
     await compare.getByRole("button", { name: "Make this the baseline" }).click();
-    await expect(page.getByText("Made the baseline")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Made the baseline")).toBeVisible();
     await expect(compare.getByRole("button", { name: "This is the baseline" })).toBeDisabled();
     await page.keyboard.press("Escape");
     await expect(compare).toBeHidden();
@@ -100,7 +100,7 @@ test.describe("golden paths: Environment", () => {
 
   test("Environment: photos from two spots added at once, the second starting its own shot", async ({ page }) => {
     await page.goto("/environment");
-    await expect(page.getByTestId("home-score")).toHaveText(/^\d+\.\d$/, { timeout: 10_000 });
+    await expect(page.getByTestId("home-score")).toHaveText(/^\d+\.\d$/);
     const png = await bigPng(page);
     const garage = page.getByRole("article", { name: "Garage" });
     await garage.getByRole("button", { name: "Add photos of Garage", exact: true }).click();
@@ -116,7 +116,7 @@ test.describe("golden paths: Environment", () => {
     await rows.nth(1).getByLabel("Shot").selectOption({ label: "New shot…" });
     await rows.nth(1).getByLabel("New shot's name").fill("Workbench");
     await sheet.getByRole("button", { name: "Add 2 photos" }).click();
-    await expect(sheet).toBeHidden({ timeout: 10_000 });
+    await expect(sheet).toBeHidden();
     await expect(page.getByText("Added 2 photos of Garage and the shot Workbench")).toBeVisible();
 
     // Each spot is its own shot with its own Then, picked on the card.
@@ -130,7 +130,7 @@ test.describe("golden paths: Environment", () => {
   test("Environment: add a space, change its weight, and archive it out of the score", async ({ page }) => {
     await page.goto("/environment");
     const editor = page.getByRole("region", { name: "Manage spaces" });
-    await expect(editor.getByTestId("space-row")).toHaveCount(9, { timeout: 10_000 });
+    await expect(editor.getByTestId("space-row")).toHaveCount(9);
     const add = editor.getByRole("heading", { name: "Add a space" }).locator("..");
     await add.getByLabel("Name").fill("Office");
     await add.getByRole("button", { name: "Add space" }).click();

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { GRAPH_DRAWN } from "../support";
 
 test.describe("golden paths: creating, the Map, the Inbox and the shell", () => {
   test("create via New dialog", async ({ page }) => {
@@ -9,7 +10,7 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     // An Identity Statement needs its statement (subject-forms).
     await page.getByRole("textbox", { name: "Statement" }).fill("I'm the type of person who ships.");
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 10_000 });
+    await expect(page.getByRole("dialog")).toBeHidden();
   });
 
   test("inline create-child in Map", async ({ page }) => {
@@ -21,9 +22,7 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     await expect(title).toBeVisible();
     await title.fill("Track Sunday long runs");
     await page.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Track Sunday long runs", exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(page.getByRole("button", { name: "Track Sunday long runs", exact: true })).toBeVisible();
   });
 
   test("Enter on a selected row's toggle opens or closes it, and adds nothing (code review CR87)", async ({ page }) => {
@@ -80,7 +79,7 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     await title.press("Enter");
     await title.press("Enter");
     const made = page.getByRole("button", { name: "Track tempo runs", exact: true });
-    await expect(made.first()).toBeVisible({ timeout: 10_000 });
+    await expect(made.first()).toBeVisible();
     // A second create would land a moment after the first; give it time to show before counting.
     await page.waitForTimeout(500);
     await expect(made).toHaveCount(1);
@@ -118,7 +117,7 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     const description = page.getByLabel("Description");
     await description.fill("Polished across every interface.");
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
   });
 
   test("Discard asks once, and the next item opens as it is (code review CR92)", async ({ page }) => {
@@ -180,13 +179,15 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
 
   test("a page whose file is gone after an update says so, inside the shell (code review CR93)", async ({ page }) => {
     // As after a deploy: the page's file, fetched the first time it's opened, is no longer there.
-    await page.route(/\/src\/pages\/browse-page\.tsx/, (route) => route.abort());
+    await page.route(/\/assets\/browse-page-[\w-]+\.js$/, (route) => route.abort());
     await page.goto("/");
     await page.getByRole("link", { name: "Browse" }).click();
 
     // It reloads once to get the new build; when that doesn't help, it says so and offers Reload.
+    // The reload comes first, so this waits longer than a check's usual wait.
     const failed = page.getByRole("alert").filter({ hasText: "LifeOS was updated" });
-    await expect(failed).toBeVisible({ timeout: 15_000 });
+    const afterTheReload = { timeout: 15_000 };
+    await expect(failed).toBeVisible(afterTheReload);
     await expect(failed.getByRole("button", { name: "Reload" })).toBeVisible();
 
     // The shell stays, so another page still opens.
@@ -203,17 +204,15 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     await page.keyboard.press("Enter");
     await expect(page.getByRole("alertdialog")).toBeVisible();
     await page.getByRole("button", { name: "Drop" }).last().click();
-    await expect(page.getByRole("alertdialog")).toBeHidden({ timeout: 10_000 });
+    await expect(page.getByRole("alertdialog")).toBeHidden();
   });
 
   test("graph node click opens detail peek", async ({ page }) => {
     await page.goto("/map?view=graph");
     const node = page.getByText("Craftsman of systems", { exact: false }).first();
-    await expect(node).toBeVisible({ timeout: 20_000 });
+    await expect(node).toBeVisible(GRAPH_DRAWN);
     await node.click();
-    await expect(page.getByRole("heading", { name: /Craftsman of systems/ })).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(page.getByRole("heading", { name: /Craftsman of systems/ })).toBeVisible();
   });
 
   test("quick capture lands in Inbox", async ({ page }) => {
@@ -226,12 +225,10 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     await note.fill("Standing desk trial this week.");
     await expect(note).toHaveValue("Standing desk trial this week.");
     await dialog.getByRole("button", { name: "Capture" }).click();
-    await expect(page.getByText("Captured to Inbox")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Captured to Inbox")).toBeVisible();
     // On a desktop the Inbox opens its newest item, so the capture can show in the detail pane
     // too: its row in the list is the first match.
-    await expect(page.getByText("Standing desk trial this week.").first()).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(page.getByText("Standing desk trial this week.").first()).toBeVisible();
   });
 
   test("theme toggle switches the document class", async ({ page }) => {
