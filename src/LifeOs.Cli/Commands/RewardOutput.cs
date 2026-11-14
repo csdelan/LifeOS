@@ -8,8 +8,8 @@ namespace LifeOs.Cli.Commands;
 /// Shared formatting for the rewards verbs (<c>wallet</c>, <c>ledger</c>, <c>redeem</c>,
 /// <c>bounty</c>, <c>rewards</c>) and the verbs that can earn (<c>status</c>,
 /// <c>timer</c>): amounts read "+10 XP, +2 Coins" / "−45 Freedom", money reads "$1,250.00",
-/// and every verb's <c>--json</c> carries the wallet, awards and catalog rewards in the
-/// same shape.
+/// and every verb's <c>--json</c> carries the wallet, awards and catalog rewards in the API's
+/// shapes (<see cref="RewardRows"/>, code review CR89).
 /// </summary>
 internal static class RewardOutput
 {
@@ -20,37 +20,6 @@ internal static class RewardOutput
 
     /// <summary>Dollars to the cent: <c>$1,250.00</c>.</summary>
     public static string Usd(decimal value) => "$" + value.ToString("#,0.00", CultureInfo.InvariantCulture);
-
-    /// <summary>The wallet as JSON-ready data.</summary>
-    public static object WalletJson(Wallet wallet) => new
-    {
-        openedAt = wallet.OpenedAt,
-        coinValueUsd = wallet.CoinValueUsd,
-        balances = wallet.Lines.Select(l => new
-        {
-            currency = l.Currency.Key,
-            label = l.Currency.Label,
-            spendable = l.Currency.Spendable,
-            earned = l.Earned,
-            reversed = l.Reversed,
-            spent = l.Spent,
-            balance = l.Balance
-        })
-    };
-
-    /// <summary>The entries a reconcile wrote, as JSON-ready data.</summary>
-    public static object AwardsJson(IEnumerable<Award> awards) => awards.Select(a => new
-    {
-        id = a.EventId,
-        entry = a.Entry,
-        trigger = a.Trigger,
-        awardKey = a.AwardKey,
-        subject = a.Subject is { } s ? new { urn = s.Urn, type = s.Type, title = s.Title } : null,
-        amounts = a.Amounts,
-        note = a.Note,
-        @base = a.Base,
-        multipliers = a.Multipliers
-    });
 
     /// <summary>
     /// Prints one line per award: "Earned +10 XP, +2 Coins (completed: Write report)." — or, for
@@ -76,21 +45,6 @@ internal static class RewardOutput
                 ? $"{amount} ({basis} × {multiplier.ToString("0.0#", CultureInfo.InvariantCulture)})"
                 : amount;
         }));
-
-    /// <summary>Each life domain whose level, rank or bests a write changed, as JSON-ready data.</summary>
-    public static object ProgressJson(IEnumerable<DomainChange> progress) => progress.Select(p => new
-    {
-        domain = p.Domain,
-        levelFrom = p.LevelFrom,
-        levelTo = p.LevelTo,
-        rankFrom = p.RankFrom,
-        rankTo = p.RankTo,
-        rankTitle = p.RankTitle,
-        bestLevelFrom = p.BestLevelFrom,
-        bestLevelTo = p.BestLevelTo,
-        bestRankFrom = p.BestRankFrom,
-        bestRankTo = p.BestRankTo
-    });
 
     /// <summary>
     /// Prints one line per domain that moved: "Health: level 9 → 12 (a new best), now
@@ -123,25 +77,6 @@ internal static class RewardOutput
             Console.WriteLine($"{LifeDomains.Name(p.Domain)}: {string.Join(", ", parts)}.");
         }
     }
-
-    /// <summary>A catalog Reward as JSON-ready data.</summary>
-    public static object RewardJson(CatalogReward reward) => new
-    {
-        id = reward.Reward.Id,
-        urn = reward.Reward.Urn,
-        name = reward.Reward.Title,
-        kind = reward.Kind,
-        price = reward.Price,
-        targetUsd = reward.TargetUsd,
-        redemptions = reward.Redemptions,
-        coinsRedeemed = reward.CoinsRedeemed,
-        dollarsRedeemed = reward.DollarsRedeemed,
-        lastRedeemedAt = reward.LastRedeemedAt,
-        percentOfTarget = reward.PercentOfTarget,
-        remainingUsd = reward.RemainingUsd,
-        description = reward.Description,
-        archived = reward.Archived
-    };
 
     /// <summary>
     /// What a Reward costs or how far a savings goal has got: "costs 120 Freedom", or

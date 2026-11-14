@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The shapes LifeOS answers in, and the mappers that make them from the kernel's readings:
+    what /api sends (web/src/api/openapi.json describes it), and what bsk prints in JSON for the
+    same read or write (code review CR89). No ASP.NET Core and no database: the doors fetch,
+    these shape.
+  -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LifeOs.Application\LifeOs.Application.csproj" />
+  </ItemGroup>
+
+</Project>

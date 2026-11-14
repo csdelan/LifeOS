@@ -2,7 +2,7 @@ using System.Globalization;
 using LifeOs.Application.Measurements;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// One metric (MEASURE-1, MEASURE-3): its name, unit, decimals (0–3), goal and which way is better

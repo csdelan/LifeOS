@@ -103,7 +103,7 @@ internal static class ReviewCommand
                     .ListAsync(kind, from, to, cancellationToken: cancellationToken);
                 if (asJson)
                 {
-                    Cli.WriteJson(reviews.Select(r => Json(r, today)).ToArray());
+                    Cli.WriteJson(reviews.Select(r => ReviewRow.From(r, today)).ToArray());
                     return 0;
                 }
 
@@ -128,7 +128,7 @@ internal static class ReviewCommand
     {
         if (asJson)
         {
-            Cli.WriteJson(Json(review, today));
+            Cli.WriteJson(ReviewRow.From(review, today));
             return;
         }
 
@@ -140,20 +140,6 @@ internal static class ReviewCommand
     /// <summary>What a review reads as today: "Open", "Missed", "Completed" or "Completed late".</summary>
     private static string Reads(Review review, DateOnly today)
         => review.CompletedLate ? "Completed late" : review.StatusAsOf(today);
-
-    private static object Json(Review review, DateOnly today) => new
-    {
-        id = review.Id,
-        urn = review.Urn,
-        title = review.Title,
-        kind = review.Kind,
-        period = review.Period.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-        status = review.StatusAsOf(today),
-        missed = review.MissedAsOf(today),
-        completedLate = review.CompletedLate,
-        completedAt = review.CompletedAt,
-        keepFocus = review.KeepFocus,
-    };
 
     private static DateOnly? ParseDay(string? text, DateOnly today)
     {

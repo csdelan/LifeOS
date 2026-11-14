@@ -86,7 +86,9 @@ internal static class DomainsCommand
                         : reading.Domains.Where(e => e.Domain.Currency.Key == DomainService.Resolve(domain).Key).ToList();
                     if (asJson)
                     {
-                        Cli.WriteJson(new { today = reading.Today, days = reading.Days, domains = entries.Select(ReportJson) });
+                        var read = DomainRows.From(reading);
+                        read.Domains = read.Domains.Where(d => entries.Any(e => e.Domain.Currency.Key == d.Key)).ToList();
+                        Cli.WriteJson(read);
                         return 0;
                     }
 
@@ -99,7 +101,7 @@ internal static class DomainsCommand
                     var reading = await service.GetAsync(cancellationToken);
                     if (asJson)
                     {
-                        Cli.WriteJson(new { today = reading.Today, domains = reading.Domains.Select(ReadingJson) });
+                        Cli.WriteJson(DomainRows.From(reading));
                         return 0;
                     }
 
@@ -124,7 +126,7 @@ internal static class DomainsCommand
 
                 if (asJson)
                 {
-                    var json = allSeries.Select(SeriesJson).ToList();
+                    var json = allSeries.Select(DomainRows.From).ToList();
                     Cli.WriteJson(domain is null ? new { domains = json } : json[0]);
                     return 0;
                 }
@@ -185,36 +187,6 @@ internal static class DomainsCommand
         }
     }
 
-    private static object ReportJson(DomainReportEntry e) => new
-    {
-        currency = e.Domain.Currency.Key,
-        label = e.Domain.Currency.Label,
-        configured = e.Domain.Configured,
-        from = e.From,
-        to = e.To,
-        @base = e.Base,
-        paid = e.Paid,
-        period = e.Period is not { } p
-            ? null
-            : new
-            {
-                daysCounted = p.DaysCounted,
-                exceptionDays = p.ExceptionDays,
-                activeDays = p.ActiveDays,
-                activeShare = DomainFigures.Share(p.ActiveShare),
-                averageBase = DomainFigures.Average(p.AverageBase),
-                levelFrom = p.Before.Level,
-                levelTo = p.End.Level,
-                rankFrom = p.Before.Rank,
-                rankTo = p.End.Rank,
-                bestLevelFrom = p.Before.BestLevel,
-                bestLevelTo = p.End.BestLevel,
-                bestRank = p.BestRank,
-                ranksReached = p.RanksReached.Select(r => new { index = r.Rank, title = r.Rule.Title, qualifiedOn = r.QualifiedOn }),
-                ranks = p.Standings.Select(s => new { day = s.Day, level = s.Level, rank = s.Rank, bestRank = s.BestRank, exception = s.Exception })
-            }
-    };
-
     private static void WriteSeries(DomainSeries series)
     {
         WriteReading(series.Domain);
@@ -235,27 +207,6 @@ internal static class DomainsCommand
             Console.WriteLine(line);
         }
     }
-
-    private static object SeriesJson(DomainSeries series) => new
-    {
-        domain = ReadingJson(series.Domain),
-        days = series.Days.Select(d => new
-        {
-            day = d.Day,
-            @base = d.Base,
-            action = d.Action,
-            passive = d.Passive,
-            paid = d.Paid,
-            exception = d.Exception,
-            counted = d.Counted,
-            active = d.Active,
-            activeMinimum = d.Standing?.ActiveMinimum,
-            lifetimeLevel = d.Standing?.LifetimeLevel,
-            consistencyLevel = d.Standing?.ConsistencyLevel,
-            level = d.Standing?.Level,
-            rank = d.Standing?.Rank
-        })
-    };
 
     private static void WriteReading(DomainReading d)
     {
@@ -278,7 +229,7 @@ internal static class DomainsCommand
             return;
         }
 
-        var consistency = (ConsistencyRule)p.Rules.Consistency;
+        var consistency = p.Rules.Consistency;
         var best = p.BestLevel > p.Level ? $" (best {p.BestLevel}, {p.BestRankRule.Title})" : "";
         Console.WriteLine($"    level       {p.Level}, {p.RankRule.Title}{best}");
         Console.WriteLine(p.LimitedBy switch
@@ -294,7 +245,7 @@ internal static class DomainsCommand
                 $"    falling     {Number(p.Rules.Fall.PercentPerDay)}% a day toward {p.Target}"
                 + (p.FallingSince is { } since ? $", since {Day(since)} (from {p.FallingFrom})" : "")
                 + $"; {Plural(days, "day")} back on track pauses it: {consistency.Average(p.Level)}+ base XP a day,"
-                + $" {consistency.ActiveDaysNeeded(p.Level, days)} active ({consistency.ActiveMinimum(p.Level)}+ action XP)");
+                + $" {consistency.ReachedDaysNeeded(p.Level, days)} active ({consistency.DayMinimum(p.Level)}+ action XP)");
         }
         else if (p.Paused)
         {
@@ -334,115 +285,6 @@ internal static class DomainsCommand
             Console.WriteLine($"    exceptions  {string.Join(", ", recent.Select(Day))} (the last 30 days)");
         }
     }
-
-    private static object ReadingJson(DomainReading d) => new
-    {
-        currency = d.Currency.Key,
-        label = d.Currency.Label,
-        totalXp = d.TotalXp,
-        configured = d.Configured,
-        progress = d.Progress is not { } p
-            ? null
-            : new
-            {
-                start = p.Start,
-                settledThrough = p.SettledThrough,
-                lifetime = new
-                {
-                    level = p.LifetimeLevel,
-                    levelXp = p.Rules.Curve.CostToNext(p.LifetimeLevel),
-                    xpIntoLevel = p.XpIntoLevel,
-                    xpToNext = p.XpToNext
-                },
-                consistency = new
-                {
-                    kind = p.Rules.Consistency.Kind,
-                    level = p.ConsistencyLevel,
-                    windowDays = p.Window.Days,
-                    from = p.Window.From,
-                    to = p.Window.To,
-                    averageBase = DomainFigures.Average(p.Window.Average),
-                    averageHomeScore = p.Rules.Consistency.ReadsScore ? DomainFigures.Score(p.Window.AverageScore) : (decimal?)null,
-                    held = p.HeldConsistency is not { } held
-                        ? null
-                        : new
-                        {
-                            level = held.Level,
-                            bar = p.Rules.Consistency.ScoreBar(held.Level),
-                            activeMinimum = held.ActiveMinimum,
-                            activeDays = held.ActiveDaysNow,
-                            windowDays = held.WindowDays
-                        },
-                    next = p.NextConsistency is not { } next
-                        ? null
-                        : new
-                        {
-                            level = next.Level,
-                            windowDays = next.WindowDays,
-                            average = next.Average,
-                            averageNow = DomainFigures.Average(next.AverageNow),
-                            averageMet = next.AverageMet,
-                            activeMinimum = next.ActiveMinimum,
-                            activeDaysNeeded = next.ActiveDaysNeeded,
-                            activeDays = next.ActiveDaysNow,
-                            activeDaysMet = next.ActiveDaysMet,
-                            ageNeeded = next.AgeNeeded,
-                            age = next.AgeNow,
-                            ageMet = next.AgeMet,
-                            bar = p.Rules.Consistency.ScoreBar(next.Level)
-                        }
-                },
-                shown = new
-                {
-                    level = p.Level,
-                    exact = DomainFigures.Level(p.ShownExact),
-                    target = p.Target,
-                    rank = new { index = p.Rank, title = p.RankRule.Title },
-                    limitedBy = p.LimitedBy?.ToString().ToLowerInvariant(),
-                    falling = p.Falling,
-                    paused = p.Paused,
-                    fallingSince = p.FallingSince,
-                    fallingFrom = p.FallingFrom,
-                    lastChange = p.LastChange is not { } change ? null : new { day = change.Day, from = change.From, to = change.To }
-                },
-                best = new
-                {
-                    level = p.BestLevel,
-                    levelOn = p.BestLevelOn,
-                    rank = new { index = p.BestRank, title = p.BestRankRule.Title },
-                    ranksReached = p.RanksReached.Select(r => new { index = r.Rank, title = r.Rule.Title, qualifiedOn = r.QualifiedOn })
-                },
-                current = new
-                {
-                    todayBase = p.TodayBase,
-                    todayAction = p.TodayAction,
-                    todayHomeScore = p.TodayScore is { } todayScore ? todayScore / (decimal)HomeRules.Unit : (decimal?)null,
-                    activeMinimum = p.ActiveMinimum,
-                    todayActive = p.TodayActive,
-                    todayException = p.TodayException,
-                    rule = p.TodayRule,
-                    window = new
-                    {
-                        from = p.Consistency.From,
-                        to = p.Consistency.To,
-                        days = p.Consistency.Days,
-                        coveredDays = p.Consistency.CoveredDays,
-                        activeDays = p.Consistency.SuccessfulDays,
-                        share = DomainFigures.Share(p.Consistency.Share)
-                    },
-                    multiplier = p.MultiplierNow,
-                    nextTier = p.NextTier is not { } tier
-                        ? null
-                        : new
-                        {
-                            minShare = tier.MinShare,
-                            multiplier = tier.Multiplier,
-                            daysNeeded = p.Consistency.DaysNeededFor(tier.MinShare)
-                        }
-                },
-                exceptionDays = p.ExceptionDays.Order()
-            }
-    };
 
     /// <summary>
     /// A domain held by the home (REWARD-9, environment plan §4.7): the level, what limits it,

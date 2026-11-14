@@ -60,16 +60,7 @@ internal static class RedeemCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        id = redemption.EventId,
-                        reward = redemption.Reward is { } reward ? RewardOutput.RewardJson(reward) : null,
-                        amounts = redemption.Amounts,
-                        note = redemption.Note,
-                        dollars = redemption.Dollars,
-                        coinRate = redemption.CoinRate,
-                        wallet = RewardOutput.WalletJson(redemption.Wallet)
-                    });
+                    Cli.WriteJson(RewardRows.From(redemption));
                     return 0;
                 }
 

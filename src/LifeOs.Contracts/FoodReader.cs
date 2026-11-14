@@ -3,7 +3,7 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Food;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// The Food Log reads (FOOD-1..4, food-log plan §3.6) on the <c>bsk_reader</c> connection, like

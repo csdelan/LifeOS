@@ -87,12 +87,13 @@ internal static class LabCommand
             return Cli.RunAsync(asJson, async () =>
             {
                 await using var provider = Cli.BuildServices(connectionString);
-                var list = await provider.GetRequiredService<LabVisitService>().ListAsync(cancellationToken);
                 if (asJson)
                 {
-                    Cli.WriteJson(new { today = Day(list.Today), visits = list.Visits.Select(Json) });
+                    Cli.WriteJson(await Cli.Reader<MeasurementReader>(provider).GetVisitsAsync(cancellationToken));
                     return 0;
                 }
+
+                var list = await provider.GetRequiredService<LabVisitService>().ListAsync(cancellationToken);
 
                 if (list.Visits.Count == 0)
                 {
@@ -262,7 +263,7 @@ internal static class LabCommand
                     parseResult.GetValue(visitArgument)!, cancellationToken);
                 if (asJson)
                 {
-                    Cli.WriteJson(new { visit = (object?)null });
+                    Cli.WriteJson(new LabVisitResult { Visit = null });
                     return 0;
                 }
 
@@ -328,28 +329,11 @@ internal static class LabCommand
         return units;
     }
 
-    internal static object Json(LabVisitRead read) => new
-    {
-        id = read.Visit.Id,
-        lab = read.Visit.Lab,
-        note = read.Visit.Note,
-        collectedAt = read.Visit.CollectedAt,
-        collectedOn = Day(read.Visit.CollectedOn),
-        collectedLocal = read.Visit.CollectedLocal.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
-        report = read.Visit.Report is { } report
-            ? new { id = report.ArtifactId, filename = report.Filename, contentType = report.ContentType, byteSize = report.ByteSize }
-            : null,
-        results = read.Results.Select(r => MeasureCommand.Json(r.Reading, r.Metric)),
-        outside = read.Outside,
-        loggedAt = read.Visit.LoggedAt,
-        versions = read.Visit.Versions
-    };
-
     private static int Write(LabVisitRead read, bool asJson, string? done)
     {
         if (asJson)
         {
-            Cli.WriteJson(new { visit = Json(read) });
+            Cli.WriteJson(new LabVisitResult { Visit = MeasurementRows.Visit(read) });
             return 0;
         }
 

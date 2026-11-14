@@ -1,4 +1,7 @@
-namespace LifeOs.Api.Read;
+using LifeOs.Application.Subjects;
+using LifeOs.Domain;
+
+namespace LifeOs.Contracts;
 
 /// <summary>A subject type and how many subjects have it — the left-hand tree.</summary>
 public sealed class TypeCount
@@ -332,6 +335,25 @@ public sealed class CreatedSubject
     public string Title { get; set; } = "";
 }
 
+/// <summary>
+/// The subject whose recurrence was set, the stored recurrence (JSON, null when cleared), and
+/// for a repeating Task the repetitions it made.
+/// </summary>
+public sealed class RecurResult
+{
+    public Guid Id { get; set; }
+    public string Urn { get; set; } = "";
+    public string? Recurrence { get; set; }
+    public IReadOnlyList<CreatedSubject> Made { get; set; } = [];
+}
+
+/// <summary>What Materialize made: the series and each new occurrence (none when all were made already).</summary>
+public sealed class MaterializeRow
+{
+    public CreatedSubject Series { get; set; } = new();
+    public IReadOnlyList<CreatedSubject> Created { get; set; } = [];
+}
+
 public sealed class RenamedSubject
 {
     public Guid Id { get; set; }
@@ -382,4 +404,59 @@ public sealed class TimerActionResult
     public IReadOnlyList<AwardRow> Awards { get; set; } = [];
     /// <summary>Each life domain whose level or rank completing changed (xp-domains plan §3.8).</summary>
     public IReadOnlyList<DomainChangeRow> Progress { get; set; } = [];
+}
+
+/// <summary>
+/// Maps the kernel's subject writes onto the API's shapes, which <c>bsk --json</c> prints for the
+/// same write (code review CR89).
+/// </summary>
+public static class SubjectRows
+{
+    public static CreatedSubject From(SubjectRef subject) => new()
+    {
+        Id = subject.Id,
+        Urn = subject.Urn,
+        Type = subject.Type,
+        Title = subject.Title
+    };
+
+    public static RenamedSubject From(RenameResult result) => new()
+    {
+        Id = result.Subject.Id,
+        Title = result.Subject.Title,
+        PreviousTitle = result.PreviousTitle,
+        Changed = result.Changed,
+        OccurrencesRenamed = result.OccurrencesRenamed
+    };
+
+    public static RenamedTag From(TagRenameResult result) => new()
+    {
+        From = result.From,
+        To = result.To,
+        Renamed = result.Renamed,
+        Merged = result.Merged
+    };
+
+    public static RecurResult From(RecurrenceResult result) => new()
+    {
+        Id = result.Subject.Id,
+        Urn = result.Subject.Urn,
+        Recurrence = result.Recurrence,
+        Made = result.Made.Select(From).ToList()
+    };
+
+    /// <summary>A recurrence cleared: the subject, and no recurrence or repetitions.</summary>
+    public static RecurResult Cleared(SubjectRef subject) => new() { Id = subject.Id, Urn = subject.Urn };
+
+    public static TaskSettleRead From(TaskSettleResult result) => new()
+    {
+        Series = result.Series,
+        Made = result.Made.Select(made => From(made)).ToList()
+    };
+
+    public static MaterializeRow From(MaterializeResult result) => new()
+    {
+        Series = From(result.Series),
+        Created = result.Created.Select(From).ToList()
+    };
 }

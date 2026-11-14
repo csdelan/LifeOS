@@ -30,7 +30,7 @@ internal static class WalletCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(RewardOutput.WalletJson(wallet));
+                    Cli.WriteJson(RewardRows.From(wallet));
                     return 0;
                 }
 

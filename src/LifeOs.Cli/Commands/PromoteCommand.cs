@@ -57,14 +57,7 @@ internal static class PromoteCommand
 
                     if (asJson)
                     {
-                        Cli.WriteJson(new
-                        {
-                            id = result.Subject.Id,
-                            urn = result.Subject.Urn,
-                            type = result.Subject.Type,
-                            title = result.Subject.Title,
-                            originEventId = result.OriginEventId
-                        });
+                        Cli.WriteJson(SubjectRows.From(result.Subject), new { originEventId = result.OriginEventId });
                     }
                     else
                     {
@@ -78,12 +71,8 @@ internal static class PromoteCommand
 
                     if (asJson)
                     {
-                        Cli.WriteJson(new
+                        Cli.WriteJson(SubjectRows.From(result.Target), new
                         {
-                            id = result.Target.Id,
-                            urn = result.Target.Urn,
-                            type = result.Target.Type,
-                            title = result.Target.Title,
                             sourceUrn = result.Source.Urn,
                             relation = SubjectRelations.ResultsIn
                         });

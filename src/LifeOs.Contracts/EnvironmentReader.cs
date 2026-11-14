@@ -3,7 +3,7 @@ using LifeOs.Application.Home;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// The home's reads (HOME-1 to HOME-4, environment plan §4.7, §8.3) on the <c>bsk_reader</c>
@@ -101,16 +101,7 @@ public sealed class EnvironmentReader(ISpaceRepository spaces, IHomeCalendar cal
         var today = await calendar.TodayAsync(cancellationToken);
         var from = today.AddDays(1 - days);
         var all = await spaces.GetSpacesAsync(cancellationToken);
-        var ratings = await spaces.GetRatingsAsync(space, from, cancellationToken);
-        return new SpaceRatingsRead
-        {
-            Today = EnvironmentRows.Day(today),
-            From = EnvironmentRows.Day(from),
-            Ratings = ratings
-                .OrderByDescending(r => r.Day).ThenByDescending(r => r.RatedAt)
-                .Select(r => EnvironmentRows.From(r, all))
-                .ToList()
-        };
+        return EnvironmentRows.Ratings(today, from, await spaces.GetRatingsAsync(space, from, cancellationToken), all);
     }
 
     /// <summary>Every space, for naming the spaces in a write's answer.</summary>

@@ -245,18 +245,4 @@ internal sealed class TaskTimerBar : FlowLayoutPanel
             Changed?.Invoke(this, EventArgs.Empty);
         }
     }
-
-    /// <summary>The subset of <c>bsk timer … --json</c> the Pilot uses.</summary>
-    private sealed class TimerResultJson
-    {
-        public long TotalSeconds { get; set; }
-        public List<PausedJson> Paused { get; set; } = [];
-        public bool Completed { get; set; }
-    }
-
-    private sealed class PausedJson
-    {
-        public string Urn { get; set; } = "";
-        public string Title { get; set; } = "";
-    }
 }

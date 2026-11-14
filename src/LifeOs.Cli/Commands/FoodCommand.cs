@@ -78,7 +78,7 @@ internal static class FoodCommand
                     var view = await food.GetDayAsync(day, cancellationToken);
                     if (asJson)
                     {
-                        Cli.WriteJson(FoodOutput.DayJson(view));
+                        Cli.WriteJson(FoodRows.From(view, food.Rules));
                     }
                     else
                     {
@@ -96,7 +96,7 @@ internal static class FoodCommand
                 var range = await food.GetDaysAsync(from, to, cancellationToken);
                 if (asJson)
                 {
-                    Cli.WriteJson(FoodOutput.RangeJson(range));
+                    Cli.WriteJson(FoodRows.From(range, food.Rules));
                 }
                 else
                 {
@@ -483,7 +483,7 @@ internal static class FoodCommand
                 var streak = (await food.GetDayAsync(today, cancellationToken)).Sobriety;
                 if (asJson)
                 {
-                    Cli.WriteJson(FoodOutput.DrinksJson(tally, streak));
+                    Cli.WriteJson(FoodRows.From(tally), new { sobriety = FoodRows.From(streak) });
                 }
                 else
                 {
@@ -612,16 +612,7 @@ internal static class FoodOutput
     {
         if (asJson)
         {
-            Cli.WriteJson(new
-            {
-                action = result.Action,
-                meal = result.Meal is { } m ? MealJson(m) : null,
-                fast = result.Fast is { } f ? FastJson(f) : null,
-                day = result.Day?.ToString("yyyy-MM-dd"),
-                days = result.Days.Select(d => d.ToString("yyyy-MM-dd")),
-                awards = RewardOutput.AwardsJson(result.Earned.Awards),
-                progress = RewardOutput.ProgressJson(result.Earned.Progress)
-            });
+            Cli.WriteJson(FoodRows.From(result));
             return;
         }
 
@@ -777,29 +768,6 @@ internal static class FoodOutput
         }
     }
 
-    public static object DrinksJson(DrinkTally tally, SobrietyStreak? streak) => new
-    {
-        from = tally.From,
-        to = tally.To,
-        drinks = tally.Drinks,
-        drinkDays = tally.DrinkDays,
-        mostInADay = tally.MostInADay,
-        mostOn = tally.MostOn?.ToString("yyyy-MM-dd"),
-        sobriety = SobrietyJson(streak)
-    };
-
-    private static object? SobrietyJson(SobrietyStreak? streak) => streak is null
-        ? null
-        : new
-        {
-            asOf = streak.AsOf.ToString("yyyy-MM-dd"),
-            days = streak.Days,
-            bestDays = streak.BestDays,
-            since = streak.Since.ToString("yyyy-MM-dd"),
-            lastDrinkOn = streak.LastDrinkOn?.ToString("yyyy-MM-dd"),
-            firstDay = streak.FirstDay.ToString("yyyy-MM-dd")
-        };
-
     /// <summary>What the ledger pays a day: "39 Health XP (food 32 x 1.2 = 38, fast 7)".</summary>
     private static string Paid(FoodDayPaid paid)
     {
@@ -844,86 +812,6 @@ internal static class FoodOutput
                 $"{Streak(streak)} as of {streak.AsOf.ToString("ddd MMM d", CultureInfo.InvariantCulture)}.");
         }
     }
-
-    public static object DayJson(FoodDayView view) => new
-    {
-        day = view.Day.ToString("yyyy-MM-dd"),
-        today = view.Today.ToString("yyyy-MM-dd"),
-        meals = view.Meals.Select(m => MealJson(m, view.EatenDuringFast.GetValueOrDefault(m.Id))),
-        fasts = view.Fasts.Select(FastJson),
-        running = view.Running is { } r ? FastJson(r) : null,
-        lastMeal = view.LastMeal is { } l ? MealJson(l) : null,
-        summary = SummaryJson(view.Facts, view.Score, view.Paid),
-        sobriety = SobrietyJson(view.Sobriety)
-    };
-
-    public static object RangeJson(FoodRange range) => new
-    {
-        from = range.From.ToString("yyyy-MM-dd"),
-        to = range.To.ToString("yyyy-MM-dd"),
-        today = range.Today.ToString("yyyy-MM-dd"),
-        days = range.Days.Select(d => SummaryJson(d.Facts, d.Score, d.Paid)),
-        sobriety = SobrietyJson(range.Sobriety)
-    };
-
-    public static object MealJson(Meal meal) => MealJson(meal, Guid.Empty);
-
-    private static object MealJson(Meal meal, Guid duringFast) => new
-    {
-        id = meal.Id,
-        name = meal.Name,
-        score = meal.Score,
-        calories = meal.Calories,
-        alcoholic = meal.Alcoholic,
-        proteinG = meal.ProteinG,
-        carbsG = meal.CarbsG,
-        fatG = meal.FatG,
-        mealType = meal.MealType,
-        eatenAt = meal.EatenAt,
-        eatenOn = meal.EatenOn.ToString("yyyy-MM-dd"),
-        photo = meal.PhotoArtifactId,
-        duringFast = duringFast == Guid.Empty ? (Guid?)null : duringFast,
-        loggedAt = meal.LoggedAt,
-        versions = meal.Versions
-    };
-
-    public static object FastJson(Fast fast) => new
-    {
-        id = fast.Id,
-        startedAt = fast.StartedAt,
-        endedAt = fast.EndedAt,
-        startedOn = fast.StartedOn.ToString("yyyy-MM-dd"),
-        endedOn = fast.EndedOn?.ToString("yyyy-MM-dd"),
-        running = fast.Running,
-        seconds = fast.Seconds,
-        mealsDuring = fast.MealsDuring
-    };
-
-    private static object SummaryJson(FoodDay facts, DietScore score, FoodDayPaid paid) => new
-    {
-        day = facts.Day.ToString("yyyy-MM-dd"),
-        meals = facts.Meals,
-        calories = facts.Calories,
-        averageScore = score.AverageScore is { } s ? Math.Round(s, 2) : (decimal?)null,
-        longestFastSeconds = facts.LongestFastSeconds,
-        closed = facts.Closed,
-        closedByHand = facts.ClosedByHand,
-        closedAt = facts.ClosedAt,
-        quality = Math.Round(score.Quality, 2),
-        caloriesPart = Math.Round(score.CaloriesPart, 2),
-        fasting = Math.Round(score.Fasting, 2),
-        foodAward = score.FoodAward,
-        fastAward = score.FastAward,
-        total = score.Total,
-        drinks = score.Drinks,
-        drinkFactor = score.DrinkFactor,
-        paid = new
-        {
-            fast = paid.Fast is { } f ? new { @base = f.Base, paid = f.Paid, multiplier = f.Multiplier } : null,
-            diet = paid.Diet is { } d ? new { @base = d.Base, paid = d.Paid, multiplier = d.Multiplier } : null,
-            total = paid.Total
-        }
-    };
 
     private static string Describe(Meal meal)
         => $"{meal.Name} ({(meal.Alcoholic ? "alcoholic " : "")}{meal.MealType}, {meal.Calories:N0} cal, score {FoodEntries.ScoreText(meal.Score)}{Nutrients(meal)}) at {FoodText.When(meal.EatenLocal)}";

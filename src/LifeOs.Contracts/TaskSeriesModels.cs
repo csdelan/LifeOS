@@ -1,4 +1,4 @@
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// A Task's place in a repeating Task (TASKS-3, D16), on its detail: the series it belongs to

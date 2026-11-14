@@ -43,13 +43,7 @@ internal static class RenameTagCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        from = result.From,
-                        to = result.To,
-                        renamed = result.Renamed,
-                        merged = result.Merged
-                    });
+                    Cli.WriteJson(SubjectRows.From(result));
                 }
                 else if (result.Renamed == 0 && result.Merged == 0)
                 {

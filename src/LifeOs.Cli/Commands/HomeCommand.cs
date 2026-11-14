@@ -41,39 +41,16 @@ internal static class HomeCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
+                    var read = await Cli.Reader<EnvironmentReader>(provider).GetHomeAsync(cancellationToken);
+                    if (series is null)
                     {
-                        today = Day(home.Today),
-                        settledThrough = Day(home.SettledThrough),
-                        homeScore = Points(home.Score),
-                        spaces = home.Spaces.Select(space =>
-                        {
-                            var day = home.Of(space.Id);
-                            return new
-                            {
-                                id = space.Id,
-                                name = space.Name,
-                                weight = space.Weight,
-                                pace = space.Pace,
-                                score = Points(day?.Score),
-                                lastRatedOn = day?.LastRatedOn is { } last ? Day(last) : null,
-                                parts = HomeParts.All.ToDictionary(p => p, p => PartJson(day?.Part(p)))
-                            };
-                        }),
-                        fixNext = home.FixNext.Select(x => new
-                        {
-                            spaceId = x.SpaceId,
-                            space = names.GetValueOrDefault(x.SpaceId),
-                            part = x.Part.Part,
-                            drag = Points(x.Part.Drag)
-                        }),
-                        days = series?.Days.Select(d => new
-                        {
-                            day = Day(d.Day),
-                            homeScore = Points(d.Score),
-                            exception = series.Exceptions.GetValueOrDefault(d.Day)
-                        })
-                    });
+                        Cli.WriteJson(read);
+                    }
+                    else
+                    {
+                        Cli.WriteJson(read, new { days = EnvironmentRows.From(series) });
+                    }
+
                     return 0;
                 }
 
@@ -131,21 +108,7 @@ internal static class HomeCommand
             ? $"{part.Part} {RateCommand.Rating(rated)} → {Shown(value)}"
             : $"{part?.Part ?? ""} —";
 
-    private static object? PartJson(PartValue? part) => part is null
-        ? null
-        : new
-        {
-            rated = part.Rated,
-            ratedOn = part.RatedOn is { } on ? Day(on) : null,
-            now = Points(part.Value),
-            drag = Points(part.Drag)
-        };
-
     /// <summary>Points floored to a tenth, as the web shows them: 636,805 → "63.6".</summary>
     internal static string Shown(long value)
         => (Math.Floor(value / (HomeRules.Unit / 10m)) / 10m).ToString("0.0", CultureInfo.InvariantCulture);
-
-    private static decimal? Points(long? value) => value is { } v ? v / (decimal)HomeRules.Unit : null;
-
-    private static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 }

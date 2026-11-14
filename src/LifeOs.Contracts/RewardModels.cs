@@ -2,7 +2,7 @@ using System.Globalization;
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// <c>GET /api/wallet</c> (REWARD-1 / REWARD-3): every currency's balance in display order,
@@ -187,7 +187,7 @@ public static class RewardRows
         Amounts = entry.Amounts,
         Trigger = entry.Trigger,
         AwardKey = entry.AwardKey,
-        Subject = entry.Subject is { } subject ? Subject(subject) : null,
+        Subject = entry.Subject is { } subject ? SubjectRows.From(subject) : null,
         Note = entry.Note,
         Dollars = entry.Dollars,
         CoinRate = entry.CoinRate
@@ -226,7 +226,7 @@ public static class RewardRows
         Entry = award.Entry,
         Trigger = award.Trigger,
         AwardKey = award.AwardKey,
-        Subject = award.Subject is { } subject ? Subject(subject) : null,
+        Subject = award.Subject is { } subject ? SubjectRows.From(subject) : null,
         Amounts = award.Amounts,
         Note = award.Note,
         Base = award.Base,
@@ -262,13 +262,5 @@ public static class RewardRows
         CoinRate = redemption.CoinRate,
         Reward = redemption.Reward is { } reward ? From(reward) : null,
         Wallet = From(redemption.Wallet)
-    };
-
-    private static CreatedSubject Subject(SubjectRef subject) => new()
-    {
-        Id = subject.Id,
-        Urn = subject.Urn,
-        Type = subject.Type,
-        Title = subject.Title
     };
 }

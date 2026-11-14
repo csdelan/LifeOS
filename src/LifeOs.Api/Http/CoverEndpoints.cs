@@ -53,24 +53,10 @@ public static class CoverEndpoints
             return Results.BadRequest(new ApiError($"Pages run from 1 to {CoverService.MaxPage}; got {page}."));
         }
 
-        var appName = covers.AppName;
-        var read = new CoverSearchRead
-        {
-            Configured = covers.IsSetUp,
-            Query = words,
-            Page = page,
-            UnsplashLink = Cover.UnsplashLink(appName),
-        };
-        if (!covers.IsSetUp)
-        {
-            return Results.Ok(read);
-        }
-
-        var found = await covers.SearchAsync(words, page, CoverService.DefaultPerPage, cancellationToken);
-        read.Total = found.Total;
-        read.TotalPages = found.TotalPages;
-        read.Photos = found.Photos.Select(photo => CoverPhotoRead.From(photo, appName)).ToList();
-        return Results.Ok(read);
+        var found = covers.IsSetUp
+            ? await covers.SearchAsync(words, page, CoverService.DefaultPerPage, cancellationToken)
+            : null;
+        return Results.Ok(CoverSearchRead.From(words, page, covers.AppName, found));
     }
 
     private static async Task<IResult> SetCover(

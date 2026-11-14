@@ -90,7 +90,7 @@ internal static class OuraCommand
                     new OuraSyncOptions(from, HistoryWindows: int.MaxValue), ct);
                 if (asJson)
                 {
-                    Cli.WriteJson(new { sync = result, awards = RewardOutput.AwardsJson(earned.Awards) });
+                    Cli.WriteJson(new { sync = result, awards = earned.Awards.Select(RewardRows.From) });
                     return;
                 }
 
@@ -140,27 +140,14 @@ internal static class OuraCommand
             {
                 var reads = services.GetRequiredService<ActivityReads>();
                 var (from, to) = await reads.LastDaysAsync(days, ct);
-                var rows = await reads.GetDaysAsync(from, to, ct);
                 if (asJson)
                 {
-                    Cli.WriteJson(rows.Select(d => new
-                    {
-                        d.Day,
-                        d.Steps,
-                        band = d.Steps is { } s ? ActivityTargets.Band(s) : null,
-                        d.ActiveCalories,
-                        d.TotalCalories,
-                        d.WalkingM,
-                        d.HighS,
-                        d.MediumS,
-                        d.LowS,
-                        d.NonWearS,
-                        d.Score,
-                        d.SyncedAt,
-                        d.Versions
-                    }));
+                    var paid = await services.GetRequiredService<ActivityPaidReads>().GetPaidAsync(from, to, ct);
+                    Cli.WriteJson(ActivityRows.Days(from, to, await reads.TodayAsync(ct), await reads.GetDailyAsync(from, to, ct), paid));
                     return;
                 }
+
+                var rows = await reads.GetDaysAsync(from, to, ct);
 
                 if (rows.Count == 0)
                 {
@@ -216,7 +203,7 @@ internal static class OuraCommand
                 var workouts = await reads.GetWorkoutsAsync(from, to, all, ct);
                 if (asJson)
                 {
-                    Cli.WriteJson(workouts.Select(WorkoutJson));
+                    Cli.WriteJson(ActivityRows.Workouts(from, to, await reads.TodayAsync(ct), workouts));
                     return;
                 }
 
@@ -299,7 +286,7 @@ internal static class OuraCommand
                 var tags = await reads.GetTagsAsync(from, to, ct);
                 if (asJson)
                 {
-                    Cli.WriteJson(tags.Select(TagJson));
+                    Cli.WriteJson(ActivityRows.Tags(from, to, await reads.TodayAsync(ct), tags));
                     return;
                 }
 
@@ -368,7 +355,7 @@ internal static class OuraCommand
                     : await notes.SetAsync(reference, text, ct);
                 if (asJson)
                 {
-                    Cli.WriteJson(WorkoutJson(workout));
+                    Cli.WriteJson(ActivityRows.From(workout));
                     return;
                 }
 
@@ -398,41 +385,6 @@ internal static class OuraCommand
         });
     }
 
-    private static object WorkoutJson(Workout workout) => new
-    {
-        workout.Id,
-        workout.Day,
-        workout.Activity,
-        workout.Label,
-        workout.StartedAt,
-        workout.EndedAt,
-        workout.Seconds,
-        workout.Calories,
-        workout.DistanceM,
-        workout.Intensity,
-        workout.Source,
-        counted = workout.Verdict.Counted,
-        reason = workout.Verdict.Reason,
-        workout.Note,
-        workout.NoteAt,
-        workout.SyncedAt
-    };
-
-    private static object TagJson(ActivityTag tag) => new
-    {
-        tag.Id,
-        tag.Day,
-        tag.EndDay,
-        tag.TypeCode,
-        tag.CustomName,
-        tag.Name,
-        tag.StartedAt,
-        tag.EndedAt,
-        tag.Seconds,
-        tag.Comment,
-        tag.SyncedAt
-    };
-
     private static void WriteWorkout(Workout workout)
     {
         var name = workout.Label is { Length: > 0 } label ? $"{label} ({workout.Activity})" : workout.Activity;
@@ -456,7 +408,7 @@ internal static class OuraCommand
     {
         if (asJson)
         {
-            Cli.WriteJson(status);
+            Cli.WriteJson(OuraStatusRead.From(status));
             return;
         }
 

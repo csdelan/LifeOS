@@ -2,7 +2,7 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Measurements;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// The measurements' reads (MEASURE-1, MEASURE-2, MEASURE-4, measurements plan §4.6, §4.9) on the

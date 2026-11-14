@@ -10,14 +10,15 @@
   </PropertyGroup>
 
   <!--
-    WinForms-free Pilot helpers compiled into the test assembly so URL filtering and
-    timer formatting can be asserted without a ProjectReference to the Windows-only
-    Pilot exe.
+    WinForms-free Pilot helpers compiled into the test assembly so URL filtering,
+    timer formatting and the Pilot's copies of bsk's JSON can be asserted without a
+    ProjectReference to the Windows-only Pilot exe.
   -->
   <ItemGroup>
     <Compile Include="..\..\src\LifeOs.Pilot\Shell\BrowserUrl.cs" Link="Pilot\BrowserUrl.cs" />
     <Compile Include="..\..\src\LifeOs.Pilot\Shell\TimerFormat.cs" Link="Pilot\TimerFormat.cs" />
     <Compile Include="..\..\src\LifeOs.Pilot\Shell\NewItemWrites.cs" Link="Pilot\NewItemWrites.cs" />
+    <Compile Include="..\..\src\LifeOs.Pilot\Cli\BskJson.cs" Link="Pilot\BskJson.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,6 +27,11 @@
     <ProjectReference Include="..\..\src\LifeOs.Infrastructure\LifeOs.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\LifeOs.Cli\LifeOs.Cli.csproj" />
     <ProjectReference Include="..\..\src\LifeOs.Api\LifeOs.Api.csproj" />
+    <ProjectReference Include="..\..\src\LifeOs.Contracts\LifeOs.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="LifeOs.Contracts" />
   </ItemGroup>
 
   <!--

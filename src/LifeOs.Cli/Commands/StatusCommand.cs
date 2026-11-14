@@ -44,13 +44,11 @@ internal static class StatusCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
+                    Cli.WriteJson(RewardRows.Earned(result.Awards, result.Progress), new
                     {
                         eventId = result.EventId,
                         subject = new { result.Subject.Urn, result.Subject.Type },
-                        status = result.Status,
-                        awards = RewardOutput.AwardsJson(result.Awards),
-                        progress = RewardOutput.ProgressJson(result.Progress)
+                        status = result.Status
                     });
                 }
                 else

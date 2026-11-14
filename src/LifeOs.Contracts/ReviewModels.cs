@@ -1,6 +1,6 @@
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// A review as the Reviews page reads it (REVIEW-1, REVIEW-2, reviews plan §3). Days are home-zone

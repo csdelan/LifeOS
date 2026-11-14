@@ -28,11 +28,7 @@ internal static class TasksCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        series = result.Series,
-                        made = result.Made.Select(r => new { urn = r.Urn, title = r.Title })
-                    });
+                    Cli.WriteJson(SubjectRows.From(result));
                     return 0;
                 }
 

@@ -2,7 +2,7 @@ using System.Globalization;
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// <c>GET /api/domains</c> (REWARD-6 / REWARD-7 / REWARD-8, xp-domains plan §7.4.8): every life

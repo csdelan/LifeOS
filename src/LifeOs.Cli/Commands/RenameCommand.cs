@@ -46,15 +46,7 @@ internal static class RenameCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        urn = result.Subject.Urn,
-                        type = result.Subject.Type,
-                        title = result.Subject.Title,
-                        previousTitle = result.PreviousTitle,
-                        changed = result.Changed,
-                        occurrencesRenamed = result.OccurrencesRenamed
-                    });
+                    Cli.WriteJson(SubjectRows.From(result), new { urn = result.Subject.Urn, type = result.Subject.Type });
                 }
                 else if (result.Changed)
                 {

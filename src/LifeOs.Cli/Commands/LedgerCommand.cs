@@ -82,20 +82,7 @@ internal static class LedgerCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(entries.Select(e => new
-                    {
-                        id = e.EventId,
-                        occurredAt = e.OccurredAt,
-                        entry = e.Entry,
-                        provenance = e.Provenance,
-                        amounts = e.Amounts,
-                        trigger = e.Trigger,
-                        awardKey = e.AwardKey,
-                        subject = e.Subject is { } s ? new { id = s.Id, urn = s.Urn, type = s.Type, title = s.Title } : null,
-                        note = e.Note,
-                        dollars = e.Dollars,
-                        coinRate = e.CoinRate
-                    }));
+                    Cli.WriteJson(entries.Select(RewardRows.From));
                     return 0;
                 }
 
@@ -152,14 +139,7 @@ internal static class LedgerCommand
                 timeZone = zone,
                 from = from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 to = to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                days = days.Select(d => new
-                {
-                    date = d.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                    earned = d.Earned,
-                    reversed = d.Reversed,
-                    spent = d.Spent,
-                    net = d.Net
-                })
+                days = days.Select(RewardRows.From)
             });
             return 0;
         }

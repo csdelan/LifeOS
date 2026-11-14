@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LifeOs.Application\LifeOs.Application.csproj" />
+    <ProjectReference Include="..\LifeOs.Contracts\LifeOs.Contracts.csproj" />
     <ProjectReference Include="..\LifeOs.Infrastructure\LifeOs.Infrastructure.csproj" />
   </ItemGroup>
 
@@ -19,6 +20,10 @@
   <ItemGroup>
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="LifeOs.Contracts" />
   </ItemGroup>
 
 </Project>

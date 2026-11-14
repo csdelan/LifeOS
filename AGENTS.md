@@ -19,6 +19,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - `src/LifeOs.Cli`: the `bsk` CLI, and the only door for `bsk migrate`. Run it with
   `dotnet run --project src/LifeOs.Cli -- <verb>` (`bsk` isn't on PATH). Outside programs that
   read (Python, BI, `psql`) use the `bsk_reader` role and the `v_*` views.
+- `src/LifeOs.Contracts`: the shapes `/api` answers in, their mappers, and the readers that only
+  compose kernel reads. `bsk --json` prints the same shape for the same read or write; what bsk
+  says besides goes beside it (`Cli.WriteJson(dto, extra)`). A verb an endpoint also answers gets
+  a pair in `BskJsonTests`, which also checks the Pilot's copies (`src/LifeOs.Pilot/Cli/BskJson.cs`).
 - `src/LifeOs.Api`: the ASP.NET Core API. It catches up repeating Tasks and the rewards as it
   starts (`StartupCatchUp`), so starting it against a database writes to it; `CatchUp:OnStart`
   false turns that off, and `ApiTestHost` does. It serves the SPA in production and `/mcp`, the

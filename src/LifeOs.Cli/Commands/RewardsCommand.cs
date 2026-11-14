@@ -66,7 +66,7 @@ internal static class RewardsCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(catalog.Select(RewardOutput.RewardJson));
+                    Cli.WriteJson(catalog.Select(RewardRows.From));
                     return 0;
                 }
 
@@ -267,7 +267,7 @@ internal static class RewardsCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new { awards = RewardOutput.AwardsJson(awards) });
+                    Cli.WriteJson(new { awards = awards.Select(RewardRows.From) });
                     return 0;
                 }
 
@@ -289,7 +289,7 @@ internal static class RewardsCommand
     {
         if (asJson)
         {
-            Cli.WriteJson(RewardOutput.RewardJson(reward));
+            Cli.WriteJson(RewardRows.From(reward));
             return 0;
         }
 

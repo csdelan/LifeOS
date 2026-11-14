@@ -87,7 +87,7 @@ internal static class MeasureCommand
                         cancellationToken);
                     if (asJson)
                     {
-                        Cli.WriteJson(new { today = Day(list.Today), readings = list.Readings.Select(r => Json(r, Find(metrics, r))) });
+                        Cli.WriteJson(new { today = Day(list.Today), readings = list.Readings.Select(r => MeasurementRows.Reading(r, Find(metrics, r))) });
                         return 0;
                     }
 
@@ -149,7 +149,10 @@ internal static class MeasureCommand
                         var logged = await service.LogManyAsync(entries, at, note, cancellationToken);
                         if (asJson)
                         {
-                            Cli.WriteJson(new { readings = logged.Select(r => Json(r, Find(metrics, r))) });
+                            Cli.WriteJson(new MetricReadingsResult
+                            {
+                                Readings = logged.Select(r => MeasurementRows.Reading(r, Find(metrics, r))).ToList()
+                            });
                             return 0;
                         }
 
@@ -167,7 +170,10 @@ internal static class MeasureCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new { reading = delete is not null ? null : Json(reading, Find(metrics, reading)) });
+                    Cli.WriteJson(new MetricReadingResult
+                    {
+                        Reading = delete is not null ? null : MeasurementRows.Reading(reading, Find(metrics, reading))
+                    });
                     return 0;
                 }
 
@@ -177,25 +183,6 @@ internal static class MeasureCommand
         });
         return command;
     }
-
-    /// <summary>A reading as JSON, flagged against <paramref name="metric"/>'s normal range when it's given.</summary>
-    internal static object Json(MetricReading reading, Metric? metric) => new
-    {
-        id = reading.Id,
-        metricId = reading.MetricId,
-        value = reading.Value,
-        unit = reading.Unit,
-        note = reading.Note,
-        takenAt = reading.TakenAt,
-        takenOn = Day(reading.TakenOn),
-        takenLocal = reading.TakenLocal.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
-        loggedAt = reading.LoggedAt,
-        versions = reading.Versions,
-        flag = metric?.Flag(reading),
-        visitId = reading.VisitId,
-        low = reading.Low,
-        high = reading.High
-    };
 
     /// <summary>A time for <c>--at</c>: the Food Log's forms, plus a date alone, which is noon that day.</summary>
     internal static async Task<DateTimeOffset?> ParseAtAsync(

@@ -77,7 +77,7 @@ internal static class SpaceCommand
             {
                 await using var provider = Cli.BuildServices(connectionString);
                 var spaces = await provider.GetRequiredService<SpaceService>().ListAsync(archived, cancellationToken);
-                var total = spaces.Where(s => !s.Archived).Sum(s => s.Weight);
+                var total = EnvironmentRows.TotalWeight(spaces);
                 if (asJson)
                 {
                     Cli.WriteJson(new { spaces = spaces.Select(s => Json(s, total)) });
@@ -162,8 +162,8 @@ internal static class SpaceCommand
     private static async Task<int> WriteAsync(
         IServiceProvider provider, Space space, bool asJson, string done, CancellationToken cancellationToken)
     {
-        var total = (await provider.GetRequiredService<SpaceService>().ListAsync(cancellationToken: cancellationToken))
-            .Sum(s => s.Weight);
+        var total = EnvironmentRows.TotalWeight(
+            await provider.GetRequiredService<SpaceService>().ListAsync(cancellationToken: cancellationToken));
         if (asJson)
         {
             Cli.WriteJson(Json(space, total));
@@ -175,18 +175,9 @@ internal static class SpaceCommand
         return 0;
     }
 
-    internal static object Json(Space space, int totalWeight) => new
-    {
-        id = space.Id,
-        urn = space.Urn,
-        name = space.Name,
-        weight = space.Weight,
-        pace = space.Pace,
-        share = SpaceShares.Of(space, totalWeight),
-        archivedAt = space.ArchivedAt,
-        archivedOn = space.ArchivedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-        shots = SpacePhotoCommand.ShotsJson(space)
-    };
+    /// <summary>The API's row for the space, with its shots beside it (the API lists those with its photos).</summary>
+    internal static object Json(Space space, int totalWeight)
+        => Cli.Join(EnvironmentRows.From(space, totalWeight), new { shots = SpacePhotoCommand.ShotsJson(space) });
 
     private static Option<int?> WeightOption() => new("--weight")
     {

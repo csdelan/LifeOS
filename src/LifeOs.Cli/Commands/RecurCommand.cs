@@ -71,7 +71,7 @@ internal static class RecurCommand
                 if (clear)
                 {
                     var cleared = await service.ClearAsync(subject, cancellationToken);
-                    Report(asJson, cleared.Urn, null, []);
+                    Report(asJson, SubjectRows.Cleared(cleared));
                     return 0;
                 }
 
@@ -105,7 +105,7 @@ internal static class RecurCommand
                 var recurrenceJson = Recurrence.Build(freq, on, every, unit, day, cue, each, from);
 
                 var updated = await service.SetAsync(subject, recurrenceJson, start, cancellationToken);
-                Report(asJson, updated.Subject.Urn, updated.Recurrence, updated.Made);
+                Report(asJson, SubjectRows.From(updated));
                 return 0;
             });
         });
@@ -125,23 +125,18 @@ internal static class RecurCommand
             : throw new ArgumentException($"--start takes a date as yyyy-MM-dd; got '{text}'.");
     }
 
-    private static void Report(bool asJson, string urn, string? recurrenceJson, IReadOnlyList<SubjectRef> made)
+    private static void Report(bool asJson, RecurResult result)
     {
         if (asJson)
         {
-            Cli.WriteJson(new
-            {
-                urn,
-                recurrence = recurrenceJson,
-                repetitions = made.Select(r => new { urn = r.Urn, title = r.Title })
-            });
+            Cli.WriteJson(result);
             return;
         }
 
-        Console.WriteLine(recurrenceJson is null
-            ? $"Cleared recurrence on {urn}."
-            : $"Set recurrence on {urn}: {recurrenceJson}.");
-        foreach (var repetition in made)
+        Console.WriteLine(result.Recurrence is null
+            ? $"Cleared recurrence on {result.Urn}."
+            : $"Set recurrence on {result.Urn}: {result.Recurrence}.");
+        foreach (var repetition in result.Made)
         {
             Console.WriteLine($"  made {repetition.Urn}");
         }

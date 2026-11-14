@@ -88,12 +88,7 @@ internal static class DomainsExceptionCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        exception = change.Exception is { } x ? Json(x) : null,
-                        awards = RewardOutput.AwardsJson(change.Earned.Awards),
-                        progress = RewardOutput.ProgressJson(change.Earned.Progress)
-                    });
+                    Cli.WriteJson(DomainRows.From(change));
                     return 0;
                 }
 
@@ -129,12 +124,7 @@ internal static class DomainsExceptionCommand
                 var list = await provider.GetRequiredService<ExceptionDayService>().ListAsync(days, cancellationToken);
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        today = list.Today,
-                        from = list.Today.AddDays(1 - list.Days),
-                        exceptions = list.Marked.Select(Json)
-                    });
+                    Cli.WriteJson(DomainRows.From(list));
                     return 0;
                 }
 
@@ -176,8 +166,6 @@ internal static class DomainsExceptionCommand
             ? parsed
             : throw new ArgumentException($"'{text}' isn't a day: give yyyy-MM-dd, today or yesterday.");
     }
-
-    private static object Json(ExceptionDay day) => new { day = day.Day, comment = day.Comment, markedAt = day.MarkedAt };
 
     private static string Day(DateOnly day) => day.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture);
 }

@@ -50,14 +50,6 @@ public static class TaskEndpoints
     /// </summary>
     private static async Task<IResult> Settle(TaskSeriesService series, CancellationToken cancellationToken)
     {
-        var result = await series.SettleAsync(cancellationToken);
-        return Results.Ok(new TaskSettleRead
-        {
-            Series = result.Series,
-            Made = result.Made.Select(made => new CreatedSubject
-            {
-                Id = made.Id, Urn = made.Urn, Type = made.Type, Title = made.Title
-            }).ToList()
-        });
+        return Results.Ok(SubjectRows.From(await series.SettleAsync(cancellationToken)));
     }
 }

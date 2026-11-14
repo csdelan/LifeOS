@@ -3,7 +3,7 @@ using LifeOs.Application.Activity;
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// <c>GET /api/oura/status</c> (ACTIVITY-1, activity plan §3.1): the Oura connection as the
@@ -368,6 +368,35 @@ public sealed class ActivitySyncRead
 public static class ActivityRows
 {
     public static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>The days from <paramref name="from"/> to <paramref name="to"/>, each with what the ledger paid it.</summary>
+    public static ActivityDaysRead Days(
+        DateOnly from, DateOnly to, DateOnly today, IEnumerable<ActivityDaily> days,
+        IReadOnlyDictionary<DateOnly, ActivityDayPaid> paid) => new()
+    {
+        From = Day(from),
+        To = Day(to),
+        Today = Day(today),
+        MinimumSteps = ActivityTargets.MinimumSteps,
+        GoalSteps = ActivityTargets.GoalSteps,
+        Days = days.Select(d => From(d, paid.GetValueOrDefault(d.Day) ?? ActivityDayPaid.None)).ToList(),
+    };
+
+    public static ActivityWorkoutsRead Workouts(DateOnly from, DateOnly to, DateOnly today, IEnumerable<Workout> workouts) => new()
+    {
+        From = Day(from),
+        To = Day(to),
+        Today = Day(today),
+        Workouts = workouts.Select(From).ToList(),
+    };
+
+    public static ActivityTagsRead Tags(DateOnly from, DateOnly to, DateOnly today, IEnumerable<ActivityTag> tags) => new()
+    {
+        From = Day(from),
+        To = Day(to),
+        Today = Day(today),
+        Tags = tags.Select(From).ToList(),
+    };
 
     public static ActivityDayRow From(ActivityDaily daily, ActivityDayPaid paid) => new()
     {

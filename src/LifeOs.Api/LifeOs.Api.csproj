@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LifeOs.Application\LifeOs.Application.csproj" />
+    <ProjectReference Include="..\LifeOs.Contracts\LifeOs.Contracts.csproj" />
     <ProjectReference Include="..\LifeOs.Infrastructure\LifeOs.Infrastructure.csproj" />
   </ItemGroup>
 
@@ -18,6 +19,10 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="LifeOs.Contracts" />
   </ItemGroup>
 
 </Project>

@@ -2,7 +2,7 @@ using System.Globalization;
 using LifeOs.Application.Home;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// One space (HOME-1): its name, weight (1–10) and pace (1–5), its share of the Home Score (null
@@ -425,6 +425,18 @@ public static class EnvironmentRows
         RatedAt = rating.RatedAt
     };
 
+    /// <summary>The ratings from <paramref name="from"/> to <paramref name="today"/>, newest first.</summary>
+    public static SpaceRatingsRead Ratings(
+        DateOnly today, DateOnly from, IEnumerable<SpaceRating> ratings, IReadOnlyList<Space> spaces) => new()
+    {
+        Today = Day(today),
+        From = Day(from),
+        Ratings = ratings
+            .OrderByDescending(r => r.Day).ThenByDescending(r => r.RatedAt)
+            .Select(r => From(r, spaces))
+            .ToList()
+    };
+
     public static SpaceRatingResult From(RatingWriteResult result, IReadOnlyList<Space> spaces)
     {
         var earned = RewardRows.Earned(result.Earned.Awards, result.Earned.Progress);
@@ -439,5 +451,5 @@ public static class EnvironmentRows
     /// <summary>The weight of the spaces not archived: what each one's share is of.</summary>
     public static int TotalWeight(IEnumerable<Space> spaces) => spaces.Where(s => !s.Archived).Sum(s => s.Weight);
 
-    internal static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    public static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 }

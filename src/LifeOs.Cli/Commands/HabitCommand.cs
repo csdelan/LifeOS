@@ -81,14 +81,7 @@ internal static class HabitCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        habit = new { urn = view.Habit.Urn, type = view.Habit.Type, title = view.Habit.Title },
-                        minAdherence = view.MinAdherence,
-                        windowDays = view.WindowDays,
-                        adherenceIsCustom = view.AdherenceIsCustom,
-                        windowIsCustom = view.WindowIsCustom
-                    });
+                    Cli.WriteJson(HabitTargetResult.From(view));
                     return 0;
                 }
 

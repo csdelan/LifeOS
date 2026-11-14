@@ -1,7 +1,7 @@
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// What one trigger of an item pays (REWARD-2): its own price when <see cref="IsCustom"/>,

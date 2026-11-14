@@ -66,7 +66,7 @@ internal static class MetricCommand
                     parseResult.GetValue(decimalsOption), parseResult.GetValue(targetOption),
                     parseResult.GetValue(betterOption), parseResult.GetValue(lowOption), parseResult.GetValue(highOption),
                     cancellationToken: cancellationToken);
-                return Write(metric, asJson, "Added");
+                return await WriteAsync(provider, metric, asJson, "Added", cancellationToken);
             });
         });
         return command;
@@ -89,15 +89,7 @@ internal static class MetricCommand
                 var metrics = await provider.GetRequiredService<MetricReads>().ListAsync(archived, cancellationToken);
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        metrics = metrics.Select(s => new
-                        {
-                            metric = Json(s.Metric),
-                            readings = s.Readings,
-                            last = s.Last is { } last ? MeasureCommand.Json(last, s.Metric) : null
-                        })
-                    });
+                    Cli.WriteJson(new { metrics = metrics.Select(MeasurementRows.From) });
                     return 0;
                 }
 
@@ -167,7 +159,7 @@ internal static class MetricCommand
                         parseResult.GetValue(lowOption), parseResult.GetValue(noLowOption),
                         parseResult.GetValue(highOption), parseResult.GetValue(noHighOption)),
                     cancellationToken);
-                return Write(metric, asJson, "Updated");
+                return await WriteAsync(provider, metric, asJson, "Updated", cancellationToken);
             });
         });
         return command;
@@ -192,7 +184,7 @@ internal static class MetricCommand
                 var metric = archive
                     ? await service.ArchiveAsync(reference, cancellationToken)
                     : await service.RestoreAsync(reference, cancellationToken);
-                return Write(metric, asJson, archive ? "Archived" : "Restored");
+                return await WriteAsync(provider, metric, asJson, archive ? "Archived" : "Restored", cancellationToken);
             });
         });
         return command;
@@ -213,21 +205,15 @@ internal static class MetricCommand
             return Cli.RunAsync(asJson, async () =>
             {
                 await using var provider = Cli.BuildServices(connectionString);
-                var read = await provider.GetRequiredService<MetricReads>().ReadAsync(
-                    parseResult.GetValue(metricArgument)!, parseResult.GetValue(daysOption), cancellationToken);
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        today = Day(read.Today),
-                        from = read.From is { } f ? Day(f) : null,
-                        metric = Json(read.Metric),
-                        readings = read.Readings.Select(r => MeasureCommand.Json(r, read.Metric)),
-                        days = read.Days.Select(p => new { day = Day(p.Day), value = p.Value, trend = p.Trend, readingId = p.ReadingId }),
-                        goal = GoalJson(read.Goal)
-                    });
+                    Cli.WriteJson(await Cli.Reader<MeasurementReader>(provider).GetDetailAsync(
+                        parseResult.GetValue(metricArgument)!, parseResult.GetValue(daysOption), cancellationToken));
                     return 0;
                 }
+
+                var read = await provider.GetRequiredService<MetricReads>().ReadAsync(
+                    parseResult.GetValue(metricArgument)!, parseResult.GetValue(daysOption), cancellationToken);
 
                 var m = read.Metric;
                 Console.WriteLine(
@@ -276,47 +262,16 @@ internal static class MetricCommand
         };
     }
 
-    internal static object Json(Metric metric) => new
-    {
-        id = metric.Id,
-        urn = metric.Urn,
-        name = metric.Name,
-        unit = metric.Unit,
-        decimals = metric.Decimals,
-        target = metric.Target,
-        better = metric.Better,
-        catalog = metric.Catalog,
-        low = metric.Low,
-        high = metric.High,
-        panel = metric.Panel,
-        archivedAt = metric.ArchivedAt,
-        archivedOn = metric.ArchivedOn is { } on ? Day(on) : null
-    };
-
     /// <summary>A flag as a reading's listing ends with it: "  (high)", or nothing.</summary>
     internal static string FlagText(string? flag) => flag is null ? "" : $"  ({flag})";
 
-    internal static object GoalJson(MetricGoal goal) => new
-    {
-        status = goal.Status,
-        target = goal.Target,
-        direction = goal.Direction,
-        now = goal.Now,
-        ratePerWeek = goal.RatePerWeek,
-        reachedBy = goal.ReachedBy is { } by ? Day(by) : null,
-        basis = new
-        {
-            days = goal.BasisDays,
-            from = goal.BasisFrom is { } f ? Day(f) : null,
-            to = goal.BasisTo is { } t ? Day(t) : null
-        }
-    };
-
-    private static int Write(Metric metric, bool asJson, string done)
+    /// <summary>The metric as the API answers its add or change: the row, with its count and newest reading.</summary>
+    private static async Task<int> WriteAsync(
+        IServiceProvider provider, Metric metric, bool asJson, string done, CancellationToken cancellationToken)
     {
         if (asJson)
         {
-            Cli.WriteJson(Json(metric));
+            Cli.WriteJson(await Cli.Reader<MeasurementReader>(provider).GetMetricAsync(metric.Id, cancellationToken));
             return 0;
         }
 

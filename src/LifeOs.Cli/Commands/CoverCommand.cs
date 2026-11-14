@@ -58,23 +58,7 @@ internal static class CoverCommand
                 var result = await covers.SearchAsync(words, page, CoverService.DefaultPerPage, ct);
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        query = CoverService.CheckQuery(words),
-                        page,
-                        result.Total,
-                        result.TotalPages,
-                        photos = result.Photos.Select(p => new
-                        {
-                            p.Id,
-                            p.Photographer,
-                            description = p.AltDescription ?? p.Description,
-                            p.Color,
-                            p.Width,
-                            p.Height,
-                            p.PhotoUrl
-                        })
-                    });
+                    Cli.WriteJson(CoverSearchRead.From(CoverService.CheckQuery(words), page, covers.AppName, result));
                     return;
                 }
 
@@ -163,7 +147,7 @@ internal static class CoverCommand
                 var cleared = await covers.ClearAsync(subject, ct);
                 if (asJson)
                 {
-                    Cli.WriteJson(new { subject = SubjectJson(cleared.Subject), removed = cleared.HadCover });
+                    Cli.WriteJson(CoverClearedRead.From(cleared));
                     return;
                 }
 
@@ -190,8 +174,8 @@ internal static class CoverCommand
                 {
                     Cli.WriteJson(new
                     {
-                        subject = SubjectJson(view.Subject),
-                        cover = view.Cover is null ? null : CoverJson(view.Cover, covers.AppName)
+                        subject = SubjectRows.From(view.Subject),
+                        cover = view.Cover is null ? null : CoverRead.From(view.Cover, covers.AppName)
                     });
                     return;
                 }
@@ -218,13 +202,7 @@ internal static class CoverCommand
     {
         if (asJson)
         {
-            Cli.WriteJson(new
-            {
-                subject = SubjectJson(change.Subject),
-                cover = CoverJson(change.Cover, appName),
-                downloadCounted = change.DownloadCounted,
-                downloadProblem = change.DownloadProblem
-            });
+            Cli.WriteJson(CoverResult.From(change, appName));
             return;
         }
 
@@ -247,26 +225,6 @@ internal static class CoverCommand
     }
 
     private static string Heading(SubjectRef subject) => $"{subject.Title} ({subject.Type}, {subject.Urn})";
-
-    private static object SubjectJson(SubjectRef subject)
-        => new { urn = subject.Urn, type = subject.Type, title = subject.Title };
-
-    private static object CoverJson(Cover cover, string appName) => new
-    {
-        cover.Source,
-        cover.PhotoId,
-        cover.Url,
-        cover.Color,
-        cover.Width,
-        cover.Height,
-        cover.Alt,
-        cover.Photographer,
-        cover.PositionY,
-        cover.SetAt,
-        photographerLink = cover.PhotographerLink(appName),
-        photoLink = cover.PhotoLink(appName),
-        unsplashLink = Cover.UnsplashLink(appName)
-    };
 
     private static Task<int> Run(
         ParseResult parseResult, Option<string?> connectionOption, Option<bool> jsonOption,

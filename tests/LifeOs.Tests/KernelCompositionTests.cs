@@ -110,7 +110,9 @@ public sealed class KernelCompositionTests
     [Fact]
     public void Every_reader_in_the_api_is_one_the_reader_kernel_builds()
     {
+        // The readers that only compose kernel reads live with the shapes, so bsk reads through them too (CR89).
         var missing = typeof(ReaderKernel).Assembly.GetExportedTypes()
+            .Concat(typeof(FoodReader).Assembly.GetExportedTypes())
             .Where(t => t is { IsClass: true, IsAbstract: false }
                         && (t.Name.EndsWith("Reader", StringComparison.Ordinal) || t.Name.EndsWith("Reads", StringComparison.Ordinal)))
             .Except(ReaderKernel.Readers)

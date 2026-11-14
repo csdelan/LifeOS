@@ -144,12 +144,8 @@ internal static class NewCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
+                    Cli.WriteJson(SubjectRows.From(created), new
                     {
-                        id = created.Id,
-                        urn = created.Urn,
-                        type = created.Type,
-                        title = created.Title,
                         reused,
                         parent = childLink is null ? null : new { childLink.Parent.Urn, childLink.Relation }
                     });

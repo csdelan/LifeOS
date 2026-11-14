@@ -85,7 +85,7 @@ internal static class RateCommand
                         words.Length == 1 ? words[0] : null, parseResult.GetValue(daysOption), cancellationToken);
                     if (asJson)
                     {
-                        Cli.WriteJson(new { today = list.Today, ratings = list.Ratings.Select(r => Json(r, spaces)) });
+                        Cli.WriteJson(EnvironmentRows.Ratings(list.Today, list.Today.AddDays(1 - list.Days), list.Ratings, spaces));
                         return 0;
                     }
 
@@ -156,12 +156,7 @@ internal static class RateCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        ratings = result.Ratings.Select(r => Json(r, spaces)),
-                        awards = RewardOutput.AwardsJson(result.Earned.Awards),
-                        progress = RewardOutput.ProgressJson(result.Earned.Progress)
-                    });
+                    Cli.WriteJson(EnvironmentRows.From(result, spaces));
                     return 0;
                 }
 
@@ -189,19 +184,6 @@ internal static class RateCommand
         var note = rating.Note is { } n ? $" — {n}" : "";
         return $"{name} on {rating.Day.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture)}: {string.Join(", ", parts)}{note}";
     }
-
-    internal static object Json(SpaceRating rating, IReadOnlyList<Space> spaces) => new
-    {
-        id = rating.Id,
-        spaceId = rating.SpaceId,
-        space = spaces.FirstOrDefault(s => s.Id == rating.SpaceId)?.Name,
-        day = rating.Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-        tidiness = rating.Tidiness,
-        cleanliness = rating.Cleanliness,
-        aesthetics = rating.Aesthetics,
-        note = rating.Note,
-        ratedAt = rating.RatedAt
-    };
 
     internal static string Rating(decimal value) => value.ToString("0.#", CultureInfo.InvariantCulture);
 

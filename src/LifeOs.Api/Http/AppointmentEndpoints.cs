@@ -59,14 +59,7 @@ public static class AppointmentEndpoints
 
         var result = await appointments.MaterializeAsync(
             id.ToString(), through, cancellationToken);
-        return Results.Ok(new MaterializeRow
-        {
-            Series = new CreatedSubject
-            {
-                Id = result.Series.Id, Urn = result.Series.Urn, Type = result.Series.Type, Title = result.Series.Title
-            },
-            Created = [.. result.Created.Select(o => new CreatedSubject { Id = o.Id, Urn = o.Urn, Type = o.Type, Title = o.Title })],
-        });
+        return Results.Ok(SubjectRows.From(result));
     }
 }
 
@@ -74,11 +67,4 @@ public sealed class MaterializeBody
 {
     /// <summary>The last day to make occurrences for, <c>yyyy-MM-dd</c>.</summary>
     public string? Through { get; set; }
-}
-
-/// <summary>What Materialize made: the series and each new occurrence (none when all were made already).</summary>
-public sealed class MaterializeRow
-{
-    public CreatedSubject Series { get; set; } = new();
-    public IReadOnlyList<CreatedSubject> Created { get; set; } = [];
 }

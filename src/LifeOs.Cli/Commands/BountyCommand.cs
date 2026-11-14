@@ -96,17 +96,7 @@ internal static class BountyCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        subject = new { urn = view.Subject.Urn, type = view.Subject.Type, title = view.Subject.Title },
-                        bounty = view.Lines.Select(l => new
-                        {
-                            trigger = l.Trigger,
-                            amounts = l.Amounts,
-                            everyMinutes = l.EveryMinutes,
-                            custom = l.IsCustom
-                        })
-                    });
+                    Cli.WriteJson(BountyRows.From(view));
                     return 0;
                 }
 

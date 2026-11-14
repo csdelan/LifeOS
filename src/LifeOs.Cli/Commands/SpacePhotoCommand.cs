@@ -63,7 +63,7 @@ internal static class SpacePhotoCommand
             {
                 var space = await provider.GetRequiredService<SpaceService>()
                     .AddShotAsync(parseResult.GetValue(addSpace)!, parseResult.GetValue(addName)!, cancellationToken);
-                return WriteShots(space, asJson, $"Added a shot to {space.Name}");
+                return await WriteShotsAsync(provider, space, asJson, $"Added a shot to {space.Name}", cancellationToken);
             }));
 
         var renameSpace = SpaceArgument();
@@ -79,7 +79,7 @@ internal static class SpacePhotoCommand
                 var space = await provider.GetRequiredService<SpaceService>().RenameShotAsync(
                     parseResult.GetValue(renameSpace)!, parseResult.GetValue(renameShot)!, parseResult.GetValue(renameName)!,
                     cancellationToken);
-                return WriteShots(space, asJson, $"Renamed a shot of {space.Name}");
+                return await WriteShotsAsync(provider, space, asJson, $"Renamed a shot of {space.Name}", cancellationToken);
             }));
 
         var removeSpace = SpaceArgument();
@@ -92,7 +92,7 @@ internal static class SpacePhotoCommand
             {
                 var space = await provider.GetRequiredService<SpaceService>().RemoveShotAsync(
                     parseResult.GetValue(removeSpace)!, parseResult.GetValue(removeShot)!, cancellationToken);
-                return WriteShots(space, asJson, $"Removed a shot of {space.Name}");
+                return await WriteShotsAsync(provider, space, asJson, $"Removed a shot of {space.Name}", cancellationToken);
             }));
 
         command.Subcommands.Add(add);
@@ -151,13 +151,8 @@ internal static class SpacePhotoCommand
                 var baselines = Baselines(list.Space, list.Photos);
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        space = list.Space.Name,
-                        spaceId = list.Space.Id,
-                        shots = ShotsJson(list.Space),
-                        photos = list.Photos.Select(p => Json(p, list.Space, baselines.Contains(p.Id)))
-                    });
+                    Cli.WriteJson(await Cli.Reader<EnvironmentReader>(provider).GetSpacePhotosAsync(
+                        list.Space.Id.ToString(), parseResult.GetValue(shotOption), cancellationToken));
                     return 0;
                 }
 
@@ -210,7 +205,9 @@ internal static class SpacePhotoCommand
                     .RemoveAsync(parseResult.GetValue(photoArgument)!, cancellationToken);
                 if (asJson)
                 {
-                    Cli.WriteJson(new { removed = photo.Id, spaceId = photo.SpaceId });
+                    Cli.WriteJson(
+                        await Cli.Reader<EnvironmentReader>(provider).PhotoResultAsync(photo.SpaceId, null, cancellationToken),
+                        new { removed = photo.Id });
                     return 0;
                 }
 
@@ -251,22 +248,26 @@ internal static class SpacePhotoCommand
         var space = await provider.GetRequiredService<ISpaceRepository>().GetSpaceAsync(photo.SpaceId, cancellationToken)
                     ?? throw new InvalidOperationException("That photo's space no longer exists.");
         var photos = await provider.GetRequiredService<ISpaceRepository>().GetPhotosAsync(space.Id, cancellationToken);
-        var baseline = Baselines(space, photos).Contains(photo.Id);
         if (asJson)
         {
-            Cli.WriteJson(Json(photo, space, baseline));
+            Cli.WriteJson(await Cli.Reader<EnvironmentReader>(provider).PhotoResultAsync(space.Id, photo.Id, cancellationToken));
             return 0;
         }
+
+        var baseline = Baselines(space, photos).Contains(photo.Id);
 
         Console.WriteLine($"{done}: {Line(photo, space, baseline)}");
         return 0;
     }
 
-    private static int WriteShots(Space space, bool asJson, string done)
+    private static async Task<int> WriteShotsAsync(
+        IServiceProvider provider, Space space, bool asJson, string done, CancellationToken cancellationToken)
     {
         if (asJson)
         {
-            Cli.WriteJson(new { spaceId = space.Id, space = space.Name, shots = ShotsJson(space) });
+            Cli.WriteJson(
+                await Cli.Reader<EnvironmentReader>(provider).PhotoResultAsync(space.Id, null, cancellationToken),
+                new { space = space.Name });
             return 0;
         }
 
@@ -291,21 +292,6 @@ internal static class SpacePhotoCommand
         => space.Shots.FirstOrDefault(s => string.Equals(s.Id, photo.ShotId, StringComparison.OrdinalIgnoreCase)) is { } shot
             ? space.ShotName(shot)
             : $"a removed shot ({photo.ShotId})";
-
-    private static object Json(SpacePhoto photo, Space space, bool baseline) => new
-    {
-        id = photo.Id,
-        spaceId = space.Id,
-        space = space.Name,
-        shotId = photo.ShotId,
-        shot = space.Shots.FirstOrDefault(s => string.Equals(s.Id, photo.ShotId, StringComparison.OrdinalIgnoreCase)) is { } shot
-            ? space.ShotName(shot)
-            : null,
-        day = photo.Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-        artifactId = photo.ArtifactId,
-        addedAt = photo.AddedAt,
-        baseline
-    };
 
     /// <summary>
     /// A space's shots: <c>pickedBaseline</c> is the photo picked with <c>bsk space baseline</c>,

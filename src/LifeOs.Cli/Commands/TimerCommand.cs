@@ -72,10 +72,10 @@ internal static class TimerCommand
                         runningSince = timer.RunningSince,
                         totalSeconds = timer.TotalSeconds,
                         sessionSeconds = timer.SessionSeconds,
-                        paused = (result?.Paused ?? []).Select(p => new { urn = p.Urn, title = p.Title }),
+                        paused = (result?.Paused ?? []).Select(p => SubjectRows.From(p)),
                         completed = result?.Completed ?? false,
-                        awards = RewardOutput.AwardsJson(result?.Awards ?? []),
-                        progress = RewardOutput.ProgressJson(result?.Progress ?? [])
+                        awards = (result?.Awards ?? []).Select(RewardRows.From),
+                        progress = (result?.Progress ?? []).Select(RewardRows.From)
                     });
                     return 0;
                 }

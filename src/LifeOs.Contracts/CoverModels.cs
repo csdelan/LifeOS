@@ -2,7 +2,7 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Covers;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// A subject's cover as pages read it (COVER-1..3, D15; cover-images plan §3.4): the stored
@@ -76,6 +76,18 @@ public sealed class CoverSearchRead
     public string UnsplashLink { get; set; } = "";
 
     public IReadOnlyList<CoverPhotoRead> Photos { get; set; } = [];
+
+    /// <summary>A page of the search for <paramref name="query"/>; <paramref name="found"/> is null when covers aren't set up.</summary>
+    public static CoverSearchRead From(string query, int page, string appName, UnsplashSearchPage? found) => new()
+    {
+        Configured = found is not null,
+        Query = query,
+        Page = page,
+        UnsplashLink = Cover.UnsplashLink(appName),
+        Total = found?.Total ?? 0,
+        TotalPages = found?.TotalPages ?? 0,
+        Photos = found?.Photos.Select(photo => CoverPhotoRead.From(photo, appName)).ToList() ?? []
+    };
 }
 
 /// <summary>One photo in the picker: a small image to show, and its credit.</summary>
@@ -133,7 +145,7 @@ public sealed class CoverResult
 
     public static CoverResult From(CoverChange change, string appName) => new()
     {
-        Subject = CoverSubjects.From(change.Subject),
+        Subject = SubjectRows.From(change.Subject),
         Cover = CoverRead.From(change.Cover, appName),
         DownloadCounted = change.DownloadCounted,
         DownloadProblem = change.DownloadProblem,
@@ -148,18 +160,7 @@ public sealed class CoverClearedRead
 
     public static CoverClearedRead From(CoverCleared cleared) => new()
     {
-        Subject = CoverSubjects.From(cleared.Subject),
+        Subject = SubjectRows.From(cleared.Subject),
         Removed = cleared.HadCover,
-    };
-}
-
-internal static class CoverSubjects
-{
-    public static CreatedSubject From(SubjectRef subject) => new()
-    {
-        Id = subject.Id,
-        Urn = subject.Urn,
-        Type = subject.Type,
-        Title = subject.Title,
     };
 }

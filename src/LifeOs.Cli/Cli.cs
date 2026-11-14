@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using LifeOs.Application.Subjects;
 using LifeOs.Infrastructure.DependencyInjection;
 using LifeOs.Infrastructure.Integrations;
@@ -31,8 +32,50 @@ internal static class Cli
                 integrations: IntegrationSettings.FromEnvironment())
             .BuildServiceProvider();
 
+    /// <summary>
+    /// Prints <paramref name="payload"/> as JSON. A read or write the API also answers prints the
+    /// API's own shape for it, made by the same mapper in <c>LifeOs.Contracts</c> (code review
+    /// CR89); <c>BskJsonTests</c> checks each one against the endpoint.
+    /// </summary>
     public static void WriteJson(object payload)
         => Console.WriteLine(JsonSerializer.Serialize(payload, JsonOptions));
+
+    /// <summary>
+    /// Prints the API's shape for a write with what <c>bsk</c> says besides it (the event it
+    /// wrote, say): each property of <paramref name="extra"/> joins the payload's, and one the
+    /// payload already has is a mistake, refused.
+    /// </summary>
+    public static void WriteJson(object payload, object extra) => WriteJson(Join(payload, extra));
+
+    /// <summary>
+    /// The API's shape for <paramref name="payload"/> with <paramref name="extra"/>'s properties
+    /// beside its own, for a list whose rows each carry what <c>bsk</c> adds.
+    /// </summary>
+    public static JsonObject Join(object payload, object extra)
+    {
+        var node = JsonSerializer.SerializeToNode(payload, payload.GetType(), JsonOptions)!.AsObject();
+        var added = JsonSerializer.SerializeToNode(extra, extra.GetType(), JsonOptions)!.AsObject();
+        foreach (var name in added.Select(p => p.Key).ToList())
+        {
+            var value = added[name];
+            added.Remove(name);
+            if (node.ContainsKey(name))
+            {
+                throw new InvalidOperationException($"bsk's '{name}' would hide the API's own.");
+            }
+
+            node[name] = value;
+        }
+
+        return node;
+    }
+
+    /// <summary>
+    /// One of the readers the API reads through (<c>LifeOs.Contracts</c>), on this kernel, so a
+    /// <c>bsk</c> read answers what the endpoint does.
+    /// </summary>
+    public static T Reader<T>(IServiceProvider provider) where T : class
+        => ActivatorUtilities.CreateInstance<T>(provider);
 
     public static void WriteError(bool asJson, string message)
     {

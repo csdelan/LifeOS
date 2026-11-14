@@ -60,14 +60,12 @@ internal static class AdhereCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
+                    Cli.WriteJson(RewardRows.Earned(recorded.Awards, recorded.Progress), new
                     {
                         eventId = recorded.EventId,
                         habit = recorded.Habit.Urn,
                         result = recorded.Result,
-                        occurrence = recorded.Occurrence.ToString("yyyy-MM-dd"),
-                        awards = RewardOutput.AwardsJson(recorded.Awards),
-                        progress = RewardOutput.ProgressJson(recorded.Progress)
+                        occurrence = recorded.Occurrence.ToString("yyyy-MM-dd")
                     });
                 }
                 else

@@ -21,12 +21,14 @@ COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/LifeOs.Domain/LifeOs.Domain.csproj src/LifeOs.Domain/
 COPY src/LifeOs.Application/LifeOs.Application.csproj src/LifeOs.Application/
 COPY src/LifeOs.Infrastructure/LifeOs.Infrastructure.csproj src/LifeOs.Infrastructure/
+COPY src/LifeOs.Contracts/LifeOs.Contracts.csproj src/LifeOs.Contracts/
 COPY src/LifeOs.Api/LifeOs.Api.csproj src/LifeOs.Api/
 RUN dotnet restore src/LifeOs.Api/LifeOs.Api.csproj
 COPY db/ db/
 COPY src/LifeOs.Domain/ src/LifeOs.Domain/
 COPY src/LifeOs.Application/ src/LifeOs.Application/
 COPY src/LifeOs.Infrastructure/ src/LifeOs.Infrastructure/
+COPY src/LifeOs.Contracts/ src/LifeOs.Contracts/
 COPY src/LifeOs.Api/ src/LifeOs.Api/
 RUN dotnet publish src/LifeOs.Api/LifeOs.Api.csproj \
     --configuration Release \

@@ -135,14 +135,7 @@ public static class WriteEndpoints
         }
 
         var result = await rename.RenameAsync(body.Subject, body.Title, cancellationToken);
-        return Results.Ok(new RenamedSubject
-        {
-            Id = result.Subject.Id,
-            Title = result.Subject.Title,
-            PreviousTitle = result.PreviousTitle,
-            Changed = result.Changed,
-            OccurrencesRenamed = result.OccurrencesRenamed
-        });
+        return Results.Ok(SubjectRows.From(result));
     }
 
     private static async Task<IResult> SetStatus(
@@ -182,20 +175,14 @@ public static class WriteEndpoints
         if (body.Recurrence is not { } pattern)
         {
             var cleared = await recurrence.ClearAsync(subjectRef, cancellationToken);
-            return Results.Ok(new RecurResult { Id = cleared.Id, Urn = cleared.Urn });
+            return Results.Ok(SubjectRows.Cleared(cleared));
         }
 
         var json = Recurrence.Build(
             pattern.Freq, pattern.On, pattern.Every, pattern.Unit, pattern.Day, pattern.Cue,
             pattern.Period, pattern.From);
         var updated = await recurrence.SetAsync(subjectRef, json, ParseOccurrence(body.Start), cancellationToken);
-        return Results.Ok(new RecurResult
-        {
-            Id = updated.Subject.Id,
-            Urn = updated.Subject.Urn,
-            Recurrence = updated.Recurrence,
-            Made = updated.Made.Select(ToCreated).ToList()
-        });
+        return Results.Ok(SubjectRows.From(updated));
     }
 
     private static async Task<IResult> Archive(
@@ -255,13 +242,7 @@ public static class WriteEndpoints
         }
 
         var result = await tags.RenameAsync(body.From, body.To, cancellationToken);
-        return Results.Ok(new RenamedTag
-        {
-            From = result.From,
-            To = result.To,
-            Renamed = result.Renamed,
-            Merged = result.Merged
-        });
+        return Results.Ok(SubjectRows.From(result));
     }
 
     private static async Task<IResult> Link(
@@ -515,13 +496,7 @@ public static class WriteEndpoints
         return date;
     }
 
-    private static CreatedSubject ToCreated(SubjectRef created) => new()
-    {
-        Id = created.Id,
-        Urn = created.Urn,
-        Type = created.Type,
-        Title = created.Title
-    };
+    private static CreatedSubject ToCreated(SubjectRef created) => SubjectRows.From(created);
 }
 
 public sealed class NewSubjectBody
@@ -594,18 +569,6 @@ public sealed class RecurrenceBody
     public string? Cue { get; set; }
     public string? Period { get; set; }
     public string? From { get; set; }
-}
-
-/// <summary>
-/// The subject whose recurrence was set, the stored recurrence (JSON, null when cleared), and
-/// for a repeating Task the repetitions it made.
-/// </summary>
-public sealed class RecurResult
-{
-    public Guid Id { get; set; }
-    public string Urn { get; set; } = "";
-    public string? Recurrence { get; set; }
-    public IReadOnlyList<CreatedSubject> Made { get; set; } = [];
 }
 
 public sealed class SubjectBody

@@ -3,7 +3,7 @@ using LifeOs.Application.Food;
 using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// <c>GET /api/food/day</c> (FOOD-1..4, food-log plan §3.6): one home-zone day of the Food Log.

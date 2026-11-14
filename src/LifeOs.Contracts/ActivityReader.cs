@@ -2,7 +2,7 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Activity;
 using LifeOs.Domain;
 
-namespace LifeOs.Api.Read;
+namespace LifeOs.Contracts;
 
 /// <summary>
 /// The Activity page's reads (ACTIVITY-2..4, ACTIVITY-6, activity plan §3.6, §3.9) on the <c>bsk_reader</c>
@@ -31,16 +31,7 @@ public sealed class ActivityReader(ActivityReads reads, ActivityPaidReads paid)
         var end = to ?? today;
         var start = from ?? end.AddDays(1 - DefaultDays);
         var days = await reads.GetDailyAsync(start, end, cancellationToken);
-        var paidByDay = await paid.GetPaidAsync(start, end, cancellationToken);
-        return new ActivityDaysRead
-        {
-            From = ActivityRows.Day(start),
-            To = ActivityRows.Day(end),
-            Today = ActivityRows.Day(today),
-            MinimumSteps = ActivityTargets.MinimumSteps,
-            GoalSteps = ActivityTargets.GoalSteps,
-            Days = days.Select(d => ActivityRows.From(d, paidByDay.GetValueOrDefault(d.Day) ?? ActivityDayPaid.None)).ToList(),
-        };
+        return ActivityRows.Days(start, end, today, days, await paid.GetPaidAsync(start, end, cancellationToken));
     }
 
     /// <summary>
@@ -53,14 +44,7 @@ public sealed class ActivityReader(ActivityReads reads, ActivityPaidReads paid)
         var today = await reads.TodayAsync(cancellationToken);
         var end = to ?? today;
         var start = from ?? Monday(end).AddDays(-7 * (DefaultWeeks - 1));
-        var workouts = await reads.GetWorkoutsAsync(start, end, all: true, cancellationToken);
-        return new ActivityWorkoutsRead
-        {
-            From = ActivityRows.Day(start),
-            To = ActivityRows.Day(end),
-            Today = ActivityRows.Day(today),
-            Workouts = workouts.Select(ActivityRows.From).ToList(),
-        };
+        return ActivityRows.Workouts(start, end, today, await reads.GetWorkoutsAsync(start, end, all: true, cancellationToken));
     }
 
     /// <summary>
@@ -73,14 +57,7 @@ public sealed class ActivityReader(ActivityReads reads, ActivityPaidReads paid)
         var today = await reads.TodayAsync(cancellationToken);
         var end = to ?? today;
         var start = from ?? end.AddDays(1 - DefaultDays);
-        var tags = await reads.GetTagsAsync(start, end, cancellationToken);
-        return new ActivityTagsRead
-        {
-            From = ActivityRows.Day(start),
-            To = ActivityRows.Day(end),
-            Today = ActivityRows.Day(today),
-            Tags = tags.Select(ActivityRows.From).ToList(),
-        };
+        return ActivityRows.Tags(start, end, today, await reads.GetTagsAsync(start, end, cancellationToken));
     }
 
     /// <summary>LifeOS holds a live workout with exactly that Oura id.</summary>

@@ -188,18 +188,4 @@ public sealed class BskCli(string executablePath, bool fromWorkingTree = false)
             // Temp leftovers are harmless.
         }
     }
-
-    private sealed class JournalCapture
-    {
-        public Guid Id { get; set; }
-    }
-}
-
-/// <summary>The structured result of <c>bsk new --json</c>.</summary>
-public sealed class CreatedSubject
-{
-    public Guid Id { get; set; }
-    public string Urn { get; set; } = "";
-    public string Type { get; set; } = "";
-    public string Title { get; set; } = "";
 }

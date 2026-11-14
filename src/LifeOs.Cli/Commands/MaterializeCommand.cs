@@ -50,12 +50,7 @@ internal static class MaterializeCommand
 
                 if (asJson)
                 {
-                    Cli.WriteJson(new
-                    {
-                        series = result.Series.Urn,
-                        created = result.Created.Select(o => o.Urn).ToArray(),
-                        count = result.Created.Count
-                    });
+                    Cli.WriteJson(SubjectRows.From(result));
                 }
                 else
                 {
