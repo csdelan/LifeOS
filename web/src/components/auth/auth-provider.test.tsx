@@ -14,7 +14,7 @@ vi.mock("@/lib/api-base", () => ({
 
 vi.mock("@/lib/supabase", () => ({
   isSupabaseConfigured: () => true,
-  getSupabase: () => ({
+  getSupabase: async () => ({
     auth: {
       signInWithOAuth,
       getSession: async () => ({ data: { session: null } }),

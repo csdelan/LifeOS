@@ -8,10 +8,12 @@ import { AuthProvider } from "@/components/auth/auth-provider";
 import { HomeDayRollover } from "@/components/shell/home-day-rollover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { isLiveApi } from "@/lib/api-base";
 import { ApiRequestError } from "@/lib/live/http";
 import { isConsentPath } from "@/lib/oauth-consent";
 import { OAuthConsentPage } from "@/pages/oauth-consent-page";
 import { router } from "@/router";
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { reportUnhandledRejections } from "@/lib/write-action";
 import { listenForNewBuild } from "@/lib/new-build";
 import "./index.css";
@@ -35,6 +37,9 @@ const queryClient = new QueryClient({
 reportUnhandledRejections(window);
 // A page opened before a deploy reloads when a file it asks for is gone (code review CR93).
 listenForNewBuild(window);
+// Live, the session is the first thing the app reads, and supabase-js is a chunk of its own:
+// fetch it now, not once the app has drawn (code review CR101). AuthProvider says if it fails.
+if (isLiveApi() && isSupabaseConfigured()) getSupabase().catch(() => {});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

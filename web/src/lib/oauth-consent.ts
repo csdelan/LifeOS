@@ -144,7 +144,7 @@ function fail(error: { message?: string } | null, fallback: string): never {
 export function liveConsentClient(): ConsentClient {
   return {
     async lookup(authorizationId) {
-      const { data, error } = await getSupabase().auth.oauth.getAuthorizationDetails(authorizationId);
+      const { data, error } = await (await getSupabase()).auth.oauth.getAuthorizationDetails(authorizationId);
       if (error || !data) fail(error, "Supabase didn't return the request.");
       if (!("authorization_id" in data)) {
         return { kind: "redirect", url: data.redirect_url };
@@ -163,14 +163,14 @@ export function liveConsentClient(): ConsentClient {
       };
     },
     async approve(authorizationId) {
-      const { data, error } = await getSupabase().auth.oauth.approveAuthorization(authorizationId, {
+      const { data, error } = await (await getSupabase()).auth.oauth.approveAuthorization(authorizationId, {
         skipBrowserRedirect: true,
       });
       if (error || !data) fail(error, "Supabase didn't approve the request.");
       return data.redirect_url;
     },
     async deny(authorizationId) {
-      const { data, error } = await getSupabase().auth.oauth.denyAuthorization(authorizationId, {
+      const { data, error } = await (await getSupabase()).auth.oauth.denyAuthorization(authorizationId, {
         skipBrowserRedirect: true,
       });
       if (error || !data) fail(error, "Supabase didn't deny the request.");

@@ -9,7 +9,8 @@ const REFRESH_SKEW_SECONDS = 60;
  */
 export async function getAccessToken(): Promise<string | null> {
   if (!isLiveApi() || !isSupabaseConfigured()) return null;
-  const { data, error } = await getSupabase().auth.getSession();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.auth.getSession();
   if (error) return null;
   const session = data.session;
   if (!session?.access_token) return null;
@@ -17,7 +18,7 @@ export async function getAccessToken(): Promise<string | null> {
   const expiresAt = session.expires_at ?? 0;
   const now = Math.floor(Date.now() / 1000);
   if (expiresAt > 0 && expiresAt - now < REFRESH_SKEW_SECONDS) {
-    const refreshed = await getSupabase().auth.refreshSession();
+    const refreshed = await supabase.auth.refreshSession();
     if (refreshed.data.session?.access_token) {
       return refreshed.data.session.access_token;
     }

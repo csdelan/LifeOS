@@ -31,7 +31,7 @@ const { oauth } = vi.hoisted(() => ({
 
 vi.mock("@/lib/supabase", () => ({
   isSupabaseConfigured: () => true,
-  getSupabase: () => ({ auth: { oauth } }),
+  getSupabase: async () => ({ auth: { oauth } }),
 }));
 
 describe("consent page addresses", () => {

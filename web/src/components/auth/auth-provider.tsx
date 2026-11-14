@@ -20,11 +20,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!live) return;
-    const supabase = getSupabase();
     let cancelled = false;
-    void supabase.auth
-      .getSession()
-      .then(({ data }) => {
+    let unsubscribe = () => {};
+    void getSupabase()
+      .then(async (supabase) => {
+        if (cancelled) return;
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, next) => {
+          setSession(next);
+        });
+        unsubscribe = () => subscription.unsubscribe();
+        const { data } = await supabase.auth.getSession();
         if (!cancelled) {
           setSession(data.session);
           setReady(true);
@@ -36,19 +43,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setReady(true);
         }
       });
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
-    });
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
+      unsubscribe();
     };
   }, [live]);
 
   const signInWithGoogle = useCallback(async () => {
-    const { error } = await getSupabase().auth.signInWithOAuth({
+    const supabase = await getSupabase();
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       // Signing out of LifeOS leaves Google signed in; without the chooser Google
       // silently reuses that account, so a wrong (non-allowlisted) one can't be swapped.
@@ -59,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     if (live) {
-      await getSupabase().auth.signOut();
+      await (await getSupabase()).auth.signOut();
     }
     setSession(null);
     queryClient.clear();

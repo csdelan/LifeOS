@@ -3,7 +3,8 @@
  * tsc nor the build says any of it:
  *
  * - the first page and each page's own chunk leave out what shows only on demand: the Map's
- *   graph, with its layout engine, and the shell's dialogs load when they're first wanted;
+ *   graph, with its layout engine, and the shell's dialogs load when they're first wanted, and
+ *   supabase-js when the app first reads a session (CR101);
  * - code outside `lib/mock` is code the app uses: every module there is reached from `main.tsx`,
  *   and everything it exports, a test and the mock aside, is used by the app. What only the mock
  *   and the tests use goes under `lib/mock`, which the build keeps in a chunk of its own;
@@ -126,18 +127,29 @@ const loadsWith = (edge: Edge) => !edge.dynamic && !edge.typeOnly;
 const pages = Object.keys(sources).filter((f) => f.startsWith("/src/pages/") && !f.endsWith("-page.helpers.ts"));
 const appModules = reach([ENTRY], () => true);
 
-describe("the bundle (code review CR84)", () => {
-  it("leaves the graph and its layout engine out of the first page and every page's chunk", () => {
-    const heavy = ["@xyflow/react", "elkjs"];
-    const offenders = new Set<string>();
-    for (const start of [ENTRY, ...pages]) {
-      for (const file of reach([start], loadsWith)) {
-        for (const edge of graph.get(file) ?? []) {
-          if (edge.external && !edge.typeOnly && heavy.includes(edge.target)) offenders.add(`${start} → ${file}`);
-        }
+/** Where the first page or a page's chunk loads any of `packages` with it, as `page → module`. */
+function loadedWithAPage(packages: string[]): string[] {
+  const offenders = new Set<string>();
+  for (const start of [ENTRY, ...pages]) {
+    for (const file of reach([start], loadsWith)) {
+      for (const edge of graph.get(file) ?? []) {
+        if (edge.external && loadsWith(edge) && packages.includes(edge.target)) offenders.add(`${start} → ${file}`);
       }
     }
-    expect([...offenders].sort()).toEqual([]);
+  }
+  return [...offenders].sort();
+}
+
+describe("the bundle (code review CR84)", () => {
+  it("leaves the graph and its layout engine out of the first page and every page's chunk", () => {
+    expect(loadedWithAPage(["@xyflow/react", "elkjs"])).toEqual([]);
+  });
+
+  it("loads supabase-js when the app first reads a session, not with the first page (code review CR101)", () => {
+    // About 100 kB that mock mode never needs, and the live app only once it starts.
+    expect(loadedWithAPage(["@supabase/supabase-js"])).toEqual([]);
+    const client = graph.get("/src/lib/supabase.ts") ?? [];
+    expect(client.some((e) => e.target === "@supabase/supabase-js" && e.dynamic), "lib/supabase.ts loads it").toBe(true);
   });
 
   it("loads the shell's dialogs when they're first opened, not with the first page", () => {

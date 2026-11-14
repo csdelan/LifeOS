@@ -232,7 +232,7 @@ export function liveAgentsClient(): AgentsClient {
       return fits<AgentsOverview>()(await unwrap(api().GET("/api/agents")));
     },
     async grants() {
-      const { data, error } = await getSupabase().auth.oauth.listGrants();
+      const { data, error } = await (await getSupabase()).auth.oauth.listGrants();
       if (error || !data) fail(error, "Supabase didn't list the connected agents.");
       return data.map((g) => ({
         clientId: g.client.id,
@@ -269,7 +269,7 @@ export function liveAgentsClient(): AgentsClient {
       );
     },
     async removeGrant(clientId) {
-      const { error } = await getSupabase().auth.oauth.revokeGrant({ clientId });
+      const { error } = await (await getSupabase()).auth.oauth.revokeGrant({ clientId });
       if (error) fail(error, "Supabase didn't remove the agent.");
     },
     async linkPerson(clientId, personId) {
