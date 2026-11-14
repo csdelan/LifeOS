@@ -80,7 +80,7 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Refuse a ref that isn't main or a release tag
         run: |
@@ -129,7 +129,7 @@ jobs:
 
       - name: Fetch the image CI built
         if: ${{ inputs.deploy && inputs.image_artifact != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.image_artifact }}
           path: ${{ runner.temp }}/image
@@ -166,7 +166,7 @@ jobs:
           echo "digest=$pushed" >> "$GITHUB_OUTPUT"
 
       - name: Set up .NET (from global.json)
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
