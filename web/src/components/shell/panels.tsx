@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -70,29 +71,72 @@ export function usePersistedWidth(
     window.addEventListener("pointercancel", onUp);
   }, []);
 
-  return { width, dragging, onPointerDown };
+  const resize = useCallback((next: number) => {
+    const { min, max } = rangeRef.current;
+    setWidth(clamp(next, min, max));
+  }, []);
+
+  return { width, dragging, onPointerDown, resize, min: range.min, max: range.max };
 }
 
+/** A panel's width and the ways to change it, as `usePersistedWidth` hands them out. */
+export type PanelWidth = ReturnType<typeof usePersistedWidth>;
+
+/** How far an arrow key moves a panel's edge, and with Shift held. */
+const STEP = 16;
+const BIG_STEP = 64;
+
+/**
+ * The edge a panel is resized by: dragged with the pointer, or focused and moved with the arrow
+ * keys (Shift for a bigger step), Home and End for the narrowest and widest (code review CR87).
+ * It is a window splitter, a focusable separator whose value is the panel's width. `invert` is
+ * for a panel's start edge, where moving the edge left widens the panel.
+ */
 export function ResizeHandle({
-  invert = false,
+  panel,
+  label,
   edge,
-  onPointerDown,
+  invert = false,
 }: {
-  invert?: boolean;
+  panel: PanelWidth;
+  label: string;
   edge: "start" | "end";
-  onPointerDown: (event: ReactPointerEvent<HTMLElement>, invert?: boolean) => void;
+  invert?: boolean;
 }) {
+  function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const step = (event.shiftKey ? BIG_STEP : STEP) * (invert ? -1 : 1);
+    const next =
+      event.key === "ArrowRight"
+        ? panel.width + step
+        : event.key === "ArrowLeft"
+          ? panel.width - step
+          : event.key === "Home"
+            ? panel.min
+            : event.key === "End"
+              ? panel.max
+              : null;
+    if (next == null) return;
+    event.preventDefault();
+    panel.resize(next);
+  }
+
   return (
-    <button
-      type="button"
-      aria-label="Resize panel"
+    <div
+      role="separator"
+      tabIndex={0}
+      aria-label={label}
+      aria-orientation="vertical"
+      aria-valuenow={panel.width}
+      aria-valuemin={panel.min}
+      aria-valuemax={panel.max}
       className={cn(
-        "absolute inset-y-0 z-20 hidden w-2 cursor-col-resize touch-none appearance-none border-0 bg-transparent p-0 md:block",
+        "absolute inset-y-0 z-20 hidden w-2 cursor-col-resize touch-none outline-none md:block",
         "after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent after:transition-colors",
-        "hover:after:bg-primary/50",
+        "hover:after:bg-primary/50 focus-visible:after:w-0.5 focus-visible:after:bg-ring",
         edge === "start" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2",
       )}
-      onPointerDown={(e) => onPointerDown(e, invert)}
+      onPointerDown={(e) => panel.onPointerDown(e, invert)}
+      onKeyDown={onKeyDown}
     />
   );
 }
@@ -109,10 +153,11 @@ export function PeekPanel({
   children: ReactNode;
 }) {
   const isDesktop = useIsDesktop();
-  const { width, dragging, onPointerDown } = usePersistedWidth("layout.peekWidth", 448, {
+  const panel = usePersistedWidth("layout.peekWidth", 448, {
     min: 320,
     max: 800,
   });
+  const { width, dragging } = panel;
 
   if (!isDesktop) {
     return (
@@ -152,7 +197,7 @@ export function PeekPanel({
     >
       {open ? (
         <div className="relative h-full" style={{ width }}>
-          <ResizeHandle edge="start" invert onPointerDown={onPointerDown} />
+          <ResizeHandle panel={panel} label="Resize the detail panel" edge="start" invert />
           <div className="h-full min-w-0 overflow-hidden">{children}</div>
         </div>
       ) : null}

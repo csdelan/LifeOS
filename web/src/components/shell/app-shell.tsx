@@ -129,11 +129,7 @@ export function AppShell() {
   const { data: me } = useMe();
   const { signOut } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { width: navWidth, onPointerDown: onNavPointerDown } = usePersistedWidth(
-    "layout.navWidth",
-    248,
-    { min: 176, max: 400 },
-  );
+  const navPanel = usePersistedWidth("layout.navWidth", 248, { min: 176, max: 400 });
 
   useEffect(() => {
     setNavOpen(false);
@@ -267,9 +263,9 @@ export function AppShell() {
       </header>
       <aside
         className="relative hidden shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground md:flex"
-        style={{ width: navWidth }}
+        style={{ width: navPanel.width }}
       >
-        <ResizeHandle edge="end" onPointerDown={onNavPointerDown} />
+        <ResizeHandle panel={navPanel} label="Resize the navigation" edge="end" />
         {nav}
       </aside>
       <Sheet open={navOpen} onOpenChange={setNavOpen}>

@@ -1,4 +1,5 @@
 import { ChevronRightIcon, Link2Icon, RepeatIcon } from "lucide-react";
+import { Children } from "react";
 import { cn } from "@/lib/utils";
 import { DateChip } from "@/components/primitives/date-chip";
 import { StatusPill } from "@/components/primitives/status-pill";
@@ -12,6 +13,13 @@ import type { SubjectListItem } from "@/lib/production-ui-types";
 import { isTerminal } from "@/lib/production-ui-types";
 import { repeatLabel, shownStatus } from "@/lib/task-series";
 
+/**
+ * A row of an outline, the Map's or the gallery's: a list item in a nested list, so a screen
+ * reader hears the list, its depth and its size, and Tab moves through each row's buttons. The
+ * outline is lists, not an ARIA tree, which would promise the arrow keys a tree has (code review
+ * CR87). The toggle says whether the row is open, the selected row's title is the current one,
+ * and Enter on it adds under it, as an outliner's Enter does.
+ */
 export function TreeNode({
   subject,
   depth,
@@ -46,14 +54,10 @@ export function TreeNode({
   // A repeating Task is one row, its series (TASKS-3), saying how it repeats.
   const repeats = subject.isSeries ? repeatLabel(subject.repeat) : null;
   const createLabel = subject.type === "Task" ? "sibling" : "child";
+  const hasChildren = Children.count(children) > 0;
 
   return (
-    <div
-      role="treeitem"
-      aria-expanded={expandable ? Boolean(expanded) : undefined}
-      aria-selected={Boolean(selected)}
-      aria-level={depth + 1}
-    >
+    <li>
       <div
         data-map-node={subject.id}
         className={cn(
@@ -70,6 +74,7 @@ export function TreeNode({
             expandable ? "hover:bg-muted" : "opacity-0",
           )}
           aria-label={expanded ? `Collapse ${subject.title}` : `Expand ${subject.title}`}
+          aria-expanded={expandable ? Boolean(expanded) : undefined}
           disabled={!expandable}
           tabIndex={expandable ? 0 : -1}
           onClick={onToggle}
@@ -84,7 +89,13 @@ export function TreeNode({
         <button
           type="button"
           className="flex min-h-11 min-w-0 flex-1 items-center gap-2 py-0.5 text-left focus-visible:ring-2 focus-visible:ring-ring/50 md:min-h-0"
+          aria-current={selected ? "true" : undefined}
           onClick={onSelect}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" || !selected || !onCreateChild) return;
+            e.preventDefault();
+            onCreateChild();
+          }}
         >
           <span className="flex w-4 shrink-0 items-center justify-center" aria-hidden>
             <TypeIcon type={subject.type} className="size-3.5" />
@@ -115,7 +126,9 @@ export function TreeNode({
             aria-label={`Add ${createLabel} under ${subject.title}`}
             className={cn(
               "min-h-11 shrink-0 rounded-md px-2 text-[0.6875rem] text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 md:min-h-0 md:px-1.5 md:py-0.5",
-              selected ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100",
+              selected
+                ? "opacity-100"
+                : "opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100",
             )}
           >
             + {createLabel}
@@ -133,11 +146,7 @@ export function TreeNode({
         </div>
       </div>
       {creating}
-      {expanded ? (
-        <div role="group" aria-label={`Children of ${subject.title}`}>
-          {children}
-        </div>
-      ) : null}
-    </div>
+      {expanded && hasChildren ? <ul aria-label={`Children of ${subject.title}`}>{children}</ul> : null}
+    </li>
   );
 }

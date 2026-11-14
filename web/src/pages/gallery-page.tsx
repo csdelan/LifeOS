@@ -170,7 +170,7 @@ export function GalleryPage() {
         </Section>
 
         <Section title="TreeNode">
-          <div className="rounded-xl bg-card p-2 ring-1 ring-foreground/10" role="tree" aria-label="Example outline">
+          <ul className="rounded-xl bg-card p-2 ring-1 ring-foreground/10" aria-label="Example outline">
             <TreeNode
               subject={{ ...sample, type: "Value", title: "Craftsman of systems", status: null, due: null }}
               depth={0}
@@ -192,7 +192,7 @@ export function GalleryPage() {
                 />
               </TreeNode>
             </TreeNode>
-          </div>
+          </ul>
         </Section>
 
         <Section title="Attachment">

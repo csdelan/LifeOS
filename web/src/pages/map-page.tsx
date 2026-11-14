@@ -253,16 +253,7 @@ export function MapPage() {
 
   return (
     <div className="flex h-full min-h-0">
-      <div
-        className="flex min-w-0 flex-1 flex-col"
-        onKeyDown={(e) => {
-          if (view !== "outline" || !selected) return;
-          if (e.key === "Enter" && !(e.target instanceof HTMLInputElement)) {
-            e.preventDefault();
-            setCreating({ parentId: selected });
-          }
-        }}
-      >
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-col gap-2 border-b px-4 py-3 md:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -473,7 +464,7 @@ export function MapPage() {
                 description="Everything here is finished. Set Show to All to see it."
               />
             ) : null}
-            <div role="tree" aria-label="Alignment outline">
+            <ul aria-label="Alignment outline">
               {forest?.map((n) => (
                 <MapBranch
                   key={n.instanceKey}
@@ -488,7 +479,7 @@ export function MapPage() {
                   onCancelCreate={() => setCreating(null)}
                 />
               ))}
-            </div>
+            </ul>
           </div>
         )}
       </div>

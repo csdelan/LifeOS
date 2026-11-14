@@ -114,7 +114,7 @@ test.describe("golden paths: repeating tasks and timers", () => {
   test("a repeating task is one node on the Map, and a review counts its weeks", async ({ page }) => {
     await page.clock.install({ time: new Date("2026-10-21T12:00:00") });
     await page.goto("/map");
-    const outline = page.getByRole("tree", { name: "Alignment outline" });
+    const outline = page.getByRole("list", { name: "Alignment outline" });
     await expect(outline).toBeVisible();
     const expandAll = page.getByRole("switch", { name: "Expand all" });
     if ((await expandAll.getAttribute("aria-checked")) !== "true") await expandAll.click();

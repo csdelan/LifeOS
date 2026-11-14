@@ -14,7 +14,7 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
 
   test("inline create-child in Map", async ({ page }) => {
     await page.goto("/map");
-    await expect(page.getByRole("tree", { name: "Alignment outline" })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Alignment outline" })).toBeVisible();
     await page.getByRole("button", { name: "Run a half-marathon", exact: true }).click();
     await page.keyboard.press("Enter");
     const title = page.getByLabel(/New (project|task|goal)/i);
@@ -26,9 +26,22 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     });
   });
 
+  test("Enter on a selected row's toggle opens or closes it, and adds nothing (code review CR87)", async ({ page }) => {
+    await page.goto("/map");
+    await expect(page.getByRole("list", { name: "Alignment outline" })).toBeVisible();
+    await page.getByRole("button", { name: "Run a half-marathon", exact: true }).click();
+    const toggle = page.getByRole("button", { name: /^(Expand|Collapse) Run a half-marathon$/ }).first();
+    const before = await toggle.getAttribute("aria-label");
+    const after = before!.startsWith("Expand") ? before!.replace("Expand", "Collapse") : before!.replace("Collapse", "Expand");
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: after, exact: true }).first()).toBeVisible();
+    await expect(page.getByLabel(/New (project|task|goal)/i)).toHaveCount(0);
+  });
+
   test("Enter pressed twice in the Map's inline create makes one item", async ({ page }) => {
     await page.goto("/map");
-    await expect(page.getByRole("tree", { name: "Alignment outline" })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Alignment outline" })).toBeVisible();
     await page.getByRole("button", { name: "Run a half-marathon", exact: true }).click();
     await page.keyboard.press("Enter");
     const title = page.getByLabel(/New (project|task|goal)/i);
@@ -45,7 +58,7 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
 
   test("the Map hides finished work until Show asks for it", async ({ page }) => {
     await page.goto("/map");
-    const outline = page.getByRole("tree", { name: "Alignment outline" });
+    const outline = page.getByRole("list", { name: "Alignment outline" });
     await expect(outline).toBeVisible();
     const expandAll = page.getByRole("switch", { name: "Expand all" });
     if ((await expandAll.getAttribute("aria-checked")) !== "true") await expandAll.click();
