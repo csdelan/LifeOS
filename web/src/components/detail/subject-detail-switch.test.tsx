@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SubjectDetail } from "@/components/detail/subject-detail";
 import { CreateActions } from "@/components/create/create-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { UnsavedEditsCtx } from "@/components/shell/unsaved-edits";
 import { getState, resetStore } from "@/lib/mock/store";
 
 vi.mock("sonner", () => ({
@@ -125,5 +126,37 @@ describe("SubjectDetail when another item opens (code review CR91)", () => {
 
     panel.unmount();
     expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+});
+
+describe("SubjectDetail and Discard in the shell's Unsaved edits (code review CR92)", () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  it("throws the edit away when the same item stays open", async () => {
+    const titleA = getState().details[A]!.title;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
+    const shell = (discards: number) => (
+      <QueryClientProvider client={client}>
+        <TooltipProvider>
+          <UnsavedEditsCtx.Provider
+            value={{ dirty: false, setDirty: () => {}, requestNavigation: (go) => go(), discards }}
+          >
+            <SubjectDetail subjectId={A} />
+          </UnsavedEditsCtx.Provider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+    const user = userEvent.setup();
+    const view = render(shell(0));
+    await heading(titleA);
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.type(screen.getByLabelText("Title"), " and more");
+
+    view.rerender(shell(1));
+
+    expect(await heading(titleA)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
   });
 });

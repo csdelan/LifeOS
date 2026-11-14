@@ -7,7 +7,7 @@ import { CardSkeleton, ListSkeleton } from "@/components/primitives/skeletons";
 import { RedeemDialog } from "@/components/rewards/redeem-dialog";
 import { RewardFormDialog } from "@/components/rewards/reward-form-dialog";
 import { RewardsHistory } from "@/components/rewards/rewards-history";
-import { useDirty } from "@/components/shell/app-shell";
+import { useDirty } from "@/components/shell/unsaved-edits";
 import { PeekPanel } from "@/components/shell/panels";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";

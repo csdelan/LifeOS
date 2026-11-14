@@ -71,6 +71,7 @@ import { HistoryTab } from "./history-tab";
 import { EstablishmentPanel } from "./establishment-panel";
 import { useWriteAction } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
+import { useDirty } from "@/components/shell/unsaved-edits";
 
 // The journal (tiptap's editor and its HTML schema) is fetched when the Journal tab is first
 // opened, not with every page that shows an item (code review CR23).
@@ -91,11 +92,13 @@ type SubjectDetailProps = {
  * One item's detail. A page keeps the panel open and changes the item it shows, so everything
  * typed here (the edit, a bounty, an establish target, a journal entry) belongs to the item and
  * starts afresh with the next: kept, an edit begun on one item was saved onto the next (code
- * review CR91). Only the open tab stays.
+ * review CR91). Only the open tab stays. Discard in the shell's "Unsaved edits" throws the edit
+ * away too, when the move it allowed leaves this item open (code review CR92).
  */
 export function SubjectDetail(props: SubjectDetailProps) {
   const [tab, setTab] = useState("overview");
-  return <ItemDetail key={props.subjectId} {...props} tab={tab} onTabChange={setTab} />;
+  const { discards } = useDirty();
+  return <ItemDetail key={`${props.subjectId}:${discards}`} {...props} tab={tab} onTabChange={setTab} />;
 }
 
 function ItemDetail({

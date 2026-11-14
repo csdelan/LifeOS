@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/primitives/empty-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { AdherenceButtons } from "@/components/habits/adherence-buttons";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
-import { useDirty } from "@/components/shell/app-shell";
+import { useDirty } from "@/components/shell/unsaved-edits";
 import {
   useDashboard,
   useHabits,
@@ -61,7 +61,7 @@ export function ReviewsPage() {
   const reviews = useReviews(weekStart, weekEnd);
   const { data, isLoading, isError } = reviews;
   const writes = useWrites();
-  const { setDirty } = useDirty();
+  const { setDirty, discards } = useDirty();
   const docs = data ?? [];
   const doc = docs.find((r) => r.kind === kind && r.date === period.date);
   const weekDoc = docs.find((r) => r.kind === "weekly" && r.date === weekEnd);
@@ -212,7 +212,8 @@ export function ReviewsPage() {
 
         {doc ? (
           <ReviewEditor
-            key={doc.id}
+            // By Discard too, so the choice it threw away doesn't stay on screen (code review CR92).
+            key={`${doc.id}:${discards}`}
             doc={doc}
             onDirty={setDirty}
             onSave={(body) => writes.saveReview(doc.id, body)}

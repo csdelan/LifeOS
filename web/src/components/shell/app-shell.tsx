@@ -1,15 +1,6 @@
 import { Link, Outlet, useBlocker, useRouterState } from "@tanstack/react-router";
 import { useTheme } from "next-themes";
-import {
-  createContext,
-  lazy,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIcon,
   ClipboardCheckIcon,
@@ -47,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { OnceOpened } from "@/components/shell/once-opened";
+import { UnsavedEditsCtx, type UnsavedEdits } from "@/components/shell/unsaved-edits";
 import { ResizeHandle, usePersistedWidth } from "@/components/shell/panels";
 import { CreateActions, type CreateOpts } from "@/components/create/create-context";
 import { RunningTimer } from "@/components/timer/running-timer";
@@ -72,16 +64,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-
-const DirtyCtx = createContext<{
-  dirty: boolean;
-  setDirty: (v: boolean) => void;
-  requestNavigation: (proceed: () => void) => void;
-}>({ dirty: false, setDirty: () => {}, requestNavigation: (proceed) => proceed() });
-
-export function useDirty() {
-  return useContext(DirtyCtx);
-}
 
 const NAV = [
   { to: "/", label: "Focus", icon: LayoutDashboardIcon },
@@ -121,7 +103,15 @@ export function AppShell() {
   const [capturing, setCapturing] = useState(false);
   const [voice, setVoice] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirtyState] = useState(false);
+  // Read where the answer can't wait for a render: Discard clears it and moves in the same click,
+  // and a blocker reading the rendered value blocked that move and asked again (code review CR92).
+  const dirtyRef = useRef(false);
+  const setDirty = useCallback((next: boolean) => {
+    dirtyRef.current = next;
+    setDirtyState(next);
+  }, []);
+  const [discards, setDiscards] = useState(0);
   const idle = useIdleAfterFirstPage();
   const pendingNav = useRef<(() => void) | null>(null);
   const { resolvedTheme, setTheme } = useTheme();
@@ -160,7 +150,7 @@ export function AppShell() {
   }, []);
 
   const blocker = useBlocker({
-    shouldBlockFn: () => dirty,
+    shouldBlockFn: () => dirtyRef.current,
     withResolver: true,
     enableBeforeUnload: dirty,
   });
@@ -170,21 +160,39 @@ export function AppShell() {
     if (blocker.status === "blocked") setStayOpen(true);
   }, [blocker.status]);
 
-  const requestNavigation = useCallback(
-    (proceed: () => void) => {
-      if (!dirty) {
-        proceed();
-        return;
-      }
-      pendingNav.current = proceed;
-      setStayOpen(true);
-    },
-    [dirty],
-  );
+  const requestNavigation = useCallback((proceed: () => void) => {
+    if (!dirtyRef.current) {
+      proceed();
+      return;
+    }
+    pendingNav.current = proceed;
+    setStayOpen(true);
+  }, []);
 
-  const ctx = useMemo(
-    () => ({ dirty, setDirty, requestNavigation }),
-    [dirty, requestNavigation],
+  /**
+   * Stay, by the button or by Escape: the move is dropped and the router let go of it. Left
+   * blocked, the router waited on it, and every later link did nothing (code review CR92).
+   * After Discard it finds nothing left to drop.
+   */
+  function stay() {
+    setStayOpen(false);
+    pendingNav.current = null;
+    if (blocker.status === "blocked") blocker.reset?.();
+  }
+
+  function discard() {
+    const next = pendingNav.current;
+    pendingNav.current = null;
+    setDirty(false);
+    setDiscards((n) => n + 1);
+    setStayOpen(false);
+    if (blocker.status === "blocked") blocker.proceed?.();
+    else next?.();
+  }
+
+  const ctx = useMemo<UnsavedEdits>(
+    () => ({ dirty, setDirty, requestNavigation, discards }),
+    [dirty, setDirty, requestNavigation, discards],
   );
 
   const createActions = useMemo(
@@ -212,7 +220,7 @@ export function AppShell() {
   );
 
   return (
-    <DirtyCtx.Provider value={ctx}>
+    <UnsavedEditsCtx.Provider value={ctx}>
       <CreateActions.Provider value={createActions}>
       <div className="flex h-svh flex-col overflow-hidden bg-background md:flex-row">
       <a href="#main" className="skip-link">
@@ -313,7 +321,9 @@ export function AppShell() {
       <OnceOpened open={voice || idle}>
         <VoiceCaptureDialog open={voice} onOpenChange={setVoice} />
       </OnceOpened>
-      <AlertDialog open={stayOpen} onOpenChange={setStayOpen}>
+      {/* Closing it any way but Discard (Stay, Escape) is staying. Discard's click runs before
+          the dialog closes, so the stay that follows finds nothing left to drop. */}
+      <AlertDialog open={stayOpen} onOpenChange={(open) => (open ? setStayOpen(true) : stay())}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Unsaved edits</AlertDialogTitle>
@@ -322,33 +332,15 @@ export function AppShell() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                setStayOpen(false);
-                pendingNav.current = null;
-                if (blocker.status === "blocked") blocker.reset?.();
-              }}
-            >
-              Stay
-            </AlertDialogCancel>
-            <AlertDialogAction
-              variant="outline"
-              onClick={() => {
-                const next = pendingNav.current;
-                pendingNav.current = null;
-                setDirty(false);
-                setStayOpen(false);
-                if (blocker.status === "blocked") blocker.proceed?.();
-                else next?.();
-              }}
-            >
+            <AlertDialogCancel>Stay</AlertDialogCancel>
+            <AlertDialogAction variant="outline" onClick={discard}>
               Discard
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       </CreateActions.Provider>
-    </DirtyCtx.Provider>
+    </UnsavedEditsCtx.Provider>
   );
 }
 

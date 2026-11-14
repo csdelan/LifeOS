@@ -371,9 +371,13 @@ number when Chris chooses it.
 |----|----------|-----|
 | CR91 | 1 | The detail panel keys everything typed by its item, inside `SubjectDetail`, so none of its five pages can forget: an edit, a bounty or establish target, a journal entry being written and a relationship being chosen start afresh with the next item, and only the open tab stays. It says nothing is unsaved once it's gone. The Inbox preview is keyed by its item the same way, and a typed promote title now survives the item being tagged. The sheets that edit a record already keyed their forms by it. |
 
-Found while checking it: Discard in the unsaved-edits dialog does ask twice (P1, 8).
+### P1: built so far (CR92)
 
-### P1
+| ID | Review # | Fix |
+|----|----------|-----|
+| CR92 | 8 | Discard in "Unsaved edits" asks once: the router's blocker reads the flag where Discard has already cleared it. Discard throws the edit away when the move keeps the same item open (the panel and the review editor key themselves by it), so the shell and what holds the edit agree. Escape is Stay, and lets the router go: before, the move stayed blocked and every later link did nothing. The guard has a module of its own (`components/shell/unsaved-edits.ts`), and three golden paths cover it. |
+
+### P1: proposed
 
 | # | Area | Problem and fix | Finishes | Size |
 |---|------|-----------------|----------|------|
@@ -383,11 +387,11 @@ Found while checking it: Discard in the unsaved-edits dialog does ask twice (P1,
 | 5 | Database | `SubjectReader`'s list casts `vision_order` with an unguarded `::int`, for the API and the Pilot, so one bad value breaks every list. Guard it, and add a test that writes junk to every free attribute a view or reader casts, then reads every list. | CR70 | S–M |
 | 6 | Ops | A rollback run by hand (`migrate.yml`) runs main's newest migrations before deploying the old image, and doesn't check the digest is in the registry before it migrates; each job builds its own `bsk`. Check the digest first, migrate only when asked (`bsk migrate --pending` to say what would run), and publish `bsk` from CI beside the image. | CR90 | M |
 | 7 | Ops | The backup and restore scripts run the working tree's `bsk`, and the nightly `rebuild --verify` has raised false alarms since CR66. Build `bsk` from `origin/main` as `install-bsk.ps1` does, and fix the verify and the stale dev-migrate notes. | | M |
-| 8 | Web screens | Discard in the unsaved-edits dialog asks twice, because the blocker holds a stale dirty flag, and the page's two dirty flags can disagree. One flag. | | S |
+| 8 | Web screens | Built as CR92. Discard in the unsaved-edits dialog asks twice, because the blocker holds a stale dirty flag, and the page's two dirty flags can disagree. One flag. | | S |
 | 9 | Web screens, API | One error boundary, at the root. The lazy pieces (the palette, the dialogs, the graph, the journal tab) don't reload when a deploy has removed their chunk, and `/assets` falls back to `index.html`, so a missing chunk answers HTML. A deep link's `index.html` has no cache header. A boundary per page, a lazy import that reloads once, a 404 for a missing asset, and `no-cache` on `index.html`. | | M |
 | 10 | API | With the rewards area off, the bounty still reaches agents through `get_item`'s attributes and series and `recent_changes`' attribute changes. Hide reward attributes through `McpAreas`, with a test over every tool that answers attributes. | | S–M |
 
-### P2
+### P2: proposed
 
 | # | Area | Problem and fix | Finishes | Size |
 |---|------|-----------------|----------|------|

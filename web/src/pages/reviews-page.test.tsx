@@ -55,8 +55,8 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock("@/components/shell/app-shell", () => ({
-  useDirty: () => ({ dirty: false, setDirty: vi.fn() }),
+vi.mock("@/components/shell/unsaved-edits", () => ({
+  useDirty: () => ({ dirty: false, setDirty: vi.fn(), requestNavigation: (go: () => void) => go(), discards: 0 }),
 }));
 
 // The real dialog records from the microphone; here it shows what it was opened for.

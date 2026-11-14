@@ -35,7 +35,7 @@ import { TypeBadge } from "@/components/primitives/type-badge";
 import { TypeIcon } from "@/components/primitives/type-icon";
 import { SubjectDetail } from "@/components/detail/subject-detail";
 import { useCreateActions } from "@/components/create/create-context";
-import { useDirty } from "@/components/shell/app-shell";
+import { useDirty } from "@/components/shell/unsaved-edits";
 import { PeekPanel } from "@/components/shell/panels";
 import {
   DEFAULT_BROWSE_FILTERS,

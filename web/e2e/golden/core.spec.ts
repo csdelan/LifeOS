@@ -91,6 +91,63 @@ test.describe("golden paths: creating, the Map, the Inbox and the shell", () => 
     await expect(page.getByRole("button", { name: "Edit" })).toBeVisible({ timeout: 10_000 });
   });
 
+  test("Discard asks once, and the next item opens as it is (code review CR92)", async ({ page }) => {
+    await page.goto("/browse?type=Goal&selected=goal-lifeos");
+    await expect(page.getByRole("heading", { name: "Ship LifeOS production UI" })).toBeVisible();
+    await page.getByRole("button", { name: "Edit" }).click();
+    await page.getByLabel("Title", { exact: true }).fill("Typed for the first item");
+
+    await page.getByRole("list", { name: "Goal list" }).getByText("Run a half-marathon").click();
+    const dialog = page.getByRole("alertdialog", { name: "Unsaved edits" });
+    await dialog.getByRole("button", { name: "Discard" }).click();
+
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Run a half-marathon" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save" })).toBeHidden();
+  });
+
+  test("Discard throws the edit away when the item stays open (code review CR92)", async ({ page }) => {
+    await page.goto("/browse?type=Goal&selected=goal-lifeos");
+    await expect(page.getByRole("heading", { name: "Ship LifeOS production UI" })).toBeVisible();
+    await page.getByRole("button", { name: "Edit" }).click();
+    await page.getByLabel("Title", { exact: true }).fill("Typed and then discarded");
+
+    // All types keeps the open Goal open.
+    await page.getByRole("complementary", { name: "Browse filters" }).getByRole("button", { name: /^All types/ }).click();
+    const dialog = page.getByRole("alertdialog", { name: "Unsaved edits" });
+    await dialog.getByRole("button", { name: "Discard" }).click();
+
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Ship LifeOS production UI" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save" })).toBeHidden();
+    // Nothing is held, so leaving doesn't ask.
+    await page.getByRole("link", { name: "Focus" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(dialog).toBeHidden();
+  });
+
+  test("Escape keeps the edit, and leaving asks again (code review CR92)", async ({ page }) => {
+    await page.goto("/browse?type=Goal&selected=goal-lifeos");
+    await expect(page.getByRole("heading", { name: "Ship LifeOS production UI" })).toBeVisible();
+    await page.getByRole("button", { name: "Edit" }).click();
+    const title = page.getByLabel("Title", { exact: true });
+    await title.fill("Kept through Escape");
+    const dialog = page.getByRole("alertdialog", { name: "Unsaved edits" });
+
+    await page.getByRole("link", { name: "Focus" }).click();
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    await expect(dialog).toBeHidden();
+    await expect(page).toHaveURL(/\/browse/);
+    await expect(title).toHaveValue("Kept through Escape");
+    await page.getByRole("link", { name: "Focus" }).click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Discard" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(dialog).toBeHidden();
+  });
+
   test("Inbox keyboard triage: arrows, Enter, Drop confirm", async ({ page }) => {
     await page.goto("/inbox");
     await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();

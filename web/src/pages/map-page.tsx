@@ -33,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useDirty } from "@/components/shell/app-shell";
+import { useDirty } from "@/components/shell/unsaved-edits";
 import { PeekPanel } from "@/components/shell/panels";
 import { loadExpanded, saveExpanded, loadView, saveView } from "@/lib/view-state";
 import { mapSubjects } from "@/lib/task-series";

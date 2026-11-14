@@ -73,8 +73,8 @@ vi.mock("@tanstack/react-router", () => ({
   useSearch: () => ({ selected: undefined }),
 }));
 
-vi.mock("@/components/shell/app-shell", () => ({
-  useDirty: () => ({ setDirty: vi.fn(), requestNavigation: (go: () => void) => go() }),
+vi.mock("@/components/shell/unsaved-edits", () => ({
+  useDirty: () => ({ dirty: false, setDirty: vi.fn(), requestNavigation: (go: () => void) => go(), discards: 0 }),
 }));
 
 vi.mock("@/components/shell/panels", () => ({

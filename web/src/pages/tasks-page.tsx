@@ -15,7 +15,7 @@ import { ListRow } from "@/components/primitives/list-row";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { SubjectDetail } from "@/components/detail/subject-detail";
 import { useCreateActions } from "@/components/create/create-context";
-import { useDirty } from "@/components/shell/app-shell";
+import { useDirty } from "@/components/shell/unsaved-edits";
 import { PeekPanel } from "@/components/shell/panels";
 import { TimerChip } from "@/components/timer/task-timer";
 import { SeriesList } from "@/components/tasks/series-list";

@@ -9,7 +9,7 @@ import { AdherenceButtons } from "@/components/habits/adherence-buttons";
 import { MaintainButtons, type MaintainPick } from "@/components/habits/maintain-buttons";
 import { ReadyToEstablish } from "@/components/habits/establish-dialog";
 import { BountyChip } from "@/components/rewards/bounty-chip";
-import { useDirty } from "@/components/shell/app-shell";
+import { useDirty } from "@/components/shell/unsaved-edits";
 import { PeekPanel } from "@/components/shell/panels";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
 import { useHabits, useOccurrencesOn, useSubjects, useWrites } from "@/lib/queries";
