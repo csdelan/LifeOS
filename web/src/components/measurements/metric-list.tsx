@@ -13,9 +13,10 @@ import {
   readingWhen,
   type MetricGroup,
   type ReadingSet,
-} from "@/lib/measurements";
+} from "@/lib/features/measurements/measurements";
 import { dayNumber } from "@/lib/metric-trend";
-import { useMetricsOver, useWrites } from "@/lib/queries";
+import { useWrites } from "@/lib/queries";
+import { useMetricsOver } from "@/lib/features/measurements/queries";
 import { cn } from "@/lib/utils";
 import { errorText } from "@/lib/write-action";
 

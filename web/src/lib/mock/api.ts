@@ -48,15 +48,17 @@ import type {
   TaskTimer,
   Wallet,
   EnvironmentRead,
-  LabVisitsRead,
-  MetricDetailRead,
-  MetricRow,
-  MetricTemplate,
   HomeDaysRead,
   SpacePhotosRead,
   SpaceRatingsRead,
   SpaceRow,
 } from "@/lib/production-ui-types";
+import type {
+  LabVisitsRead,
+  MetricDetailRead,
+  MetricRow,
+  MetricTemplate,
+} from "@/lib/features/measurements/types";
 import { isTerminal, type SubjectType } from "@/lib/production-ui-types";
 import { searchSubjects, type SubjectSearch } from "@/lib/browse";
 import { composeRecap, type RecapSection } from "@/lib/review-recap";

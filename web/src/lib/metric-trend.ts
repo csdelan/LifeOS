@@ -4,7 +4,7 @@
  * the C# step for step, rounding included, and `metric-trend.test.ts` checks the same cases as
  * `MetricTrendTests`, so the mock and the API agree.
  */
-import type { MetricBetter, MetricGoalStatus } from "@/lib/production-ui-types";
+import type { MetricBetter, MetricGoalStatus } from "@/lib/features/measurements/types";
 
 /** How far each day's value pulls the trend after a one-day step (§2.2). */
 export const ALPHA = 0.2;

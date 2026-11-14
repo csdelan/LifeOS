@@ -20,8 +20,8 @@ import {
   starterChoices,
   starterText,
   type StarterChoice,
-} from "@/lib/measurements";
-import type { MetricBetter, MetricRow, MetricTemplate } from "@/lib/production-ui-types";
+} from "@/lib/features/measurements/measurements";
+import type { MetricBetter, MetricRow, MetricTemplate } from "@/lib/features/measurements/types";
 import { useWrites } from "@/lib/queries";
 import { useWriteAction } from "@/lib/write-action";
 

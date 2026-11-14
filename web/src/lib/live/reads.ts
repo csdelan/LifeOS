@@ -5,6 +5,7 @@ import { api, ApiRequestError, unwrap, unwrapBlob, unwrapOrNull } from "@/lib/li
 import { normalizeCoverSearch, withNormalCover } from "@/lib/cover";
 import { repeatingSection, type RecapSection } from "@/lib/review-recap";
 import type { LifeOsReads } from "@/lib/reads";
+import { liveMeasurementReads } from "@/lib/features/measurements/reads";
 import type { SubjectSearch } from "@/lib/browse";
 import { seriesFromDue } from "@/lib/task-series";
 import type {
@@ -51,10 +52,6 @@ import type {
   SpacePhotosRead,
   SpaceRatingsRead,
   SpaceRow,
-  LabVisitsRead,
-  MetricDetailRead,
-  MetricRow,
-  MetricTemplate,
 } from "@/lib/production-ui-types";
 
 // An artifact's bytes never change, so each is fetched once a session and kept as an object
@@ -78,6 +75,8 @@ function artifactObjectUrl(id: string): Promise<string | null> {
 }
 
 export const liveReads: LifeOsReads = {
+  ...liveMeasurementReads,
+
   async listSubjects(opts) {
     const data = await unwrap(
       api().GET("/api/subjects", {
@@ -322,27 +321,6 @@ export const liveReads: LifeOsReads = {
       api().GET("/api/environment/spaces/{id}/photos", { params: { path: { id: space }, query: { shot } } }),
     );
     return fits<SpacePhotosRead>()(data);
-  },
-
-  async metricCatalog() {
-    return fits<MetricTemplate[]>()(await unwrap(api().GET("/api/measurements/catalog")));
-  },
-
-  async metrics() {
-    return fits<MetricRow[]>()(await unwrap(api().GET("/api/measurements/metrics")));
-  },
-
-  async metric(metric, days) {
-    const data = await unwrap(
-      api().GET("/api/measurements/metrics/{id}", {
-        params: { path: { id: metric }, query: { days: days ?? undefined } },
-      }),
-    );
-    return fits<MetricDetailRead>()(data);
-  },
-
-  async labVisits() {
-    return fits<LabVisitsRead>()(await unwrap(api().GET("/api/measurements/visits")));
   },
 
   async activityDay(date) {

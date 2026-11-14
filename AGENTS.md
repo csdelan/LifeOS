@@ -30,10 +30,15 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - `web/`: the React + Vite SPA. With no `VITE_API_BASE_URL` it runs in mock mode on an in-memory
   store.
   A component runs a write through `useWriteAction` (`web/src/lib/write-action.ts`), which says a
-  failure inline or in a toast; a bare `void writes.x()` loses it. A write's success toast is said
-  once, in `decorateWrites` (`lib/queries.ts`), never in a write client. App code reaches the mock only
+  failure inline or in a toast; a bare `void writes.x()` loses it. What a write does besides
+  itself (the reads it refreshes, its success toast, its earnings, an optimistic change) is its
+  entry in `writeEffects` (`lib/write-effects.ts`), never in a write client; a failed write
+  refreshes only when it was optimistic, got a 409 or its entry says why. App code reaches the mock only
   through `lib/client.ts` (a lint rule says so), so the production bundle leaves it out; the read
-  seam's types are in `lib/reads.ts`. Pages load lazily (`lazyRouteComponent` in `router.tsx`).
+  seam's types are in `lib/reads.ts`. A feature's types, reads, writes, effects, query keys and
+  hooks live in `lib/features/<feature>/` and are spread into the shared seams
+  (`features/measurements` is the pattern; the other features move there as they're next
+  worked on). Pages load lazily (`lazyRouteComponent` in `router.tsx`).
   A live read or write returns the API's data through `fits<T>()(await unwrap(...))`
   (`lib/live/fits.ts`): `unwrap` answers an `Unchecked` that only `fits` opens, so tsc checks the
   generated type against the app's, and `lib/live/seam.test.ts` finds the ways round it. The API

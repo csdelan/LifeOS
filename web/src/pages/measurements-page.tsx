@@ -19,9 +19,9 @@ import {
   templateOf,
   type MetricGroup,
   type ReadingSet,
-} from "@/lib/measurements";
-import type { LabVisitRow } from "@/lib/production-ui-types";
-import { useLabVisits, useMetricCatalog, useMetrics } from "@/lib/queries";
+} from "@/lib/features/measurements/measurements";
+import type { LabVisitRow } from "@/lib/features/measurements/types";
+import { useLabVisits, useMetricCatalog, useMetrics } from "@/lib/features/measurements/queries";
 import { loadView, saveView } from "@/lib/view-state";
 
 const OPEN_VIEW = "measurements.open";

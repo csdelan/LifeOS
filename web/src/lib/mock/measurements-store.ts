@@ -15,7 +15,13 @@
  */
 import { dataUrlFor, objectUrlFor } from "@/lib/artifacts";
 import { addDays, nowIso, todayIso } from "@/lib/dates";
-import { LAB_MAX, REPORT_TYPES, lineProblem, reportOrder, reportProblem } from "@/lib/labs";
+import {
+  LAB_MAX,
+  REPORT_TYPES,
+  lineProblem,
+  reportOrder,
+  reportProblem,
+} from "@/lib/features/measurements/labs";
 import {
   DECIMALS_MAX,
   MAX_DAYS,
@@ -27,7 +33,7 @@ import {
   flagOf,
   formatValue,
   type MetricTemplate,
-} from "@/lib/measurements";
+} from "@/lib/features/measurements/measurements";
 import {
   A1C,
   CMP_TESTS,
@@ -58,7 +64,7 @@ import type {
   MetricReadingsResult,
   MetricRequest,
   MetricRow,
-} from "@/lib/production-ui-types";
+} from "@/lib/features/measurements/types";
 
 /** The most readings logged together, as `MetricReadingService.MaxTogether`. */
 const MAX_TOGETHER = 50;

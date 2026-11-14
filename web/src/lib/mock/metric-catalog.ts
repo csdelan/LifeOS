@@ -6,7 +6,7 @@
  * pressure is two metrics logged together, paired by their keys, and only it comes with a normal
  * range. Then the lab tests (M4) with the common adult ranges a first visit starts from.
  */
-import type { LabPanel, MetricBetter, MetricTemplate } from "@/lib/production-ui-types";
+import type { LabPanel, MetricBetter, MetricTemplate } from "@/lib/features/measurements/types";
 
 function metric(
   key: string,

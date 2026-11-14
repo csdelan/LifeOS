@@ -20,8 +20,8 @@ import {
   parseValue,
   rangeProblem,
   type MetricGroup,
-} from "@/lib/measurements";
-import type { MetricBetter, MetricRequest, MetricRow } from "@/lib/production-ui-types";
+} from "@/lib/features/measurements/measurements";
+import type { MetricBetter, MetricRequest, MetricRow } from "@/lib/features/measurements/types";
 import { useWrites } from "@/lib/queries";
 import { useWriteAction } from "@/lib/write-action";
 

@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { dayTitle } from "@/lib/activity";
 import { formatDay } from "@/lib/dates";
-import { resultRange } from "@/lib/labs";
+import { resultRange } from "@/lib/features/measurements/labs";
 import {
   RANGES,
   flagOf,
@@ -30,9 +30,10 @@ import {
   type MetricGroup,
   type MetricRange,
   type ReadingSet,
-} from "@/lib/measurements";
-import type { MetricDayRow, MetricDetailRead, MetricFlag } from "@/lib/production-ui-types";
-import { useMetricsOver, useWrites } from "@/lib/queries";
+} from "@/lib/features/measurements/measurements";
+import type { MetricDayRow, MetricDetailRead, MetricFlag } from "@/lib/features/measurements/types";
+import { useWrites } from "@/lib/queries";
+import { useMetricsOver } from "@/lib/features/measurements/queries";
 import { usePersistedChoice } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
 import { errorText } from "@/lib/write-action";

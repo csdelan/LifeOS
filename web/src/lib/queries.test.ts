@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockReads } from "@/lib/mock/api";
 import { createMockWriteClient } from "@/lib/mock/write-client";
 import type { LifeOsWriteClient } from "@/lib/production-ui-types";
-import { decorateWrites, qk, useAlignmentEdges, useAlignmentForest, useSubjects } from "@/lib/queries";
+import { qk, useAlignmentEdges, useAlignmentForest, useSubjects } from "@/lib/queries";
+import { decorateWrites } from "@/lib/write-effects";
 
 afterEach(() => {
   vi.restoreAllMocks();

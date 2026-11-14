@@ -57,3 +57,32 @@ describe("shortIdOf", () => {
     expect(shortIdOf("urn:bsk:project:life-kernel")).toBe("life-kernel");
   });
 });
+
+// Code review CR83: a hand-written type the generated ones already say is a copy to keep in step
+// by hand. Each is aliased to the generated one (`ApiSchema`) once it needs no narrowing, so the
+// count of copies only falls. When you alias one, lower COPIES; a new type the API already has
+// is an alias from the start.
+describe("hand-written copies of the API's types", () => {
+  const COPIES = 75;
+  const schema = Object.values(
+    import.meta.glob<string>("/src/api/schema.d.ts", { query: "?raw", import: "default", eager: true }),
+  )[0];
+  const components = schema.slice(schema.indexOf("export interface components"));
+  const generated = new Set([...components.matchAll(/^ {8}(\w+): /gm)].map((m) => m[1]));
+  const sources = import.meta.glob<string>(["/src/**/*.ts", "!/src/**/*.test.ts", "!/src/api/**"], {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  });
+
+  it(`number ${COPIES}, and only fall`, () => {
+    const copies = Object.entries(sources).flatMap(([path, text]) =>
+      [...text.matchAll(/^export (?:interface (\w+)|type (\w+)\s*=\s*\{)/gm)]
+        .map((m) => m[1] ?? m[2])
+        .filter((name) => generated.has(name))
+        .map((name) => `${path}: ${name}`),
+    );
+    expect(generated.size).toBeGreaterThan(100);
+    expect(copies.length, copies.join("\n")).toBe(COPIES);
+  });
+});

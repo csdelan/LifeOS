@@ -5,13 +5,21 @@
  * the fields the app fills in itself. The API's OpenAPI document is the contract, and
  * `src/api/schema.d.ts` its generated types. The live seams check every response against these
  * types with `fits` (`lib/live/fits.ts`, code review CR38), so one that drifts from the API fails
- * the build. A new feature's type that needs no narrowing can be an alias of the generated one
- * (`components["schemas"]["X"]`); older ones become aliases as their feature is next worked on.
+ * the build. A type that needs no narrowing is the generated one, in one line:
+ * `export type AreaRow = ApiSchema<"AreaRow">` (code review CR83). The copies left are counted by
+ * `production-ui-types.test.ts`, so the count only falls: alias one as its feature is next worked
+ * on, and lower the count.
  *
  * Date conventions (matching the kernel readers):
  *   - `*Date` / `due` / `scheduled` / `targetDate` / `occurrenceDate` : "YYYY-MM-DD"
  *   - `*At` (createdAt, occurredAt, triagedAt, nextReviewAt)          : ISO-8601 timestamp
  */
+
+import type { components } from "@/api/schema";
+import type { MeasurementWrites } from "@/lib/features/measurements/writes";
+
+/** The API's generated type for the schema named `N` (`src/api/schema.d.ts`). */
+export type ApiSchema<N extends keyof components["schemas"]> = components["schemas"][N];
 
 // ---------------------------------------------------------------------------
 // Vocabulary (interim mirror of PilotVocab / the Domain). Presentation-facing.
@@ -384,52 +392,16 @@ export interface TaskRepeat extends TaskSeriesCounts {
 }
 
 /** One repeating Task (`GET /api/tasks/series`). */
-export interface TaskSeriesRow extends TaskSeriesCounts {
-  id: string;
-  urn: string;
-  title: string;
-  recurrence: string;
-  start?: string | null;
-  status?: string | null;
-  archived: boolean;
-  stopped: boolean;
-  area?: string | null;
-  areaName?: string | null;
-  /** What completing a repetition pays. */
-  bounty?: Amounts | null;
-}
+export type TaskSeriesRow = ApiSchema<"TaskSeriesRow">;
 
 /** One repetition, as a series' history lists it. */
-export interface TaskRepetitionRow {
-  id: string;
-  urn: string;
-  title: string;
-  occurrence?: string | null;
-  due?: string | null;
-  scheduled?: string | null;
-  status?: string | null;
-  /** Completed, Missed or Cancelled. */
-  closed: boolean;
-  /** The day it closed. */
-  closedOn?: string | null;
-  archived: boolean;
-}
+export type TaskRepetitionRow = ApiSchema<"TaskRepetitionRow">;
 
 /** A repeating Task and every repetition it made, latest first (`GET /api/tasks/series/{id}`). */
-export interface TaskSeriesHistory {
-  series: TaskSeriesRow;
-  repetitions: TaskRepetitionRow[];
-}
+export type TaskSeriesHistory = ApiSchema<"TaskSeriesHistory">;
 
 /** One repetition due in a period, with its series (`GET /api/tasks/series/due`). */
-export interface SeriesRepetitionDue {
-  seriesId: string;
-  seriesTitle: string;
-  id: string;
-  due: string;
-  status?: string | null;
-  archived: boolean;
-}
+export type SeriesRepetitionDue = ApiSchema<"SeriesRepetitionDue">;
 
 /**
  * A repeating Task with the repetitions a review counts, only as much of each as it reads: what
@@ -487,16 +459,7 @@ export interface CoverPhoto {
 }
 
 /** A page of the cover picker's search. Without an Access Key on the server, `configured` is false. */
-export interface CoverSearchRead {
-  configured: boolean;
-  /** The words as searched, spaces squeezed. */
-  query: string;
-  page: number;
-  total: number;
-  totalPages: number;
-  unsplashLink: string;
-  photos: CoverPhoto[];
-}
+export type CoverSearchRead = ApiSchema<"CoverSearchRead">;
 
 /** `POST /api/cover` (`bsk cover set`): an Unsplash photo by id, centred at `positionY` (50 by default). */
 export interface CoverRequest {
@@ -537,18 +500,10 @@ export interface ConcerningEvent {
 }
 
 /** One recorded state_change in a subject's status history. */
-export interface StatusHistoryEntry {
-  status: string;
-  occurredAt: string;
-  id: string;
-}
+export type StatusHistoryEntry = ApiSchema<"StatusHistoryEntry">;
 
 /** An append-only journal entry (journal-kind event concerning the subject). */
-export interface JournalEntry {
-  eventId: string;
-  occurredAt: string;
-  content: string;
-}
+export type JournalEntry = ApiSchema<"JournalEntry">;
 
 /**
  * One flagged item awaiting triage (v_inbox, INBOX-1). Membership is asserted, not
@@ -1099,11 +1054,7 @@ export interface ExceptionDay {
 }
 
 /** `GET /api/domains/exceptions?days=N`: the marked days from `from` to `today`, newest first. */
-export interface ExceptionDaysRead {
-  today: string;
-  from: string;
-  exceptions: ExceptionDay[];
-}
+export type ExceptionDaysRead = ApiSchema<"ExceptionDaysRead">;
 
 /** Marking or unmarking a day: the day as it now reads (null once unmarked), and what it moved. */
 export interface ExceptionDayResult extends Earned {
@@ -1229,19 +1180,9 @@ export interface NewRewardRequest {
   description?: string;
 }
 
-export interface AreaRow {
-  id: string;
-  urn: string;
-  name: string;
-  description?: string | null;
-  notes?: string | null;
-  createdAt: string;
-}
+export type AreaRow = ApiSchema<"AreaRow">;
 
-export interface TagUniverseItem {
-  tag: string;
-  itemCount: number;
-}
+export type TagUniverseItem = ApiSchema<"TagUniverseItem">;
 
 export interface HabitRow {
   id: string;
@@ -1279,23 +1220,7 @@ export interface HabitOccurrenceRow {
   note?: string | null;
 }
 
-export interface AppointmentRow {
-  id: string;
-  urn: string;
-  title: string;
-  date?: string | null;         // "YYYY-MM-DD" (null on a series header)
-  startTime?: string | null;
-  endTime?: string | null;
-  allDay?: string | null;
-  location?: string | null;
-  meetingLink?: string | null;
-  area?: string | null;
-  seriesUrn?: string | null;
-  recurrence?: string | null;
-  status: string;               // Scheduled | Completed | Cancelled | Missed
-  archived: boolean;
-  createdAt: string;
-}
+export type AppointmentRow = ApiSchema<"AppointmentRow">;
 
 /** What Materialize made (CAL-1, `bsk materialize`): the series and each new occurrence. */
 export interface MaterializeResult {
@@ -1303,14 +1228,7 @@ export interface MaterializeResult {
   created: CreatedSubject[];
 }
 
-export interface PersonRow {
-  id: string;
-  urn: string;
-  title: string;                // the person's name
-  personKind?: string | null;   // "human" | "ai"
-  role?: string | null;
-  archived: boolean;
-}
+export type PersonRow = ApiSchema<"PersonRow">;
 
 export interface PersonAssociationRow {
   subjectId: string;
@@ -1337,14 +1255,7 @@ export interface CreatedSubject {
 }
 
 /** Result of `rename`. The URN never changes, so only titles come back. */
-export interface RenamedSubject {
-  id: string;
-  title: string;
-  previousTitle: string;
-  changed: boolean;
-  /** Appointment series: upcoming occurrences that still had the old title and took the new one. */
-  occurrencesRenamed: number;
-}
+export type RenamedSubject = ApiSchema<"RenamedSubject">;
 
 /** Toast text for a rename; mentions series occurrences that followed it. */
 export function renamedMessage(renamed: RenamedSubject): string {
@@ -1355,12 +1266,7 @@ export function renamedMessage(renamed: RenamedSubject): string {
 }
 
 /** Result of `renameTag`. `merged` counts items that already carried the new tag. */
-export interface RenamedTag {
-  from: string;
-  to: string;
-  renamed: number;
-  merged: number;
-}
+export type RenamedTag = ApiSchema<"RenamedTag">;
 
 export interface NewSubjectRequest {
   type: SubjectType;
@@ -2010,260 +1916,11 @@ export interface HomeDaysRead {
   days: HomeDayRow[];
 }
 
-// ---------------------------------------------------------------------------
-// Measurements (MEASURE-1 to MEASURE-4, D20, measurements plan §4.6, §4.8, §4.9): `/api/measurements`.
-// A metric is something Chris measures (Weight); a reading is one measurement of it, taken at an
-// instant. A lab visit (M4) is one blood draw: its results are readings of lab tests (metrics on a
-// panel), each with the range printed beside it. Days are home-zone days (`yyyy-MM-dd`). Readings
-// are information only: no write earns or moves a level.
-// ---------------------------------------------------------------------------
-
-/** Which way is good for a metric: it sets the goal date's direction. */
-export type MetricBetter = "lower" | "higher";
-
-/** Where a reading sits against its metric's normal range (MEASURE-3): below it or above it. */
-export type MetricFlag = "low" | "high";
-
-/** The lab panel a test is on (MEASURE-4): the starter list's three, and `other` for a test added from a visit. */
-export type LabPanel = "cmp" | "lipids" | "a1c" | "other";
-
-/** How a metric stands against its target (measurements plan §2.3). */
-export type MetricGoalStatus = "no_target" | "too_few" | "reached" | "heading" | "far" | "not_heading";
-
-/** One reading (MEASURE-1): its value in `unit`, when it was taken, and how many versions it has. */
-export interface MetricReadingRow {
-  id: string;
-  metricId: string;
-  value: number;
-  /** The metric's unit when the reading was written. */
-  unit: string;
-  note: string | null;
-  /** ISO instant it was taken. */
-  takenAt: string;
-  /** The home-zone day it was taken. */
-  takenOn: string;
-  /** The home-zone wall-clock time it was taken, `yyyy-MM-ddTHH:mm:ss`. */
-  takenLocal: string;
-  /** ISO instant it was last written. */
-  loggedAt: string;
-  versions: number;
-  /**
-   * `low` or `high` outside its range (the ends themselves are normal); null inside it or with no
-   * range. A lab result's range is the one printed beside it (`low`, `high`), for good; any other
-   * reading's is its metric's as it is now.
-   */
-  flag: MetricFlag | null;
-  /** The lab visit a result belongs to (MEASURE-4); null for any other reading. */
-  visitId: string | null;
-  /** The low end of the range printed beside a lab result; null for any other reading. */
-  low: number | null;
-  /** The high end of the range printed beside a lab result. */
-  high: number | null;
-}
-
-/** One metric (MEASURE-1), with its normal range (MEASURE-3), how many readings it has and its newest one. */
-/**
- * A metric on the starter list (measurements plan §2.1, `GET /api/measurements/catalog`): what
- * making one by that name fills in. `better` is which way is good (most lab tests have none);
- * `low` and `high` the normal range it starts with (blood pressure's, §4.8, and the lab tests'
- * common adult ones, §4.9); `panel` the lab panel a test is on, null for a body metric.
- */
-export interface MetricTemplate {
-  key: string;
-  name: string;
-  unit: string;
-  decimals: number;
-  better: MetricBetter | null;
-  low: number | null;
-  high: number | null;
-  panel: LabPanel | null;
-}
-
-export interface MetricRow {
-  id: string;
-  urn: string;
-  name: string;
-  unit: string;
-  /** 0–3: the decimal places a reading takes and shows. */
-  decimals: number;
-  target: number | null;
-  better: MetricBetter | null;
-  /** The starter-list key it was made from (`weight`), kept through a rename. */
-  catalog: string | null;
-  archivedAt: string | null;
-  archivedOn: string | null;
-  /** The normal range's low end, or null; a reading below it is flagged `low`. */
-  low: number | null;
-  /** The normal range's high end, or null; a reading above it is flagged `high`. */
-  high: number | null;
-  /** The lab panel a test is on (MEASURE-4); null for a metric that isn't a lab test. A test's range follows its newest report. */
-  panel: LabPanel | null;
-  readings: number;
-  lastReading: MetricReadingRow | null;
-}
-
-/** One day's value (its first reading) and the trend on that day (measurements plan §2.2). */
-export interface MetricDayRow {
-  day: string;
-  value: number;
-  trend: number;
-  readingId: string;
-}
-
-/**
- * Where a metric stands against its target (§2.3): `now` is the trend on the newest day,
- * `ratePerWeek` the rate over the basis, and `reachedBy` the day the rate reaches the target
- * (`heading` only). The basis is the days the rate was measured over.
- */
-export interface MetricGoalRow {
-  status: MetricGoalStatus;
-  target: number | null;
-  direction: MetricBetter | null;
-  now: number | null;
-  ratePerWeek: number | null;
-  reachedBy: string | null;
-  basis: { days: number; from: string | null; to: string | null };
-}
-
-/**
- * `GET /api/measurements/metrics/{id}?days=N`: the readings from `from` (all of them when null)
- * to `today`, newest first; the day values with the trend, oldest first; and the goal, which
- * reads the newest 28 days of all history.
- */
-export interface MetricDetailRead {
-  today: string;
-  from: string | null;
-  metric: MetricRow;
-  readings: MetricReadingRow[];
-  days: MetricDayRow[];
-  goal: MetricGoalRow;
-}
-
-/** A reading write's answer: the reading as it now reads, or null after a delete. */
-export interface MetricReadingResult {
-  reading: MetricReadingRow | null;
-}
-
-/** Readings logged together: each as it now reads, in the order given. */
-export interface MetricReadingsResult {
-  readings: MetricReadingRow[];
-}
-
-/**
- * Adding or changing a metric. A starter-list name (Weight, Systolic BP) fills in the unit,
- * decimals, which way is better and the normal range when a new one leaves them out;
- * `clearTarget`, `clearLow` and `clearHigh` remove the target or an end of the range.
- */
-export interface MetricRequest {
-  name?: string;
-  unit?: string;
-  decimals?: number;
-  target?: number;
-  clearTarget?: boolean;
-  better?: MetricBetter;
-  low?: number;
-  clearLow?: boolean;
-  high?: number;
-  clearHigh?: boolean;
-}
-
-/** Logging a reading: the metric (id or name), the value, when it was taken (now when left out), a note. */
-export interface MetricReadingRequest {
-  metric: string;
-  value: number;
-  /** ISO instant; now when left out. */
-  takenAt?: string;
-  note?: string;
-}
-
-/**
- * Logging readings of several metrics taken together (blood pressure's two, MEASURE-3): one
- * time (now when left out) and one note. All or nothing.
- */
-export interface MetricReadingBatchRequest {
-  readings: { metric: string; value: number }[];
-  takenAt?: string;
-  note?: string;
-}
-
-/** Changing a reading: any of the value, the time and the note; a blank note removes it. */
-export interface MetricReadingEditRequest {
-  value?: number;
-  takenAt?: string;
-  note?: string;
-}
-
-/** A lab visit's report (MEASURE-4): a PDF, or a photo of the paper. Its bytes come from `artifactBytesUrl(id)`. */
-export interface LabReportRow {
-  id: string;
-  filename: string | null;
-  contentType: string;
-  byteSize: number;
-}
-
-/**
- * One lab visit (MEASURE-4, measurements plan §4.9): the lab, a note, when the sample was
- * collected (an instant, and in the home zone its day and wall-clock time), the report, its
- * results in the order its report prints them (by panel), and how many are outside the range
- * printed beside them.
- */
-export interface LabVisitRow {
-  id: string;
-  lab: string | null;
-  note: string | null;
-  collectedAt: string;
-  collectedOn: string;
-  collectedLocal: string;
-  report: LabReportRow | null;
-  results: MetricReadingRow[];
-  outside: number;
-  loggedAt: string;
-  versions: number;
-}
-
-/** `GET /api/measurements/visits`: today in the home zone and every visit, newest collected first. */
-export interface LabVisitsRead {
-  today: string;
-  visits: LabVisitRow[];
-}
-
-/** A visit write's answer: the visit as it now reads, or null after a delete. */
-export interface LabVisitResult {
-  visit: LabVisitRow | null;
-}
-
-/**
- * One result in a visit: the test (a metric's id or name), its value, the range printed beside
- * it, a note, the unit for a test that isn't tracked or on the starter list, and in an edit the
- * result it keeps (`reading`, its id).
- */
-export interface LabResultRequest {
-  metric: string;
-  value: number;
-  low?: number;
-  high?: number;
-  note?: string;
-  unit?: string;
-  reading?: string;
-}
-
-/**
- * Logging or saving a lab visit: when the sample was collected (now for a new visit when left
- * out; kept by an edit), the lab and a note (an edit keeps each when left out and clears it when
- * blank), and all its results: an edit's results become these, so one left out is deleted.
- */
-export interface LabVisitRequest {
-  collectedAt?: string;
-  lab?: string;
-  note?: string;
-  results: LabResultRequest[];
-}
-
 /**
  * The write client the UI calls. Every method maps to a bsk verb / API endpoint.
  * Mock all of these for the first pass; return shapes match the real API.
  */
-export interface LifeOsWriteClient {
+export interface LifeOsWriteClient extends MeasurementWrites {
   newSubject(req: NewSubjectRequest): Promise<CreatedSubject>;
   /** source = event id (capture→subject) or subject ref (Idea→work via results_in). */
   promote(source: string, type: SubjectType, title: string): Promise<CreatedSubject>;
@@ -2371,43 +2028,6 @@ export interface LifeOsWriteClient {
   renameShot(space: string, shot: string, name: string): Promise<SpacePhotoResult>;
   /** Remove a shot; its photos stay in the record (`POST …/shots/{shot}/delete`). A space keeps one. */
   removeShot(space: string, shot: string): Promise<SpacePhotoResult>;
-  /**
-   * Add a metric (MEASURE-1, `POST /api/measurements/metrics`): a starter-list name (Weight)
-   * fills in the rest. Archive one with `archive(urn)`.
-   */
-  addMetric(req: MetricRequest & { name: string }): Promise<MetricRow>;
-  /** Rename a metric or change its unit, decimals, target, direction or normal range (`POST …/metrics/{id}`). */
-  setMetric(metric: string, req: MetricRequest): Promise<MetricRow>;
-  /**
-   * Log a reading (`POST /api/measurements/readings`), now or at any past time. Refused, with
-   * nothing written, for a future time, too many decimal places, or an archived metric.
-   */
-  logReading(req: MetricReadingRequest): Promise<MetricReadingResult>;
-  /**
-   * Log readings of several metrics at one time with one note (`POST …/readings/batch`), all or
-   * nothing: blood pressure's systolic and diastolic. Refused as `logReading` is, and for a
-   * metric given twice.
-   */
-  logReadings(req: MetricReadingBatchRequest): Promise<MetricReadingsResult>;
-  /** Change a reading's value, time or note (`POST …/readings/{id}`). */
-  editReading(reading: string, req: MetricReadingEditRequest): Promise<MetricReadingResult>;
-  /** Delete a reading; the record keeps its versions (`POST …/readings/{id}/delete`). */
-  deleteReading(reading: string): Promise<MetricReadingResult>;
-  /**
-   * Log a lab visit with all its results (MEASURE-4, `POST /api/measurements/visits`), all or
-   * nothing: a test not tracked yet is made from the starter list by its name, or under Other
-   * tests with the unit given. Refused for a future time, a test given twice, an archived test,
-   * too many decimal places or a range upside down.
-   */
-  logLabVisit(req: LabVisitRequest): Promise<LabVisitResult>;
-  /** Save a visit as given (`POST …/visits/{id}`): its results become these; one left out is deleted. */
-  saveLabVisit(visit: string, req: LabVisitRequest): Promise<LabVisitResult>;
-  /** Delete a visit and its results; the record keeps their versions (`POST …/visits/{id}/delete`). */
-  deleteLabVisit(visit: string): Promise<LabVisitResult>;
-  /** Add a visit's report, a PDF or a photo up to 10 MB, in place of any before it (`POST …/visits/{id}/report`). */
-  attachLabReport(visit: string, report: Blob, filename?: string): Promise<LabVisitResult>;
-  /** Take a visit's report off; its bytes stay in the record (`POST …/visits/{id}/report/delete`). */
-  removeLabReport(visit: string): Promise<LabVisitResult>;
   /**
    * Set a subject's repeat pattern (D8, `POST /api/recur`); `null` clears it. A Task's `start`
    * is the first date it repeats from (TASKS-3); setting one makes its first repetition.

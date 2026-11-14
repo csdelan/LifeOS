@@ -17,9 +17,9 @@ import {
   visitSummary,
   visitTitle,
   type VisitTestRow,
-} from "@/lib/labs";
+} from "@/lib/features/measurements/labs";
 import { METRIC_CATALOG } from "@/lib/mock/metric-catalog";
-import type { LabPanel, MetricReadingRow, MetricRow } from "@/lib/production-ui-types";
+import type { LabPanel, MetricReadingRow, MetricRow } from "@/lib/features/measurements/types";
 
 function test(name: string, panel: LabPanel | null, catalog: string | null, more: Partial<MetricRow> = {}): MetricRow {
   return {

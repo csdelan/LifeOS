@@ -5,10 +5,22 @@ import { ListSkeleton } from "@/components/primitives/skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { openArtifactUrl } from "@/lib/artifacts";
-import { resultRange, resultsByPanel, testsByPanel, visitSummary, visitTitle } from "@/lib/labs";
-import { flagWord, formatValue, type MetricGroup, type ReadingSet } from "@/lib/measurements";
-import type { LabVisitRow, MetricRow, MetricTemplate } from "@/lib/production-ui-types";
-import { useArtifactBytesUrl, useLabVisits } from "@/lib/queries";
+import {
+  resultRange,
+  resultsByPanel,
+  testsByPanel,
+  visitSummary,
+  visitTitle,
+} from "@/lib/features/measurements/labs";
+import {
+  flagWord,
+  formatValue,
+  type MetricGroup,
+  type ReadingSet,
+} from "@/lib/features/measurements/measurements";
+import type { LabVisitRow, MetricRow, MetricTemplate } from "@/lib/features/measurements/types";
+import { useArtifactBytesUrl } from "@/lib/queries";
+import { useLabVisits } from "@/lib/features/measurements/queries";
 import { cn } from "@/lib/utils";
 
 /** A visit's key in the page's remembered open rows. */

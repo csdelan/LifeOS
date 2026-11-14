@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { exerciseXp, sleepXp, stepsXp } from "@/lib/activity-score";
-import { caloriesPartFor, drinkFactorFor, fastingFor, guessMealType, isScore, scoreDay } from "@/lib/diet-score";
+import {
+  caloriesPartFor,
+  drinkFactorFor,
+  fastingFor,
+  guessMealType,
+  isScore,
+  scoreDay,
+} from "@/lib/diet-score";
 import { ENVIRONMENT, HEALTH, levelFor, totalFor } from "@/lib/domain-fold";
 import { exerciseVerdict } from "@/lib/exercise-rules";
 import { fade, partDrag, partValue, ratingPoints, spaceScore } from "@/lib/home-score";
@@ -9,7 +16,7 @@ import type { HomePart, ReviewKind, SubjectType } from "@/lib/production-ui-type
 import { reviewPeriod } from "@/lib/reviews";
 import { addDays } from "@/lib/dates";
 import { isOccurrenceDate, parseRecurrence } from "@/lib/recurrence";
-import { DIASTOLIC_KEY, SYSTOLIC_KEY, WEIGHT_KEY } from "@/lib/measurements";
+import { DIASTOLIC_KEY, SYSTOLIC_KEY, WEIGHT_KEY } from "@/lib/features/measurements/measurements";
 import { METRIC_CATALOG } from "@/lib/mock/metric-catalog";
 import { CURRENCIES } from "@/lib/rewards";
 

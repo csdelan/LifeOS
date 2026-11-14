@@ -32,10 +32,16 @@ import {
   visitSummary,
   visitTitle,
   type VisitTestRow,
-} from "@/lib/labs";
-import { NAME_MAX, NOTE_MAX, SKEW_MS, UNIT_MAX } from "@/lib/measurements";
+} from "@/lib/features/measurements/labs";
+import { NAME_MAX, NOTE_MAX, SKEW_MS, UNIT_MAX } from "@/lib/features/measurements/measurements";
 import { useIsDesktop } from "@/lib/media-query";
-import type { LabPanel, LabVisitRequest, LabVisitRow, MetricRow, MetricTemplate } from "@/lib/production-ui-types";
+import type {
+  LabPanel,
+  LabVisitRequest,
+  LabVisitRow,
+  MetricRow,
+  MetricTemplate,
+} from "@/lib/features/measurements/types";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { errorText, useWriteAction } from "@/lib/write-action";

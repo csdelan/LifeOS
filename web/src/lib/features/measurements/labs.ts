@@ -16,14 +16,14 @@ import {
   singleGroup,
   type MetricGroup,
   type MetricTemplate,
-} from "@/lib/measurements";
+} from "@/lib/features/measurements/measurements";
 import type {
   LabPanel,
   LabResultRequest,
   LabVisitRow,
   MetricReadingRow,
   MetricRow,
-} from "@/lib/production-ui-types";
+} from "@/lib/features/measurements/types";
 
 /** The kernel's `LabLimits`: a lab's name, a report's size, and the results a visit takes. */
 export const LAB_MAX = 60;

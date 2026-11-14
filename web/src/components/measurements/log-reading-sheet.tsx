@@ -25,9 +25,9 @@ import {
   readingWhen,
   readingsMessage,
   type MetricGroup,
-} from "@/lib/measurements";
+} from "@/lib/features/measurements/measurements";
 import { useIsDesktop } from "@/lib/media-query";
-import type { MetricReadingRow } from "@/lib/production-ui-types";
+import type { MetricReadingRow } from "@/lib/features/measurements/types";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { useWriteAction } from "@/lib/write-action";

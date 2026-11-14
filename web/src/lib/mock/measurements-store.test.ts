@@ -20,7 +20,7 @@ import {
   mockSetMetric,
   resetMeasurementsStore,
 } from "@/lib/mock/measurements-store";
-import type { LabResultRequest, MetricReadingRow } from "@/lib/production-ui-types";
+import type { LabResultRequest, MetricReadingRow } from "@/lib/features/measurements/types";
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });

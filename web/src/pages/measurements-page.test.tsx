@@ -5,8 +5,13 @@ import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { addDays, todayIso } from "@/lib/dates";
-import { goalText, withUnit } from "@/lib/measurements";
-import { clearMockMeasurements, mockLabVisits, mockMetricDetail, mockMetrics } from "@/lib/mock/measurements-store";
+import { goalText, withUnit } from "@/lib/features/measurements/measurements";
+import {
+  clearMockMeasurements,
+  mockLabVisits,
+  mockMetricDetail,
+  mockMetrics,
+} from "@/lib/mock/measurements-store";
 import { resetStore } from "@/lib/mock/store";
 import { MeasurementsPage } from "@/pages/measurements-page";
 

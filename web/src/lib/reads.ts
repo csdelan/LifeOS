@@ -5,6 +5,7 @@
  */
 
 import type { AlignmentEdge, DashboardRead } from "@/lib/derive";
+import type { MeasurementReads } from "@/lib/features/measurements/reads";
 import type {
   ActivityDayDetailRead,
   ActivityDaysRead,
@@ -15,7 +16,6 @@ import type {
   AreaRow,
   ArtifactRecord,
   BountyTypeDefaults,
-  MetricTemplate,
   CoverSearchRead,
   DomainDaysRead,
   DomainReportRead,
@@ -29,12 +29,9 @@ import type {
   HomeDaysRead,
   InboxItem,
   JournalEntry,
-  LabVisitsRead,
   LedgerDay,
   LedgerRow,
   MealRow,
-  MetricDetailRead,
-  MetricRow,
   OuraStatus,
   PersonRow,
   RelationEdge,
@@ -75,7 +72,7 @@ export interface ListSubjectsOptions {
   limit?: number;
 }
 
-export interface LifeOsReads {
+export interface LifeOsReads extends MeasurementReads {
   /**
    * Subjects by type; a repeating Task's series only with `includeSeries` (TASKS-3). `status` is
    * `open` (any status not finished), `closed`, or one status; `limit` cuts the list (code review
@@ -175,24 +172,6 @@ export interface LifeOsReads {
    * shot (its id or name) when given, each with the space's score on its day; its shots too.
    */
   spacePhotos(space: string, shot?: string): Promise<SpacePhotosRead>;
-  /**
-   * The starter list (measurements plan §2.1, `GET /api/measurements/catalog`): what making each
-   * metric and lab test by its name fills in, in the list's order (code review CR73).
-   */
-  metricCatalog(): Promise<MetricTemplate[]>;
-  /** Every metric (MEASURE-1, `GET /api/measurements/metrics`), archived ones included, by name. */
-  metrics(): Promise<MetricRow[]>;
-  /**
-   * One metric (its id or name) over the last `days` days, all history when null
-   * (`GET /api/measurements/metrics/{id}`): readings newest first, day values with the trend,
-   * and the goal.
-   */
-  metric(metric: string, days: number | null): Promise<MetricDetailRead>;
-  /**
-   * Every lab visit with its results, newest collected first (MEASURE-4,
-   * `GET /api/measurements/visits`). A report's bytes come from `artifactBytesUrl`.
-   */
-  labVisits(): Promise<LabVisitsRead>;
   /** Ledger entries newest first, in [from, to) (ISO timestamps); `limit` defaults to 100. */
   ledger(opts?: { from?: string; to?: string; limit?: number }): Promise<LedgerRow[]>;
   /**

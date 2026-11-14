@@ -10,9 +10,9 @@ import {
   rangeText,
   readingSets,
   starterChoices,
-} from "@/lib/measurements";
+} from "@/lib/features/measurements/measurements";
 import { METRIC_CATALOG } from "@/lib/mock/metric-catalog";
-import type { MetricReadingRow, MetricRow } from "@/lib/production-ui-types";
+import type { MetricReadingRow, MetricRow } from "@/lib/features/measurements/types";
 
 function metric(name: string, catalog: string | null, more: Partial<MetricRow> = {}): MetricRow {
   return {

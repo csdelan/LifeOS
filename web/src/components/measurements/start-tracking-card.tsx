@@ -3,7 +3,7 @@ import { WeightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { parseValue, type MetricTemplate } from "@/lib/measurements";
+import { parseValue, type MetricTemplate } from "@/lib/features/measurements/measurements";
 import { useWrites } from "@/lib/queries";
 import { errorText } from "@/lib/write-action";
 

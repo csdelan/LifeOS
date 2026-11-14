@@ -1,10 +1,7 @@
 import { fits } from "@/lib/live/fits";
 import { api, unwrap } from "@/lib/live/http";
+import { liveMeasurementWrites } from "@/lib/features/measurements/writes";
 import type {
-  LabVisitResult,
-  MetricReadingResult,
-  MetricReadingsResult,
-  MetricRow,
   ActivitySyncResult,
   BinaryCaptureResult,
   BountyResult,
@@ -41,6 +38,8 @@ function coverResult(result: CoverResult): CoverResult {
 
 export function createLiveWriteClient(): LifeOsWriteClient {
   return {
+    ...liveMeasurementWrites,
+
     async newSubject(req) {
       return fits<CreatedSubject>()(await unwrap(api().POST("/api/subjects", { body: req })));
     },
@@ -297,71 +296,6 @@ export function createLiveWriteClient(): LifeOsWriteClient {
           api().POST("/api/environment/spaces/{id}/shots/{shot}/delete", { params: { path: { id: space, shot } } }),
         ),
       );
-    },
-
-    async addMetric(req) {
-      return fits<MetricRow>()(await unwrap(api().POST("/api/measurements/metrics", { body: req })));
-    },
-
-    async setMetric(metric, req) {
-      return fits<MetricRow>()(await unwrap(
-        api().POST("/api/measurements/metrics/{id}", { params: { path: { id: metric } }, body: req }),
-      ));
-    },
-
-    async logReading(req) {
-      return fits<MetricReadingResult>()(await unwrap(api().POST("/api/measurements/readings", { body: req })));
-    },
-
-    async logReadings(req) {
-      return fits<MetricReadingsResult>()(await unwrap(api().POST("/api/measurements/readings/batch", { body: req })));
-    },
-
-    async editReading(reading, req) {
-      return fits<MetricReadingResult>()(await unwrap(
-        api().POST("/api/measurements/readings/{id}", { params: { path: { id: reading } }, body: req }),
-      ));
-    },
-
-    async deleteReading(reading) {
-      return fits<MetricReadingResult>()(await unwrap(
-        api().POST("/api/measurements/readings/{id}/delete", { params: { path: { id: reading } } }),
-      ));
-    },
-
-    async logLabVisit(req) {
-      return fits<LabVisitResult>()(await unwrap(api().POST("/api/measurements/visits", { body: req })));
-    },
-
-    async saveLabVisit(visit, req) {
-      return fits<LabVisitResult>()(await unwrap(
-        api().POST("/api/measurements/visits/{id}", { params: { path: { id: visit } }, body: req }),
-      ));
-    },
-
-    async deleteLabVisit(visit) {
-      return fits<LabVisitResult>()(await unwrap(
-        api().POST("/api/measurements/visits/{id}/delete", { params: { path: { id: visit } } }),
-      ));
-    },
-
-    async attachLabReport(visit, report, filename) {
-      const form = new FormData();
-      form.append("report", report, filename ?? (report instanceof File ? report.name : "report.pdf"));
-      return fits<LabVisitResult>()(await unwrap(
-        api().POST("/api/measurements/visits/{id}/report", {
-          params: { path: { id: visit } },
-          // The browser sets the multipart boundary; openapi-fetch leaves FormData as it is.
-          body: form as unknown as { report?: string },
-          bodySerializer: (body) => body as unknown as FormData,
-        }),
-      ));
-    },
-
-    async removeLabReport(visit) {
-      return fits<LabVisitResult>()(await unwrap(
-        api().POST("/api/measurements/visits/{id}/report/delete", { params: { path: { id: visit } } }),
-      ));
     },
 
     async timer(task, action) {

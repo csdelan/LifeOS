@@ -13,7 +13,7 @@ import type {
   MetricReadingRow,
   MetricRow,
   MetricTemplate,
-} from "@/lib/production-ui-types";
+} from "@/lib/features/measurements/types";
 
 /** The kernel's `MetricLimits`. */
 export const NAME_MAX = 60;
@@ -26,7 +26,7 @@ export const MAX_DAYS = 3660;
 /** How far ahead of now a reading's time may be, for clock skew. */
 export const SKEW_MS = 60_000;
 
-export type { MetricTemplate } from "@/lib/production-ui-types";
+export type { MetricTemplate } from "@/lib/features/measurements/types";
 
 /**
  * The starter-list keys the page names: Weight has a card of its own, and blood pressure's two
