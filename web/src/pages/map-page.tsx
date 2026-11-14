@@ -1,30 +1,14 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import {
-  useAlignmentEdges,
-  useAlignmentForest,
-  useAreas,
-  useCreateSubject,
-  useSubjects,
-} from "@/lib/queries";
-import type { AlignmentEdge, AlignmentNode, MapLens } from "@/lib/derive";
+import { useAlignmentEdges, useAlignmentForest, useAreas, useSubjects } from "@/lib/queries";
+import type { AlignmentEdge, MapLens } from "@/lib/derive";
 import { buildAlignmentGraph } from "@/lib/graph-model";
 import type { GraphLayoutKind, MapViewMode, OrphanFilter } from "@/lib/graph-model";
-import {
-  DEFAULT_MAP_SHOW,
-  MAP_SHOW_OPTIONS,
-  isFinished,
-  showForest,
-  type MapShow,
-} from "@/lib/map-show";
-import { childTypesFor, inferChildRelation, typeLabel } from "@/lib/production-ui-types";
-import type { AreaRow, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
-import { TreeNode } from "@/components/primitives/tree-node";
+import { DEFAULT_MAP_SHOW, MAP_SHOW_OPTIONS, showForest, type MapShow } from "@/lib/map-show";
+import type { AreaRow, SubjectListItem } from "@/lib/production-ui-types";
 import { TreeSkeleton, GraphSkeleton } from "@/components/primitives/skeletons";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { SubjectDetail } from "@/components/detail/subject-detail";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -38,8 +22,10 @@ import { PeekPanel } from "@/components/shell/panels";
 import { loadExpanded, saveExpanded, loadView, saveView } from "@/lib/view-state";
 import { mapSubjects } from "@/lib/task-series";
 import { MapIcon } from "lucide-react";
-import { useWriteAction } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
+import { MapBranch } from "@/components/map/map-branch";
+import { Segmented } from "@/components/map/segmented";
+import { ancestorIds, collectNodeIds, findNode } from "@/lib/map-tree";
 
 // The graph engine (React Flow and ELK) is most of the Map's weight, so it loads only when the
 // graph is shown: the Outline, the default view, never fetches it (code review CR84).
@@ -512,214 +498,4 @@ export function MapPage() {
       </PeekPanel>
     </div>
   );
-}
-
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-  ariaLabel,
-}: {
-  value: T;
-  options: { id: T; label: string }[];
-  onChange: (id: T) => void;
-  ariaLabel: string;
-}) {
-  return (
-    <div role="group" aria-label={ariaLabel} className="flex flex-wrap rounded-lg bg-muted p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          aria-pressed={value === o.id}
-          onClick={() => onChange(o.id)}
-          className={`min-h-11 rounded-md px-2.5 py-1 text-xs font-medium focus-visible:ring-2 focus-visible:ring-ring/50 md:min-h-0 ${
-            value === o.id ? "bg-background shadow-sm" : "text-muted-foreground"
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function MapBranch({
-  node,
-  expanded,
-  selected,
-  creating,
-  onToggle,
-  onSelect,
-  onNavigateParent,
-  onCreate,
-  onCancelCreate,
-}: {
-  node: AlignmentNode;
-  expanded: Set<string>;
-  selected?: string;
-  creating: { parentId: string } | null;
-  onToggle: (id: string) => void;
-  onSelect: (id: string) => void;
-  onNavigateParent: (id: string) => void;
-  onCreate: (node: AlignmentNode) => void;
-  onCancelCreate: () => void;
-}) {
-  const isOpen = expanded.has(node.id);
-  const childTypes = childTypesFor(node.subject.type);
-  const canCreate = childTypes.length > 0 || node.parentId !== null;
-  const showCreate = creating && creating.parentId === node.id;
-
-  return (
-    <TreeNode
-      subject={node.subject}
-      depth={node.depth}
-      expanded={isOpen}
-      expandable={node.children.length > 0 || !!showCreate}
-      selected={selected === node.id}
-      finished={isFinished(node.subject)}
-      extraParents={node.extraParents}
-      onToggle={() => onToggle(node.id)}
-      onSelect={() => onSelect(node.id)}
-      onNavigateParent={onNavigateParent}
-      onCreateChild={canCreate ? () => onCreate(node) : undefined}
-      creating={
-        showCreate ? (
-          <InlineCreate
-            parent={node}
-            depth={node.depth + 1}
-            onDone={onCancelCreate}
-          />
-        ) : null
-      }
-    >
-      {isOpen
-        ? node.children.map((c) => (
-            <MapBranch
-              key={c.instanceKey}
-              node={c}
-              expanded={expanded}
-              selected={selected}
-              creating={creating}
-              onToggle={onToggle}
-              onSelect={onSelect}
-              onNavigateParent={onNavigateParent}
-              onCreate={onCreate}
-              onCancelCreate={onCancelCreate}
-            />
-          ))
-        : null}
-    </TreeNode>
-  );
-}
-
-function InlineCreate({
-  parent,
-  depth,
-  onDone,
-}: {
-  parent: AlignmentNode;
-  depth: number;
-  onDone: () => void;
-}) {
-  const childTypes = childTypesFor(parent.subject.type);
-  const isSibling = childTypes.length === 0;
-  const types: SubjectType[] = isSibling ? ["Task"] : childTypes;
-  const [type, setType] = useState<SubjectType>(types[0]);
-  const [title, setTitle] = useState("");
-  const create = useCreateSubject();
-  // Enter and Add both run through here, one create at a time: a second Enter while the first is
-  // still saving made a second item (code review CR60).
-  const adding = useWriteAction({ onDone });
-
-  function save() {
-    if (!title.trim()) return;
-    const parentRef = isSibling ? parent.parentId : parent.id;
-    const parentType = isSibling ? undefined : parent.subject.type;
-    const relation =
-      parentRef && parentType ? inferChildRelation(type, parentType) : undefined;
-    void adding.run(() =>
-      create.mutateAsync({
-        type,
-        title: title.trim(),
-        parent: parentRef ?? undefined,
-        relation,
-      }),
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-2 py-1 pr-2" style={{ paddingLeft: 8 + depth * 18 }}>
-      <div role="group" aria-label="New item's type" className="flex gap-1">
-        {types.map((t) => (
-          <button
-            key={t}
-            type="button"
-            aria-pressed={type === t}
-            onClick={() => setType(t)}
-            className={`min-h-11 rounded-md px-1.5 py-0.5 text-[0.6875rem] md:min-h-0 ${
-              type === t ? "bg-primary/12 text-primary" : "text-muted-foreground"
-            }`}
-          >
-            {typeLabel(t)}
-          </button>
-        ))}
-      </div>
-      <Input
-        autoFocus
-        value={title}
-        placeholder={isSibling ? "New sibling…" : `New ${typeLabel(type).toLowerCase()}…`}
-        aria-label={isSibling ? "New sibling title" : `New ${typeLabel(type)} title`}
-        className="h-7"
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            save();
-          }
-          // Tab leaves the field as it does anywhere else; the type is chosen by its buttons,
-          // before the field. Tab used to change the type, so the keyboard couldn't reach Add or
-          // anything past it (code review CR95).
-          if (e.key === "Escape") {
-            e.preventDefault();
-            onDone();
-          }
-        }}
-      />
-      <Button size="xs" onClick={save} disabled={!title.trim() || adding.pending}>
-        Add
-      </Button>
-      {adding.error ? (
-        <p role="alert" className="basis-full text-xs text-destructive">
-          {adding.error}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function findNode(nodes: AlignmentNode[], id: string): AlignmentNode | null {
-  for (const n of nodes) {
-    if (n.id === id) return n;
-    const c = findNode(n.children, id);
-    if (c) return c;
-  }
-  return null;
-}
-
-function ancestorIds(nodes: AlignmentNode[], id: string, trail: string[] = []): string[] | null {
-  for (const n of nodes) {
-    if (n.id === id) return trail;
-    const found = ancestorIds(n.children, id, [...trail, n.id]);
-    if (found) return found;
-  }
-  return null;
-}
-
-function collectNodeIds(nodes: AlignmentNode[], into: Set<string> = new Set()): Set<string> {
-  for (const n of nodes) {
-    into.add(n.id);
-    collectNodeIds(n.children, into);
-  }
-  return into;
 }

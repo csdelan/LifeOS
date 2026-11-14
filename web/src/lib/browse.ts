@@ -123,6 +123,17 @@ export const SORT_COLUMN: Record<Exclude<BrowseSort, "title">, BrowseColumn> = {
   tags: "tags",
 };
 
+/** Clears what narrows the list; the sort and Include archived stay as they are. */
+export function clearedFilters(f: BrowseFilters): BrowseFilters {
+  return { ...DEFAULT_BROWSE_FILTERS, sort: f.sort, dir: f.dir, archived: f.archived };
+}
+
+/** A new sort runs ascending, except Entered, which starts newest first. */
+export function nextSort(f: BrowseFilters, sort: BrowseSort): BrowseFilters {
+  if (f.sort === sort) return { ...f, dir: f.dir === "asc" ? "desc" : "asc" };
+  return { ...f, sort, dir: sort === "entered" ? "desc" : "asc" };
+}
+
 /**
  * The sorts worth offering where the list is too narrow for its headers: Title and the
  * columns shown, plus the sort in use so the menu never reads blank.

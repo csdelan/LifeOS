@@ -85,7 +85,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   `npm run test:e2e` and `npm run a11y`, one spec per feature in `web/e2e/golden` and
   `web/e2e/a11y`, helpers in `e2e/support.ts`. A new page goes in `components/shell/pages.ts`,
   which the nav and the palette list, and in the router; `pages.test.ts` checks the two agree and
-  that an a11y spec opens it (`a11y/pages.spec.ts` unless its feature's spec does).
+  that an a11y spec opens it (`a11y/pages.spec.ts` unless its feature's spec does). A page's file
+  stays under 550 lines, which it checks too: its parts go in `components/<feature>/`.
 - After changing an endpoint or a read model, run `./scripts/generate-web-client.ps1` and commit
   `web/src/api/openapi.json` and `schema.d.ts`: a .NET test checks the first and CI the second.
   It needs no running API, so the "Regenerating the web API types" steps in `verifying.md` are

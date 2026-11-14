@@ -42,3 +42,22 @@ describe("one list of pages (code review CR97)", () => {
     expect(NAV_PAGES.map((p) => p.to)).not.toContain("/gallery");
   });
 });
+
+const pageFiles = import.meta.glob<string>(["/src/pages/*.tsx", "!/src/pages/*.test.tsx"], {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+
+// A page past this moves its parts into components/<feature> and its rules into lib, as
+// Browse, the Inbox, the Map and Reviews did (code review CR103).
+const PAGE_LINES = 550;
+
+describe("a page's file holds the page, and its parts live beside it (code review CR103)", () => {
+  it(`keeps every page's file to ${PAGE_LINES} lines`, () => {
+    const long = Object.entries(pageFiles)
+      .map(([file, source]) => `${file}: ${source.split("\n").length} lines`)
+      .filter((entry) => Number(/: (\d+) lines$/.exec(entry)![1]) > PAGE_LINES);
+    expect(long).toEqual([]);
+  });
+});
