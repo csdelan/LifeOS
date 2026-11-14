@@ -365,7 +365,9 @@ describe("Measurements page: any metric (MEASURE-3, measurements plan §4.8)", (
     ]);
     expect(within(dialog).getByRole("button", { name: "Add" })).toBeDisabled();
     await user.click(within(dialog).getByRole("button", { name: /^Add Body fat/ }));
-    await waitFor(() => expect(row("Body fat").item).toBeInTheDocument());
+    // The dialog hides the page from getByRole until the add is written and it closes, which on
+    // a busy CI runner took longer than waitFor's default second.
+    await waitFor(() => expect(row("Body fat").item).toBeInTheDocument(), { timeout: 4000 });
 
     await user.click(screen.getByRole("button", { name: "Add a metric" }));
     dialog = await screen.findByRole("dialog", { name: "Add a metric" });
@@ -380,7 +382,9 @@ describe("Measurements page: any metric (MEASURE-3, measurements plan §4.8)", (
     await user.type(within(dialog).getByLabelText("Low end"), "40");
     await user.click(within(dialog).getByRole("button", { name: "Add Resting heart rate" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a metric" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a metric" })).not.toBeInTheDocument(), {
+      timeout: 4000,
+    });
     const added = mockMetrics().find((m) => m.name === "Resting heart rate")!;
     expect(added).toMatchObject({ unit: "bpm", decimals: 0, low: 40, high: 50, catalog: null });
     // His own come after the starter list's; the new one is open, with nothing logged yet.
