@@ -96,7 +96,7 @@ public sealed class NpgsqlActivityRepository(NpgsqlDataSource dataSource) : IAct
     public async Task<IReadOnlyList<ActivityDay>> GetActivityDaysAsync(
         DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
         => (await QueryAsync<ActivityDayRow>(
-                ActivityDaySql + " WHERE day BETWEEN @from::date AND @to::date ORDER BY day",
+                ActivityDaySql + DayKeyRange + " ORDER BY day",
                 Range(from, to), cancellationToken))
             .Select(r => r.ToDay()).ToList();
 
@@ -127,7 +127,7 @@ public sealed class NpgsqlActivityRepository(NpgsqlDataSource dataSource) : IAct
     public async Task<IReadOnlyList<ReadinessDay>> GetReadinessDaysAsync(
         DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
         => (await QueryAsync<ReadinessDayRow>(
-                ReadinessDaySql + " WHERE day BETWEEN @from::date AND @to::date ORDER BY day",
+                ReadinessDaySql + DayKeyRange + " ORDER BY day",
                 Range(from, to), cancellationToken))
             .Select(r => r.ToDay()).ToList();
 
@@ -151,6 +151,13 @@ public sealed class NpgsqlActivityRepository(NpgsqlDataSource dataSource) : IAct
         await connection.OpenAsync(cancellationToken);
         return await connection.QueryAsync<T>(new CommandDefinition(sql, args, cancellationToken: cancellationToken));
     }
+
+    // Activity and readiness days are folded by Oura's day as it sends it, which their indexes
+    // hold as text: a range on that key goes below the view's window and reads only those days
+    // (code review CR128), where a range on the date worked out above it folds every day. Oura
+    // sends days as yyyy-MM-dd, which sort as text as they do as dates; the date's range is kept
+    // so a key in any other form still can't answer for a day outside it.
+    private const string DayKeyRange = " WHERE day_key BETWEEN @from AND @to AND day BETWEEN @from::date AND @to::date";
 
     private static object Range(DateOnly from, DateOnly to) => new { from = Text(from), to = Text(to) };
 

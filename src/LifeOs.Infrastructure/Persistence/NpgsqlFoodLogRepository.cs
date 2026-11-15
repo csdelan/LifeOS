@@ -62,11 +62,26 @@ public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFood
                 new { prefix = IdPrefix(prefix) }, cancellationToken))
             .Select(r => r.ToMeal()).ToList();
 
+    // A meal is eaten when its newest version says it happened, so the meals eaten in a range are
+    // among those with a version that happened in it: those keys are picked first, by
+    // event_kind_occurred_idx over the range, as an initplan, which goes below v_meal's window to
+    // event_meal_idx, so only their versions are folded (code review CR128) and not every meal's.
+    // The pick doesn't say jsonb_exists, so event_meal_idx, which holds every meal, can't serve it.
+    // The range's ends are its days' midnights in the home zone, the zone eaten_on reads.
+    public const string MealsInRangeSql = MealSql + """
+         WHERE eaten_on BETWEEN @from::date AND @to::date
+           AND meal_key = ANY(ARRAY(
+               SELECT e.payload->'meal'->>'id'
+               FROM bsk.event e
+               WHERE e.kind = 'measurement' AND e.payload->'meal'->>'id' IS NOT NULL
+                 AND e.occurred_at >= (@from::date::timestamp AT TIME ZONE bsk.home_zone())
+                 AND e.occurred_at < ((@to::date + 1)::timestamp AT TIME ZONE bsk.home_zone())))
+         ORDER BY eaten_at, meal_id
+        """;
+
     public async Task<IReadOnlyList<Meal>> GetMealsAsync(
         DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
-        => (await QueryAsync<MealRow>(
-                MealSql + " WHERE eaten_on BETWEEN @from::date AND @to::date ORDER BY eaten_at, meal_id",
-                new { from = Text(from), to = Text(to) }, cancellationToken))
+        => (await QueryAsync<MealRow>(MealsInRangeSql, new { from = Text(from), to = Text(to) }, cancellationToken))
             .Select(r => r.ToMeal()).ToList();
 
     public async Task<IReadOnlyList<Meal>> GetLatestMealsAsync(
@@ -116,8 +131,11 @@ public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFood
         await connection.OpenAsync(cancellationToken);
         var first = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT to_char(min(day), 'YYYY-MM-DD') FROM bsk.v_food_day;", cancellationToken: cancellationToken));
+        // A day has a drink when an alcoholic entry was eaten on it, as v_food_day counts them; read
+        // from v_meal alone, since a filter on v_food_day's drinks turned its joins into nested
+        // loops over every day (code review CR128).
         var drinkDays = await connection.QueryAsync<string>(new CommandDefinition(
-            "SELECT to_char(day, 'YYYY-MM-DD') FROM bsk.v_food_day WHERE drinks > 0 AND day <= @to::date ORDER BY day;",
+            "SELECT DISTINCT to_char(eaten_on, 'YYYY-MM-DD') AS day FROM bsk.v_meal WHERE alcoholic AND eaten_on <= @to::date ORDER BY day;",
             new { to = Text(to) },
             cancellationToken: cancellationToken));
         return new DrinkHistory(first is null ? null : ParseDay(first), drinkDays.Select(ParseDay).ToList());

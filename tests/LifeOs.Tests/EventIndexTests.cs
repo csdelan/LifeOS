@@ -84,13 +84,21 @@ public sealed class EventIndexTests(ClassDatabase classDb) : IClassFixture<Class
             "event_ledger_trigger_idx", true),
         new("every meal", "SELECT * FROM bsk.v_meal;", "event_meal_idx", false),
         new("one meal", $"SELECT * FROM bsk.v_meal WHERE meal_key = '{Id}';", "event_meal_idx", true),
+        // Code review CR128: a range's meals are picked by when their versions happened, then folded by key.
+        new("a range's meals", Recap(NpgsqlFoodLogRepository.MealsInRangeSql), "event_kind_occurred_idx", true, "occurred_at", "event_occurred_at_idx"),
         new("one metric reading", $"SELECT * FROM bsk.v_metric_reading WHERE reading_key = '{Id}';", "event_metric_reading_idx", true),
         new("Oura activity days", "SELECT * FROM bsk.v_activity_day;", "event_oura_activity_idx", false),
+        // Code review CR128 (migration 0072): a week of the days Oura keys by day, by that key.
+        new("a week of Oura activity days", Recap("SELECT * FROM bsk.v_activity_day WHERE day_key BETWEEN @from AND @to;"),
+            "event_oura_activity_idx", true),
         new("Oura readiness days", "SELECT * FROM bsk.v_readiness_day;", "event_oura_readiness_idx", false),
+        new("a week of Oura readiness days", Recap("SELECT * FROM bsk.v_readiness_day WHERE day_key BETWEEN @from AND @to;"),
+            "event_oura_readiness_idx", true),
         new("Oura sleep days", "SELECT * FROM bsk.v_sleep_day;", "event_oura_sleep_day_idx", false),
         new("Oura sleep periods", "SELECT * FROM bsk.v_sleep_period;", "event_oura_sleep_idx", false),
         new("Oura tags", "SELECT * FROM bsk.v_oura_tag;", "event_oura_tag_idx", false),
         new("Oura workouts", "SELECT * FROM bsk.v_workout;", "event_oura_workout_idx", false),
+        new("one workout", $"SELECT * FROM bsk.v_workout WHERE workout_id = '{Id}';", "event_oura_workout_idx", true),
         new("workout notes", "SELECT * FROM bsk.v_workout;", "event_workout_note_idx", false),
         new("the change feed",
             "SELECT id FROM bsk.v_event WHERE recorded_at >= now() - interval '1 day' ORDER BY recorded_at DESC LIMIT 50;",
@@ -113,6 +121,10 @@ public sealed class EventIndexTests(ClassDatabase classDb) : IClassFixture<Class
         new("one space rating", $"SELECT * FROM bsk.v_space_rating WHERE rating_key = '{Id}';", "event_space_rating_idx", true),
         new("a subject's status", $"SELECT * FROM bsk_derived.subject_current_source WHERE subject_id = '{Id}';",
             "event_state_change_subject", true),
+        new("an item's due awards", $"SELECT * FROM bsk.v_reward_due WHERE subject_id = '{Id}';", "event_state_change_subject", true),
+        new("one review", $"SELECT * FROM bsk.v_review WHERE id = '{Id}';", "event_state_change_subject", true),
+        new("one space", $"SELECT * FROM bsk.v_space WHERE id = '{Id}';", "event_archive_change_subject", true),
+        new("a subject's events", $"SELECT * FROM bsk.v_subject_event WHERE subject_id = '{Id}';", "event_pkey", true),
         new("one task's timer", $"SELECT * FROM bsk.v_task_timer WHERE subject_key = '{Id}';", "event_timer_subject_idx", true),
         // Code review CR63: a capture sent again asks whether it was ever triaged.
         new("whether an item was ever triaged",
@@ -126,7 +138,85 @@ public sealed class EventIndexTests(ClassDatabase classDb) : IClassFixture<Class
         ["event_payload_gin"] = "for containment queries (payload @> ...) from psql and BI, which the code doesn't make",
     };
 
+    /// <summary>
+    /// Every view that reads the log: the reads here that look it up by its key or a range of it,
+    /// or why it's read whole (code review CR128, fifth review R12). HotPathBudgetTests measures
+    /// what the whole ones cost on three years of use.
+    /// </summary>
+    private static readonly Dictionary<string, ViewReads> Views = new(StringComparer.Ordinal)
+    {
+        ["bsk.v_activity_day"] = Bounded("a week of Oura activity days"),
+        ["bsk.v_artifact"] = Bounded("a stored file's event"),
+        ["bsk.v_award_credit"] = Bounded("some awards' credit by day"),
+        ["bsk.v_event"] = Bounded("the change feed"),
+        ["bsk.v_exception_day"] = Whole("the domain fold reads every exception day, by design: a few a year"),
+        ["bsk.v_fast"] = Bounded("one fast"),
+        ["bsk.v_food_day"] = Whole(
+            "it groups every meal and fast, each folded by its id, by its day; a range of days needs a pre-select of "
+            + "the range's meals and fasts (HotPathBudgetTests lists the Food Log week over budget)"),
+        ["bsk.v_inbox"] = Whole(
+            "it folds every capture's newest triage to find what waits; bounding it needs a projection beside the log "
+            + "(HotPathBudgetTests lists the Inbox count over budget)"),
+        ["bsk.v_inbox_resolved"] = Whole("the same fold as v_inbox, for the Resolved list"),
+        ["bsk.v_lab_visit"] = Bounded("one lab visit"),
+        ["bsk.v_ledger"] = Bounded("whether an award is paid", "the ledger over a range", "a subject's ledger", "the ledger by trigger"),
+        ["bsk.v_meal"] = Bounded("one meal", "a range's meals"),
+        ["bsk.v_metric"] = Bounded("whether each metric is archived"),
+        ["bsk.v_metric_reading"] = Bounded("one metric reading"),
+        ["bsk.v_oura_tag"] = Whole("folded by Oura's id and read by day, so a range folds every tag: a few a month"),
+        ["bsk.v_readiness_day"] = Bounded("a week of Oura readiness days"),
+        ["bsk.v_review"] = Bounded("one review"),
+        ["bsk.v_reward"] = Bounded("a Reward's redeems"),
+        ["bsk.v_reward_trigger"] = Bounded("an item's due awards"),
+        ["bsk.v_sleep_day"] = Whole(
+            "it groups every sleep period, each folded by Oura's id, by its day (HotPathBudgetTests lists the "
+            + "Activity week over budget)"),
+        ["bsk.v_sleep_period"] = Whole("folded by Oura's id and read by day, for v_sleep_day and a day's periods"),
+        ["bsk.v_space"] = Bounded("one space"),
+        ["bsk.v_space_photo"] = Bounded("one space photo"),
+        ["bsk.v_space_rating"] = Bounded("one space rating"),
+        ["bsk.v_subject_event"] = Bounded("a subject's events"),
+        ["bsk.v_task_timer"] = Bounded("one task's timer"),
+        ["bsk.v_workout"] = Bounded("one workout"),
+        ["bsk_derived.habit_occurrence_source"] = Whole(
+            "every habit's check-offs: a habit's streaks and its rewards read its whole history by design"),
+        ["bsk_derived.habit_planned_source"] = Whole("each Habit's Planned spells, from its state changes: a few a habit"),
+        ["bsk_derived.subject_current_source"] = Bounded("a subject's status"),
+    };
+
+    /// <summary>A view's reads by key here, or why it has none.</summary>
+    private sealed record ViewReads(IReadOnlyList<string> Lookups, string? Why);
+
+    private static ViewReads Bounded(params string[] lookups) => new(lookups, null);
+
+    private static ViewReads Whole(string why) => new([], why);
+
     public static TheoryData<string> ReadNames => new(Reads.Select(r => r.Name));
+
+    [Fact]
+    public async Task Every_view_over_the_event_log_is_read_by_key_here_or_says_why_not()
+    {
+        await using var connection = await OpenAsync();
+        var views = (await connection.QueryAsync<string>(new CommandDefinition("""
+            SELECT DISTINCT format('%I.%I', vn.nspname, v.relname)
+            FROM pg_depend d
+            JOIN pg_rewrite r ON r.oid = d.objid
+            JOIN pg_class v ON v.oid = r.ev_class
+            JOIN pg_namespace vn ON vn.oid = v.relnamespace
+            WHERE d.classid = 'pg_rewrite'::regclass AND d.refclassid = 'pg_class'::regclass
+              AND d.refobjid = 'bsk.event'::regclass AND v.relkind IN ('v', 'm');
+            """, cancellationToken: Ct))).ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(views.SetEquals(Views.Keys),
+            $"Views over bsk.event not listed here: {string.Join(", ", views.Except(Views.Keys))}. "
+            + $"Listed here but not over bsk.event: {string.Join(", ", Views.Keys.Except(views))}.");
+        var lookups = Reads.Where(r => r.Lookup).Select(r => r.Name).ToHashSet(StringComparer.Ordinal);
+        Assert.All(Views, v => Assert.True(
+            v.Value.Why is { Length: > 0 }
+                ? v.Value.Lookups.Count == 0
+                : v.Value.Lookups.Count > 0 && v.Value.Lookups.All(lookups.Contains),
+            $"{v.Key} names no lookup that's a read here, nor why it's read whole."));
+    }
 
     [Fact]
     public async Task Every_index_on_the_event_log_has_a_read_here()

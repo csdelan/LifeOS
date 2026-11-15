@@ -43,22 +43,17 @@ public sealed class HotPathBudgetTests(PostgresFixture postgres)
     /// </summary>
     private static readonly Dictionary<string, Over> Over = new(StringComparer.Ordinal)
     {
-        ["food week"] = new(8, 40_000, 600_000,
-            "v_food_day, v_fast and the day awards' ledger read are folded whole and filtered after; the drink days "
-            + "look up every fast's meals again"),
-        ["activity week"] = new(12, 37_000, 920_000,
-            "v_activity_day, v_sleep_day and v_readiness_day are folded whole and filtered after, and v_sleep_day "
-            + "joins every sleep period to every day"),
+        ["food week"] = new(8, 20_600, 61_000,
+            "v_food_day groups every meal and fast, each folded by its id, by the day it's on, so the week's days and "
+            + "the Food Log's first day each read all of them; the sobriety streak's best run reads every drink by design. "
+            + "Bounding v_food_day needs it to pre-select a range's meals and fasts by when they happened, as "
+            + "NpgsqlFoodLogRepository.GetMealsAsync does"),
+        ["activity week"] = new(12, 6_900, 19_500,
+            "v_sleep_day groups every sleep period, each folded by Oura's id, by the day it's on, and the week's "
+            + "workouts and tags are folded by id too; the days, readiness and the ledger read only the week"),
         ["inbox count"] = new(130, 7_100, 11_000,
             "v_inbox folds every capture's triage and asks bsk.is_archived of each; counting only what waits needs a "
-            + "projection beside the log"),
-        ["settle"] = new(28, 70_000, 5_250_000,
-            "v_fast counts the meals during each fast with a subquery per fast, over every meal"),
-        ["check-off"] = new(1_280, 35_500, 102_000,
-            "v_reward_due asks bsk.ledger_opened_at() of every row it reads, and the awards' credit is read by "
-            + "subject, every award the habit ever earned"),
-        ["meal"] = new(13, 25_000, 4_300_000,
-            "v_fast counts the meals during each fast with a subquery per fast, over every meal"),
+            + "projection beside the log, as bsk_derived.subject_current_source is for status"),
     };
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;

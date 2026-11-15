@@ -138,9 +138,14 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   (`jsonb_exists(payload, 'meal')`), and an expression index only if it uses the same expression,
   casts and all; otherwise the planner scans the whole log. A filter goes below a view's window
   only on the partition key itself, so a newest-version view ends with its key as text (`meal_key`)
-  and a lookup filters on that, not on the uuid cast (`meal_id`). `EventIndexTests` needs a read
+  and a lookup filters on that, not on the uuid cast (`meal_id`). A range of days of a stream keyed
+  by day filters on its key as text (`day_key`); a range of one keyed by id picks the range's keys
+  first, as `= ANY(ARRAY(SELECT ...))` (`MealsInRangeSql`). The planner has no statistics for an
+  expression only a partial index holds, so it may read all of it for a list of keys: look them up
+  one at a time, in a `LATERAL (... OFFSET 0)` (`AwardsByKeySql`). `EventIndexTests` needs a read
   for every index on `bsk.event` and checks a lookup uses its index's condition, so a new index
-  fails it until you add its read. A cast of a JSON value needs a test sound for its type in its own
+  fails it until you add its read, and it lists every view over `bsk.event` with its reads by key,
+  or why it's read whole. A cast of a JSON value needs a test sound for its type in its own
   CASE or the view's WHERE (`is_uuid_text`, `jsonb_typeof`, ...), or a CHECK, and a time goes through
   `bsk.try_to_timestamptz`: `CastGuardTests` scans every view and the C# SQL.
 - `bsk migrate` takes a lock, and refuses a pending migration numbered below the highest one already

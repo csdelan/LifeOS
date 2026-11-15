@@ -31,27 +31,44 @@ public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, IClock
     // Aliased to CreditRow's names (no underscore matching in the CLI host). A passive award's key
     // starts with its trigger (sleep:2026-10-24, §7.4.2), and no item trigger shares a passive
     // trigger's name, so the key's first part says which base is passive.
-    private const string CreditSelect = """
+    private const string CreditColumns = """
         SELECT c.currency,
                to_char(coalesce(c.credited_on, (c.occurred_at AT TIME ZONE @tz)::date), 'YYYY-MM-DD') AS day,
                sum(c.base)::bigint AS base,
                sum(c.paid)::bigint AS paid,
                coalesce(sum(c.base) FILTER (WHERE split_part(c.award_key, ':', 1) = ANY(@passive)), 0)::bigint AS passive
-        FROM bsk.v_award_credit c
-        WHERE c.currency = ANY(@currencies)
         """;
 
     private const string CreditGroup = """
 
+        WHERE c.currency = ANY(@currencies)
         GROUP BY 1, 2
         ORDER BY 1, 2;
         """;
 
     /// <summary>Every award's credit per currency and day: what a fold reads.</summary>
-    public const string DaysSql = CreditSelect + CreditGroup;
+    public const string DaysSql = CreditColumns + """
 
-    /// <summary>Some awards' credit (<c>@keys</c>), summed as <see cref="DaysSql"/> sums every award's.</summary>
-    public const string AwardCreditSql = CreditSelect + "  AND c.award_key = ANY(@keys)" + CreditGroup;
+        FROM bsk.v_award_credit c
+        """ + CreditGroup;
+
+    /// <summary>
+    /// Some awards' credit (<c>@keys</c>), summed as <see cref="DaysSql"/> sums every award's. The
+    /// view joins each award's net to its latest earn, and a list of keys reaches only the net's
+    /// side of that join, so the latest earn of every award was read for it. One key at a time, as
+    /// an equality the planner gives both sides (OFFSET 0 keeps it a subquery of its own), each
+    /// side reads only its key's entries by <c>event_ledger_award_key_idx</c> (code review CR128).
+    /// </summary>
+    public const string AwardCreditSql = CreditColumns + """
+
+        FROM (SELECT DISTINCT unnest(@keys::text[]) AS award_key) k
+        CROSS JOIN LATERAL (
+            SELECT v.award_key, v.currency, v.base, v.paid, v.credited_on, v.occurred_at
+            FROM bsk.v_award_credit v
+            WHERE v.award_key = k.award_key
+            OFFSET 0
+        ) c
+        """ + CreditGroup;
 
     private const string ExceptionsSql = """
         SELECT to_char(x.day, 'YYYY-MM-DD') AS day, x.comment, x.marked_at AS markedat

@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0071 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0072 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -281,12 +281,13 @@ CREATE INDEX agent_call_client_called_at ON bsk_ops.agent_call USING btree (clie
 
 -- ---------------------------------------------------------------- views
 
--- ACTIVITY-2 (D14): one row per Oura activity day (starting 4 a.m.) — the newest version by recorded_at. Steps, calories, walking distance, activity time by intensity, non-wear time, in seconds where a time.
+-- ACTIVITY-2 (D14): one row per Oura activity day (starting 4 a.m.) — the newest version by recorded_at. Steps, calories, walking distance, activity time by intensity, non-wear time, in seconds where a time. day_key is the day as Oura sends it, the key its versions are folded by: a range on it reads only those days.
 CREATE VIEW bsk.v_activity_day AS
  WITH version AS (
          SELECT e.id AS event_id,
             e.payload -> 'oura_activity'::text AS a,
             e.recorded_at,
+            (e.payload -> 'oura_activity'::text) ->> 'day'::text AS day_key,
             row_number() OVER w_desc AS rn,
             count(*) OVER w_all AS versions
            FROM bsk.event e
@@ -307,7 +308,8 @@ CREATE VIEW bsk.v_activity_day AS
     bsk.json_int(a -> 'score'::text) AS score,
     recorded_at AS synced_at,
     versions::integer AS versions,
-    event_id
+    event_id,
+    day_key
    FROM version v
   WHERE rn = 1;
 
@@ -482,9 +484,9 @@ CREATE VIEW bsk.v_fast AS
            FROM version v
           WHERE v.rn = 1 AND COALESCE(v.f ->> 'voided'::text, 'false'::text) <> 'true'::text AND jsonb_typeof(v.f -> 'started_at'::text) = 'string'::text AND bsk.try_to_timestamptz(v.f ->> 'started_at'::text) IS NOT NULL
         ), meal_time AS MATERIALIZED (
-         SELECT m.eaten_at
+         SELECT COALESCE(array_agg(m.eaten_at ORDER BY m.eaten_at), '{}'::timestamp with time zone[]) AS eaten
            FROM bsk.v_meal m
-          WHERE m.calories > 0
+          WHERE m.calories > 0 AND m.eaten_at IS NOT NULL
         )
  SELECT fast_id,
     started_at,
@@ -501,9 +503,8 @@ CREATE VIEW bsk.v_fast AS
     (ended_at AT TIME ZONE bsk.home_zone())::date AS ended_on,
     (started_at AT TIME ZONE bsk.home_zone()) AS started_local,
     (ended_at AT TIME ZONE bsk.home_zone()) AS ended_local,
-    (( SELECT count(*) AS count
-           FROM meal_time m
-          WHERE m.eaten_at > l.started_at AND m.eaten_at < COALESCE(l.ended_at, now())))::integer AS meals_during,
+    ( SELECT GREATEST(0, width_bucket(COALESCE(l.ended_at, now()) - '00:00:00.000001'::interval, mt.eaten) - width_bucket(l.started_at, mt.eaten)) AS "greatest"
+           FROM meal_time mt) AS meals_during,
     recorded_at,
     event_id,
     fast_key
@@ -1046,7 +1047,7 @@ CREATE VIEW bsk.v_person_association AS
      JOIN bsk.subject p ON p.urn = (assoc.value ->> 'person'::text) AND p.type = 'Person'::text
   WHERE jsonb_typeof(s.attributes -> 'people'::text) = 'array'::text AND NOT bsk.is_archived(s.id);
 
--- ACTIVITY-4 (D14): one row per day with a readiness score — the newest version by recorded_at: the score, its contributors and the temperature deviation in degrees C.
+-- ACTIVITY-4 (D14): one row per day with a readiness score — the newest version by recorded_at: the score, its contributors and the temperature deviation in degrees C. day_key is the day as Oura sends it, the key its versions are folded by: a range on it reads only those days.
 CREATE VIEW bsk.v_readiness_day AS
  SELECT DISTINCT ON (((payload -> 'oura_readiness'::text) ->> 'day'::text)) bsk.try_to_date((payload -> 'oura_readiness'::text) ->> 'day'::text) AS day,
     bsk.json_int((payload -> 'oura_readiness'::text) -> 'score'::text) AS score,
@@ -1057,7 +1058,8 @@ CREATE VIEW bsk.v_readiness_day AS
     bsk.json_num((payload -> 'oura_readiness'::text) -> 'temperature_deviation'::text) AS temperature_deviation,
     bsk.json_num((payload -> 'oura_readiness'::text) -> 'temperature_trend_deviation'::text) AS temperature_trend_deviation,
     recorded_at AS synced_at,
-    id AS event_id
+    id AS event_id,
+    (payload -> 'oura_readiness'::text) ->> 'day'::text AS day_key
    FROM bsk.event e
   WHERE kind = 'measurement'::text AND source_id = 'oura'::text AND jsonb_exists(payload, 'oura_readiness'::text) AND jsonb_typeof(payload -> 'oura_readiness'::text) = 'object'::text AND bsk.try_to_date((payload -> 'oura_readiness'::text) ->> 'day'::text) IS NOT NULL
   ORDER BY ((payload -> 'oura_readiness'::text) ->> 'day'::text), recorded_at DESC, id DESC;
@@ -1174,7 +1176,7 @@ CREATE VIEW bsk.v_reward_due AS
     timed_seconds,
     occurred_on
    FROM bsk.v_reward_trigger t
-  WHERE triggered_at >= bsk.ledger_opened_at();
+  WHERE triggered_at >= (( SELECT bsk.ledger_opened_at() AS ledger_opened_at));
 
 -- REWARD-1/2/6 (D11): every award the record supports, one row per award key, with the events that make it due — Task/Project/Goal completed; Task timed (timer time before the completion, in timed_seconds); Habit established, days followed / partial (up to graduation, and after it while the habit is Established), and 7 / 30 / 100 streaks (up to graduation). occurred_on is the award's own local date (a habit day's date, a streak's last day), NULL when it has none. Not yet filtered by the wallet's start line; see v_reward_due.
 CREATE VIEW bsk.v_reward_trigger AS
@@ -1290,8 +1292,29 @@ CREATE VIEW bsk.v_sleep_day AS
            FROM bsk.event e
           WHERE e.kind = 'measurement'::text AND e.source_id = 'oura'::text AND jsonb_exists(e.payload, 'oura_sleep_day'::text) AND jsonb_typeof(e.payload -> 'oura_sleep_day'::text) = 'object'::text AND bsk.try_to_date((e.payload -> 'oura_sleep_day'::text) ->> 'day'::text) IS NOT NULL
           ORDER BY ((e.payload -> 'oura_sleep_day'::text) ->> 'day'::text), e.recorded_at DESC, e.id DESC
+        ), period AS (
+         SELECT p_1.period_id,
+            p_1.day,
+            p_1.type,
+            p_1.started_at,
+            p_1.ended_at,
+            p_1.in_bed_s,
+            p_1.asleep_s,
+            p_1.deep_s,
+            p_1.light_s,
+            p_1.rem_s,
+            p_1.awake_s,
+            p_1.latency_s,
+            p_1.efficiency,
+            p_1.average_hrv,
+            p_1.average_hr,
+            p_1.lowest_hr,
+            p_1.synced_at,
+            p_1.event_id,
+            row_number() OVER (PARTITION BY p_1.day, (p_1.type = 'long_sleep'::text) ORDER BY p_1.asleep_s DESC NULLS LAST, p_1.in_bed_s DESC NULLS LAST, p_1.started_at, p_1.period_id) AS nth
+           FROM bsk.v_sleep_period p_1
         ), night AS (
-         SELECT DISTINCT ON (p_1.day) p_1.period_id,
+         SELECT p_1.period_id,
             p_1.day,
             p_1.type,
             p_1.started_at,
@@ -1309,18 +1332,16 @@ CREATE VIEW bsk.v_sleep_day AS
             p_1.lowest_hr,
             p_1.synced_at,
             p_1.event_id
-           FROM bsk.v_sleep_period p_1
-          WHERE p_1.type = 'long_sleep'::text
-          ORDER BY p_1.day, p_1.asleep_s DESC NULLS LAST, p_1.in_bed_s DESC NULLS LAST, p_1.started_at, p_1.period_id
+           FROM period p_1
+          WHERE p_1.type = 'long_sleep'::text AND p_1.nth = 1
         ), nap AS (
          SELECT p_1.day,
             count(*)::integer AS naps,
             COALESCE(sum(p_1.asleep_s), 0::bigint)::integer AS nap_s,
             max(p_1.synced_at) AS synced_at,
             array_agg(p_1.event_id ORDER BY p_1.started_at, p_1.event_id) AS event_ids
-           FROM bsk.v_sleep_period p_1
-             LEFT JOIN night n_1 ON n_1.period_id = p_1.period_id
-          WHERE n_1.period_id IS NULL
+           FROM period p_1
+          WHERE p_1.type <> 'long_sleep'::text OR p_1.nth > 1
           GROUP BY p_1.day
         ), days AS (
          SELECT score.day
@@ -1715,12 +1736,13 @@ CREATE VIEW bsk.v_workout AS
  WITH version AS (
          SELECT e.id AS event_id,
             e.payload -> 'oura_workout'::text AS w,
+            (e.payload -> 'oura_workout'::text) ->> 'id'::text AS workout_key,
             e.recorded_at,
             row_number() OVER (PARTITION BY ((e.payload -> 'oura_workout'::text) ->> 'id'::text) ORDER BY e.recorded_at DESC, e.id DESC) AS rn
            FROM bsk.event e
           WHERE e.kind = 'activity'::text AND e.source_id = 'oura'::text AND jsonb_exists(e.payload, 'oura_workout'::text) AND jsonb_typeof(e.payload -> 'oura_workout'::text) = 'object'::text AND COALESCE((e.payload -> 'oura_workout'::text) ->> 'id'::text, ''::text) <> ''::text
         ), live AS (
-         SELECT v.w ->> 'id'::text AS workout_id,
+         SELECT v.workout_key AS workout_id,
             bsk.try_to_date(v.w ->> 'day'::text) AS day,
             v.w,
             bsk.try_to_timestamptz(v.w ->> 'start'::text) AS started_at,

@@ -40,6 +40,7 @@ public sealed class CastGuardTests(PostgresFixture postgres, ClassDatabase class
         ["bsk.v_space boolean e.payload->>'archived'"] = "event_archive_change_archived_check",
         ["bsk_derived.habit_occurrence_source date e.payload->>'occurrence'"] = "event_activity_occurrence_check",
         ["NpgsqlLedgerRepository.cs numeric (e.payload->'amounts')->>w.currency"] = "event_ledger_amounts_check",
+        ["NpgsqlLedgerRepository.cs numeric a.value#>>'{}'"] = "event_ledger_amounts_check",
     };
 
     /// <summary>Casts that only a well-formed value reaches, and why.</summary>

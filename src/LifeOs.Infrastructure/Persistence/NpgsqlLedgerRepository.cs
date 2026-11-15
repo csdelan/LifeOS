@@ -76,25 +76,36 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
               AND e.payload->>'award_key' IS NOT NULL
               AND e.payload->>'trigger' = ANY(@triggers)
         ),
-        """ + KeyedFoldSql;
+        """ + NetFromLedgerSql + KeyedFoldSql;
 
     /// <summary>
     /// The awards of some keys, as <see cref="KeyedAwardsSql"/> folds them, looked up by
     /// <c>event_ledger_award_key_idx</c>: a page's days, not every keyed award (code review CR78).
+    /// Every entry of those keys is in <c>keyed</c>, so their net is summed from it, not from a
+    /// semi-join of <c>bsk.v_ledger</c>, which read the whole ledger to find them (CR128). The keys
+    /// are looked up one at a time (OFFSET 0 keeps each a subquery of its own): the planner has no
+    /// statistics for an expression only a partial index holds, so it took a week's 14 keys for
+    /// 7% of the ledger and read all of it in date order instead.
     /// </summary>
     public const string AwardsByKeySql = """
         WITH keyed AS (
-            SELECT e.id, e.occurred_at, e.recorded_at, e.payload, e.derived_from, e.payload->>'award_key' AS award_key
-            FROM bsk.event e
-            WHERE e.kind = 'ledger'
-              AND e.payload->>'award_key' = ANY(@keys)
+            SELECT e.id, e.occurred_at, e.recorded_at, e.payload, e.derived_from, e.award_key
+            FROM (SELECT DISTINCT unnest(@keys::text[]) AS award_key) k
+            CROSS JOIN LATERAL (
+                SELECT e.id, e.occurred_at, e.recorded_at, e.payload, e.derived_from, e.payload->>'award_key' AS award_key
+                FROM bsk.event e
+                WHERE e.kind = 'ledger'
+                  AND e.payload->>'award_key' = k.award_key
+                OFFSET 0
+            ) e
         ),
-        """ + KeyedFoldSql;
+        """ + NetFromKeyedSql + KeyedFoldSql;
 
-    // Each of the `keyed` events' keys: its net per currency (an empty object once reversed), its
-    // latest earn as bsk.v_award_credit picks it, and its newest entry. Aliased to KeyedRow's
-    // names (no underscore matching in the CLI host).
-    private const string KeyedFoldSql = """
+    // Each key's net per currency (an empty object once reversed): from bsk.v_ledger, for a
+    // `keyed` of the entries naming one of its triggers, since every entry of a key counts
+    // whatever trigger it names; or from `keyed` itself, when it holds every entry of its keys.
+    // Each amount as v_ledger reads it.
+    private const string NetFromLedgerSql = """
 
         net AS (
             SELECT l.award_key,
@@ -107,6 +118,29 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
             ) l
             GROUP BY l.award_key
         ),
+        """;
+
+    private const string NetFromKeyedSql = """
+
+        net AS (
+            SELECT l.award_key,
+                   coalesce(jsonb_object_agg(l.currency, l.net) FILTER (WHERE l.net <> 0), '{}'::jsonb) AS net
+            FROM (
+                SELECT k.award_key, a.key AS currency,
+                       sum(((a.value #>> '{}')::numeric)::bigint)::bigint AS net
+                FROM keyed k
+                CROSS JOIN LATERAL jsonb_each(
+                    CASE WHEN jsonb_typeof(k.payload->'amounts') = 'object' THEN k.payload->'amounts' ELSE '{}'::jsonb END) a(key, value)
+                GROUP BY k.award_key, a.key
+            ) l
+            GROUP BY l.award_key
+        ),
+        """;
+
+    // Each of the `keyed` events' keys, after its net: its latest earn as bsk.v_award_credit picks
+    // it, and its newest entry. Aliased to KeyedRow's names (no underscore matching in the CLI host).
+    private const string KeyedFoldSql = """
+
         latest_earn AS (
             SELECT DISTINCT ON (k.award_key)
                 k.award_key, k.id, k.occurred_at, k.derived_from,
