@@ -21,6 +21,13 @@ they cannot rather than guessing. The `constraint` capacity check reads a plain
 `committed_hours` jsonb attribute (set with `bsk new … --attr committed_hours=5`)
 to total booked hours against a Constraint's stated focused-hours limit.
 
+A diagnostic that reads the alignment graph follows `results_in` as well as
+`serves`, as the alignment tree does: a Project created under its Goal is linked
+by `results_in` (GEN-7, `ParentChildRelations`). `WishesDriftDiagnosticTests`
+creates every parent-first link the app makes and checks that `wishes`, `drift`
+and `decorative_identity` don't call it missing; a new check about what an item
+serves, or what serves it, goes in its list.
+
 ## File naming
 
 ```
