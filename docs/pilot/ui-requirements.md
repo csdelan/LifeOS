@@ -72,6 +72,8 @@ requirements cluster and the ID says where it lives:
 | `HOME-` | Home environment: spaces, ratings, the Home Score |
 | `MEASURE-` | Measurements: weight, body measurements, lab results, charts beside Oura |
 | `CHECKLIST-` | Checklists: reusable procedures, run alone or inside reviews |
+| `OPS-` | Operations: backups and restores of the life record |
+| `AGENT-` | AI agents: reading LifeOS, writing to it, and working jobs Chris assigns |
 | `NAV-` | Navigation shell |
 | `GEN-` | Cross-cutting conventions **and** per-subject-type object specs (Goals, Projects, Tasks, Identity Statements, Commitments, Decisions, Problems, People, Vision, …) |
 
@@ -574,7 +576,9 @@ Build:      built
   UI's "Tag" vs "Relate to" separation real rather than cosmetic. "Universal" = one shared
   tag space across subjects and events.
 - Open decisions: normalized table vs per-row array; whether the reserved `focus` attribute
-  becomes just another tag or stays special for Season parking.
+  becomes just another tag or stays special for Season parking. **Settled (kernel Phase 3):**
+  a normalized table, `bsk.item_tag`, one row per tag on a subject or an event, lower-cased
+  and trimmed. The `focus` question is still open.
 - Autocomplete (web, 2026-10-20): every tag field — the New dialog, the detail Tags tab (add
   and rename), and Inbox triage — uses one autocomplete box over the tag universe. Focus
   lists the most-used tags; typing narrows them, prefix matches first; tags already on the
@@ -669,6 +673,13 @@ Build:      built
 - SIDE NOTE:  Depending on how habits are represented in the ontology, it could relate to commitment also.
 
 **Ontology fit (Claude):**
+- **Revised (2026-09-13, D2):** a Habit is **its own subject type**, not a Commitment
+  (kernel Phase 9). It composes the shared recurrence and adherence mechanism (D8):
+  recurrence is `attributes.recurrence` (D8's patterns), and a recorded day is an `activity`
+  event naming the habit and the day with a `result` (followed, partial or missed), which
+  `evidences` the habit, or `violates` it for a miss (`AdherenceResults`). Where the
+  bullets below say Commitment or `expected_cadence`, read Habit and `attributes.recurrence`;
+  the rest holds.
 - Maps to (D2): a Habit **is a Commitment** with habit attributes (cue / routine / reward,
   start / end, `expected_cadence` for recurrence). Occurrences are **not stored** — they're a
   projection over cadence + adherence events: followed = an activity `evidences` it,
@@ -680,15 +691,20 @@ Build:      built
   streak projection** over cadence & adherence events; (3) present Habit-Commitment misses
   as a gentle streak break — **exclude them from the confrontational breach report**;
   (4) habit fields are just attributes (free).
-- Implications: "Habit" never appears in storage — it's a Commitment the UI dresses up. A
-  missed day is an absence / `violates`, shown as a broken streak, not a breach.
+- Implications: ~~"Habit" never appears in storage — it's a Commitment the UI dresses up.~~
+  (Superseded: Habit is its own type, above.) A missed day is an absence / `violates`, shown
+  as a broken streak, not a breach.
 - A day can be missed only when the habit has it: its pattern schedules it, or something is
   already recorded on it, which the miss corrects. A day that hasn't come takes no recording.
   On a day that isn't one of its occurrences, a session done anyway can still be logged as
   followed. A habit with no pattern has no scheduled days. The app offers only the kernel's
   days (code review CR105).
 - Open decisions: partial as a new edge relation vs an activity-event attribute; materialize
-  "not-followed at window close" or leave it purely projected.
+  "not-followed at window close" or leave it purely projected. **Settled by what's built
+  (Phases 9–10):** partial is the `result` on the day's `activity` event, which `evidences`
+  the habit as a followed day does, not an edge of its own; and a
+  miss is projected, never stored: `habit_occurrence_source` reads a scheduled day with no
+  recording as missed once it's over (migration 0018, `v_habit_occurrence`).
 
 
 ### GEN-4 — History views show chronological change with progressive detail
@@ -857,14 +873,18 @@ Build:      built
   These pairs are unambiguous, so the UI infers the relation silently; only a genuinely
   ambiguous pair prompts. The **leaf invariant** (nothing serves a Task) makes the child-type
   chooser under a Task empty for free.
-- Kernel delta (needs-kernel): an **atomic create-and-link** (child + parent edge in one
-  transaction) so "if the relate fails, don't report success and keep my child data" holds
-  without leaving an orphan — important under the no-delete policy (D9). Plus recording the
-  relation map above.
+- Kernel delta: an **atomic create-and-link** (child + parent edge in one transaction) so "if
+  the relate fails, don't report success and keep my child data" holds without leaving an
+  orphan — important under the no-delete policy (D9). Plus recording the relation map above.
+  **Shipped** (kernel Phase 6).
 - Implications: the child defaults to a **single** parent; more are added later via normal
   Relationships. Grouping children by type on the parent screen is a read over incoming edges.
 - Open decisions: atomic create+link as a `bsk` flag (e.g. `bsk new Task "…" --serves <p>`)
   vs app-composed with rollback; whether the relation map lives in the kernel or the app.
+  **Settled (Phase 6):** in the kernel. `bsk new <Type> "…" --parent <p>` and `POST
+  /api/subjects` with a parent make the child and its edge in one transaction
+  (`SubjectCreationService`, `ChildCreationService`), and the map is `ParentChildRelations` in
+  Domain; a pair it doesn't know needs the relation named.
 
 
 ### GEN-8 — Goals use a type-specific form and must be developed before activation
@@ -1714,14 +1734,30 @@ this have no `occurrence` and stand for their `date`.
   auto-advanced to Missed — the user sets it.
 - Open decisions: **how People links meaning "attendee / involves" are modeled** — a generic
   association relation vs a Person-ref attribute (recurs across Appointments, Commitments,
-  delegation, Task `waiting_for`). Lean: a Person-ref attribute for the Pilot.
+  delegation, Task `waiting_for`). Lean: a Person-ref attribute for the Pilot. **Settled
+  (kernel Phase 11):** the attribute. `attributes.people` holds Person references with a role
+  (attendee, owner, assignee, waiting_for or involves), written by `bsk involve`
+  (`PeopleService`), not a relation.
 
 
 
 ### CAP-1 — I want to be able to quickly capture a note, idea, problem from anywhere in the app
 Horizon:    Pilot phase 2
 Definition: active
-Build:      mapped
+Build:      built
+
+**Update (2026-11-15 — what's built):** the web's Capture does this. Alt+N, the Capture
+button in the top bar and the command palette open one dialog with the cursor in a multi-line
+box and a tabbable Note / Idea / Problem choice (Note first). Enter submits, Ctrl+Enter breaks
+the line, Escape discards, a blank capture is refused, and a failure stays in the dialog with
+the text and type kept, so a retry needs no retyping (it sends the same request id, so a
+retry whose first try landed doesn't capture twice; code review CR108). A Note is a `note`
+event flagged to the Inbox; an Idea or a Problem is made at once with the capture concerning
+it and flagged, in one write (`InboxFilingService`, CR114), titled by the text's first line.
+The same path serves `bsk capture`, the API and an agent's `capture`. **Not built**, since a
+web page can't: the system-wide hotkey while LifeOS isn't focused, capture while it's
+minimized to the tray, and several capture dialogs open at once, tiled. The WinForms Pilot
+has only its Inbox's New note (a note, through `bsk capture`).
 
 **Workflow (Chris):**
 - A system-wide global hotkey brings up the capture dialog even when LifeOS is not the
@@ -1773,17 +1809,20 @@ Build:      mapped
   - **Idea** → **immediately an `Idea` subject** (CAP-6): full text, derived Title, Status
     `New`; flagged for triage.
   (Document / URL flavors are CAP-4 / CAP-5 — events + reference.) All land in the Inbox.
-- Kernel delta (needs-kernel): the **bifurcated capture path** (D4) — create an *event* (note)
-  or a *subject* (idea / problem) from the same dialog — plus **flag-on-create** so a freshly
+- Kernel delta: the **bifurcated capture path** (D4) — create an *event* (note) or a
+  *subject* (idea / problem) from the same dialog — plus **flag-on-create** so a freshly
   created capture subject enters the triage queue (the INBOX-1 marker on a subject, not only an
-  event). `bsk capture` (note) and `bsk new Problem/Idea` already exist; the new bits are
-  choosing between them by type and attaching the triage marker.
+  event). **Shipped:** kernel Phase 7, and since code review CR114 one write for the Idea or
+  Problem, its edge from the capture and its flag (`InboxFilingService`,
+  `SubjectService.CreateFromCaptureAsync`), the same from every door.
 - Implications: **"promote" now splits** — a `note` (event) promotes *into* a subject, while an
   `Idea` (already a subject) "promotes" *to another type* by creating it, adding a `results_in`
   edge from the Idea, and setting the Idea `Promoted` (CAP-6). Concurrency, hotkeys, and
   title-derivation stay app-side.
 - Open decisions: does capturing a Problem **reuse an existing same-title Problem** (the
-  ontology's reuse-by-title anchor, §6) or always create new? Does a plain `note` keep any
+  ontology's reuse-by-title anchor, §6) or always create new? **Settled by what's built:** it
+  reuses it. A Problem's title is unique (migration 0006), so a captured Problem of a title
+  already there files the capture to that Problem and flags it. Does a plain `note` keep any
   flavor tag at all now that idea / problem are their own subjects? *(Supersedes the earlier
   A / B / C flavored-note mapping, now retired.)*
 
@@ -1856,7 +1895,11 @@ exists in the Production web UI (wired onto the quick-capture seam). Build moves
 - Implications: "Keep audio" = retain the binary artifact; transcript-only = discard it
   after success; failed transcription = keep audio + flag to inbox as needing processing.
 - Open decisions: where audio bytes live (DB large object vs a managed file dir) — one
-  decision shared across all binary attachments.
+  decision shared across all binary attachments. **Settled:** neither. Migration 0022 kept
+  bytes in Postgres (`bsk.artifact_blob`, bytea, deduped by content hash), and since 0035 they
+  go to Supabase Storage (`artifacts/<sha256>`, never overwritten) wherever it's configured,
+  as on staging; only a database on this machine keeps them in Postgres
+  ([binary-artifacts.md](binary-artifacts.md)).
 
 ### CAP-3 - I want AI assist mode for captures
 Horizon:    Production
@@ -1928,6 +1971,9 @@ live.
   genuinely new infra. One attachment per capture keeps it simple (another file = another
   reference item).
 - Open decisions: blob-in-DB vs managed-file-dir + stored path; retention / dedup.
+  **Settled:** as CAP-2's: object storage (Supabase Storage, migration 0035) where configured,
+  Postgres (0022) only on a database on this machine. Bytes are deduped by content hash, so the
+  same file captured twice is one capture, and kept for good, like the rest of the record.
 
 
 ### CAP-5 — I want to capture URL reference
@@ -2062,6 +2108,8 @@ Build:      built
   this. "Journal vs a related Note" is a flavor distinction (D4); both are events that
   `concern` the subject.
 - Open decisions: a dedicated journal-append verb vs composing the existing two.
+  **Settled:** a dedicated verb, `bsk journal <item>`, which writes the entry and its edge in
+  one write through `JournalService`, as the API and `/mcp`'s `add_journal_entry` do.
 
 
 ### JOURNAL-2 — Production journals support rich formatting and inline media
@@ -2144,7 +2192,11 @@ Build:      built
   email-reading agent plugs into (it flags; it doesn't need to be a `bsk capture`).
 - Open decisions: is resolution **recorded explicitly** (a triage-resolved event with an
   outcome) or **inferred** from promote/relate/drop? (Hybrid: explicit flag on entry +
-  explicit Drop; promote/relate stay untouched and count as resolution.)
+  explicit Drop; promote/relate stay untouched and count as resolution.) **Settled by
+  migration 0021 (the update below):** a hybrid, but not that one. Entry is an explicit
+  `flagged` marker; Dismiss and Promote write an explicit marker too; a subject also leaves
+  when its status turns terminal (Drop sets it), which `v_inbox` reads rather than a marker.
+  Relating doesn't resolve an item (INBOX-4).
 
 **Update (2026-09-16 — attention vs. status, migration 0021):** the built model refines the
 above. The Inbox encodes **attention only**; an item's *resolution* lives in its **Status**,
@@ -2772,7 +2824,9 @@ establish window. Habits with no status, made before Planned existed, still read
 
 **Ontology fit (Claude):**
 - Maps to: Habit gains a status vocabulary (D7): **Building → Established | Abandoned**.
-  Building is the default, and existing habits with no status read as Building. Established
+  Building was the default until migration 0049 made it **Planned → Building → Established |
+  Abandoned**: a new habit now starts Planned and isn't tracked until it moves to Building (the
+  2026-10-28 update above). Habits with no status read as Building. Established
   and Abandoned are terminal, so a graduated habit drops out of default views and
   `v_habit_occurrence` stops expanding occurrences after the date it graduated. Moving it back
   to Building resumes tracking and reverses the establishment award.
@@ -2970,6 +3024,14 @@ Horizon:    Pilot
 Definition: active
 Build:      built
 
+**What holds now (2026-11-15):** Health has no flat "successful day" bar. The bar was 70 base
+XP (X3), then 60 from 2026-10-22 (activity plan §3.8), and levels v2 (D17, 2026-10-25)
+replaced it. A day is now **active** when its action XP (base XP less sleep) reaches the
+shown level's minimum: 20 at the low levels, rising to 32 at level 100 (since 2026-10-27; it
+was 10). The multiplier counts active days; the consistency level reads the last 90 days'
+average base XP and share of active days (xp-domains plan §7.2, `LifeDomains.HealthConsistency`).
+Older updates below and in FOOD-3 that say 60 or 70 describe the rule as it was then.
+
 **Update (2026-10-27 — Environment planned):** Environment gets rules of its own (REWARD-9,
 D18). It keeps this requirement's shown level, 1% fall, ranks, best level and rank, Gems,
 multiplier and exception days. The difference is what holds it: the Home Score
@@ -3094,7 +3156,8 @@ successful day gets retuned after a few weeks of real XP.
   realistic patterns stalling at level 19, so rank difficulty rises through the bars and
   windows instead.) The success test is a replaceable rule per domain, so it can later
   require core habits or allow an approved recovery-day routine. In the pilot, recovery days
-  are handled by pricing: all Health XP counts toward the 70.
+  are handled by pricing: all Health XP counts toward the bar. *(Since levels v2 there is no
+  flat bar; see "What holds now" at the top.)*
 - **Rank milestones** (designed now, built later): a rank can also require objective
   achievements, such as an endurance or strength Goal.
 - **Consistency multiplier** from the past 30 days, capped at +30%. Tiers start at 50% /
@@ -3375,7 +3438,9 @@ retune never rewrites it (plan, As built F2).
   - **The food part pays when I close the day**, or by itself once the day is over, and a
     later correction re-scores the day.
   - **Diet XP counts toward Health's 70-XP successful day**, and the consistency multiplier
-    applies on top.
+    applies on top. *(Now: there's no flat bar. Diet XP is action XP, so it counts toward a
+    day being active, 20 action XP or more at the low levels, and toward the 90-day average
+    base XP; see REWARD-7's "What holds now".)*
 
 **Ontology fit (Claude):**
 - Maps to: two award keys a day on the D11 ledger, with no item: `fast:<date>` (due once a
@@ -3472,7 +3537,7 @@ photos. Build moves `mapped → built`.
 - Open decisions: none blocking.
 
 
-### FOOD-6 — Alcoholic drinks are flagged, cut the day's diet XP above two, and keep a sobriety streak
+### FOOD-6 — Alcoholic drinks are flagged, cut the day's diet XP from the first, and keep a sobriety streak
 Horizon:    Pilot
 Definition: active
 Build:      built
@@ -3836,6 +3901,7 @@ Build:      built
   (A9) are next.
 - **The successful day is now 60 base XP (2026-10-22).** The calibration found 70 held a
   healthy routine to about 70% successful days and level 59 after 10 years. Chris chose 60.
+  (Levels v2 replaced the bar three days later: REWARD-7, "What holds now".)
 
 **Update (2026-10-22 — XP on the ledger, A8):** `ActivityRewards` pays the three keys.
 
@@ -4401,7 +4467,7 @@ Build:      unmapped
 
 **Ontology fit (Claude):**
 - Maps to: a series read over the metrics' day values and the Oura and Food Log day views
-  (plan §4.8). No new storage.
+  (plan §4.10). No new storage.
 - Kernel delta: `GET /api/series` and the Compare view (plan M5).
 - Open decisions: none blocking.
 
@@ -4446,6 +4512,116 @@ Build:      unmapped
 
 **Ontology fit (Claude):**
 - pending (Definition is `drafting`).
+
+
+---
+
+### OPS-1 — The life record is backed up every night, encrypted, off site and restore-tested
+Horizon:    Pilot
+Definition: active
+Build:      built
+
+*(Added 2026-11-15 from [agent-access-plan.md](agent-access-plan.md) Phase 0, which proposed
+this ID; Chris agreed the plan on 2026-10-27 and chose OneDrive on 2026-10-28. Horizon and
+Definition are read from that; Chris to confirm.)*
+
+**Workflow (Chris):**
+- *To be written by Chris.* What he asked for (plan, opening): automated backups, deployed
+  first, before any agent access.
+
+**Ontology fit (Claude):**
+- Maps to: nothing in the ontology. A nightly scheduled task on Chris's PC dumps staging's
+  `bsk`, `bsk_derived` and `bsk_ops` schemas and `public.schema_migrations`, and the photo
+  bytes new in Storage; restores the dump into a throwaway database to test it; encrypts it to
+  his key; and saves it to his OneDrive (plan §3). `auth.*` and the secrets aren't in it.
+- Kernel delta: migration 0046 (`bsk_backup`, a read-only role for the dump);
+  `scripts/backup.ps1`, `backup-setup.ps1` and `restore.ps1`, which run the `bsk` built from
+  `origin/main`. Runbook: [backup-restore.md](backup-restore.md).
+- Implications: every night's copy is kept 35 days and the first of each month for good
+  (plan §2, decision 2). OneDrive can't lock a file, so its recycle bin and Restore your
+  OneDrive are the safety net. A restore to a new Supabase project means signing in with
+  Google again.
+- Open decisions: none. The optional dead-man's switch isn't set (plan §3.9).
+
+
+### AGENT-1 — My AI agents can read my life in LifeOS, and I can see what each one read
+Horizon:    Pilot
+Definition: active
+Build:      built
+
+*(Added 2026-11-15 from [agent-access-plan.md](agent-access-plan.md) Phase 1, which proposed
+this ID; agreed with Chris 2026-10-27, with his decisions in plan §2. Horizon and Definition
+are read from that; Chris to confirm.)*
+
+**Workflow (Chris):**
+- *To be written by Chris.* What he asked for (plan, opening): his agents should understand
+  his goals, identity, tasks, habits and events as they stand now, so their advice is up to
+  date; MCP rather than the REST API; read-only first.
+
+**Ontology fit (Claude):**
+- Maps to: `/mcp` on the API, read tools over the same readers `/api` uses (`life_snapshot`,
+  `list_items`, `get_item`, `find_items`, `alignment`, `inbox`, `recent_changes`, `habits`,
+  `calendar`, `people`, `diagnostics`, and per area `health`, `food`, `rewards`, `home`). An
+  agent is an AI-agent Person (GEN-15) that a client acts as.
+- Kernel delta: sign-in through Supabase's OAuth 2.1 server and LifeOS's consent page;
+  LifeOS's own allow list and access log, `bsk_ops.agent_client` and `agent_call` (migration
+  0047, kept 90 days); reconnecting replaces the earlier client (0048); Connected agents on
+  the People page. Settings: `Mcp:Enabled`, `Mcp:Domains`, `Mcp:BlockedClients`.
+- Implications: agents read everything by default. The core is always on, and Health, Food,
+  Rewards and Home can each be switched off (`Mcp:Domains`; a feature's new payload or
+  attribute keys join an area in `McpAreas`). Oura data is included and Chris accepts the risk
+  under Oura's API agreement (plan §2, decision 3). Read tools never open the owner
+  connection, and an agent's token can't reach `/api/*`.
+- Open decisions: none blocking.
+
+
+### AGENT-2 — My agents can write to LifeOS, behind a switch, attributed and undoable
+Horizon:    Pilot
+Definition: active
+Build:      building
+
+*(Added 2026-11-15 from [agent-access-plan.md](agent-access-plan.md) Phase 2, which proposed
+this ID; Chris's decisions are in plan §2, items 4 and 5. Horizon and Definition are read
+from that; Chris to confirm.)*
+
+**Workflow (Chris):**
+- *To be written by Chris.* What he asked for (plan, opening): read/write, which he switches
+  on once he's comfortable.
+
+**Ontology fit (Claude):**
+- Maps to: write tools on `/mcp` that call the Application services their `/api` endpoints
+  call. Each event an agent writes has source `mcp:<client_id>` and provenance `declared`
+  (Chris said it, through that agent), and names the agent's Person; `derived` is kept for an
+  agent's own inferences, which aren't offered (this settles CAP-3's open decision).
+- Kernel delta: `Mcp:Writes` (`off`, `capture`, `full`) and `Mcp:WriteClients`; a write
+  needs both, and a client linked to an AI-agent Person. The `capture` level is built and on
+  for staging since 2026-11-12: `capture`, `add_journal_entry`, `dismiss` (raw captures only)
+  and `link_reflection` (plan §5.2). `full` (status, check-offs, timers, create, relate, tag,
+  meals) isn't built.
+- Implications: a `request_id` makes a retry write once. Nothing an agent can do deletes
+  anything, and some writes have no tool at any level: archive, any delete, rewards, exception
+  days, Oura, covers (plan §5.2). Undo is the kernel's usual: a status set back, a capture
+  dismissed.
+- Open decisions: none blocking; `full` waits for the week or two at `capture` the plan's
+  rollout asks for (plan §5.1).
+
+
+### AGENT-3 — Claude works the jobs I assign it, on its own, and asks in the Task when it needs me
+Horizon:    Pilot
+Definition: drafting
+Build:      unmapped
+
+*(Added 2026-11-15 from [agent-access-plan.md](agent-access-plan.md) Phase 3, which proposed
+this ID. Its decisions (plan §6.5) are leanings, not yet Chris's, so this stays `drafting`.)*
+
+**Workflow (Chris):**
+- *To be written by Chris.* What he asked for (plan §6, 2026-10-28 and 2026-10-29): he assigns
+  a LifeOS Task to Claude, and Claude does it on its own, fixes from his `#lifeos` queue
+  included, with no separate prompt.
+
+**Ontology fit (Claude):**
+- pending (Definition is `drafting`). The plan's design is in §6: a queue tool, writes scoped
+  to the job, a fire from LifeOS, and a prototype on two repos first (step 3.1).
 
 
 ## Cross-cutting ontology decisions
@@ -4536,15 +4712,19 @@ With this resolved, DASHBOARD-1 / TODAY-1 / TODAY-2 / REVIEW-* can now be mapped
 **D7 — Per-type status vocabularies + terminal classification.** Each subject type now
 carries its own status set, moved by `state_change` events: Goal (New → Active →
 Completed / Abandoned), Project (same shape), Task (Not started / In progress / Waiting /
-Completed / Cancelled), Commitment (Open / Fulfilled / Missed / Cancelled), Decision (Open /
-Implementing / Cancelled / Closed), Problem (Open / Working / Resolved), Appointment
-(Scheduled / Completed / Cancelled / Missed), Idea (New / Promoted / Rejected), and — since
-REWARD-2 (migration 0027) — Habit (Building / Established / Abandoned). **Identity
-Statement has no status** (it uses archive, D9). The diagnostics depend on which statuses
-are **terminal** — neglect skips terminal subjects via `is_terminal_status` (migration
-0008); breach is Commitment-only. Deliverable: a documented per-type status map + terminal
-set, and an extended `is_terminal_status`. Open: enforce the vocabularies as kernel enums
-vs validate them app-side.
+Completed / Missed / Cancelled; Missed since TASKS-3, 2026-10-24), Commitment (Open /
+Fulfilled / Missed / Cancelled), Decision (Open / Implementing / Cancelled / Closed), Problem
+(Open / Working / Resolved / Cancelled; Cancelled is what Drop sets, migration 0021),
+Appointment (Scheduled / Completed / Cancelled / Missed), Idea (New / Promoted / Rejected),
+Habit (Planned / Building / Established / Abandoned: the last three since REWARD-2, migration
+0027, and Planned, a new habit's first status, since migration 0049), and Review (Open /
+Completed / Missed, migration 0052; an Open review reads as Missed once its day is over).
+**Identity Statement has no status** (it uses archive, D9). The diagnostics depend on which
+statuses are **terminal** — neglect skips terminal subjects via `is_terminal_status`
+(migration 0008); breach is Commitment-only. Deliverable: a documented per-type status map +
+terminal set, and an extended `is_terminal_status`. The map is `StatusVocabulary`
+(`src/LifeOs.Domain`). **Settled:** the vocabularies are validated app-side, not kernel enums:
+`StatusService` refuses a word outside the type's list, and the database adds no constraint.
 
 **D8 — Recurrence + adherence is a shared *mechanism*, not a base type (resolves the
 Commitment god-type).** Chris confirmed Commitment is too abstract to be a first-order
@@ -4574,8 +4754,10 @@ this flag — terminal-status hiding and archive hiding are separate mechanisms 
 item from default views.)
 
 **D10 — Appointment = a new durable subject type** (net-new, alongside Area — the pilot
-pushes the ontology from 11 → 13 types). Time attributes (date / start / end / all-day /
-location / meeting link), attendees = `Person` relations, recurrence via D8. **Divergence to
+pushed the ontology from 11 → 13 types; with Habit, Reward, Space, Metric and Review since,
+there are 18). Time attributes (date / start / end / all-day /
+location / meeting link), attendees = Person references in `attributes.people` (kernel
+Phase 11, `bsk involve`; see CAL-1), recurrence via D8. **Divergence to
 note:** CAL-1 wants **materialized per-occurrence status** (each occurrence individually
 Scheduled / Completed / Cancelled / Missed), unlike Habit's **projected** occurrences (D2).
 Two different recurrence-instance models under one roof — deliberate, recorded here so it
@@ -4758,9 +4940,10 @@ mechanism, never inherited from a god-type.
 ## Kernel build backlog
 
 The roll-up of every `needs-kernel` delta above — the authoritative feeder for ontology
-work. One line per item; details live in the requirement. **Sync (2026-09-20):** most items
-shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifact work
-(2026-09-20); each is tagged below and the few still open are gathered at the end.
+work. One line per item; details live in the requirement. **Sync (2026-11-15):** most items
+shipped with the Pilot kernel (Phases 1–12, 2026-09-14), the binary-artifact work
+(2026-09-20) and the feature plans since; each is tagged below and the few still open are
+gathered at the end.
 
 - **Triage marker primitive** (INBOX-1) — a flag that asserts inbox membership + a `Drop`
   outcome + a `v_inbox` projection (flagged AND not resolved). Source-agnostic; attaches to
@@ -4769,7 +4952,9 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   live "tag universe" reader; reconcile with the existing reserved `focus` attribute. — **Shipped** (Phase 3).
 - **New subject types** — Area (GEN-2 / D1), Appointment (CAL-1 / D10), Habit (revised D2),
   Review (D3 / REVIEW-0): the pilot grows the model **11 → ~15 types**; plus master-list /
-  readers and `attributes.area` on items. — **Mostly shipped** (Area P4, Habit P9, Appointment P12 → 14 types); **Review still open**.
+  readers and `attributes.area` on items. — **Shipped** (Area P4, Habit P9, Appointment P12 → 14
+  types; Review, migration 0052). With Reward (0028), Space (0044) and Metric (0050) there are
+  18 types.
 - **Habit subject type** (GEN-3 / revised D2) — its own type composing the shared
   adherence / recurrence mechanism, **no longer stored as a Commitment**. — **Shipped** (Phase 9).
 - **Per-type status vocabularies + terminal classification** (D7) — a documented status map
@@ -4779,16 +4964,18 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   Commitment / Review. — **Shipped** (Phase 8, migration 0016 `recurrence_occurrences`).
 - **Shared adherence + missed / backfill mechanism** (D8, was the "recurring engine") —
   `evidences` / `violates` events + missed-detection + correction, composed per-type with
-  per-type diagnostic framing. — **Partly shipped**: habit adherence + correction (Phases 9–10); **review scheduling / missed still open** (REVIEW-0).
+  per-type diagnostic framing. — **Shipped**: habit adherence + correction (Phases 9–10);
+  review scheduling and missed (REVIEW-0, migration 0052).
 - **Universal archive / active flag** (D9) — cross-cutting hide-from-default-views flag;
   reversible; never deletes; orthogonal to workflow status. — **Shipped** (Phase 2).
 - **Capture bifurcation** (D4) — note / document / url as events; idea / problem as
-  subjects-on-capture; split the `promote` paths (event→subject vs subject→subject). — **Shipped** (Phase 7; url flavor still rides a plain note).
+  subjects-on-capture; split the `promote` paths (event→subject vs subject→subject). — **Shipped** (Phase 7). The `url` flavor was dropped: a URL is a link on a
+  subject (`attributes.references`, CAP-5 / GEN-17), not a capture.
 - **Atomic create-and-link + parent→child relation map** (GEN-7) — a one-transaction create +
   parent edge so parent-first creation is all-or-nothing (no orphan on failure); canonical
   map: Goal→Value `serves`, Project→Goal `results_in`, Task→Project/Goal `serves`. — **Shipped** (Phase 6, `bsk new --parent`).
 - **Managed binary artifact storage** (CAP-2 / CAP-4 / JOURNAL-2) — blob / file storage for
-  audio, attachments, and inline media; today's artifact table holds text only. — **Shipped 2026-09-20** (migration 0022 `artifact_blob`, bytea + `IArtifactBlobStore` port, dedup by content hash).
+  audio, attachments, and inline media; today's artifact table holds text only. — **Shipped 2026-09-20** (migration 0022 `artifact_blob`, bytea + `IArtifactBlobStore` port, dedup by content hash). Since migration 0035 the bytes go to Supabase Storage wherever it's configured, as on staging, and stay in Postgres only on a database on this machine.
 - **`voice` write path** (CAP-2) — a `bsk` verb that writes `voice` events (closes one of
   the 4 unreachable event kinds). — **Shipped 2026-09-20** (`bsk voice`; `bsk attach` closes the document path, `bsk artifact get` exports bytes).
 - **Partial-credit adherence** (D2 / GEN-3) — a third state (**fixed half-credit**) beyond
@@ -4796,7 +4983,10 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
 - **Habit occurrence + streak projection** (GEN-3) — a projection over recurrence +
   adherence events; misses shown as a gentle streak break, excluded from the breach report. — **Shipped** (Phase 10, migration 0018 `v_habit_occurrence` / `v_habit_streak`).
 - **Review subject type + mutable-body edit trail** (D3 / REVIEW-0) — a body attribute with
-  each save appended as an edit event; scheduling / missed via the D8 mechanism. — **Open** (Reviews not yet built).
+  each save appended as an edit event; scheduling / missed via the D8 mechanism. — **Shipped**
+  (the Review type, scheduling and missed, migration 0052). Its answers aren't a body
+  attribute: they're the vault reflection the review links to (reviews plan §4.1, R5,
+  migration 0054).
 - **D6 focus storage** (TODAY-1) — current Monthly + Weekly Primary-focus Goal pointers with
   change history (focus-set events or a lightweight Season); daily objectives stay app-local,
   materializing into Inbox items only when unfinished. — **Open**.
@@ -4860,8 +5050,10 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   versioned `measurement` events, `v_metric` and `v_metric_reading` (migration 0050),
   `MetricTrend` (day values, trend, goal date), `bsk metric`, `bsk measure`, the
   `/api/measurements` endpoints, the `/measurements` page; then any metric, lab visits,
-  Compare and the `health` tool. — **Open** (planned in
-  [measurements-plan.md](measurements-plan.md), M1–M6).
+  Compare and the `health` tool. — **Mostly shipped** (M1–M4 in
+  [measurements-plan.md](measurements-plan.md): the kernel, Weight on the web, any metric
+  (0051) and lab visits (0053)). **Open:** M5, Compare (MEASURE-5), and M6, the `health`
+  tool reading measurements (MEASURE-6).
 - **Food log + diet XP** (FOOD-1..5 / D13): food entries as `measurement` events and fasts
   and day closes as `activity` events, versioned by id; `v_meal` / `v_fast` / `v_food_day`;
   `DietRules`; `fast:` / `diet:` award keys with re-pricing and an ordered ledger guard;
@@ -4869,9 +5061,10 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   **Shipped** (F1–F6 and F10 in [food-log-plan.md](food-log-plan.md), migrations 0034–0035
   and 0040, photos in Supabase Storage).
 - **Drinks, the sobriety streak and combined entries** (FOOD-6 / FOOD-7): the alcohol flag on
-  a food entry, the cut above two drinks a day, the streak, a drinks count over any range,
-  identical entries combined on the day's page, entries oldest first. — **Shipped** (F7–F9 in
-  [food-log-plan.md](food-log-plan.md) §7, migration 0038).
+  a food entry, the cut of the day's diet XP for each drink (above two at first, from the
+  first drink since 2026-10-27), the streak, a drinks count over any range, identical entries
+  combined on the day's page, entries oldest first. — **Shipped** (F7–F9 in
+  [food-log-plan.md](food-log-plan.md) §7, migration 0038; the first-drink cut §7.6).
 - **Oura integration** (ACTIVITY-1..4, ACTIVITY-6 / D14):
   - an OAuth connection with encrypted tokens in `bsk_ops`
   - Oura records as `observed` events from source `oura`, versioned by content
@@ -4891,13 +5084,12 @@ shipped with the Pilot kernel (Phases 1–12, 2026-09-14) and the binary-artifac
   `POST /api/tasks/settle`. — **Shipped** (RT1–RT5 in
   [recurring-tasks-plan.md](recurring-tasks-plan.md), 2026-10-24).
 
-**Still open:** **D6 focus storage** (TODAY-1), and where a **review's answers** live: the
-Review type, scheduling and missed shipped in migration 0052 (REVIEW-0 / D8), and the answers
-are vault notes the review links to (reviews plan §4.1, R5, migration 0054). The Oura integration (D14) and cover images (D15)
-shipped. Everything else
-above has shipped, the rewards work included (R1–R7 in [rewards-plan.md](rewards-plan.md))
-and life-domain XP (X1–X7 in [xp-domains-plan.md](xp-domains-plan.md)), and the Food Log
-(F1–F6 in [food-log-plan.md](food-log-plan.md)). The user-facing UIs for the shipped kernel bits still vary by surface — see each
-requirement's Build field (e.g. CAP-5 still rides a plain note).
+**Still open:** **D6 focus storage** (TODAY-1), and Measurements' **M5** (Compare,
+MEASURE-5) and **M6** (the `health` tool, MEASURE-6). The Review type, scheduling and missed
+shipped in migration 0052 (REVIEW-0 / D8), and a review's answers are the vault reflection it
+links to (reviews plan §4.1, R5, migration 0054). Everything else above has shipped. The
+user-facing UIs for the shipped kernel bits still vary by surface — see each requirement's
+Build field (e.g. CAP-5's links ride `attributes.references` with no screen for them yet,
+GEN-17).
 
 *(Prior mapping gaps already closed: the `concerns` write path — shipped as `bsk relate`.)*
