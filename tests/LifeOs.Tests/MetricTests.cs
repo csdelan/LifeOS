@@ -91,6 +91,10 @@ public sealed class MetricTests(PostgresFixture postgres)
         Assert.Equal("kg", (await service.SetAsync("Weight", new MetricChange(Unit: "kg"), Ct)).Unit);
         await service.SetAsync("Weight", new MetricChange(Unit: "lb"), Ct);
         await db.Get<MetricReadingService>().LogAsync("Weight", 192.4m, cancellationToken: Ct);
+        // Another metric's readings aren't Weight's (code review CR123 counts one metric's).
+        await service.AddAsync("Waist", "in", cancellationToken: Ct);
+        await db.Get<MetricReadingService>().LogAsync("Waist", 34m, cancellationToken: Ct);
+        await db.Get<MetricReadingService>().LogAsync("Waist", 33.5m, cancellationToken: Ct);
         Assert.Contains("Weight has 1 reading in lb, so its unit stays",
             (await Assert.ThrowsAsync<InvalidOperationException>(() => service.SetAsync("Weight", new MetricChange(Unit: "kg"), Ct))).Message);
         Assert.Equal(185.5m, (await service.ResolveAsync("Weight", Ct)).Target);

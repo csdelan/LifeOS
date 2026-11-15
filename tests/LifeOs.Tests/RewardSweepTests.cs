@@ -11,15 +11,16 @@ namespace LifeOs.Tests;
 /// <summary>
 /// Code review CR14: a fold of the life domains reads all of their history, so the sweep
 /// (<see cref="RewardService.ReconcileAllAsync"/>) folds once and keeps that fold from item to
-/// item until a write changes the domains' credit, and pays rank-ups once at the end. Before,
-/// every item that paid domain XP folded twice.
+/// item, and pays rank-ups once at the end. Before, every item that paid domain XP folded twice;
+/// since CR123 a write of domain XP reads again only its own awards' credit, before and after
+/// it, where it read all of history to price the next item.
 /// </summary>
 public sealed class RewardSweepTests(PostgresFixture postgres)
 {
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
-    public async Task A_sweep_folds_once_for_each_item_that_pays_domain_XP_and_once_for_rank_ups()
+    public async Task A_sweep_folds_once_to_price_and_once_for_rank_ups_reading_each_items_own_credit_between()
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
         var today = await db.TodayAsync();
@@ -42,8 +43,10 @@ public sealed class RewardSweepTests(PostgresFixture postgres)
         var awards = await kernel.GetRequiredService<RewardService>().ReconcileAllAsync(Ct);
 
         Assert.Equal(3, awards.Count(a => habits.Any(h => h.Id == a.Subject?.Id) && a.Amounts.ContainsKey(Currencies.HealthXp)));
-        // One fold to price each of the three, then one to pay rank-ups: four, not seven.
-        Assert.Equal(4, counter.Count(nameof(IDomainCreditReader.GetDomainDaysAsync)));
+        // One fold to price the first and kept for the rest, then one to pay rank-ups: two, not
+        // seven (four from CR14); each item's own credit is read before and after its write.
+        Assert.Equal(2, counter.Count(nameof(IDomainCreditReader.GetDomainDaysAsync)));
+        Assert.Equal(6, counter.Count(nameof(IDomainCreditReader.GetAwardCreditAsync)));
     }
 
     // Code review CR46: the Character page and bsk rewards reconcile settle through one method. The

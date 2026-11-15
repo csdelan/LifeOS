@@ -162,7 +162,7 @@ public sealed class MetricService(
             var unit = MetricLimits.CheckUnit(change.Unit);
             if (unit != metric.Unit)
             {
-                var count = (await metrics.CountReadingsAsync(cancellationToken)).GetValueOrDefault(metric.Id);
+                var count = await metrics.CountReadingsAsync(metric.Id, cancellationToken);
                 if (count > 0)
                 {
                     throw new InvalidOperationException(

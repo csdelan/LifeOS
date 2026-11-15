@@ -205,6 +205,35 @@ public sealed record DomainCredit(DateOnly Today, IReadOnlyList<CreditDay> Days,
 
     /// <summary>The home's spaces and ratings, read beside the credit, for the Home Score (HOME-3, environment plan §4.6).</summary>
     public HomeInputs Home { get; init; } = HomeInputs.None;
+
+    /// <summary>
+    /// This credit after a write that changed only some awards (code review CR123): those awards'
+    /// credit before it (<paramref name="was"/>) taken out, and theirs after it
+    /// (<paramref name="now"/>) put in, since a day's credit is the sum of its awards'. A day left
+    /// with none has no row, as a read leaves it; the days stay in a read's order.
+    /// </summary>
+    public DomainCredit WithAwards(IReadOnlyList<CreditDay> was, IReadOnlyList<CreditDay> now)
+    {
+        var days = Days.ToDictionary(d => (d.Currency, d.Day));
+        foreach (var (change, sign) in was.Select(d => (d, -1)).Concat(now.Select(d => (d, 1))))
+        {
+            var day = days.GetValueOrDefault((change.Currency, change.Day)) ?? new CreditDay(change.Currency, change.Day, 0, 0);
+            days[(change.Currency, change.Day)] = day with
+            {
+                Base = day.Base + sign * change.Base,
+                Paid = day.Paid + sign * change.Paid,
+                Passive = day.Passive + sign * change.Passive,
+            };
+        }
+
+        return this with
+        {
+            Days = days.Values
+                .Where(d => d is not { Base: 0, Paid: 0, Passive: 0 })
+                .OrderBy(d => d.Currency, StringComparer.Ordinal).ThenBy(d => d.Day)
+                .ToList(),
+        };
+    }
 }
 
 /// <summary>

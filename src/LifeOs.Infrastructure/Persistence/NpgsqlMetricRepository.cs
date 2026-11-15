@@ -66,11 +66,10 @@ public sealed class NpgsqlMetricRepository(NpgsqlDataSource dataSource) : IMetri
                 cancellationToken))
             .Select(r => r.ToReading()).ToList();
 
-    public async Task<IReadOnlyDictionary<Guid, int>> CountReadingsAsync(CancellationToken cancellationToken = default)
-        => (await QueryAsync<CountRow>(
-                "SELECT metric_id AS metricid, count(*)::int AS readings FROM bsk.v_metric_reading GROUP BY metric_id",
-                null, cancellationToken))
-            .ToDictionary(r => r.MetricId, r => r.Readings);
+    public async Task<int> CountReadingsAsync(Guid metricId, CancellationToken cancellationToken = default)
+        => (await QueryAsync<int>(
+                "SELECT count(*)::int FROM bsk.v_metric_reading WHERE metric_id = @metricId",
+                new { metricId }, cancellationToken)).Single();
 
     public async Task<MetricReading?> GetReadingAsync(Guid id, CancellationToken cancellationToken = default)
         => (await QueryAsync<ReadingRow>(ReadingSql + " WHERE reading_key = @id::text", new { id }, cancellationToken))
@@ -256,11 +255,5 @@ public sealed class NpgsqlMetricRepository(NpgsqlDataSource dataSource) : IMetri
                 ? new LabReport(report, ReportFilename, ReportContentType ?? "application/octet-stream", ReportByteSize ?? 0)
                 : null,
             Utc(FirstLoggedAt), Utc(LoggedAt), Versions, EventId);
-    }
-
-    private sealed class CountRow
-    {
-        public Guid MetricId { get; set; }
-        public int Readings { get; set; }
     }
 }

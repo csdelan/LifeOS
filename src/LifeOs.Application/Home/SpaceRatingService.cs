@@ -76,8 +76,6 @@ public sealed class SpaceRatingService(
         var now = clock.UtcNow;
         var today = await calendar.DateAtAsync(now, cancellationToken);
         var on = CheckDay(day ?? today, today);
-        var history = await spaces.GetRatingsAsync(cancellationToken: cancellationToken);
-
         var planned = new List<(Space Space, Guid Id, decimal? T, decimal? C, decimal? A, string? Note)>();
         foreach (var input in ratings)
         {
@@ -101,7 +99,9 @@ public sealed class SpaceRatingService(
                         $"'Same as last time' repeats {space.Name}'s last rating, so it takes no new ones: leave them out.");
                 }
 
-                var last = history.Where(r => r.SpaceId == space.Id && r.Day <= on).ToList();
+                // Only this space's ratings, not every space's (code review CR123).
+                var last = (await spaces.GetRatingsAsync(space.Id, cancellationToken: cancellationToken))
+                    .Where(r => r.Day <= on).ToList();
                 t = LastOf(last, HomeParts.Tidiness);
                 c = LastOf(last, HomeParts.Cleanliness);
                 a = LastOf(last, HomeParts.Aesthetics);

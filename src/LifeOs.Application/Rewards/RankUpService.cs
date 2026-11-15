@@ -11,6 +11,13 @@ namespace LifeOs.Application.Rewards;
 /// rank moved. <see cref="RewardService"/> prices and pays an item; this pays what the domains
 /// reach, after an item's earn, a food or activity day, an exception day or a room rating moved
 /// them, or time alone did (code review CR48).
+/// <para>
+/// Every fold reads all of the domains' history, so a write reads it once, before itself: what
+/// the domains are after it is that read with only what the write changed read again, its own
+/// awards' credit (<see cref="AroundAwardsAsync{T}"/>) or the exception days and the Home
+/// (<see cref="AroundAsync"/>). A rank-up due then is paid from a read of all of it again, so what
+/// pays is never a patched read's (code review CR123).
+/// </para>
 /// </summary>
 public sealed class RankUpService(
     ILedgerRepository ledger, IDomainCreditReader credit, IClock clock, EventSource eventSource)
@@ -50,21 +57,67 @@ public sealed class RankUpService(
     public async Task<Earned> AroundAsync(
         Func<CancellationToken, Task> write, CancellationToken cancellationToken = default)
     {
-        var before = await FoldAsync(cancellationToken);
+        var before = await ReadAsync(cancellationToken);
         await write(cancellationToken);
-        return await PayAfterAsync(before, cancellationToken);
+        return await PayAfterAsync(before, Folded(await credit.RereadBesideAsync(before.Credit, cancellationToken)), cancellationToken);
     }
 
     /// <summary>
-    /// After a write that moved the domains' credit: pays any rank-up now reached, and answers it
-    /// with each configured domain whose level or rank moved since <paramref name="before"/>.
+    /// Runs <paramref name="write"/>, which writes the awards <paramref name="awardKeys"/> carrying
+    /// domain XP, and answers the domains after it: <paramref name="before"/> with those awards'
+    /// credit read just before the write taken out and read just after it put in
+    /// (<see cref="DomainCredit.WithAwards"/>), so no read of all of history follows the write.
+    /// </summary>
+    public async Task<(T Result, DomainState After)> AroundAwardsAsync<T>(
+        DomainState before, IReadOnlyCollection<string> awardKeys, Func<CancellationToken, Task<T>> write,
+        CancellationToken cancellationToken = default)
+    {
+        var was = await credit.GetAwardCreditAsync(DomainCurrencies, awardKeys, cancellationToken);
+        var result = await write(cancellationToken);
+        var now = await credit.GetAwardCreditAsync(DomainCurrencies, awardKeys, cancellationToken);
+        return (result, Folded(before.Credit.WithAwards(was, now)));
+    }
+
+    /// <summary>
+    /// After a write that moved the domains from <paramref name="before"/> to
+    /// <paramref name="after"/>: pays any rank-up now reached, and answers it with each configured
+    /// domain whose level or rank moved. When <paramref name="after"/> reaches a rank not yet
+    /// paid, it pays from a read of all of history again, as the sweep and a settle do; otherwise
+    /// it reads nothing more.
     /// </summary>
     public async Task<Earned> PayAfterAsync(
-        IReadOnlyList<DomainProgress> before, CancellationToken cancellationToken = default)
+        DomainState before, DomainState after, CancellationToken cancellationToken = default)
     {
-        var (ranks, after) = await PayRankUpsAsync(cancellationToken);
-        return new Earned(ranks.Select(r => r.Award).ToList(), DomainChanges(before, after, ranks));
+        if (!await AnyUnpaidAsync(after, cancellationToken))
+        {
+            return new Earned([], DomainChanges(before.Folds, after.Folds, []));
+        }
+
+        var (ranks, folds) = await PayRankUpsAsync(cancellationToken);
+        return new Earned(ranks.Select(r => r.Award).ToList(), DomainChanges(before.Folds, folds, ranks));
     }
+
+    /// <summary>Whether <paramref name="state"/> reaches a rank that pays and hasn't been paid.</summary>
+    private async Task<bool> AnyUnpaidAsync(DomainState state, CancellationToken cancellationToken)
+    {
+        var due = Due(state.Credit.OpenedOn, state.Folds);
+        if (due.Count == 0)
+        {
+            return false;
+        }
+
+        var paid = await ledger.GetPaidKeysAsync(LifeDomains.RankTrigger, cancellationToken);
+        return due.Any(d => !paid.Contains(d.Progress.Rules.RankAwardKey(d.Reached.Rank)));
+    }
+
+    /// <summary>The ranks <paramref name="folds"/> reached on or after the wallet opened that pay Gems.</summary>
+    private static List<(DomainProgress Progress, RankReached Reached)> Due(DateOnly? openedOn, IReadOnlyList<DomainProgress> folds)
+        => openedOn is not { } opened
+            ? []
+            : folds
+                .SelectMany(p => p.RanksReached.Where(r => r.QualifiedOn >= opened).Select(r => (Progress: p, Reached: r)))
+                .Where(d => d.Progress.Rules.GemsFor(d.Reached.Rank) > 0)
+                .ToList();
 
     /// <summary>Folds the configured domains, then pays their rank-ups, re-reading after a lost race.</summary>
     private async Task<(IReadOnlyList<RankUp> Awards, IReadOnlyList<DomainProgress> Folds)> PayRankUpsAsync(
@@ -88,15 +141,7 @@ public sealed class RankUpService(
     private async Task<IReadOnlyList<RankUp>> PayRankUpsAsync(
         DateOnly? openedOn, IReadOnlyList<DomainProgress> folds, CancellationToken cancellationToken)
     {
-        if (openedOn is not { } opened)
-        {
-            return [];
-        }
-
-        var due = folds
-            .SelectMany(p => p.RanksReached.Where(r => r.QualifiedOn >= opened).Select(r => (Progress: p, Reached: r)))
-            .Where(d => d.Progress.Rules.GemsFor(d.Reached.Rank) > 0)
-            .ToList();
+        var due = Due(openedOn, folds);
         if (due.Count == 0)
         {
             return [];
@@ -186,15 +231,20 @@ public sealed class RankUpService(
         return changes;
     }
 
+    /// <summary>The configured domains' currencies: what a fold reads the credit of.</summary>
+    private static readonly IReadOnlyList<string> DomainCurrencies = LifeDomains.Configured.Select(r => r.Currency).ToList();
+
     private Task<DomainCredit> ReadDomainsAsync(CancellationToken cancellationToken)
-        => credit.GetDomainDaysAsync(LifeDomains.Configured.Select(r => r.Currency).ToList(), cancellationToken);
+        => credit.GetDomainDaysAsync(DomainCurrencies, cancellationToken);
 
     private static IReadOnlyList<DomainProgress> Fold(DomainCredit read)
         => LifeDomains.Configured.Select(r => DomainService.Fold(r, read)).ToList();
 
-    /// <summary>The configured domains folded as they stand now.</summary>
-    public async Task<IReadOnlyList<DomainProgress>> FoldAsync(CancellationToken cancellationToken = default)
-        => Fold(await ReadDomainsAsync(cancellationToken));
+    private static DomainState Folded(DomainCredit read) => new(read, Fold(read));
+
+    /// <summary>The configured domains as they stand now: all of their history read, and folded.</summary>
+    public async Task<DomainState> ReadAsync(CancellationToken cancellationToken = default)
+        => Folded(await ReadDomainsAsync(cancellationToken));
 
     /// <summary>
     /// A rank-up's earn (xp-domains plan §3.7): no subject, so no <c>concerns</c> edge; the
@@ -232,3 +282,6 @@ public sealed class RankUpService(
     /// <summary>A rank-up award, with its domain and rank (an index into the domain's ranks).</summary>
     private sealed record RankUp(Award Award, string Currency, int Rank);
 }
+
+/// <summary>The configured life domains folded (<see cref="Folds"/>) from <see cref="Credit"/>, what was read.</summary>
+public sealed record DomainState(DomainCredit Credit, IReadOnlyList<DomainProgress> Folds);

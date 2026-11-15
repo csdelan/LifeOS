@@ -66,6 +66,14 @@ public sealed class EventIndexTests(ClassDatabase classDb) : IClassFixture<Class
         new("what some days' awards pay",
             NpgsqlLedgerRepository.AwardsByKeySql.Replace("@keys", "ARRAY['diet:2026-11-08','fast:2026-11-08']", StringComparison.Ordinal),
             "event_ledger_award_key_idx", true),
+        // Code review CR123: a write's own awards' credit, read before and after it in place of all of history.
+        new("some awards' credit by day",
+            NpgsqlDomainCreditReader.AwardCreditSql
+                .Replace("@tz", "'America/Los_Angeles'", StringComparison.Ordinal)
+                .Replace("@currencies", "ARRAY['health_xp','environment_xp']", StringComparison.Ordinal)
+                .Replace("@passive", "ARRAY['sleep']", StringComparison.Ordinal)
+                .Replace("@keys", "ARRAY['completed:x','habit_day:y']", StringComparison.Ordinal),
+            "event_ledger_award_key_idx", true),
         new("the ledger over a range",
             "SELECT * FROM bsk.v_ledger WHERE occurred_at >= '2026-11-01' AND occurred_at < '2026-11-08';", "event_ledger_occurred_idx", true),
         new("a Reward's redeems", "SELECT * FROM bsk.v_reward;", "event_ledger_subject_idx", true),

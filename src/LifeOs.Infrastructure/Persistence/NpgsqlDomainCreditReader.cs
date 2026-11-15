@@ -28,27 +28,42 @@ namespace LifeOs.Infrastructure.Persistence;
 public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, IClock clock, string homeTimeZone = HomeZone.Default)
     : IDomainCreditReader
 {
+    // Aliased to CreditRow's names (no underscore matching in the CLI host). A passive award's key
+    // starts with its trigger (sleep:2026-10-24, §7.4.2), and no item trigger shares a passive
+    // trigger's name, so the key's first part says which base is passive.
+    private const string CreditSelect = """
+        SELECT c.currency,
+               to_char(coalesce(c.credited_on, (c.occurred_at AT TIME ZONE @tz)::date), 'YYYY-MM-DD') AS day,
+               sum(c.base)::bigint AS base,
+               sum(c.paid)::bigint AS paid,
+               coalesce(sum(c.base) FILTER (WHERE split_part(c.award_key, ':', 1) = ANY(@passive)), 0)::bigint AS passive
+        FROM bsk.v_award_credit c
+        WHERE c.currency = ANY(@currencies)
+        """;
+
+    private const string CreditGroup = """
+
+        GROUP BY 1, 2
+        ORDER BY 1, 2;
+        """;
+
+    /// <summary>Every award's credit per currency and day: what a fold reads.</summary>
+    public const string DaysSql = CreditSelect + CreditGroup;
+
+    /// <summary>Some awards' credit (<c>@keys</c>), summed as <see cref="DaysSql"/> sums every award's.</summary>
+    public const string AwardCreditSql = CreditSelect + "  AND c.award_key = ANY(@keys)" + CreditGroup;
+
+    private const string ExceptionsSql = """
+        SELECT to_char(x.day, 'YYYY-MM-DD') AS day, x.comment, x.marked_at AS markedat
+        FROM bsk.v_exception_day x
+        ORDER BY x.day;
+        """;
+
     public async Task<DomainCredit> GetDomainDaysAsync(
         IReadOnlyCollection<string> currencies, CancellationToken cancellationToken = default)
     {
         await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
-
-        // Aliased to CreditRow's names (no underscore matching in the CLI host). A passive
-        // award's key starts with its trigger (sleep:2026-10-24, §7.4.2), and no item trigger
-        // shares a passive trigger's name, so the key's first part says which base is passive.
-        const string daysSql = """
-            SELECT c.currency,
-                   to_char(coalesce(c.credited_on, (c.occurred_at AT TIME ZONE @tz)::date), 'YYYY-MM-DD') AS day,
-                   sum(c.base)::bigint AS base,
-                   sum(c.paid)::bigint AS paid,
-                   coalesce(sum(c.base) FILTER (WHERE split_part(c.award_key, ':', 1) = ANY(@passive)), 0)::bigint AS passive
-            FROM bsk.v_award_credit c
-            WHERE c.currency = ANY(@currencies)
-            GROUP BY 1, 2
-            ORDER BY 1, 2;
-            """;
-
         try
         {
             // Every statement reads one snapshot (code review CR47): the dates, the credit, the
@@ -69,21 +84,16 @@ public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, IClock
                 transaction, cancellationToken: cancellationToken));
             HomeZoneCheck.Ensure(homeTimeZone, dates.Zone);
             var rows = await connection.QueryAsync<CreditRow>(new CommandDefinition(
-                daysSql,
+                DaysSql,
                 new { tz = homeTimeZone, currencies = currencies.ToArray(), passive = LifeDomains.PassiveTriggers.ToArray() },
                 transaction, cancellationToken: cancellationToken));
             var exceptions = await connection.QueryAsync<ExceptionRow>(new CommandDefinition(
-                """
-                SELECT to_char(x.day, 'YYYY-MM-DD') AS day, x.comment, x.marked_at AS markedat
-                FROM bsk.v_exception_day x
-                ORDER BY x.day;
-                """,
-                transaction: transaction, cancellationToken: cancellationToken));
+                ExceptionsSql, transaction: transaction, cancellationToken: cancellationToken));
             var home = await NpgsqlSpaceRepository.ReadHomeAsync(connection, cancellationToken, transaction);
             await transaction.CommitAsync(cancellationToken);
             return new DomainCredit(
                 ParseDay(dates.Today),
-                rows.Select(r => new CreditDay(r.Currency, ParseDay(r.Day), r.Base, r.Paid, r.Passive)).ToList(),
+                rows.Select(ToCreditDay).ToList(),
                 dates.OpenedOn is { } openedOn ? ParseDay(openedOn) : null)
             {
                 ExceptionDays = exceptions.Select(ToExceptionDay).ToList(),
@@ -95,6 +105,51 @@ public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, IClock
         {
             throw UnknownHomeZone(e);
         }
+    }
+
+    public async Task<IReadOnlyList<CreditDay>> GetAwardCreditAsync(
+        IReadOnlyCollection<string> currencies, IReadOnlyCollection<string> awardKeys,
+        CancellationToken cancellationToken = default)
+    {
+        if (currencies.Count == 0 || awardKeys.Count == 0)
+        {
+            return [];
+        }
+
+        await using var connection = dataSource.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        try
+        {
+            return (await connection.QueryAsync<CreditRow>(new CommandDefinition(
+                    AwardCreditSql,
+                    new
+                    {
+                        tz = homeTimeZone,
+                        currencies = currencies.ToArray(),
+                        passive = LifeDomains.PassiveTriggers.ToArray(),
+                        keys = awardKeys.Distinct(StringComparer.Ordinal).ToArray(),
+                    },
+                    cancellationToken: cancellationToken)))
+                .Select(ToCreditDay).ToList();
+        }
+        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.InvalidParameterValue)
+        {
+            throw UnknownHomeZone(e);
+        }
+    }
+
+    public async Task<DomainCredit> RereadBesideAsync(DomainCredit credit, CancellationToken cancellationToken = default)
+    {
+        await using var connection = dataSource.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        // One snapshot, as the whole read takes.
+        await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
+        var exceptions = await connection.QueryAsync<ExceptionRow>(new CommandDefinition(
+            ExceptionsSql, transaction: transaction, cancellationToken: cancellationToken));
+        var home = await NpgsqlSpaceRepository.ReadHomeAsync(connection, cancellationToken, transaction);
+        await transaction.CommitAsync(cancellationToken);
+        return credit with { ExceptionDays = exceptions.Select(ToExceptionDay).ToList(), Home = home };
     }
 
     public async Task<(DateOnly Today, IReadOnlyList<ExceptionDay> Days)> GetExceptionDaysAsync(
@@ -129,6 +184,8 @@ public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, IClock
             throw UnknownHomeZone(e);
         }
     }
+
+    private static CreditDay ToCreditDay(CreditRow row) => new(row.Currency, ParseDay(row.Day), row.Base, row.Paid, row.Passive);
 
     private static ExceptionDay ToExceptionDay(ExceptionRow row)
         => new(ParseDay(row.Day), row.Comment, new DateTimeOffset(DateTime.SpecifyKind(row.MarkedAt, DateTimeKind.Utc)));

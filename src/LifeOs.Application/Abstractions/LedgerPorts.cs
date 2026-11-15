@@ -148,6 +148,24 @@ public interface IDomainCreditReader
         IReadOnlyCollection<string> currencies, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The credit of only <paramref name="awardKeys"/>, of <paramref name="currencies"/>, per local
+    /// day, summed as <see cref="GetDomainDaysAsync"/> sums every award: what a write of those
+    /// awards changes, read before and after it, so the domains after it need no read of all of
+    /// history (<see cref="DomainCredit.WithAwards"/>, code review CR123). Each award is looked up
+    /// by its key.
+    /// </summary>
+    Task<IReadOnlyList<CreditDay>> GetAwardCreditAsync(
+        IReadOnlyCollection<string> currencies, IReadOnlyCollection<string> awardKeys,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <paramref name="credit"/> with what the fold reads beside the ledger read again, the
+    /// exception days and the Home, and the rest as it was: the domains after a write that
+    /// changed one of those and wrote no award (code review CR123).
+    /// </summary>
+    Task<DomainCredit> RereadBesideAsync(DomainCredit credit, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Today's date in the home zone and the days marked as exceptions among the last
     /// <paramref name="days"/> (today included), newest first (<c>bsk.v_exception_day</c>,
     /// REWARD-8).

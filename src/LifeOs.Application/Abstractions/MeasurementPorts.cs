@@ -30,8 +30,8 @@ public interface IMetricRepository
     Task<IReadOnlyList<MetricReading>> GetReadingsAsync(
         Guid? metricId = null, DateOnly? from = null, CancellationToken cancellationToken = default);
 
-    /// <summary>How many live readings each metric has, by metric id (a metric with none is left out).</summary>
-    Task<IReadOnlyDictionary<Guid, int>> CountReadingsAsync(CancellationToken cancellationToken = default);
+    /// <summary>How many live readings <paramref name="metricId"/> has (code review CR123: one metric's, not every metric's).</summary>
+    Task<int> CountReadingsAsync(Guid metricId, CancellationToken cancellationToken = default);
 
     /// <summary>The live reading with that id, or null (never written, or deleted).</summary>
     Task<MetricReading?> GetReadingAsync(Guid id, CancellationToken cancellationToken = default);
