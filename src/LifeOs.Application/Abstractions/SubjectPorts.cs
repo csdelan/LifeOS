@@ -54,6 +54,25 @@ public interface ISubjectRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Makes <paramref name="newSubject"/> from the capture <paramref name="eventId"/> in one
+    /// transaction (code review CR114): the subject, the capture's <c>concerns</c> edge to it and
+    /// its flag into the Inbox, stamped by <paramref name="flag"/>. All or nothing, so an Idea or a
+    /// Problem made from a capture always concerns it and is always flagged, and a capture sent
+    /// again finds it there. A title its type keeps unique throws
+    /// <see cref="DuplicateSubjectException"/>, with nothing written.
+    /// </summary>
+    Task<Guid> CreateFiledAsync(
+        NewSubject newSubject, Guid eventId, TriageStamp flag, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Files the capture <paramref name="eventId"/> as the subject <paramref name="subjectId"/>
+    /// already there (a Problem reused by its title, D4): its <c>concerns</c> edge, unless it's
+    /// there, and its flag into the Inbox, in one transaction (code review CR114).
+    /// </summary>
+    Task FileExistingAsync(
+        Guid subjectId, Guid eventId, TriageStamp flag, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Merges a jsonb patch into a subject's <c>attributes</c> and removes the named
     /// keys, in one update. Returns whether a row was affected (<c>false</c> = no such
     /// subject). Only the attributes bag is touched — type, title, and status are

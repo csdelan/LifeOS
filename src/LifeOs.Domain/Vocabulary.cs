@@ -56,6 +56,19 @@ public static class TriageStates
 
     /// <summary>Resolved by being promoted into a subject / into new work (CAP-6 / D4).</summary>
     public const string Promoted = "promoted";
+
+    /// <summary>
+    /// A <c>triage</c> event's payload: the item it names, an event or a subject, and its state.
+    /// The one shape, for the triage service and for a flag written beside a new item (code review
+    /// CR114).
+    /// </summary>
+    public static string Payload(bool isEvent, Guid itemId, string state)
+        => System.Text.Json.JsonSerializer.Serialize(new
+        {
+            item_kind = isEvent ? "event" : "subject",
+            item_id = itemId.ToString(),
+            state,
+        });
 }
 
 /// <summary>Provenance values, matching the CHECK on <c>provenance</c> columns.</summary>

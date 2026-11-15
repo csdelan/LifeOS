@@ -483,7 +483,8 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         using var nowhere = await PostVoiceAsync(host, $"About nothing {ns}", "urn:bsk:review:nope-000000");
 
         Assert.True(dictated.IsSuccessStatusCode, await dictated.Content.ReadAsStringAsync(Ct));
-        Assert.Equal(HttpStatusCode.BadRequest, nowhere.StatusCode);
+        // The filing service refuses an item that isn't there, as every door's missing item is (CR114).
+        Assert.Equal(HttpStatusCode.NotFound, nowhere.StatusCode);
         await using var client = await McpServerTests.ConnectAsync(host, ApiTestHost.TokenFor(clientId: Writer));
         var inbox = await InboxAsync(client);
         var capture = Assert.Single(inbox, i => (i.TryGetProperty("text", out var t) ? t.GetString() : null)?.Contains(ns, StringComparison.Ordinal) == true);

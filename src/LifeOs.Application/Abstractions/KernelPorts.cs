@@ -62,6 +62,12 @@ public interface IEventReader
     /// this what its first call stopped before (code review CR68).
     /// </summary>
     Task<EarlierWrite?> FindWriteAsync(string sourceId, string externalId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The items the event <paramref name="eventId"/> concerns, oldest edge first: how a file
+    /// captured again finds what its first send was filed as (code review CR114).
+    /// </summary>
+    Task<IReadOnlyList<SubjectRef>> ConcernsAsync(Guid eventId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>An event a source already wrote for a request: its id, kind, text and the items it concerns.</summary>

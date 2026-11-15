@@ -273,4 +273,23 @@ public sealed class CaptureEndpointTests(PostgresFixture postgres)
 
         Assert.Empty(await InboxAsync(host));
     }
+
+    [Fact]
+    public async Task A_voice_note_about_no_item_is_refused_with_nothing_in_the_inbox()
+    {
+        // The check is the filing service's, as the other doors' are (code review CR114).
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
+        var form = new MultipartFormDataContent
+        {
+            { new StringContent("Ask about the fence"), "transcript" },
+            { new StringContent("urn:bsk:project:nowhere-000000"), "concerning" },
+        };
+
+        var response = await host.Client.PostAsync("/api/capture/voice", form, Ct);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Contains("nowhere-000000", (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("error").GetString());
+        Assert.Empty(await InboxAsync(host));
+    }
 }

@@ -55,6 +55,21 @@ public sealed class NpgsqlEventReader(NpgsqlDataSource dataSource) : IEventReade
                     .ToList());
     }
 
+    public async Task<IReadOnlyList<SubjectRef>> ConcernsAsync(Guid eventId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = dataSource.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        return (await connection.QueryAsync<SubjectRef>(new CommandDefinition(
+            """
+            SELECT s.id, s.urn, s.type, s.title
+            FROM bsk.subject_event se
+            JOIN bsk.subject s ON s.id = se.subject_id
+            WHERE se.event_id = @eventId AND se.relation = 'concerns'
+            ORDER BY se.created_at, se.id;
+            """,
+            new { eventId }, cancellationToken: cancellationToken))).AsList();
+    }
+
     /// <summary>The read behind <see cref="FindWriteAsync"/>; <c>EventIndexTests</c> checks it uses <c>event_source_external_key</c>.</summary>
     public const string FindWriteSql = """
         SELECT e.id, e.kind, e.artifact_id AS artifactid, s.id AS subjectid, s.urn, s.type, s.title

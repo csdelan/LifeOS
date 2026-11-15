@@ -1,4 +1,3 @@
-using System.Text.Json;
 using LifeOs.Application.Abstractions;
 using LifeOs.Domain;
 
@@ -103,13 +102,7 @@ public sealed class TriageService(
     private async Task<Guid> AppendAsync(
         bool isEvent, Guid itemId, string state, CancellationToken cancellationToken)
     {
-        var payload = JsonSerializer.Serialize(new
-        {
-            item_kind = isEvent ? "event" : "subject",
-            item_id = itemId.ToString(),
-            state
-        });
-
+        var payload = TriageStates.Payload(isEvent, itemId, state);
         var now = clock.UtcNow;
         return await store.AppendAsync(
             new NewEvent(

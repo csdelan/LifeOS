@@ -154,6 +154,52 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
         return (new SubjectRef(newId, urn, type, cleanTitle), edgeId);
     }
 
+    /// <summary>
+    /// Makes a <paramref name="type"/> titled <paramref name="title"/> from the capture
+    /// <paramref name="captureEventId"/> and flags it into the Inbox, in one write (D4, code review
+    /// CR114): the item, the capture's <c>concerns</c> edge to it and its flag land together or not
+    /// at all, so a capture sent again finds what it was filed as. With
+    /// <paramref name="reuseByTitle"/> (a Problem), one of that type and title already there is
+    /// filed and flagged instead, its attributes untouched.
+    /// </summary>
+    public async Task<ResolvedSubject> CreateFromCaptureAsync(
+        string type, string title, string attributesJson, Guid captureEventId, bool reuseByTitle,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            throw new ArgumentException("A title is required.", nameof(title));
+        }
+
+        var cleanTitle = NormalizeTitle(title);
+        var flag = new TriageStamp(clock.UtcNow, eventSource.Id);
+        if (reuseByTitle && await subjects.FindByTypeAndTitleAsync(type, cleanTitle, cancellationToken) is { } existing)
+        {
+            await subjects.FileExistingAsync(existing.Id, captureEventId, flag, cancellationToken);
+            return new ResolvedSubject(existing, Created: false);
+        }
+
+        var urn = Urns.Build(type, cleanTitle);
+        try
+        {
+            var id = await subjects.CreateFiledAsync(
+                Insertable(urn, type, cleanTitle, attributesJson), captureEventId, flag, cancellationToken);
+            return new ResolvedSubject(new SubjectRef(id, urn, type, cleanTitle), Created: true);
+        }
+        catch (DuplicateSubjectException) when (reuseByTitle)
+        {
+            // Lost a race to make the same Problem: file the one that won.
+            var raced = await subjects.FindByTypeAndTitleAsync(type, cleanTitle, cancellationToken);
+            if (raced is null)
+            {
+                throw;
+            }
+
+            await subjects.FileExistingAsync(raced.Id, captureEventId, flag, cancellationToken);
+            return new ResolvedSubject(raced, Created: false);
+        }
+    }
+
     public Task<ResolvedSubject> ResolveOrCreateAsync(
         string type, string urnOrTitle, CancellationToken cancellationToken = default)
         => ResolveOrCreateAsync(type, urnOrTitle, "{}", cancellationToken);

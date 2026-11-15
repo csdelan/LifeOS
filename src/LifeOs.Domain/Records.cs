@@ -35,6 +35,9 @@ public sealed record NewSubject(
 /// </summary>
 public sealed record InitialStatus(string Status, DateTimeOffset At, string SourceId);
 
+/// <summary>When a flag into the Inbox was set and which source set it, as a triage event carries them.</summary>
+public sealed record TriageStamp(DateTimeOffset At, string SourceId);
+
 /// <summary>A lightweight read view of a subject, used for resolve-or-create.</summary>
 public sealed record SubjectRef(Guid Id, string Urn, string Type, string Title);
 

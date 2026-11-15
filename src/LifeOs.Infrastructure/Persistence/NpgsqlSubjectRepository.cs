@@ -213,6 +213,69 @@ public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource, EventSo
         }
     }
 
+    public async Task<Guid> CreateFiledAsync(
+        NewSubject newSubject, Guid eventId, TriageStamp flag, CancellationToken cancellationToken = default)
+    {
+        await using var connection = dataSource.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var id = await InsertAsync(connection, transaction, newSubject, cancellationToken);
+            await FileAsync(connection, transaction, id, eventId, flag, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return id;
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // Not committed: the transaction is rolled back on dispose, so no partial row.
+            throw new DuplicateSubjectException(newSubject.Type, newSubject.Title, ex);
+        }
+    }
+
+    public async Task FileExistingAsync(
+        Guid subjectId, Guid eventId, TriageStamp flag, CancellationToken cancellationToken = default)
+    {
+        await using var connection = dataSource.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await FileAsync(connection, transaction, subjectId, eventId, flag, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// The capture's <c>concerns</c> edge to the item it's filed as, unless it's there, and the
+    /// item's flag into the Inbox, inside the caller's transaction (code review CR114).
+    /// </summary>
+    private static async Task FileAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction, Guid itemId, Guid eventId, TriageStamp flag,
+        CancellationToken cancellationToken)
+    {
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO bsk.subject_event (event_id, relation, subject_id, provenance)
+            VALUES (@EventId, @Relation, @SubjectId, @Provenance)
+            ON CONFLICT (event_id, subject_id, relation) DO NOTHING;
+            """,
+            new
+            {
+                EventId = eventId,
+                Relation = SubjectEventRelations.Concerns,
+                SubjectId = itemId,
+                Provenance = Provenances.Declared,
+            },
+            transaction, cancellationToken: cancellationToken));
+
+        await EventSql.InsertAsync(connection, new NewEvent(
+            Kind: EventKinds.Triage,
+            Provenance: Provenances.Declared,
+            OccurredAt: flag.At,
+            RecordedAt: flag.At,
+            SourceId: flag.SourceId,
+            PayloadJson: TriageStates.Payload(isEvent: false, itemId, TriageStates.Flagged)), transaction, cancellationToken);
+    }
+
     public Task<bool> RenameAsync(
         Guid id, string newTitle, CancellationToken cancellationToken = default)
         => ChangeAsync(id, newTitle, "{}", [], followed: null, cancellationToken);

@@ -39,6 +39,7 @@ public static class CaptureEndpoints
             .WithMetadata(new RequestSizeLimitAttribute(ArtifactLimits.DefaultMaxBytes + RequestOverhead))
             .Produces<BinaryCaptureRow>()
             .Produces<ApiError>(StatusCodes.Status400BadRequest)
+            .Produces<ApiError>(StatusCodes.Status404NotFound)
             .Produces<ApiError>(StatusCodes.Status502BadGateway);
     }
 
@@ -85,29 +86,15 @@ public static class CaptureEndpoints
         [FromForm] string? type,
         [FromForm] string? title,
         [FromForm] string? concerning,
-        SubjectReader reader,
         InboxFilingService filing,
         CancellationToken cancellationToken)
     {
-
-        // Found before anything is written, so a bad id leaves no capture behind.
-        string? about = null;
-        if (Clean(concerning) is { } reference)
-        {
-            var detail = await reader.FindByIdOrUrnAsync(reference, cancellationToken);
-            if (detail is null)
-            {
-                return Results.BadRequest(new ApiError($"concerning names no item: '{reference}'."));
-            }
-
-            about = detail.Urn;
-        }
-
         var filename = audio is null ? null : FileName(audio);
         var recording = audio is null ? null : new CaptureFile(await ReadAsync(audio, cancellationToken), filename, audio.ContentType);
-        // Once stored, the filing and the concerns edge run to the end even if the phone drops (CR63).
+        // The item it concerns is found before anything is stored (code review CR114). Once stored,
+        // the filing and the concerns edge run to the end even if the phone drops (CR63).
         var captured = await filing.CaptureVoiceAsync(
-            recording, transcript, keepAudio == true, type, title, about, cancellationToken);
+            recording, transcript, keepAudio == true, type, title, concerning, cancellationToken);
         return Results.Ok(Row(captured, filename));
     }
 
@@ -137,9 +124,6 @@ public static class CaptureEndpoints
         await file.CopyToAsync(buffer, cancellationToken);
         return buffer.ToArray();
     }
-
-    private static string? Clean(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
-
 }
 
 /// <summary>
