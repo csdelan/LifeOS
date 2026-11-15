@@ -147,6 +147,10 @@ public sealed record OccurrencesMade(IReadOnlyList<SubjectRef> Created, int Due)
 /// <summary>Creates directed subject → subject edges in <c>bsk.subject_relation</c>.</summary>
 public interface IRelationRepository
 {
+    /// <summary>
+    /// Records a directed edge and answers its id; an edge is stored once, so a second link
+    /// answers the edge already there (code review CR111).
+    /// </summary>
     Task<Guid> CreateAsync(
         Guid fromSubject, string relation, Guid toSubject, string provenance,
         CancellationToken cancellationToken = default);

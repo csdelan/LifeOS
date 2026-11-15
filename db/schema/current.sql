@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0067 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0068 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -271,7 +271,7 @@ CREATE UNIQUE INDEX subject_review_period_key ON bsk.subject USING btree (((attr
 CREATE UNIQUE INDEX subject_task_repetition_key ON bsk.subject USING btree (((attributes ->> 'series'::text)), ((attributes ->> 'occurrence'::text))) WHERE ((type = 'Task'::text) AND ((attributes ->> 'series'::text) IS NOT NULL));
 CREATE UNIQUE INDEX subject_event_edge_key ON bsk.subject_event USING btree (event_id, subject_id, relation);
 CREATE INDEX subject_event_subject_idx ON bsk.subject_event USING btree (subject_id, relation);
-CREATE INDEX subject_relation_from ON bsk.subject_relation USING btree (from_subject, relation);
+CREATE UNIQUE INDEX subject_relation_edge_key ON bsk.subject_relation USING btree (from_subject, relation, to_subject);
 CREATE INDEX subject_relation_to ON bsk.subject_relation USING btree (to_subject, relation);
 CREATE INDEX agent_call_called_at ON bsk_ops.agent_call USING btree (called_at);
 CREATE INDEX agent_call_client_called_at ON bsk_ops.agent_call USING btree (client_id, called_at DESC);

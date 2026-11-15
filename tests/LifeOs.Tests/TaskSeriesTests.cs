@@ -554,6 +554,7 @@ public sealed class TaskSeriesTests(ClassDatabase classDb) : IClassFixture<Class
         await k.Bounties.SetNothingAsync(series.Urn, BountyTriggers.Completed, cancellationToken: Ct);
         await k.Tags.ApplyAsync(series.Urn, ["chores"], [], Ct);
         await k.Relations.LinkAsync(series.Urn, "serves", project.Urn, Ct);
+        await k.Relations.LinkAsync(series.Urn, "serves", project.Urn, Ct); // stored once (CR111)
 
         var rep1 = Assert.Single((await k.Recurrence.SetAsync(series.Urn, Recurrence.Weekly(["tue"]), Monday, Ct)).Made);
         Assert.Equal("Upstairs too", await AttributeAsync(rep1.Id, "description"));
@@ -563,7 +564,7 @@ public sealed class TaskSeriesTests(ClassDatabase classDb) : IClassFixture<Class
         Assert.Equal(["chores"], await TagsAsync(rep1.Id));
         await using (var c = await OpenAsync())
         {
-            Assert.Equal(project.Id, await c.ExecuteScalarAsync<Guid>(new CommandDefinition(
+            Assert.Equal([project.Id], await c.QueryAsync<Guid>(new CommandDefinition(
                 "SELECT to_subject FROM bsk.subject_relation WHERE from_subject = @id AND relation = 'serves';",
                 new { id = rep1.Id }, cancellationToken: Ct)));
         }

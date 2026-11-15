@@ -124,4 +124,38 @@ public sealed class RelationServiceTests(ClassDatabase classDb) : IClassFixture<
 
         Assert.Equal(0, result.Removed);
     }
+
+    [Fact]
+    public async Task Linking_twice_keeps_one_edge_and_answers_it_both_times()
+    {
+        // Code review CR111: a second link stored the edge again; bsk link, /mcp and the API share this.
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var relations = provider.GetRequiredService<RelationService>();
+        var ns = Guid.NewGuid().ToString("N");
+
+        var task = await subjects.CreateAsync(SubjectTypes.Task, $"sweep the porch {ns}", cancellationToken: Ct);
+        var project = await subjects.CreateAsync(SubjectTypes.Project, $"tidy the house {ns}", cancellationToken: Ct);
+
+        var first = await relations.LinkAsync(task.Urn, SubjectRelations.Serves, project.Urn, Ct);
+        var second = await relations.LinkAsync(task.Urn, SubjectRelations.Serves, project.Urn, Ct);
+        Assert.Equal(first.Id, second.Id);
+
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await connection.OpenAsync(Ct);
+        Assert.Equal(1, await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject_relation WHERE from_subject = @from AND to_subject = @to;",
+            new { from = task.Id, to = project.Id }, cancellationToken: Ct)));
+
+        // And any door that writes the table: the database itself refuses a second copy.
+        var duplicate = await Assert.ThrowsAsync<PostgresException>(() => connection.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO bsk.subject_relation (from_subject, relation, to_subject, provenance)
+            VALUES (@from, 'serves', @to, 'declared');
+            """,
+            new { from = task.Id, to = project.Id }, cancellationToken: Ct)));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, duplicate.SqlState);
+
+        Assert.Equal(1, (await relations.UnlinkAsync(task.Urn, SubjectRelations.Serves, project.Urn, Ct)).Removed);
+    }
 }

@@ -325,15 +325,35 @@ public sealed class WriteEndpointsTests(ClassDatabase classDb) : IClassFixture<C
         return new Created(json.GetProperty("id").GetGuid(), json.GetProperty("urn").GetString()!);
     }
 
+    [Fact]
+    public async Task A_link_sent_twice_stores_one_edge_and_one_unlink_removes_it()
+    {
+        // Code review CR111: a retried or second link stored the edge again, and an unlink took both.
+        await using var host = await StartAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var project = await PostSubjectAsync(host.Client, new { type = SubjectTypes.Project, title = $"project {ns}" });
+        var task = await PostSubjectAsync(host.Client, new { type = SubjectTypes.Task, title = $"task {ns}" });
+        var link = new { from = task.Id.ToString(), relation = SubjectRelations.Serves, to = project.Id.ToString() };
+
+        await PostOkAsync(host.Client, "/api/link", link);
+        await PostOkAsync(host.Client, "/api/link", link);
+        Assert.Equal(1, await EdgeCountAsync(task.Id, SubjectRelations.Serves, project.Id));
+
+        await PostOkAsync(host.Client, "/api/link", new { link.from, link.relation, link.to, remove = true });
+        Assert.Equal(0, await EdgeCountAsync(task.Id, SubjectRelations.Serves, project.Id));
+    }
+
     private async Task<bool> EdgeExistsAsync(Guid from, string relation, Guid to)
+        => await EdgeCountAsync(from, relation, to) > 0;
+
+    private async Task<int> EdgeCountAsync(Guid from, string relation, Guid to)
     {
         await using var connection = new NpgsqlConnection(classDb.ConnectionString);
         await connection.OpenAsync(Ct);
-        return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+        return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             """
-            SELECT EXISTS (
-                SELECT 1 FROM bsk.subject_relation
-                WHERE from_subject = @from AND relation = @relation AND to_subject = @to);
+            SELECT count(*) FROM bsk.subject_relation
+            WHERE from_subject = @from AND relation = @relation AND to_subject = @to;
             """,
             new { from, relation, to }, cancellationToken: Ct));
     }

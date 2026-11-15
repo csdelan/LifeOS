@@ -174,7 +174,8 @@ public sealed class NpgsqlTaskSeriesRepository(NpgsqlDataSource dataSource, Even
                 INSERT INTO bsk.subject_relation (from_subject, relation, to_subject, provenance)
                 SELECT @id, relation, to_subject, provenance
                 FROM bsk.subject_relation
-                WHERE from_subject = @seriesId AND relation = 'serves';
+                WHERE from_subject = @seriesId AND relation = 'serves'
+                ON CONFLICT (from_subject, relation, to_subject) DO NOTHING;
                 """,
                 new { id, seriesId = series.Series.Id }, transaction, cancellationToken: cancellationToken));
 
