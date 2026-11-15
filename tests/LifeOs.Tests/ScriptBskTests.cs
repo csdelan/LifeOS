@@ -87,25 +87,29 @@ public sealed partial class ScriptBskTests
     [Fact]
     public async Task Every_script_parses()
     {
+        var files = Files().ToList();
+        Assert.NotEmpty(files);
         var start = new ProcessStartInfo("pwsh")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+        // The paths go in the environment, never after -Command: pwsh joins every argument after
+        // -Command into the command, so $args was empty and the first path ran as a command (on
+        // Linux, xdg-open on a .psm1). It answers how many it parsed, so a command that parses
+        // nothing can't pass.
+        start.Environment[ParseFilesVariable] = string.Join('\n', files);
         foreach (var argument in new[]
                  {
                      "-NoProfile", "-NonInteractive", "-Command",
-                     "foreach ($f in $args) { $e = $null; [void][Management.Automation.Language.Parser]::ParseFile($f, [ref]$null, [ref]$e); " +
-                     "foreach ($x in $e) { [Console]::Out.WriteLine(\"$([IO.Path]::GetFileName($f)):$($x.Extent.StartLineNumber): $($x.Message)\") } }",
+                     $"$n = 0; foreach ($f in $env:{ParseFilesVariable} -split \"`n\") {{ $n++; $e = $null; " +
+                     "[void][Management.Automation.Language.Parser]::ParseFile($f, [ref]$null, [ref]$e); " +
+                     "foreach ($x in $e) { [Console]::Out.WriteLine(\"$([IO.Path]::GetFileName($f)):$($x.Extent.StartLineNumber): $($x.Message)\") } }; " +
+                     "[Console]::Out.WriteLine(\"parsed $n\")",
                  })
         {
             start.ArgumentList.Add(argument);
-        }
-
-        foreach (var file in Files())
-        {
-            start.ArgumentList.Add(file);
         }
 
         using var process = Process.Start(start)!;
@@ -115,8 +119,10 @@ public sealed partial class ScriptBskTests
         await process.WaitForExitAsync(timeout.Token);
 
         Assert.Equal(0, process.ExitCode);
-        Assert.Equal("", (await output).Trim() + (await error).Trim());
+        Assert.Equal($"parsed {files.Count}", (await output).Trim() + (await error).Trim());
     }
+
+    private const string ParseFilesVariable = "LIFEOS_SCRIPTS_TO_PARSE";
 
     // A dotnet run, build or publish of the CLI, outside a comment and a quoted hint.
     private static bool BuildsTheCli(string line)
