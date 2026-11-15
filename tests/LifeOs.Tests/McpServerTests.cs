@@ -9,6 +9,8 @@ using LifeOs.Api.Mcp;
 using LifeOs.Api.Mcp.Tools;
 using LifeOs.Api.Read;
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Rewards;
+using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure;
 using LifeOs.Infrastructure.Diagnostics;
@@ -499,6 +501,60 @@ public sealed class McpServerTests(PostgresFixture postgres, ClassDatabase class
     }
 
     [Fact]
+    public async Task An_area_switched_off_keeps_its_attributes_out_of_every_tool()
+    {
+        // Code review CR115: a bounty reached agents with the rewards area off, through get_item's
+        // attributes, a repeating Task's series and the attribute change that set it.
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var ns = Guid.NewGuid().ToString("N")[..8];
+        var subjects = db.Get<SubjectService>();
+        var task = await subjects.CreateAsync(SubjectTypes.Task, $"Clean the gutters {ns}", cancellationToken: Ct);
+        await db.Get<BountyService>().SetAsync(task.Urn, trigger: null, new Dictionary<string, long> { [Currencies.Coins] = 5 }, cancellationToken: Ct);
+        var series = await subjects.CreateAsync(SubjectTypes.Task, $"Water the plants {ns}", cancellationToken: Ct);
+        await db.Get<RecurrenceService>().SetAsync(
+            series.Urn, Recurrence.Weekly(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]), start: null, Ct);
+
+        async Task<List<string>> AnswersAsync(McpClient client) =>
+        [
+            (await CallAsync(client, "get_item", new() { ["id"] = task.Id.ToString() })).GetRawText(),
+            (await CallAsync(client, "get_item", new() { ["id"] = series.Id.ToString() })).GetRawText(),
+            (await CallAsync(client, "recent_changes", new() { ["since"] = "1h" })).GetRawText(),
+            (await CallAsync(client, "list_items", new() { ["type"] = "Task" })).GetRawText(),
+            (await CallAsync(client, "find_items", new() { ["query"] = ns })).GetRawText(),
+            (await CallAsync(client, "life_snapshot")).GetRawText(),
+            (await CallAsync(client, "calendar")).GetRawText(),
+            (await CallAsync(client, "habits")).GetRawText(),
+            (await CallAsync(client, "inbox")).GetRawText(),
+            (await CallAsync(client, "alignment")).GetRawText(),
+        ];
+
+        // With every area on, the answers carry each area's attributes, so the check below sees them.
+        await using (var open = await StartAsync(db.ConnectionString))
+        {
+            await using var client = await ConnectAsync(open, ApiTestHost.TokenFor(clientId: Agent));
+            var answers = await AnswersAsync(client);
+            Assert.All(McpAreas.All.SelectMany(a => a.AttributeKeys), key => Assert.Contains(answers, a => a.Contains($"\"{key}\"", StringComparison.Ordinal)));
+        }
+
+        Assert.NotEmpty(McpAreas.All.SelectMany(a => a.AttributeKeys));
+        foreach (var area in McpAreas.All.Where(a => a.AttributeKeys.Count > 0))
+        {
+            await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, new Dictionary<string, string?>(On)
+            {
+                [McpOptions.DomainsKey] = string.Join(",", McpOptions.AllDomains.Where(d => d != area.Name)),
+                [HomeZone.ConfigurationKey] = DomainTestDatabase.Zone,
+            });
+            await AllowAsync(host);
+            await using var client = await ConnectAsync(host, ApiTestHost.TokenFor(clientId: Agent));
+            var answers = await AnswersAsync(client);
+            foreach (var key in area.AttributeKeys)
+            {
+                Assert.All(answers, a => Assert.DoesNotContain($"\"{key}\"", a, StringComparison.Ordinal));
+            }
+        }
+    }
+
+    [Fact]
     public async Task Recent_changes_shows_an_oura_records_newest_version_goes_by_either_time_and_leaves_the_ledger_out()
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
@@ -749,6 +805,19 @@ public sealed class McpServerTests(PostgresFixture postgres, ClassDatabase class
             .ToList();
         Assert.Equal(McpWriteAccess.Tools.Order(), writeTools.Select(t => t.Name!).Order());
         Assert.All(writeTools, t => Assert.False(t.Destructive, $"{t.Name} is marked destructive"));
+    }
+
+    [Fact]
+    public void Every_tool_type_is_the_cores_or_one_areas()
+    {
+        // The host lists an area's tools from McpAreas (code review CR115), so a tool type of a
+        // new area that isn't in the table would never be listed.
+        Type[] core = [typeof(SnapshotTools), typeof(ItemTools), typeof(RecordTools), typeof(PlanTools), typeof(CaptureTools)];
+        var toolTypes = typeof(McpHost).Assembly.GetTypes()
+            .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null)
+            .Select(t => t.Name)
+            .Order(StringComparer.Ordinal);
+        Assert.Equal(toolTypes, core.Concat(McpAreas.All.Select(a => a.Tools)).Select(t => t.Name).Order(StringComparer.Ordinal));
     }
 
     [Fact]

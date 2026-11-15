@@ -55,8 +55,11 @@ public sealed class RecentChangesAreaTests(PostgresFixture postgres)
         Assert.Equal(
             ["activity", "archive_change", "attribute_change", "idea_session", "journal", "note", "observation", "state_change", "triage", "voice"],
             everything.Select(r => r.Kind).Distinct().Order(StringComparer.Ordinal));
+
+        // Pricing the habit is the rewards area's, not the core's (code review CR115).
+        var priced = Assert.Single(everything, r => r.Kind == "attribute_change" && (r.Payload ?? "").Contains("\"bounty\"", StringComparison.Ordinal));
         Assert.Equal(
-            everything.Select(r => $"{r.Kind} {r.Id}").Order(StringComparer.Ordinal),
+            everything.Where(r => r != priced).Select(r => $"{r.Kind} {r.Id}").Order(StringComparer.Ordinal),
             core.Select(r => $"{r.Kind} {r.Id}").Order(StringComparer.Ordinal));
     }
 
@@ -83,6 +86,17 @@ public sealed class RecentChangesAreaTests(PostgresFixture postgres)
                 foreach (var source in area.Sources)
                 {
                     ids.Add(await InsertAsync(owner, "observation", source, """{"fixture": true}"""));
+                }
+
+                // A change to an attribute the area owns, a core kind with core payload keys (CR115).
+                foreach (var key in area.AttributeKeys)
+                {
+                    var payload = JsonSerializer.Serialize(new
+                    {
+                        subject_id = Guid.NewGuid().ToString(),
+                        attributes = new Dictionary<string, object> { [key] = new { to = new { fixture = true } } },
+                    });
+                    ids.Add(await InsertAsync(owner, "attribute_change", "test", payload));
                 }
             }
         }

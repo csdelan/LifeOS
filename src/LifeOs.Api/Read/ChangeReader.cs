@@ -68,9 +68,11 @@ public sealed class ChangeReader(NpgsqlDataSource dataSource)
                   AND ((@kinds::text[] IS NULL AND e.kind <> 'ledger') OR e.kind = ANY(@kinds::text[]))
                   -- With an area off (McpAreas): nothing of that area, and nothing no area claims
                   -- unless every key in its payload is a core one. An event no one placed stays out.
+                  -- An attribute change of a key an off area owns (a bounty) is that area's.
                   AND (NOT @anyOff OR (
                       NOT (jsonb_exists_any(e.payload, @offKeys::text[]) OR e.kind = ANY(@offKinds::text[])
-                           OR e.source_id = ANY(@offSources::text[]) OR coalesce(s.type = ANY(@offTypes::text[]), false))
+                           OR e.source_id = ANY(@offSources::text[]) OR coalesce(s.type = ANY(@offTypes::text[]), false)
+                           OR coalesce(jsonb_exists_any(e.payload -> 'attributes', @offAttributes::text[]), false))
                       AND (jsonb_exists_any(e.payload, @onKeys::text[]) OR e.kind = ANY(@onKinds::text[])
                            OR e.source_id = ANY(@onSources::text[]) OR coalesce(s.type = ANY(@onTypes::text[]), false)
                            OR CASE WHEN jsonb_typeof(e.payload) = 'object'
@@ -117,6 +119,7 @@ public sealed class ChangeReader(NpgsqlDataSource dataSource)
                 offKinds = off.SelectMany(a => a.Kinds).ToArray(),
                 offSources = off.SelectMany(a => a.Sources).ToArray(),
                 offTypes = off.SelectMany(a => a.Types).ToArray(),
+                offAttributes = off.SelectMany(a => a.AttributeKeys).ToArray(),
                 onKeys = on.SelectMany(a => a.PayloadKeys).ToArray(),
                 onKinds = on.SelectMany(a => a.Kinds).ToArray(),
                 onSources = on.SelectMany(a => a.Sources).ToArray(),

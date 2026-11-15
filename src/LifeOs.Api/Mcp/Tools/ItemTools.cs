@@ -1,5 +1,7 @@
 using System.ComponentModel;
+using System.Text.Json.Nodes;
 using LifeOs.Api.Read;
+using LifeOs.Application.Rewards;
 using LifeOs.Domain;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
@@ -122,6 +124,12 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
         object? series = null;
         if (detail.Repeating is { IsSeries: true } repeat && (await subjects.GetTaskSeriesHistoryAsync(repeat.SeriesId, cancellationToken: cancellationToken)) is { } h)
         {
+            // What each repetition pays is the rewards area's (code review CR115).
+            if (!options.AllowsAttribute(Bounty.AttributeKey))
+            {
+                h.Series.Bounty = null;
+            }
+
             series = new { h.Series, Repetitions = h.Repetitions.Take(HistoryLimit).ToList() };
         }
 
@@ -144,7 +152,7 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
                 Archived = detail.Archived ? true : (bool?)null,
                 Area = detail.AreaName ?? detail.Area,
                 AreaUrn = detail.Area,
-                Attributes = McpResults.ParseJson(detail.Attributes),
+                Attributes = Visible(McpResults.ParseJson(detail.Attributes)),
                 detail.Repeating,
             },
             Serves = Allowed((await subjects.GetServesAsync(detail.Id, cancellationToken: cancellationToken))),
@@ -214,6 +222,17 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
     private IReadOnlyList<RelationEdge> Allowed(IEnumerable<RelationEdge> edges)
         => edges.Where(e => options.AllowsType(e.Type)).ToList();
 
+    /// <summary>An item's attributes without those of an area switched off (code review CR115).</summary>
+    private JsonNode? Visible(JsonNode? attributes)
+    {
+        if (attributes is JsonObject bag)
+        {
+            foreach (var key in options.HiddenAttributes)
+            {
+                bag.Remove(key);
+            }
+        }
 
-
+        return attributes;
+    }
 }

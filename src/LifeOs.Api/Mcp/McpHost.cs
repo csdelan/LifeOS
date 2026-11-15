@@ -136,25 +136,8 @@ public static class McpHost
                 }
             }));
 
-        if (options.Allows(McpDomains.Health))
-        {
-            server.WithTools<HealthTools>();
-        }
-
-        if (options.Allows(McpDomains.Food))
-        {
-            server.WithTools<FoodTools>();
-        }
-
-        if (options.Allows(McpDomains.Rewards))
-        {
-            server.WithTools<RewardsTools>();
-        }
-
-        if (options.Allows(McpDomains.Home))
-        {
-            server.WithTools<HomeTools>();
-        }
+        // Each optional area's own tools, while it's on (code review CR115).
+        server.WithTools(McpAreas.All.Where(a => options.Allows(a.Name)).Select(a => a.Tools));
 
         // Writes (§5), only when Mcp:Writes is on. The call filter above refuses a write tool to an
         // agent that may not write, whether or not it was listed them.

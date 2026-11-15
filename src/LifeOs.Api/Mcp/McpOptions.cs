@@ -1,3 +1,4 @@
+using LifeOs.Api.Mcp.Tools;
 using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
@@ -64,6 +65,17 @@ public sealed class McpOptions
     /// <summary>The item types <see cref="AllowsType"/> leaves out, for reads that filter in SQL.</summary>
     public IReadOnlyCollection<string> HiddenTypes
         => McpAreas.All.Where(a => !Allows(a.Name)).SelectMany(a => a.Types).ToList();
+
+    /// <summary>
+    /// Whether agents may see the attribute <paramref name="key"/> on an item of any type: a
+    /// bounty is the rewards area's, so it goes when that area is off (code review CR115).
+    /// </summary>
+    public bool AllowsAttribute(string key)
+        => !McpAreas.All.Any(a => !Allows(a.Name) && a.AttributeKeys.Contains(key, StringComparer.Ordinal));
+
+    /// <summary>The attribute keys <see cref="AllowsAttribute"/> leaves out.</summary>
+    public IReadOnlySet<string> HiddenAttributes
+        => McpAreas.All.Where(a => !Allows(a.Name)).SelectMany(a => a.AttributeKeys).ToHashSet(StringComparer.Ordinal);
 
     public bool IsBlocked(string clientId) => BlockedClients.Contains(clientId.Trim());
 
@@ -165,14 +177,25 @@ public static class McpDomains
 /// <summary>
 /// What belongs to one optional area. An event is the area's when its payload holds one of
 /// <see cref="PayloadKeys"/>, it's about an item of one of <see cref="Types"/>, it came from one
-/// of <see cref="Sources"/> or it's one of <see cref="Kinds"/>.
+/// of <see cref="Sources"/>, it's one of <see cref="Kinds"/>, or it changes one of
+/// <see cref="AttributeKeys"/>. <see cref="Tools"/> are the tools that read only this area, which
+/// the host lists while it's on.
 /// </summary>
 public sealed record McpArea(
     string Name,
     IReadOnlyList<string> PayloadKeys,
     IReadOnlyList<string> Types,
     IReadOnlyList<string> Sources,
-    IReadOnlyList<string> Kinds);
+    IReadOnlyList<string> Kinds,
+    Type Tools)
+{
+    /// <summary>
+    /// Attribute keys the area owns on an item of any type (code review CR115): while it's off,
+    /// <c>get_item</c> leaves them out and an attribute change of one is the area's. A key that
+    /// lives only on one of <see cref="Types"/> needn't be listed: the item goes with its type.
+    /// </summary>
+    public IReadOnlyList<string> AttributeKeys { get; init; } = [];
+}
 
 /// <summary>
 /// The one table of what each optional area holds (§4.3), which every read that leaves a
@@ -188,14 +211,25 @@ public static class McpAreas
         [MetricLimits.ReadingKey, LabLimits.VisitKey, "workout_note", .. OuraCollections.All.Select(c => c.PayloadKey)],
         [SubjectTypes.Metric],
         [KernelSources.Oura],
-        []);
+        [],
+        typeof(HealthTools));
 
-    public static readonly McpArea Food = new(McpDomains.Food, ["meal", "fast", "food_day", "food_photo"], [], [], []);
+    public static readonly McpArea Food = new(
+        McpDomains.Food, ["meal", "fast", "food_day", "food_photo"], [], [], [], typeof(FoodTools));
 
+    /// <summary>
+    /// What an item pays is the rewards area's (REWARD-1). A habit's establish target stays the
+    /// core's: it says when a habit is ready for Established, a status of the core's, and the
+    /// habits tool's progress toward it reads it.
+    /// </summary>
     public static readonly McpArea Rewards = new(
-        McpDomains.Rewards, [ExceptionDayService.PayloadKey], [SubjectTypes.Reward], [], [EventKinds.Ledger]);
+        McpDomains.Rewards, [ExceptionDayService.PayloadKey], [SubjectTypes.Reward], [], [EventKinds.Ledger], typeof(RewardsTools))
+    {
+        AttributeKeys = [Bounty.AttributeKey],
+    };
 
-    public static readonly McpArea Home = new(McpDomains.Home, [SpaceLimits.RatingKey, SpaceLimits.PhotoKey], [SubjectTypes.Space], [], []);
+    public static readonly McpArea Home = new(
+        McpDomains.Home, [SpaceLimits.RatingKey, SpaceLimits.PhotoKey], [SubjectTypes.Space], [], [], typeof(HomeTools));
 
     public static readonly IReadOnlyList<McpArea> All = [Health, Food, Rewards, Home];
 

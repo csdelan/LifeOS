@@ -141,8 +141,9 @@ public sealed class McpGuide
         ## Optional areas
 
         Depending on Chris's settings, these tools may be present: health (his Oura ring),
-        food (meals, fasts, drinks), rewards (coins, XP, domain levels) and home (room
-        ratings). A missing tool means that area is switched off; don't guess at its data.
+        food (meals, fasts, drinks), rewards (coins, XP, domain levels, what an item pays) and
+        home (room ratings). A missing tool means that area is switched off, and its data is
+        left out of every other tool too; don't guess at it.
 
         ## Reading the answers
 
