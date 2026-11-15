@@ -43,12 +43,10 @@ the user think in storage terms; never bend the store to mirror a screen.
   stdout or throws `BskException` (the CLI's plain-text error) on non-zero exit. Add
   `--json` and parse stdout when you need structured results back (e.g. a new subject's
   urn); today most calls rely on plain text + a reload.
-- Status is event-driven: after a `status`/`archive`/adherence write, the derived
-  projection updates on the next read for view-folded values, but the materialized
-  `subject_current` needs `bsk rebuild`. The Pilot already runs `bsk rebuild` after a
-  status change to hide that seam — keep doing that where a view reads `v_subject_current`.
-  (Views that fold from source — `v_inbox`, `v_habit_*`, `is_archived`, appointment status
-  via `subject_current_source` — are always fresh and need no rebuild.)
+- Status is event-driven: after a `status`/`archive`/adherence write, every view shows it
+  on the next read. `v_subject_current` folds from `subject_current_source` since 0067 (code
+  review CR110), so nothing runs `bsk rebuild` after a write; the materialized
+  `bsk_derived.subject_current` is only what `bsk rebuild --verify` checks.
 - **Dapper + `date` columns:** reading a bare SQL `date` into a scalar `DateTime`/`DateOnly`
   throws or mis-maps with the pinned Dapper. Select dates as text (`to_char(d,'YYYY-MM-DD')`)
   for scalar reads, or map onto a `DateOnly`/`DateTime` **property** on a POCO (that works).
@@ -84,7 +82,7 @@ the user think in storage terms; never bend the store to mirror a screen.
 | View | What it gives the UI |
 |---|---|
 | `v_subject` | Every subject flattened + `archived`, `area`, `statement`, `attributes` |
-| `v_subject_current` | Folded current status (materialized; needs `bsk rebuild`) |
+| `v_subject_current` | Current status, folded live from state_change events (0067) |
 | `v_subject_relation` / `v_subject_event` | Alignment edges / event→subject edges, with urns+types |
 | `v_area` | Areas master list (name/description/notes) |
 | `v_item_tag` / `v_tag_universe` | Tag assignments / the live tag set + counts (autocomplete) |

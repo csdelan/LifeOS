@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0066 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0067 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -1523,6 +1523,7 @@ CREATE VIEW bsk.v_subject AS
     attributes ->> 'area'::text AS area
    FROM bsk.subject s;
 
+-- Each subject's current status, folded live from its state_change events (0067). No rebuild needed.
 CREATE VIEW bsk.v_subject_current AS
  SELECT subject_id,
     urn,
@@ -1531,7 +1532,7 @@ CREATE VIEW bsk.v_subject_current AS
     status,
     status_event_id,
     status_occurred_at
-   FROM bsk_derived.subject_current;
+   FROM bsk_derived.subject_current_source;
 
 CREATE VIEW bsk.v_subject_event AS
  SELECT se.id,

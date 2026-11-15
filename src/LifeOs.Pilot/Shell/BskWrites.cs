@@ -3,7 +3,7 @@ using LifeOs.Pilot.Shell;
 
 namespace LifeOs.Pilot.Shell;
 
-/// <summary>Shared write sequences: attributes, status+rebuild, recurrence, tags, involve.</summary>
+/// <summary>Shared write sequences: attributes, status, recurrence, tags, involve.</summary>
 internal static class BskWrites
 {
     public static void SetAttributes(BskCli bsk, string urn, IReadOnlyDictionary<string, string?> values)
@@ -22,8 +22,8 @@ internal static class BskWrites
 
     public static void ChangeStatus(BskCli bsk, string urn, string status)
     {
+        // v_subject_current folds status live (0067), so nothing needs a rebuild after it.
         bsk.Run("status", urn, status);
-        bsk.Run("rebuild");
     }
 
     public static void ApplyRecurrence(BskCli bsk, string urn, string[]? recurArgs)

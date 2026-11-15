@@ -219,8 +219,6 @@ internal sealed class TaskTimerBar : FlowLayoutPanel
                 changed = true;
                 if (result.Completed)
                 {
-                    // Status is read from v_subject_current, rebuilt like any status change.
-                    bsk.Run("rebuild");
                     _navigator.Notify(result.TotalSeconds > 0
                         ? $"Completed “{title}” · {TimerFormat.Tracked(result.TotalSeconds)} recorded."
                         : $"Completed “{title}”.");

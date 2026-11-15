@@ -352,11 +352,6 @@ internal sealed class BrowseView : UserControl, IPilotView
             }
 
             _bsk.Run("flag", item.Urn);
-
-            if (mustReopen)
-            {
-                _bsk.Run("rebuild"); // fold the re-opened status so Browse reflects it
-            }
         }
         catch (BskException ex)
         {

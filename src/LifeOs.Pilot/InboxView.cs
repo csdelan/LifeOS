@@ -350,12 +350,6 @@ internal sealed class InboxView : UserControl, IPilotView
         Write("Drop failed", () =>
         {
             _bsk.Run("drop", _current.Ref);
-            // A subject Drop is a status change; fold it into subject_current so Browse and
-            // the other views show the new status (the Inbox itself reads a live view).
-            if (dismissStatus.Length > 0)
-            {
-                _bsk.Run("rebuild");
-            }
         });
     }
 
