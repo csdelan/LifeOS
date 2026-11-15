@@ -1,4 +1,6 @@
+using System.Text.Json.Nodes;
 using Dapper;
+using LifeOs.Cli;
 using LifeOs.Infrastructure.Migrations;
 using Npgsql;
 
@@ -130,6 +132,60 @@ public sealed class MigrationRunnerTests(PostgresFixture postgres, ClassDatabase
 
             var all = new EmbeddedMigrationSource().Load().Count;
             Assert.Equal([0, all], runs.Select(r => r.Count).Order());
+        }
+        finally
+        {
+            NpgsqlConnection.ClearAllPools();
+            await using var admin = new NpgsqlConnection(classDb.ConnectionString);
+            await admin.ExecuteAsync(new CommandDefinition($"DROP DATABASE {name} WITH (FORCE);", cancellationToken: CancellationToken.None));
+        }
+    }
+
+    [Fact]
+    public async Task Pending_lists_what_would_be_applied_and_applies_nothing()
+    {
+        // Code review CR117: what a release run by hand says before it's asked to migrate.
+        await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var runner = new MigrationRunner(database.ConnectionString);
+        Assert.Empty(await runner.PendingAsync(allowOutOfOrder: false, Ct));
+
+        var newest = new EmbeddedMigrationSource().Load().MaxBy(s => s.Version)!;
+        await ForgetAsync(database.ConnectionString, newest.Version);
+        Assert.Equal([newest.Version], (await runner.PendingAsync(allowOutOfOrder: false, Ct)).Select(s => s.Version));
+
+        var (exit, output, error) = await ConsoleCapture.RunAsync(() => BskRoot.Create().Command
+            .Parse(["migrate", "--pending", "--json", "--connection", database.ConnectionString])
+            .InvokeAsync(cancellationToken: Ct));
+        Assert.True(exit == 0, error + output);
+        var printed = JsonNode.Parse(output)!;
+        Assert.Equal(1, printed["count"]!.GetValue<int>());
+        Assert.Equal(newest.Version, printed["pending"]![0]!["version"]!.GetValue<long>());
+        Assert.False(await RecordedAsync(database.ConnectionString, newest.Version));
+
+        // It refuses what migrate would refuse.
+        await ForgetAsync(database.ConnectionString, 10);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => runner.PendingAsync(allowOutOfOrder: false, Ct));
+        Assert.Equal([10L, newest.Version], (await runner.PendingAsync(allowOutOfOrder: true, Ct)).Select(s => s.Version));
+    }
+
+    [Fact]
+    public async Task Pending_on_an_empty_database_lists_every_migration_and_creates_nothing()
+    {
+        var name = $"pending_{Guid.NewGuid():N}";
+        await using (var admin = new NpgsqlConnection(classDb.ConnectionString))
+        {
+            await admin.ExecuteAsync(new CommandDefinition($"CREATE DATABASE {name};", cancellationToken: Ct));
+        }
+
+        try
+        {
+            var connectionString = new NpgsqlConnectionStringBuilder(classDb.ConnectionString) { Database = name }.ConnectionString;
+            var pending = await new MigrationRunner(connectionString).PendingAsync(allowOutOfOrder: false, Ct);
+
+            Assert.Equal(new EmbeddedMigrationSource().Load().Count, pending.Count);
+            await using var connection = new NpgsqlConnection(connectionString);
+            Assert.False(await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+                "SELECT to_regclass('public.schema_migrations') IS NOT NULL;", cancellationToken: Ct)));
         }
         finally
         {

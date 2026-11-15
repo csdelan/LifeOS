@@ -40,8 +40,8 @@ jobs:
     uses: ./.github/workflows/migrate.yml
     with:
       environment: staging
+      migrate: true
       deploy: true
-      fly_config: fly.staging.toml
       image_artifact: lifeos-image
       image_digest: ${{ needs.ci.outputs.image_digest }}
     secrets: inherit
@@ -53,8 +53,8 @@ jobs:
     uses: ./.github/workflows/migrate.yml
     with:
       environment: production
+      migrate: true
       deploy: true
-      fly_config: fly.toml
       image_artifact: lifeos-image
       image_digest: ${{ needs.ci.outputs.image_digest }}
     secrets: inherit

@@ -88,7 +88,7 @@ Templates: [`.env.example`](../../.env.example), `src/LifeOs.Api/appsettings.jso
 |---|---|---|
 | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | pull request | `dotnet` tests (`test.ps1` equivalent), web lint/test/build, `docker build` with placeholder VITE_* (no push) |
 | [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) | merge to `main`, tag `v*` | CI (which keeps the image it built, the `lifeos-image` artifact, for 7 days), then staging migrate+deploy, then production migrate+deploy (skipped unless repo variable `DEPLOY_PRODUCTION` is `true`) |
-| [`.github/workflows/migrate.yml`](../../.github/workflows/migrate.yml) | reusable + manual dispatch | `bsk migrate` against the chosen GitHub Environment; with `deploy`, first pushes the image to the app's Fly registry as it is (`skopeo copy --preserve-digests`, refused unless it comes to CI's digest), then after migrating `flyctl deploy --image registry.fly.io/<app>@<digest>`, then waits up to two minutes for `/health/ready` to answer ready. It builds nothing: run by hand, it deploys an image already in the registry, by `image_digest` |
+| [`.github/workflows/migrate.yml`](../../.github/workflows/migrate.yml) | reusable + manual dispatch | With `migrate`, `bsk migrate` against the chosen GitHub Environment; without it, `bsk migrate --pending` says in the run's summary what would be applied, and nothing is. Deploy and Migrate staging ask for it; a run by hand asks only when you pass `-f migrate=true`. With `deploy`, it first pushes the image to the app's Fly registry as it is (`skopeo copy --preserve-digests`, refused unless it comes to CI's digest), or run by hand checks the `image_digest` is in that registry, then after migrating `flyctl deploy --image registry.fly.io/<app>@<digest>`, then waits up to two minutes for `/health/ready` to answer ready. It builds nothing. The Fly config is the environment's, and a `v*` tag must be on `main` |
 
 Staging uses GitHub Environment `staging` and [`fly.staging.toml`](../../fly.staging.toml)
 (Fly app `lifeos-mz55-staging`; plain `lifeos-staging` is someone else's app).
@@ -109,14 +109,16 @@ Redeploy the previous Fly image by its digest; do **not** reverse migrations.
 
 ```powershell
 fly releases --image --app lifeos-mz55-w
-gh workflow run migrate.yml -f environment=production -f deploy=true -f fly_config=fly.toml -f image_digest=sha256:<previous>
+gh workflow run migrate.yml -f environment=production -f deploy=true -f image_digest=sha256:<previous>
 # or, from your own machine (no readiness check):
 fly deploy --app lifeos-mz55-w --image registry.fly.io/lifeos-mz55-w@sha256:<previous>
 fly releases rollback --app lifeos-mz55-w
 ```
 
-For staging, the same with `-f environment=staging -f fly_config=fly.staging.toml` and the
-app `lifeos-mz55-staging`. Production must be approved within 7 days of the push: after
+A rollback migrates nothing: the run's summary lists what `bsk migrate` would apply, and
+the job checks the digest is in the app's registry before it deploys. For staging, the same with
+`-f environment=staging` and the app `lifeos-mz55-staging`; the workflow picks the
+environment's Fly config itself. Production must be approved within 7 days of the push: after
 that the image artifact is gone and its job fails before it migrates. Re-run Deploy from the
 start then; it builds the image again and staging runs it first.
 

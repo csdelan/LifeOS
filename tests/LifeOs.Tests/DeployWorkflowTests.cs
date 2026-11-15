@@ -6,7 +6,9 @@ namespace LifeOs.Tests;
 /// The release workflows deploy the one image CI built, by its digest, and check
 /// <c>/health/ready</c> after each deploy (code review CR90). Read from the workflow files, since
 /// no test can run them: a deploy that builds its own image again, or names one by a tag that can
-/// move, or ends without the readiness check, fails here.
+/// move, or ends without the readiness check, fails here. A release migrates only when asked, finds
+/// an image named by its digest before it migrates, deploys with its environment's Fly config, and
+/// takes a tag only on main (code review CR117).
 /// </summary>
 public sealed partial class DeployWorkflowTests
 {
@@ -88,6 +90,57 @@ public sealed partial class DeployWorkflowTests
         }
     }
 
+    [Fact]
+    public void A_release_migrates_only_when_asked_and_deploys_only_what_its_environment_holds()
+    {
+        // Code review CR117 (fifth review R10): a rollback by hand ran main's newest migrations
+        // before deploying the old image, never checked the digest was there, deployed with
+        // production's fly.toml whatever the environment, and took any v* tag.
+        var release = Workflow("migrate.yml");
+        var steps = Steps(release);
+
+        // Both triggers take migrate, off unless asked; Deploy and Migrate staging ask for it.
+        Assert.Equal(2, MigrateInputOff().Matches(release).Count);
+        foreach (var caller in new[] { "deploy.yml", "migrate-staging.yml" })
+        {
+            var yaml = Workflow(caller);
+            var calls = Regex.Matches(yaml, @"uses: \./\.github/workflows/migrate\.yml").Count;
+            Assert.True(calls > 0, $"{caller} should release through migrate.yml.");
+            Assert.Equal(calls, Regex.Matches(yaml, @"\n      migrate: true\n").Count);
+        }
+
+        // bsk migrate applies under the input only; without it, --pending says what it would.
+        var migrate = Assert.Single(steps, s => s.Contains("-- migrate", StringComparison.Ordinal));
+        Assert.Contains("MIGRATE: ${{ inputs.migrate }}", migrate, StringComparison.Ordinal);
+        Assert.Matches(
+            @"if \[ ""\$MIGRATE"" = ""true"" \]; then\n\s+dotnet run [^\n]+-- migrate --json\n\s+else\n(?:[^\n]*\n)*?[^\n]*-- migrate --pending --json",
+            migrate);
+
+        // An image named by its digest is found in the app's registry before anything migrates.
+        var found = steps.FindIndex(s => s.Contains("skopeo inspect", StringComparison.Ordinal));
+        Assert.True(found >= 0 && found < steps.IndexOf(migrate), "The image should be found in the registry before the migration.");
+        Assert.Contains("registry.fly.io/$APP@$IMAGE_DIGEST", steps[found], StringComparison.Ordinal);
+        Assert.Contains("exit 1", steps[found], StringComparison.Ordinal);
+
+        // The Fly config is the environment's: no input names one, and each config is its own app.
+        Assert.All(Files, f => Assert.DoesNotContain("fly_config", Read(f), StringComparison.Ordinal));
+        var target = Assert.Single(steps, s => s.Contains("staging) config=fly.staging.toml ;;", StringComparison.Ordinal));
+        Assert.Contains("production) config=fly.toml ;;", target, StringComparison.Ordinal);
+        Assert.Contains("config=$config", target, StringComparison.Ordinal);
+        var deploy = Assert.Single(steps, s => DeployCommand().IsMatch(s));
+        Assert.Contains("FLY_CONFIG: ${{ steps.target.outputs.config }}", deploy, StringComparison.Ordinal);
+        Assert.EndsWith("-staging", FlyApp("fly.staging.toml"), StringComparison.Ordinal);
+        Assert.DoesNotContain("staging", FlyApp("fly.toml"), StringComparison.Ordinal);
+
+        // A tag releases only when it's on main, checked against the whole history.
+        Assert.Contains("fetch-depth: 0", steps[0], StringComparison.Ordinal);
+        var refs = Assert.Single(steps, s => s.Contains("refs/tags/v*)", StringComparison.Ordinal));
+        Assert.Contains("git merge-base --is-ancestor \"$GITHUB_SHA\" refs/remotes/origin/main", refs, StringComparison.Ordinal);
+    }
+
+    private static string FlyApp(string config)
+        => Regex.Match(File.ReadAllText(Path.Combine(RepoRoot.Path, config)), @"^app = ""([^""]+)""", RegexOptions.Multiline).Groups[1].Value;
+
     private static string? Condition(string step) => StepCondition().Match(step) is { Success: true } m ? m.Groups[1].Value : null;
 
     [GeneratedRegex(@"\n(?=      - (?:name|uses):)")]
@@ -101,4 +154,7 @@ public sealed partial class DeployWorkflowTests
 
     [GeneratedRegex(@"\n        if: (.+)")]
     private static partial Regex StepCondition();
+
+    [GeneratedRegex(@"\n      migrate:\n(?:        [^\n]+\n)*?        default: false\n")]
+    private static partial Regex MigrateInputOff();
 }

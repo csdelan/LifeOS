@@ -77,6 +77,24 @@ public sealed class MigrationRunner
         }
     }
 
+    /// <summary>
+    /// The migrations <see cref="ApplyAsync(bool, CancellationToken)"/> would apply, after the same
+    /// checks, applying and creating nothing (code review CR117): what a release run by hand says
+    /// it would do before it's asked to migrate.
+    /// </summary>
+    public async Task<IReadOnlyList<MigrationScript>> PendingAsync(
+        bool allowOutOfOrder, CancellationToken cancellationToken = default)
+    {
+        var scripts = _source.Load();
+
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var recorded = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            "SELECT to_regclass('public.schema_migrations') IS NOT NULL;", cancellationToken: cancellationToken));
+        var applied = recorded ? await LoadAppliedAsync(connection, cancellationToken) : new Dictionary<long, string>();
+        return Pending(scripts, applied, allowOutOfOrder);
+    }
+
     /// <summary>The scripts to apply, after checking the applied ones are unchanged and in order.</summary>
     private static List<MigrationScript> Pending(
         IReadOnlyList<MigrationScript> scripts, Dictionary<long, string> applied, bool allowOutOfOrder)

@@ -136,8 +136,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   CASE or the view's WHERE (`is_uuid_text`, `jsonb_typeof`, ...), or a CHECK, and a time goes through
   `bsk.try_to_timestamptz`: `CastGuardTests` scans every view and the C# SQL.
 - `bsk migrate` takes a lock, and refuses a pending migration numbered below the highest one already
-  applied (`--allow-out-of-order` overrides). `scripts/migrate-staging.ps1` runs only from a clean
-  `origin/main`, and the Release workflow only from `main` or a `v*` tag.
+  applied (`--allow-out-of-order` overrides); `--pending` lists what it would apply.
+  `scripts/migrate-staging.ps1` runs only from a clean `origin/main`, and the Release workflow
+  (`migrate.yml`) only from `main` or a `v*` tag on it, and migrates only when asked (`migrate`).
 - **Find the next number by looking, not from memory.** Take the highest number in
   `db/migrations` plus one, and check unmerged branches too (`git log --all --stat -- db/migrations`).
   For example, branch `claude/superjournal-connect-9e24c0` has a `0049__journal_pointer.sql` that

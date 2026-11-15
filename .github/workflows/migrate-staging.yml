@@ -15,5 +15,6 @@ jobs:
     uses: ./.github/workflows/migrate.yml
     with:
       environment: staging
+      migrate: true
       deploy: false
     secrets: inherit

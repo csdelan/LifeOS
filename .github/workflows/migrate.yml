@@ -5,6 +5,10 @@ name: Release environment
 # workflow. Production is gated by the GitHub Environment reviewer.
 #
 # Order is migrate-then-deploy on purpose. The running API never migrates.
+# It migrates only when asked (migrate): Deploy and Migrate staging ask, and a
+# run by hand that doesn't, such as a rollback, says what it would apply
+# (bsk migrate --pending) and applies none. The Fly config is the environment's
+# (fly.staging.toml or fly.toml), and a v* tag must be on main.
 #
 # It builds nothing. A deploy runs either the image CI built in this run (the
 # image_artifact Deploy passes, pushed to this app's Fly registry as it is, and
@@ -20,16 +24,16 @@ on:
         description: GitHub Environment (staging or production)
         required: true
         type: string
+      migrate:
+        description: Apply pending migrations. Without it, the job says what it would apply and applies none
+        required: false
+        type: boolean
+        default: false
       deploy:
         description: After migrating, deploy the Fly app for this environment
         required: false
         type: boolean
         default: false
-      fly_config:
-        description: fly.toml path used when deploy is true
-        required: false
-        type: string
-        default: fly.toml
       image_artifact:
         description: This run's artifact holding the image to deploy (CI's lifeos-image)
         required: false
@@ -50,16 +54,16 @@ on:
           - staging
           - production
         default: staging
-      deploy:
-        description: Also deploy the Fly app after migrating
+      migrate:
+        description: Apply pending migrations (main's). Without it, the run says what it would apply and applies none
         required: false
         type: boolean
         default: false
-      fly_config:
-        description: fly.toml path (fly.staging.toml or fly.toml)
+      deploy:
+        description: Deploy the Fly app (after migrating, when migrate is on)
         required: false
-        type: string
-        default: fly.toml
+        type: boolean
+        default: false
       image_digest:
         description: To deploy, the digest (sha256:...) of an image already in the app's Fly registry (fly releases --image)
         required: false
@@ -81,13 +85,25 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v4
+        with:
+          # The whole history, so a tag's ancestry on main can be checked.
+          fetch-depth: 0
 
-      - name: Refuse a ref that isn't main or a release tag
+      - name: Refuse a ref that isn't main or a release tag on main
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
         run: |
           case "$GITHUB_REF" in
-            refs/heads/main|refs/tags/v*) ;;
+            refs/heads/main) ;;
+            refs/tags/v*)
+              git fetch --no-tags --quiet origin +refs/heads/main:refs/remotes/origin/main
+              if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+                echo "::error::$GITHUB_REF isn't on main. $ENVIRONMENT gets migrations only from main or a v* tag of a commit on it."
+                exit 1
+              fi
+              ;;
             *)
-              echo "::error::${{ inputs.environment }} gets migrations only from main (or a v* tag), not $GITHUB_REF. A branch's migration that later changes or is renumbered breaks every later deploy."
+              echo "::error::$ENVIRONMENT gets migrations only from main (or a v* tag), not $GITHUB_REF. A branch's migration that later changes or is renumbered breaks every later deploy."
               exit 1
               ;;
           esac
@@ -97,12 +113,18 @@ jobs:
         if: ${{ inputs.deploy }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_CONFIG: ${{ inputs.fly_config }}
+          ENVIRONMENT: ${{ inputs.environment }}
           IMAGE_ARTIFACT: ${{ inputs.image_artifact }}
           IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
+          # The environment's own app: production's config can't be deployed to staging, or the other way.
+          case "$ENVIRONMENT" in
+            staging) config=fly.staging.toml ;;
+            production) config=fly.toml ;;
+            *) echo "::error::No Fly config for the '$ENVIRONMENT' environment."; exit 1 ;;
+          esac
           if [ -z "$FLY_API_TOKEN" ]; then
-            echo "::error::FLY_API_TOKEN is not set on the '${{ inputs.environment }}' environment. Run scripts/fly-setup.ps1 for this environment (it mints an app-scoped deploy token and stores it here)."
+            echo "::error::FLY_API_TOKEN is not set on the '$ENVIRONMENT' environment. Run scripts/fly-setup.ps1 for this environment (it mints an app-scoped deploy token and stores it here)."
             exit 1
           fi
           if [ -z "$IMAGE_ARTIFACT" ] && [ -z "$IMAGE_DIGEST" ]; then
@@ -113,12 +135,13 @@ jobs:
             ""|sha256:*) ;;
             *) echo "::error::image_digest is a digest, sha256:..., not '$IMAGE_DIGEST'."; exit 1 ;;
           esac
-          app=$(sed -n 's/^app *= *"\([^"]*\)".*/\1/p' "$FLY_CONFIG")
+          app=$(sed -n 's/^app *= *"\([^"]*\)".*/\1/p' "$config")
           if [ -z "$app" ]; then
-            echo "::error::$FLY_CONFIG names no app."
+            echo "::error::$config names no app."
             exit 1
           fi
           echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "config=$config" >> "$GITHUB_OUTPUT"
 
       - name: Set up flyctl
         if: ${{ inputs.deploy }}
@@ -134,8 +157,9 @@ jobs:
           name: ${{ inputs.image_artifact }}
           path: ${{ runner.temp }}/image
 
-      # Before the migration, so a registry or token problem stops the release with the schema untouched.
-      - name: Push the image to the app's Fly registry
+      # Before the migration, so a registry or token problem, or an image that isn't there, stops
+      # the release with the schema untouched.
+      - name: Push the image to the app's Fly registry, or find it there
         id: image
         if: ${{ inputs.deploy }}
         env:
@@ -144,13 +168,17 @@ jobs:
           IMAGE_ARTIFACT: ${{ inputs.image_artifact }}
           IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
+          command -v skopeo >/dev/null || { sudo apt-get update && sudo apt-get install -y skopeo; }
+          flyctl auth docker
           if [ -z "$IMAGE_ARTIFACT" ]; then
+            if ! skopeo inspect --raw --authfile "$HOME/.docker/config.json" "docker://registry.fly.io/$APP@$IMAGE_DIGEST" >/dev/null; then
+              echo "::error::registry.fly.io/$APP holds no image $IMAGE_DIGEST. Pick one from fly releases --image --app $APP."
+              exit 1
+            fi
             echo "Deploying $IMAGE_DIGEST again, from registry.fly.io/$APP."
             echo "digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          command -v skopeo >/dev/null || { sudo apt-get update && sudo apt-get install -y skopeo; }
-          flyctl auth docker
           # --preserve-digests copies the layers and manifest as they are, so the digest can't change.
           skopeo copy --preserve-digests \
             --dest-authfile "$HOME/.docker/config.json" \
@@ -170,21 +198,31 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Apply migrations with bsk migrate
+      - name: Apply migrations with bsk migrate, when asked
         env:
           BSK_CONNECTION_STRING: ${{ secrets.BSK_CONNECTION_STRING }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          MIGRATE: ${{ inputs.migrate }}
         run: |
+          set -o pipefail
           if [ -z "$BSK_CONNECTION_STRING" ]; then
-            echo "::error::BSK_CONNECTION_STRING is not set for the '${{ inputs.environment }}' environment. Add the Supabase session-pooler (port 5432) owner connection string under Settings → Environments → ${{ inputs.environment }} → Secrets."
+            echo "::error::BSK_CONNECTION_STRING is not set for the '$ENVIRONMENT' environment. Add the Supabase session-pooler (port 5432) owner connection string under Settings → Environments → $ENVIRONMENT → Secrets."
             exit 1
           fi
-          dotnet run --project src/LifeOs.Cli/LifeOs.Cli.csproj --configuration Release -- migrate --json
+          if [ "$MIGRATE" = "true" ]; then
+            dotnet run --project src/LifeOs.Cli/LifeOs.Cli.csproj --configuration Release -- migrate --json
+          else
+            # Not asked (a rollback, say): main's newest migrations stay unapplied. Say which they are.
+            echo "Not asked to migrate. bsk migrate would apply:" >> "$GITHUB_STEP_SUMMARY"
+            dotnet run --project src/LifeOs.Cli/LifeOs.Cli.csproj --configuration Release -- migrate --pending --json \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Deploy to Fly
         if: ${{ inputs.deploy }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_CONFIG: ${{ inputs.fly_config }}
+          FLY_CONFIG: ${{ steps.target.outputs.config }}
           APP: ${{ steps.target.outputs.app }}
           DIGEST: ${{ steps.image.outputs.digest }}
         run: |
