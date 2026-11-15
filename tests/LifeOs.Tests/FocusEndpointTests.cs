@@ -81,7 +81,7 @@ public sealed class FocusEndpointTests(PostgresFixture postgres)
         Assert.Equal([overdue, scheduled], Ids(focus.GetProperty("dueAndOverdue")));
         Assert.Equal([underway], Ids(focus.GetProperty("nextActions")));
         Assert.Equal(1, focus.GetProperty("inboxCount").GetInt32());
-        Assert.Equal([later, sooner], Ids(focus.GetProperty("activeGoals")).Order());
+        Assert.Equal(new[] { later, sooner }.Order(), Ids(focus.GetProperty("activeGoals")).Order());
         Assert.DoesNotContain(roof, Ids(focus.GetProperty("activeProjects")));
 
         var todayHabits = focus.GetProperty("todayHabits");
