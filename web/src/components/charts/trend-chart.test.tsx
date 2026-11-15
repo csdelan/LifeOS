@@ -31,8 +31,13 @@ describe("TrendChart (measurements plan §4.7–§4.8)", () => {
     const chart = screen.getByRole("group", { name: "Weight by day. Use the arrow keys to read a day." });
     const dots = within(chart).getAllByTestId("trend-dot");
     expect(dots).toHaveLength(3);
-    // 31 days across: the first day's middle, the second's, the last's.
-    expect(dots.map((d) => d.style.left)).toEqual([`${(0.5 / 31) * 100}%`, `${(1.5 / 31) * 100}%`, `${(30.5 / 31) * 100}%`]);
+    // 31 days across: the first day's middle, the second's, the last's. Read as numbers, since a
+    // browser (and jsdom from 31) keeps only six significant digits of a percentage.
+    const lefts = dots.map((d) => {
+      expect(d.style.left).toMatch(/%$/);
+      return parseFloat(d.style.left);
+    });
+    [0.5, 1.5, 30.5].forEach((middle, i) => expect(lefts[i]).toBeCloseTo((middle / 31) * 100, 3));
     expect(screen.queryByTestId("trend-target")).not.toBeInTheDocument();
     expect(screen.queryByTestId("trend-band")).not.toBeInTheDocument();
   });

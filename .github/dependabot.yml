@@ -24,6 +24,13 @@ updates:
         patterns: ["@tiptap/*"]
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Its types follow the Node that runs the app (22: ci.yml, Dockerfile); move it when Node moves.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 is the native compiler; revisit when Vite and oxlint support it (#39).
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: nuget
     directory: /
@@ -33,3 +40,9 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # These ship with .NET and stay on its major (net10.0, global.json) until a deliberate .NET 11 move.
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types: ["version-update:semver-major"]
