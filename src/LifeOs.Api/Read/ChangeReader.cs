@@ -29,42 +29,69 @@ public sealed class ChangeReader(NpgsqlDataSource dataSource)
     /// default) when LifeOS recorded it. An Oura backfill is recent by the second, not the first.</item>
     /// <item>Null <paramref name="kinds"/> is every kind but <c>ledger</c>: a day of meals writes
     /// many earns and reversals, which would drown the rest; ask for <c>ledger</c> by name.</item>
-    /// <item>Some records are kept as versions: Oura re-sends a day as it changes, and editing a
-    /// meal, a fast, a space photo, a rating, a reading or a lab visit writes it again under the
-    /// same id. Only the newest
-    /// version comes back, with how many it saw in <see cref="ChangeRow.Versions"/>. An older
-    /// version in the window whose newest one is outside it (a meal moved to another day) is
-    /// left out too.</item>
+    /// <item>Some records are kept as versions (<c>bsk.event_record</c>): Oura re-sends a day as
+    /// it changes, and editing a meal, a fast, a space photo, a rating, a reading or a lab visit
+    /// writes it again under the same id. Only the newest version comes back, with how many there
+    /// are in <see cref="ChangeRow.Versions"/>. An older version in the window whose newest one is
+    /// outside it (a meal moved to another day) is left out too.</item>
     /// <item><paramref name="before"/> continues a cut answer: only events older than that one,
     /// in the same order.</item>
     /// </list>
+    /// The log is read newest first and the read stops at the page (code review CR122): a version
+    /// shows when no newer one of its record was recorded, which <c>event_record_idx</c> looks up,
+    /// and only the page counts its versions.
     /// </summary>
     public async Task<IReadOnlyList<ChangeRow>> GetChangesAsync(
         DateTimeOffset since, IReadOnlyCollection<string>? kinds, IReadOnlySet<string> excluded, int limit,
         bool byOccurred = false, ChangeCursor? before = null, CancellationToken cancellationToken = default)
     {
+        var (sql, parameters) = Query(since, kinds, excluded, limit, byOccurred, before);
+        await using var db = await dataSource.OpenConnectionAsync(cancellationToken);
+        return (await db.QueryAsync<ChangeRow>(new CommandDefinition(sql, parameters, cancellationToken: cancellationToken))).AsList();
+    }
+
+    /// <summary>The query <see cref="GetChangesAsync"/> runs and its parameters, for a test to plan.</summary>
+    public static (string Sql, object Parameters) Query(
+        DateTimeOffset since, IReadOnlyCollection<string>? kinds, IReadOnlySet<string> excluded, int limit,
+        bool byOccurred = false, ChangeCursor? before = null)
+    {
         // A column name from a bool, never input.
         var at = byOccurred ? "occurred_at" : "recorded_at";
+        // The bound on the time alone lets the time's index stop there; the pair breaks a tie.
+        var older = before is null ? "" : $"AND e.{at} <= @beforeAt AND (e.{at}, e.id) < (@beforeAt, @beforeId)";
         var off = McpAreas.All.Where(a => excluded.Contains(a.Name)).ToList();
         var on = McpAreas.All.Except(off).ToList();
-        await using var db = await dataSource.OpenConnectionAsync(cancellationToken);
-        return (await db.QueryAsync<ChangeRow>(new CommandDefinition(
-            $"""
-            WITH matched AS (
+        var sql = $"""
+            SELECT m.id, m.kind, m.source_id AS source, m.provenance,
+                   m.occurred_at, m.recorded_at,
+                   m.subject_id, m.subject_urn, m.subject_type, m.subject_title,
+                   m.status,
+                   left(a.content, @maxText) AS text,
+                   CASE WHEN length(m.payload::text) <= @maxPayload THEN m.payload::text END AS payload,
+                   CASE WHEN m.record IS NULL THEN 1
+                        ELSE (SELECT count(*) FROM bsk.event v
+                              WHERE bsk.event_record(v.source_id, v.external_id, v.payload) = m.record)
+                   END AS versions
+            FROM (
                 SELECT e.id, e.kind, e.source_id, e.provenance, e.occurred_at, e.recorded_at,
-                       e.status, e.artifact_id, e.payload,
+                       e.payload->>'status' AS status, e.artifact_id, e.payload,
                        s.id AS subject_id, s.urn AS subject_urn, s.type AS subject_type, s.title AS subject_title,
-                       {RecordKey("e")} AS record
-                FROM bsk.v_event e
+                       bsk.event_record(e.source_id, e.external_id, e.payload) AS record
+                FROM bsk.event e
+                -- An event whose payload names no subject is about the first one it's linked to.
                 LEFT JOIN LATERAL (
                     SELECT se.subject_id
-                    FROM bsk.v_subject_event se
-                    WHERE se.event_id = e.id
+                    FROM bsk.subject_event se
+                    WHERE se.event_id = e.id AND e.payload->>'subject_id' IS NULL
                     ORDER BY se.relation, se.subject_id
                     LIMIT 1
                 ) about ON true
-                LEFT JOIN bsk.v_subject s ON s.id::text = coalesce(e.subject_id, about.subject_id::text)
+                LEFT JOIN bsk.subject s ON s.id = CASE
+                    WHEN e.payload->>'subject_id' IS NULL THEN about.subject_id
+                    WHEN bsk.is_uuid_text(e.payload->>'subject_id') THEN (e.payload->>'subject_id')::uuid
+                END
                 WHERE e.{at} >= @since
+                  {older}
                   AND ((@kinds::text[] IS NULL AND e.kind <> 'ledger') OR e.kind = ANY(@kinds::text[]))
                   -- With an area off (McpAreas): nothing of that area, and nothing no area claims
                   -- unless every key in its payload is a core one. An event no one placed stays out.
@@ -79,82 +106,41 @@ public sealed class ChangeReader(NpgsqlDataSource dataSource)
                                    THEN NOT EXISTS (SELECT 1 FROM jsonb_object_keys(e.payload) k
                                                     WHERE k <> ALL(@coreKeys::text[]))
                                    ELSE false END)))
-            ),
-            -- The newest version of each versioned record in the window, wherever its time falls.
-            -- A newer version is never recorded before an older one, so looking from the earliest
-            -- one in the window finds it.
-            latest AS (
-                SELECT v.record,
-                       (array_agg(v.id ORDER BY v.recorded_at DESC, v.id DESC))[1] AS id,
-                       count(*) AS versions
-                FROM (
-                    SELECT {RecordKey("e")} AS record, e.id, e.recorded_at
-                    FROM bsk.v_event e
-                    WHERE e.recorded_at >= (SELECT min(recorded_at) FROM matched WHERE record IS NOT NULL)
-                ) v
-                WHERE v.record IN (SELECT record FROM matched WHERE record IS NOT NULL)
-                GROUP BY v.record
-            )
-            SELECT m.id, m.kind, m.source_id AS source, m.provenance,
-                   m.occurred_at, m.recorded_at,
-                   m.subject_id, m.subject_urn, m.subject_type, m.subject_title,
-                   m.status,
-                   left(a.content, @maxText) AS text,
-                   CASE WHEN length(m.payload::text) <= @maxPayload THEN m.payload::text END AS payload,
-                   coalesce(l.versions, 1) AS versions
-            FROM matched m
-            LEFT JOIN latest l ON l.record = m.record
+                  -- A record's newest version only, wherever its time falls: none of its record
+                  -- recorded after it.
+                  AND (bsk.event_record(e.source_id, e.external_id, e.payload) IS NULL OR NOT EXISTS (
+                      SELECT 1 FROM bsk.event n
+                      WHERE bsk.event_record(n.source_id, n.external_id, n.payload)
+                                = bsk.event_record(e.source_id, e.external_id, e.payload)
+                        AND (n.recorded_at, n.id) > (e.recorded_at, e.id)))
+                ORDER BY e.{at} DESC, e.id DESC
+                LIMIT @take
+            ) m
             LEFT JOIN bsk.artifact a ON a.id = m.artifact_id
-            WHERE (m.record IS NULL OR l.id = m.id)
-              AND (@beforeAt::timestamptz IS NULL OR (m.{at}, m.id) < (@beforeAt::timestamptz, @beforeId::uuid))
             ORDER BY m.{at} DESC, m.id DESC
-            LIMIT @take
-            """,
-            new
-            {
-                since,
-                kinds = kinds is { Count: > 0 } ? kinds.ToArray() : null,
-                anyOff = off.Count > 0,
-                offKeys = off.SelectMany(a => a.PayloadKeys).ToArray(),
-                offKinds = off.SelectMany(a => a.Kinds).ToArray(),
-                offSources = off.SelectMany(a => a.Sources).ToArray(),
-                offTypes = off.SelectMany(a => a.Types).ToArray(),
-                offAttributes = off.SelectMany(a => a.AttributeKeys).ToArray(),
-                onKeys = on.SelectMany(a => a.PayloadKeys).ToArray(),
-                onKinds = on.SelectMany(a => a.Kinds).ToArray(),
-                onSources = on.SelectMany(a => a.Sources).ToArray(),
-                onTypes = on.SelectMany(a => a.Types).ToArray(),
-                coreKeys = McpAreas.CorePayloadKeys.ToArray(),
-                maxText = MaxTextLength,
-                maxPayload = MaxPayloadLength,
-                beforeAt = before?.At,
-                beforeId = before?.Id,
-                take = limit + 1,
-            },
-            cancellationToken: cancellationToken))).AsList();
+            """;
+        return (sql, new
+        {
+            since,
+            kinds = kinds is { Count: > 0 } ? kinds.ToArray() : null,
+            anyOff = off.Count > 0,
+            offKeys = off.SelectMany(a => a.PayloadKeys).ToArray(),
+            offKinds = off.SelectMany(a => a.Kinds).ToArray(),
+            offSources = off.SelectMany(a => a.Sources).ToArray(),
+            offTypes = off.SelectMany(a => a.Types).ToArray(),
+            offAttributes = off.SelectMany(a => a.AttributeKeys).ToArray(),
+            onKeys = on.SelectMany(a => a.PayloadKeys).ToArray(),
+            onKinds = on.SelectMany(a => a.Kinds).ToArray(),
+            onSources = on.SelectMany(a => a.Sources).ToArray(),
+            onTypes = on.SelectMany(a => a.Types).ToArray(),
+            coreKeys = McpAreas.CorePayloadKeys.ToArray(),
+            maxText = MaxTextLength,
+            maxPayload = MaxPayloadLength,
+            beforeAt = before?.At,
+            beforeId = before?.Id,
+            take = limit + 1,
+        });
     }
-
-    /// <summary>
-    /// Which record an event is a version of, or null when it stands alone. An Oura version's
-    /// external_id is <c>&lt;collection&gt;:&lt;key&gt;:&lt;hash&gt;:&lt;what it replaces&gt;</c>,
-    /// and the key may hold a colon, so the record is all but the last two parts. A meal, a fast,
-    /// a space photo and a space rating keep their id in the payload, as their views fold them.
-    /// </summary>
-    private static string RecordKey(string e) => $"""
-        CASE WHEN {e}.source_id = 'oura' AND {e}.external_id IS NOT NULL
-                  THEN 'oura:' || regexp_replace({e}.external_id, ':[^:]*:[^:]*$', '')
-             WHEN {e}.payload->'meal'->>'id' IS NOT NULL THEN 'meal:' || ({e}.payload->'meal'->>'id')
-             WHEN {e}.payload->'fast'->>'id' IS NOT NULL THEN 'fast:' || ({e}.payload->'fast'->>'id')
-             WHEN {e}.payload->'space_photo'->>'id' IS NOT NULL
-                  THEN 'space_photo:' || ({e}.payload->'space_photo'->>'id')
-             WHEN {e}.payload->'space_rating'->>'id' IS NOT NULL
-                  THEN 'space_rating:' || ({e}.payload->'space_rating'->>'id')
-             WHEN {e}.payload->'metric_reading'->>'id' IS NOT NULL
-                  THEN 'metric_reading:' || ({e}.payload->'metric_reading'->>'id')
-             WHEN {e}.payload->'lab_visit'->>'id' IS NOT NULL
-                  THEN 'lab_visit:' || ({e}.payload->'lab_visit'->>'id')
-        END
-        """;
 }
 
 /// <summary>One recorded event, with the subject it's about when it's about one.</summary>
@@ -186,8 +172,9 @@ public sealed class ChangeRow
     public string? Payload { get; set; }
 
     /// <summary>
-    /// How many versions of this record it saw: above 1 for an Oura record Oura re-sent as it
-    /// changed, and a meal, fast, space photo or rating that was edited. This row is the newest.
+    /// How many versions of this record there are: above 1 for an Oura record Oura re-sent as it
+    /// changed, and a meal, fast, space photo, rating, reading or lab visit that was edited. This
+    /// row is the newest.
     /// </summary>
     public long Versions { get; set; } = 1;
 }

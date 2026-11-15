@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0069 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0070 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -246,6 +246,7 @@ CREATE INDEX event_ledger_subject_uuid_idx ON bsk.event USING btree (((NULLIF((p
 CREATE INDEX event_ledger_trigger_idx ON bsk.event USING btree (((payload ->> 'trigger'::text))) WHERE (kind = 'ledger'::text);
 CREATE INDEX event_meal_idx ON bsk.event USING btree ((((payload -> 'meal'::text) ->> 'id'::text)), recorded_at) WHERE ((kind = 'measurement'::text) AND jsonb_exists(payload, 'meal'::text));
 CREATE INDEX event_metric_reading_idx ON bsk.event USING btree ((((payload -> 'metric_reading'::text) ->> 'id'::text)), recorded_at) WHERE ((kind = 'measurement'::text) AND jsonb_exists(payload, 'metric_reading'::text));
+CREATE INDEX event_occurred_at_idx ON bsk.event USING btree (occurred_at);
 CREATE INDEX event_oura_activity_idx ON bsk.event USING btree ((((payload -> 'oura_activity'::text) ->> 'day'::text)), recorded_at) WHERE ((kind = 'measurement'::text) AND jsonb_exists(payload, 'oura_activity'::text));
 CREATE INDEX event_oura_readiness_idx ON bsk.event USING btree ((((payload -> 'oura_readiness'::text) ->> 'day'::text)), recorded_at) WHERE ((kind = 'measurement'::text) AND jsonb_exists(payload, 'oura_readiness'::text));
 CREATE INDEX event_oura_sleep_day_idx ON bsk.event USING btree ((((payload -> 'oura_sleep_day'::text) ->> 'day'::text)), recorded_at) WHERE ((kind = 'measurement'::text) AND jsonb_exists(payload, 'oura_sleep_day'::text));
@@ -253,6 +254,7 @@ CREATE INDEX event_oura_sleep_idx ON bsk.event USING btree ((((payload -> 'oura_
 CREATE INDEX event_oura_tag_idx ON bsk.event USING btree ((((payload -> 'oura_tag'::text) ->> 'id'::text)), recorded_at) WHERE ((kind = 'observation'::text) AND jsonb_exists(payload, 'oura_tag'::text));
 CREATE INDEX event_oura_workout_idx ON bsk.event USING btree ((((payload -> 'oura_workout'::text) ->> 'id'::text)), recorded_at) WHERE ((kind = 'activity'::text) AND jsonb_exists(payload, 'oura_workout'::text));
 CREATE INDEX event_payload_gin ON bsk.event USING gin (payload);
+CREATE INDEX event_record_idx ON bsk.event USING btree (bsk.event_record(source_id, external_id, payload), recorded_at, id) WHERE (bsk.event_record(source_id, external_id, payload) IS NOT NULL);
 CREATE INDEX event_recorded_at_idx ON bsk.event USING btree (recorded_at);
 CREATE UNIQUE INDEX event_source_external_key ON bsk.event USING btree (source_id, external_id) WHERE (external_id IS NOT NULL);
 CREATE INDEX event_space_photo_idx ON bsk.event USING btree ((((payload -> 'space_photo'::text) ->> 'id'::text)), recorded_at) WHERE ((kind = 'observation'::text) AND jsonb_exists(payload, 'space_photo'::text));
@@ -1880,6 +1882,24 @@ BEGIN
         TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_OP
         USING ERRCODE = 'restrict_violation';
 END;
+$function$;
+
+-- The record an event is a version of (an Oura record, a meal, a fast, a space photo or rating, a metric reading, a lab visit), or null when it stands alone. Its newest version by recorded_at is the record.
+CREATE OR REPLACE FUNCTION bsk.event_record(source_id text, external_id text, payload jsonb)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE PARALLEL SAFE
+AS $function$
+    SELECT CASE
+        WHEN source_id = 'oura' AND external_id IS NOT NULL
+            THEN 'oura:' || regexp_replace(external_id, ':[^:]*:[^:]*$', '')
+        WHEN payload->'meal'->>'id' IS NOT NULL THEN 'meal:' || (payload->'meal'->>'id')
+        WHEN payload->'fast'->>'id' IS NOT NULL THEN 'fast:' || (payload->'fast'->>'id')
+        WHEN payload->'space_photo'->>'id' IS NOT NULL THEN 'space_photo:' || (payload->'space_photo'->>'id')
+        WHEN payload->'space_rating'->>'id' IS NOT NULL THEN 'space_rating:' || (payload->'space_rating'->>'id')
+        WHEN payload->'metric_reading'->>'id' IS NOT NULL THEN 'metric_reading:' || (payload->'metric_reading'->>'id')
+        WHEN payload->'lab_visit'->>'id' IS NOT NULL THEN 'lab_visit:' || (payload->'lab_visit'->>'id')
+    END;
 $function$;
 
 -- Today in the home zone (bsk.home_zone()). The habit views use it in place of current_date, which is the database's (UTC) date.

@@ -87,6 +87,14 @@ public sealed class EventIndexTests(ClassDatabase classDb) : IClassFixture<Class
         new("the change feed",
             "SELECT id FROM bsk.v_event WHERE recorded_at >= now() - interval '1 day' ORDER BY recorded_at DESC LIMIT 50;",
             "event_recorded_at_idx", true),
+        // Code review CR122 (migration 0070): the change feed by when it happened, and whether a
+        // version is its record's newest; ChangeFeedPlanTests plans the feed's own query.
+        new("the change feed by when it happened",
+            "SELECT id FROM bsk.event WHERE occurred_at >= now() - interval '1 day' ORDER BY occurred_at DESC LIMIT 50;",
+            "event_occurred_at_idx", true, "occurred_at"),
+        new("a record's newer versions",
+            $"SELECT 1 FROM bsk.event n WHERE bsk.event_record(n.source_id, n.external_id, n.payload) = 'meal:{Id}' AND (n.recorded_at, n.id) > (now(), '{Id}'::uuid);",
+            "event_record_idx", true),
         // Code review CR68: a retried request finds its first write by source and request id.
         new("a retried request's first write",
             NpgsqlEventReader.FindWriteSql
