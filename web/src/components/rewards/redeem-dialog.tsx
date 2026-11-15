@@ -27,7 +27,7 @@ import {
 } from "@/lib/rewards";
 import type { Redemption, RewardRow, Wallet } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 /**
  * Spend currencies (REWARD-3): an instant reward at its price (or a different amount
@@ -90,8 +90,7 @@ function RedeemForm({
   const fields = fieldsFor(reward);
   const [draft, setDraft] = useState<AmountDraft>(() => draftFrom(reward?.price ?? {}, fields));
   const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error } = useWriteAction({ fallback: "Redeem failed. Nothing was spent." });
 
   const amounts = amountsFrom(draft);
   const problem = redeemProblem({ reward, amounts, note }, wallet);
@@ -101,24 +100,21 @@ function RedeemForm({
   const coins = amounts.coins ?? 0;
 
   async function submit() {
-    if (problem || pending) return;
-    setError(null);
-    setPending(true);
-    try {
-      // Unchanged from the catalog price: let the kernel charge the price itself.
-      const atPrice = reward?.kind === "instant" && sameAmounts(amounts, reward.price);
-      const redemption = await writes.redeem({
-        reward: reward?.id,
-        amounts: atPrice ? undefined : amounts,
-        note: note.trim() || undefined,
-      });
-      celebrate();
-      onDone(redemption);
-    } catch (e) {
-      setError(errorText(e, "Redeem failed. Nothing was spent."));
-    } finally {
-      setPending(false);
-    }
+    if (problem) return;
+    // Unchanged from the catalog price: let the kernel charge the price itself.
+    const atPrice = reward?.kind === "instant" && sameAmounts(amounts, reward.price);
+    await run(
+      () =>
+        writes.redeem({
+          reward: reward?.id,
+          amounts: atPrice ? undefined : amounts,
+          note: note.trim() || undefined,
+        }),
+      (redemption) => {
+        celebrate();
+        onDone(redemption);
+      },
+    );
   }
 
   const title = custom

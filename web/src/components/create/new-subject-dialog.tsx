@@ -56,7 +56,7 @@ import {
   subjectFormSchema,
   type SubjectFormValues,
 } from "@/lib/subject-forms";
-import { errorText } from "@/lib/write-action";
+import { errorText, useWriteAction } from "@/lib/write-action";
 
 export type CreateParent = { id: string; title: string; type: SubjectType };
 
@@ -99,7 +99,9 @@ export function NewSubjectDialog({
 
   const type = useWatch({ control: form.control, name: "type" });
   const cfg = formConfig(type);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  // One create at a time (fifth review R1): Enter on a Task's title submits, and pressed again
+  // while the first create is on its way it would make a second item.
+  const { run, pending, error: submitError, setError: setSubmitError } = useWriteAction();
   // The bounty starts on the type's defaults; only triggers Chris changes are saved.
   const { data: bountyDefaults } = useBountyDefaults();
   const bountyLines = defaultLines(type, bountyDefaults);
@@ -109,10 +111,10 @@ export function NewSubjectDialog({
     if (!open) return;
     form.reset(seedValues(startType, initialParent, initialTitle));
     // Each opening starts from its seed: the form's own store is reset here, and the rest with it.
-    // oxlint-disable-next-line react/set-state-in-effect
     setSubmitError(null);
+    // oxlint-disable-next-line react/set-state-in-effect
     setBountyDraft({});
-  }, [open, startType, initialParent, initialTitle, form]);
+  }, [open, startType, initialParent, initialTitle, form, setSubmitError]);
 
   // The dialog scrolls, so a field error can sit out of view; repeat it by Save.
   function onInvalid(errors: FieldErrors<SubjectFormValues>) {
@@ -121,12 +123,22 @@ export function NewSubjectDialog({
   }
 
   async function onSubmit(values: SubjectFormValues) {
-    setSubmitError(null);
     const bountyIssue = bountyProblem(bountyDraft);
     if (bountyIssue) {
       setSubmitError(bountyIssue);
       return;
     }
+    await run(() => save(values), {
+      fallback: `Could not create the ${typeLabel(values.type)}.`,
+      onDone: (created) => {
+        onCreated?.(created);
+        onOpenChange(false);
+      },
+    });
+  }
+
+  /** Makes the item, then its details; answers the item once it exists. */
+  async function save(values: SubjectFormValues): Promise<CreatedSubject> {
     const t = values.type;
     const parents = selectedParentIds(values);
     const primaryParent = initialParent?.id || values.parent || parents[0];
@@ -151,13 +163,7 @@ export function NewSubjectDialog({
       relation: carriesLink ? linkParent.relation : relation,
       attrs,
     };
-    let created: CreatedSubject;
-    try {
-      created = await create.mutateAsync(req);
-    } catch (err) {
-      setSubmitError(errorText(err, `Could not create the ${typeLabel(t)}.`));
-      return;
-    }
+    const created = await create.mutateAsync(req);
     // The subject exists now; a failed follow-up must not leave the dialog open,
     // or a second Save would create a duplicate.
     try {
@@ -166,8 +172,7 @@ export function NewSubjectDialog({
     } catch (err) {
       toast.error(`Created ${created.title}, but not every detail saved: ${errorText(err, "unknown error")}`);
     }
-    onCreated?.(created);
-    onOpenChange(false);
+    return created;
   }
 
   /** The pending Decision link, then the original's Cancelled when this replaces it. */
@@ -335,8 +340,8 @@ export function NewSubjectDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? "Creating…" : "Save"}
+            <Button type="submit" disabled={pending || form.formState.isSubmitting}>
+              {pending || form.formState.isSubmitting ? "Creating…" : "Save"}
             </Button>
           </DialogFooter>
         </form>

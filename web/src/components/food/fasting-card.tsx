@@ -8,7 +8,7 @@ import { DIET_RULES, fastingFor, formatDuration, roundHalfUp } from "@/lib/diet-
 import { fastEarningText, formatClock, formatClockOn, fromLocalInput, toLocalInput } from "@/lib/food";
 import type { FastRow, FoodDayRead } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 const HOUR = 3600;
 
@@ -132,24 +132,17 @@ function RunningFast({ fast }: { fast: FastRow }) {
   const writes = useWrites();
   const now = useNow();
   const [endAt, setEndAt] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error, setError } = useWriteAction();
   const seconds = Math.max(0, Math.floor((now - Date.parse(fast.startedAt)) / 1000));
   const shown = endAt ?? toLocalInput(now);
 
   async function end() {
     const at = endAt ? fromLocalInput(endAt) : undefined;
     if (at === null) return setError("Say when the fast ended.");
-    setError(null);
-    setPending(true);
-    try {
-      await writes.fast({ action: "end", at });
-      setEndAt(null);
-    } catch (e) {
-      setError(errorText(e, "That didn't save. Nothing was written."));
-    } finally {
-      setPending(false);
-    }
+    await run(
+      () => writes.fast({ action: "end", at }),
+      () => setEndAt(null),
+    );
   }
 
   return (
@@ -198,21 +191,12 @@ function BeginFast({ day }: { day: FoodDayRead }) {
   // Begin fast offers the last entry's time, when it was within the last day.
   const last = day.lastMeal && now - Date.parse(day.lastMeal.eatenAt) < 24 * HOUR * 1000 ? day.lastMeal : null;
   const [beginAt, setBeginAt] = useState(() => toLocalInput(last?.eatenAt ?? now));
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error, setError } = useWriteAction();
 
   async function begin() {
     const at = fromLocalInput(beginAt);
     if (!at) return setError("Say when the fast began.");
-    setError(null);
-    setPending(true);
-    try {
-      await writes.fast({ action: "begin", at });
-    } catch (e) {
-      setError(errorText(e, "That didn't save. Nothing was written."));
-    } finally {
-      setPending(false);
-    }
+    await run(() => writes.fast({ action: "begin", at }));
   }
 
   return (

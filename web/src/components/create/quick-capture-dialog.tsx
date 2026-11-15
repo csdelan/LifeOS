@@ -13,7 +13,7 @@ import { CaptureKindTabs } from "@/components/create/capture-kind-tabs";
 import { formatBytes, MAX_ARTIFACT_BYTES, oversizedFile } from "@/lib/artifacts";
 import { useWrites } from "@/lib/queries";
 import type { CaptureKind } from "@/lib/production-ui-types";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 export function QuickCaptureDialog({
   open,
@@ -25,9 +25,13 @@ export function QuickCaptureDialog({
   const [kind, setKind] = useState<CaptureKind>("Note");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const writes = useWrites();
-  const [pending, setPending] = useState(false);
+  // One capture at a time (fifth review R1): Enter held or pressed twice while the first is on
+  // its way would otherwise capture twice.
+  const { run, pending, error, setError } = useWriteAction({ fallback: "Capture failed. Retry without retyping." });
+  // The id a typed capture is sent with, kept while the same text is retried, so a retry after
+  // a lost answer finishes the first capture rather than making a second.
+  const request = useRef<{ key: string; id: string } | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
 
   function reset() {
@@ -35,9 +39,16 @@ export function QuickCaptureDialog({
     setKind("Note");
     setFile(null);
     setError(null);
+    request.current = null;
+  }
+
+  function requestId(key: string): string {
+    if (request.current?.key !== key) request.current = { key, id: crypto.randomUUID() };
+    return request.current.id;
   }
 
   async function submit() {
+    if (pending) return;
     const body = text.trim();
     if (oversizedFile(file)) {
       setError(`That file is larger than ${formatBytes(MAX_ARTIFACT_BYTES)}.`);
@@ -47,21 +58,16 @@ export function QuickCaptureDialog({
       setError("Write something first, or attach a file.");
       return;
     }
-    setError(null);
-    setPending(true);
-    try {
-      if (file) {
-        await writes.captureDocument({ file, description: body, type: kind });
-      } else {
-        await writes.capture(body, kind);
-      }
-      reset();
-      onOpenChange(false);
-    } catch (e) {
-      setError(errorText(e, "Capture failed. Retry without retyping."));
-    } finally {
-      setPending(false);
-    }
+    await run<unknown>(
+      () =>
+        file
+          ? writes.captureDocument({ file, description: body, type: kind })
+          : writes.capture(body, kind, requestId(`${kind}\n${body}`)),
+      () => {
+        reset();
+        onOpenChange(false);
+      },
+    );
   }
 
   return (
@@ -121,7 +127,11 @@ export function QuickCaptureDialog({
           }}
           disabled={pending}
         />
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
+        ) : null}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Discard

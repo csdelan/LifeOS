@@ -164,3 +164,38 @@ describe("a write's failure is said through useWriteAction (code review CR102)",
     expect(own).toEqual(Object.keys(OWN_FAILURE_TOASTS).sort());
   });
 });
+
+/**
+ * Where a component still holds a write's pending state itself, and why `useWriteAction`, which
+ * runs one write at a time when it says failures inline, doesn't fit (fifth review R1). Before it,
+ * Enter pressed twice in the New dialog or Quick capture made the item twice.
+ */
+const OWN_PENDING_STATE: Record<string, string> = {
+  "/src/components/activity/use-connect-oura.ts": "Connect leaves for Oura's sign-in when it works, so it stays busy until the page goes",
+  "/src/components/create/voice-capture-dialog.tsx":
+    "Capture is its only way to send and is disabled while it runs; its error line also says the microphone's problems",
+  "/src/components/environment/walk-through-sheet.tsx":
+    "the ratings go in, then each photo, and a failure after the ratings says what went in",
+  "/src/components/inbox/inbox-preview.tsx":
+    "Back to Inbox runs through the Inbox page's own useWriteAction; this only holds its button down meanwhile",
+  "/src/components/journal/journal-editor.tsx": "a failed entry stays in the editor, which its toast says",
+};
+
+describe("a write runs through useWriteAction, one at a time (fifth review R1)", () => {
+  it("leaves a pending state of its own to the writes the hook doesn't fit", () => {
+    const own = Object.entries(sources)
+      .filter(([file]) => file.startsWith("/src/components/") || file.startsWith("/src/pages/"))
+      .filter(([, source]) => /\bset(?:Pending|Saving|Busy|Submitting|Working)\(true\)/.test(source))
+      .map(([file]) => file)
+      .sort();
+    expect(own).toEqual(Object.keys(OWN_PENDING_STATE).sort());
+  });
+
+  it("runs a mutation's write inside the hook, not by hand", () => {
+    const byHand = Object.entries(sources)
+      .filter(([file]) => file.startsWith("/src/components/") || file.startsWith("/src/pages/"))
+      .filter(([, source]) => /\.mutateAsync\(/.test(source) && !/\buseWriteAction\(/.test(source))
+      .map(([file]) => file);
+    expect(byHand).toEqual([]);
+  });
+});

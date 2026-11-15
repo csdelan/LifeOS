@@ -2467,6 +2467,7 @@ export interface components {
         CaptureBody: {
             text?: string;
             type?: null | string;
+            requestId?: null | string;
         };
         CoverBody: {
             subject?: string;

@@ -94,6 +94,29 @@ describe("NewSubjectDialog", () => {
     );
   });
 
+  it("creates a Task once when Enter is pressed again while the first create runs (fifth review R1)", async () => {
+    writes = createMockWriteClient();
+    let finish: (value: Awaited<ReturnType<LifeOsWriteClient["newSubject"]>>) => void = () => {};
+    const create = vi.spyOn(writes, "newSubject").mockImplementation(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    const onOpenChange = vi.fn();
+    renderDialog({ initialType: "Task", onOpenChange });
+
+    const title = screen.getByLabelText("Title");
+    fireEvent.change(title, { target: { value: "Take the bins out" } });
+    fireEvent.keyDown(title, { key: "Enter" });
+    fireEvent.keyDown(title, { key: "Enter" });
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    fireEvent.keyDown(title, { key: "Enter" });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(create).toHaveBeenCalledTimes(1);
+
+    finish({ id: "t-1", urn: "urn:lifeos:task:t-1", type: "Task", title: "Take the bins out" });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
   it("sends serves for a Habit's first parent", async () => {
     writes = createMockWriteClient();
     const create = vi.spyOn(writes, "newSubject");

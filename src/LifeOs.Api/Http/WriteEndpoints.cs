@@ -430,7 +430,9 @@ public static class WriteEndpoints
     /// <summary>
     /// A typed capture: <c>text</c>, and <c>type</c> (Note, the default; Idea or Problem). A Note
     /// is flagged in the Inbox; an Idea or Problem is made from the text and flagged, and the note
-    /// event concerns it, as a document or voice capture does.
+    /// event concerns it, as a document or voice capture does. A <c>requestId</c> (a UUID the
+    /// page keeps while it retries the same capture) makes a retry finish the first call rather
+    /// than capture twice, as an agent's request_id does (code review CR68, fifth review R1).
     /// </summary>
     private static async Task<IResult> Capture(
         CaptureBody body,
@@ -442,7 +444,18 @@ public static class WriteEndpoints
             return Results.BadRequest(new ApiError("text is required."));
         }
 
-        await filing.CaptureAsync(body.Text, body.Type, cancellationToken: cancellationToken);
+        string? requestId = null;
+        if (!string.IsNullOrWhiteSpace(body.RequestId))
+        {
+            if (!Guid.TryParse(body.RequestId.Trim(), out var id))
+            {
+                return Results.BadRequest(new ApiError("requestId is a UUID."));
+            }
+
+            requestId = id.ToString("D");
+        }
+
+        await filing.CaptureAsync(body.Text, body.Type, externalId: requestId, cancellationToken: cancellationToken);
         return Results.Ok();
     }
 
@@ -641,6 +654,9 @@ public sealed class CaptureBody
 
     /// <summary>Note (the default), Idea or Problem.</summary>
     public string? Type { get; set; }
+
+    /// <summary>A UUID kept across retries of one capture, so a retry doesn't capture twice.</summary>
+    public string? RequestId { get; set; }
 }
 
 public sealed record ApiError(string Error, object? Candidates = null);

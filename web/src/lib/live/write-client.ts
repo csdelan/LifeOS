@@ -314,8 +314,8 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       await unwrap(api().POST("/api/journal", { body: { subject, text } }));
     },
 
-    async capture(text, type) {
-      await unwrap(api().POST("/api/capture", { body: { text, type } }));
+    async capture(text, type, requestId) {
+      await unwrap(api().POST("/api/capture", { body: { text, type, requestId } }));
     },
 
     async captureDocument(req) {

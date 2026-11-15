@@ -43,7 +43,7 @@ import {
   type TaskGroup,
 } from "@/lib/task-groups";
 import { loadView, saveView } from "@/lib/view-state";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
 
 type TasksView = {
@@ -326,24 +326,21 @@ function QuickTaskEntry() {
   const create = useCreateSubject();
   const { openNew } = useCreateActions();
   const [draft, setDraft] = useState("");
-  const [entryError, setEntryError] = useState<string | null>(null);
+  // One create at a time (fifth review R1): Enter pressed again while the first is on its way
+  // would make the Task twice.
+  const { run, pending, error: entryError } = useWriteAction({ fallback: "Could not create the task." });
   const entryRef = useRef<HTMLInputElement>(null);
 
   async function quickCreate() {
     const title = draft.trim();
     if (!title) return;
-    setEntryError(null);
-    try {
-      await create.mutateAsync({
-        type: "Task",
-        title,
-        attrs: { priority: "Medium" },
-      });
-      setDraft("");
-      entryRef.current?.focus();
-    } catch (e) {
-      setEntryError(errorText(e, "Could not create the task."));
-    }
+    await run(
+      () => create.mutateAsync({ type: "Task", title, attrs: { priority: "Medium" } }),
+      () => {
+        setDraft("");
+        entryRef.current?.focus();
+      },
+    );
   }
 
   return (
@@ -363,7 +360,7 @@ function QuickTaskEntry() {
           aria-label="New task title"
           className="flex-1"
         />
-        <Button type="submit" size="sm" disabled={!draft.trim() || create.isPending}>
+        <Button type="submit" size="sm" disabled={!draft.trim() || pending}>
           Add
         </Button>
         <Button

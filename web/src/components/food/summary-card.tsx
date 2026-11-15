@@ -1,11 +1,10 @@
-import { useState } from "react";
 import { BeerIcon, LockIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DIET_RULES, drinksLine, formatPart } from "@/lib/diet-score";
 import { formatClock, summaryHeadline } from "@/lib/food";
 import type { FoodDaySummary } from "@/lib/production-ui-types";
 import { useWrites } from "@/lib/queries";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 function Part({ label, value, max, detail }: { label: string; value: number; max: number; detail?: string }) {
   const share = max > 0 ? Math.min(value / max, 1) : 0;
@@ -41,20 +40,11 @@ function Part({ label, value, max, detail }: { label: string; value: number; max
  */
 export function SummaryCard({ summary, isToday }: { summary: FoodDaySummary; isToday: boolean }) {
   const writes = useWrites();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error } = useWriteAction({ fallback: "The day didn't close. Nothing was written." });
   const canClose = isToday && !summary.closedByHand && summary.meals > 0;
 
   async function close() {
-    setError(null);
-    setPending(true);
-    try {
-      await writes.closeFoodDay(summary.day);
-    } catch (e) {
-      setError(errorText(e, "The day didn't close. Nothing was written."));
-    } finally {
-      setPending(false);
-    }
+    await run(() => writes.closeFoodDay(summary.day));
   }
 
   const status = summary.closedByHand && summary.closedAt

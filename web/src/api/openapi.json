@@ -7353,6 +7353,12 @@
               "null",
               "string"
             ]
+          },
+          "requestId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

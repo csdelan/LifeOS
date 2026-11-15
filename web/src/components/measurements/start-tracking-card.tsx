@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseValue, type MetricTemplate } from "@/lib/features/measurements/measurements";
 import { useWrites } from "@/lib/queries";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 /**
  * Before there's a Weight metric (MEASURE-1, measurements plan §4.7): Start tracking weight
@@ -16,22 +16,15 @@ export function StartTrackingCard({ weight }: { weight: MetricTemplate }) {
   const writes = useWrites();
   const id = useId();
   const [goal, setGoal] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error } = useWriteAction();
   const parsed = goal.trim() === "" ? null : parseValue(goal, weight.decimals, "The goal");
   const problem = parsed && "problem" in parsed ? parsed.problem : null;
 
   async function start() {
-    if (problem || pending) return;
-    setError(null);
-    setPending(true);
-    try {
-      await writes.addMetric({ name: weight.name, target: parsed && "value" in parsed ? parsed.value : undefined });
-    } catch (e) {
-      setError(errorText(e, "That didn't save. Nothing was written."));
-    } finally {
-      setPending(false);
-    }
+    if (problem) return;
+    await run(() =>
+      writes.addMetric({ name: weight.name, target: parsed && "value" in parsed ? parsed.value : undefined }),
+    );
   }
 
   return (

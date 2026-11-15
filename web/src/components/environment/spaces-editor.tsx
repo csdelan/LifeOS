@@ -12,7 +12,7 @@ import { DEFAULT_PACE, DEFAULT_WEIGHT, NAME_MAX, PACE_MAX, PACE_MIN, WEIGHT_MAX,
 import type { SpaceRequest, SpaceRow } from "@/lib/production-ui-types";
 import { useEnvironment, useSpaces, useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
 
 const PACES = Array.from({ length: PACE_MAX - PACE_MIN + 1 }, (_, i) => {
@@ -118,30 +118,25 @@ function SpaceForm({
 }) {
   const ids = useId();
   const [fields, setFields] = useState(initial);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { run, pending, error, setError } = useWriteAction();
   const set = (next: Partial<Fields>) => {
     setError(null);
     setFields((f) => ({ ...f, ...next }));
   };
 
   async function submit() {
-    if (pending) return;
-    setPending(true);
-    setError(null);
-    try {
-      await onSubmit({
-        name: fields.name,
-        weight: Number(fields.weight),
-        pace: Number(fields.pace),
-      });
-      if (!onCancel) setFields(initial);
-      onCancel?.();
-    } catch (e) {
-      setError(errorText(e, "That didn't save. Nothing was written."));
-    } finally {
-      setPending(false);
-    }
+    await run(
+      () =>
+        onSubmit({
+          name: fields.name,
+          weight: Number(fields.weight),
+          pace: Number(fields.pace),
+        }),
+      () => {
+        if (!onCancel) setFields(initial);
+        onCancel?.();
+      },
+    );
   }
 
   return (
@@ -228,7 +223,7 @@ export function SpacesEditor() {
   const [editing, setEditing] = useState<string | null>(null);
   const [shooting, setShooting] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { run, error } = useWriteAction();
 
   const live = (spaces.data ?? []).filter((s) => s.archivedAt == null);
   const archived = (spaces.data ?? []).filter((s) => s.archivedAt != null);
@@ -237,15 +232,8 @@ export function SpacesEditor() {
 
   async function archive(space: SpaceRow, restore: boolean) {
     setBusy(space.id);
-    setError(null);
-    try {
-      if (restore) await writes.restore(space.urn);
-      else await writes.archive(space.urn);
-    } catch (e) {
-      setError(errorText(e, "That didn't save. Nothing was written."));
-    } finally {
-      setBusy(null);
-    }
+    await run(() => (restore ? writes.restore(space.urn) : writes.archive(space.urn)));
+    setBusy(null);
   }
 
   return (

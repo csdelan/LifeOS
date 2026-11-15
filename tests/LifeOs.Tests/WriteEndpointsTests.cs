@@ -144,6 +144,25 @@ public sealed class WriteEndpointsTests(ClassDatabase classDb) : IClassFixture<C
     }
 
     [Fact]
+    public async Task A_capture_retried_with_its_request_id_is_captured_once()
+    {
+        // Fifth review R1: the page keeps a capture's request id while it retries the same text,
+        // so a retry after a lost answer finishes the first capture rather than making a second.
+        await using var host = await StartAsync();
+        var text = $"retried capture {Guid.NewGuid():N}";
+        var requestId = Guid.NewGuid().ToString();
+
+        await PostOkAsync(host.Client, "/api/capture", new { text, requestId });
+        await PostOkAsync(host.Client, "/api/capture", new { text, requestId });
+
+        var rows = await host.Client.GetFromJsonAsync<JsonElement>("/api/inbox", Ct);
+        Assert.Single(rows.EnumerateArray(), row => row.GetProperty("eventContent").GetString() == text);
+
+        var refused = await host.Client.PostAsJsonAsync("/api/capture", new { text, requestId = "not-a-uuid" }, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+    }
+
+    [Fact]
     public async Task A_subject_renamed_by_id_reads_back_with_its_new_title_and_old_urn()
     {
         await using var host = await StartAsync();

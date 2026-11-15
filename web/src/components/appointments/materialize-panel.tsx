@@ -7,7 +7,7 @@ import { todayIso } from "@/lib/dates";
 import { addMonthsClamped, parseRecurrence, recurrenceLabel } from "@/lib/recurrence";
 import { useWrites } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 
 /** The furthest ahead Materialize reaches, as the kernel holds it (`AppointmentSeries.HorizonYears`). */
 export const HORIZON_MONTHS = 24;
@@ -30,8 +30,7 @@ export function MaterializePanel({
   const writes = useWrites();
   const field = useId();
   const [through, setThrough] = useState(() => addMonthsClamped(todayIso(), 3));
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { run, pending, error, setError } = useWriteAction({ fallback: "Materialize failed." });
   const spec = parseRecurrence(recurrence);
 
   async function make() {
@@ -39,15 +38,7 @@ export function MaterializePanel({
       setError("Pick the last day to make occurrences for.");
       return;
     }
-    setError(null);
-    setPending(true);
-    try {
-      await writes.materialize(seriesId, through);
-    } catch (e) {
-      setError(errorText(e, "Materialize failed."));
-    } finally {
-      setPending(false);
-    }
+    await run(() => writes.materialize(seriesId, through));
   }
 
   return (

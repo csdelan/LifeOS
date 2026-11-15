@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { addDays, formatDayFull } from "@/lib/dates";
 import { useExceptionDays, useWrites } from "@/lib/queries";
-import { errorText } from "@/lib/write-action";
+import { useWriteAction } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
 
 /** The longest comment, as the API takes it. */
@@ -30,19 +30,13 @@ export function ExceptionDays({ today }: { today: string }) {
   const writes = useWrites();
   const [open, setOpen] = useState(false);
   const [unmarking, setUnmarking] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { run, error } = useWriteAction({ fallback: "Unmarking failed. Try again." });
   const marked = list.data?.exceptions ?? [];
 
   async function unmark(day: string) {
-    setError(null);
     setUnmarking(day);
-    try {
-      await writes.unmarkException(day);
-    } catch (e) {
-      setError(errorText(e, "Unmarking failed. Try again."));
-    } finally {
-      setUnmarking(null);
-    }
+    await run(() => writes.unmarkException(day));
+    setUnmarking(null);
   }
 
   return (
@@ -116,8 +110,7 @@ export function MarkExceptionDialog({
   const [which, setWhich] = useState<Which>("today");
   const [earlier, setEarlier] = useState(() => addDays(today, -2));
   const [comment, setComment] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { run, pending, error, setError } = useWriteAction({ fallback: "Marking failed. Try again." });
   const yesterday = addDays(today, -1);
 
   function reset() {
@@ -138,17 +131,13 @@ export function MarkExceptionDialog({
       setError("Pick today or an earlier day.");
       return;
     }
-    setError(null);
-    setPending(true);
-    try {
-      await writes.markException(text, day);
-      reset();
-      onOpenChange(false);
-    } catch (e) {
-      setError(errorText(e, "Marking failed. Try again."));
-    } finally {
-      setPending(false);
-    }
+    await run(
+      () => writes.markException(text, day),
+      () => {
+        reset();
+        onOpenChange(false);
+      },
+    );
   }
 
   const options: { value: Which; label: string }[] = [
