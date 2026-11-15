@@ -93,6 +93,23 @@ Save that password too. The pilot reads through this role. (We keep this out of
 migrations on purpose — migrations are immutable and shared across every
 environment, so a per-environment secret can't live in one.)
 
+### 4a. Give the API's role a password
+
+The API writes as `bsk_writer` (migration `0071`, code review CR126): it reads
+and writes every table but owns none, so it can't alter or drop one or switch
+off the append-only triggers on `bsk.event`. The migration leaves it unable to
+sign in, with no password. In the **SQL Editor**:
+
+```sql
+alter role bsk_writer with login password '<a-strong-random-password>';
+```
+
+Save it, and put the role's session-pooler string in `.env` as
+`BSK_WRITER_CONNECTION_STRING` (username `bsk_writer.<project-ref>`). Only the
+Fly app gets it (`scripts/fly-setup.ps1`); `bsk`, the Pilot, the backup and CI's
+`bsk migrate` keep the owner's. Switching an environment that already runs the
+API is in [deploy.md](deploy.md#switching-the-api-to-bsk_writer).
+
 ### 5. Point the WinForms pilot at staging
 
 The pilot reads via `BSK_READER_CONNECTION_STRING`. Through the pooler the

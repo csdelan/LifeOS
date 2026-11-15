@@ -9,7 +9,8 @@
     Does the recipe in docs/agents/verifying.md ("Live check") in one step:
 
     1. Makes the database lifeos_check_<Name> in the dev container (lifeos-postgres, started if
-       it's stopped) and migrates it. Never Chris's dev database (lifeos), never staging.
+       it's stopped) and migrates it. Never Chris's dev database (lifeos), never staging. The
+       API's role, bsk_writer, gets the local password so the API can write as it.
     2. Starts scripts/live-check/fakes.mjs: Supabase Auth's JWKS, Oura from the test fixtures,
        Unsplash from the test fixtures, and Supabase Storage in memory.
     3. Builds the API into the check's own folder, so it never locks src/LifeOs.Api/bin and the
@@ -205,6 +206,12 @@ try {
     Invoke-Psql "CREATE DATABASE $database" | Out-Null
     dotnet run --project (Join-Path $root 'src' 'LifeOs.Cli') -- migrate --connection $owner
     if ($LASTEXITCODE -ne 0) { throw "bsk migrate failed ($LASTEXITCODE)." }
+    # The API writes as bsk_writer, as on staging (code review CR126). The migration leaves it
+    # unable to sign in; on this machine's container it gets the local password the tests use
+    # (BskWriter.LocalPassword). Roles belong to the whole container, so it stays after -Stop.
+    Invoke-Psql "ALTER ROLE bsk_writer WITH LOGIN PASSWORD 'bsk_writer'" | Out-Null
+    $writer = $owner -replace 'Username=[^;]+;Password=[^;]+', 'Username=bsk_writer;Password=bsk_writer'
+    if ($writer -notmatch 'Username=bsk_writer;') { throw "Couldn't make bsk_writer's connection from $owner." }
     if ($Seed) {
         & (Join-Path $PSScriptRoot 'seed.ps1') -Connection $owner -NoBuild
     }
@@ -228,7 +235,7 @@ try {
     $apiEnv = @{
         ASPNETCORE_ENVIRONMENT        = 'Check'
         ASPNETCORE_URLS               = $apiUrl
-        ConnectionStrings__Owner      = $owner
+        ConnectionStrings__Writer     = $writer
         ConnectionStrings__Reader     = $reader
         ALLOWED_EMAILS                = $Email
         Auth__Issuer                  = $issuer

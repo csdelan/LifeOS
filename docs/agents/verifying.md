@@ -37,13 +37,19 @@ The steps below are what it does, for when one needs to change.
    it with `dotnet run --project src/LifeOs.Cli -- migrate -c "<conn>"`. Build the connection
    strings from the `LocalDevelopmentDefault` constants in `src/LifeOs.Infrastructure`
    (`KernelConnectionString.cs` and `ReaderConnectionString.cs`) with the database name swapped. Seed it through `bsk` with
-   `BSK_CONNECTION_STRING` set. Afterwards, `DROP DATABASE lifeos_<x> WITH (FORCE)`.
+   `BSK_CONNECTION_STRING` set. The API writes as `bsk_writer` (migration 0071), which no
+   migration lets sign in: give it the local password the tests use,
+   `ALTER ROLE bsk_writer WITH LOGIN PASSWORD 'bsk_writer'` (roles belong to the whole container),
+   and make its string from the owner's with that username and password. Afterwards,
+   `DROP DATABASE lifeos_<x> WITH (FORCE)`.
 2. **API.** Run `src/LifeOs.Api` with `--no-launch-profile` on a spare port (5281) and
    `ASPNETCORE_ENVIRONMENT=Check` (any name but Development), so the user secrets, which point
    at the real Supabase, don't load and the API acts as staging does. Outside Development it also
    needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (fakes). Set:
-   - `ConnectionStrings__Owner` and `ConnectionStrings__Reader` for the throwaway database.
-     Configuration beats `BSK_CONNECTION_STRING`, so setting only that isn't enough.
+   - `ConnectionStrings__Writer` (as `bsk_writer`) and `ConnectionStrings__Reader` for the
+     throwaway database. Configuration beats the environment variables, so setting only
+     `BSK_WRITER_CONNECTION_STRING` isn't enough. Without a writer the API falls back to
+     `ConnectionStrings__Owner`, which hides a write the role isn't granted.
    - `Storage__SupabaseUrl` at the fake and any `Storage__SupabaseSecretKey` starting
      `sb_secret_`. Food photos, room photos and lab reports then upload there, as on staging.
      Without Storage they go into the throwaway database, which is allowed only because it's

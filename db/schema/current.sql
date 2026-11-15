@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0070 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0071 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --

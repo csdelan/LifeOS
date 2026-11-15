@@ -49,9 +49,10 @@ public static class ApiHost
             });
         }
 
-        var owner = ApiConnections.ResolveOwner(builder.Configuration, builder.Environment);
+        // The API writes as bsk_writer, which owns nothing (code review CR126), and reads as bsk_reader.
+        var writer = ApiConnections.ResolveWriter(builder.Configuration, builder.Environment);
         var reader = ApiConnections.ResolveReader(builder.Configuration, builder.Environment);
-        builder.Services.AddSingleton(new ApiConnectionStrings(owner, reader));
+        builder.Services.AddSingleton(new ApiConnectionStrings(writer, reader));
         // Coins are real money (REWARD-3): Rewards:CoinValueUsd, default $0.50; a bad value
         // fails startup rather than mis-pricing deposits. Rewards:HomeTimeZone (default
         // America/Los_Angeles) decides which day an earn counts on; a malformed one fails too.
@@ -67,14 +68,14 @@ public static class ApiHost
         // picker says covers aren't set up; covers already set still show.
         var integrations = IntegrationSettings.Resolve(key => builder.Configuration[key]);
         builder.Services.AddLifeOsKernel(KernelSettings.Resolve(
-            owner, KernelSources.Api,
+            writer, KernelSources.Api,
             KernelSettings.ParseCoinValueUsd(builder.Configuration[CoinRates.ConfigurationKey]),
             homeZone,
             storage,
             integrations: integrations));
         // The zone must be the database's own bsk.home_zone too; startup fails when it isn't.
         builder.Services.AddHostedService(sp => new HomeZoneStartupCheck(
-            KernelDataSource.For(owner), homeZone, sp.GetRequiredService<ILogger<HomeZoneStartupCheck>>()));
+            KernelDataSource.For(writer), homeZone, sp.GetRequiredService<ILogger<HomeZoneStartupCheck>>()));
         // What fell due while the machine was stopped is caught up before the API answers anything,
         // unless CatchUp:OnStart is false (code review CR57); a value that isn't true or false fails.
         if (StartupCatchUp.Enabled(builder.Configuration[StartupCatchUp.ConfigurationKey]))
@@ -85,9 +86,9 @@ public static class ApiHost
         // and clock (code review CR81).
         builder.Services.AddLifeOsReaders(reader);
 
-        // The agents Chris allowed and what each called (agent-access plan §4.5), on the owner
+        // The agents Chris allowed and what each called (agent-access plan §4.5), on the writer
         // connection: bsk_ops is never granted to bsk_reader. /mcp checks the list on every call.
-        builder.Services.AddSingleton(new AgentAccessStore(owner, homeZone));
+        builder.Services.AddSingleton(new AgentAccessStore(writer, homeZone));
 
         // Fail closed: missing issuer/audience/JWKS-or-secret/ALLOWED_EMAILS throws.
         builder.Services.AddLifeOsAuth(builder.Configuration);

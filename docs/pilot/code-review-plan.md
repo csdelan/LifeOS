@@ -1,8 +1,8 @@
 # Code review fixes plan
 
 **Status:** CR1 to CR26 built (2026-11-12). CR27 to CR56, the second review's P0, P1 and P2, built
-(2026-11-13), and CR57 for its choice A; Chris chose B on 2026-11-15 (CR124), and C waits for him
-([Second review](#second-review-2026-11-13)). The third review scored the code 6.1 of 10, and Chris
+(2026-11-13), and CR57 for its choice A; Chris chose B and C on 2026-11-15 (CR124, and CR126, whose
+staging switch waits for his steps in deploy.md) ([Second review](#second-review-2026-11-13)). The third review scored the code 6.1 of 10, and Chris
 chose its P0 and P1, CR58 to CR67, built (2026-11-13), then its P2, CR68 to CR90, built
 (2026-11-13) ([Third review](#third-review-2026-11-13)). The fourth review scored 6.4, and CR91
 to CR107 are built from it ([Fourth review](#fourth-review-2026-11-13)). The fifth scored 6.5 and
@@ -159,6 +159,21 @@ commit each, and skipped P3 (listed under the second review, so it isn't lost).
         WHERE r.from_subject = h.id AND r.relation = 'serves' AND p.type IN ('Goal', 'Value'));
   ```
 
+- **CR126 (choice C):** the API writes as `bsk_writer` (migration 0071), a role that reads and
+  writes every table in `bsk`, `bsk_derived` and `bsk_ops` but owns none and can create nothing, so
+  it can't alter or drop a table or switch off the append-only triggers. On `bsk.event` and the
+  artifact tables it can only add. It's NOLOGIN, as `bsk_backup` is: each project gives it a password
+  by hand, and only the Fly app gets its string (`BSK_WRITER_CONNECTION_STRING`); `bsk`, the Pilot,
+  the backup and CI's `bsk migrate` keep the owner's. The API takes the writer from
+  `ConnectionStrings:Writer` or that variable, and the owner's only while neither is set, so the
+  push that makes the role can't take staging down; `fly-setup.ps1` puts exactly one of the two on
+  Fly. The tests' server, `ApiTestHost` and `live-check.ps1` connect as the role, so every endpoint
+  test is a check of its grants, and `WriterRoleTests` reads the catalog so a later table is
+  checked the day it's added (an append-only one fails until its migration revokes UPDATE and
+  DELETE). Staging switches by Chris's steps in deploy.md (Switching the API to bsk_writer).
+  **Step 2, after he says staging has switched:** the API stops falling back to the owner outside
+  Development, and `fly-setup.ps1` requires `BSK_WRITER_CONNECTION_STRING`.
+
 ## Items
 
 | ID | Tier | Fix |
@@ -287,6 +302,7 @@ misses `.claude/`.
   canned reads when its rule next changes, and check exact amounts in .NET.
   *Chosen 2026-11-15, as recommended (CR124).*
 - **C.** A non-owner database role for the API, so it can't drop the append-only triggers.
+  *Chosen 2026-11-15: `bsk_writer`, with the switch in two steps so staging never breaks (CR126).*
 
 ## Third review (2026-11-13)
 
@@ -386,7 +402,7 @@ photo picker; a shared page-test harness; "in real money" from the daily read; o
 - **B:** the mock's copy of the reward economy is about 4,800 lines, and the live app uses only
   `barText` from it. Of 34 commits to the kernel's rule files since October, 12 also had to edit the
   web copies, and the Health and Environment fold rules have no shared cases.
-- **C:** unchanged.
+- **C:** unchanged. *Chosen 2026-11-15 (CR126).*
 
 ## Fourth review (2026-11-13)
 
@@ -505,7 +521,7 @@ Pilot's `bsk` calls on the UI thread and its unbounded polled reads; the CLI's t
   tests; CR84 moved it under `lib/mock`, so the live bundle no longer ships it. Since October 1, 11
   commits touched the copied folds, 5 of them alongside a kernel change. The mock keeps
   economy-aware handlers for two writes no screen calls.
-- **C:** unchanged.
+- **C:** unchanged. *Chosen 2026-11-15 (CR126).*
 
 ## Fifth review (2026-11-14)
 
@@ -607,7 +623,7 @@ handles; the list-plus-detail wiring five times, where Habits and Rewards don't 
   kernel code (CR105 and the People photo) also had to edit the mock, and CR106 moved Focus's rules
   into the mock (`mock/dashboard.ts`) rather than deleting them. *Chosen 2026-11-15: each part
   becomes canned reads when its rule next changes (CR124).*
-- **C:** unchanged.
+- **C:** unchanged. *Chosen 2026-11-15 (CR126).*
 - **D (new):** the Goal and Habit gates (a Goal can't be Active without a target date; a Habit needs
   a Goal or an Identity Statement) live in the web twice (`lib/subject-forms.ts`, and a copy in
   `subject-detail.tsx` that can't run because the form refuses first) and in the Pilot, but not in

@@ -147,6 +147,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   `db/migrations` plus one, and check unmerged branches too (`git log --all --stat -- db/migrations`).
   For example, branch `claude/superjournal-connect-9e24c0` has a `0049__journal_pointer.sql` that
   clashes with `main` and must be renumbered before it merges.
+- The API writes as `bsk_writer` (0071), which owns nothing, so it can't alter a table or drop a
+  trigger. A new table gets its grants from 0071's default privileges; a new append-only one also
+  revokes UPDATE and DELETE from it (`WriterRoleTests` reads the catalog).
 - Staging gets a migration only when a push deploys it. Code that reads a new view must cope with
   the view not being there yet. The Pilot catches `PostgresErrorCodes.UndefinedTable` and hides the
   feature (see `src/LifeOs.Pilot/Views/TasksView.cs`).

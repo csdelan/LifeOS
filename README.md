@@ -239,7 +239,8 @@ Flattened views unpack common jsonb attributes into columns for convenience:
 and `bsk.v_subject_current`.
 
 Point read-only consumers (Python, BI, ad-hoc `psql`) at `bsk_reader`; never at
-the owner used by `bsk migrate` / `bsk rebuild`. The role's password in
+the owner used by `bsk migrate` / `bsk rebuild`. The API writes as `bsk_writer`
+(migration 0071), which reads and writes every table but owns none. The role's password in
 migration 0005 is a **local-development** credential (matches
 `docker-compose.yml`); production supplies its own.
 

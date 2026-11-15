@@ -25,9 +25,10 @@ uses). It reads **only** via `SELECT` over `bsk.v_*` as the `bsk_reader` role.
    ./scripts/seed.ps1          # optional, but Focus/Map/Inbox look better with data
    ```
 
-   Staging (Supabase) uses the same env vars the Pilot already honors:
-   `BSK_CONNECTION_STRING` (owner / writes) and `BSK_READER_CONNECTION_STRING`
-   (`bsk_reader` / reads). Unset, they fall back to the local Docker defaults.
+   On staging (Supabase) the API writes with `BSK_WRITER_CONNECTION_STRING`
+   (`bsk_writer`, which owns nothing) and reads with `BSK_READER_CONNECTION_STRING`
+   (`bsk_reader`). Without a writer it writes as the owner, `BSK_CONNECTION_STRING`.
+   Unset, they fall back to the local Docker defaults.
 
 2. Run the API:
 
@@ -109,7 +110,8 @@ origin. On Fly, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` with
 
 The API will not start until issuer, audience, a signing source (JWKS and/or JWT
 secret), and at least one allowed email are set. Outside Development it also
-refuses to start without `BSK_CONNECTION_STRING` and `BSK_READER_CONNECTION_STRING`.
+refuses to start without a write connection (`BSK_WRITER_CONNECTION_STRING`, or the
+owner's `BSK_CONNECTION_STRING` until an environment switches) and `BSK_READER_CONNECTION_STRING`.
 OpenAPI at `/openapi/v1.json` is Development-only (anonymous for `npm run gen:api`);
 every `/api/*` route requires an allowlisted user. `/health` and `/health/ready`
 are anonymous.

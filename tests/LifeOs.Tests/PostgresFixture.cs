@@ -1,4 +1,5 @@
 using Dapper;
+using LifeOs.Infrastructure;
 using LifeOs.Infrastructure.Migrations;
 using Npgsql;
 using Testcontainers.PostgreSql;
@@ -38,6 +39,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// </summary>
     public const string HabitViewZone = "UTC";
 
+    /// <summary>Whether <c>bsk_writer</c> could sign in before this server gave it a password.</summary>
+    public bool WriterCouldSignInAfterMigrating { get; private set; }
+
     public async ValueTask InitializeAsync()
     {
         await _container.StartAsync();
@@ -50,6 +54,17 @@ public sealed class PostgresFixture : IAsyncLifetime
         }
 
         await new MigrationRunner(On(server, TemplateDatabase)).ApplyAsync();
+
+        // The API's role is NOLOGIN as the migrations leave it (0071); this server gives it the
+        // local password, as each project gives it its own, so the API's tests connect as it.
+        await using (var admin = new NpgsqlConnection(server))
+        {
+            await admin.OpenAsync();
+            WriterCouldSignInAfterMigrating = await admin.ExecuteScalarAsync<bool>(
+                "SELECT rolcanlogin FROM pg_roles WHERE rolname = @role;", new { role = BskWriter.RoleName });
+            await admin.ExecuteAsync(
+                $"ALTER ROLE {BskWriter.RoleName} WITH LOGIN PASSWORD '{BskWriter.LocalPassword}';");
+        }
 
         // A copy refuses to start while anything is connected to its template.
         NpgsqlConnection.ClearAllPools();

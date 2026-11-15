@@ -18,7 +18,9 @@ namespace LifeOs.Tests;
 /// <summary>
 /// The real API host on a random local port against the test database, with a client
 /// that carries a valid token for the allowlisted owner — so endpoint tests send exactly
-/// what the web client sends.
+/// what the web client sends. It connects as staging's API does: it writes as bsk_writer, which
+/// owns nothing (code review CR126), and reads as bsk_reader, so a write the role isn't granted
+/// fails its endpoint's test.
 /// </summary>
 internal sealed class ApiTestHost(WebApplication app, HttpClient client) : IAsyncDisposable
 {
@@ -52,7 +54,7 @@ internal sealed class ApiTestHost(WebApplication app, HttpClient client) : IAsyn
             ["Auth:Audience"] = Audience,
             ["Auth:JwtSecret"] = Secret,
             ["ALLOWED_EMAILS"] = Allowed,
-            ["ConnectionStrings:Owner"] = connectionString,
+            ["ConnectionStrings:Writer"] = BskWriter.ConnectionStringFrom(connectionString),
             ["ConnectionStrings:Reader"] = BskReader.ConnectionStringFrom(connectionString),
             ["VITE_SUPABASE_URL"] = "https://placeholder.supabase.co",
             ["VITE_SUPABASE_ANON_KEY"] = "placeholder-anon-key",

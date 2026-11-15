@@ -16,7 +16,8 @@
 
     Reads:
       -EnvFile (default .env)   BSK_CONNECTION_STRING, BSK_READER_CONNECTION_STRING,
-                                and optionally VITE_SUPABASE_URL,
+                                BSK_WRITER_CONNECTION_STRING (until it's there, the
+                                API writes as the owner), and optionally VITE_SUPABASE_URL,
                                 VITE_SUPABASE_ANON_KEY, ALLOWED_EMAILS,
                                 Storage__SupabaseSecretKey (or SUPABASE_SECRET_KEY),
                                 and the Oura app: Oura__ClientId, Oura__ClientSecret,
@@ -45,8 +46,15 @@
     Without it the cover picker says covers aren't set up; covers already set still
     show. Unsplash__AppName is the utm_source on credit links (default lifeos).
 
+    BSK_WRITER_CONNECTION_STRING signs in as bsk_writer, the role the API writes as
+    (migration 0071, code review CR126), which owns nothing. With it, the Fly app
+    gets it and loses BSK_CONNECTION_STRING, so the owner's password is nowhere on
+    Fly; without it, the app keeps the owner's and loses the writer's. GitHub always
+    gets the owner's, for bsk migrate. docs/pilot/deploy.md has the switch.
+
     Sets:
-      Fly app secrets           BSK_CONNECTION_STRING, BSK_READER_CONNECTION_STRING,
+      Fly app secrets           BSK_WRITER_CONNECTION_STRING (or, without it,
+                                BSK_CONNECTION_STRING), BSK_READER_CONNECTION_STRING,
                                 Auth__Issuer, Auth__JwksUrl, ALLOWED_EMAILS,
                                 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY,
                                 Storage__SupabaseSecretKey (when given),
@@ -187,6 +195,25 @@ if ($values['BSK_READER_CONNECTION_STRING'] -match 'Password=bsk_reader(;|$)') {
     throw "BSK_READER_CONNECTION_STRING still uses the public local-dev password. Reset bsk_reader first (docs/pilot/supabase-hosting.md)."
 }
 
+# The API's own role (code review CR126). Optional until the switch in docs/pilot/deploy.md.
+$writer = $fromEnvFile['BSK_WRITER_CONNECTION_STRING']
+if (-not [string]::IsNullOrWhiteSpace($writer)) {
+    $writer = $writer.Trim()
+    $sourceOf['BSK_WRITER_CONNECTION_STRING'] = $EnvFile
+    if ($writer -notmatch '(Username|User ID)=bsk_writer\.([a-z0-9]+)') {
+        throw "BSK_WRITER_CONNECTION_STRING must sign in as bsk_writer.<project-ref>, the API's role. Use the session pooler string."
+    }
+    if ($Matches[2] -ne $ref) {
+        throw "BSK_WRITER_CONNECTION_STRING points at Supabase project '$($Matches[2])' but VITE_SUPABASE_URL is '$ref'. Do not mix environments."
+    }
+    if ($writer -match 'Host=(localhost|127\.0\.0\.1)') { throw "BSK_WRITER_CONNECTION_STRING points at a local database." }
+    if ($writer -match 'Password=bsk_writer(;|$)') {
+        throw "BSK_WRITER_CONNECTION_STRING uses the local test password. Give bsk_writer its own first (docs/pilot/supabase-hosting.md)."
+    }
+} else {
+    $writer = $null
+}
+
 # The SPA key is served to every browser, so it must be the public anon key.
 $anonKey = $values['VITE_SUPABASE_ANON_KEY']
 if ($anonKey.StartsWith('sb_secret_')) { throw "VITE_SUPABASE_ANON_KEY is a secret key. Use the anon (publishable) key." }
@@ -255,13 +282,21 @@ if (-not [string]::IsNullOrWhiteSpace($unsplashAppName)) {
 }
 
 $flySecrets = [ordered]@{
-    BSK_CONNECTION_STRING        = $values['BSK_CONNECTION_STRING']
     BSK_READER_CONNECTION_STRING = $values['BSK_READER_CONNECTION_STRING']
     Auth__Issuer                 = "$supabaseUrl/auth/v1"
     Auth__JwksUrl                = "$supabaseUrl/auth/v1/.well-known/jwks.json"
     ALLOWED_EMAILS               = $values['ALLOWED_EMAILS']
     VITE_SUPABASE_URL            = $supabaseUrl
     VITE_SUPABASE_ANON_KEY       = $anonKey
+}
+# The API's write connection: bsk_writer's when the env file has it, else the owner's. The other
+# one is taken off the app, so Fly holds exactly one.
+if ($writer) {
+    $flySecrets.Insert(0, 'BSK_WRITER_CONNECTION_STRING', $writer)
+    $staleWrite = 'BSK_CONNECTION_STRING'
+} else {
+    $flySecrets.Insert(0, 'BSK_CONNECTION_STRING', $values['BSK_CONNECTION_STRING'])
+    $staleWrite = 'BSK_WRITER_CONNECTION_STRING'
 }
 if ($storageKey) { $flySecrets['Storage__SupabaseSecretKey'] = $storageKey }
 $storageKey = $null
@@ -285,6 +320,12 @@ Write-Host "GitHub environment $GitHubEnvironment ($repo)" -ForegroundColor Cyan
 Write-Host "Supabase project   $ref via $poolerHost" -ForegroundColor Cyan
 Write-Host "Allowlist          $emailCount address(es)" -ForegroundColor Cyan
 foreach ($name in $required) { Write-Host ("  {0,-29} from {1}" -f $name, $sourceOf[$name]) }
+if ($writer) {
+    Write-Host ("  {0,-29} from {1}" -f 'BSK_WRITER_CONNECTION_STRING', $sourceOf['BSK_WRITER_CONNECTION_STRING'])
+    Write-Host "API writes as      bsk_writer; the owner's BSK_CONNECTION_STRING leaves the Fly app (GitHub keeps it for bsk migrate)" -ForegroundColor Cyan
+} else {
+    Write-Host "API writes as      the OWNER: no BSK_WRITER_CONNECTION_STRING in $EnvFile (docs/pilot/deploy.md, Switching the API to bsk_writer)" -ForegroundColor Yellow
+}
 if ($flySecrets.Contains('Storage__SupabaseSecretKey')) {
     Write-Host ("  {0,-29} from {1}" -f 'Storage__SupabaseSecretKey', $sourceOf['Storage__SupabaseSecretKey'])
     Write-Host "Food photos        Supabase Storage, private bucket lifeos-artifacts (made on first upload)" -ForegroundColor Cyan
@@ -326,6 +367,13 @@ Write-Host "Importing $($flySecrets.Count) runtime secrets into $app ..." -Foreg
 $secretLines = ($flySecrets.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join "`n"
 if ((Invoke-WithStdin $fly @('secrets', 'import', '--app', $app, '--stage') "$secretLines`n") -ne 0) {
     throw "'fly secrets import' failed."
+}
+$secretNames = @(& $fly secrets list --app $app --json | ConvertFrom-Json | ForEach-Object { $_.Name })
+if ($LASTEXITCODE -ne 0) { throw "'fly secrets list' failed." }
+if ($secretNames -contains $staleWrite) {
+    Write-Host "Removing $staleWrite from $app (staged too) ..." -ForegroundColor Cyan
+    & $fly secrets unset $staleWrite --app $app --stage
+    if ($LASTEXITCODE -ne 0) { throw "'fly secrets unset $staleWrite' failed." }
 }
 
 # ---------- GitHub environment ----------

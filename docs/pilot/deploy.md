@@ -13,8 +13,8 @@ Browser ── HTTPS ──▶ Fly.io (LifeOs.Api + wwwroot SPA, same origin)
                          ├── JWT (Supabase Auth / Google) + ALLOWED_EMAILS
                          │
                          └── session pooler :5432 ──▶ Supabase Postgres
-                              owner = BSK_CONNECTION_STRING (writes)
-                              reader = BSK_READER_CONNECTION_STRING (reads)
+                              writer = BSK_WRITER_CONNECTION_STRING (bsk_writer: writes, owns nothing)
+                              reader = BSK_READER_CONNECTION_STRING (bsk_reader: reads)
 
 GitHub Actions
   PR:     test + web build + docker build (no push)
@@ -38,8 +38,9 @@ This app serves private life data. The process **will not start** if:
 - `Auth__Issuer`, `Auth__Audience`, and a signing source (`Auth__JwksUrl` and/or
   `Auth__JwtSecret`) are missing
 - `ALLOWED_EMAILS` is empty
-- `BSK_CONNECTION_STRING` or `BSK_READER_CONNECTION_STRING` is missing
-  outside Development
+- `BSK_WRITER_CONNECTION_STRING` (or, until an environment's
+  [switch](#switching-the-api-to-bsk_writer), the owner's `BSK_CONNECTION_STRING`)
+  or `BSK_READER_CONNECTION_STRING` is missing outside Development
 - CORS is configured with a wildcard origin
 - `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` is missing outside Development
   (public anon values, injected into the SPA at process start — never the
@@ -61,7 +62,8 @@ only — never commit real values.
 
 | Variable | Purpose |
 |---|---|
-| `BSK_CONNECTION_STRING` | Owner role, writes. Supabase **session pooler** port **5432**, `SSL Mode=Require;Trust Server Certificate=true`. Username `postgres.<project-ref>`. |
+| `BSK_WRITER_CONNECTION_STRING` | `bsk_writer` role (migration 0071), which the API writes as: it reads and writes every table but owns none, so it can't alter or drop one or switch off the append-only triggers (code review CR126). Supabase **session pooler** port **5432**, `SSL Mode=Require;Trust Server Certificate=true`. Username `bsk_writer.<project-ref>`. |
+| `BSK_CONNECTION_STRING` | Owner role (`postgres.<project-ref>`, same pooler and SSL). The API writes as it only while `BSK_WRITER_CONNECTION_STRING` isn't set; after the [switch](#switching-the-api-to-bsk_writer) it isn't on Fly at all. The GitHub Environment secret of the same name is the owner's too, for `bsk migrate`. |
 | `BSK_READER_CONNECTION_STRING` | `bsk_reader` role, reads. Same pooler/SSL. Username `bsk_reader.<project-ref>`. |
 | `Auth__Issuer` | `https://<project-ref>.supabase.co/auth/v1` (prod project ≠ staging) |
 | `Auth__Audience` | `authenticated` |
@@ -131,7 +133,8 @@ problem.
 ## Health
 
 - `GET /health` — liveness (process is up). Fly's HTTP check uses this.
-- `GET /health/ready` — owner + reader can `SELECT 1`. Returns 503 if either
+- `GET /health/ready` — the writer and reader connections can `SELECT 1`
+  (`"writer"` and `"reader"` in its answer). Returns 503 if either
   connection fails. Do not use this as the Fly machine check (a brief DB blip
   would take the machine out of rotation). Each release job checks it after its
   deploy and fails when it hasn't answered ready within two minutes, so a staging
@@ -171,7 +174,10 @@ you, so these steps are yours; the script does the wiring in between.
    same Supabase project, shows what it will do, and asks before it:
    - creates the Fly app if it does not exist,
    - imports the seven runtime secrets, eight with the Storage key
-     (`fly secrets import --stage`; values go over stdin, never a command line),
+     (`fly secrets import --stage`; values go over stdin, never a command line).
+     The API's write connection is `BSK_WRITER_CONNECTION_STRING` when `.env`
+     has it, else the owner's `BSK_CONNECTION_STRING`, and the other one is
+     taken off the app,
    - sets `BSK_CONNECTION_STRING` and `FLY_API_TOKEN` (a deploy token scoped to
      this one app) on the `staging` GitHub Environment.
 
@@ -201,6 +207,56 @@ you, so these steps are yours; the script does the wiring in between.
      Google account is 403
    - Fly logs show no `bsk migrate` on boot
 
+## Switching the API to bsk_writer
+
+The API wrote as the owner, which can drop the append-only triggers on `bsk.event`
+and then rewrite the log. Migration `0071` adds `bsk_writer`, which owns nothing
+(code review CR126). The API writes as it once `BSK_WRITER_CONNECTION_STRING` is set,
+and as the owner until then, so no step below takes staging down. Staging switches
+once, in this order (Chris only):
+
+1. **Push** the commit with migration `0071`. Deploy migrates staging, which makes
+   `bsk_writer` with no login, and deploys. The API still writes as the owner:
+   nothing changes.
+2. **Give the role a password.** Supabase (project `lifeos`) → SQL Editor:
+
+   ```sql
+   alter role bsk_writer with login password '<a-strong-random-password>';
+   ```
+
+   Save it in your password manager.
+3. **Add it to `.env`**, beside the owner's string, which stays (`bsk`, the Pilot,
+   the backup and CI's `bsk migrate` keep using it):
+
+   ```
+   BSK_WRITER_CONNECTION_STRING=Host=<the pooler host in BSK_CONNECTION_STRING>;Port=5432;Database=postgres;Username=bsk_writer.<project-ref>;Password=<that password>;SSL Mode=Require;Trust Server Certificate=true
+   ```
+
+4. **Stage it on Fly:** `./scripts/fly-setup.ps1`. It says "API writes as bsk_writer",
+   stages `BSK_WRITER_CONNECTION_STRING` and takes `BSK_CONNECTION_STRING` off the Fly
+   app (both staged, so the running machine doesn't change yet). GitHub keeps the
+   owner's for `bsk migrate`.
+5. **Deploy:** `gh workflow run deploy.yml`. It migrates nothing new, deploys the same
+   image with the new secrets, and waits for `/health/ready`.
+6. **Check:**
+   - `https://lifeos-mz55-staging.fly.dev/health/ready` answers `"status":"ready"`.
+   - Signed in, make an item, edit it, tick a habit and capture to the Inbox.
+   - SQL Editor: `select usename, count(*) from pg_stat_activity where datname = current_database() group by usename;`
+     lists `bsk_writer` (the API's writes) and `bsk_reader` (its reads).
+   - `fly secrets list --app lifeos-mz55-staging` has `BSK_WRITER_CONNECTION_STRING`
+     and no `BSK_CONNECTION_STRING`.
+
+**If a write fails** with "permission denied" after the switch: take the
+`BSK_WRITER_CONNECTION_STRING` line out of `.env`, run `./scripts/fly-setup.ps1`
+(it puts the owner's string back on Fly and takes the writer's off) and
+`gh workflow run deploy.yml`. Then tell an agent which write failed: the fix is a
+new migration that grants it.
+
+**Afterwards, one more push** (an agent's, once you say staging has switched): the
+API stops falling back to the owner outside Development, and `fly-setup.ps1`
+requires `BSK_WRITER_CONNECTION_STRING`, so the owner's password can't reach Fly
+again by mistake. Until then the fallback is what keeps step 1 safe.
+
 ## Production later
 
 Production is a **second** Supabase project. (When you get here, the
@@ -212,11 +268,16 @@ staging project instead. Decide then.) Once per production setup:
 2. Put its session-pooler owner and reader strings, its URL and anon key, and
    `ALLOWED_EMAILS` in `.env.prod` (git-ignored). Apply schema with
    `./scripts/migrate-production.ps1`, then reset `bsk_reader` (migration `0005`
-   ships the public local-dev password):
+   ships the public local-dev password) and give `bsk_writer` its login
+   (migration `0071` leaves it without one):
 
    ```sql
    alter role bsk_reader with password '<a-strong-random-password>';
+   alter role bsk_writer with login password '<another-strong-random-password>';
    ```
+
+   Add the `bsk_writer.<prod-ref>` string to `.env.prod` as
+   `BSK_WRITER_CONNECTION_STRING`, so production's API never holds the owner's.
 
 3. Supabase → Authentication → Providers → Google: enable it with the same
    Google OAuth client, and add the new project's callback
@@ -257,7 +318,7 @@ first cutover:
 docker build -t lifeos:local .
 
 docker run --rm -p 8080:8080 `
-  -e BSK_CONNECTION_STRING="<staging owner session-pooler>" `
+  -e BSK_WRITER_CONNECTION_STRING="<staging bsk_writer session-pooler>" `
   -e BSK_READER_CONNECTION_STRING="<staging reader session-pooler>" `
   -e Auth__Issuer=https://<staging-ref>.supabase.co/auth/v1 `
   -e Auth__Audience=authenticated `

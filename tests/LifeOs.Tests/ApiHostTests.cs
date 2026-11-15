@@ -30,7 +30,7 @@ public sealed class ApiHostTests
         var builder = CreateBuilder("Production", includeAuth: false);
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["ConnectionStrings:Owner"] = Unreachable,
+            ["ConnectionStrings:Writer"] = Unreachable,
             ["ConnectionStrings:Reader"] = Unreachable,
             ["Auth:Issuer"] = Issuer,
             ["Auth:Audience"] = Audience,
@@ -232,7 +232,7 @@ public sealed class ApiHostTests
         ["Auth:Audience"] = Audience,
         ["Auth:JwtSecret"] = Secret,
         ["ALLOWED_EMAILS"] = Allowed,
-        ["ConnectionStrings:Owner"] = Unreachable,
+        ["ConnectionStrings:Writer"] = Unreachable,
         ["ConnectionStrings:Reader"] = Unreachable,
         ["VITE_SUPABASE_URL"] = "https://placeholder.supabase.co",
         ["VITE_SUPABASE_ANON_KEY"] = "placeholder-anon-key",

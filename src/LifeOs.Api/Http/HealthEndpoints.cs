@@ -21,10 +21,10 @@ public static class HealthEndpoints
         ApiConnectionStrings connections,
         CancellationToken cancellationToken)
     {
-        var owner = await PostgresProbe.CanQueryAsync(connections.Owner, cancellationToken);
+        var writer = await PostgresProbe.CanQueryAsync(connections.Writer, cancellationToken);
         var reader = await PostgresProbe.CanQueryAsync(connections.Reader, cancellationToken);
-        var body = new ReadinessResponse(owner && reader ? "ready" : "unready", owner, reader);
-        return owner && reader
+        var body = new ReadinessResponse(writer && reader ? "ready" : "unready", writer, reader);
+        return writer && reader
             ? Results.Json(body)
             : Results.Json(body, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
@@ -32,4 +32,4 @@ public static class HealthEndpoints
 
 public sealed record LivenessResponse(string Status);
 
-public sealed record ReadinessResponse(string Status, bool Owner, bool Reader);
+public sealed record ReadinessResponse(string Status, bool Writer, bool Reader);
