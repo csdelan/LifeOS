@@ -15,11 +15,10 @@
 
     `bsk migrate` is the single source of truth for schema and is safe to
     re-run: already-applied migrations are skipped, and one whose SQL changed
-    after it was applied is rejected rather than silently re-run. It builds bsk
-    from this working tree, so it refuses unless HEAD is origin/main and nothing
-    under db/ or src/ is uncommitted: staging gets a migration only from main,
-    and a branch's migration that later changes or is renumbered breaks every
-    later deploy. Use this to
+    after it was applied is rejected rather than silently re-run. It runs the bsk
+    built from origin/main (Get-MainBsk, in LifeOsBsk.psm1), never this working
+    tree's: staging gets a migration only from main, and a branch's migration that
+    later changes or is renumbered breaks every later deploy. Use this to
     promote schema to staging by hand (e.g. the very first apply, or from a
     machine that isn't CI). GitHub Actions runs the same command on merge to
     main — see .github/workflows/deploy.yml. For production, use
@@ -48,18 +47,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 
-git -C $root fetch --quiet origin
-if ($LASTEXITCODE -ne 0) { throw 'git fetch failed.' }
-$head = (git -C $root rev-parse HEAD).Trim()
-$main = (git -C $root rev-parse origin/main).Trim()
-if ($head -ne $main) {
-    throw "HEAD ($($head.Substring(0, 7))) isn't origin/main ($($main.Substring(0, 7))). " +
-        'Migrate from a checkout of origin/main: a remote database gets only what main has.'
-}
-$uncommitted = git -C $root status --porcelain -- db src Directory.Build.props Directory.Packages.props global.json
-if ($uncommitted) {
-    throw "Uncommitted changes would be built into bsk:`n$($uncommitted -join "`n")"
-}
+# A remote database gets only what main has, whatever this checkout holds (code review CR118).
+Import-Module (Join-Path $PSScriptRoot 'LifeOsBsk.psm1') -Force
+$bsk = Get-MainBsk -Repo $root
 
 # A dotenv file named with -EnvFile wins over BSK_CONNECTION_STRING in the shell, and the shell's
 # variable is refused when the default .env names a different database (code review CR59;
@@ -72,16 +62,15 @@ $conn = Resolve-MigrationConnection -EnvPath (Join-Path $root $EnvFile) -EnvFile
 # Say which database without its password. The pooler host is shared, so the user is shown too.
 Write-Host "Migrating $(Get-ConnectionTarget $conn)" -ForegroundColor Yellow
 
-$cliProject = Join-Path $root 'src' 'LifeOs.Cli' 'LifeOs.Cli.csproj'
 $argList = @('migrate')
 if ($MigrateArgs) { $argList += $MigrateArgs }
 
-Write-Host "Running: bsk $($argList -join ' ')" -ForegroundColor Cyan
+Write-Host "Running: bsk $($argList -join ' ') (from $($bsk.Commit.Substring(0, 7)))" -ForegroundColor Cyan
 # bsk reads the variable, so set it for the run and put the caller's value back after.
 $before = $env:BSK_CONNECTION_STRING
 $env:BSK_CONNECTION_STRING = $conn
 try {
-    dotnet run --project $cliProject --configuration Release -- @argList
+    dotnet $bsk.Path @argList
     $code = $LASTEXITCODE
 }
 finally {

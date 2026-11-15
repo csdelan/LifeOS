@@ -7,8 +7,9 @@
 .DESCRIPTION
     Fetches origin, checks the commit out into a temporary git worktree, publishes
     src/LifeOs.Cli from there to %USERPROFILE%\.lifeos\bin\bsk, and removes the
-    worktree. Building from a clean checkout of main means nothing half-written in
-    this working tree (by Chris or by an agent) can become the writer for staging.
+    worktree (Get-MainBsk, in LifeOsBsk.psm1). Building from a clean checkout of main
+    means nothing half-written in this working tree (by Chris or by an agent) can become
+    the writer for staging. A build of that commit already there is kept.
 
     The Pilot writes to STAGING only with this copy, or with BSK_EXE when it is set,
     and runs its launch-time DEV migrate only with one of those. Re-run this after a
@@ -30,40 +31,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
-$lifeOsHome = Join-Path $env:USERPROFILE '.lifeos'
-$target = Join-Path $lifeOsHome 'bin' 'bsk'
-# Outside AppData on purpose: the Claude desktop app redirects its AppData writes.
-$checkout = Join-Path $lifeOsHome 'tmp' ('bsk-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+Import-Module (Join-Path $PSScriptRoot 'LifeOsBsk.psm1') -Force
 
-git -C $root fetch --quiet origin
-if ($LASTEXITCODE -ne 0) { throw 'git fetch failed.' }
+# The same build migrate-staging, backup and restore run (LifeOsBsk.psm1), in the Pilot's own folder.
+$target = Join-Path $HOME '.lifeos' 'bin' 'bsk'
+$bsk = Get-MainBsk -Repo (Split-Path -Parent $PSScriptRoot) -Ref $Ref -Target $target
 
-$commit = (git -C $root rev-parse --verify "$Ref^{commit}").Trim()
-if ($LASTEXITCODE -ne 0) { throw "Can't resolve $Ref to a commit." }
-
-git -C $root merge-base --is-ancestor $commit origin/main
-if ($LASTEXITCODE -ne 0) { throw "$Ref ($commit) isn't on origin/main. The Pilot writes only with bsk built from main." }
-
-Write-Host "Building bsk from $Ref ($($commit.Substring(0, 7)))" -ForegroundColor Cyan
-New-Item -ItemType Directory -Force (Split-Path -Parent $checkout) | Out-Null
-git -C $root worktree add --quiet --detach $checkout $commit
-if ($LASTEXITCODE -ne 0) { throw 'git worktree add failed.' }
-
-try {
-    $staged = "$target.new"
-    if (Test-Path $staged) { Remove-Item -Recurse -Force $staged }
-
-    dotnet publish (Join-Path $checkout 'src' 'LifeOs.Cli' 'LifeOs.Cli.csproj') `
-        --configuration Release --output $staged --nologo
-    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE." }
-
-    Set-Content -Path (Join-Path $staged 'commit.txt') -Value $commit
-    if (Test-Path $target) { Remove-Item -Recurse -Force $target }
-    Move-Item $staged $target
-}
-finally {
-    git -C $root worktree remove --force $checkout
-}
-
-Write-Host "Installed $(Join-Path $target 'bsk.exe')" -ForegroundColor Green
+Write-Host "Installed $(Join-Path $target 'bsk.exe') from $($bsk.Commit.Substring(0, 7))" -ForegroundColor Green

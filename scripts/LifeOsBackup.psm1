@@ -448,19 +448,23 @@ function Get-ScratchConnectionString($Scratch) {
 }
 
 # ---------------------------------------------------------------------------------------------
-# The bsk CLI, run from this working copy
+# The bsk CLI, built from origin/main (code review CR118)
 # ---------------------------------------------------------------------------------------------
 
-function Get-CliProject { Join-Path (Split-Path -Parent $PSScriptRoot) 'src\LifeOs.Cli\LifeOs.Cli.csproj' }
+Import-Module (Join-Path $PSScriptRoot 'LifeOsBsk.psm1') -Force
+$script:Bsk = $null
 
-function Build-Cli {
-    Invoke-Process dotnet @('build', (Get-CliProject), '-c', 'Release', '--nologo', '-v', 'quiet') -What 'Building the bsk CLI' | Out-Null
+# Finds or builds the bsk Invoke-Bsk runs: from origin/main, as staging runs it, never a working
+# copy, which may be behind staging (so rebuild --verify would differ) or hold a branch's migrations.
+function Initialize-Bsk([Parameter(Mandatory)][string] $Repo) {
+    $script:Bsk = Get-MainBsk -Repo $Repo
+    $script:Bsk
 }
 
 # Runs `bsk <arguments> --json` against a connection string; returns exit code, parsed JSON and text.
 function Invoke-Bsk([Parameter(Mandatory)][string] $ConnectionString, [Parameter(Mandatory)][string[]] $Arguments) {
-    $result = Invoke-Process dotnet (@('run', '--no-build', '--no-launch-profile', '--project', (Get-CliProject),
-            '-c', 'Release', '--') + $Arguments + @('--json')) `
+    if (-not $script:Bsk) { throw 'Run Initialize-Bsk before Invoke-Bsk.' }
+    $result = Invoke-Process dotnet (@($script:Bsk.Path) + $Arguments + @('--json')) `
         -Environment @{ BSK_CONNECTION_STRING = $ConnectionString } -AllowFailure
     $json = $null
     $last = @($result.Out -split "`r?`n" | Where-Object { $_.Trim() -ne '' }) | Select-Object -Last 1

@@ -17,6 +17,8 @@
       4. Checks every table's row count against the manifest, brings the schema up to date with
          `bsk migrate` (nothing to do when the backup is recent), and refreshes the derived
          tables with `bsk rebuild` (they're usually behind in a backup: only rebuild writes them).
+         That bsk is built from origin/main (LifeOsBsk.psm1), never this working copy, so a
+         branch's migrations can't reach the restored database.
       5. With -ArtifactsFolder, decrypts the photos into that folder, each checked against its
          sha256. With -UploadArtifacts, uploads them to the Supabase project named in -EnvFile
          (Storage__SupabaseUrl or VITE_SUPABASE_URL, and Storage__SupabaseSecretKey).
@@ -144,7 +146,7 @@ try {
     if ($mismatch) { throw "The restored database doesn't match the manifest: $($mismatch -join '; ')." }
     Write-Host "Every table's row count matches the manifest ($($restored.Count) tables)." -ForegroundColor Green
 
-    Build-Cli
+    $bsk = Initialize-Bsk -Repo (Split-Path -Parent $PSScriptRoot)
     $migrate = Invoke-Bsk $ConnectionString @('migrate')
     if ($migrate.ExitCode -ne 0) { throw "bsk migrate failed: $($migrate.Text)" }
     $applied = @($migrate.Json.applied)
@@ -196,7 +198,7 @@ SELECT DISTINCT bucket, object_key, sha256, content_type FROM bsk.artifact_objec
     Write-Host ''
     Write-Host "Done. $($pg.PGDATABASE) at $($pg.PGHOST) holds the copy taken $($manifest['takenAt'])." -ForegroundColor Cyan
     if ($local) {
-        Write-Host "Read it with:  dotnet run --project src/LifeOs.Cli -- check -c `"$ConnectionString`""
+        Write-Host "Read it with:  dotnet `"$($bsk.Path)`" check -c `"$ConnectionString`""
         Write-Host "Drop it with:  docker exec lifeos-postgres dropdb -U lifeos --force $Database"
     }
 }

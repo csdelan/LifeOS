@@ -21,7 +21,11 @@
          %USERPROFILE%\.lifeos\backup\<Target>.settings.xml. The secrets in it are encrypted
          with DPAPI: only this Windows account on this PC can read them.
       4. The task "\LifeOS\Backup (<Target>)": daily at -At, while you're signed in. A run
-         missed while the PC was off or asleep starts as soon as it's back.
+         missed while the PC was off or asleep starts as soon as it's back. It runs a copy of
+         backup.ps1 and its modules installed in %USERPROFILE%\.lifeos\bin\backup, so it
+         doesn't depend on the checkout (maybe a worktree, since gone) that set it up, and builds
+         bsk from origin/main in this repository's main checkout. Run setup again after a push
+         that changes the backup scripts.
 
 .EXAMPLE
     ./scripts/backup-setup.ps1
@@ -65,6 +69,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'LifeOsBackup.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'LifeOsBsk.psm1') -Force
 $repo = Split-Path -Parent $PSScriptRoot
 
 $existing = if (Test-Path (Get-BackupSettingsPath $Target)) { Read-BackupSettings -Target $Target } else { $null }
@@ -150,12 +155,24 @@ if (-not $NoTask) {
     $pwsh = @("$env:ProgramFiles\PowerShell\7\pwsh.exe", (Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue |
             Select-Object -First 1 -ExpandProperty Source), (Join-Path $PSHOME 'pwsh.exe')) |
         Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-    $script = Join-Path $PSScriptRoot 'backup.ps1'
+    # A copy of the scripts the task runs, outside any checkout (code review CR118): a worktree
+    # that set it up may be gone by tonight. bsk is built from origin/main in the main checkout.
+    $installed = Join-Path $HOME '.lifeos' 'bin' 'backup'
+    New-Item -ItemType Directory -Force $installed | Out-Null
+    foreach ($file in 'backup.ps1', 'LifeOsBackup.psm1', 'LifeOsBsk.psm1') {
+        Copy-Item (Join-Path $PSScriptRoot $file) (Join-Path $installed $file) -Force
+    }
+    $sourceCommit = (git -C $repo rev-parse --short HEAD).Trim()
+    if (git -C $repo status --porcelain --untracked-files=no -- scripts) { $sourceCommit += ' (with local changes)' }
+    Set-Content -Path (Join-Path $installed 'commit.txt') -Value $sourceCommit
+    $mainCheckout = Get-MainCheckout $repo
+    $script = Join-Path $installed 'backup.ps1'
     # conhost --headless runs it with no console window popping up. Its exit code is always 0,
     # so Task Scheduler's Last Run Result only says the run started: the log, the notification
     # and the dead-man's switch say how it went.
     $action = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\conhost.exe') `
-        -Argument "--headless `"$pwsh`" -NoProfile -NonInteractive -File `"$script`" -Target $Target" -WorkingDirectory $repo
+        -Argument "--headless `"$pwsh`" -NoProfile -NonInteractive -File `"$script`" -Target $Target -Repo `"$mainCheckout`"" `
+        -WorkingDirectory $installed
     $trigger = New-ScheduledTaskTrigger -Daily -At ([datetime]::ParseExact($At, 'HH:mm', $null))
     $taskSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
         -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances IgnoreNew
@@ -164,6 +181,7 @@ if (-not $NoTask) {
         -Settings $taskSettings -Principal $principal -Force `
         -Description "Backs up LifeOS ($Target) to $Destination. scripts/backup.ps1; docs/pilot/backup-restore.md." | Out-Null
     Write-Host "Registered the task \LifeOS\Backup ($Target): daily at $At, or as soon as the PC is back if it was off." -ForegroundColor Green
+    Write-Host "It runs the copy in $installed and builds bsk from origin/main in $mainCheckout." -ForegroundColor Green
 }
 
 Write-Host ''

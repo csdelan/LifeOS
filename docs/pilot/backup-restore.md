@@ -82,8 +82,13 @@ when a day passes with no successful ping. The URL is encrypted in the settings,
 says whether it's on: each run without one warns "No dead-man's switch is set up", and each
 run with one ends "Told the dead-man's switch the run succeeded" (or failed).
 
-The app's own checks (`bsk rebuild`, `bsk check`) are built from this working copy. If
-it doesn't build at 3 am, the copy is still saved and the run reports why.
+The app's own checks (`bsk rebuild`, `bsk check`) run the bsk built from `origin/main`, as
+staging runs it (`Get-MainBsk` in `scripts/LifeOsBsk.psm1`, published to
+`%USERPROFILE%\.lifeos\bin\bsk-main` and kept until main moves), never a working copy, which
+may be behind staging. The task runs a copy of `backup.ps1` and its modules that setup installs
+in `%USERPROFILE%\.lifeos\bin\backup`, building bsk in the repository's main checkout, so it
+doesn't depend on the checkout that set it up; run setup again after a push that changes the
+backup scripts. If bsk doesn't build at 3 am, the copy is still saved and the run reports why.
 
 ## Setting it up
 
@@ -198,6 +203,7 @@ as in the drill and copy what's needed from there.
 | `scripts/backup-setup.ps1` | Key, `bsk_backup` login, settings, scheduled task |
 | `scripts/restore.ps1` | Decrypt, restore, check; photos to a folder or a new project |
 | `scripts/LifeOsBackup.psm1` | What the three share |
+| `scripts/LifeOsBsk.psm1` | `Get-MainBsk`: the bsk built from `origin/main`, which restore, backup, `migrate-staging.ps1` and `install-bsk.ps1` run |
 | `db/migrations/0046__backup_role.sql` | The read-only `bsk_backup` role |
 
 Postgres's tools run from the `postgres:<major>-alpine` image that matches the server, so the

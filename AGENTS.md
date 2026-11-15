@@ -137,7 +137,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   `bsk.try_to_timestamptz`: `CastGuardTests` scans every view and the C# SQL.
 - `bsk migrate` takes a lock, and refuses a pending migration numbered below the highest one already
   applied (`--allow-out-of-order` overrides); `--pending` lists what it would apply.
-  `scripts/migrate-staging.ps1` runs only from a clean `origin/main`, and the Release workflow
+  `scripts/migrate-staging.ps1`, `restore.ps1` and the backup run the bsk `Get-MainBsk`
+  (`scripts/LifeOsBsk.psm1`) builds from `origin/main`, never a working tree's, and the Release workflow
   (`migrate.yml`) only from `main` or a `v*` tag on it, and migrates only when asked (`migrate`).
 - **Find the next number by looking, not from memory.** Take the highest number in
   `db/migrations` plus one, and check unmerged branches too (`git log --all --stat -- db/migrations`).

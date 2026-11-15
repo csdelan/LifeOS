@@ -34,12 +34,16 @@
 [CmdletBinding()]
 param(
     # The settings to use: %USERPROFILE%\.lifeos\backup\<Target>.settings.xml.
-    [string] $Target = 'staging'
+    [string] $Target = 'staging',
+
+    # The LifeOS checkout bsk is built from, from origin/main. The scheduled task runs a copy of
+    # this script under %USERPROFILE%\.lifeos\bin\backup and names the main checkout here.
+    [string] $Repo = (Split-Path -Parent $PSScriptRoot)
 )
 
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'LifeOsBackup.psm1') -Force
-$repo = Split-Path -Parent $PSScriptRoot
+$repo = $Repo
 
 Start-BackupLog -Name $Target | Out-Null
 $mutex = [Threading.Mutex]::new($false, "LifeOS-backup-$Target")
@@ -147,11 +151,13 @@ SELECT DISTINCT store, bucket, object_key, sha256 FROM bsk.artifact_object ORDER
             [pscustomobject]@{ Store = $store; Bucket = $bucket; Key = $key; Sha256 = $sha }
         })
 
-    # The app's own checks, from this working copy's CLI. They can't make the copy unusable, so
-    # a failure here is reported after the copy is saved.
+    # The app's own checks, with the bsk built from origin/main, as staging runs it (code review
+    # CR118). They can't make the copy unusable, so a failure here is reported after the copy is saved.
     $restoreTest = [ordered]@{ rowCountsMatch = $true; derivedWasCurrent = $null; rebuildMatches = $null; checkFindings = $null }
+    $bsk = $null
     try {
-        Build-Cli
+        $bsk = Initialize-Bsk -Repo $repo
+        Write-BackupLog "bsk built from origin/main at $($bsk.Commit.Substring(0, 7))."
         $connection = Get-ScratchConnectionString $scratch
         # Only `bsk rebuild` writes bsk_derived, and the app reads status live from the source, so
         # on a database in use the derived table is normally behind. That's recorded, not a
@@ -193,8 +199,13 @@ SELECT DISTINCT store, bucket, object_key, sha256 FROM bsk.artifact_object ORDER
         $files += [ordered]@{ name = "$file.age"; bytes = (Get-Item $encrypted).Length; sha256 = Get-FileSha256 $encrypted }
     }
 
-    $commit = (Invoke-Process git @('-C', $repo, 'rev-parse', '--short', 'HEAD') -AllowFailure).Out.Trim()
-    if ((Invoke-Process git @('-C', $repo, 'status', '--porcelain', '--untracked-files=no') -AllowFailure).Out.Trim()) { $commit += ' (with local changes)' }
+    # The commit these scripts came from: backup-setup writes it beside the copy it installs.
+    $installed = Join-Path $PSScriptRoot 'commit.txt'
+    $commit = if (Test-Path $installed) { (Get-Content $installed -Raw).Trim() }
+    else {
+        $head = (Invoke-Process git @('-C', $repo, 'rev-parse', '--short', 'HEAD') -AllowFailure).Out.Trim()
+        if ((Invoke-Process git @('-C', $repo, 'status', '--porcelain', '--untracked-files=no') -AllowFailure).Out.Trim()) { "$head (with local changes)" } else { $head }
+    }
     $manifest = [ordered]@{
         format           = 1
         target           = $Target
@@ -207,6 +218,7 @@ SELECT DISTINCT store, bucket, object_key, sha256 FROM bsk.artifact_object ORDER
         pgDumpVersion    = $pgDumpVersion
         pgMajor          = $major
         scriptCommit     = $commit
+        bskCommit        = $bsk.Commit
         latestMigration  = [int] $facts['latest_migration']
         databaseSettings = $databaseSettings
         rowCounts        = $counts
