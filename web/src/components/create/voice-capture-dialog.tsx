@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { MicIcon, SquareIcon } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FormDialog } from "@/components/primitives/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -334,141 +333,140 @@ export function VoiceCaptureDialog({
   const levelPct = Math.round(level * 100);
 
   return (
-    <Dialog
+    <FormDialog
       open={open}
       onOpenChange={(next) => {
         if (!next) discardAndClose();
         else onOpenChange(true);
       }}
+      className="sm:max-w-md"
+      showCloseButton={false}
+      data-voice-capture=""
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && recording && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+          e.preventDefault();
+          stopSessionRef.current();
+        }
+      }}
+      escapeDiscards
+      dirty={recording || reviewing}
     >
-      <DialogContent
-        className="sm:max-w-md"
-        showCloseButton={false}
-        data-voice-capture=""
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && recording && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-            e.preventDefault();
-            stopSessionRef.current();
-          }
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>{about?.title ?? "Voice capture"}</DialogTitle>
-          <DialogDescription>
-            {recording
-              ? "Recording. Enter or Stop to review. Escape discards."
-              : reviewing
-                ? "Review the transcript, then capture. Escape discards."
-                : (about?.description ?? "Lands in Inbox. Escape discards.")}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogHeader>
+        <DialogTitle>{about?.title ?? "Voice capture"}</DialogTitle>
+        <DialogDescription>
+          {recording
+            ? "Recording. Enter or Stop to review. Escape discards."
+            : reviewing
+              ? "Review the transcript, then capture. Escape discards."
+              : (about?.description ?? "Lands in Inbox. Escape discards.")}
+        </DialogDescription>
+      </DialogHeader>
 
-        <div className="sr-only" role="status" aria-live="assertive" aria-atomic="true">
-          {recording ? "Recording in progress" : reviewing ? "Review your capture" : (error ?? "")}
-        </div>
+      <div className="sr-only" role="status" aria-live="assertive" aria-atomic="true">
+        {recording ? "Recording in progress" : reviewing ? "Review your capture" : (error ?? "")}
+      </div>
 
-        {phase === "error" ? <p className="text-sm text-destructive">{error}</p> : null}
+      {phase === "error" ? <p className="text-sm text-destructive">{error}</p> : null}
 
-        {recording ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="relative flex size-3" aria-hidden>
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-attention opacity-60" />
-                <span className="relative inline-flex size-3 rounded-full bg-attention" />
-              </span>
-              <MicIcon className="size-4" aria-hidden />
-              <span className="text-sm font-medium">Recording</span>
-            </div>
-            <div>
-              <p className="mb-1 text-[0.6875rem] text-muted-foreground">Microphone level</p>
-              <div
-                className="h-2 overflow-hidden rounded-full bg-muted"
-                role="meter"
-                aria-label="Microphone level"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={levelPct}
-              >
-                <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-75"
-                  style={{ width: `${levelPct}%` }}
-                />
-              </div>
-            </div>
-            <div className="min-h-16 rounded-lg bg-muted/50 px-3 py-2 text-sm">
-              {transcript ? (
-                <p className="whitespace-pre-wrap">{transcript}</p>
-              ) : forceKeep ? (
-                <p className="text-muted-foreground">
-                  Live transcript unavailable — audio will be kept.
-                </p>
-              ) : (
-                <p className="text-muted-foreground">Listening…</p>
-              )}
-            </div>
-            <Button ref={stopRef} type="button" onClick={() => stopSessionRef.current()}>
-              <SquareIcon />
-              Stop
-            </Button>
+      {recording ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="relative flex size-3" aria-hidden>
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-attention opacity-60" />
+              <span className="relative inline-flex size-3 rounded-full bg-attention" />
+            </span>
+            <MicIcon className="size-4" aria-hidden />
+            <span className="text-sm font-medium">Recording</span>
           </div>
-        ) : null}
-
-        {reviewing ? (
-          <div className="space-y-3">
-            {about ? null : <CaptureKindTabs value={kind} onChange={setKind} disabled={pending} />}
-            {playbackUrl ? (
-              <audio
-                className="w-full"
-                controls
-                src={playbackUrl}
-                preload="metadata"
-                aria-label="Playback of recorded audio"
+          <div>
+            <p className="mb-1 text-[0.6875rem] text-muted-foreground">Microphone level</p>
+            <div
+              className="h-2 overflow-hidden rounded-full bg-muted"
+              role="meter"
+              aria-label="Microphone level"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={levelPct}
+            >
+              <div
+                className="h-full rounded-full bg-primary transition-[width] duration-75"
+                style={{ width: `${levelPct}%` }}
               />
-            ) : null}
-            <Textarea
-              ref={transcriptRef}
-              rows={5}
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              placeholder="Transcript…"
-              aria-label="Transcript"
-            />
-            {forceKeep ? (
-              <p className="text-xs text-muted-foreground">
+            </div>
+          </div>
+          <div className="min-h-16 rounded-lg bg-muted/50 px-3 py-2 text-sm">
+            {transcript ? (
+              <p className="whitespace-pre-wrap">{transcript}</p>
+            ) : forceKeep ? (
+              <p className="text-muted-foreground">
                 Live transcript unavailable — audio will be kept.
               </p>
-            ) : null}
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="keep-audio"
-                checked={forceKeep || keepAudio}
-                disabled={forceKeep || pending}
-                onCheckedChange={(v) => setKeepAudio(v === true)}
-              />
-              <Label htmlFor="keep-audio" className="text-sm font-normal">
-                Keep audio
-              </Label>
-            </div>
-            {error ? <p className="text-xs text-destructive">{error}</p> : null}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={discardAndClose}>
-                Discard
-              </Button>
-              <Button type="button" onClick={() => void submit()} disabled={pending}>
-                {pending ? "Capturing…" : "Capture"}
-              </Button>
-            </div>
+            ) : (
+              <p className="text-muted-foreground">Listening…</p>
+            )}
           </div>
-        ) : null}
+          <Button ref={stopRef} type="button" onClick={() => stopSessionRef.current()}>
+            <SquareIcon />
+            Stop
+          </Button>
+        </div>
+      ) : null}
 
-        {phase === "error" ? (
-          <div className="flex justify-end">
+      {reviewing ? (
+        <div className="space-y-3">
+          {about ? null : <CaptureKindTabs value={kind} onChange={setKind} disabled={pending} />}
+          {playbackUrl ? (
+            <audio
+              className="w-full"
+              controls
+              src={playbackUrl}
+              preload="metadata"
+              aria-label="Playback of recorded audio"
+            />
+          ) : null}
+          <Textarea
+            ref={transcriptRef}
+            rows={5}
+            value={transcript}
+            onChange={(e) => setTranscript(e.target.value)}
+            placeholder="Transcript…"
+            aria-label="Transcript"
+          />
+          {forceKeep ? (
+            <p className="text-xs text-muted-foreground">
+              Live transcript unavailable — audio will be kept.
+            </p>
+          ) : null}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="keep-audio"
+              checked={forceKeep || keepAudio}
+              disabled={forceKeep || pending}
+              onCheckedChange={(v) => setKeepAudio(v === true)}
+            />
+            <Label htmlFor="keep-audio" className="text-sm font-normal">
+              Keep audio
+            </Label>
+          </div>
+          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={discardAndClose}>
-              Close
+              Discard
+            </Button>
+            <Button type="button" onClick={() => void submit()} disabled={pending}>
+              {pending ? "Capturing…" : "Capture"}
             </Button>
           </div>
-        ) : null}
-      </DialogContent>
-    </Dialog>
+        </div>
+      ) : null}
+
+      {phase === "error" ? (
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" onClick={discardAndClose}>
+            Close
+          </Button>
+        </div>
+      ) : null}
+    </FormDialog>
   );
 }

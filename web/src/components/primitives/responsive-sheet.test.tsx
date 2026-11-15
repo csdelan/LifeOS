@@ -115,3 +115,27 @@ describe("every form or record sheet opens through ResponsiveSheet (code review 
     expect(own).toEqual(Object.keys(OWN_SHEETS).sort());
   });
 });
+
+/**
+ * The dialogs that don't open through FormDialog, and why. A new one holds a form, and opens
+ * through it, so what's typed in it is asked about before Escape or a tap outside throws it away.
+ */
+const OWN_DIALOGS: Record<string, string> = {
+  "/src/components/primitives/form-dialog.tsx": "the shared dialog itself",
+  "/src/components/ui/command.tsx": "the palette: a search, which is nothing to lose",
+  "/src/components/cover/cover-picker.tsx":
+    "Choose a cover: its search is filled in from the title, and a tap on a photo saves at once",
+  "/src/components/environment/photo-compare-dialog.tsx": "two photos side by side, nothing typed",
+  "/src/components/food/meal-gallery.tsx": "a list of an entry's copies, nothing typed",
+  "/src/components/food/meal-photo.tsx": "a photo full size, nothing typed",
+};
+
+describe("every form dialog opens through FormDialog (fifth review R2)", () => {
+  it("leaves only the listed dialogs to open shadcn's dialog themselves", () => {
+    const own = Object.entries(sources)
+      .filter(([, text]) => /<DialogContent\b/.test(text))
+      .map(([path]) => path)
+      .sort();
+    expect(own).toEqual(Object.keys(OWN_DIALOGS).sort());
+  });
+});

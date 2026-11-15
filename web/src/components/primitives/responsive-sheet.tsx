@@ -1,27 +1,15 @@
-import { useRef, useState, type ReactNode } from "react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { useRef, type ReactNode } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { useCloseGuard } from "@/components/primitives/close-guard";
 import { useIsDesktop } from "@/lib/media-query";
 import { cn } from "@/lib/utils";
-
-/** A control whose click is a choice in a form: a toggle, a switch, a checkbox, a radio, an option. */
-const CHOICE = '[aria-pressed], [role="switch"], [role="checkbox"], [role="radio"], [role="option"]';
 
 /**
  * The sheet a form or a record opens in: a bottom sheet on a phone, a side panel on a desktop
  * (code review CR96). Once something in it is typed or chosen, closing it by Escape, the close
- * button or a tap outside asks first, as leaving a page with an unsaved edit does; Discard closes
- * it, Stay keeps it. A form's own Save or Cancel closes it through `onOpenChange` directly, so
- * neither asks. Each opening starts afresh.
+ * button or a tap outside asks first, through `useCloseGuard`, which `FormDialog` shares; Discard
+ * closes it, Stay keeps it. A form's own Save or Cancel closes it through `onOpenChange` directly,
+ * so neither asks. Each opening starts afresh.
  */
 export function ResponsiveSheet({
   open,
@@ -45,34 +33,7 @@ export function ResponsiveSheet({
 }) {
   const desktop = useIsDesktop();
   const content = useRef<HTMLDivElement>(null);
-  const [touched, setTouched] = useState(false);
-  const [asking, setAsking] = useState(false);
-  const [openedAs, setOpenedAs] = useState(open);
-  if (openedAs !== open) {
-    setOpenedAs(open);
-    if (open) {
-      setTouched(false);
-      setAsking(false);
-    }
-  }
-
-  function touch() {
-    if (guard && !touched) setTouched(true);
-  }
-
-  function requestOpenChange(next: boolean) {
-    if (!next && guard && touched) {
-      setAsking(true);
-      return;
-    }
-    onOpenChange(next);
-  }
-
-  function discard() {
-    setAsking(false);
-    setTouched(false);
-    onOpenChange(false);
-  }
+  const { requestOpenChange, contentProps, confirm } = useCloseGuard({ open, onOpenChange, guard });
 
   return (
     <Sheet open={open} onOpenChange={requestOpenChange}>
@@ -84,10 +45,7 @@ export function ResponsiveSheet({
           desktop ? (wide ? "w-full data-[side=right]:sm:max-w-xl" : "w-full sm:max-w-md") : "max-h-[92dvh] rounded-t-2xl",
           className,
         )}
-        onChange={touch}
-        onClickCapture={(e) => {
-          if (e.target instanceof Element && e.target.closest(CHOICE)) touch();
-        }}
+        {...contentProps}
         onOpenAutoFocus={
           focusSheet
             ? (e) => {
@@ -99,22 +57,7 @@ export function ResponsiveSheet({
       >
         {children}
       </SheetContent>
-      <AlertDialog open={asking} onOpenChange={setAsking}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved edits</AlertDialogTitle>
-            <AlertDialogDescription>
-              What's typed here isn't saved. Discard it, or stay to finish it?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Stay</AlertDialogCancel>
-            <AlertDialogAction variant="outline" onClick={discard}>
-              Discard
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {confirm}
     </Sheet>
   );
 }

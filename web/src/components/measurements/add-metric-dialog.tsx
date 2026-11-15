@@ -2,13 +2,12 @@ import { useId, useState } from "react";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FormDialog } from "@/components/primitives/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -47,24 +46,22 @@ export function AddMetricDialog({
   onAdded: (key: string) => void;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add a metric</DialogTitle>
-          <DialogDescription>Information only: readings earn no XP. You can change any of it later.</DialogDescription>
-        </DialogHeader>
-        {open ? (
-          <AddForm
-            metrics={metrics}
-            catalog={catalog}
-            onDone={(key) => {
-              onOpenChange(false);
-              if (key) onAdded(key);
-            }}
-          />
-        ) : null}
-      </DialogContent>
-    </Dialog>
+    <FormDialog open={open} onOpenChange={onOpenChange} className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>Add a metric</DialogTitle>
+        <DialogDescription>Information only: readings earn no XP. You can change any of it later.</DialogDescription>
+      </DialogHeader>
+      {open ? (
+        <AddForm
+          metrics={metrics}
+          catalog={catalog}
+          onDone={(key) => {
+            onOpenChange(false);
+            if (key) onAdded(key);
+          }}
+        />
+      ) : null}
+    </FormDialog>
   );
 }
 

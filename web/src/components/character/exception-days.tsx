@@ -2,13 +2,12 @@ import { useId, useState } from "react";
 import { CalendarOffIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FormDialog } from "@/components/primitives/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { addDays, formatDayFull } from "@/lib/dates";
@@ -147,89 +146,88 @@ export function MarkExceptionDialog({
   ];
 
   return (
-    <Dialog
+    <FormDialog
       open={open}
       onOpenChange={(next) => {
         if (!next) reset();
         onOpenChange(next);
       }}
+      className="sm:max-w-md"
     >
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Mark a day as an exception</DialogTitle>
-          <DialogDescription>
-            It won't count for or against your domains, and a falling level waits. You can unmark it later.
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submit();
-          }}
-        >
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Day</legend>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {options.map((o) => (
-                <label key={o.value} className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="radio"
-                    name="exception-day"
-                    value={o.value}
-                    checked={which === o.value}
-                    onChange={() => setWhich(o.value)}
-                    className="accent-primary"
-                  />
-                  {o.label}
-                </label>
-              ))}
-            </div>
-            {which === "earlier" ? (
-              <div className="space-y-1">
-                <Label htmlFor={dateId}>Date</Label>
-                <Input
-                  id={dateId}
-                  type="date"
-                  max={today}
-                  value={earlier}
-                  required
-                  onChange={(e) => setEarlier(e.target.value)}
-                  className="w-44"
+      <DialogHeader>
+        <DialogTitle>Mark a day as an exception</DialogTitle>
+        <DialogDescription>
+          It won't count for or against your domains, and a falling level waits. You can unmark it later.
+        </DialogDescription>
+      </DialogHeader>
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Day</legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {options.map((o) => (
+              <label key={o.value} className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="radio"
+                  name="exception-day"
+                  value={o.value}
+                  checked={which === o.value}
+                  onChange={() => setWhich(o.value)}
+                  className="accent-primary"
                 />
-              </div>
-            ) : null}
-          </fieldset>
-          <div className="space-y-1">
-            <Label htmlFor={commentId}>Why</Label>
-            <Input
-              id={commentId}
-              value={comment}
-              maxLength={EXCEPTION_COMMENT_MAX}
-              placeholder="Sick with a cold"
-              required
-              aria-describedby={countId}
-              onChange={(e) => setComment(e.target.value.replace(/[\r\n]+/g, " "))}
-            />
-            <p id={countId} className="text-right text-[0.6875rem] text-muted-foreground">
-              {comment.length} of {EXCEPTION_COMMENT_MAX} characters
-            </p>
+                {o.label}
+              </label>
+            ))}
           </div>
-          {error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
+          {which === "earlier" ? (
+            <div className="space-y-1">
+              <Label htmlFor={dateId}>Date</Label>
+              <Input
+                id={dateId}
+                type="date"
+                max={today}
+                value={earlier}
+                required
+                onChange={(e) => setEarlier(e.target.value)}
+                className="w-44"
+              />
+            </div>
           ) : null}
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              Mark as exception
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </fieldset>
+        <div className="space-y-1">
+          <Label htmlFor={commentId}>Why</Label>
+          <Input
+            id={commentId}
+            value={comment}
+            maxLength={EXCEPTION_COMMENT_MAX}
+            placeholder="Sick with a cold"
+            required
+            aria-describedby={countId}
+            onChange={(e) => setComment(e.target.value.replace(/[\r\n]+/g, " "))}
+          />
+          <p id={countId} className="text-right text-[0.6875rem] text-muted-foreground">
+            {comment.length} of {EXCEPTION_COMMENT_MAX} characters
+          </p>
+        </div>
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={pending}>
+            Mark as exception
+          </Button>
+        </DialogFooter>
+      </form>
+    </FormDialog>
   );
 }

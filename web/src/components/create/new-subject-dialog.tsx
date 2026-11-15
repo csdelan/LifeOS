@@ -4,13 +4,12 @@ import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FieldErrors, Resolver } from "react-hook-form";
 import {
-  Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FormDialog } from "@/components/primitives/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -225,128 +224,126 @@ export function NewSubjectDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>New {typeLabel(type)}</DialogTitle>
-          <DialogDescription>
-            Type-specific create. Attributes are filtered to this type; due and scheduled
-            stay independent.
-            {initialParent ? ` Child of ${initialParent.title}.` : null}
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          className="space-y-4"
-          onSubmit={(e) => void form.handleSubmit(onSubmit, onInvalid)(e)}
-        >
-          {typeChoices.length > 1 ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="create-type">Type</Label>
-              <Select
-                value={type}
-                onValueChange={(v) => {
-                  const next = v as SubjectType;
-                  const prev = form.getValues();
-                  setBountyDraft({});
-                  const keep = attrsToWrite(next, { ...prev, type: next }, { omitEmpty: true });
-                  form.reset({
-                    ...emptyFormValues(next, "create"),
-                    title: prev.title,
-                    tags: prev.tags,
-                    parent: prev.parent,
-                    parents: prev.parents,
-                    person: prev.person,
-                    area: prev.area,
-                    attrs: { ...emptyFormValues(next).attrs, ...keep },
-                  });
-                }}
-              >
-                <SelectTrigger id="create-type" aria-label="Subject type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {typeChoices.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {typeLabel(t)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : null}
-
-          {initialLink ? <PendingLinkNote link={initialLink} type={type} /> : null}
-
+    <FormDialog open={open} onOpenChange={onOpenChange} className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>New {typeLabel(type)}</DialogTitle>
+        <DialogDescription>
+          Type-specific create. Attributes are filtered to this type; due and scheduled
+          stay independent.
+          {initialParent ? ` Child of ${initialParent.title}.` : null}
+        </DialogDescription>
+      </DialogHeader>
+      <form
+        className="space-y-4"
+        onSubmit={(e) => void form.handleSubmit(onSubmit, onInvalid)(e)}
+      >
+        {typeChoices.length > 1 ? (
           <div className="space-y-1.5">
-            <Label htmlFor="title">{cfg.titleLabel}</Label>
-            <Input
-              id="title"
-              autoFocus
-              placeholder={cfg.titlePlaceholder ?? cfg.titleLabel}
-              {...form.register("title")}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && type === "Task" && !e.shiftKey) {
-                  e.preventDefault();
-                  void form.handleSubmit(onSubmit, onInvalid)();
-                }
+            <Label htmlFor="create-type">Type</Label>
+            <Select
+              value={type}
+              onValueChange={(v) => {
+                const next = v as SubjectType;
+                const prev = form.getValues();
+                setBountyDraft({});
+                const keep = attrsToWrite(next, { ...prev, type: next }, { omitEmpty: true });
+                form.reset({
+                  ...emptyFormValues(next, "create"),
+                  title: prev.title,
+                  tags: prev.tags,
+                  parent: prev.parent,
+                  parents: prev.parents,
+                  person: prev.person,
+                  area: prev.area,
+                  attrs: { ...emptyFormValues(next).attrs, ...keep },
+                });
               }}
-            />
-            {form.formState.errors.title ? (
-              <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
-            ) : null}
+            >
+              <SelectTrigger id="create-type" aria-label="Subject type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {typeChoices.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {typeLabel(t)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+        ) : null}
 
-          <SubjectTypeFields form={form} editing />
+        {initialLink ? <PendingLinkNote link={initialLink} type={type} /> : null}
 
-          <BountySection
-            key={type}
-            idPrefix="create-bounty"
-            type={type}
-            lines={bountyLines}
-            draft={bountyDraft}
-            onChange={setBountyDraft}
-            editing
+        <div className="space-y-1.5">
+          <Label htmlFor="title">{cfg.titleLabel}</Label>
+          <Input
+            id="title"
+            autoFocus
+            placeholder={cfg.titlePlaceholder ?? cfg.titleLabel}
+            {...form.register("title")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && type === "Task" && !e.shiftKey) {
+                e.preventDefault();
+                void form.handleSubmit(onSubmit, onInvalid)();
+              }
+            }}
           />
-
-          <Separator />
-          <div className="space-y-1.5">
-            <Label htmlFor="tags">Tags (optional)</Label>
-            <Controller
-              control={form.control}
-              name="tags"
-              render={({ field }) => (
-                <TagListField
-                  id="tags"
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder="Type to find a tag, Enter to add"
-                />
-              )}
-            />
-            <p className="text-xs text-muted-foreground">
-              Tags classify. Existing tags are suggested as you type; a new one is fine too.
-              Relationships are assigned separately — the parent above is a relationship,
-              not a tag.
-            </p>
-          </div>
-
-          {submitError ? (
-            <p role="alert" className="text-sm text-destructive">
-              {submitError}
-            </p>
+          {form.formState.errors.title ? (
+            <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
           ) : null}
+        </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending || form.formState.isSubmitting}>
-              {pending || form.formState.isSubmitting ? "Creating…" : "Save"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <SubjectTypeFields form={form} editing />
+
+        <BountySection
+          key={type}
+          idPrefix="create-bounty"
+          type={type}
+          lines={bountyLines}
+          draft={bountyDraft}
+          onChange={setBountyDraft}
+          editing
+        />
+
+        <Separator />
+        <div className="space-y-1.5">
+          <Label htmlFor="tags">Tags (optional)</Label>
+          <Controller
+            control={form.control}
+            name="tags"
+            render={({ field }) => (
+              <TagListField
+                id="tags"
+                value={field.value}
+                onChange={field.onChange}
+                placeholder="Type to find a tag, Enter to add"
+              />
+            )}
+          />
+          <p className="text-xs text-muted-foreground">
+            Tags classify. Existing tags are suggested as you type; a new one is fine too.
+            Relationships are assigned separately — the parent above is a relationship,
+            not a tag.
+          </p>
+        </div>
+
+        {submitError ? (
+          <p role="alert" className="text-sm text-destructive">
+            {submitError}
+          </p>
+        ) : null}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={pending || form.formState.isSubmitting}>
+            {pending || form.formState.isSubmitting ? "Creating…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </FormDialog>
   );
 }
 

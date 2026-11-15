@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FormDialog } from "@/components/primitives/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatDuration } from "@/lib/diet-score";
@@ -35,19 +34,17 @@ export function FastDialog({
   defaultTo?: string;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        {open ? (
-          <FastForm
-            key={fast?.id ?? "new"}
-            fast={fast}
-            defaultFrom={defaultFrom}
-            defaultTo={defaultTo}
-            onDone={() => onOpenChange(false)}
-          />
-        ) : null}
-      </DialogContent>
-    </Dialog>
+    <FormDialog open={open} onOpenChange={onOpenChange} className="sm:max-w-md">
+      {open ? (
+        <FastForm
+          key={fast?.id ?? "new"}
+          fast={fast}
+          defaultFrom={defaultFrom}
+          defaultTo={defaultTo}
+          onDone={() => onOpenChange(false)}
+        />
+      ) : null}
+    </FormDialog>
   );
 }
 

@@ -3,13 +3,12 @@ import { ArchiveIcon } from "lucide-react";
 import { ToggleGroup } from "@/components/primitives/toggle-group";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FormDialog } from "@/components/primitives/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -43,28 +42,26 @@ export function MetricSettingsDialog({
   const [which, setWhich] = useState(0);
   const metric = group.metrics[Math.min(which, group.metrics.length - 1)];
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit {nameInText(group.name)}</DialogTitle>
-          <DialogDescription>
-            The goal draws a dashed line and a date your trend is heading for it; a reading outside the normal range is
-            marked High or Low.
-          </DialogDescription>
-        </DialogHeader>
-        {group.metrics.length > 1 ? (
-          <ToggleGroup
-            label="Edit"
-            value={String(which)}
-            onChange={(id) => setWhich(Number(id))}
-            options={group.metrics.map((_, i) => ({ id: String(i), label: group.labels[i] }))}
-          />
-        ) : null}
-        {open ? (
-          <SettingsForm key={metric.id} group={group} metric={metric} onDone={() => onOpenChange(false)} />
-        ) : null}
-      </DialogContent>
-    </Dialog>
+    <FormDialog open={open} onOpenChange={onOpenChange} className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>Edit {nameInText(group.name)}</DialogTitle>
+        <DialogDescription>
+          The goal draws a dashed line and a date your trend is heading for it; a reading outside the normal range is
+          marked High or Low.
+        </DialogDescription>
+      </DialogHeader>
+      {group.metrics.length > 1 ? (
+        <ToggleGroup
+          label="Edit"
+          value={String(which)}
+          onChange={(id) => setWhich(Number(id))}
+          options={group.metrics.map((_, i) => ({ id: String(i), label: group.labels[i] }))}
+        />
+      ) : null}
+      {open ? (
+        <SettingsForm key={metric.id} group={group} metric={metric} onDone={() => onOpenChange(false)} />
+      ) : null}
+    </FormDialog>
   );
 }
 

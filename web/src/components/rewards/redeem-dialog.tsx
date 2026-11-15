@@ -1,11 +1,10 @@
 import { useState } from "react";
 import {
-  Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FormDialog } from "@/components/primitives/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,20 +49,18 @@ export function RedeemDialog({
   onRedeemed?: (redemption: Redemption) => void;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <RedeemForm
-          key={reward?.id ?? "custom"}
-          reward={reward}
-          wallet={wallet}
-          onDone={(redemption) => {
-            onRedeemed?.(redemption);
-            onOpenChange(false);
-          }}
-          onCancel={() => onOpenChange(false)}
-        />
-      </DialogContent>
-    </Dialog>
+    <FormDialog open={open} onOpenChange={onOpenChange} className="sm:max-w-md">
+      <RedeemForm
+        key={reward?.id ?? "custom"}
+        reward={reward}
+        wallet={wallet}
+        onDone={(redemption) => {
+          onRedeemed?.(redemption);
+          onOpenChange(false);
+        }}
+        onCancel={() => onOpenChange(false)}
+      />
+    </FormDialog>
   );
 }
 

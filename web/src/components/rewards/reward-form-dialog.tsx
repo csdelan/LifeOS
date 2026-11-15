@@ -1,11 +1,10 @@
 import { useState } from "react";
 import {
-  Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FormDialog } from "@/components/primitives/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,15 +40,13 @@ export function RewardFormDialog({
   reward?: RewardRow | null;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <RewardForm
-          key={reward?.id ?? "new"}
-          reward={reward ?? null}
-          onDone={() => onOpenChange(false)}
-        />
-      </DialogContent>
-    </Dialog>
+    <FormDialog open={open} onOpenChange={onOpenChange} className="sm:max-w-md">
+      <RewardForm
+        key={reward?.id ?? "new"}
+        reward={reward ?? null}
+        onDone={() => onOpenChange(false)}
+      />
+    </FormDialog>
   );
 }
 
