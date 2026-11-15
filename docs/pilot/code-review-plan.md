@@ -4,7 +4,10 @@
 (2026-11-13), and CR57 for its choice A; choices B and C wait for Chris
 ([Second review](#second-review-2026-11-13)). The third review scored the code 6.1 of 10, and Chris
 chose its P0 and P1, CR58 to CR67, built (2026-11-13), then its P2, CR68 to CR90, built
-(2026-11-13) ([Third review](#third-review-2026-11-13)).
+(2026-11-13) ([Third review](#third-review-2026-11-13)). The fourth review scored 6.4, and CR91
+to CR107 are built from it ([Fourth review](#fourth-review-2026-11-13)). The fifth scored 6.5 and
+carries every proposal the fourth left open; none of its own is chosen yet
+([Fifth review](#fifth-review-2026-11-14)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
@@ -399,6 +402,9 @@ number when Chris chooses it.
 
 ### P1: proposed
 
+Every P1 and P2 proposal below not yet built still stood at the fifth review, which carries it as
+"4th #N" ([Fifth review](#fifth-review-2026-11-14)).
+
 | # | Area | Problem and fix | Finishes | Size |
 |---|------|-----------------|----------|------|
 | 2 | Kernel | A write that commits can still fail its request, when a follow-up after the commit throws, and the refusal then says nothing was written. `bsk` has no zone check at start. Follow-ups run best effort and say what failed, the wording says what was written, and `bsk` checks the zone as the API does. | CR88 | M |
@@ -464,3 +470,110 @@ Pilot's `bsk` calls on the UI thread and its unbounded polled reads; the CLI's t
   commits touched the copied folds, 5 of them alongside a kernel change. The mock keeps
   economy-aware handlers for two writes no screen calls.
 - **C:** unchanged.
+
+## Fifth review (2026-11-14)
+
+A fifth pass at 1a079d3, after CR91 to CR107, with the same weighting and method: six Opus 5.5
+reviewers, one area each, findings first and scores second. It scored the code 6.5, up from 6.4
+(`docs/agents/quality-scorecard.md`), and found no P0. Its findings merge into 35 proposals, eleven
+P1 and twenty-four P2, a P3 list and a new choice for Chris (D). R1 to R6, R8 to R10 and R14, the
+rename half of R19, the web half of R28 and choice D were checked by hand against the code before
+they were written here; the rest are the reviewers' readings, each with the lines it cites.
+
+Every proposal the fourth review left open still stands at 1a079d3 and is carried here ("4th #N").
+Most of the new ones finish a CR whose check covered the case it fixed rather than its class, as the
+fourth review found: CR96's unsaved-edits guard covers sheets and not dialogs (R2), CR60's one write
+at a time covers the Map's inline create and not the New dialog (R1), CR85's check looks for words
+(R24), CR107 scoped three read hooks (R16), CR106 moved Focus to the server without scoping its read
+(R14), CR28 hides an area's payload keys and not its attribute keys (R8), and CR103 caps pages and
+not components (R23). So each fix below names the check over its class that ships with it. The
+numbers (R1 to R35) are the review's; a proposal gets a CR number when Chris chooses it. "Earlier"
+names the CR whose check it widens, or the fourth review's proposal it carries.
+
+### P1: proposed
+
+| # | Area | Problem and fix | Earlier | Size |
+|---|------|-----------------|---------|------|
+| R1 | Web | Enter pressed twice in the New dialog or Quick capture writes twice: neither checks that its write is still running, and the web sends no request id, so each Enter makes another permanent item or capture. Both run through `useWriteAction` inline, and create and capture send a request id. CR102's check widens from `toast.error(` to any pending state or catch a component keeps around a write (twelve files, among them `materialize-panel.tsx`, `exception-days.tsx` and `redeem-dialog.tsx`), and a test presses Enter twice in each dialog. | CR60, CR102 | M |
+| R2 | Web screens | Nine form dialogs throw away what's typed on Escape or a tap outside: New, Quick capture, Voice capture, Mark exception, Fast, Add metric, Metric settings, Redeem and the reward form. CR96's guard lives only in `ResponsiveSheet`. A `FormDialog` (or `useCloseGuard`) carries it, and the check that lists what opens shadcn's sheet itself widens from `<SheetContent` to `<DialogContent`, each unguarded dialog listed with why (the viewers, the palette, the cover picker). | CR96 | M |
+| R3 | Pilot | The Pilot reads status from `bsk.v_subject_current`, which only `bsk rebuild` writes (`Reader/SubjectReader.cs`), so a status set on the web, by an agent or by a timer's Complete doesn't show in its Browse, Tasks or detail. Flag to Inbox then offers to re-open an item it wrongly thinks is Completed (`BrowseView.cs`), which writes Not started over the live status, and the Pilot runs a full `rebuild` on staging after its own writes (four calls). A view the reader role can read over `subject_current_source`, as the API reads, and the rebuild calls go; a test writes a status through `StatusService` and reads it back through the Pilot's reader with no rebuild. | First review's P3 | M |
+| R4 | Database | `bsk.subject_relation` has no unique key, and nothing checks for an existing edge (`RelationService.LinkResolvedAsync`, `POST /api/relations`): a retry or a second add stores the edge twice, each new repetition copies the duplicate, the serves lists show it twice, and unlink removes both. A migration keeps the oldest of each duplicate (the table is in the mutable layer) and adds a unique index on `(from_subject, relation, to_subject)`, and the four inserts take `ON CONFLICT DO NOTHING`. Before the push, a query lists staging's duplicates. A test links twice through `bsk`, the API and a repetition's copy and finds one edge. | | S |
+| R5 | Kernel | An upload that repeats one already stored is found by source and SHA-256 alone (`NpgsqlArtifactBlobStore`), across the five upload services. A room, meal, lab-visit or person photo that matches reuses the stored bytes and writes its own event, which is fine. But a file shared to the Inbox that matches a photo stored for a room or a meal gets that photo's event back, flags it into the Inbox (`InboxFilingService.FileAsync`), and links an Idea filed from it to it, in a log that can't be edited. The dedup key names the feature (the object key stays content-addressed), the five services share one intake, and a test stores the same bytes through each pair of doors. | CR68's class | M |
+| R6 | Kernel, web data | A write that committed can still answer "Nothing was written". `StatusService`, `AttributeService` and `ArchiveService` run the reward reconcile and the series follow-ups after the commit, and the reconcile's last `LedgerConflictException` escapes as a refusal; the web's effect runner (`write-effects.ts`) treats a throw in `lands`, `says` or the earnings toast as the write failing. A retry writes twice. A follow-up that fails after the commit is logged and answered as pending, left to the catch-up and reconcile that already heal it, never as a refusal, and the web catches after the write lands. A test makes each service's follow-up port throw and checks the answer isn't a refusal while the event is in the log. | 4th #2 | M |
+| R7 | Kernel | Filing an Inbox item takes three transactions (create, relate, flag), and a document or voice note re-sent as an Idea makes a second Idea: the text path's retry lookup (`FinishRetryAsync`) isn't used for files, and the voice door's `concerning` check is in the door. One write for the Idea, its edge and its flag; the lookup for every capture; the check in Application. | 4th #3 | M |
+| R8 | API | With the Rewards area off, a bounty still reaches agents through `get_item`'s raw attributes and its series headline, and setting one is a core `attribute_change` in `recent_changes`. `McpArea` names its attribute keys (`bounty`, and `establish_target` if it's Rewards'), tools strip them while the area is off, `ChangeReader` treats an attribute change of an off area's key as that area's, and the host registers tools from `McpAreas.All`. A test switches each area off and reads each of its attributes through every tool. Latent while every area is on. | 4th #10 | S–M |
+| R9 | Database | `(attributes->>'vision_order')::int` has no guard in the API's and the Pilot's subject lists, so `bsk set <item> vision_order=1st` breaks Browse, the Map and Vision. Five payload casts are half guarded: `v_fast`, `v_oura_tag`, `v_sleep_period` and `v_workout` check a timestamp is a string but not that it parses, and `v_award_credit`'s `base` has no CHECK. Guard them, and a test over `pg_views` and the C# SQL fails on any cast of a free value without a guard or a CHECK. | 4th #5 | S–M |
+| R10 | Ops | A rollback through `migrate.yml` runs main's newest migrations before deploying the old image, never checks the digest is in the registry, defaults `fly_config` to `fly.toml` (production's app) whatever environment is chosen, and accepts any `v*` tag without checking it's on `main`. Check the digest first, migrate on a run by hand only when asked (`bsk migrate --pending` to say what would run), take the Fly config from the environment, and check a tag's ancestry; `DeployWorkflowTests` asserts each. | 4th #6 | M |
+| R11 | Ops | `restore.ps1` migrates a new real database with the working tree's `bsk`, branch migrations and all; the nightly `rebuild --verify` raises a false alarm whenever the checkout is behind staging (since CR66); and the scheduled backup runs `backup.ps1` from whichever checkout set it up, which may be a worktree that has since gone. One `Get-MainBsk` that builds from `origin/main` as `install-bsk.ps1` does, used by restore, backup and `migrate-staging.ps1`; `backup-setup.ps1` installs the scripts under `%USERPROFILE%\.lifeos\bin`; a scan allows a CLI build in `scripts/` only there and in the throwaway-database scripts. | 4th #7 | M |
+
+### P2: proposed
+
+| # | Area | Problem and fix | Earlier | Size |
+|---|------|-----------------|---------|------|
+| R12 | Database, kernel | Reads over a range of a versioned record fold every version ever stored (meals and fasts by day, the six Oura reads by day, readings by metric, ratings and photos by space), since each filters on a column worked out above the view's window. The Inbox count, on every page's badge, runs `DISTINCT ON` over every triage event; each reconcile's `GetLatestSubjectEventAsync` scans the log; `GetWorkoutAsync` folds every workout. `EventIndexTests` marks these `Lookup: false` and checks only that each index has a read. A day column as text for streams keyed by day, a pre-select of keys for streams keyed by id, kinds named in the latest-event lookup, and `EventIndexTests` lists every view over `bsk.event` from `pg_depend`, each bounded or listed with why. | 4th #17, CR77 | M |
+| R13 | Database | Nothing measures cost as data grows: `EventIndexTests` plans against an empty log. A template seeded with years of meals, Oura days, check-offs, the ledger and the triage history, with time budgets for the hot reads (a Food Log week, an Activity week, the Inbox count, one check-off's reconcile, the domain fold); it also gives a migration test against a database that holds data. Best done before R12 and R14 to R18, to rank them by what they cost. | 4th #20 | L |
+| R14 | API | Focus and `life_snapshot` read every open item of every type (`FocusReader.DayAsync`), Appointment occurrences two years ahead and every status-less Person, Area, Value and Metric among them, and use only the Goals, Projects and Tasks. The filter names the three types, and a server-side twin of `scoped-reads.test.ts` checks it. | CR106 | S |
+| R15 | Web data, API | Browse and the Map read every subject of every type: every repetition, a review a day, Appointment occurrences ahead, and Spaces, Metrics and Reviews the web throws away (`browsableItems`). `/mcp`'s alignment reads every subject and edge, through a C# port of the web's `buildAlignmentForest` with no shared cases. `GET /api/subjects` takes types, area, tag and due (the kernel's `SubjectFilter` already does); Browse counts and pages on the server; one alignment read serves the Map and `/mcp`; `scoped-reads.test.ts` requires a read of all subjects to name its types, with no whitelist. | 4th #15, CR76, CR107 | M–L |
+| R16 | API, web | More reads with no bound: `GET /api/timers` answers every timer ever, and the shell reads it on every page to find the running one; the journal and history read with no limit, though the API takes one (CR54); a series' whole history is read, then cut to 20; `EnvironmentReader` reads every photo of every space; a detail reads every habit to find its own, habit or not; parent pickers read every Goal and Project. Bounds in SQL, a running-timer read, a first page with Show older. A list of the server's unbounded reads with why, and `scoped-reads.test.ts` widened to `useSubjectsOfTypes`, `useHabits`, `useTimers` and the journal. | CR54, CR107 | S–M |
+| R17 | API | `recent_changes` builds its whole window, up to 366 days with a regex on every row, before its limit (`ChangeReader`). Page first by keyset over `recorded_at` and id, and fold newest versions only for the page; an EXPLAIN check wants a limit above an index scan. | 4th #15 | M |
+| R18 | Kernel | Each write that earns XP runs the domain fold over all history twice (`RankUpService`'s `AroundAsync` and `PayAfterAsync`); a room rating reads every rating of every space (`SpaceRatingService`); a reading counts every metric's readings. One fold per request, shared; reads bounded to the space or metric; a query budget on R13's template. | | M |
+| R19 | Kernel | There's no place for a type's own rules. The generic rename (`RenameService`) skips the name checks `SpaceService` and `MetricService` make, so two metrics can be called "Weight", and readings find a metric by name; the two services copy their resolve and free-name checks, which have drifted (short ids) and check before acting; eight verb services branch on type. One registration per type that rename, archive, restore and status consult, and a partial unique index on live spaces' and metrics' names. A table test over every type and generic verb: each is refused or reaches its type's rule. | 4th #23 | M |
+| R20 | Web data | A feature with a read and a write still edits eight shared files (`reads.ts`, `live/reads.ts`, `query-keys.ts`, `production-ui-types.ts`, both write clients, `write-effects.ts`, `mock/api.ts`): People's photo edited six, CR106 five, CR107 six. `lib/features` holds two features, CR105 to CR107 didn't move theirs, and neither `MOCK_ONLY` (45) nor the copy count (75) has been lowered. One record per feature spread from `features/index.ts`; `LifeOsWriteClient` in `lib/writes.ts`; `web/src/lib/production-ui-types.ts` (2,106 lines, 200 importers) split by feature. Feature by feature, habits, food and environment first. | 4th #24 | L |
+| R21 | API, web data | About 30 response types reached only as a property are all-optional in the OpenAPI document (`WebClientDocument` marks fields required only without a `JsonPropertyInfo`), so `fits()` checks nothing in them, and about 48 hand-written types match a generated schema field for field under another name (`Award` and `AwardRow`, seven `*Request` and `*Body` pairs). Required marked from the CLR type; the copies aliased; the ratchet compares fields, not names; a test fails on an all-optional response schema. | 4th #25 | S–M |
+| R22 | Web screens | `subject-detail.tsx` has 21 `subject.type === …` branches in one 509-line function (the timer, repeat, materialize, person photo, establishment, streak, Decision actions, target date), so a new type with a panel edits it. A typed table of panels per type, and a check that no type literal is left in the file. | | M |
+| R23 | Web screens, API, CLI | Only pages have a size cap. Six components are over the pages' 550 lines (`domain-reports.tsx` 756, `log-food-sheet.tsx` 695, `walk-through-sheet.tsx` 658, `rewards-history.tsx` 633, `subject-detail.tsx` 621, `lab-visit-sheet.tsx` 560), and in C# `SubjectReader.cs` (1,051, with four methods nothing calls), `FoodCommand.cs` (843) and `NpgsqlLedgerRepository.cs` (726). One ratchet for components and C# files listing today's oversized ones, lowered as each is split; the dead methods go. | CR103 | M (check S) |
+| R24 | Web screens | A failed read looks empty in 19 views: the journal says "No journal yet", the history "No status history", the palette "Nothing matches.", and the Relationships tab, repeat panel, streak grid and pickers the same. About ten write-failure or field-error paragraphs aren't announced (`role="alert"`, `aria-describedby`), and a workout note saved as its sheet closes fails silently. A source check that each read hook's result reaches `ReadFailed` or `isError`, exceptions listed with why; one `FormError` primitive; the workout note toasts when its sheet is gone. | CR85 | S–M |
+| R25 | API, CLI | Defaults and caps differ by door: the domains read 30 days through the API and 14 through `bsk`, and only the API holds the 731-day cap; the review list reads 28 days with a 400-day cap through the API and no cap through `bsk`; `RewardReader` copies a service's range check. Constants in Application, doors pass null for the default, and `BskJsonTests` pairs these with no arguments. | 4th #12 | M |
+| R26 | API | Overdue counts a past do-date on `/mcp` (`Due ?? Scheduled`) and not on the web or in reviews, where it's the due date alone. One `TaskDates.IsOverdue` in Domain, with `tests/rules/overdue.json`. | 4th #11 | S |
+| R27 | Database | Views copy C# lists with nothing checking them: review kinds (a third kind would vanish from `v_review`), lab panels, a metric's direction and decimals, a space's weight and pace bounds. And the newest-version view is copied 13 times and has drifted: 6 of 12 end with their key as text, some use `DISTINCT ON` and some `row_number`, the uuid regex is written 14 times beside `bsk.is_uuid_text`, and keys compare as text whatever their case. A test per copied list, and a shape test over `pg_views` with a written recipe. | 4th #18, #19 | M |
+| R28 | Kernel, web, Pilot | Home-zone math outside `IHomeCalendar` in three repositories (space, food, metric), and `now()` or `clock_timestamp()` in two writes, which a `TestClock` can't move. The web builds a default noon in the browser's zone (`collectedInstant`, the food sheet's past-day default), so with the browser five or more hours east of Pacific a lab visit or a meal lands on the home day before. The Pilot's today is the PC's date (`Ui.Today`). `IHomeCalendar.InstantAtAsync`, a `homeInstant(day, time)` in `dates.ts`, the Pilot reading `bsk.home_today()`, and a source scan on each side. | 4th #22 | S–M |
+| R29 | Tests | No shared test support: 182 `new NpgsqlConnection(` in 96 files, 35 private `OpenAsync`, 12 `RefusedAsync`, 31 raw subject inserts, and the newest test files add more. CR88's rule that a global read takes its own database is a convention, and slipped once (27d69aa). `Support/Db.cs` and `Support/Api.cs` with typed inserts, and a ratchet on connections opened outside them. | 4th #21 | M |
+| R30 | CLI, Pilot | CI never builds the Pilot or runs its 25 SQL reads; its ~35 `bsk` command lines are parsed by nothing; four of its vocabulary tables copy the kernel's unchecked. `BskJsonTests`' pairs are a hand list, and `bsk timer --json` already prints a different shape from `POST /api/timer`. The Pilot built in CI; each reader method run once as `bsk_reader`; one `BskVerbs.cs` parsed by `BskRoot`; a walk of `BskRoot`'s verbs, each paired or listed as `bsk`'s own with why. | 4th #26, #27 | M |
+| R31 | CLI | `bsk` is the door CR26 left out: every exception, refusal or fault, exits 1 with its message, `--json` errors carry no kind, and resolving the connection, `--json` and building services is copied into 77 verbs. One `Cli.Verb` helper on `KernelRefusals`' table: exit 2 for a refusal, 1 for a fault, and a JSON `kind`. | CR26 | M |
+| R32 | Ops | Four `.env` parsers that disagree: `fly-setup.ps1` and `LifeOsBackup.psm1` strip only double quotes, so a single-quoted value reaches Fly and GitHub secrets with its quotes, which breaks staging at the next deploy. Also four connection-string parsers and four ways to run `bsk`. One module (`LifeOsConnection.psm1`, with R11's `Get-MainBsk`), tested on quoted values. | | S–M |
+| R33 | Web screens | No accessibility scan opens the shell's overlays: the palette, Quick and Voice capture, Redeem, the reward form, either Unsaved edits dialog. Scan each, and a check that every file rendering a dialog's or a sheet's content is opened by a spec or listed with why. | CR97 | M |
+| R34 | Web | `web/e2e` is never type-checked (`tsconfig.node.json` leaves it out), and five errors are there today (`golden/tasks.spec.ts` calls `group(name: string)` with a RegExp). Include it, and `e2e-setup.test.ts` checks it stays included. | CR104 | S |
+| R35 | Ops (latent) | `deploy.yml`'s concurrency group covers the whole run, so once production is on, staging waits behind the last production approval. A group per job and environment, as `migrate.yml` has. | 4th #28 | S |
+
+The review's suggested order: R1 to R11; then R13, so R12 and R14 to R18 can be ranked by what
+they cost; then R19 to R24. The cheapest are R4, R14, R26 and R34.
+
+### P3: when working in that area
+
+Kernel: `TaskSeries.CopiedKeys` copied into the repository's SQL; a lab visit makes its metrics
+before its own write, and its range sync reads every reading; faults thrown as
+`InvalidOperationException` answer 400; eleven `ParseDay` copies in the kernel and thirteen day
+parsers in the API, one of which ignores a bad `from=` and reads every occurrence; the Monday week
+start written five times; stale Dapper comments; a subject's first status inserted without
+`EventSql`. API: MCP areas registered by hand in four places; habits on `/mcp` say both "missed" and
+"not_followed"; the guide's status table and `RecordKey`'s list of versioned records are copies; 26
+of 141 routes declare 404; the agent-in-use predicate written four times; status words as literals.
+Database and tests: relation vocabularies not checked against their CHECKs; `RuleParityTests`' file
+list; two unused indexes and none on `subject(type)`; migrations' 30-second command timeout; tests
+on the real clock. CLI, Pilot and ops: `FoodCommand`'s time parsing, and a drink-score rule only
+`bsk` holds; `bsk home --json` reads twice; the Pilot's `bsk` calls on the UI thread and its polled
+timer read; stale notes (`verifying.md`'s `-OpenApiUrl`, "bsk is the only writer"); the two Fly
+configs unchecked, floating base images, `migrate-staging.yml` repeating `migrate.yml`. Web data:
+seam members no screen calls (`artifact`, `spaceRatings`, editing and deleting a rating); CR55's lint
+rule tied to two file paths; `CREATABLE_TYPES`, `PARENT_MAP`, `ATTR_KEYS_BY_TYPE`, `PERSON_ROLES` and
+`habitDay` without shared cases; `qk.recap` refreshed by nothing; the README, ten stale `TODO(api)`
+notes, the `bump` and `emit` nobody hears, and the dead draft `docs/pilot/production-ui-types.ts`
+(347 lines). Web screens: `MetricFields` and one `PhotoPicker`; a shared page-test harness (Map,
+Rewards, Food, People and Areas have no page test); three segmented controls, two Unsaved edits
+dialogs, settle-on-open written four ways, and a "G F" shortcut the palette shows that nothing
+handles; the list-plus-detail wiring five times, where Habits and Rewards don't pass
+`onOpenSubject`.
+
+### For Chris to decide
+
+- **B:** the mock's copy of the reward economy is about 3,200 lines in `lib/mock`, with about 1,800
+  lines of tests. Since 6152b61 no commit touched the copied folds, but both commits that changed
+  kernel code (CR105 and the People photo) also had to edit the mock, and CR106 moved Focus's rules
+  into the mock (`mock/dashboard.ts`) rather than deleting them.
+- **C:** unchanged.
+- **D (new):** the Goal and Habit gates (a Goal can't be Active without a target date; a Habit needs
+  a Goal or an Identity Statement) live in the web twice (`lib/subject-forms.ts`, and a copy in
+  `subject-detail.tsx` that can't run because the form refuses first) and in the Pilot, but not in
+  Application, so `bsk` and agents skip them. `ui-requirements.md` puts them in the app layer.
+  Either move them into Application, refused at every door, or record that they stay in the screens
+  and delete the web's copy that can't run.

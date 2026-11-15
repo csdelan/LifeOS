@@ -79,6 +79,7 @@ Overall per area (mean of its six dimensions) and the repo score (mean of the ar
 |---|---|---|---|---|---|---|---|---|---|
 | 2026-11-13 | 308b96d | Claude Opus 5.5, third review's area reviewers | 6.8 | 6.3 | 6.4 | 6.0 | 5.6 | 5.6 | **6.1** |
 | 2026-11-13 | 6152b61 | Claude Opus 5.5, fourth review's area reviewers | 6.7 | 6.9 | 6.3 | 6.4 | 6.2 | 6.0 | **6.4** |
+| 2026-11-14 | 1a079d3 | Claude Opus 5.5, fifth review's area reviewers | 6.5 | 6.8 | 6.4 | 6.4 | 6.3 | 6.3 | **6.5** |
 
 Each dimension, as the mean of the six areas:
 
@@ -86,6 +87,7 @@ Each dimension, as the mean of the six areas:
 |---|---|---|---|---|---|---|---|
 | 2026-11-13 | 308b96d | 6.3 | 5.5 | 6.7 | 5.4 | 5.5 | 7.3 |
 | 2026-11-13 | 6152b61 | 6.5 | 5.8 | 6.8 | 5.8 | 6.1 | 7.4 |
+| 2026-11-14 | 1a079d3 | 6.5 | 5.9 | 6.8 | 6.0 | 6.2 | 7.4 |
 
 Each area's six scores at 6152b61 (Structure, Single source, Safeguards, Scalability,
 Extendibility, Readability):
@@ -98,6 +100,17 @@ Extendibility, Readability):
 | CLI, Pilot and ops | 6.5, 5.5, 6.5, 6, 6.5, 7.5 | 6.4 |
 | Web data layer | 6, 5.5, 7, 5.5, 6, 7 | 6.2 |
 | Web screens | 6, 5.5, 5.5, 6, 6, 7 | 6.0 |
+
+Each area's six scores at 1a079d3, in the same order:
+
+| Area | Scores | Overall |
+|---|---|---|
+| Kernel | 7, 6, 6.5, 6, 6, 7.5 | 6.5 |
+| API and MCP | 7, 6.5, 7, 6, 6.5, 8 | 6.8 |
+| Database and .NET tests | 6.5, 5.5, 7.5, 5.5, 6, 7.5 | 6.4 |
+| CLI, Pilot and ops | 6.5, 5.5, 6.5, 6, 6.5, 7.5 | 6.4 |
+| Web data layer | 6, 6, 7, 6, 6, 7 | 6.3 |
+| Web screens | 6, 6, 6.5, 6.5, 6, 7 | 6.3 |
 
 Notes for 2026-11-13: each rater put their own uncertainty at ±0.5 (web data ±0.5 to ±1). The
 split scores were database 6.5 and tests 6.2; CLI 6.0, Pilot 5.0 and ops 6.5; live web data 6.0
@@ -118,6 +131,21 @@ scalability (5.8 each) are still the weakest. Twelve of the fourth review's prop
 built that day, each because its check covered the one case it fixed rather than the class
 (`docs/pilot/code-review-plan.md`, Fourth review).
 
+Notes for 1a079d3 (after CR91 to CR107): the same method and model, with prompts written afresh
+in the same shape (findings first, then scores against this file), and the context brought up to
+CR107. Unlike the earlier rounds, each reviewer was told its area's fourth-review scores, asked not
+to start from them and to say why wherever it differed by a point or more; that anchors more than
+before, so a small move here says less. Each put their uncertainty at ±0.5 (the kernel ±0.4). The
+repo rose 0.1, which is noise, and the measured numbers moved the same way (big-file share 22.2% to
+19.2%, the web's test ratio 0.35 to 0.37, .NET's held at 0.68). Web screens rose most (6.0 to 6.3),
+its safeguards 5.5 to 6.5 from the checks CR94 to CR107 added; web data rose 6.2 to 6.3; the kernel
+(6.7 to 6.5) and the API (6.9 to 6.8) fell within noise, from findings in code that was already
+there at 6152b61 (R5, R8, R19), and the CLI, Pilot and ops (6.4) and the database and tests (6.3 to
+6.4) held. The splits: database 6.5 and tests 6.3; CLI 6.8, Pilot 5.2 and ops 6.5; live web data 6.7
+and the mock 5.1. No area is at 7 yet; single source of truth (5.9) and scalability (6.0) are still
+the weakest. As in the fourth review, most new proposals finish a CR whose check covered its one case
+rather than the class (`docs/pilot/code-review-plan.md`, Fifth review).
+
 ### Measured numbers
 
 See `scripts/quality-metrics.ps1` for what each column counts. The rows before 2026-11-13 were
@@ -132,6 +160,7 @@ worked out afterwards from git.
 | 2026-11-13 | 308b96d | After CR27–CR57; first scores | 107,901 | 0.63 | 0.33 | 38 | 25.9% | 10,472 | production-ui-types.ts (2460) |
 | 2026-11-13 | da72df9 | After CR58–CR67 (third review's P0, P1) | 108,537 | 0.64 | 0.33 | 39 | 26.3% | 10,474 | production-ui-types.ts (2460) |
 | 2026-11-13 | 6152b61 | After CR68–CR90 (its P2); second scores | 104,556 | 0.68 | 0.35 | 34 | 22.2% | 12,722 | production-ui-types.ts (2097) |
+| 2026-11-14 | 1a079d3 | After CR91–CR107; third scores | 105,777 | 0.68 | 0.37 | 30 | 19.2% | 12,916 | production-ui-types.ts (2106) |
 
 From 6152b61 the API's count includes `src/LifeOs.Contracts`, which CR89 made from `src/LifeOs.Api/Read`.
 Part of that row's fall in prod lines, and the mock's rise, is CR84 moving about 2,200 lines that only
