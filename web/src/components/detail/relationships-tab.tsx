@@ -1,8 +1,10 @@
 import { useCallback, useState } from "react";
+import { ArrowDownIcon, ArrowUpIcon, Link2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SubjectSearchCombobox } from "@/components/subject-search-combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DetailSection } from "@/components/primitives/detail-section";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { DecisionRelationships } from "@/components/detail/decision-relationships";
@@ -64,18 +66,15 @@ export function RelationshipsTab({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {decision ? (
         <DecisionRelationships rels={data} onOpenSubject={onOpenSubject} />
       ) : (
         <>
-          <section className="rounded-xl bg-muted/40 p-3">
-            <h3 className="type-scale-section text-muted-foreground">Parents</h3>
-            <p className="mt-1 mb-2 text-xs text-muted-foreground">
-              Alignment edges — this is structure, not tagging.
-            </p>
+          <DetailSection title="Parents" icon={ArrowUpIcon}>
+            <p className="text-xs text-muted-foreground">Alignment edges — this is structure, not tagging.</p>
             {data?.parents.length ? (
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {data.parents.map((e) => (
                   <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
                     <TypeBadge type={e.type} />
@@ -87,17 +86,14 @@ export function RelationshipsTab({
             ) : (
               <p className="text-sm text-muted-foreground">No parents — unaligned for now.</p>
             )}
-          </section>
-          <section className="rounded-xl bg-muted/40 p-3">
-            <h3 className="type-scale-section text-muted-foreground">Children</h3>
+          </DetailSection>
+          <DetailSection title="Children" icon={ArrowDownIcon}>
             {data?.children.length ? (
-              <div className="mt-2 space-y-3">
+              <div className="space-y-3">
                 {Object.entries(grouped).map(([type, rows]) => (
                   <div key={type}>
-                    <p className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">
-                      {typeLabel(type as SubjectType)}
-                    </p>
-                    <ul className="space-y-1">
+                    <p className="mb-1 text-[0.8125rem] text-muted-foreground">{typeLabel(type as SubjectType)}</p>
+                    <ul className="space-y-1.5">
                       {rows.map((e) => (
                         <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
                           <TypeBadge type={e.type} />
@@ -109,14 +105,13 @@ export function RelationshipsTab({
                 ))}
               </div>
             ) : (
-              <p className="mt-2 text-sm text-muted-foreground">No children yet.</p>
+              <p className="text-sm text-muted-foreground">No children yet.</p>
             )}
-          </section>
+          </DetailSection>
         </>
       )}
-      <section>
-        <h3 className="type-scale-section text-muted-foreground">Add relationship</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
+      <DetailSection title="Add relationship" icon={Link2Icon}>
+        <p className="text-xs text-muted-foreground">
           {decision
             ? "Add an existing item to Context (what prompted it), Resulting work (what carries it out) or Replaces (an earlier Decision this one reversed). "
             : null}
@@ -124,7 +119,7 @@ export function RelationshipsTab({
           hidden unless you check Archived. This is a link between two items, not a
           tag.
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {decision ? (
             <>
               <span className="text-xs text-muted-foreground">Add to</span>
@@ -195,7 +190,7 @@ export function RelationshipsTab({
             Link
           </Button>
         </div>
-      </section>
+      </DetailSection>
     </div>
   );
 }

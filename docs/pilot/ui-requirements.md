@@ -522,6 +522,17 @@ the columns shown.
   URN, Area or tags, in any order; titles starting with it come first, archived items last;
   the best 50 show. Identity Statements, Goals, Projects and Tasks open on the Map as before;
   every other type opens in Browse on its type.
+- Overview layout (web, 2026-11-15): the detail's Overview is in titled groups. Free text
+  (description, statement, notes) comes first as prose, left out while empty until Edit; then
+  Details (status first, area last), Dates (When for an Appointment) and a Habit's loop, each a
+  card of label and value with the label in a column of its own once the panel is about 24rem
+  wide, above the value when narrower. The detail cards sit side by side when the panel is wider
+  still. Then Establishing and Streak (a Habit), Bounty, and Repeats near the end: a repeating
+  Task's pattern, its start, how it has gone and its repetitions in one card (a Habit's is
+  Schedule; an Appointment's holds Make occurrences, which had sat in the header). Edit uses the
+  same groups with the inputs in them; a hint or the required mark shows only while editing, and
+  Stop repeating, Repeat again and Mark missed wait until the edit is saved. The ID and Archive
+  close the tab. Relationships uses the same cards. Each group's title names it as a region.
 
 
 

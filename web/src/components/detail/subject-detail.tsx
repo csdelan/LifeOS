@@ -8,7 +8,6 @@ import {
   ImagePlusIcon,
   LayoutListIcon,
   Link2Icon,
-  PaperclipIcon,
   PlusIcon,
   RepeatIcon,
   TagIcon,
@@ -18,21 +17,14 @@ import { Button } from "@/components/ui/button";
 import { applyRelationshipWrites, relationshipWrites } from "@/lib/subject-save";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
 import { DateChip } from "@/components/primitives/date-chip";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { ListSkeleton } from "@/components/primitives/skeletons";
-import { SubjectTypeFields } from "@/components/create/subject-type-fields";
 import { useCreateActions } from "@/components/create/create-context";
-import { AttachmentChip } from "@/components/artifacts/attachment-chip";
-import { StreakGrid } from "@/components/habits/streak-grid";
 import { BountyChip } from "@/components/rewards/bounty-chip";
-import { BountySection } from "@/components/rewards/bounty-editor";
 import { TaskTimerPanel } from "@/components/timer/task-timer";
-import { MaterializePanel } from "@/components/appointments/materialize-panel";
-import { RepeatPanel } from "@/components/tasks/repeat-panel";
 import { CoverBanner } from "@/components/cover/cover-banner";
 import { CoverPicker } from "@/components/cover/cover-picker";
 import { PersonPhotoControl } from "@/components/people/person-photo";
@@ -44,13 +36,12 @@ import {
   useListItem,
   useRelations,
   useSubject,
-  useSubjectFiles,
   useSubjectTags,
   useWrites,
 } from "@/lib/queries";
-import { childTypesFor, defaultStatus, isTerminal, shortIdOf } from "@/lib/production-ui-types";
+import { childTypesFor, defaultStatus, isTerminal } from "@/lib/production-ui-types";
 import { bountyDirty, bountyProblem, bountyWrites, type BountyDraft } from "@/lib/bounty";
-import { habitStage, targetDirty, targetProblem, targetWrite, type TargetDraft } from "@/lib/establish";
+import { targetDirty, targetProblem, targetWrite, type TargetDraft } from "@/lib/establish";
 import { parseRecurrence, sameRecurrence } from "@/lib/recurrence";
 import { repeatLabel } from "@/lib/task-series";
 import {
@@ -68,7 +59,7 @@ import {
 import { RelationshipsTab } from "./relationships-tab";
 import { TagsTab } from "./tags-tab";
 import { HistoryTab } from "./history-tab";
-import { EstablishmentPanel } from "./establishment-panel";
+import { OverviewTab } from "./overview-tab";
 import { useWriteAction } from "@/lib/write-action";
 import { ReadFailed } from "@/components/primitives/read-state";
 import { useDirty } from "@/components/shell/unsaved-edits";
@@ -114,7 +105,6 @@ function ItemDetail({
   const { data: list } = useListItem(subjectId);
   const { data: rels } = useRelations(subjectId);
   const { data: tags } = useSubjectTags(subjectId);
-  const { data: files } = useSubjectFiles(subjectId);
   // Its habit row, read only for a habit, where this read every habit to find it (code review CR121).
   const { data: habitRow } = useHabit(subjectId, (data?.type ?? list?.type) === "Habit");
   const [editing, setEditing] = useState(false);
@@ -123,7 +113,6 @@ function ItemDetail({
   const [bountyDraft, setBountyDraft] = useState<BountyDraft>({});
   const [targetDraft, setTargetDraft] = useState<TargetDraft>({});
   const writes = useWrites();
-  const reported = useWriteAction({ report: "toast" });
   // A save is many writes in a row; inline runs one save at a time, so a second click or Enter
   // can't send them all again while the first is still going (code review CR60).
   const saving = useWriteAction({ report: "inline", fallback: SAVE_FAILED });
@@ -467,18 +456,13 @@ function ItemDetail({
             className="mt-3"
           />
         ) : null}
-        {subject.type === "Appointment" && parseAttrBag(subject.attributes).recurrence ? (
-          <MaterializePanel
-            seriesId={subject.id}
-            recurrence={parseAttrBag(subject.attributes).recurrence}
-            className="mt-3"
-          />
-        ) : null}
       </header>
 
       <Tabs value={tab} onValueChange={onTabChange} className="flex min-h-0 flex-1 flex-col gap-0">
-        <div className="shrink-0 border-b px-5">
-          <TabsList variant="line" className="w-full justify-start">
+        {/* The tabs' icons show only when the panel has room for them on one row: with them, the
+            five tabs wrapped onto two at the panel's usual width. */}
+        <div className="@container shrink-0 border-b px-5">
+          <TabsList variant="line" className="w-full justify-start [&_svg]:hidden @lg:[&_svg]:block">
             <TabsTrigger value="overview">
               <LayoutListIcon /> Overview
             </TabsTrigger>
@@ -498,96 +482,18 @@ function ItemDetail({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <TabsContent value="overview">
-            <div className="space-y-5">
-              <SubjectTypeFields form={form} editing={editing} repeating={repeating} />
-              {repeating ? (
-                <RepeatPanel subjectId={subject.id} repeating={repeating} onOpenSubject={onOpenSubject} />
-              ) : null}
-              {subject.type === "Habit" && habit ? (
-                <EstablishmentPanel
-                  habit={habit}
-                  editing={editing}
-                  draft={targetDraft}
-                  onChange={setTargetDraft}
-                />
-              ) : null}
-              <BountySection
-                key={`${subject.id}-${editing}`}
-                idPrefix={`bounty-${subject.id}`}
-                type={subject.type}
-                lines={bountyLines}
-                draft={bountyDraft}
-                onChange={setBountyDraft}
-                editing={editing}
-                note={
-                  series
-                    ? "Every repetition pays this, unless one has a price of its own."
-                    : subject.bountyFromSeries
-                      ? "The repeating task's price. A price set here is for this one only."
-                      : undefined
-                }
-              />
-              {(files ?? []).length > 0 ? (
-                <section>
-                  <p className="type-scale-section text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5">
-                      <PaperclipIcon className="size-3.5" aria-hidden />
-                      Files
-                    </span>
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Related documents and kept audio. Open plays the managed copy.
-                  </p>
-                  <ul className="mt-2 space-y-2">
-                    {(files ?? []).map((file) => (
-                      <li key={file.id}>
-                        <AttachmentChip artifact={file} />
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-              {subject.type === "Habit" ? (
-                <StreakGrid
-                  habitId={subject.id}
-                  allowsPartial={habit?.allowsPartial ?? true}
-                  onRecord={
-                    habit && habitStage(habit) === "planned"
-                      ? undefined
-                      : (date, state, note) => void reported.run(() => writes.adhere(subject.id, state, { on: date, note }))
-                  }
-                />
-              ) : null}
-              <Field label="ID">
-                <code className="text-[0.75rem] text-muted-foreground">{shortIdOf(subject.urn)}</code>
-              </Field>
-              {cfg.canArchive ? (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="type-scale-section text-muted-foreground">Archive</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      LifeOS archives, never deletes.
-                    </p>
-                    <div className="mt-2">
-                      {subject.archived ? (
-                        <Button variant="outline" size="sm" onClick={() => void reported.run(() => writes.restore(subject.id))}>
-                          Restore
-                        </Button>
-                      ) : (
-                        <Button variant="outline" size="sm" onClick={() => void reported.run(() => writes.archive(subject.id))}>
-                          Archive
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Areas are permanent — they are not archived or deleted.
-                </p>
-              )}
-            </div>
+            <OverviewTab
+              subject={subject}
+              form={form}
+              editing={editing}
+              habit={habit}
+              bountyLines={bountyLines}
+              bountyDraft={bountyDraft}
+              onBountyDraft={setBountyDraft}
+              targetDraft={targetDraft}
+              onTargetDraft={setTargetDraft}
+              onOpenSubject={onOpenSubject}
+            />
           </TabsContent>
           <TabsContent value="relationships">
             <RelationshipsTab subjectId={subject.id} type={subject.type} onOpenSubject={onOpenSubject} />
@@ -605,15 +511,6 @@ function ItemDetail({
           </TabsContent>
         </div>
       </Tabs>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <p className="type-scale-section text-muted-foreground">{label}</p>
-      {children}
     </div>
   );
 }

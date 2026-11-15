@@ -10,7 +10,7 @@ describe("MaterializePanel", () => {
   it("lets the day go from today to two years ahead, as the kernel allows", () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <MaterializePanel seriesId="series-1" recurrence='{"freq":"weekly","on":["mon"]}' />
+        <MaterializePanel seriesId="series-1" />
       </QueryClientProvider>,
     );
 

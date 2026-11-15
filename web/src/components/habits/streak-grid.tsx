@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { FlameIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DetailSection } from "@/components/primitives/detail-section";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -50,22 +52,22 @@ export function StreakGrid({
   while (cells.length % 7 !== 0) cells.push(null);
 
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between">
-        <p className="type-scale-section text-muted-foreground">Streak</p>
-        <div className="flex items-center gap-1">
+    <DetailSection
+      title="Streak"
+      icon={FlameIcon}
+      action={
+        <>
           <Button variant="ghost" size="xs" aria-label="Previous month" onClick={() => setMonth(addMonths(month, -1))}>
             Prev
           </Button>
-          <span className="min-w-28 text-center text-xs font-medium">
-            {formatMonth(month)}
-          </span>
+          <span className="min-w-28 text-center text-xs font-medium">{formatMonth(month)}</span>
           <Button variant="ghost" size="xs" aria-label="Next month" onClick={() => setMonth(addMonths(month, 1))}>
             Next
           </Button>
-        </div>
-      </div>
-      <div className="mb-2 flex flex-wrap gap-3 text-[0.6875rem] text-muted-foreground">
+        </>
+      }
+    >
+      <div className="flex flex-wrap gap-3 text-[0.6875rem] text-muted-foreground">
         <Legend className={HABIT_STATE_SURFACE.unrecorded} label="Unrecorded" />
         <Legend className={HABIT_STATE_SURFACE.followed} label="Followed" />
         <Legend className={HABIT_STATE_SURFACE.partial} label="Partial" />
@@ -92,7 +94,7 @@ export function StreakGrid({
           ),
         )}
       </div>
-    </div>
+    </DetailSection>
   );
 }
 

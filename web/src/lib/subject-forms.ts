@@ -36,10 +36,19 @@ export type FieldKind =
   | "attendees"
   | "recurrence";
 
+/**
+ * Where a field sits on an item's Overview: the text about it first, then its details and its
+ * dates, a habit's loop, and its repeat pattern together near the end. `fieldGroup` says which
+ * a field is in when it doesn't say itself.
+ */
+export type FieldGroup = "about" | "loop" | "details" | "when" | "repeat";
+
 export interface FieldDef {
   key: string;
   label: string;
   kind: FieldKind;
+  /** Its group on the Overview; left out, its kind decides (`fieldGroup`). */
+  group?: FieldGroup;
   required?: boolean;
   placeholder?: string;
   hint?: string;
@@ -238,6 +247,7 @@ const CONFIG: Partial<Record<SubjectType, TypeFormConfig>> = {
         key: "start",
         label: "Repeats from",
         kind: "date",
+        group: "repeat",
         hint: "The first date it repeats from. Empty: its due date, or today.",
         hideWhen: (v) => !isSeriesForm(v),
       },
@@ -358,7 +368,7 @@ const CONFIG: Partial<Record<SubjectType, TypeFormConfig>> = {
     canArchive: true,
     fields: [
       { key: "date", label: "Date", kind: "date" },
-      { key: "all_day", label: "All day", kind: "toggle" },
+      { key: "all_day", label: "All day", kind: "toggle", group: "when" },
       {
         key: "start",
         label: "Start",
@@ -387,12 +397,12 @@ const CONFIG: Partial<Record<SubjectType, TypeFormConfig>> = {
     hasArea: true,
     canArchive: true,
     fields: [
-      { key: "cue", label: "Cue", kind: "text", placeholder: "When the kettle boils…" },
-      { key: "routine", label: "Routine", kind: "text" },
-      { key: "reward", label: "Reward", kind: "text" },
+      { key: "cue", label: "Cue", kind: "text", placeholder: "When the kettle boils…", group: "loop" },
+      { key: "routine", label: "Routine", kind: "text", group: "loop" },
+      { key: "reward", label: "Reward", kind: "text", group: "loop" },
       { key: "recurrence", label: "Recurrence", kind: "recurrence" },
-      { key: "start", label: "Start date", kind: "date" },
-      { key: "end", label: "End date", kind: "date" },
+      { key: "start", label: "Start date", kind: "date", group: "repeat" },
+      { key: "end", label: "End date", kind: "date", group: "repeat" },
       { key: "allows_partial", label: "Allow partial credit", kind: "toggle" },
       {
         key: "parents",
@@ -475,6 +485,36 @@ export function visibleFields(type: SubjectType, mode: FormMode, values: Subject
     if (f.hideWhen?.(values)) return false;
     return true;
   });
+}
+
+/** A field's group on the Overview: its own, or by its kind (free text is "about", a date or time "when"). */
+export function fieldGroup(field: FieldDef): FieldGroup {
+  if (field.group) return field.group;
+  if (field.kind === "textarea") return "about";
+  if (field.kind === "date" || field.kind === "time") return "when";
+  if (field.kind === "recurrence") return "repeat";
+  return "details";
+}
+
+/**
+ * The fields in each group, in the order the type lists them, but for the details: those open
+ * with the status and end with the area, whatever the type. A group with none is left out.
+ */
+export function groupFields(fields: FieldDef[]): Partial<Record<FieldGroup, FieldDef[]>> {
+  const rank = (f: FieldDef) => (f.kind === "status" ? 0 : f.kind === "area" ? 2 : 1);
+  const out: Partial<Record<FieldGroup, FieldDef[]>> = {};
+  for (const field of fields) (out[fieldGroup(field)] ??= []).push(field);
+  out.details?.sort((a, b) => rank(a) - rank(b));
+  return out;
+}
+
+/** A group's title on the Overview. A Habit's repeat is its schedule; an Appointment's dates are when it is. */
+export function groupTitle(group: FieldGroup, type: SubjectType): string {
+  if (group === "loop") return "Habit loop";
+  if (group === "when") return type === "Appointment" ? "When" : "Dates";
+  if (group === "repeat") return type === "Habit" ? "Schedule" : "Repeats";
+  if (group === "about") return "About";
+  return "Details";
 }
 
 export function emptyFormValues(type: SubjectType, mode: FormMode = "create"): SubjectFormValues {

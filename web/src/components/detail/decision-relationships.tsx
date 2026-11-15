@@ -1,6 +1,6 @@
-import { useId } from "react";
 import { PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DetailSection } from "@/components/primitives/detail-section";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -153,15 +153,11 @@ function RelationGroup({
   empty?: string;
   onOpenSubject?: (id: string) => void;
 }) {
-  const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="rounded-xl bg-muted/40 p-3">
-      <h3 id={headingId} className="type-scale-section text-muted-foreground">
-        {title}
-      </h3>
-      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+    <DetailSection title={title}>
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       {rows.length > 0 ? (
-        <ul className="mt-2 space-y-1">
+        <ul className="space-y-1.5">
           {rows.map((e, i) => (
             <li
               key={`${e.relation}-${e.subjectId}-${i}`}
@@ -185,8 +181,8 @@ function RelationGroup({
           ))}
         </ul>
       ) : empty ? (
-        <p className="mt-2 text-sm text-muted-foreground">{empty}</p>
+        <p className="text-sm text-muted-foreground">{empty}</p>
       ) : null}
-    </section>
+    </DetailSection>
   );
 }

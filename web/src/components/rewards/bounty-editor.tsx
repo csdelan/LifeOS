@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { CoinsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DetailSection, PropertyList, PropertyRow } from "@/components/primitives/detail-section";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AmountFields } from "@/components/rewards/amount-fields";
@@ -131,36 +133,61 @@ function minutesWords(n: number): string {
   return Number.isInteger(n) && n > 1 ? `${n} minutes` : "minute";
 }
 
-/** Each trigger and what it pays, read-only; "default" marks the type default. */
-export function BountySummary({ lines, draft = {} }: { lines: BountyLine[]; draft?: BountyDraft }) {
+/**
+ * Each trigger and what it pays, read-only; "default" marks the type default. `rows` lays each
+ * out as a label and its value, as the detail's other groups are.
+ */
+export function BountySummary({
+  lines,
+  draft = {},
+  rows = false,
+}: {
+  lines: BountyLine[];
+  draft?: BountyDraft;
+  rows?: boolean;
+}) {
+  const paid = (line: BountyLine) => {
+    const typed = draftForLine(line, draft);
+    const amounts = draftAmounts(typed);
+    const custom = draft[line.trigger] ? !draftOnDefault(line, typed) : line.isCustom;
+    return (
+      <>
+        {Object.keys(amounts).length > 0 ? (
+          <BountyChip amounts={amounts} suffix={line.trigger === TIMED ? perMinutes(draftMinutes(typed)) : undefined} />
+        ) : (
+          <span className="text-[0.75rem] text-muted-foreground">pays nothing</span>
+        )}
+        {custom ? null : <span className="text-[0.6875rem] text-muted-foreground">default</span>}
+      </>
+    );
+  };
+  if (rows) {
+    return (
+      <PropertyList>
+        {lines.map((line) => (
+          <PropertyRow key={line.trigger} label={bountyTriggerTitle(line.trigger)}>
+            <div className="flex flex-wrap items-center gap-2">{paid(line)}</div>
+          </PropertyRow>
+        ))}
+      </PropertyList>
+    );
+  }
   return (
     <ul className="space-y-1">
-      {lines.map((line) => {
-        const typed = draftForLine(line, draft);
-        const amounts = draftAmounts(typed);
-        const custom = draft[line.trigger] ? !draftOnDefault(line, typed) : line.isCustom;
-        return (
-          <li key={line.trigger} className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-muted-foreground">{bountyTriggerTitle(line.trigger)}</span>
-            {Object.keys(amounts).length > 0 ? (
-              <BountyChip
-                amounts={amounts}
-                suffix={line.trigger === TIMED ? perMinutes(draftMinutes(typed)) : undefined}
-              />
-            ) : (
-              <span className="text-[0.75rem] text-muted-foreground">pays nothing</span>
-            )}
-            {custom ? null : <span className="text-[0.6875rem] text-muted-foreground">default</span>}
-          </li>
-        );
-      })}
+      {lines.map((line) => (
+        <li key={line.trigger} className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">{bountyTriggerTitle(line.trigger)}</span>
+          {paid(line)}
+        </li>
+      ))}
     </ul>
   );
 }
 
 /**
  * The Bounty section of a form: a summary with Change, which opens the editor. Shown for
- * the types that earn, once their lines have loaded.
+ * the types that earn, once their lines have loaded. `framed` makes it one of the detail's
+ * titled groups.
  */
 export function BountySection({
   idPrefix,
@@ -171,6 +198,7 @@ export function BountySection({
   editing,
   startOpen = false,
   note,
+  framed = false,
 }: {
   idPrefix: string;
   type: SubjectType;
@@ -181,34 +209,42 @@ export function BountySection({
   startOpen?: boolean;
   /** A line under the heading: where the price comes from (a repeating Task's, TASKS-3). */
   note?: string;
+  framed?: boolean;
 }) {
   const [open, setOpen] = useState(startOpen);
   if (lines.length === 0) return null;
   const showEditor = editing && open;
+  const change = editing ? (
+    <Button type="button" variant="outline" size="xs" aria-expanded={showEditor} onClick={() => setOpen((v) => !v)}>
+      {showEditor ? "Done" : "Change"}
+    </Button>
+  ) : null;
+  const body = (
+    <>
+      {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+      {showEditor ? (
+        <BountyEditor idPrefix={idPrefix} type={type} lines={lines} draft={draft} onChange={onChange} />
+      ) : (
+        <BountySummary lines={lines} draft={draft} rows={framed} />
+      )}
+    </>
+  );
+  if (framed) {
+    return (
+      <DetailSection title="Bounty" icon={CoinsIcon} action={change}>
+        {body}
+      </DetailSection>
+    );
+  }
   return (
     <section className="space-y-2" aria-labelledby={`${idPrefix}-heading`}>
       <div className="flex items-center justify-between gap-2">
         <p id={`${idPrefix}-heading`} className="type-scale-section text-muted-foreground">
           Bounty
         </p>
-        {editing ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            aria-expanded={showEditor}
-            onClick={() => setOpen((v) => !v)}
-          >
-            {showEditor ? "Done" : "Change"}
-          </Button>
-        ) : null}
+        {change}
       </div>
-      {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
-      {showEditor ? (
-        <BountyEditor idPrefix={idPrefix} type={type} lines={lines} draft={draft} onChange={onChange} />
-      ) : (
-        <BountySummary lines={lines} draft={draft} />
-      )}
+      {body}
     </section>
   );
 }

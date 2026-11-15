@@ -1,5 +1,6 @@
-import { PlayIcon } from "lucide-react";
+import { PlayIcon, SproutIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DetailSection } from "@/components/primitives/detail-section";
 import { Input } from "@/components/ui/input";
 import { ReadyToEstablish } from "@/components/habits/establish-dialog";
 import { useWrites } from "@/lib/queries";
@@ -36,10 +37,9 @@ export function EstablishmentPanel({
   const fields = establishment ? targetFields(establishment) : null;
   const problem = editing ? targetProblem(draft) : null;
   return (
-    <section className="rounded-xl bg-muted/40 p-3">
-      <p className="type-scale-section text-muted-foreground">Establishing</p>
+    <DetailSection title="Establishing" icon={SproutIcon}>
       {stage === "planned" ? (
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm">
             Planned — not tracked yet, so no day is scheduled or missed. Its days count from the
             day you start tracking it.
@@ -47,18 +47,18 @@ export function EstablishmentPanel({
           {editing ? null : <StartTracking habit={habit} />}
         </div>
       ) : stage === "established" ? (
-        <p className="mt-1 text-sm">
+        <p className="text-sm">
           Established — graduated from daily tracking. Each day you check it off under
           Maintaining still pays; move it back to Building to track it daily again.
         </p>
       ) : establishment ? (
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm">{establishmentProgress(establishment)}</p>
           {isReadyToEstablish(habit) ? <ReadyToEstablish habit={habit} /> : null}
         </div>
       ) : null}
       {editing && stage === "building" && fields ? (
-        <div className="mt-2 space-y-1">
+        <div className="space-y-1">
           <div
             role="group"
             aria-label="Establish target"
@@ -100,7 +100,7 @@ export function EstablishmentPanel({
           ) : null}
         </div>
       ) : null}
-    </section>
+    </DetailSection>
   );
 }
 /** Moves a Planned habit to Building: tracking starts today. */

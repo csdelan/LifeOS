@@ -226,6 +226,44 @@ describe("SubjectDetail repeating tasks (TASKS-3)", () => {
     await waitFor(() => expect(getState().details["task-trash"]?.status).toBe("Cancelled"), { timeout: 4000 });
     expect(await within(panel).findByRole("button", { name: "Repeat again" }, { timeout: 4000 })).toBeInTheDocument();
   });
+
+  it("keeps everything about the repeat in its one group, read and edited", async () => {
+    const user = userEvent.setup();
+    renderDetail("task-trash");
+    const panel = await screen.findByRole("region", { name: "Repeats" }, { timeout: 4000 });
+    // The pattern and its start sit with the history, not among the other fields.
+    expect(within(panel).getByText("Every Wednesday")).toBeInTheDocument();
+    expect(within(panel).getByText("Repeats from")).toBeInTheDocument();
+    expect(screen.getAllByText("Repeats from")).toHaveLength(1);
+    expect(within(screen.getByRole("region", { name: "Details" })).queryByText(/Repeat/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(within(panel).getByRole("group", { name: "Repeat" })).toBeInTheDocument();
+    expect(within(panel).getByLabelText("Repeats from")).toBeInTheDocument();
+    expect(await within(panel).findByRole("list", { name: "Repetitions" }, { timeout: 4000 })).toBeInTheDocument();
+    // A status changed here while editing would be undone by the Save, so it waits.
+    expect(within(panel).queryByRole("button", { name: "Stop repeating" })).not.toBeInTheDocument();
+  });
+});
+
+describe("SubjectDetail Overview groups", () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  it("puts details and dates in groups of their own, labels beside values, and leaves out empty text", async () => {
+    renderDetail("task-shoes");
+    const details = await screen.findByRole("region", { name: "Details" }, { timeout: 4000 });
+    expect(within(details).getByText("Priority")).toBeInTheDocument();
+    expect(within(details).getByText("High")).toBeInTheDocument();
+    const dates = screen.getByRole("region", { name: "Dates" });
+    expect(within(dates).getByText("Due date")).toBeInTheDocument();
+    expect(within(dates).queryByText("Priority")).not.toBeInTheDocument();
+    // A plain Task has no repeat to show until Edit.
+    expect(screen.queryByRole("region", { name: "Repeats" })).not.toBeInTheDocument();
+    // How to fill a field in is said only while editing.
+    expect(screen.queryByText(/A real deadline/)).not.toBeInTheDocument();
+  });
 });
 
 describe("SubjectDetail tag autocomplete", () => {

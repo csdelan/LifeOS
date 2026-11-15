@@ -14,7 +14,8 @@ import {
 import { RecurrenceEditor } from "@/components/create/recurrence-editor";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { DateChip } from "@/components/primitives/date-chip";
-import { useAreas, useParentOptions, usePeople } from "@/lib/queries";
+import { EmptyValue, PropertyRow } from "@/components/primitives/detail-section";
+import { useFieldOptions, type FieldLayout, type FieldOptions } from "@/components/create/field-options";
 import { defaultStatus, isTerminal, typeLabel } from "@/lib/production-ui-types";
 import type { SubjectType, TaskRepeat } from "@/lib/production-ui-types";
 import {
@@ -43,13 +44,7 @@ export function SubjectTypeFields({
   const mode = form.watch("mode");
   const values = form.watch();
   const fields = visibleFields(type, mode, values);
-  const { data: areas } = useAreas();
-  const { data: people } = usePeople();
-  // Only the types its pickers offer, a Task's parents being Goals and Projects, so the form never
-  // downloads every Task there is (code review CR76); and only the open ones, with any picked
-  // already, not every Goal and Project ever made (code review CR121).
-  const picked = [values.parent ?? "", ...(values.parents ?? [])];
-  const { data: parentSubjects } = useParentOptions(pickerTypes(fields), picked);
+  const options = useFieldOptions(fields, values);
 
   return (
     <div className="space-y-4">
@@ -60,9 +55,7 @@ export function SubjectTypeFields({
           form={form}
           editing={editing}
           type={type}
-          areas={areas ?? []}
-          people={people ?? []}
-          subjects={parentSubjects ?? []}
+          options={options}
           repeating={repeating}
         />
       ))}
@@ -70,31 +63,24 @@ export function SubjectTypeFields({
   );
 }
 
-/** The types the visible parent pickers offer, each once. */
-function pickerTypes(fields: ReturnType<typeof visibleFields>): SubjectType[] {
-  const types = fields.flatMap((f) => (f.kind === "parent" || f.kind === "parents" ? (f.parentTypes ?? []) : []));
-  return [...new Set(types)];
-}
-
-function FieldBlock({
+export function FieldBlock({
   field,
   form,
   editing,
   type,
-  areas,
-  people,
-  subjects,
+  options,
   repeating,
+  layout = "stacked",
 }: {
   field: FieldDef;
   form: UseFormReturn<SubjectFormValues>;
   editing: boolean;
   type: SubjectType;
-  areas: { id: string; urn: string; name: string }[];
-  people: { id: string; title: string; personKind?: string | null }[];
-  subjects: { id: string; title: string; type: SubjectType; archived: boolean }[];
+  options: FieldOptions;
   repeating?: TaskRepeat | null;
+  layout?: FieldLayout;
 }) {
+  const { areas, people, subjects } = options;
   const error = fieldError(form, field);
   const attr = form.watch(`attrs.${field.key}`) ?? "";
   const cfg = formConfig(type);
@@ -103,16 +89,25 @@ function FieldBlock({
     const statuses = statusOptionsFor(type, form.watch());
     const status = form.watch("status") || defaultStatus(type);
     if (!cfg.hasStatus || statuses.length === 0) {
-      return (
-        <p className="text-sm text-muted-foreground">
-          {type === "Value"
-            ? "Identity Statements have no status — they simply are."
-            : "This type has no status workflow."}
-        </p>
+      const none =
+        type === "Value" ? "Identity Statements have no status — they simply are." : "This type has no status workflow.";
+      return layout === "row" ? (
+        <PropertyRow label={field.label}>
+          <EmptyValue>{none}</EmptyValue>
+        </PropertyRow>
+      ) : (
+        <p className="text-sm text-muted-foreground">{none}</p>
       );
     }
     return (
-      <Field label={field.label} required={field.required} error={error} hint={field.hint}>
+      <Field
+        layout={layout}
+        editing={editing}
+        label={field.label}
+        required={field.required}
+        error={error}
+        hint={field.hint}
+      >
         {editing ? (
           <Select value={status} onValueChange={(v) => form.setValue("status", v, { shouldDirty: true })}>
             <SelectTrigger aria-label={field.label}>
@@ -137,7 +132,7 @@ function FieldBlock({
     const area = form.watch("area");
     const name = areas.find((a) => a.urn === area || a.id === area)?.name;
     return (
-      <Field label={field.label} error={error} hint={field.hint}>
+      <Field layout={layout} editing={editing} label={field.label} error={error} hint={field.hint}>
         {editing ? (
           <Select
             value={areaSelectValue(area)}
@@ -156,7 +151,7 @@ function FieldBlock({
             </SelectContent>
           </Select>
         ) : (
-          <p className="text-sm">{name || "—"}</p>
+          <p className="text-sm">{name || <EmptyValue />}</p>
         )}
       </Field>
     );
@@ -169,7 +164,14 @@ function FieldBlock({
     );
     const selected = subjects.find((s) => s.id === parent);
     return (
-      <Field label={field.label} required={field.required} error={error} hint={field.hint}>
+      <Field
+        layout={layout}
+        editing={editing}
+        label={field.label}
+        required={field.required}
+        error={error}
+        hint={field.hint}
+      >
         {editing ? (
           <SubjectCombobox
             className="w-full"
@@ -186,7 +188,7 @@ function FieldBlock({
             }
           />
         ) : (
-          <p className="text-sm">{selected?.title || "—"}</p>
+          <p className="text-sm">{selected?.title || <EmptyValue />}</p>
         )}
       </Field>
     );
@@ -200,7 +202,15 @@ function FieldBlock({
       (s) => !s.archived && (!field.parentTypes || field.parentTypes.includes(s.type)),
     );
     return (
-      <Field label={field.label} required={field.required} error={error} hint={field.hint}>
+      <Field
+        wide
+        layout={layout}
+        editing={editing}
+        label={field.label}
+        required={field.required}
+        error={error}
+        hint={field.hint}
+      >
         {editing ? (
           <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2">
             {options.map((s) => {
@@ -232,7 +242,7 @@ function FieldBlock({
             {options
               .filter((s) => selected.has(s.id))
               .map((s) => s.title)
-              .join(", ") || "—"}
+              .join(", ") || <EmptyValue />}
           </p>
         )}
       </Field>
@@ -243,7 +253,7 @@ function FieldBlock({
     const person = form.watch("person");
     const selected = people.find((p) => p.id === person);
     return (
-      <Field label={field.label} error={error} hint={field.hint}>
+      <Field layout={layout} editing={editing} label={field.label} error={error} hint={field.hint}>
         {editing ? (
           <Select
             value={person || NONE}
@@ -264,7 +274,7 @@ function FieldBlock({
           </Select>
         ) : (
           <p className="text-sm">
-            {selected ? `${selected.title}${selected.personKind === "ai" ? " (AI)" : ""}` : "—"}
+            {selected ? `${selected.title}${selected.personKind === "ai" ? " (AI)" : ""}` : <EmptyValue />}
           </p>
         )}
       </Field>
@@ -275,7 +285,7 @@ function FieldBlock({
     const raw = attr;
     const ids = new Set(raw.split(",").map((x) => x.trim()).filter(Boolean));
     return (
-      <Field label={field.label} hint={field.hint}>
+      <Field wide layout={layout} editing={editing} label={field.label} hint={field.hint}>
         {editing ? (
           <ul className="max-h-36 space-y-1 overflow-y-auto rounded-lg border p-2">
             {people.map((p) => {
@@ -307,7 +317,7 @@ function FieldBlock({
             {people
               .filter((p) => ids.has(p.id))
               .map((p) => p.title)
-              .join(", ") || "—"}
+              .join(", ") || <EmptyValue />}
           </p>
         )}
       </Field>
@@ -319,8 +329,11 @@ function FieldBlock({
     const keepsPattern = !!repeating?.isSeries && !!repeating.latestOccurrence;
     return (
       <Field
+        wide
+        layout={layout}
+        editing={editing}
         label={field.label}
-        hint={editing && keepsPattern ? "To stop it repeating, set its status to Cancelled." : field.hint}
+        hint={keepsPattern ? "To stop it repeating, set its status to Cancelled." : field.hint}
       >
         {editing ? (
           <RecurrenceEditor
@@ -330,7 +343,7 @@ function FieldBlock({
             onChange={(next) => form.setValue(`attrs.${field.key}`, next, { shouldDirty: true })}
           />
         ) : (
-          <p className="text-sm">{repeatText(attr)}</p>
+          <p className="text-sm">{repeatText(attr) ?? <EmptyValue />}</p>
         )}
       </Field>
     );
@@ -339,7 +352,7 @@ function FieldBlock({
   if (field.kind === "toggle") {
     const on = attr === "true";
     return (
-      <Field label={field.label} hint={field.hint}>
+      <Field layout={layout} editing={editing} label={field.label} hint={field.hint}>
         {editing ? (
           <Switch
             checked={on}
@@ -356,7 +369,14 @@ function FieldBlock({
 
   if (field.kind === "select") {
     return (
-      <Field label={field.label} required={field.required} error={error} hint={field.hint}>
+      <Field
+        layout={layout}
+        editing={editing}
+        label={field.label}
+        required={field.required}
+        error={error}
+        hint={field.hint}
+      >
         {editing ? (
           <Select
             value={attr || field.options?.[0]?.value}
@@ -374,7 +394,7 @@ function FieldBlock({
             </SelectContent>
           </Select>
         ) : (
-          <p className="text-sm">{attr || "—"}</p>
+          <p className="text-sm">{attr || <EmptyValue />}</p>
         )}
       </Field>
     );
@@ -382,7 +402,14 @@ function FieldBlock({
 
   if (field.kind === "textarea") {
     return (
-      <Field label={field.label} required={field.required} error={error} hint={field.hint}>
+      <Field
+        layout={layout}
+        editing={editing}
+        label={field.label}
+        required={field.required}
+        error={error}
+        hint={field.hint}
+      >
         {editing ? (
           <Textarea
             placeholder={field.placeholder}
@@ -391,9 +418,23 @@ function FieldBlock({
             onChange={(e) => form.setValue(`attrs.${field.key}`, e.target.value, { shouldDirty: true })}
           />
         ) : field.key === "statement" ? (
-          <p className="font-heading text-lg italic text-foreground/90">{attr || "No statement yet."}</p>
+          <p
+            className={cn(
+              "font-heading italic text-foreground/90",
+              layout === "block" ? "border-l-2 border-primary/50 pl-3 text-xl leading-snug" : "text-lg",
+            )}
+          >
+            {attr || "No statement yet."}
+          </p>
         ) : (
-          <p className="whitespace-pre-wrap text-sm text-foreground/85">{attr || "—"}</p>
+          <p
+            className={cn(
+              "whitespace-pre-wrap",
+              layout === "block" ? "text-[0.9375rem] leading-relaxed text-foreground" : "text-sm text-foreground/85",
+            )}
+          >
+            {attr || <EmptyValue />}
+          </p>
         )}
       </Field>
     );
@@ -401,11 +442,18 @@ function FieldBlock({
 
   if (field.kind === "date") {
     return (
-      <Field label={field.label} required={field.required} error={error} hint={field.hint}>
+      <Field
+        layout={layout}
+        editing={editing}
+        label={field.label}
+        required={field.required}
+        error={error}
+        hint={field.hint}
+      >
         {editing ? (
           <Input
             type="date"
-            className="w-48"
+            className="w-full max-w-48"
             aria-label={field.label}
             value={attr}
             onChange={(e) => form.setValue(`attrs.${field.key}`, e.target.value, { shouldDirty: true })}
@@ -425,7 +473,9 @@ function FieldBlock({
             closed={isTerminal(form.watch("status"))}
           />
         ) : (
-          <span className="text-sm text-muted-foreground">None</span>
+          <p className="text-sm">
+            <EmptyValue />
+          </p>
         )}
       </Field>
     );
@@ -433,24 +483,31 @@ function FieldBlock({
 
   if (field.kind === "time") {
     return (
-      <Field label={field.label} hint={field.hint}>
+      <Field layout={layout} editing={editing} label={field.label} hint={field.hint}>
         {editing ? (
           <Input
             type="time"
-            className="w-36"
+            className="w-full max-w-36"
             aria-label={field.label}
             value={attr}
             onChange={(e) => form.setValue(`attrs.${field.key}`, e.target.value, { shouldDirty: true })}
           />
         ) : (
-          <p className="text-sm">{attr || "—"}</p>
+          <p className="text-sm">{attr || <EmptyValue />}</p>
         )}
       </Field>
     );
   }
 
   return (
-    <Field label={field.label} required={field.required} error={error} hint={field.hint}>
+    <Field
+      layout={layout}
+      editing={editing}
+      label={field.label}
+      required={field.required}
+      error={error}
+      hint={field.hint}
+    >
       {editing ? (
         <Input
           placeholder={field.placeholder}
@@ -459,7 +516,7 @@ function FieldBlock({
           onChange={(e) => form.setValue(`attrs.${field.key}`, e.target.value, { shouldDirty: true })}
         />
       ) : (
-        <p className="text-sm">{attr || "—"}</p>
+        <p className="text-sm">{attr || <EmptyValue />}</p>
       )}
     </Field>
   );
@@ -475,22 +532,46 @@ function fieldError(form: UseFormReturn<SubjectFormValues>, field: FieldDef): st
   return attrs?.[field.key]?.message;
 }
 
+/**
+ * A field's label, its input or value, and its hint. The hint and the required mark say how to
+ * fill it in, so they show only while editing.
+ */
 function Field({
   label,
-  required,
+  required: isRequired,
   error,
-  hint,
+  hint: givenHint,
+  layout,
+  editing,
+  wide = false,
   children,
 }: {
   label: string;
   required?: boolean;
   error?: string;
   hint?: string;
+  layout: FieldLayout;
+  editing: boolean;
+  /** Its input needs the row's width (a checklist, the repeat pattern), so its label stays above it longer. */
+  wide?: boolean;
   children: React.ReactNode;
 }) {
+  const hint = editing ? givenHint : undefined;
+  const required = editing && isRequired;
+  if (layout === "row") {
+    return (
+      <PropertyRow label={label} required={required} hint={hint} error={error} wide={editing && wide}>
+        {children}
+      </PropertyRow>
+    );
+  }
   return (
     <div className="space-y-1.5">
-      <Label className={cn("type-scale-section text-muted-foreground")}>
+      <Label
+        className={cn(
+          layout === "block" ? "text-[0.8125rem] font-medium text-muted-foreground" : "type-scale-section text-muted-foreground",
+        )}
+      >
         {label}
         {required ? <span className="text-destructive"> *</span> : null}
       </Label>
@@ -501,7 +582,7 @@ function Field({
   );
 }
 
-function repeatText(raw?: string): string {
+function repeatText(raw?: string): string | null {
   const spec = parseRecurrence(raw);
-  return spec ? recurrenceLabel(spec) : "—";
+  return spec ? recurrenceLabel(spec) : null;
 }

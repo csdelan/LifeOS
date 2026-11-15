@@ -4,9 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { todayIso } from "@/lib/dates";
-import { addMonthsClamped, parseRecurrence, recurrenceLabel } from "@/lib/recurrence";
+import { addMonthsClamped } from "@/lib/recurrence";
 import { useWrites } from "@/lib/queries";
-import { cn } from "@/lib/utils";
 import { useWriteAction } from "@/lib/write-action";
 
 /** The furthest ahead Materialize reaches, as the kernel holds it (`AppointmentSeries.HorizonYears`). */
@@ -16,22 +15,13 @@ export const HORIZON_MONTHS = 24;
  * A repeating Appointment's Materialize (CAL-1, D10; the Pilot's "Materialize…"): makes its
  * occurrences through a date, each with its own status. Three months ahead by default, as the
  * Pilot offers, and at most two years (code review CR65); running it again only fills in dates
- * not made yet.
+ * not made yet. It sits in the detail's Repeats group, under the pattern.
  */
-export function MaterializePanel({
-  seriesId,
-  recurrence,
-  className,
-}: {
-  seriesId: string;
-  recurrence: string;
-  className?: string;
-}) {
+export function MaterializePanel({ seriesId, className }: { seriesId: string; className?: string }) {
   const writes = useWrites();
   const field = useId();
   const [through, setThrough] = useState(() => addMonthsClamped(todayIso(), 3));
   const { run, pending, error, setError } = useWriteAction({ fallback: "Materialize failed." });
-  const spec = parseRecurrence(recurrence);
 
   async function make() {
     if (!through) {
@@ -42,9 +32,8 @@ export function MaterializePanel({
   }
 
   return (
-    <div className={cn("rounded-lg bg-muted/40 p-3 ring-1 ring-foreground/10", className)}>
-      <p className="text-sm font-medium">{spec ? `Repeats: ${recurrenceLabel(spec)}` : "Repeats"}</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">
+    <div className={className}>
+      <p className="text-xs text-muted-foreground">
         Each occurrence is its own Appointment with its own status. Make them ahead through a day.
       </p>
       <div className="mt-2 flex flex-wrap items-end gap-2">

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { RepeatIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DetailSection, PropertyList, PropertyRow } from "@/components/primitives/detail-section";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { LIST_PAGE, MAX_READ } from "@/components/primitives/use-paged";
 import { formatDay, formatDayFull } from "@/lib/dates";
@@ -15,21 +16,28 @@ import { useWriteAction } from "@/lib/write-action";
 const FIRST_ROWS = 6;
 
 /**
- * A repeating Task on its detail (TASKS-3, D16): how it repeats, how it has gone ("3 of 4
- * done"), and its repetitions, latest first. On one repetition it says which date this one is
- * for and offers Mark missed, which closes it without paying, the next being made as for any
- * close. On the series it offers Stop repeating (Cancelled) and Repeat again, which counts
- * from today.
+ * A repeating Task on its detail (TASKS-3, D16), everything about its repeat in one group: how
+ * it repeats and from when, how it has gone ("3 of 4 done"), and its repetitions, latest first.
+ * On one repetition it says which date this one is for and offers Mark missed, which closes it
+ * without paying, the next being made as for any close. On the series it offers Stop repeating
+ * (Cancelled) and Repeat again, which counts from today. While the item is edited, the series'
+ * pattern and start are the form's inputs (`editRows`), and the buttons wait: a status changed
+ * here would be undone by the Save, as the Decision's are.
  */
 export function RepeatPanel({
   subjectId,
   repeating,
   onOpenSubject,
+  editing = false,
+  editRows,
 }: {
   subjectId: string;
   repeating: TaskRepeat;
   /** Opens another Task in the detail: the series, or one of its repetitions. */
   onOpenSubject?: (id: string) => void;
+  editing?: boolean;
+  /** The form's rows for the pattern and its start, shown in place of them while editing. */
+  editRows?: ReactNode;
 }) {
   const writes = useWrites();
   // The newest few repetitions, then a page more each Show more, read on the server: a daily
@@ -50,60 +58,77 @@ export function RepeatPanel({
     await changing.run(() => writes.setStatus(id, status), () => toast.success(done));
   }
 
-  return (
-    <section className="space-y-2" aria-labelledby={`repeat-${subjectId}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p id={`repeat-${subjectId}`} className="type-scale-section text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <RepeatIcon className="size-3.5" aria-hidden />
-            Repeats
-          </span>
-        </p>
-        {repeating.isSeries ? (
-          stopped ? (
-            <Button
-              variant="outline"
-              size="xs"
-              disabled={busy}
-              onClick={() => void move(repeating.seriesId, "Not started", "Repeating again, from today")}
-            >
-              Repeat again
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="xs"
-              disabled={busy}
-              onClick={() => void move(repeating.seriesId, "Cancelled", "Stopped repeating")}
-            >
-              Stop repeating
-            </Button>
-          )
-        ) : own && !isTerminal(own.status) && !own.archived ? (
-          <Button
-            variant="outline"
-            size="xs"
-            disabled={busy}
-            onClick={() => void move(subjectId, "Missed", "Marked missed")}
-          >
-            Mark missed
-          </Button>
-        ) : null}
-      </div>
+  const action = editing ? null : repeating.isSeries ? (
+    stopped ? (
+      <Button
+        variant="outline"
+        size="xs"
+        disabled={busy}
+        onClick={() => void move(repeating.seriesId, "Not started", "Repeating again, from today")}
+      >
+        Repeat again
+      </Button>
+    ) : (
+      <Button
+        variant="outline"
+        size="xs"
+        disabled={busy}
+        onClick={() => void move(repeating.seriesId, "Cancelled", "Stopped repeating")}
+      >
+        Stop repeating
+      </Button>
+    )
+  ) : own && !isTerminal(own.status) && !own.archived ? (
+    <Button variant="outline" size="xs" disabled={busy} onClick={() => void move(subjectId, "Missed", "Marked missed")}>
+      Mark missed
+    </Button>
+  ) : null;
 
-      <p className="text-sm">
-        {label}
-        {stopped ? <span className="text-muted-foreground"> · Stopped</span> : null}
-      </p>
+  return (
+    <DetailSection
+      title="Repeats"
+      icon={RepeatIcon}
+      action={
+        <>
+          {stopped ? <span className="text-xs font-medium text-muted-foreground">Stopped</span> : null}
+          {action}
+        </>
+      }
+    >
+      <PropertyList>
+        {editRows ?? (
+          <>
+            <PropertyRow label="Repeat">
+              <p>{label}</p>
+            </PropertyRow>
+            {repeating.isSeries && repeating.start ? (
+              <PropertyRow label="Repeats from">{formatDayFull(repeating.start)}</PropertyRow>
+            ) : null}
+          </>
+        )}
+        {!repeating.isSeries && repeating.occurrence ? (
+          <PropertyRow label="Repetition for">{formatDayFull(repeating.occurrence)}</PropertyRow>
+        ) : null}
+        <PropertyRow label="So far">
+          <p className="font-medium">
+            {seriesTally(counts)}
+            {counts.openCount > 0 ? (
+              <span className="font-normal text-muted-foreground"> · {counts.openCount} open</span>
+            ) : null}
+            {counts.nextDue && repeating.isSeries ? (
+              <span className="font-normal text-muted-foreground"> · next due {formatDay(counts.nextDue)}</span>
+            ) : null}
+          </p>
+        </PropertyRow>
+      </PropertyList>
+
       {repeating.isSeries ? (
         <p className="text-xs text-muted-foreground">
-          {repeating.start ? `Repeats from ${formatDayFull(repeating.start)}. ` : null}
-          Each repetition is a Task of its own, done or missed on its own; this one holds the
-          repeat, the price and the details they copy.
+          Each repetition is a Task of its own, done or missed on its own; this one holds the repeat,
+          the price and the details they copy.
         </p>
       ) : (
         <p className="text-xs text-muted-foreground">
-          {repeating.occurrence ? `This one is for ${formatDayFull(repeating.occurrence)}. ` : null}
           The repeat, the price and Stop repeating are on{" "}
           {onOpenSubject ? (
             <button
@@ -120,27 +145,20 @@ export function RepeatPanel({
         </p>
       )}
 
-      <p className="text-sm font-medium">
-        {seriesTally(counts)}
-        {counts.openCount > 0 ? (
-          <span className="font-normal text-muted-foreground"> · {counts.openCount} open</span>
-        ) : null}
-        {counts.nextDue && repeating.isSeries ? (
-          <span className="font-normal text-muted-foreground"> · next due {formatDay(counts.nextDue)}</span>
-        ) : null}
-      </p>
-
       {rows.length > 0 ? (
-        <ul className="space-y-1" aria-label="Repetitions">
-          {rows.map((row) => (
-            <RepetitionItem
-              key={row.id}
-              row={row}
-              current={row.id === subjectId}
-              onOpen={onOpenSubject && row.id !== subjectId ? () => onOpenSubject(row.id) : undefined}
-            />
-          ))}
-        </ul>
+        <div className="space-y-1">
+          <p className="text-[0.8125rem] text-muted-foreground">Repetitions</p>
+          <ul className="-mx-2 space-y-0.5" aria-label="Repetitions">
+            {rows.map((row) => (
+              <RepetitionItem
+                key={row.id}
+                row={row}
+                current={row.id === subjectId}
+                onOpen={onOpenSubject && row.id !== subjectId ? () => onOpenSubject(row.id) : undefined}
+              />
+            ))}
+          </ul>
+        </div>
       ) : null}
       {rows.length < count && limit < MAX_READ ? (
         <Button
@@ -155,7 +173,7 @@ export function RepeatPanel({
           Show fewer
         </Button>
       ) : null}
-    </section>
+    </DetailSection>
   );
 }
 
