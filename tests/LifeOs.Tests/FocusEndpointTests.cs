@@ -94,6 +94,27 @@ public sealed class FocusEndpointTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Focus_reads_only_the_goals_projects_and_tasks_it_shows()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
+        var today = await db.TodayAsync();
+        var goal = await NewAsync(host, new { type = SubjectTypes.Goal, title = "Ship the shed" });
+        var project = await NewAsync(host, new { type = SubjectTypes.Project, title = "Shed frame" });
+        var task = await NewAsync(host, new { type = SubjectTypes.Task, title = "Buy lumber" });
+
+        // Open by the status filter, since none has a status, but nothing Focus shows (CR119).
+        await NewAsync(host, new { type = SubjectTypes.Person, title = "Sam" });
+        await NewAsync(host, new { type = SubjectTypes.Area, title = "Home" });
+        await NewAsync(host, new { type = SubjectTypes.Value, title = "Finisher", attrs = new Dictionary<string, string> { ["statement"] = "I finish what I start." } });
+        await NewAsync(host, new { type = SubjectTypes.Appointment, title = "Dentist", attrs = new Dictionary<string, string> { ["date"] = today.AddDays(30).ToString("yyyy-MM-dd") } });
+
+        var day = await TestReaders.On(db.ConnectionString).Get<LifeOs.Api.Read.FocusReader>().DayAsync(today, cancellationToken: Ct);
+
+        Assert.Equal(new[] { goal, project, task }.Order(), day.Open.Select(s => s.Id).Order());
+    }
+
+    [Fact]
     public async Task With_no_active_goal_focus_says_so_and_offers_any_active_projects()
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);

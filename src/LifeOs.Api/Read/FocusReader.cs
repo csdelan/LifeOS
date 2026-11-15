@@ -17,6 +17,9 @@ public sealed class FocusReader(SubjectReader subjects, IHomeCalendar calendar)
     /// <summary>How many projects Focus lists under its goal.</summary>
     public const int ObjectiveLimit = 3;
 
+    /// <summary>The types <see cref="FocusDay.Open"/> holds: the goals, projects and Tasks Focus shows.</summary>
+    public static readonly IReadOnlyList<string> Types = [SubjectTypes.Goal, SubjectTypes.Project, SubjectTypes.Task];
+
     /// <summary>
     /// What's open on <paramref name="today"/>, leaving out <paramref name="hiddenTypes"/> (an
     /// agent's switched-off areas).
@@ -27,9 +30,11 @@ public sealed class FocusReader(SubjectReader subjects, IHomeCalendar calendar)
         var day = today.ToString("yyyy-MM-dd");
 
         // Only what's open, in SQL (code review CR54): a finished item, such as each repetition of
-        // a daily chore Chris has done, isn't read.
+        // a daily chore Chris has done, isn't read. And only the types Focus and life_snapshot
+        // show (code review CR119): an Appointment's occurrences two years ahead, and every
+        // Person, Area, Value and Metric, which have no status and so are always open, aren't.
         var open = await subjects.ListSubjectsAsync(
-            new SubjectFilter { Status = SubjectFilter.Open, HiddenTypes = hiddenTypes ?? [] }, cancellationToken);
+            new SubjectFilter { Types = Types, Status = SubjectFilter.Open, HiddenTypes = hiddenTypes ?? [] }, cancellationToken);
 
         // TASKS-1: due today or late, or its do-date has come (the Tasks page's Overdue and Today).
         var openTasks = open.Where(s => s.Type == SubjectTypes.Task && !StatusVocabulary.IsTerminal(s.Status)).ToList();
@@ -123,7 +128,7 @@ public sealed class FocusReader(SubjectReader subjects, IHomeCalendar calendar)
 
 /// <summary>What's open on <see cref="Today"/>, as <see cref="FocusReader.DayAsync"/> works it out.</summary>
 /// <param name="Today">The home day, <c>yyyy-MM-dd</c>.</param>
-/// <param name="Open">Every open, unarchived item.</param>
+/// <param name="Open">Every open, unarchived Goal, Project and Task (<see cref="FocusReader.Types"/>).</param>
 /// <param name="DueAndOverdue">Open Tasks due or scheduled on or before today, soonest first.</param>
 /// <param name="InProgress">Open Tasks In progress that aren't due.</param>
 /// <param name="Building">Each Building habit and its day.</param>

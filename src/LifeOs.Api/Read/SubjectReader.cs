@@ -98,6 +98,7 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
         var parameters = new
         {
             type = filter.Type,
+            types = filter.Types.ToArray(),
             includeArchived = filter.IncludeArchived,
             includeSeries = filter.IncludeSeries,
             excludeRepetitions = filter.ExcludeRepetitions,
@@ -117,6 +118,7 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
         await using var db = await OpenAsync(cancellationToken);
         return (await db.QueryAsync<SubjectListItem, BountyText, CoverText, SubjectListItem>(new CommandDefinition(ListSelect + """
             WHERE (@type::text IS NULL OR s.type = @type)
+              AND (cardinality(@types::text[]) = 0 OR s.type = ANY(@types))
               AND (@includeArchived OR NOT s.archived)
               AND (@includeSeries OR NOT bsk.is_task_series(s.type, s.attributes))
               AND NOT (@excludeRepetitions AND ser.id IS NOT NULL AND NOT bsk.is_task_series(s.type, s.attributes))
@@ -1009,6 +1011,13 @@ public sealed record SubjectFilter
 
     /// <summary>The canonical type, or null for every type.</summary>
     public string? Type { get; init; }
+
+    /// <summary>
+    /// Canonical types, any of which passes, or empty for every type (code review CR119): Focus
+    /// reads the three it shows, not every open item. <c>ScopedReadsTests</c> lists each read of
+    /// every type.
+    /// </summary>
+    public IReadOnlyCollection<string> Types { get; init; } = [];
 
     public bool IncludeArchived { get; init; }
 
