@@ -59,7 +59,8 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
                s.expected_cadence,
                s.next_review_at,
                s.attributes->>'person_kind' AS person_kind,
-               (s.attributes->>'vision_order')::int AS vision_order,
+               CASE WHEN s.attributes->>'vision_order' ~ '^\s*-?[0-9]{1,9}\s*$'
+                    THEN (s.attributes->>'vision_order')::int END AS vision_order,
                bsk.is_task_series(s.type, s.attributes) AS is_series,
                ser.id AS series_id,
                CASE WHEN ser.id IS NOT NULL THEN s.attributes->>'occurrence' END AS occurrence,

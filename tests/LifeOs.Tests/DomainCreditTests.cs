@@ -179,6 +179,11 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
         await connection.OpenAsync(Ct);
         await using var transaction = await connection.BeginTransactionAsync(Ct);
         var (multiplied, malformed) = ($"test:{Guid.NewGuid():N}", $"test:{Guid.NewGuid():N}");
+
+        // Migration 0069 refuses a base that isn't whole numbers (code review CR116); one written
+        // before it still reads, so it's written here as if before.
+        await connection.ExecuteAsync(new CommandDefinition(
+            "ALTER TABLE bsk.event DROP CONSTRAINT event_ledger_base_check;", transaction: transaction, cancellationToken: Ct));
         const string insert = """
             INSERT INTO bsk.event (kind, provenance, occurred_at, recorded_at, source_id, payload)
             VALUES ('ledger', 'declared', now(), now(), @source, @payload::jsonb);
@@ -212,8 +217,8 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
         Assert.Equal(
             [(Currencies.EnvironmentXp, 10L, 13L, "2003-04-01"), (Currencies.Xp, 5L, 5L, "2003-04-01")],
             rows.Select(r => (r.Currency, r.Base, r.Paid, r.CreditedOn)));
-        // A base that isn't an object reads as absent; a bad date as none (the reader then
-        // files it on the earn's own date).
+        // A base that isn't an object, from before the CHECK, reads as absent; a bad date as none
+        // (the reader then files it on the earn's own date).
         Assert.Equal((4L, 4L, (string?)null), (odd.Base, odd.Paid, odd.CreditedOn));
         Assert.Empty(await CreditRowsAsync(db, multiplied));
     }

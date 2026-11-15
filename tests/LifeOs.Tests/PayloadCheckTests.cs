@@ -24,6 +24,8 @@ public sealed class PayloadCheckTests(PostgresFixture postgres)
     [InlineData("ledger", """{"entry": "earn", "amounts": {"coins": 10, "health_xp": -25}, "subject_id": "6f1c2b9e-3a4d-4e5f-8a7b-1c2d3e4f5a6b"}""")]
     [InlineData("ledger", """{"entry": "redeem", "amounts": {"coins": -400}, "dollars": 4.00, "coin_rate": 0.01, "subject_id": ""}""")]
     [InlineData("ledger", """{"entry": "earn", "amounts": {}}""")]
+    [InlineData("ledger", """{"entry": "earn", "amounts": {"coins": 15}, "base": {"coins": 10}}""")]
+    [InlineData("ledger", """{"entry": "earn", "amounts": {"coins": 15}, "base": null}""")]
     public async Task A_payload_the_views_can_read_is_taken(string kind, string payload)
     {
         await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);
@@ -43,6 +45,10 @@ public sealed class PayloadCheckTests(PostgresFixture postgres)
     [InlineData("ledger", """{"entry": "earn", "amounts": {"coins": "10"}}""", "event_ledger_amounts_check")]
     [InlineData("ledger", """{"entry": "earn", "amounts": {"coins": 1e19}}""", "event_ledger_amounts_check")]
     [InlineData("ledger", """{"entry": "earn", "amounts": [10]}""", "event_ledger_amounts_check")]
+    [InlineData("ledger", """{"entry": "earn", "amounts": {"coins": 15}, "base": {"coins": 1.5}}""", "event_ledger_base_check")]
+    [InlineData("ledger", """{"entry": "earn", "amounts": {"coins": 15}, "base": {"coins": "10"}}""", "event_ledger_base_check")]
+    [InlineData("ledger", """{"entry": "earn", "amounts": {"coins": 15}, "base": {"coins": 1e19}}""", "event_ledger_base_check")]
+    [InlineData("ledger", """{"entry": "earn", "amounts": {"coins": 15}, "base": [10]}""", "event_ledger_base_check")]
     public async Task A_payload_a_view_would_fail_to_cast_is_refused(string kind, string payload, string constraint)
     {
         await using var database = await DomainTestDatabase.CreateAsync(postgres, Ct);

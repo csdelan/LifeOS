@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0068 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0069 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -74,6 +74,7 @@ CREATE TABLE bsk.event (
     CONSTRAINT event_derived_has_sources CHECK (((provenance <> 'derived'::text) OR (cardinality(derived_from) >= 1))),
     CONSTRAINT event_kind_check CHECK ((kind = ANY (ARRAY['journal'::text, 'note'::text, 'voice'::text, 'idea_session'::text, 'observation'::text, 'activity'::text, 'measurement'::text, 'interaction'::text, 'state_change'::text, 'archive_change'::text, 'triage'::text, 'ledger'::text, 'attribute_change'::text]))),
     CONSTRAINT event_ledger_amounts_check CHECK (((kind <> 'ledger'::text) OR ((jsonb_typeof((payload -> 'amounts'::text)) = 'object'::text) AND (NOT (payload @? '$."amounts".*?(((@.type() != "number" || @.floor() != @) || @ > 1000000000000000) || @ < -1000000000000000)'::jsonpath))))) NOT VALID,
+    CONSTRAINT event_ledger_base_check CHECK (((kind <> 'ledger'::text) OR (COALESCE(jsonb_typeof((payload -> 'base'::text)), 'null'::text) = 'null'::text) OR ((jsonb_typeof((payload -> 'base'::text)) = 'object'::text) AND (NOT (payload @? '$."base".*?(((@.type() != "number" || @.floor() != @) || @ > 1000000000000000) || @ < -1000000000000000)'::jsonpath))))) NOT VALID,
     CONSTRAINT event_ledger_coin_rate_check CHECK (((kind <> 'ledger'::text) OR (jsonb_typeof((payload -> 'coin_rate'::text)) = ANY (ARRAY['number'::text, 'null'::text])))) NOT VALID,
     CONSTRAINT event_ledger_dollars_check CHECK (((kind <> 'ledger'::text) OR (jsonb_typeof((payload -> 'dollars'::text)) = ANY (ARRAY['number'::text, 'null'::text])))) NOT VALID,
     CONSTRAINT event_ledger_subject_id_check CHECK (((kind <> 'ledger'::text) OR bsk.is_uuid_text(NULLIF((payload ->> 'subject_id'::text), ''::text)))) NOT VALID,
@@ -468,16 +469,16 @@ CREATE VIEW bsk.v_fast AS
           WHERE e.kind = 'activity'::text AND jsonb_exists(e.payload, 'fast'::text) AND jsonb_typeof(e.payload -> 'fast'::text) = 'object'::text AND ((e.payload -> 'fast'::text) ->> 'id'::text) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text
         ), live AS (
          SELECT v.fast_id,
-            (v.f ->> 'started_at'::text)::timestamp with time zone AS started_at,
+            bsk.try_to_timestamptz(v.f ->> 'started_at'::text) AS started_at,
                 CASE
-                    WHEN jsonb_typeof(v.f -> 'ended_at'::text) = 'string'::text THEN (v.f ->> 'ended_at'::text)::timestamp with time zone
+                    WHEN jsonb_typeof(v.f -> 'ended_at'::text) = 'string'::text THEN bsk.try_to_timestamptz(v.f ->> 'ended_at'::text)
                     ELSE NULL::timestamp with time zone
                 END AS ended_at,
             v.recorded_at,
             v.event_id,
             v.fast_key
            FROM version v
-          WHERE v.rn = 1 AND COALESCE(v.f ->> 'voided'::text, 'false'::text) <> 'true'::text AND jsonb_typeof(v.f -> 'started_at'::text) = 'string'::text
+          WHERE v.rn = 1 AND COALESCE(v.f ->> 'voided'::text, 'false'::text) <> 'true'::text AND jsonb_typeof(v.f -> 'started_at'::text) = 'string'::text AND bsk.try_to_timestamptz(v.f ->> 'started_at'::text) IS NOT NULL
         ), meal_time AS MATERIALIZED (
          SELECT m.eaten_at
            FROM bsk.v_meal m
@@ -1017,16 +1018,16 @@ CREATE VIEW bsk.v_oura_tag AS
     bsk.try_to_date(t ->> 'end_day'::text) AS end_day,
     NULLIF(btrim(t ->> 'type_code'::text), ''::text) AS type_code,
     NULLIF(btrim(t ->> 'custom_name'::text), ''::text) AS custom_name,
-    (t ->> 'start'::text)::timestamp with time zone AS started_at,
+    bsk.try_to_timestamptz(t ->> 'start'::text) AS started_at,
         CASE
-            WHEN jsonb_typeof(t -> 'end'::text) = 'string'::text THEN (t ->> 'end'::text)::timestamp with time zone
+            WHEN jsonb_typeof(t -> 'end'::text) = 'string'::text THEN bsk.try_to_timestamptz(t ->> 'end'::text)
             ELSE NULL::timestamp with time zone
         END AS ended_at,
     NULLIF(btrim(t ->> 'comment'::text), ''::text) AS comment,
     recorded_at AS synced_at,
     event_id
    FROM version v
-  WHERE rn = 1 AND COALESCE(t ->> 'voided'::text, 'false'::text) <> 'true'::text AND bsk.try_to_date(t ->> 'day'::text) IS NOT NULL AND jsonb_typeof(t -> 'start'::text) = 'string'::text;
+  WHERE rn = 1 AND COALESCE(t ->> 'voided'::text, 'false'::text) <> 'true'::text AND bsk.try_to_date(t ->> 'day'::text) IS NOT NULL AND jsonb_typeof(t -> 'start'::text) = 'string'::text AND bsk.try_to_timestamptz(t ->> 'start'::text) IS NOT NULL;
 
 -- Flattened People-association links (attributes.people): which Person is involved in which subject, and in what role. A property, not an alignment edge.
 CREATE VIEW bsk.v_person_association AS
@@ -1365,8 +1366,8 @@ CREATE VIEW bsk.v_sleep_period AS
  SELECT s ->> 'id'::text AS period_id,
     bsk.try_to_date(s ->> 'day'::text) AS day,
     COALESCE(s ->> 'type'::text, 'unknown'::text) AS type,
-    (s ->> 'start'::text)::timestamp with time zone AS started_at,
-    (s ->> 'end'::text)::timestamp with time zone AS ended_at,
+    bsk.try_to_timestamptz(s ->> 'start'::text) AS started_at,
+    bsk.try_to_timestamptz(s ->> 'end'::text) AS ended_at,
     bsk.json_int(s -> 'in_bed_s'::text) AS in_bed_s,
     bsk.json_int(s -> 'asleep_s'::text) AS asleep_s,
     bsk.json_int(s -> 'deep_s'::text) AS deep_s,
@@ -1381,7 +1382,7 @@ CREATE VIEW bsk.v_sleep_period AS
     recorded_at AS synced_at,
     event_id
    FROM version v
-  WHERE rn = 1 AND COALESCE(s ->> 'voided'::text, 'false'::text) <> 'true'::text AND (COALESCE(s ->> 'type'::text, ''::text) <> ALL (ARRAY['rest'::text, 'deleted'::text])) AND bsk.try_to_date(s ->> 'day'::text) IS NOT NULL AND jsonb_typeof(s -> 'start'::text) = 'string'::text AND jsonb_typeof(s -> 'end'::text) = 'string'::text;
+  WHERE rn = 1 AND COALESCE(s ->> 'voided'::text, 'false'::text) <> 'true'::text AND (COALESCE(s ->> 'type'::text, ''::text) <> ALL (ARRAY['rest'::text, 'deleted'::text])) AND bsk.try_to_date(s ->> 'day'::text) IS NOT NULL AND jsonb_typeof(s -> 'start'::text) = 'string'::text AND jsonb_typeof(s -> 'end'::text) = 'string'::text AND bsk.try_to_timestamptz(s ->> 'start'::text) IS NOT NULL AND bsk.try_to_timestamptz(s ->> 'end'::text) IS NOT NULL;
 
 -- HOME-1, HOME-4 (D18): one row per Space subject — its name, weight (1-10) and pace (1-5), each 3 when missing or malformed, when it was archived (null while it is not), and its shots (attributes.shots, [] when missing). The Home Score is computed in C# from this and bsk.v_space_rating.
 CREATE VIEW bsk.v_space AS
@@ -1720,12 +1721,12 @@ CREATE VIEW bsk.v_workout AS
          SELECT v.w ->> 'id'::text AS workout_id,
             bsk.try_to_date(v.w ->> 'day'::text) AS day,
             v.w,
-            (v.w ->> 'start'::text)::timestamp with time zone AS started_at,
-            (v.w ->> 'end'::text)::timestamp with time zone AS ended_at,
+            bsk.try_to_timestamptz(v.w ->> 'start'::text) AS started_at,
+            bsk.try_to_timestamptz(v.w ->> 'end'::text) AS ended_at,
             v.recorded_at,
             v.event_id
            FROM version v
-          WHERE v.rn = 1 AND COALESCE(v.w ->> 'voided'::text, 'false'::text) <> 'true'::text AND jsonb_typeof(v.w -> 'start'::text) = 'string'::text AND jsonb_typeof(v.w -> 'end'::text) = 'string'::text
+          WHERE v.rn = 1 AND COALESCE(v.w ->> 'voided'::text, 'false'::text) <> 'true'::text AND jsonb_typeof(v.w -> 'start'::text) = 'string'::text AND jsonb_typeof(v.w -> 'end'::text) = 'string'::text AND bsk.try_to_timestamptz(v.w ->> 'start'::text) IS NOT NULL AND bsk.try_to_timestamptz(v.w ->> 'end'::text) IS NOT NULL
         ), note AS (
          SELECT DISTINCT ON (((e.payload -> 'workout_note'::text) ->> 'workout'::text)) (e.payload -> 'workout_note'::text) ->> 'workout'::text AS workout_id,
             NULLIF(btrim((e.payload -> 'workout_note'::text) ->> 'text'::text), ''::text) AS text,
@@ -1971,7 +1972,10 @@ CREATE OR REPLACE FUNCTION bsk.json_int(value jsonb)
  LANGUAGE sql
  IMMUTABLE
 AS $function$
-    SELECT CASE WHEN jsonb_typeof(value) = 'number' THEN round((value #>> '{}')::numeric)::int END;
+    SELECT CASE
+        WHEN jsonb_typeof(value) = 'number' AND abs((value #>> '{}')::numeric) < 2147483647.5
+            THEN round((value #>> '{}')::numeric)::int
+    END;
 $function$;
 
 -- A jsonb number as numeric; null for anything else.

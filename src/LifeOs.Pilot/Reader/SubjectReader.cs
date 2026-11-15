@@ -52,7 +52,8 @@ public sealed class SubjectReader(string connectionString)
                    s.expected_cadence,
                    s.next_review_at,
                    s.attributes->>'person_kind' AS person_kind,
-                   (s.attributes->>'vision_order')::int AS vision_order
+                   CASE WHEN s.attributes->>'vision_order' ~ '^\s*-?[0-9]{1,9}\s*$'
+                        THEN (s.attributes->>'vision_order')::int END AS vision_order
             FROM bsk.v_subject s
             LEFT JOIN bsk.v_subject_current c ON c.subject_id = s.id
             LEFT JOIN bsk.v_area a ON a.urn = s.area
