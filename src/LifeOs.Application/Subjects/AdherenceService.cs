@@ -24,7 +24,7 @@ namespace LifeOs.Application.Subjects;
 /// </summary>
 public sealed class AdherenceService(
     SubjectService subjects, ISubjectRepository repository, IActivityWriter writer, RewardService rewards,
-    IClock clock, IHomeCalendar calendar, EventSource eventSource)
+    IClock clock, IHomeCalendar calendar, EventSource eventSource, AfterCommit afterCommit)
 {
     /// <summary>
     /// Records <paramref name="result"/> for the habit's occurrence on
@@ -111,8 +111,14 @@ public sealed class AdherenceService(
             [new SubjectEventEdge(habit.Id, relation, Provenances.Declared)],
             cancellationToken);
 
-        var earned = await rewards.ReconcileWithProgressAsync(habit, eventId, cancellationToken);
-        return new AdherenceResult(eventId, habit, normalizedResult, day, earned.Awards, earned.Progress);
+        // The day is written: its reconcile can be pending, never a refusal (code review CR113).
+        var earned = await afterCommit.RunAsync(
+            "the reward reconcile", habit.Urn,
+            ct => rewards.ReconcileWithProgressAsync(habit, eventId, ct), Earned.Nothing);
+        return new AdherenceResult(eventId, habit, normalizedResult, day, earned.Value.Awards, earned.Value.Progress)
+        {
+            FollowUpsPending = earned.Pending,
+        };
     }
 
     private async Task<bool> AllowsPartialAsync(Guid habitId, CancellationToken cancellationToken)
@@ -128,4 +134,8 @@ public sealed class AdherenceService(
 /// </summary>
 public sealed record AdherenceResult(
     Guid EventId, SubjectRef Habit, string Result, DateOnly Occurrence, IReadOnlyList<Award> Awards,
-    IReadOnlyList<DomainChange> Progress);
+    IReadOnlyList<DomainChange> Progress)
+{
+    /// <summary>The day is written, but its reconcile failed and is left to the catch-up (CR113).</summary>
+    public bool FollowUpsPending { get; init; }
+}

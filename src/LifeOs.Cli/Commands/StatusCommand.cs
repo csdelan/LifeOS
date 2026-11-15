@@ -54,10 +54,10 @@ internal static class StatusCommand
                 else
                 {
                     Console.WriteLine(
-                        $"Recorded status '{result.Status}' for {result.Subject.Urn} " +
-                        $"(state_change {result.EventId}); run `bsk rebuild` to refresh the projection.");
+                        $"Recorded status '{result.Status}' for {result.Subject.Urn} (state_change {result.EventId}).");
                     RewardOutput.WriteAwards(result.Awards);
                     RewardOutput.WriteProgress(result.Progress);
+                    RewardOutput.WritePending(result.FollowUpsPending);
                 }
 
                 return 0;

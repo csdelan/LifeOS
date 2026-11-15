@@ -23,7 +23,7 @@ namespace LifeOs.Application.Subjects;
 /// </para>
 /// </summary>
 public sealed class AttributeService(
-    SubjectService subjects, ISubjectRepository repository, TaskSeriesService taskSeries)
+    SubjectService subjects, ISubjectRepository repository, TaskSeriesService taskSeries, AfterCommit afterCommit)
 {
     /// <summary>
     /// Sets or removes attributes on the subject named by <paramref name="reference"/>
@@ -106,6 +106,9 @@ public sealed class AttributeService(
 
         var setKeys = patch.Select(pair => pair.Key).ToList();
 
+        // The edit is written: carrying it to a series' repetitions can be pending, never a
+        // refusal (code review CR113).
+        var pending = false;
         if (subject.Type == SubjectTypes.Task)
         {
             if (edit is not null)
@@ -121,16 +124,20 @@ public sealed class AttributeService(
                     values[key] = null;
                 }
 
-                await taskSeries.FollowAsync(edit, values, cancellationToken);
+                pending |= (await afterCommit.RunAsync(
+                    "carrying the edit to the open repetitions", subject.Urn,
+                    ct => taskSeries.FollowAsync(edit, values, ct), 0)).Pending;
             }
 
             if (setKeys.Concat(removed).Any(k => k is Recurrence.AttributeKey or TaskSeries.StartKey))
             {
-                await taskSeries.AfterPatternAsync(subject, cancellationToken: cancellationToken);
+                pending |= (await afterCommit.RunAsync(
+                    "re-planning the repetitions", subject.Urn,
+                    ct => taskSeries.AfterPatternAsync(subject, cancellationToken: ct), (IReadOnlyList<SubjectRef>)[])).Pending;
             }
         }
 
-        return new AttributeUpdateResult(subject, setKeys, removed);
+        return new AttributeUpdateResult(subject, setKeys, removed) { FollowUpsPending = pending };
     }
 }
 
@@ -139,4 +146,8 @@ public sealed record AttributeAssignment(string Key, string? Value);
 
 /// <summary>The outcome of a <c>set</c>: the subject and which keys were set / removed.</summary>
 public sealed record AttributeUpdateResult(
-    SubjectRef Subject, IReadOnlyList<string> SetKeys, IReadOnlyList<string> RemovedKeys);
+    SubjectRef Subject, IReadOnlyList<string> SetKeys, IReadOnlyList<string> RemovedKeys)
+{
+    /// <summary>The edit is written, but carrying it to a series' repetitions failed and is left to the catch-up (CR113).</summary>
+    public bool FollowUpsPending { get; init; }
+}

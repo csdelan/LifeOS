@@ -61,6 +61,7 @@ internal static class ArchiveCommand
                 {
                     var verb = result.Archived ? "Archived" : "Restored";
                     Console.WriteLine($"{verb} {result.Subject.Urn} (archive_change {result.EventId}).");
+                    RewardOutput.WritePending(result.FollowUpsPending);
                 }
 
                 return 0;

@@ -5,7 +5,7 @@ import { ApiRequestError } from "@/lib/live/http";
 import { createMockWriteClient } from "@/lib/mock/write-client";
 import type { LifeOsWriteClient } from "@/lib/production-ui-types";
 import { qk } from "@/lib/query-keys";
-import { decorateWrites, writeEffects } from "@/lib/write-effects";
+import { decorateWrites, LANDED_UNSHOWN, writeEffects } from "@/lib/write-effects";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -49,6 +49,22 @@ describe("the write effects", () => {
       const effect = writeEffects[name] as { optimistic?: unknown; refreshesOnFailure?: string };
       expect(effect.optimistic ?? effect.refreshesOnFailure).toBeTruthy();
     }
+  });
+
+  it("answer a write that landed as landed, even when what it shows afterwards fails (CR113)", async () => {
+    const qc = new QueryClient();
+    const client = createMockWriteClient();
+    const answer = { subject: { id: "s1" }, awards: [], progress: [] };
+    vi.spyOn(client, "setStatus").mockResolvedValue(answer as never);
+    vi.spyOn(toast, "success").mockImplementation(() => {
+      throw new Error("The toaster is gone.");
+    });
+    const warned = vi.spyOn(toast, "warning").mockImplementation(() => 1);
+    const refreshed = vi.spyOn(qc, "invalidateQueries");
+
+    await expect(decorateWrites(client, qc).setStatus("s1", "Completed")).resolves.toBe(answer);
+    expect(warned).toHaveBeenCalledWith(LANDED_UNSHOWN);
+    expect(refreshed).toHaveBeenCalled();
   });
 
   it("refresh after a 409, since another window changed what was shown", async () => {

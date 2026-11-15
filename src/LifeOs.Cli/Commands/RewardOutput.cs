@@ -18,6 +18,20 @@ internal static class RewardOutput
         => string.Join(", ", amounts.Select(kv =>
             $"{(signed && kv.Value > 0 ? "+" : "")}{kv.Value} {Currencies.LabelFor(kv.Key)}"));
 
+    /// <summary>
+    /// What a write says when it landed but a follow-up after it failed (code review CR113): the
+    /// API catches up as it starts, and these verbs do it now.
+    /// </summary>
+    public static void WritePending(bool pending)
+    {
+        if (pending)
+        {
+            Console.WriteLine(
+                "Saved, but its rewards or repetitions didn't follow yet: they catch up when the API next " +
+                "starts, or now with `bsk rewards reconcile` and `bsk tasks settle`.");
+        }
+    }
+
     /// <summary>Dollars to the cent: <c>$1,250.00</c>.</summary>
     public static string Usd(decimal value) => "$" + value.ToString("#,0.00", CultureInfo.InvariantCulture);
 

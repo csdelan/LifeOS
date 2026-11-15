@@ -74,6 +74,7 @@ internal static class AdhereCommand
                         $"Recorded {recorded.Result} for {recorded.Habit.Urn} on {recorded.Occurrence:yyyy-MM-dd}.");
                     RewardOutput.WriteAwards(recorded.Awards);
                     RewardOutput.WriteProgress(recorded.Progress);
+                    RewardOutput.WritePending(recorded.FollowUpsPending);
                 }
 
                 return 0;

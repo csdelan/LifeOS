@@ -324,7 +324,8 @@ public sealed class RewardHabitTests(ClassDatabase classDb) : IClassFixture<Clas
             kernel.Rewards,
             new TestClock(beforeOpening),
             kernel.Provider.GetRequiredService<IHomeCalendar>(),
-            new EventSource(KernelSources.Cli));
+            new EventSource(KernelSources.Cli),
+            kernel.Provider.GetRequiredService<AfterCommit>());
 
         var recorded = await backdated.RecordAsync(
             habit.Urn, AdherenceResults.Followed, DateOnly.FromDateTime(beforeOpening.UtcDateTime), cancellationToken: Ct);

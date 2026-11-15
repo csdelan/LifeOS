@@ -68,6 +68,7 @@ internal static class SetCommand
                     }
 
                     Console.WriteLine($"Updated {result.Subject.Urn}: {string.Join("; ", parts)}.");
+                    RewardOutput.WritePending(result.FollowUpsPending);
                 }
 
                 return 0;

@@ -29,7 +29,7 @@ namespace LifeOs.Application.Subjects;
 /// </summary>
 public sealed class StatusService(
     SubjectService subjects, IEventStore events, RewardService rewards, IClock clock, EventSource eventSource,
-    TaskSeriesService taskSeries, ITimerRepository timers)
+    TaskSeriesService taskSeries, ITimerRepository timers, AfterCommit afterCommit)
 {
     public async Task<StatusResult> ChangeStatusAsync(
         string reference, string newStatus, CancellationToken cancellationToken = default)
@@ -71,9 +71,19 @@ public sealed class StatusService(
             PayloadJson: payload);
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);
-        var earned = await rewards.ReconcileWithProgressAsync(subject, eventId, cancellationToken);
-        var made = await taskSeries.AfterStatusAsync(followUp, eventId, cancellationToken);
-        return new StatusResult(eventId, subject, status, earned.Awards, earned.Progress) { Repetitions = made };
+
+        // The status is written: what follows can be pending, never a refusal (code review CR113).
+        var earned = await afterCommit.RunAsync(
+            "the reward reconcile", subject.Urn,
+            ct => rewards.ReconcileWithProgressAsync(subject, eventId, ct), Earned.Nothing);
+        var made = await afterCommit.RunAsync(
+            "the repeating task's next repetition", subject.Urn,
+            ct => taskSeries.AfterStatusAsync(followUp, eventId, ct), (IReadOnlyList<SubjectRef>)[]);
+        return new StatusResult(eventId, subject, status, earned.Value.Awards, earned.Value.Progress)
+        {
+            Repetitions = made.Value,
+            FollowUpsPending = earned.Pending || made.Pending,
+        };
     }
 
     /// <summary>
@@ -109,4 +119,10 @@ public sealed record StatusResult(
 {
     /// <summary>The repetitions it made, when it closed one of a repeating Task's (D16).</summary>
     public IReadOnlyList<SubjectRef> Repetitions { get; init; } = [];
+
+    /// <summary>
+    /// The status is written, but its reconcile or its next repetition failed and is left to the
+    /// catch-up (code review CR113).
+    /// </summary>
+    public bool FollowUpsPending { get; init; }
 }

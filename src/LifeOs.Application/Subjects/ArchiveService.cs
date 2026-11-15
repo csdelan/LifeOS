@@ -16,7 +16,7 @@ namespace LifeOs.Application.Subjects;
 /// </summary>
 public sealed class ArchiveService(
     SubjectService subjects, IEventStore events, IClock clock, EventSource eventSource, TaskSeriesService taskSeries,
-    ISpaceRepository spaces, IMetricRepository metrics)
+    ISpaceRepository spaces, IMetricRepository metrics, AfterCommit afterCommit)
 {
     /// <summary>Archives the subject — hides it from default views, reversibly.</summary>
     public Task<ArchiveResult> ArchiveAsync(
@@ -64,13 +64,13 @@ public sealed class ArchiveService(
 
         var eventId = await events.AppendAsync(newEvent, cancellationToken);
 
-        // Archiving a repeating Task stops it; restoring it repeats again from today (D16).
-        if (!archived)
-        {
-            await taskSeries.AfterRestoreAsync(subject, eventId, cancellationToken);
-        }
+        // Archiving a repeating Task stops it; restoring it repeats again from today (D16). The
+        // restore is written: that can be pending, never a refusal (code review CR113).
+        var pending = !archived && (await afterCommit.RunAsync(
+            "repeating the restored task again", subject.Urn,
+            ct => taskSeries.AfterRestoreAsync(subject, eventId, ct), (IReadOnlyList<SubjectRef>)[])).Pending;
 
-        return new ArchiveResult(eventId, subject, archived);
+        return new ArchiveResult(eventId, subject, archived) { FollowUpsPending = pending };
     }
 
     private async Task CheckSpaceNameFreeAsync(Guid id, CancellationToken cancellationToken)
@@ -109,4 +109,8 @@ public sealed class ArchiveService(
 }
 
 /// <summary>The outcome of an archive / restore: the event and the subject.</summary>
-public sealed record ArchiveResult(Guid EventId, SubjectRef Subject, bool Archived);
+public sealed record ArchiveResult(Guid EventId, SubjectRef Subject, bool Archived)
+{
+    /// <summary>The restore is written, but repeating it again failed and is left to the catch-up (CR113).</summary>
+    public bool FollowUpsPending { get; init; }
+}

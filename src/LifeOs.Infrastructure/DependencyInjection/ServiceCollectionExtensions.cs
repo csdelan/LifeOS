@@ -11,11 +11,13 @@ using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.Diagnostics;
 using LifeOs.Infrastructure.Integrations;
+using LifeOs.Infrastructure.Logging;
 using LifeOs.Infrastructure.Migrations;
 using LifeOs.Infrastructure.Persistence;
 using LifeOs.Infrastructure.Rebuild;
 using LifeOs.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace LifeOs.Infrastructure.DependencyInjection;
@@ -126,6 +128,10 @@ public static class ServiceCollectionExtensions
 
     private static void AddServices(IServiceCollection services, KernelSettings settings)
     {
+        // What a write does after its commit is pending when it fails, never a refusal (CR113).
+        services.AddSingleton<IFollowUpLog>(sp => new LoggedFollowUps(sp.GetService<ILogger<LoggedFollowUps>>()));
+        services.AddSingleton<AfterCommit>();
+
         // Subjects, their relations, statuses and repeats (D16).
         services.AddSingleton<SubjectService>();
         services.AddSingleton<TaskSeriesService>();

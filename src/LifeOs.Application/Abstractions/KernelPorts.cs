@@ -11,6 +11,16 @@ public interface IClock
 }
 
 /// <summary>
+/// Where a write's follow-up that failed after the write committed is told (code review CR113):
+/// the reward reconcile, or a repeating Task's next repetition. The host logs it; the catch-up
+/// and the reconcile sweep heal what it left.
+/// </summary>
+public interface IFollowUpLog
+{
+    void Failed(string followUp, string about, Exception exception);
+}
+
+/// <summary>
 /// The calendar in the home zone (<see cref="HomeZone"/>, <c>Rewards:HomeTimeZone</c>): what
 /// day it is where Chris lives, whatever zone the server or the database runs in. The
 /// solution runs with invariant globalization, so the database does the zone math.

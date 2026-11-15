@@ -345,6 +345,9 @@ function isConflict(error: unknown): boolean {
   return error instanceof ApiRequestError && error.status === 409;
 }
 
+/** What a write that landed says when what it shows afterwards fails (code review CR113). */
+export const LANDED_UNSHOWN = "That saved, but the page couldn't show it. Reload to see it.";
+
 async function run(qc: QueryClient, effect: AnyEffect, write: () => Promise<unknown>, args: unknown[]): Promise<unknown> {
   effect.optimistic?.(qc, args);
   let answer: unknown;
@@ -356,20 +359,27 @@ async function run(qc: QueryClient, effect: AnyEffect, write: () => Promise<unkn
     }
     throw error;
   }
-  effect.lands?.(qc, answer);
-  const message = effect.says?.(answer, args);
-  if (message) toast.success(message);
-  const warning = effect.warns?.(answer);
-  if (warning) toast.warning(warning);
-  if (effect.earns) {
-    announceEarned(
-      answer as { awards?: Award[]; progress?: DomainChange[] },
-      effect.earns === true ? {} : { lostBecause: effect.earns.lostBecause },
-    );
-  }
-  if (effect.refreshes) {
-    const refreshed = refresh(qc, effect.refreshes(args, answer));
-    if (!effect.refreshesBehind) await refreshed;
+  // The write landed. What follows only shows it: a fault here is said, never thrown, since a
+  // throw would read as the write failing and a retry would write it twice (code review CR113).
+  try {
+    effect.lands?.(qc, answer);
+    const message = effect.says?.(answer, args);
+    if (message) toast.success(message);
+    const warning = effect.warns?.(answer);
+    if (warning) toast.warning(warning);
+    if (effect.earns) {
+      announceEarned(
+        answer as { awards?: Award[]; progress?: DomainChange[] },
+        effect.earns === true ? {} : { lostBecause: effect.earns.lostBecause },
+      );
+    }
+    if (effect.refreshes) {
+      const refreshed = refresh(qc, effect.refreshes(args, answer));
+      if (!effect.refreshesBehind) await refreshed;
+    }
+  } catch {
+    toast.warning(LANDED_UNSHOWN);
+    void qc.invalidateQueries();
   }
   return answer;
 }
