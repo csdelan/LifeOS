@@ -227,8 +227,10 @@ function Assert-Docker {
     throw "Docker isn't running and didn't start within 4 minutes."
 }
 
+# ToHexString, not ToHexStringLower: pwsh 7.4 runs on .NET 8, which lacks the second, and the
+# tests run this module on whatever pwsh CI's runner has.
 function New-RandomHex([int] $Bytes = 32) {
-    [Convert]::ToHexStringLower([Security.Cryptography.RandomNumberGenerator]::GetBytes($Bytes))
+    [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes($Bytes)).ToLowerInvariant()
 }
 
 function Get-FileSha256([Parameter(Mandatory)][string] $Path) {
@@ -547,6 +549,421 @@ function Get-StorageStatus($Response) {
     }
     catch { }
     $status
+}
+
+# ---------------------------------------------------------------------------------------------
+# Daily copies and their stamps
+# ---------------------------------------------------------------------------------------------
+
+$script:StampFormat = "yyyyMMdd'T'HHmmss'Z'"
+
+# A copy's name: the UTC time it was taken, such as 20261029T101700Z.
+function ConvertTo-BackupStamp([Parameter(Mandatory)][datetime] $Time) {
+    $Time.ToUniversalTime().ToString($script:StampFormat, [Globalization.CultureInfo]::InvariantCulture)
+}
+
+# The UTC time a <stamp> name stands for, or $null for any other name.
+function ConvertFrom-BackupStamp([string] $Name) {
+    $taken = [datetime]::MinValue
+    $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
+    if ([datetime]::TryParseExact($Name, $script:StampFormat, [Globalization.CultureInfo]::InvariantCulture, $styles, [ref] $taken)) {
+        return $taken
+    }
+    $null
+}
+
+<#
+Deletes the daily copies in -Folder taken more than -KeepDays before -Now, and a .partial left by
+a run that stopped more than a day ago. Monthly copies live in another folder and are kept for
+good. -KeepNewest spares the newest copy whatever its age: the vault's is skipped on nights the
+vault doesn't change, so its newest may be the only copy of what the vault holds now.
+#>
+function Remove-OldDailyCopies {
+    param(
+        [Parameter(Mandatory)][string] $Folder,
+        [Parameter(Mandatory)][int] $KeepDays,
+        [datetime] $Now = [datetime]::UtcNow,
+        [string] $What = 'daily copy',
+        [switch] $KeepNewest
+    )
+    if (-not (Test-Path -LiteralPath $Folder)) { return }
+    $folders = @(Get-ChildItem -LiteralPath $Folder -Directory)
+    $newest = $folders | Where-Object { ConvertFrom-BackupStamp $_.Name } | Sort-Object Name -Descending | Select-Object -First 1
+    $cutoff = $Now.ToUniversalTime().AddDays(-$KeepDays)
+    $stale = [datetime]::UtcNow.AddDays(-1)
+    foreach ($item in $folders) {
+        if ($KeepNewest -and $newest -and $item.FullName -eq $newest.FullName) { continue }
+        $taken = ConvertFrom-BackupStamp $item.Name
+        $leftover = $item.Name.EndsWith('.partial') -and $item.LastWriteTimeUtc -lt $stale
+        if (($taken -and $taken -lt $cutoff) -or $leftover) {
+            Remove-Item -LiteralPath $item.FullName -Recurse -Force
+            Write-BackupLog "Deleted the $What $($item.Name)."
+        }
+    }
+}
+
+function Format-Bytes([long] $Bytes) {
+    if ($Bytes -ge 1GB) { return '{0:N1} GB' -f ($Bytes / 1GB) }
+    if ($Bytes -ge 1MB) { return '{0:N1} MB' -f ($Bytes / 1MB) }
+    if ($Bytes -ge 1KB) { return '{0:N0} KB' -f ($Bytes / 1KB) }
+    "$Bytes bytes"
+}
+
+# ---------------------------------------------------------------------------------------------
+# The notes vault's Git history (notes plan, "Git on the hub"). Obsidian Sync copies the notes to
+# Chris's other devices but skips .git, so without this the vault's commits exist only on this PC.
+# ---------------------------------------------------------------------------------------------
+
+# Non-empty lines, trimmed, in ordinal order. The comma keeps a one-line answer an array.
+function Get-SortedLines([string] $Text) {
+    [string[]] $lines = @($Text -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    [Array]::Sort($lines, [StringComparer]::Ordinal)
+    , $lines
+}
+
+<#
+Throws unless -VaultPath is the top folder of a Git repository with a commit, so a folder inside
+another repository, whose history isn't the vault's, is never taken for the vault.
+#>
+function Assert-VaultRepository([Parameter(Mandatory)][string] $VaultPath) {
+    if (-not (Test-Path -LiteralPath $VaultPath -PathType Container)) { throw "The vault folder $VaultPath doesn't exist." }
+    $inside = Invoke-Process git @('-C', $VaultPath, 'rev-parse', '--is-inside-work-tree') -AllowFailure
+    if ($inside.ExitCode -ne 0 -or $inside.Out.Trim() -ne 'true') { throw "The vault folder $VaultPath isn't a Git repository." }
+    if ((Invoke-Process git @('-C', $VaultPath, 'rev-parse', '--show-prefix') -What 'git rev-parse').Out.Trim()) {
+        $top = (Invoke-Process git @('-C', $VaultPath, 'rev-parse', '--show-toplevel') -What 'git rev-parse').Out.Trim()
+        throw "The vault folder $VaultPath is inside the Git repository $top, not the top of one."
+    }
+    if ((Invoke-Process git @('-C', $VaultPath, 'rev-parse', '--verify', '--quiet', 'HEAD') -AllowFailure).ExitCode -ne 0) {
+        throw "The vault at $VaultPath has no commits yet."
+    }
+}
+
+# Every ref in the vault and its HEAD, as sorted "<sha> <ref>" lines: what `git bundle list-heads`
+# prints of a bundle made with --all.
+function Get-VaultRefs([Parameter(Mandatory)][string] $VaultPath) {
+    $refs = (Invoke-Process git @('-C', $VaultPath, 'for-each-ref', '--format=%(objectname) %(refname)') -What 'Reading the vault''s refs').Out
+    $head = Invoke-Process git @('-C', $VaultPath, 'rev-parse', '--verify', '--quiet', 'HEAD') -AllowFailure
+    if ($head.ExitCode -eq 0) { $refs += "`n$($head.Out.Trim()) HEAD" }
+    Get-SortedLines $refs
+}
+
+# The newest vault manifest kept, daily or monthly, as its stamp and contents; $null when none.
+function Get-NewestVaultManifest([Parameter(Mandatory)][string] $Destination) {
+    $found = foreach ($kind in 'daily', 'monthly') {
+        $root = Join-Path $Destination $kind
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        Get-ChildItem -LiteralPath $root -Directory | Where-Object { -not $_.Name.EndsWith('.partial') } |
+            ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File -Filter 'vault-manifest-*.json' }
+    }
+    $newest = $found | Sort-Object -Property BaseName -Descending | Select-Object -First 1
+    if (-not $newest) { return $null }
+    try {
+        [pscustomobject]@{
+            Stamp    = $newest.BaseName.Substring('vault-manifest-'.Length)
+            Manifest = Get-Content -LiteralPath $newest.FullName -Raw | ConvertFrom-Json
+        }
+    }
+    catch {
+        Write-BackupLog "Couldn't read $($newest.FullName), so tonight's bundle is taken whatever changed: $($_.Exception.Message)" -Level Warn
+        $null
+    }
+}
+
+<#
+Proves a bundle restores, as the database dump is restore-tested before it's kept: `git bundle
+verify` in an empty repository; a mirror clone that holds exactly the refs the bundle lists and
+passes `git fsck --full`; and a clone of -Branch, line endings as committed, that checks out clean
+at the bundle's HEAD. The clones are deleted after. Its errors name no file in the vault.
+#>
+function Test-VaultBundle {
+    param(
+        [Parameter(Mandatory)][string] $Bundle,
+        [string] $Branch,
+        [Parameter(Mandatory)][string] $WorkFolder
+    )
+    $check = Join-Path $WorkFolder "vault-check-$(New-RandomHex 4)"
+    New-Item -ItemType Directory -Path $check | Out-Null
+    try {
+        $empty = Join-Path $check 'empty.git'
+        Invoke-Process git @('init', '--quiet', '--bare', $empty) -What 'git init' | Out-Null
+        Invoke-Process git @('-C', $empty, 'bundle', 'verify', '--quiet', $Bundle) -What 'git bundle verify' | Out-Null
+        $heads = Get-SortedLines (Invoke-Process git @('-C', $empty, 'bundle', 'list-heads', $Bundle) -What 'git bundle list-heads').Out
+        $headLines = @($heads | Where-Object { $_.EndsWith(' HEAD') })
+        if ($headLines.Count -ne 1) { throw 'the bundle has no HEAD' }
+        $head = $headLines[0].Split(' ')[0]
+
+        $mirror = Join-Path $check 'mirror.git'
+        Invoke-Process git @('clone', '--quiet', '--mirror', $Bundle, $mirror) -What 'A mirror clone of the bundle' | Out-Null
+        $cloned = Get-SortedLines (Invoke-Process git @('-C', $mirror, 'for-each-ref', '--format=%(objectname) %(refname)') -What 'Reading the clone''s refs').Out
+        $listed = @($heads | Where-Object { -not $_.EndsWith(' HEAD') })
+        if (($cloned -join "`n") -cne ($listed -join "`n")) {
+            throw "a clone of the bundle has $($cloned.Count) refs that don't match the $($listed.Count) it lists"
+        }
+        Invoke-Process git @('-C', $mirror, 'fsck', '--full', '--no-dangling', '--no-progress') -What 'git fsck of a clone of the bundle' | Out-Null
+        $commits = [int] (Invoke-Process git @('-C', $mirror, 'rev-list', '--all', '--count') -What 'Counting commits').Out.Trim()
+
+        $checkout = Join-Path $check 'checkout'
+        $clone = @('clone', '--quiet', '--config', 'core.autocrlf=false', '--config', 'core.longpaths=true')
+        if ($Branch) { $clone += @('--branch', $Branch) }
+        Invoke-Process git ($clone + @($Bundle, $checkout)) -What 'A clone of the bundle' | Out-Null
+        $checkedOut = (Invoke-Process git @('-C', $checkout, 'rev-parse', 'HEAD') -What 'git rev-parse').Out.Trim()
+        if ($checkedOut -ne $head) { throw "a clone of the bundle checks out $checkedOut, not its HEAD $head" }
+        # Get-SortedLines answers an array already: @() around it would nest it.
+        $dirty = Get-SortedLines (Invoke-Process git @('-C', $checkout, 'status', '--porcelain', '--untracked-files=all') -What 'git status of a clone of the bundle').Out
+        if ($dirty.Count) { throw "a clone of the bundle doesn't check out clean: $($dirty.Count) file(s) differ from its HEAD" }
+        $files = (Get-SortedLines (Invoke-Process git @('-C', $checkout, 'ls-files') -What 'git ls-files').Out).Count
+
+        [pscustomobject]@{ Refs = $heads; Head = $head; Commits = $commits; Files = $files }
+    }
+    finally {
+        Remove-Item -LiteralPath $check -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+<#
+Bundles the vault's whole Git history (`git bundle create --all`, which only reads the
+repository), checks the bundle with Test-VaultBundle, then saves it encrypted with a manifest in
+<Destination>\daily\<stamp>, and the month's first in monthly\<yyyy-mm>. A night whose HEAD and
+refs match the newest bundle kept is skipped, and the log says so.
+#>
+function Save-VaultBundle {
+    param(
+        [Parameter(Mandatory)][string] $VaultPath,
+        [Parameter(Mandatory)][string] $Destination,
+        [Parameter(Mandatory)][scriptblock] $Encrypt,
+        [Parameter(Mandatory)][string] $WorkFolder,
+        [datetime] $Now = [datetime]::UtcNow
+    )
+    Assert-VaultRepository $VaultPath
+    $current = Get-VaultRefs $VaultPath
+    $last = Get-NewestVaultManifest $Destination
+    if ($last -and ((Get-SortedLines (@($last.Manifest.refs) -join "`n")) -join "`n") -ceq ($current -join "`n")) {
+        $head = @($current | Where-Object { $_.EndsWith(' HEAD') })[0].Substring(0, 7)
+        Write-BackupLog "The vault's Git history hasn't changed since the bundle $($last.Stamp) (HEAD $head), so tonight's is skipped."
+        return
+    }
+
+    $stamp = ConvertTo-BackupStamp $Now
+    $bundle = Join-Path $WorkFolder "vault-$stamp.bundle"
+    $branch = (Invoke-Process git @('-C', $VaultPath, 'symbolic-ref', '--quiet', '--short', 'HEAD') -AllowFailure).Out.Trim()
+    Invoke-Process git @('-C', $VaultPath, 'bundle', 'create', '--quiet', $bundle, '--all') -What 'git bundle create' | Out-Null
+    $check = Test-VaultBundle -Bundle $bundle -Branch $branch -WorkFolder $WorkFolder
+    # A bundle holds no config. These say how the vault checks out (the vault sets autocrlf false,
+    # where Git for Windows' install sets it true), so a restore can clone it the same way.
+    $coreConfig = [ordered]@{}
+    $config = Invoke-Process git @('-C', $VaultPath, 'config', '--local', '--get-regexp',
+        '^core\.(autocrlf|eol|safecrlf|longpaths|quotepath|ignorecase|symlinks|filemode|precomposeunicode)$') -AllowFailure
+    # Assigned first: foreach over Get-SortedLines itself would take its array as one item.
+    $lines = Get-SortedLines $config.Out
+    foreach ($line in $lines) {
+        $key, $value = $line.Split(' ', 2)
+        $coreConfig[$key] = $value
+    }
+
+    $daily = Join-Path $Destination 'daily' $stamp
+    $partial = "$daily.partial"
+    if (Test-Path -LiteralPath $partial) { Remove-Item -LiteralPath $partial -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $partial | Out-Null
+    $name = "vault-$stamp.bundle.age"
+    $encrypted = Join-Path $partial $name
+    & $Encrypt $bundle $encrypted | Out-Null
+    if (-not (Test-Path -LiteralPath $encrypted)) { throw 'encrypting the bundle wrote nothing' }
+
+    $manifest = [ordered]@{
+        format      = 1
+        kind        = 'vault'
+        stamp       = $stamp
+        takenAt     = $Now.ToUniversalTime().ToString('o')
+        vault       = $VaultPath
+        gitVersion  = (Invoke-Process git @('--version') -What 'git --version').Out.Trim()
+        branch      = if ($branch) { $branch } else { $null }
+        coreConfig  = $coreConfig
+        head        = $check.Head
+        commits     = $check.Commits
+        bundleBytes = (Get-Item -LiteralPath $bundle).Length
+        files       = @([ordered]@{ name = $name; bytes = (Get-Item -LiteralPath $encrypted).Length; sha256 = Get-FileSha256 $encrypted })
+        refs        = $check.Refs
+        restoreTest = [ordered]@{ bundleVerified = $true; refsMatch = $true; fsckClean = $true; checkoutClean = $true; trackedFiles = $check.Files }
+    }
+    $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $partial "vault-manifest-$stamp.json") -Encoding utf8
+    Rename-Item -LiteralPath $partial -NewName $stamp
+    Remove-Item -LiteralPath $bundle -Force
+    $commits = if ($check.Commits -eq 1) { '1 commit' } else { "$($check.Commits) commits" }
+    Write-BackupLog ("Saved the vault's Git history to $daily`: $commits, HEAD $($check.Head.Substring(0, 7))" +
+        "$(if ($branch) { " on $branch" }), checked by a clone that checked out its $($check.Files) files clean.")
+
+    $month = $Now.ToUniversalTime().ToString('yyyy-MM', [Globalization.CultureInfo]::InvariantCulture)
+    $monthly = Join-Path $Destination 'monthly' $month
+    if (-not (Test-Path -LiteralPath $monthly)) {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $monthly) | Out-Null
+        if (Test-Path -LiteralPath "$monthly.partial") { Remove-Item -LiteralPath "$monthly.partial" -Recurse -Force }
+        Copy-Item -LiteralPath $daily -Destination "$monthly.partial" -Recurse
+        Rename-Item -LiteralPath "$monthly.partial" -NewName $month
+        Write-BackupLog "Kept it as $month's monthly vault bundle."
+    }
+}
+
+function Save-VaultSnapshotIndex([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)] $Index) {
+    [ordered]@{ format = 1; files = @($Index.Values) } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$Path.new" -Encoding utf8
+    Move-Item -LiteralPath "$Path.new" -Destination $Path -Force
+}
+
+<#
+Copies each of the vault's read-only snapshots (the files in -SnapshotFolder named "<vault name>
+…", such as the zip and inventory the 2026-11-12 cutover left), encrypted, to
+<Destination>\snapshots: once, and again only if one changes. snapshots.json there records what
+was copied (sizes, times and sha256, nothing of what's inside). A snapshot deleted at the source
+keeps its copy.
+#>
+function Save-VaultSnapshots {
+    param(
+        [Parameter(Mandatory)][string] $SnapshotFolder,
+        [Parameter(Mandatory)][string] $VaultName,
+        [Parameter(Mandatory)][string] $Destination,
+        [Parameter(Mandatory)][scriptblock] $Encrypt,
+        [datetime] $Now = [datetime]::UtcNow
+    )
+    if (-not (Test-Path -LiteralPath $SnapshotFolder -PathType Container)) {
+        Write-BackupLog "The vault's snapshots folder $SnapshotFolder isn't there, so no snapshot was checked." -Level Warn
+        return
+    }
+    $sources = @(Get-ChildItem -LiteralPath $SnapshotFolder -File |
+            Where-Object { $_.Name.StartsWith("$VaultName ", [StringComparison]::OrdinalIgnoreCase) } | Sort-Object Name)
+    if (-not $sources.Count) {
+        Write-BackupLog "There are no snapshots of $VaultName in $SnapshotFolder."
+        return
+    }
+
+    $folder = Join-Path $Destination 'snapshots'
+    New-Item -ItemType Directory -Force -Path $folder | Out-Null
+    $indexPath = Join-Path $folder 'snapshots.json'
+    $index = [ordered]@{}
+    if (Test-Path -LiteralPath $indexPath) {
+        foreach ($entry in @((Get-Content -LiteralPath $indexPath -Raw | ConvertFrom-Json).files)) { $index[$entry.name] = $entry }
+    }
+
+    $copied = 0
+    foreach ($source in $sources) {
+        $target = Join-Path $folder "$($source.Name).age"
+        $record = $index[$source.Name]
+        $present = $record -and (Test-Path -LiteralPath $target) -and (Get-Item -LiteralPath $target).Length -eq [long] $record.encryptedBytes
+        $ticks = $source.LastWriteTimeUtc.Ticks
+        if ($present -and [long] $record.bytes -eq $source.Length -and [long] $record.lastWriteTicks -eq $ticks) { continue }
+
+        $sha = Get-FileSha256 $source.FullName
+        if ($present -and $record.sha256 -eq $sha) {
+            # Only its time changed (copied back from somewhere, say): the copy still matches it.
+            $record.lastWriteTicks = $ticks
+            Save-VaultSnapshotIndex $indexPath $index
+            continue
+        }
+        if ($present) {
+            # ConvertFrom-Json may have read copiedAt as a date already.
+            $copiedOn = try { ([datetime] $record.copiedAt).ToUniversalTime().ToString('yyyy-MM-dd') } catch { "$($record.copiedAt)" }
+            Write-BackupLog "The vault snapshot $($source.Name) changed since it was copied on $copiedOn; copying it again. A snapshot shouldn't change, so check why." -Level Warn
+        }
+        elseif ($record) {
+            Write-BackupLog "The backup's copy of the vault snapshot $($source.Name) is missing or the wrong size; copying it again." -Level Warn
+        }
+
+        $length = $source.Length
+        $partial = "$target.partial"
+        & $Encrypt $source.FullName $partial | Out-Null
+        $after = Get-Item -LiteralPath $source.FullName
+        if ($after.Length -ne $length -or $after.LastWriteTimeUtc.Ticks -ne $ticks) {
+            Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+            throw "$($source.Name) changed while it was being copied"
+        }
+        Move-Item -LiteralPath $partial -Destination $target -Force
+        $index[$source.Name] = [ordered]@{
+            name             = $source.Name
+            bytes            = $length
+            lastWriteTimeUtc = $source.LastWriteTimeUtc.ToString('o')
+            lastWriteTicks   = $ticks
+            sha256           = $sha
+            copiedAt         = $Now.ToUniversalTime().ToString('o')
+            encrypted        = "$($source.Name).age"
+            encryptedBytes   = (Get-Item -LiteralPath $target).Length
+            encryptedSha256  = Get-FileSha256 $target
+        }
+        Save-VaultSnapshotIndex $indexPath $index
+        $copied++
+        Write-BackupLog "Copied the vault snapshot $($source.Name) ($(Format-Bytes $length)), encrypted, to $folder."
+    }
+    if (-not $copied) { Write-BackupLog "The vault's $($sources.Count) snapshot file(s) were already backed up." }
+}
+
+<#
+The vault's part of a night (docs/pilot/backup-restore.md): Save-VaultBundle, Save-VaultSnapshots
+when there's a -SnapshotFolder, and daily bundles older than -KeepDailyDays deleted, except the
+newest. -Encrypt { param($In, $Out) … } writes $Out encrypted from $In; backup.ps1 passes age.
+Each part runs whatever the other did, and it throws at the end with what failed.
+#>
+function Backup-Vault {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string] $VaultPath,
+        [Parameter(Mandatory)][string] $Destination,
+        [Parameter(Mandatory)][scriptblock] $Encrypt,
+        [string] $SnapshotFolder,
+        [int] $KeepDailyDays = 35,
+        [datetime] $Now = [datetime]::UtcNow
+    )
+    if (-not (Test-Path -LiteralPath $Destination -PathType Container)) {
+        throw "The vault's backup folder $Destination doesn't exist. Is OneDrive still set up on this PC? Setup makes it."
+    }
+    $problems = [Collections.Generic.List[string]]::new()
+    $work = New-WorkFolder
+    try {
+        $bundled = $false
+        try {
+            Save-VaultBundle -VaultPath $VaultPath -Destination $Destination -Encrypt $Encrypt -WorkFolder $work -Now $Now
+            $bundled = $true
+        }
+        catch {
+            $problems.Add("The vault's Git history wasn't backed up: $($_.Exception.Message.TrimEnd('.')).")
+        }
+
+        if ($SnapshotFolder) {
+            try {
+                Save-VaultSnapshots -SnapshotFolder $SnapshotFolder -VaultName (Split-Path -Leaf $VaultPath) -Destination $Destination `
+                    -Encrypt $Encrypt -Now $Now
+            }
+            catch {
+                $problems.Add("The vault's snapshots weren't all backed up: $($_.Exception.Message.TrimEnd('.')).")
+            }
+        }
+        else {
+            Write-BackupLog 'No snapshots folder is set up for the vault, so no snapshot is copied.'
+        }
+
+        # As the database's: only after a night that worked (here, also one skipped as unchanged).
+        if ($bundled) {
+            Remove-OldDailyCopies -Folder (Join-Path $Destination 'daily') -KeepDays $KeepDailyDays -Now $Now -What 'daily vault bundle' -KeepNewest
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($problems.Count) { throw ($problems -join ' ') }
+}
+
+<#
+backup.ps1's vault step, from the settings backup-setup.ps1 saved: VaultPath, VaultDestination
+(default: a vault folder beside the database's) and VaultSnapshots. With no vault set up, it says
+so and returns.
+#>
+function Invoke-VaultBackup([Parameter(Mandatory)][hashtable] $Settings, [Parameter(Mandatory)][scriptblock] $Encrypt) {
+    $vault = $Settings['VaultPath']
+    if (-not $vault) {
+        Write-BackupLog "No vault is set up, so the notes vault's Git history isn't backed up (backup-setup.ps1 -VaultPath)."
+        return
+    }
+    $destination = $Settings['VaultDestination']
+    if (-not $destination) { $destination = Join-Path (Split-Path -Parent $Settings['Destination']) 'vault' }
+    Write-BackupLog "Backing up the vault $vault to $destination."
+    Backup-Vault -VaultPath $vault -Destination $destination -Encrypt $Encrypt -SnapshotFolder $Settings['VaultSnapshots'] `
+        -KeepDailyDays ([int] ($Settings['KeepDailyDays'] ?? 35))
 }
 
 # ---------------------------------------------------------------------------------------------

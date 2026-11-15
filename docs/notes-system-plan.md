@@ -87,7 +87,7 @@ Clear captures are filed without you; anything uncertain, and any system problem
 - The agent commits once per processed item, with the inbox item ID in the message.
 - A scheduled script commits manual edits from phone and desktop.
 - The repo lives only on the hub; add `.git` to `.stignore` so devices never see it.
-- No force-pushes or history rewrites; push to an offsite remote as backup.
+- No force-pushes or history rewrites. There's no remote: the nightly LifeOS backup keeps the whole history offsite as an encrypted `git bundle` in OneDrive, checked by a clone each night it changes, with the snapshots ([backup-restore.md](pilot/backup-restore.md)). Chris chose that on 2026-11-15 over a private GitHub repo (his writing stays off GitHub) or a bare repo on `\\bart` (the same house).
 
 ### Global inbox design
 

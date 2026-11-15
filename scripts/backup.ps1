@@ -19,13 +19,18 @@
       4. Copies each photo not yet backed up, checked against its sha256 and encrypted, to
          <Destination>\artifacts\<sha256>.age.
       5. Deletes daily copies older than 35 days. Monthly copies and photos are kept for good.
+      6. The notes vault, when setup named one (-VaultPath): its whole Git history as a bundle,
+         checked by a clone and encrypted, unless nothing changed since the last; and each of its
+         snapshots, once (Backup-Vault in LifeOsBackup.psm1).
 
     The plaintext dumps stay in a temporary folder that's deleted at the end. A copy that fails
     the restore or the row counts isn't saved. If the copy restores but a later check fails (the
     rebuild or bsk check fails, a photo couldn't be copied), the copy is saved and the run still
     fails. A live derived table that's behind its source is normal (only `bsk rebuild` writes it)
-    and is only noted in the manifest. A failed run exits 1, shows a Windows notification, and pings the dead-man's switch's
-    /fail URL when one is set. Logs: %USERPROFILE%\.lifeos\backup\logs.
+    and is only noted in the manifest. The vault's step runs whether or not the database's
+    worked, and a vault failure never costs the database's copy, nor the reverse. A failed run
+    exits 1, shows a Windows notification, and pings the dead-man's switch's /fail URL when one
+    is set. Logs: %USERPROFILE%\.lifeos\backup\logs.
 
 .EXAMPLE
     ./scripts/backup.ps1
@@ -58,16 +63,20 @@ $exitCode = 0
 $work = $null
 $scratch = $null
 $settings = $null
-# Problems found after the copy is saved: the run still fails, with all of them.
+$age = $null
+$stamp = $null
+# Problems found after the database copy is saved: the run still fails, with all of them.
 $problems = [Collections.Generic.List[string]]::new()
+# What failed tonight, the database's part and the vault's, for the notification and /fail.
+$failures = [Collections.Generic.List[string]]::new()
 
 try {
     $settings = Read-BackupSettings -Target $Target
+    $age = Find-AgeTool 'age'
     $pg = ConvertTo-PgEnvironment (ConvertFrom-SecureText $settings['ConnectionString'])
     $destination = $settings['Destination']
     $recipient = $settings['AgeRecipient']
     $keepDays = [int] ($settings['KeepDailyDays'] ?? 35)
-    $age = Find-AgeTool 'age'
     if (-not (Test-Path $destination)) {
         throw "The backup folder $destination doesn't exist. Is OneDrive still set up on this PC?"
     }
@@ -273,32 +282,53 @@ SELECT DISTINCT store, bucket, object_key, sha256 FROM bsk.artifact_object ORDER
     }
 
     # --- 6. Prune daily copies older than $keepDays days (never monthly copies or photos) ---------
-    $cutoff = (Get-Date).ToUniversalTime().AddDays(-$keepDays)
-    foreach ($folder in Get-ChildItem (Join-Path $destination 'db\daily') -Directory) {
-        $taken = [datetime]::MinValue
-        $isStamp = [datetime]::TryParseExact($folder.Name, "yyyyMMdd'T'HHmmss'Z'", [Globalization.CultureInfo]::InvariantCulture,
-            [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal, [ref] $taken)
-        $leftover = $folder.Name.EndsWith('.partial') -and $folder.LastWriteTimeUtc -lt (Get-Date).ToUniversalTime().AddDays(-1)
-        if (($isStamp -and $taken -lt $cutoff) -or $leftover) {
-            Remove-Item $folder.FullName -Recurse -Force
-            Write-BackupLog "Deleted the daily copy $($folder.Name)."
-        }
-    }
+    Remove-OldDailyCopies -Folder (Join-Path $destination 'db\daily') -KeepDays $keepDays
 
     if ($problems.Count) { throw "Saved $stamp, but: $($problems -join ' ')" }
-    Write-BackupLog "Backup $stamp done."
-    Send-HealthcheckPing $settings ''
+    Write-BackupLog "The database copy $stamp is saved and checked."
 }
 catch {
-    $exitCode = 1
     $message = $_.Exception.Message
+    $failures.Add($message)
     Write-BackupLog "Backup failed: $message" -Level Error
-    if ($settings) { Send-HealthcheckPing $settings 'fail' $message }
-    Show-BackupToast "LifeOS backup failed ($Target)" $message
 }
 finally {
     Remove-ScratchPostgres $scratch
     if ($work -and (Test-Path $work)) { Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+try {
+    # --- 7. The notes vault's Git history: whatever the database's part did ------------------------
+    if ($settings) {
+        try {
+            if (-not $age) { throw "age isn't installed, so nothing could be encrypted." }
+            $encrypt = { param($In, $Out)
+                Invoke-Process $age @('--encrypt', '--recipient', $settings['AgeRecipient'], '--output', $Out, $In) `
+                    -What "Encrypting $(Split-Path -Leaf $In)" | Out-Null
+            }.GetNewClosure()
+            Invoke-VaultBackup -Settings $settings -Encrypt $encrypt
+        }
+        catch {
+            # The detail stays on this PC: a vault error can name a note, and /fail's body goes
+            # to healthchecks.io.
+            $failures.Add('The vault wasn''t backed up; the log on this PC says why.')
+            Write-BackupLog "The vault backup failed: $($_.Exception.Message)" -Level Error
+        }
+    }
+
+    # --- How the night went ----------------------------------------------------------------------
+    if ($failures.Count) {
+        $exitCode = 1
+        $message = $failures -join ' '
+        if ($settings) { Send-HealthcheckPing $settings 'fail' $message }
+        Show-BackupToast "LifeOS backup failed ($Target)" $message
+    }
+    else {
+        Write-BackupLog "Backup $stamp done."
+        Send-HealthcheckPing $settings ''
+    }
+}
+finally {
     $mutex.ReleaseMutex()
     $mutex.Dispose()
 }

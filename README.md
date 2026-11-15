@@ -157,7 +157,8 @@ Production cutover (Fly, secrets, OAuth): [`docs/pilot/deploy.md`](docs/pilot/de
 
 **Backups.** A scheduled task on Chris's PC backs staging up every night to OneDrive
 (`scripts/backup.ps1`). Each copy is the database and new photos, restore-tested in a scratch
-Postgres and encrypted with age to a key only Chris holds. It reads as `bsk_backup`, a role
+Postgres and encrypted with age to a key only Chris holds, with the notes vault's Git history
+as a bundle checked by a clone. It reads as `bsk_backup`, a role
 that reads everything and writes nothing (migration 0046). Setup, the quarterly restore
 drill and a real restore are in [`docs/pilot/backup-restore.md`](docs/pilot/backup-restore.md).
 

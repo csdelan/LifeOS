@@ -13,14 +13,17 @@
       1. The age key: -AgeRecipient (age1…) uses an existing public key. Without it, the key from
          the last setup is kept, or a new pair is made in -KeyFile. Move that file into your
          password manager, print a copy, then delete it: only it can open the backups.
-      2. bsk_backup: a new random password, set over the owner connection (BSK_CONNECTION_STRING
+      2. The folders: -Destination, and the notes vault (-VaultPath) whose Git history is backed
+         up too, which must be the top of a Git repository; its bundles go to -VaultDestination.
+         Both are kept from the last setup unless passed. Checked before the password changes.
+      3. bsk_backup: a new random password, set over the owner connection (BSK_CONNECTION_STRING
          in -EnvFile) as a SCRAM verifier, so the plaintext never reaches the server's logs. The
          login is checked before anything is saved.
-      3. Settings: the bsk_backup connection string, the Supabase URL and secret key (from
-         -EnvFile, for the photos), the age public key and the backup folder, saved to
-         %USERPROFILE%\.lifeos\backup\<Target>.settings.xml. The secrets in it are encrypted
+      4. Settings: the bsk_backup connection string, the Supabase URL and secret key (from
+         -EnvFile, for the photos), the age public key, the backup folders and the vault, saved
+         to %USERPROFILE%\.lifeos\backup\<Target>.settings.xml. The secrets in it are encrypted
          with DPAPI: only this Windows account on this PC can read them.
-      4. The task "\LifeOS\Backup (<Target>)": daily at -At, while you're signed in. A run
+      5. The task "\LifeOS\Backup (<Target>)": daily at -At, while you're signed in. A run
          missed while the PC was off or asleep starts as soon as it's back. It runs a copy of
          backup.ps1 and its modules installed in %USERPROFILE%\.lifeos\bin\backup, so it
          doesn't depend on the checkout (maybe a worktree, since gone) that set it up, and builds
@@ -30,6 +33,11 @@
 .EXAMPLE
     ./scripts/backup-setup.ps1
     Sets up staging's backup from .env, making a new key in ~\lifeos-backup.key.
+
+.EXAMPLE
+    ./scripts/backup-setup.ps1 -VaultPath C:\Users\csdel\Vaults\Chris2.0 -HealthcheckUrl <ping URL>
+    Keeps staging's key and folder, backs up the vault's Git history too, and turns on the
+    dead-man's switch.
 
 .EXAMPLE
     ./scripts/backup-setup.ps1 -Target production -EnvFile .env.prod -AgeRecipient age1...
@@ -55,6 +63,18 @@ param(
 
     # A dead-man's switch ping URL (healthchecks.io): emails you when a night passes without a backup.
     [string] $HealthcheckUrl,
+
+    # The Obsidian vault whose Git history is backed up too, such as C:\Users\csdel\Vaults\Chris2.0:
+    # the top folder of a Git repository. Default: the last setup's. '' stops backing it up.
+    [string] $VaultPath,
+
+    # Where the vault's bundles and snapshots go. Default: a vault folder beside -Destination,
+    # so OneDrive\Backups\LifeOS\vault.
+    [string] $VaultDestination,
+
+    # The vault's read-only snapshots, each copied once: the files named "<vault name> …" in it.
+    # Default: the _snapshots folder beside the vault, when there is one. '' copies none.
+    [string] $VaultSnapshots,
 
     # When the task runs each day, in local time.
     [string] $At = '03:17',
@@ -99,7 +119,43 @@ if (-not $AgeRecipient) {
 }
 if ($AgeRecipient -notmatch '^age1[0-9a-z]+$') { throw "'$AgeRecipient' isn't an age public key (age1…)." }
 
-# --- 2. The bsk_backup login -----------------------------------------------------------------------
+# --- 2. Where the backups go, and the vault: checked before the password changes, since a setup
+# that stops after that leaves the saved settings with a password that no longer works. ----------
+if (-not $Destination) { $Destination = $existing ? $existing['Destination'] : (Get-DefaultBackupRoot $Target) }
+New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+
+# The vault: named here, or the last setup's three settings as they were.
+if ($PSBoundParameters.ContainsKey('VaultPath')) {
+    if ($VaultPath) { $VaultPath = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($VaultPath) }
+    if ($VaultPath -and -not $PSBoundParameters.ContainsKey('VaultSnapshots')) {
+        $beside = Join-Path (Split-Path -Parent $VaultPath) '_snapshots'
+        $VaultSnapshots = (Test-Path -LiteralPath $beside -PathType Container) ? $beside : $null
+    }
+}
+elseif ($existing) {
+    $VaultPath = $existing['VaultPath']
+    if (-not $VaultDestination) { $VaultDestination = $existing['VaultDestination'] }
+    if (-not $PSBoundParameters.ContainsKey('VaultSnapshots')) { $VaultSnapshots = $existing['VaultSnapshots'] }
+}
+if ($VaultPath) {
+    try { Assert-VaultRepository $VaultPath }
+    catch { throw "$($_.Exception.Message) Pass -VaultPath to name the vault, or -VaultPath '' to stop backing one up." }
+    if (-not $VaultDestination) { $VaultDestination = Join-Path (Split-Path -Parent $Destination) 'vault' }
+    $VaultDestination = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($VaultDestination)
+    $vaultRoot = $VaultPath.TrimEnd('\')
+    if ($VaultDestination.TrimEnd('\') -eq $vaultRoot -or $VaultDestination.StartsWith("$vaultRoot\", [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Keep the vault''s backups out of the vault: they would sync to every device and change the vault each night.'
+    }
+    if ($VaultSnapshots) { $VaultSnapshots = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($VaultSnapshots) }
+    New-Item -ItemType Directory -Force -Path $VaultDestination | Out-Null
+}
+else {
+    $VaultPath = $null
+    $VaultDestination = $null
+    $VaultSnapshots = $null
+}
+
+# --- 3. The bsk_backup login -----------------------------------------------------------------------
 $owner = Get-Setting 'BSK_CONNECTION_STRING'
 if (-not $owner) { throw "BSK_CONNECTION_STRING (the owner connection) isn't in $EnvFile." }
 $ownerPg = ConvertTo-PgEnvironment $owner
@@ -123,7 +179,7 @@ for ($attempt = 1; $attempt -le 6 -and -not $whoami; $attempt++) {
 if ($whoami -ne 'bsk_backup') { throw "Signed in as '$whoami', not bsk_backup." }
 Write-Host 'bsk_backup can sign in with its new password.' -ForegroundColor Green
 
-# --- 3. Settings -----------------------------------------------------------------------------------
+# --- 4. Settings -----------------------------------------------------------------------------------
 $secretKey = Get-Setting 'Storage__SupabaseSecretKey'
 $supabaseUrl = Get-Setting 'Storage__SupabaseUrl'
 if (-not $supabaseUrl) { $supabaseUrl = Get-Setting 'VITE_SUPABASE_URL' }
@@ -131,8 +187,6 @@ $poolerRef = (Get-PoolerSuffix $ownerPg.PGUSER).TrimStart('.')
 if (-not $supabaseUrl -and $poolerRef) { $supabaseUrl = "https://$poolerRef.supabase.co" }
 if (-not $secretKey) { Write-Warning "No Storage__SupabaseSecretKey in $EnvFile`: photos stored in Supabase won't be backed up." }
 
-if (-not $Destination) { $Destination = $existing ? $existing['Destination'] : (Get-DefaultBackupRoot $Target) }
-New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 if (-not $HealthcheckUrl -and $existing) { $HealthcheckUrl = ConvertFrom-SecureText $existing['HealthcheckUrl'] }
 
 $settingsPath = Save-BackupSettings @{
@@ -145,10 +199,13 @@ $settingsPath = Save-BackupSettings @{
     Destination       = $Destination
     HealthcheckUrl    = ConvertTo-SecureText $HealthcheckUrl
     KeepDailyDays     = $KeepDailyDays
+    VaultPath         = $VaultPath
+    VaultDestination  = $VaultDestination
+    VaultSnapshots    = $VaultSnapshots
 }
 Write-Host "Saved the settings to $settingsPath." -ForegroundColor Green
 
-# --- 4. The scheduled task ---------------------------------------------------------------------------
+# --- 5. The scheduled task ---------------------------------------------------------------------------
 if (-not $NoTask) {
     # A path that survives PowerShell updates: the machine install, else pwsh on PATH. (This
     # process may be dotnet.exe, when PowerShell is a .NET tool.)
@@ -186,6 +243,16 @@ if (-not $NoTask) {
 
 Write-Host ''
 Write-Host "Backups go to $Destination, encrypted to $AgeRecipient."
+if ($VaultPath) {
+    $snapshotNote = if ($VaultSnapshots) { ", with its snapshots from $VaultSnapshots" } else { '' }
+    Write-Host "The Git history of the vault $VaultPath goes to $VaultDestination$snapshotNote."
+}
+else {
+    Write-Host 'No vault is backed up. Pass -VaultPath to back up a notes vault''s Git history too.' -ForegroundColor Yellow
+}
+if (-not $HealthcheckUrl) {
+    Write-Host 'No dead-man''s switch is set up: a night with no backup alerts no one. Pass -HealthcheckUrl.' -ForegroundColor Yellow
+}
 if ($keyOnDisk) {
     Write-Host ''
     Write-Host "Your private key is in $KeyFile. Only it can open the backups." -ForegroundColor Yellow
