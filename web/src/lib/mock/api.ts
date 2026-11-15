@@ -62,7 +62,10 @@ import type {
   MetricTemplate,
 } from "@/lib/features/measurements/types";
 import { isTerminal, type SubjectType } from "@/lib/production-ui-types";
-import { searchSubjects, type SubjectSearch } from "@/lib/browse";
+import type { SubjectSearch } from "@/lib/browse";
+import { browsePage, searchSubjects } from "@/lib/mock/browse";
+import type { AlignmentRead, BrowseQuery, BrowseRead } from "@/lib/features/browse/types";
+import { ALIGNMENT_TYPES } from "@/lib/subject-meta";
 import { composeRecap } from "@/lib/mock/review-recap";
 import type { RecapSection } from "@/lib/review-recap";
 import { BOUNTY_DEFAULTS } from "@/lib/mock/bounty-defaults";
@@ -185,10 +188,33 @@ export type { LifeOsReads, SubjectRelations };
 export const mockReads: LifeOsReads = {
   async listSubjects(opts?: ListSubjectsOptions): Promise<SubjectListItem[]> {
     await wait();
-    const rows = listOf(opts?.type, opts?.includeArchived, opts?.includeSeries, opts?.status);
+    const types = opts?.types?.length ? opts.types : undefined;
+    const rows = listOf(opts?.type, opts?.includeArchived, opts?.includeSeries, opts?.status).filter(
+      (s) => !types || types.includes(s.type),
+    );
     // The Map's read: a repeating Task's repetitions left out, as the API leaves them (code review CR107).
     const shown = opts?.excludeRepetitions ? rows.filter((s) => !s.seriesId || s.isSeries) : rows;
     return opts?.limit == null ? shown : shown.slice(0, opts.limit);
+  },
+
+  async browse(query: BrowseQuery): Promise<BrowseRead> {
+    await wait();
+    // Every subject the lists show, archived ones too: the page picks what the query keeps.
+    return browsePage(listOf(undefined, true), query, todayIso());
+  },
+
+  async alignment({ includeArchived }: { includeArchived: boolean }): Promise<AlignmentRead> {
+    await wait();
+    // The alignment types and any item an edge links, a repeating Task once as its series (TASKS-3).
+    const { edges } = storeState();
+    const kept = listOf(undefined, includeArchived, true).filter((s) => !s.seriesId || s.isSeries);
+    const ids = new Set(kept.map((s) => s.id));
+    const linked = new Set(
+      edges.filter((e) => ids.has(e.fromId) && ids.has(e.toId)).flatMap((e) => [e.fromId, e.toId]),
+    );
+    const subjects = kept.filter((s) => ALIGNMENT_TYPES.includes(s.type) || linked.has(s.id));
+    const shown = new Set(subjects.map((s) => s.id));
+    return { subjects, edges: edges.filter((e) => shown.has(e.fromId) && shown.has(e.toId)) };
   },
 
   async searchSubjects(query: string, opts?: { types?: readonly SubjectType[]; limit?: number }): Promise<SubjectSearch> {

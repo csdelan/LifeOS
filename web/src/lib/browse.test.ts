@@ -3,21 +3,25 @@ import {
   DEFAULT_BROWSE_FILTERS,
   NO_AREA,
   activeFilterCount,
+  browseTypeList,
+  effectiveFilters,
+  openTarget,
+  parseBrowseType,
+  sortOptionsFor,
+  statusOf,
+  type BrowseFilters,
+} from "@/lib/browse";
+// The list's folds are the mock's copy of GET /api/browse (code review CR120).
+import {
   browseColumns,
   browseOptions,
   browseRows,
   browseTypeCounts,
   browsableItems,
-  effectiveFilters,
   itemsOfType,
-  openTarget,
-  parseBrowseType,
   searchSubjects,
   sortBrowse,
-  sortOptionsFor,
-  statusOf,
-  type BrowseFilters,
-} from "@/lib/browse";
+} from "@/lib/mock/browse";
 import type { SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 
 const TODAY = "2026-10-27";
@@ -63,7 +67,7 @@ const titles = (rows: SubjectListItem[]) => rows.map((r) => r.title);
 
 describe("Browse types (BROWSE-2)", () => {
   it("counts each type, archived items only when included, every creatable type even at zero", () => {
-    const live = browseTypeCounts(items, false);
+    const live = browseTypeList(browseTypeCounts(items, false));
     expect(live.total).toBe(8);
     const count = (t: SubjectType, c = live) => c.types.find((x) => x.type === t)?.count;
     expect(count("Decision")).toBe(3);
@@ -73,11 +77,11 @@ describe("Browse types (BROWSE-2)", () => {
     expect(live.types.some((t) => t.type === "Season")).toBe(false);
     expect(live.types.map((t) => t.type).slice(0, 4)).toEqual(["Value", "Goal", "Project", "Task"]);
 
-    const withArchived = browseTypeCounts(items, true);
+    const withArchived = browseTypeList(browseTypeCounts(items, true));
     expect(withArchived.total).toBe(9);
     expect(count("Decision", withArchived)).toBe(4);
 
-    const seasons = browseTypeCounts([item("s1", "Season", "Q4")], false);
+    const seasons = browseTypeList(browseTypeCounts([item("s1", "Season", "Q4")], false));
     expect(seasons.types.find((t) => t.type === "Season")?.count).toBe(1);
   });
 

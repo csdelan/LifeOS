@@ -4,11 +4,13 @@ using LifeOs.Domain;
 namespace LifeOs.Api.Mcp;
 
 /// <summary>
-/// The Map's alignment forest, ported from <c>buildAlignmentForest</c> in
-/// <c>web/src/lib/derive.ts</c> for the <c>alignment</c> tool: an item's children are the items
-/// that serve it (or result in it). Identity statements are roots, and so is any Goal, Project
-/// or Task that serves nothing. An item that serves two things shows under each, naming the
-/// other in <c>also_serves</c>. Lists stop at a budget of nodes, and say so.
+/// The Map's alignment forest, as <c>buildAlignmentForest</c> in <c>web/src/lib/derive.ts</c>
+/// folds it, for the <c>alignment</c> tool, from the read the Map draws
+/// (<c>SubjectReader.GetAlignmentAsync</c>): an item's children are the items that serve it (or
+/// result in it). Identity statements are roots, and so is any Goal, Project or Task that serves
+/// nothing. An item that serves two things shows under each, naming the other in
+/// <c>also_serves</c>. Lists stop at a budget of nodes, and say so. <c>tests/rules/alignment.json</c>
+/// holds the two to the same trees (code review CR120).
 /// </summary>
 public sealed class AlignmentForest
 {

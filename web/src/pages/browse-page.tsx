@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { LibraryIcon, PlusIcon, SlidersHorizontalIcon } from "lucide-react";
@@ -18,29 +19,39 @@ import { useCreateActions } from "@/components/create/create-context";
 import { useDirty } from "@/components/shell/unsaved-edits";
 import { PeekPanel } from "@/components/shell/panels";
 import {
+  BROWSE_TYPE_ORDER,
   DEFAULT_BROWSE_FILTERS,
   DUE_OPTIONS,
   ENTERED_OPTIONS,
   SORT_OPTIONS,
   activeFilterCount,
-  browseColumns,
-  browseOptions,
-  browseRows,
-  browseTypeCounts,
-  browsableItems,
+  browseTypeList,
   clearedFilters,
-  itemsOfType,
+  effectiveFilters,
+  matchesBrowse,
   parseBrowseType,
+  type BrowseColumn,
   type BrowseFilters,
+  type BrowseOptions,
   type BrowseSort,
   type BrowseType,
   type DueFilter,
   type EnteredFilter,
+  type TypeCount,
 } from "@/lib/browse";
+import { getReads } from "@/lib/client";
 import { todayIso } from "@/lib/dates";
+import { useBrowse } from "@/lib/features/browse/queries";
 import { useIsDesktop } from "@/lib/media-query";
-import { CREATABLE_TYPES, typeLabel, type CreatedSubject } from "@/lib/production-ui-types";
-import { useSubjects } from "@/lib/queries";
+import {
+  CREATABLE_TYPES,
+  typeLabel,
+  type CreatedSubject,
+  type SubjectListItem,
+} from "@/lib/production-ui-types";
+import { useListItem } from "@/lib/queries";
+import { qk } from "@/lib/query-keys";
+import { LIST_PAGE } from "@/components/primitives/use-paged";
 import { loadView, saveView } from "@/lib/view-state";
 import { ReadFailed } from "@/components/primitives/read-state";
 import {
@@ -54,6 +65,10 @@ import { BrowseList } from "@/components/browse/browse-list";
 type BrowseStored = BrowseFilters & { type?: string; selected?: string };
 
 const STORED_DEFAULT: BrowseStored = { ...DEFAULT_BROWSE_FILTERS, type: "all" };
+
+const NO_OPTIONS: BrowseOptions = { statuses: [], areas: [], tags: [] };
+const NO_COLUMNS: BrowseColumn[] = [];
+const NO_ROWS: SubjectListItem[] = [];
 
 const strings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
@@ -87,11 +102,22 @@ export function BrowsePage() {
   const [filters, setFilters] = useState<BrowseFilters>(() => storedFilters(stored));
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [created, setCreated] = useState<CreatedSubject | null>(null);
-  const subjects = useSubjects(undefined, true);
-  const { data, isLoading, isError } = subjects;
   const type: BrowseType = search.type ?? "all";
   const selected = search.selected;
   const today = todayIso();
+  const queryClient = useQueryClient();
+
+  // The server counts, filters, sorts and pages the list (code review CR120): Browse reads a page
+  // of rows, a page more each Show more, and a new type or filter starts again from the first.
+  const pagedFor = `${type}:${JSON.stringify(filters)}`;
+  const [pages, setPages] = useState(1);
+  const [pagesFor, setPagesFor] = useState(pagedFor);
+  if (pagesFor !== pagedFor) {
+    setPagesFor(pagedFor);
+    setPages(1);
+  }
+  const browse = useBrowse({ ...filters, type, limit: pages * LIST_PAGE });
+  const { data, isLoading, isError } = browse;
 
   // Come back to the type and item left open last time (NAV-1), unless the link names them.
   useEffect(() => {
@@ -115,19 +141,39 @@ export function BrowsePage() {
     saveView<BrowseStored>("browse", { ...filters, type, selected });
   }, [filters, type, selected]);
 
-  const all = useMemo(() => browsableItems(data ?? []), [data]);
-  const counts = useMemo(() => browseTypeCounts(all, filters.archived), [all, filters.archived]);
-  const typed = useMemo(
-    () => itemsOfType(all, type, filters.archived),
-    [all, type, filters.archived],
-  );
-  const options = useMemo(() => browseOptions(typed, type), [typed, type]);
-  const columns = useMemo(() => browseColumns(type, typed), [type, typed]);
-  const rows = useMemo(() => browseRows(all, type, filters, today), [all, type, filters, today]);
+  // The type list keeps the last counts while a new type's page loads, so it doesn't empty.
+  const [heldTypes, setHeldTypes] = useState<TypeCount[]>([]);
+  if (data && data.types !== heldTypes) setHeldTypes(data.types);
+  const counts = useMemo(() => browseTypeList(heldTypes), [heldTypes]);
+  const options = data?.options ?? NO_OPTIONS;
+  const columns = data?.columns ?? NO_COLUMNS;
+  const rows = data?.rows ?? NO_ROWS;
+  const total = data?.total ?? 0;
+  const matching = data?.matching ?? 0;
   const narrowing = activeFilterCount(filters);
 
-  const selectedItem = selected ? all.find((i) => i.id === selected) : undefined;
-  const selectedHidden = !!selectedItem && !rows.some((r) => r.id === selectedItem.id);
+  /** Whether the type and the filters show an item: the list's own rules, for one item. */
+  const shows = useCallback(
+    (item: SubjectListItem) =>
+      (type === "all" ? BROWSE_TYPE_ORDER.includes(item.type) : item.type === type) &&
+      (filters.archived || !item.archived) &&
+      matchesBrowse(item, effectiveFilters(filters, options), today),
+    [type, filters, options, today],
+  );
+
+  // The open item: its row when it's drawn, else read on its own, as it may be on a later page or
+  // one the filters hide.
+  const openRead = useListItem(selected).data ?? undefined;
+  const selectedItem = openRead ?? rows.find((i) => i.id === selected);
+  const selectedHidden = !!selectedItem && !!data && !shows(selectedItem);
+
+  /** An item's row, from the list when it's drawn there, else read on its own. */
+  const listItem = useCallback(
+    async (id: string) =>
+      rows.find((i) => i.id === id) ??
+      (await queryClient.fetchQuery({ queryKey: qk.listItem(id), queryFn: () => getReads().getListItem(id) })),
+    [rows, queryClient],
+  );
 
   function select(id: string | undefined) {
     requestNavigation(() => {
@@ -136,8 +182,8 @@ export function BrowsePage() {
   }
 
   /** Opens another item here, on its type, as the Pilot's Browse does. */
-  function openSubject(id: string) {
-    const item = all.find((i) => i.id === id);
+  async function openSubject(id: string) {
+    const item = await listItem(id);
     requestNavigation(() => {
       void navigate({
         search: (prev) => ({ type: item ? item.type : prev.type, selected: id }),
@@ -163,20 +209,21 @@ export function BrowsePage() {
     }
   }
 
-  // A new item is selected once it's in the list and the filters show it (BROWSE-2);
-  // otherwise the filters stay as they are and a note says it was made.
+  // A new item is selected when the filters show it (BROWSE-2); otherwise the filters stay as
+  // they are and a note says it was made.
   const shownCreated = useRef<string | null>(null);
   useEffect(() => {
     if (!created || shownCreated.current === created.id) return;
-    const item = all.find((i) => i.id === created.id);
-    if (!item) return; // not read back yet
     shownCreated.current = created.id;
-    if (rows.some((r) => r.id === item.id)) {
-      void navigate({ search: (prev) => ({ ...prev, selected: item.id }) });
-    } else {
-      toast.success(`Created ${typeLabel(item.type)} “${item.title}”. The current filters hide it.`);
-    }
-  }, [created, all, rows, navigate]);
+    void listItem(created.id).then((item) => {
+      if (!item) return;
+      if (shows(item)) {
+        void navigate({ search: (prev) => ({ ...prev, selected: item.id }) });
+      } else {
+        toast.success(`Created ${typeLabel(item.type)} “${item.title}”. The current filters hide it.`);
+      }
+    });
+  }, [created, listItem, shows, navigate]);
 
   const creatable = type !== "all" && CREATABLE_TYPES.includes(type);
   // New makes the type looked at, or anything from All types. A type New can't make (Season,
@@ -184,9 +231,9 @@ export function BrowsePage() {
   const showNew = type === "all" || creatable;
   const heading = type === "all" ? "Everything" : typeLabel(type);
   const shown =
-    rows.length === typed.length
-      ? `${typed.length} ${typed.length === 1 ? "item" : "items"}`
-      : `${rows.length} of ${typed.length} shown`;
+    matching === total
+      ? `${total} ${total === 1 ? "item" : "items"}`
+      : `${matching} of ${total} shown`;
 
   const controls = (
     <FilterControls
@@ -269,13 +316,13 @@ export function BrowsePage() {
           ) : null}
           {isLoading ? <ListSkeleton rows={8} /> : null}
           <ReadFailed
-            read={subjects}
+            read={browse}
             what="Items"
             notEmpty="an empty list"
             size="page"
             icon={LibraryIcon}
           />
-          {!isLoading && !isError && typed.length === 0 ? (
+          {!isLoading && !isError && total === 0 ? (
             <EmptyState
               icon={LibraryIcon}
               title={type === "all" ? "Nothing here yet" : `No ${typeLabel(type)} yet`}
@@ -284,7 +331,7 @@ export function BrowsePage() {
               }
             />
           ) : null}
-          {!isLoading && typed.length > 0 && rows.length === 0 ? (
+          {!isLoading && total > 0 && matching === 0 ? (
             <EmptyState
               icon={LibraryIcon}
               title="Nothing matches these filters"
@@ -297,10 +344,10 @@ export function BrowsePage() {
           ) : null}
           {rows.length > 0 ? (
             <BrowseList
-              // A new type or filter starts again from the first page of rows.
-              pagedFor={`${type}:${JSON.stringify(filters)}`}
               label={heading}
               rows={rows}
+              matching={matching}
+              onMore={() => setPages(Math.ceil(rows.length / LIST_PAGE) + 1)}
               columns={columns}
               filters={filters}
               selected={selected}
@@ -320,7 +367,7 @@ export function BrowsePage() {
           <SubjectDetail
             subjectId={selected}
             onDirtyChange={setDirty}
-            onOpenSubject={openSubject}
+            onOpenSubject={(id) => void openSubject(id)}
             onClose={() => select(undefined)}
           />
         ) : null}

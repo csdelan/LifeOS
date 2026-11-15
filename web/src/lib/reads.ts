@@ -6,6 +6,7 @@
 
 import type { AlignmentEdge } from "@/lib/derive";
 import type { HabitDay } from "@/lib/habit-days";
+import type { BrowseReads } from "@/lib/features/browse/reads";
 import type { MeasurementReads } from "@/lib/features/measurements/reads";
 import type {
   ActivityDayDetailRead,
@@ -86,6 +87,8 @@ export interface SubjectRelations {
 /** What `listSubjects` reads (code review CR76). */
 export interface ListSubjectsOptions {
   type?: SubjectListItem["type"];
+  /** Any of these types (code review CR120). */
+  types?: readonly SubjectType[];
   includeArchived?: boolean;
   includeSeries?: boolean;
   /** Leaves out a repeating Task's repetitions, as the Map draws it, once (code review CR107). */
@@ -96,7 +99,7 @@ export interface ListSubjectsOptions {
   limit?: number;
 }
 
-export interface LifeOsReads extends MeasurementReads {
+export interface LifeOsReads extends MeasurementReads, BrowseReads {
   /**
    * Subjects by type; a repeating Task's series only with `includeSeries` (TASKS-3). `status` is
    * `open` (any status not finished), `closed`, or one status; `limit` cuts the list (code review

@@ -7,8 +7,9 @@ namespace LifeOs.Api.Http;
 /// Read endpoints over <c>bsk.v_*</c> via the <c>bsk_reader</c> connection.
 /// The OpenAPI document is the contract for their shapes; the web checks its own types
 /// against the generated ones (<c>web/src/lib/live/fits.ts</c>). Focus is composed here
-/// (<see cref="FocusReader"/>), as an agent's <c>life_snapshot</c> sees it; the Map's alignment
-/// forest is still folded in <c>web/src/lib/derive.ts</c> from these primitives.
+/// (<see cref="FocusReader"/>), as an agent's <c>life_snapshot</c> sees it, and Browse
+/// (<see cref="BrowseReader"/>); the Map's alignment forest is folded in <c>web/src/lib/derive.ts</c>
+/// from <c>GET /api/alignment</c>, the read the <c>alignment</c> tool folds too.
 /// </summary>
 public static class ReadEndpoints
 {
@@ -56,9 +57,34 @@ public static class ReadEndpoints
             .Produces<IReadOnlyList<HabitOccurrenceRow>>();
         api.MapGet("/edges", GetEdges).WithName("GetAlignmentEdges")
             .Produces<IReadOnlyList<AlignmentEdge>>();
+        api.MapGet("/alignment", GetAlignment).WithName("GetAlignment")
+            .Produces<AlignmentRead>();
+        api.MapGet("/browse", GetBrowse).WithName("GetBrowse")
+            .Produces<BrowseRead>();
         api.MapGet("/timers", GetTimers).WithName("GetTimers")
             .Produces<IReadOnlyList<TaskTimer>>();
     }
+
+    /// <summary>What the Map draws, and the edges among them (code review CR120).</summary>
+    private static async Task<IResult> GetAlignment(SubjectReader reader, CancellationToken cancellationToken, bool includeArchived = false)
+        => Results.Ok(await reader.GetAlignmentAsync(includeArchived, cancellationToken));
+
+    /// <summary>
+    /// A page of Browse (BROWSE-2, code review CR120): <paramref name="type"/>'s items (every type
+    /// Browse lists for <c>all</c>) through the filters, sorted, the first <paramref name="limit"/>
+    /// of them, with the type list's counts and the type's filter options and columns.
+    /// </summary>
+    private static async Task<IResult> GetBrowse(
+        BrowseReader reader, CancellationToken cancellationToken, string type = BrowseRules.All, string? text = null,
+        string[]? status = null, string[]? area = null, string[]? tag = null, string due = "any", string entered = "any",
+        bool archived = false, string sort = "title", string dir = "asc", int limit = BrowseRules.PageSize)
+        => Results.Ok(await reader.ReadAsync(
+            new BrowseQuery
+            {
+                Type = type, Text = text ?? "", Statuses = status ?? [], Areas = area ?? [], Tags = tag ?? [],
+                Due = due, Entered = entered, Archived = archived, Sort = sort, Dir = dir, Limit = limit,
+            },
+            cancellationToken));
 
     private static async Task<IResult> GetTimers(SubjectReader reader, CancellationToken cancellationToken)
         => Results.Ok((await reader.GetTimersAsync(cancellationToken: cancellationToken)));
@@ -69,17 +95,29 @@ public static class ReadEndpoints
     /// <paramref name="status"/> narrows them to <c>open</c> ones (any status not finished),
     /// <c>closed</c> ones or one status, and <paramref name="limit"/> (1 to 1000) cuts the list, so a
     /// page that shows open items reads only those however many repetitions are done (code review CR76).
+    /// <paramref name="types"/> reads any of several types; <paramref name="area"/> (a URN or a
+    /// name), <paramref name="tag"/>, <paramref name="dueFrom"/> and <paramref name="dueTo"/> narrow
+    /// them as the kernel's filter does (code review CR120).
     /// </summary>
     private static async Task<IResult> ListSubjects(
         SubjectReader reader, CancellationToken cancellationToken, string? type, bool includeArchived = false,
-        bool includeSeries = false, string? status = null, int? limit = null, bool excludeRepetitions = false)
+        bool includeSeries = false, string? status = null, int? limit = null, bool excludeRepetitions = false,
+        string[]? types = null, string? area = null, string? tag = null, string? dueFrom = null, string? dueTo = null)
         => Results.Ok(await reader.ListSubjectsAsync(
             new SubjectFilter
             {
-                Type = type, IncludeArchived = includeArchived, IncludeSeries = includeSeries,
-                ExcludeRepetitions = excludeRepetitions, Status = status, Limit = HistoryLimit(limit)
+                Type = type, Types = types ?? [], IncludeArchived = includeArchived, IncludeSeries = includeSeries,
+                ExcludeRepetitions = excludeRepetitions, Status = status, Limit = HistoryLimit(limit),
+                Area = area, Tag = tag, DueFrom = Day(dueFrom, "dueFrom"), DueTo = Day(dueTo, "dueTo"),
+                ByDue = dueFrom is not null || dueTo is not null,
             },
             cancellationToken));
+
+    /// <summary>A yyyy-MM-dd day as given, or a refusal; the filter compares days as text.</summary>
+    private static string? Day(string? value, string name)
+        => value is null || DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _)
+            ? value
+            : throw new ArgumentException($"{name} is a day, yyyy-MM-dd, not '{value}'.");
 
     /// <summary>
     /// The command palette's search (code review CR76): subjects with every word of

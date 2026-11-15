@@ -117,6 +117,63 @@ public sealed class AlignmentEdge
     public string Relation { get; set; } = "";
 }
 
+/// <summary>
+/// What the Map draws (<c>GET /api/alignment</c>, code review CR120): the alignment types and any
+/// item an edge links, a repeating Task once as its series, and the edges among them. The
+/// <c>alignment</c> tool folds the same read.
+/// </summary>
+public sealed class AlignmentRead
+{
+    public IReadOnlyList<SubjectListItem> Subjects { get; set; } = [];
+    public IReadOnlyList<AlignmentEdge> Edges { get; set; } = [];
+}
+
+/// <summary>
+/// One page of Browse (BROWSE-2, <c>GET /api/browse</c>, code review CR120): the type list's
+/// counts, the type's filter options and columns, how many items it holds and how many the
+/// filters keep, and the first of those, sorted.
+/// </summary>
+public sealed class BrowseRead
+{
+    /// <summary>Each type Browse lists that holds an item, in its order, with how many.</summary>
+    public IReadOnlyList<BrowseTypeCount> Types { get; set; } = [];
+
+    /// <summary>The type's items (every type's for <c>all</c>), archived ones only when included.</summary>
+    public int Total { get; set; }
+
+    /// <summary>How many of them the filters keep.</summary>
+    public int Matching { get; set; }
+
+    public BrowseOptionsRead Options { get; set; } = new();
+
+    /// <summary>The list's columns, from the type's items before the filters: type, status, due, area, tags, entered.</summary>
+    public IReadOnlyList<string> Columns { get; set; } = [];
+
+    /// <summary>The first <c>limit</c> of the items the filters keep, sorted.</summary>
+    public IReadOnlyList<SubjectListItem> Rows { get; set; } = [];
+}
+
+public sealed class BrowseTypeCount
+{
+    public string Type { get; set; } = "";
+    public int Count { get; set; }
+}
+
+/// <summary>What Browse's filters offer for a type: each value with how many of its items have it.</summary>
+public sealed class BrowseOptionsRead
+{
+    public IReadOnlyList<BrowseFilterOption> Statuses { get; set; } = [];
+    public IReadOnlyList<BrowseFilterOption> Areas { get; set; } = [];
+    public IReadOnlyList<BrowseFilterOption> Tags { get; set; } = [];
+}
+
+public sealed class BrowseFilterOption
+{
+    public string Value { get; set; } = "";
+    public string Label { get; set; } = "";
+    public int Count { get; set; }
+}
+
 /// <summary>An item an edge from <see cref="FromId"/> points at.</summary>
 public sealed class AlignmentTarget
 {

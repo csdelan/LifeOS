@@ -17,11 +17,9 @@ public sealed partial class ScopedReadsTests
     private static readonly Dictionary<string, string> EveryType = new()
     {
         ["LifeOs.Api/Http/ReadEndpoints.cs ListSubjects"] =
-            "GET /api/subjects: the caller names its type, or reads every one; Browse and the Map read every one (fifth review R15).",
+            "GET /api/subjects: the caller names its types, or reads every one; the web names them (scoped-reads.test.ts).",
         ["LifeOs.Api/Mcp/Tools/ItemTools.cs ListItems"] =
             "list_items: an agent names the type, or lists every one, at most 200.",
-        ["LifeOs.Api/Mcp/Tools/ItemTools.cs Alignment"] =
-            "alignment: the whole tree, of every type that serves (fifth review R15).",
     };
 
     [Fact]
@@ -58,14 +56,16 @@ public sealed partial class ScopedReadsTests
         Assert.True(ReadsEveryType("ListSubjectsAsync", "new SubjectFilter { Type = type, Limit = 10 }, ct"));
         Assert.True(ReadsEveryType("QuerySubjectsAsync", "null, cancellationToken: ct"));
         Assert.True(ReadsEveryType("QuerySubjectsAsync", "type, cancellationToken: ct"));
+        Assert.True(ReadsEveryType("ListSubjectsAsync", "new SubjectFilter { Type = type, Types = types ?? [] }, ct"));
         Assert.False(ReadsEveryType("ListSubjectsAsync", "new SubjectFilter { Types = Types, Status = SubjectFilter.Open }, ct"));
+        Assert.False(ReadsEveryType("ListSubjectsAsync", "new SubjectFilter { Types = BrowseRules.TypesFor(query.Type), IncludeArchived = a }, ct"));
         Assert.False(ReadsEveryType("ListSubjectsAsync", "new SubjectFilter { Type = SubjectTypes.Task, Status = SubjectFilter.Open }, ct"));
         Assert.False(ReadsEveryType("QuerySubjectsAsync", "SubjectTypes.Value, cancellationToken: ct"));
         Assert.False(ReadsEveryType("GetSubjectsAsync", "SubjectTypes.Goal, cancellationToken: ct"));
     }
 
-    // A type named by a SubjectTypes constant or a named list of them is scoped; a variable, which
-    // may be null, or none at all reads every type.
+    // A type named by a SubjectTypes constant, or types by a named list or a named rule's answer, is
+    // scoped; a variable, which may be null or empty, or none at all reads every type.
     private static bool ReadsEveryType(string name, string arguments)
     {
         if (name is "QuerySubjectsAsync" or "GetSubjectsAsync")
@@ -74,7 +74,9 @@ public sealed partial class ScopedReadsTests
         }
 
         var type = TypeSet().Match(arguments);
-        return !type.Success || !Scoped().IsMatch(type.Groups["value"].Value.Trim());
+        var types = TypesSet().Match(arguments);
+        return !(type.Success && type.Groups["value"].Value.Trim().StartsWith("SubjectTypes.", StringComparison.Ordinal))
+               && !(types.Success && Scoped().IsMatch(types.Groups["value"].Value.Trim()));
     }
 
     // From an opening parenthesis to its match.
@@ -103,10 +105,13 @@ public sealed partial class ScopedReadsTests
     [GeneratedRegex(@"\.(?<name>ListSubjectsAsync|QuerySubjectsAsync|GetSubjectsAsync)\(")]
     private static partial Regex ListCall();
 
-    [GeneratedRegex(@"\bTypes?\s*=\s*(?<value>[^,}\r\n]+)")]
+    [GeneratedRegex(@"\bType\s*=\s*(?<value>[^,}\r\n]+)")]
     private static partial Regex TypeSet();
 
-    [GeneratedRegex(@"^(SubjectTypes\.\w+|[A-Z]\w*(\.[A-Z]\w*)*)$")]
+    [GeneratedRegex(@"\bTypes\s*=\s*(?<value>[^,}\r\n]+)")]
+    private static partial Regex TypesSet();
+
+    [GeneratedRegex(@"^[A-Z]\w*(\.[A-Z]\w*)*(\([^()]*\))?$")]
     private static partial Regex Scoped();
 
     [GeneratedRegex(@"(?m)^\s*(?:public|private|internal|protected)\b[^;=\n]*?\s(?<method>\w+)\s*\(")]

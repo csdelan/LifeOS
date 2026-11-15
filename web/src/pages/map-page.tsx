@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { MAP_SCOPE, useAlignmentEdges, useAlignmentForest, useAreas, useSubjects } from "@/lib/queries";
+import { useAlignmentForest, useAreas } from "@/lib/queries";
+import { useAlignment } from "@/lib/features/browse/queries";
 import type { AlignmentEdge, MapLens } from "@/lib/derive";
 import { buildAlignmentGraph } from "@/lib/graph-model";
 import type { GraphLayoutKind, MapViewMode, OrphanFilter } from "@/lib/graph-model";
@@ -78,21 +79,22 @@ export function MapPage() {
     [data, show, selected],
   );
   const forest = shown?.nodes;
-  // A repeating Task is one node, its series; the API leaves its repetitions out (TASKS-3).
-  const subjectsQuery = useSubjects(undefined, archived, true, MAP_SCOPE);
-  const graphSubjects = subjectsQuery.data ?? EMPTY_SUBJECTS;
-  const edgesQuery = useAlignmentEdges(archived);
+  // What the Map draws, which the outline folds too (code review CR120): a repeating Task is one
+  // node, its series, and the API leaves its repetitions out (TASKS-3).
+  const drawn = useAlignment(archived);
+  const graphSubjects = drawn.data?.subjects ?? EMPTY_SUBJECTS;
+  const graphEdges = drawn.data?.edges ?? EMPTY_EDGES;
   const areasQuery = useAreas();
   const graphModel = useMemo(
     () =>
-      buildAlignmentGraph(graphSubjects, edgesQuery.data ?? EMPTY_EDGES, {
+      buildAlignmentGraph(graphSubjects, graphEdges, {
         lens,
         area,
         orphans,
         show,
         keep: selected,
       }),
-    [graphSubjects, edgesQuery.data, lens, area, orphans, show, selected],
+    [graphSubjects, graphEdges, lens, area, orphans, show, selected],
   );
   const hiddenCount = view === "graph" ? graphModel.hiddenFinished : (shown?.hidden ?? 0);
   const { setDirty, requestNavigation } = useDirty();
@@ -234,9 +236,8 @@ export function MapPage() {
     const found = findNode(data, selected);
     return found?.subject.title ?? null;
   }, [data, selected]);
-  const graphLoading =
-    subjectsQuery.isLoading || edgesQuery.isLoading || areasQuery.isLoading;
-  const graphError = subjectsQuery.isError || edgesQuery.isError;
+  const graphLoading = drawn.isLoading || areasQuery.isLoading;
+  const graphError = drawn.isError;
 
   return (
     <div className="flex h-full min-h-0">
@@ -387,7 +388,7 @@ export function MapPage() {
               </div>
             ) : null}
             <ReadFailed
-              read={[subjectsQuery, edgesQuery]}
+              read={drawn}
               what="The graph"
               notEmpty="an empty graph"
               size="page"

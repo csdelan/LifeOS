@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
  * A screen reads what it shows (code review CR107). The shell's badge read the whole Inbox for its
  * number, three pickers read every subject to filter them in the browser, the Map read every
  * repetition of every repeating Task to drop them, and a habit's grid read its whole history for a
- * month. These find a read like that coming back, in the app's code (the mock answers them all).
+ * month. Then Browse and the Map read every subject of every type, Spaces, Metrics and a review a
+ * day among them; now the server pages Browse and answers what the Map draws (code review CR120).
+ * These find a read like that coming back, in the app's code (the mock answers them all).
+ * `ScopedReadsTests` is the server's twin.
  */
 const sources = import.meta.glob<string>(
   ["/src/**/*.{ts,tsx}", "!/src/**/*.test.{ts,tsx}", "!/src/lib/mock/**", "!/src/api/**"],
@@ -44,32 +47,26 @@ function firstArgument(args: string): string {
   return args;
 }
 
-/** Each place that reads every subject (`useSubjects` with no type, or one that can be none), and why. */
-const EVERY_SUBJECT: Record<string, string> = {
-  "/src/pages/browse-page.tsx": "Browse lists and counts every item, archived ones too, and filters them there.",
-  "/src/pages/map-page.tsx": "The Map draws every item, but a repeating Task's repetitions (MAP_SCOPE).",
-  "/src/lib/queries.ts": "useAlignmentForest, the Map's outline, reads what the Map page does.",
-};
-
-describe("scoped reads (code review CR107)", () => {
+describe("scoped reads (code review CR107, CR120)", () => {
   it("reads the app's code", () => {
     expect(Object.keys(sources)).toEqual(expect.arrayContaining(["/src/lib/queries.ts", "/src/pages/map-page.tsx"]));
   });
 
-  it("reads every subject only where a page shows them all", () => {
+  it("names the type of every subject list it reads, with no place listed that reads them all", () => {
     const everything = readers(/(?<!function )\buseSubjects\(/g, (args) => {
       const type = firstArgument(args).trim();
       return type === "" || /\bundefined\b/.test(type);
     });
-    expect(everything).toEqual(Object.keys(EVERY_SUBJECT).sort());
+    expect(everything).toEqual([]);
   });
 
-  it("leaves a repeating Task's repetitions out of every read of all subjects but Browse's", () => {
-    const withRepetitions = readers(/(?<!function )\buseSubjects\(/g, (args) => {
-      const type = firstArgument(args).trim();
-      return (type === "" || /\bundefined\b/.test(type)) && !args.includes("MAP_SCOPE");
-    });
-    expect(withRepetitions).toEqual(["/src/pages/browse-page.tsx"]);
+  it("lists subjects only through the hooks, which name a type", () => {
+    expect(readers(/\.listSubjects\(/g, () => true)).toEqual(["/src/lib/queries.ts"]);
+  });
+
+  it("reads Browse a page at a time, and what the Map draws once", () => {
+    expect(readers(/(?<!function )\buseBrowse\(/g, () => true)).toEqual(["/src/pages/browse-page.tsx"]);
+    expect(readers(/(?<!function )\buseAlignment\(/g, () => true)).toEqual(["/src/lib/queries.ts", "/src/pages/map-page.tsx"]);
   });
 
   it("reads the whole Inbox only on the Inbox page: the shell's badge reads its count", () => {

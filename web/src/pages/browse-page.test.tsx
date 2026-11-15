@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
@@ -7,7 +7,7 @@ import { CreateActions, type CreateOpts } from "@/components/create/create-conte
 import { createWriteClient } from "@/lib/client";
 import { createSubject, resetStore } from "@/lib/mock/store";
 import { mockReads } from "@/lib/mock/api";
-import type { SubjectListItem, SubjectType } from "@/lib/production-ui-types";
+import type { SubjectType } from "@/lib/production-ui-types";
 import { LIST_PAGE } from "@/components/primitives/use-paged";
 import { BrowsePage } from "@/pages/browse-page";
 
@@ -85,6 +85,11 @@ function rowTitles(list: HTMLElement) {
     .map((b) => b.querySelector(".font-medium")?.textContent);
 }
 
+/** The list's rows once the server's answer to the last change has come: it's read, not folded here. */
+async function rowsBecome(list: HTMLElement, titles: (string | undefined)[]) {
+  await waitFor(() => expect(rowTitles(list)).toEqual(titles));
+}
+
 const typeButton = (name: RegExp) =>
   within(screen.getByRole("complementary", { name: "Browse filters" })).getByRole("button", { name });
 
@@ -106,19 +111,19 @@ describe("Browse page (BROWSE-2)", () => {
     const list = await listOf("Decision");
 
     await user.click(screen.getByRole("checkbox", { name: "Implementing" }));
-    expect(rowTitles(list)).toEqual(["React + Vite for Production UI"]);
+    await rowsBecome(list, ["React + Vite for Production UI"]);
     expect(screen.getByText("1 of 2 shown")).toBeInTheDocument();
 
     await user.click(screen.getByRole("checkbox", { name: "Closed" }));
-    expect(rowTitles(list)).toEqual(["Blazor for Production UI", "React + Vite for Production UI"]);
+    await rowsBecome(list, ["Blazor for Production UI", "React + Vite for Production UI"]);
 
     await user.type(screen.getByRole("searchbox", { name: "Filter by title or URN" }), "blazor");
-    expect(rowTitles(list)).toEqual(["Blazor for Production UI"]);
+    await rowsBecome(list, ["Blazor for Production UI"]);
 
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(screen.getByRole("checkbox", { name: "Implementing" })).not.toBeChecked();
     // The pane clears its own filters; the text box keeps what was typed.
-    expect(rowTitles(list)).toEqual(["Blazor for Production UI"]);
+    await rowsBecome(list, ["Blazor for Production UI"]);
   });
 
   it("shows the columns that fit what's looked at, and sorts by a column header", async () => {
@@ -130,9 +135,9 @@ describe("Browse page (BROWSE-2)", () => {
 
     // Status sorts in the Decision's own order: Implementing comes before Closed.
     await user.click(screen.getByRole("button", { name: "Sort by Status" }));
-    expect(rowTitles(list)).toEqual(["React + Vite for Production UI", "Blazor for Production UI"]);
+    await rowsBecome(list, ["React + Vite for Production UI", "Blazor for Production UI"]);
     await user.click(screen.getByRole("button", { name: "Status, sorted ascending" }));
-    expect(rowTitles(list)).toEqual(["Blazor for Production UI", "React + Vite for Production UI"]);
+    await rowsBecome(list, ["Blazor for Production UI", "React + Vite for Production UI"]);
 
     await user.click(typeButton(/^Task\s*\d+$/));
     await listOf("Task");
@@ -146,21 +151,25 @@ describe("Browse page (BROWSE-2)", () => {
     await user.click(screen.getByRole("button", { name: "Sort by Tags" }));
     expect(screen.getByRole("button", { name: "Tags, sorted ascending" })).toBeInTheDocument();
     // By the tags as the column shows them: #craft…, #family…, #health…, #identity…, #trading…
-    expect(rowTitles(values).slice(0, 5)).toEqual([
-      "Craftsman of systems",
-      "Present with my family",
-      "Steward of my health",
-      "I tell myself the truth",
-      "I take only defined risk",
-    ]);
+    await waitFor(() =>
+      expect(rowTitles(values).slice(0, 5)).toEqual([
+        "Craftsman of systems",
+        "Present with my family",
+        "Steward of my health",
+        "I tell myself the truth",
+        "I take only defined risk",
+      ]),
+    );
 
     await user.click(typeButton(/^All types/));
     const all = await listOf("Everything");
     await user.click(screen.getByRole("button", { name: "Sort by Type" }));
     // Identity Statements first, as in the type list; the last rows are a later type.
-    const rows = within(all).getAllByRole("button");
-    expect(rows[0]).toHaveTextContent("Identity Statement");
-    expect(rows.at(-1)).not.toHaveTextContent("Identity Statement");
+    await waitFor(() => {
+      const rows = within(all).getAllByRole("button");
+      expect(rows[0]).toHaveTextContent("Identity Statement");
+      expect(rows.at(-1)).not.toHaveTextContent("Identity Statement");
+    });
   });
 
   it("opens an item, and keeps it open only for a type it belongs to", async () => {
@@ -187,7 +196,7 @@ describe("Browse page (BROWSE-2)", () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Show it" }));
-    expect(rowTitles(list)).toContain("Blazor for Production UI");
+    await waitFor(() => expect(rowTitles(list)).toContain("Blazor for Production UI"));
     expect(screen.queryByText(/the filters hide it/)).not.toBeInTheDocument();
   });
 
@@ -259,25 +268,29 @@ describe("Browse page (BROWSE-2)", () => {
 
 // Each makes hundreds of subjects and draws two hundred rows: about two seconds alone, and more
 // than the default five while the whole suite runs alongside.
-describe("Browse page with thousands of items (code review CR76)", { timeout: 20_000 }, () => {
-  it("draws the first two hundred rows, the open one too, and Show more draws the next", async () => {
+describe("Browse page with thousands of items (code review CR76, CR120)", { timeout: 20_000 }, () => {
+  it("reads the first two hundred rows, and Show more reads the next", async () => {
     let last = "";
     for (let i = 0; i < 230; i++) last = createSubject({ type: "Task", title: `Repetition ${String(i).padStart(3, "0")}` }).id;
     const tasks = (await mockReads.listSubjects({ type: "Task" })).length;
+    const browse = vi.spyOn(mockReads, "browse");
     const user = userEvent.setup();
     renderPage({ type: "Task", selected: last });
 
-    // By title, Repetition 229 sorts past the first page; it's open, so the list draws down to it.
+    // The server sends a page: Repetition 229 sorts past it, open in the panel but not drawn.
     const list = await listOf("Task");
-    const drawn = within(list).getAllByRole("listitem").length;
-    expect(drawn).toBeGreaterThan(LIST_PAGE);
-    expect(drawn).toBeLessThan(tasks);
-    expect(within(list).getByRole("button", { name: /Repetition 229/ })).toBeInTheDocument();
+    expect(within(list).getAllByRole("listitem")).toHaveLength(LIST_PAGE);
+    expect(browse).toHaveBeenLastCalledWith(expect.objectContaining({ type: "Task", limit: LIST_PAGE }));
+    expect(screen.getByText(`${LIST_PAGE} of ${tasks} shown`)).toBeInTheDocument();
+    expect(screen.getByTestId("detail")).toHaveTextContent(last);
 
     await user.click(screen.getByRole("button", { name: /^Show \d+ more$/ }));
 
-    expect(within(list).getAllByRole("listitem")).toHaveLength(tasks);
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(tasks));
+    expect(browse).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 2 * LIST_PAGE }));
+    expect(within(list).getByRole("button", { name: /Repetition 229/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Show \d+ more$/ })).not.toBeInTheDocument();
+    browse.mockRestore();
   });
 
   it("starts again from the first page when the filters change", async () => {
@@ -286,37 +299,23 @@ describe("Browse page with thousands of items (code review CR76)", { timeout: 20
     renderPage({ type: "Task" });
     const list = await listOf("Task");
     await user.click(screen.getByRole("button", { name: /^Show \d+ more$/ }));
-    expect(within(list).getAllByRole("listitem")).toHaveLength(2 * LIST_PAGE);
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(2 * LIST_PAGE));
 
     await user.type(screen.getByRole("searchbox"), "Repetition");
 
-    expect(within(await listOf("Task")).getAllByRole("listitem")).toHaveLength(LIST_PAGE);
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(LIST_PAGE));
   });
 });
 
-describe("Browse page with the kernel's Spaces in the list", () => {
+describe("Browse page with the kernel's Spaces among the items", () => {
   it("still shows All types, leaving the Spaces to the Environment page", async () => {
-    const list = mockReads.listSubjects.bind(mockReads);
-    const kitchen: SubjectListItem = {
-      id: "space-kitchen",
-      urn: "urn:bsk:space:kitchen-5a1b2c",
-      type: "Space" as SubjectType,
-      title: "Kitchen",
-      status: null,
-      archived: false,
-      createdAt: "2026-10-20T12:00:00.000Z",
-    };
-    const spy = vi.spyOn(mockReads, "listSubjects").mockImplementation(async (opts) => [...(await list(opts)), kitchen]);
-    try {
-      renderPage({ type: "all" });
-      const all = await listOf("Everything");
-      const shown = rowTitles(all);
-      expect(shown.length).toBeGreaterThan(0);
-      expect(shown).not.toContain("Kitchen");
-      // The count leaves it out too, so it matches the list.
-      expect(typeButton(/^All types\s*\d+$/)).toHaveTextContent(new RegExp(`^All types\\s*${shown.length}$`));
-    } finally {
-      spy.mockRestore();
-    }
+    createSubject({ type: "Space" as SubjectType, title: "Kitchen" });
+    renderPage({ type: "all" });
+    const all = await listOf("Everything");
+    const shown = rowTitles(all);
+    expect(shown.length).toBeGreaterThan(0);
+    expect(shown).not.toContain("Kitchen");
+    // The count leaves it out too, so it matches the list.
+    expect(typeButton(/^All types\s*\d+$/)).toHaveTextContent(new RegExp(`^All types\\s*${shown.length}$`));
   });
 });

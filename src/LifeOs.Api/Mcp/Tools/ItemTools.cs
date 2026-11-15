@@ -187,8 +187,10 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
         CancellationToken cancellationToken = default)
     {
         var stamp = await reads.NowAsync(cancellationToken);
-        var all = (await subjects.QuerySubjectsAsync(null, cancellationToken: cancellationToken)).Where(s => options.AllowsType(s.Type));
-        var forest = new AlignmentForest(all, (await subjects.GetAlignmentEdgesAsync(cancellationToken: cancellationToken)), include_done, MaxTreeNodes);
+        // What the Map draws (code review CR120): the alignment types and what an edge links, a
+        // repeating Task once as its series, where this read every subject and every edge.
+        var map = await subjects.GetAlignmentAsync(cancellationToken: cancellationToken);
+        var forest = new AlignmentForest(map.Subjects.Where(s => options.AllowsType(s.Type)), map.Edges, include_done, MaxTreeNodes);
 
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -200,7 +202,9 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
         var detail = await FindAsync(id, cancellationToken);
         if (!forest.Contains(detail.Id))
         {
-            throw new McpException($"{detail.Type} '{detail.Title}' is archived, so it isn't in the tree.");
+            throw new McpException(detail.Archived
+                ? $"{detail.Type} '{detail.Title}' is archived, so it isn't in the tree."
+                : $"{detail.Type} '{detail.Title}' isn't in the tree: it serves nothing and nothing serves it.");
         }
 
         var below = forest.Below(detail.Id);

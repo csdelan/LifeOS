@@ -1,7 +1,8 @@
 /**
- * The Map's alignment forest, folded from the subjects and the edges among them, which the mock
- * and the live reads both answer. Focus is worked out by the API (`GET /api/focus`, code review
- * CR106); the mock's copy of it is `lib/mock/dashboard.ts`.
+ * The Map's alignment forest, folded from what the Map draws (`GET /api/alignment`), as the
+ * `alignment` tool folds the same read (`AlignmentForest` in C#); `tests/rules/alignment.json`
+ * holds the two to the same trees (code review CR120). Focus is worked out by the API
+ * (`GET /api/focus`, code review CR106); the mock's copy of it is `lib/mock/dashboard.ts`.
  */
 
 import type { Relation, SubjectListItem } from "@/lib/production-ui-types";
@@ -26,6 +27,18 @@ export interface AlignmentNode {
   depth: number;
 }
 
+/** The relations that make the tree; `supersedes` isn't alignment, and only the graph draws it. */
+export const TREE_RELATIONS: readonly Relation[] = ["serves", "results_in"];
+
+/** Where a type comes among siblings: identity statements, goals, projects, then the rest. */
+function rank(type: SubjectListItem["type"]): number {
+  return type === "Value" ? 0 : type === "Goal" ? 1 : type === "Project" ? 2 : 3;
+}
+
+function byRankAndTitle(a: SubjectListItem, b: SubjectListItem): number {
+  return rank(a.type) - rank(b.type) || a.title.localeCompare(b.title);
+}
+
 export function buildAlignmentForest(
   allSubjects: SubjectListItem[],
   edges: AlignmentEdge[],
@@ -38,8 +51,10 @@ export function buildAlignmentForest(
   const childrenOf = new Map<string, { childId: string; relation: Relation }[]>();
   const parentsOf = new Map<string, { parentId: string; relation: Relation }[]>();
 
-  for (const e of edges) {
-    if (!by.has(e.fromId) || !by.has(e.toId)) continue;
+  const tree = edges.filter(
+    (e) => TREE_RELATIONS.includes(e.relation) && by.has(e.fromId) && by.has(e.toId),
+  );
+  for (const e of tree) {
     const kids = childrenOf.get(e.toId) ?? [];
     kids.push({ childId: e.fromId, relation: e.relation });
     childrenOf.set(e.toId, kids);
@@ -48,9 +63,7 @@ export function buildAlignmentForest(
     parentsOf.set(e.fromId, pars);
   }
 
-  const childIds = new Set(
-    edges.filter((e) => by.has(e.fromId) && by.has(e.toId)).map((e) => e.fromId),
-  );
+  const childIds = new Set(tree.map((e) => e.fromId));
 
   const roots = subjects.filter((x) => {
     if (x.type === "Value") return true;
@@ -58,11 +71,7 @@ export function buildAlignmentForest(
     return false;
   });
 
-  roots.sort((a, b) => {
-    const rank = (t: SubjectListItem) =>
-      t.type === "Value" ? 0 : t.type === "Goal" ? 1 : t.type === "Project" ? 2 : 3;
-    return rank(a) - rank(b) || a.title.localeCompare(b.title);
-  });
+  roots.sort(byRankAndTitle);
 
   const walk = (
     id: string,
@@ -87,6 +96,7 @@ export function buildAlignmentForest(
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     const kids = (childrenOf.get(id) ?? [])
+      .toSorted((a, b) => byRankAndTitle(by.get(a.childId)!, by.get(b.childId)!))
       .map((c) => walk(c.childId, id, c.relation, depth + 1, nextPath))
       .filter((n): n is AlignmentNode => n !== null);
 

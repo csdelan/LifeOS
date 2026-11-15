@@ -4,7 +4,6 @@ import { DateChip } from "@/components/primitives/date-chip";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { ShowMore } from "@/components/primitives/show-more";
-import { usePaged } from "@/components/primitives/use-paged";
 import {
   localDay,
   nextSort,
@@ -48,23 +47,27 @@ const COLUMN_SORT: Record<BrowseColumn, BrowseSort> = {
 
 /**
  * The list: a grid with sortable column headers when there's room, stacked rows when there
- * isn't (the list's own width decides, so an open detail panel narrows it too). It draws a page
- * of rows at a time and the open item's (`usePaged`), so thousands of finished repetitions don't
- * all reach the page at once (code review CR76).
+ * isn't (the list's own width decides, so an open detail panel narrows it too). The server sends
+ * a page of rows at a time (code review CR120), so thousands of finished repetitions don't all
+ * reach the page at once; Show more asks for the next.
  */
 export function BrowseList({
-  pagedFor,
   label,
   rows,
+  matching,
+  onMore,
   columns,
   filters,
   selected,
   onSelect,
   onSort,
 }: {
-  pagedFor: string;
   label: string;
+  /** The rows the server sent: the first of those the filters keep. */
   rows: SubjectListItem[];
+  /** How many items the filters keep in all. */
+  matching: number;
+  onMore: () => void;
   columns: BrowseColumn[];
   filters: BrowseFilters;
   selected?: string;
@@ -72,7 +75,6 @@ export function BrowseList({
   onSort: (update: (f: BrowseFilters) => BrowseFilters) => void;
 }) {
   const template = ["minmax(0,1fr)", ...columns.map((c) => COLUMN_WIDTH[c])].join(" ");
-  const paged = usePaged(rows, pagedFor, selected);
   return (
     <div style={{ "--browse-cols": template } as CSSProperties}>
       <div className="hidden items-center gap-x-3 px-3 pb-1 @xl:grid @xl:grid-cols-(--browse-cols)">
@@ -89,7 +91,7 @@ export function BrowseList({
         })}
       </div>
       <ul aria-label={`${label} list`} className="space-y-0.5">
-        {rows.slice(0, paged.drawn).map((item) => (
+        {rows.map((item) => (
           <li key={item.id}>
             <BrowseRow
               item={item}
@@ -101,7 +103,7 @@ export function BrowseList({
           </li>
         ))}
       </ul>
-      <ShowMore {...paged} />
+      <ShowMore drawn={rows.length} total={matching} more={onMore} />
     </div>
   );
 }

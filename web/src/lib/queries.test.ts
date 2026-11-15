@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockReads } from "@/lib/mock/api";
 import { createMockWriteClient } from "@/lib/mock/write-client";
 import type { LifeOsWriteClient } from "@/lib/production-ui-types";
-import { MAP_SCOPE, qk, useAlignmentEdges, useAlignmentForest, useSubjects } from "@/lib/queries";
+import { useAlignment } from "@/lib/features/browse/queries";
+import { qk, useAlignmentForest, useSubjects } from "@/lib/queries";
 import { decorateWrites } from "@/lib/write-effects";
 
 afterEach(() => {
@@ -116,27 +117,27 @@ describe("a write's success", () => {
   });
 });
 
-// Code review CR37: the Map's outline is built from the reads its graph caches anyway.
+// Code review CR37 and CR120: the Map's outline and its graph fold the one read of what the Map draws.
 describe("the Map's reads", () => {
-  it("ask for the subject list and the edges once each", async () => {
+  it("ask for what the Map draws once, and for no subject list or edges besides", async () => {
+    const alignment = vi.spyOn(mockReads, "alignment");
     const subjects = vi.spyOn(mockReads, "listSubjects");
     const edges = vi.spyOn(mockReads, "edges");
     const client = new QueryClient();
     const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
     const { result } = renderHook(
-      () => ({
-        forest: useAlignmentForest(false, "all"),
-        subjects: useSubjects(undefined, false, true, MAP_SCOPE),
-        edges: useAlignmentEdges(false),
-      }),
+      () => ({ forest: useAlignmentForest(false, "all"), graph: useAlignment(false) }),
       { wrapper },
     );
 
     await waitFor(() => expect(result.current.forest.data?.length).toBeGreaterThan(0));
-    expect(subjects).toHaveBeenCalledTimes(1);
-    // Without a repeating Task's repetitions, which the Map draws once, as its series (code review CR107).
-    expect(subjects).toHaveBeenCalledWith(expect.objectContaining({ includeSeries: true, excludeRepetitions: true }));
-    expect(edges).toHaveBeenCalledTimes(1);
+    expect(alignment).toHaveBeenCalledTimes(1);
+    expect(subjects).not.toHaveBeenCalled();
+    expect(edges).not.toHaveBeenCalled();
+    // A repeating Task is drawn once, as its series, and none of its repetitions (TASKS-3).
+    const drawn = result.current.graph.data!.subjects;
+    expect(drawn.some((s) => s.isSeries)).toBe(true);
+    expect(drawn.filter((s) => s.seriesId && !s.isSeries)).toEqual([]);
   });
 
   it("a subject list that isn't enabled isn't read, as the palette's while it's closed", async () => {

@@ -21,6 +21,7 @@ public sealed class ReaderKernel : IAsyncDisposable, IDisposable
     [
         typeof(ActivityReader),
         typeof(ArtifactReader),
+        typeof(BrowseReader),
         typeof(ChangeReader),
         typeof(EnvironmentReader),
         typeof(FocusReader),

@@ -185,7 +185,7 @@ describe("the bundle (code review CR84)", () => {
   // ports (the diet score, the Home Score's fold, a repeating Task's dates, the timer's fold),
   // which move under lib/mock as their features move into lib/features. When you move one, lower
   // MOCK_ONLY; an export nothing uses at all is deleted, not counted.
-  const MOCK_ONLY = 45;
+  const MOCK_ONLY = 44;
 
   it(`keeps outside lib/mock what the app uses, ${MOCK_ONLY} exports the mock and tests alone use aside`, () => {
     const used = new Map<string, Set<string> | "*">();

@@ -1,0 +1,6178 @@
+{
+  "about": "Browse (BROWSE-2): BrowseRules in src/LifeOs.Api/Read/BrowseReader.cs, which GET /api/browse answers with, and the mock\u0027s copy in web/src/lib/mock/browse.ts. Each page case is a query over the items, on a day, and answers the type list\u0027s held counts, the totals, the filter options, the columns and the rows\u0027 ids in order. Entered counts days in the home zone; the items are entered at noon UTC, so the day is the same in any zone the tests run in.",
+  "cases": [
+    {
+      "rule": "typeOrder",
+      "args": [],
+      "out": [
+        "Value",
+        "Goal",
+        "Project",
+        "Task",
+        "Habit",
+        "Commitment",
+        "Decision",
+        "Problem",
+        "Idea",
+        "Appointment",
+        "Person",
+        "Area",
+        "Constraint",
+        "Season",
+        "Reward"
+      ]
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "all",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 8,
+        "matching": 8,
+        "options": {
+          "statuses": [
+            {
+              "value": "Active",
+              "label": "Active",
+              "count": 1
+            },
+            {
+              "value": "Building",
+              "label": "Building",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "New",
+              "label": "New",
+              "count": 1
+            },
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 2
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 5
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "fitness",
+              "label": "fitness",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "type",
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004",
+          "00000000-0000-4000-8000-000000000002"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "all",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": true,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 5
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 9,
+        "matching": 9,
+        "options": {
+          "statuses": [
+            {
+              "value": "Active",
+              "label": "Active",
+              "count": 1
+            },
+            {
+              "value": "Building",
+              "label": "Building",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 2
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "New",
+              "label": "New",
+              "count": 1
+            },
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 2
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 6
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "fitness",
+              "label": "fitness",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "type",
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004",
+          "00000000-0000-4000-8000-000000000002"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 4,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "status",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 4,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000004"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "status",
+          "dir": "desc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 4,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000004",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000005"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "due",
+          "dir": "desc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 4,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "overdue",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 1,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000003"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "today",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 1,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000005"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "upcoming",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 1,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000006"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "none",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 0,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": []
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "all",
+          "text": "TASK",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 8,
+        "matching": 4,
+        "options": {
+          "statuses": [
+            {
+              "value": "Active",
+              "label": "Active",
+              "count": 1
+            },
+            {
+              "value": "Building",
+              "label": "Building",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "New",
+              "label": "New",
+              "count": 1
+            },
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 2
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 5
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "fitness",
+              "label": "fitness",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "type",
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "all",
+          "text": "sam call",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 8,
+        "matching": 1,
+        "options": {
+          "statuses": [
+            {
+              "value": "Active",
+              "label": "Active",
+              "count": 1
+            },
+            {
+              "value": "Building",
+              "label": "Building",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "New",
+              "label": "New",
+              "count": 1
+            },
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 2
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 5
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "fitness",
+              "label": "fitness",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "type",
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000006"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [
+            "Completed",
+            "Bogus"
+          ],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 1,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000004"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [
+            "__none__"
+          ],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 2,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000004"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [
+            "urn:area:health",
+            "urn:area:home"
+          ],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 2,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000003"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [
+            "home"
+          ],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 2,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "all",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "7",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 8,
+        "matching": 4,
+        "options": {
+          "statuses": [
+            {
+              "value": "Active",
+              "label": "Active",
+              "count": 1
+            },
+            {
+              "value": "Building",
+              "label": "Building",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "New",
+              "label": "New",
+              "count": 1
+            },
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 2
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 5
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "fitness",
+              "label": "fitness",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "type",
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-000000000002"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": true,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 5
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 5,
+        "matching": 5,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 2
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 3
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "all",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "type",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 8,
+        "matching": 8,
+        "options": {
+          "statuses": [
+            {
+              "value": "Active",
+              "label": "Active",
+              "count": 1
+            },
+            {
+              "value": "Building",
+              "label": "Building",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "New",
+              "label": "New",
+              "count": 1
+            },
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 2
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 5
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "fitness",
+              "label": "fitness",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "type",
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000002",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-000000000007"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "all",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "type",
+          "dir": "desc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 8,
+        "matching": 8,
+        "options": {
+          "statuses": [
+            {
+              "value": "Active",
+              "label": "Active",
+              "count": 1
+            },
+            {
+              "value": "Building",
+              "label": "Building",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "New",
+              "label": "New",
+              "count": 1
+            },
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 2
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 5
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "fitness",
+              "label": "fitness",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "type",
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004",
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000002"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "all",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "area",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 8,
+        "matching": 8,
+        "options": {
+          "statuses": [
+            {
+              "value": "Active",
+              "label": "Active",
+              "count": 1
+            },
+            {
+              "value": "Building",
+              "label": "Building",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "New",
+              "label": "New",
+              "count": 1
+            },
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 2
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 5
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "fitness",
+              "label": "fitness",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "type",
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-000000000004",
+          "00000000-0000-4000-8000-000000000002"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "all",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "tags",
+          "dir": "desc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 8,
+        "matching": 8,
+        "options": {
+          "statuses": [
+            {
+              "value": "Active",
+              "label": "Active",
+              "count": 1
+            },
+            {
+              "value": "Building",
+              "label": "Building",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "New",
+              "label": "New",
+              "count": 1
+            },
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 2
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 5
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "fitness",
+              "label": "fitness",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "type",
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000004",
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-000000000002"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "all",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "entered",
+          "dir": "desc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 8,
+        "matching": 8,
+        "options": {
+          "statuses": [
+            {
+              "value": "Active",
+              "label": "Active",
+              "count": 1
+            },
+            {
+              "value": "Building",
+              "label": "Building",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "New",
+              "label": "New",
+              "count": 1
+            },
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 2
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 5
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "fitness",
+              "label": "fitness",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "type",
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000002",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004",
+          "00000000-0000-4000-8000-000000000007"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Task",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 2
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 4,
+        "matching": 4,
+        "options": {
+          "statuses": [
+            {
+              "value": "Not started",
+              "label": "Not started",
+              "count": 1
+            },
+            {
+              "value": "In progress",
+              "label": "In progress",
+              "count": 1
+            },
+            {
+              "value": "Waiting",
+              "label": "Waiting",
+              "count": 1
+            },
+            {
+              "value": "Completed",
+              "label": "Completed",
+              "count": 1
+            },
+            {
+              "value": "Missed",
+              "label": "Missed",
+              "count": 0
+            },
+            {
+              "value": "Cancelled",
+              "label": "Cancelled",
+              "count": 0
+            }
+          ],
+          "areas": [
+            {
+              "value": "urn:area:health",
+              "label": "Health",
+              "count": 1
+            },
+            {
+              "value": "urn:area:home",
+              "label": "Home",
+              "count": 1
+            },
+            {
+              "value": "__none__",
+              "label": "No area",
+              "count": 2
+            }
+          ],
+          "tags": [
+            {
+              "value": "chores",
+              "label": "chores",
+              "count": 1
+            },
+            {
+              "value": "home",
+              "label": "home",
+              "count": 2
+            }
+          ]
+        },
+        "columns": [
+          "status",
+          "due",
+          "area",
+          "tags",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Person",
+          "text": "",
+          "statuses": [],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 1,
+        "matching": 1,
+        "options": {
+          "statuses": [],
+          "areas": [],
+          "tags": []
+        },
+        "columns": [
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000007"
+        ]
+      }
+    },
+    {
+      "rule": "page",
+      "args": [
+        {
+          "type": "Habit",
+          "text": "",
+          "statuses": [
+            "Building"
+          ],
+          "areas": [],
+          "tags": [],
+          "due": "any",
+          "entered": "any",
+          "archived": false,
+          "sort": "title",
+          "dir": "asc",
+          "limit": 200
+        },
+        "2026-11-14",
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "urn": "urn:goal:run-a-marathon",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "due": null,
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "fitness",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "urn": "urn:goal:write-a-book",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-12T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "urn": "urn:task:task-9",
+            "type": "Task",
+            "title": "Task 9",
+            "status": "In progress",
+            "due": "2026-11-13",
+            "area": "urn:area:health",
+            "areaName": "Health",
+            "tags": "chores, home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "urn": "urn:task:task-10",
+            "type": "Task",
+            "title": "Task 10",
+            "status": "Completed",
+            "due": "2026-11-10",
+            "area": null,
+            "areaName": null,
+            "tags": "home",
+            "archived": false,
+            "createdAt": "2026-11-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "urn": "urn:task:buy-milk",
+            "type": "Task",
+            "title": "buy milk",
+            "status": null,
+            "due": "2026-11-14",
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-14T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "urn": "urn:task:call-sam",
+            "type": "Task",
+            "title": "Call Sam",
+            "status": "Waiting",
+            "due": "2026-11-20",
+            "area": "urn:area:home",
+            "areaName": "Home",
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-09T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "urn": "urn:person:sam",
+            "type": "Person",
+            "title": "Sam",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "urn": "urn:task:old-chore",
+            "type": "Task",
+            "title": "Old chore",
+            "status": "Completed",
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": true,
+            "createdAt": "2026-09-01T12:00:00Z"
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "urn": "urn:habit:stretch",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "due": null,
+            "area": null,
+            "areaName": null,
+            "tags": null,
+            "archived": false,
+            "createdAt": "2026-11-08T12:00:00Z"
+          }
+        ]
+      ],
+      "out": {
+        "types": [
+          {
+            "type": "Goal",
+            "count": 2
+          },
+          {
+            "type": "Task",
+            "count": 4
+          },
+          {
+            "type": "Habit",
+            "count": 1
+          },
+          {
+            "type": "Person",
+            "count": 1
+          }
+        ],
+        "total": 1,
+        "matching": 1,
+        "options": {
+          "statuses": [
+            {
+              "value": "Planned",
+              "label": "Planned",
+              "count": 0
+            },
+            {
+              "value": "Building",
+              "label": "Building",
+              "count": 1
+            },
+            {
+              "value": "Established",
+              "label": "Established",
+              "count": 0
+            },
+            {
+              "value": "Abandoned",
+              "label": "Abandoned",
+              "count": 0
+            }
+          ],
+          "areas": [],
+          "tags": []
+        },
+        "columns": [
+          "status",
+          "entered"
+        ],
+        "rows": [
+          "00000000-0000-4000-8000-000000000009"
+        ]
+      }
+    }
+  ]
+}

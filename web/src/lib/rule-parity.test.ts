@@ -19,6 +19,11 @@ import { isOccurrenceDate, parseRecurrence } from "@/lib/recurrence";
 import { DIASTOLIC_KEY, SYSTOLIC_KEY, WEIGHT_KEY } from "@/lib/features/measurements/measurements";
 import { METRIC_CATALOG } from "@/lib/mock/metric-catalog";
 import { CURRENCIES } from "@/lib/rewards";
+import { BROWSE_TYPE_ORDER, type FilterOption } from "@/lib/browse";
+import { browsePage } from "@/lib/mock/browse";
+import { buildAlignmentForest, type AlignmentEdge, type AlignmentNode } from "@/lib/derive";
+import type { BrowseQuery } from "@/lib/features/browse/types";
+import type { SubjectListItem } from "@/lib/production-ui-types";
 
 /**
  * The TypeScript copies of kernel rules give the kernel's answers (code review CR8). The cases
@@ -41,6 +46,8 @@ const files = import.meta.glob<RuleFile>("../../../tests/rules/*.json", { eager:
 const n = (v: unknown) => v as number;
 const s = (v: unknown) => v as string;
 const curve = (domain: unknown) => (domain === "health" ? HEALTH : ENVIRONMENT).curve;
+const option = (o: FilterOption) => ({ value: o.value, label: o.label, count: o.count });
+const tree = (node: AlignmentNode): unknown => ({ id: node.id, children: node.children.map(tree) });
 
 const rules: Record<string, Record<string, (...args: unknown[]) => unknown>> = {
   activity: {
@@ -112,6 +119,32 @@ const rules: Record<string, Record<string, (...args: unknown[]) => unknown>> = {
         panel: t.panel,
       })),
   },
+  // The mock's copy of GET /api/browse (code review CR120).
+  browse: {
+    typeOrder: () => [...BROWSE_TYPE_ORDER],
+    page: (query, today, items) => {
+      const read = browsePage(items as SubjectListItem[], query as BrowseQuery, s(today));
+      return {
+        types: read.types.map((t) => ({ type: t.type, count: t.count })),
+        total: read.total,
+        matching: read.matching,
+        options: {
+          statuses: read.options.statuses.map(option),
+          areas: read.options.areas.map(option),
+          tags: read.options.tags.map(option),
+        },
+        columns: read.columns,
+        rows: read.rows.map((r) => r.id),
+      };
+    },
+  },
+  // The Map's outline, as the alignment tool folds it (code review CR120).
+  alignment: {
+    forest: (subjects, edges, includeArchived) =>
+      buildAlignmentForest(subjects as SubjectListItem[], edges as AlignmentEdge[], {
+        includeArchived: includeArchived as boolean,
+      }).map(tree),
+  },
   statuses: {
     statuses: (type) => STATUS_BY_TYPE[s(type) as SubjectType] ?? [],
     initial: (type) => initialStatus(s(type) as SubjectType),
@@ -135,6 +168,8 @@ describe("the web's copies of kernel rules", () => {
     expect(Object.keys(files).map((path) => path.split("/").pop()).sort()).toEqual(
       [
         "activity.json",
+        "alignment.json",
+        "browse.json",
         "catalogs.json",
         "diet.json",
         "home.json",

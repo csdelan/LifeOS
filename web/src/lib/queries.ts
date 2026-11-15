@@ -15,6 +15,7 @@ import { getAgentsClient } from "@/lib/client";
 import { isLiveApi } from "@/lib/api-base";
 import { createWriteClient, getReads } from "@/lib/client";
 import { buildAlignmentForest, type MapLens } from "@/lib/derive";
+import { useAlignment } from "@/lib/features/browse/queries";
 import { nextCoverPage } from "@/lib/cover";
 import { fetchMe } from "@/lib/me";
 import type { LifeOsReads } from "@/lib/reads";
@@ -378,31 +379,26 @@ export function useDashboard() {
   });
 }
 
-/** What the Map reads: a repeating Task once, as its series, and none of its repetitions (TASKS-3, code review CR107). */
-export const MAP_SCOPE: SubjectListScope = { excludeRepetitions: true };
-
 /**
- * The Map's outline, built from the cached subject list and edges rather than read whole, so the
- * Map page, which reads both for its graph too, asks for each once (code review CR37). A repeating
- * Task is one node, its series; its repetitions stay off the Map (TASKS-3).
+ * The Map's outline, folded from what the Map draws (`GET /api/alignment`, code review CR120), the
+ * read its graph folds too, so the page asks for it once (code review CR37). A repeating Task is
+ * one node, its series; its repetitions stay off the Map (TASKS-3).
  */
 export function useAlignmentForest(includeArchived: boolean, lens: MapLens) {
-  const subjects = useSubjects(undefined, includeArchived, true, MAP_SCOPE);
-  const edges = useAlignmentEdges(includeArchived);
+  const read = useAlignment(includeArchived);
   const data = useMemo(
     () =>
-      subjects.data && edges.data
-        ? buildAlignmentForest(subjects.data, edges.data, { includeArchived, lens })
+      read.data
+        ? buildAlignmentForest(read.data.subjects, read.data.edges, { includeArchived, lens })
         : undefined,
-    [subjects.data, edges.data, includeArchived, lens],
+    [read.data, includeArchived, lens],
   );
   return {
     data,
-    isLoading: subjects.isLoading || edges.isLoading,
-    isError: subjects.isError || edges.isError,
-    isFetching: subjects.isFetching || edges.isFetching,
-    /** Reads again whichever of the two failed. */
-    refetch: () => Promise.all([subjects, edges].filter((r) => r.isError).map((r) => r.refetch())),
+    isLoading: read.isLoading,
+    isError: read.isError,
+    isFetching: read.isFetching,
+    refetch: () => read.refetch(),
   };
 }
 

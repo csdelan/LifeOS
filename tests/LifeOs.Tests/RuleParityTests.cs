@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using LifeOs.Api.Mcp;
+using LifeOs.Api.Read;
 using LifeOs.Domain;
 
 namespace LifeOs.Tests;
@@ -20,7 +22,7 @@ public sealed class RuleParityTests
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    public static TheoryData<string> Files => new(["activity", "home", "reviews", "levels", "diet", "statuses", "catalogs"]);
+    public static TheoryData<string> Files => new(["activity", "home", "reviews", "levels", "diet", "statuses", "catalogs", "browse", "alignment"]);
 
     [Theory]
     [MemberData(nameof(Files))]
@@ -107,8 +109,50 @@ public sealed class RuleParityTests
             key = t.Key, name = t.Name, unit = t.Unit, decimals = t.Decimals, better = t.Better, low = t.Low, high = t.High, panel = t.Panel,
         }),
 
+        ("browse", "typeOrder") => BrowseRules.TypeOrder,
+        ("browse", "page") => BrowsePage(a),
+
+        ("alignment", "forest") => Forest(a),
+
         _ => throw new InvalidOperationException($"tests/rules/{file}.json names a rule this test doesn't know: {rule}."),
     };
+
+    /// <summary>
+    /// A Browse query over items on a day (code review CR120): the items of its type, and the
+    /// type list's counts, as the reader reads them, and an Entered day starting at midnight UTC.
+    /// </summary>
+    private static object BrowsePage(JsonArray a)
+    {
+        var query = a[0].Deserialize<BrowseQuery>(Json)!;
+        var today = Text(a[1])!;
+        var items = a[2].Deserialize<List<SubjectListItem>>(Json)!.Where(i => query.Archived || !i.Archived).ToList();
+        var counts = items.Where(i => BrowseRules.TypeOrder.Contains(i.Type)).GroupBy(i => i.Type).ToDictionary(g => g.Key, g => g.Count());
+        DateTime? since = BrowseRules.EnteredDays(query.Entered) is { } days
+            ? DateOnly.ParseExact(today, "yyyy-MM-dd").AddDays(-(days - 1)).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+            : null;
+        var page = BrowseRules.Page(query, [.. items.Where(i => BrowseRules.TypesFor(query.Type).Contains(i.Type))], today, since, counts);
+        return new
+        {
+            types = page.Types.Select(t => new { type = t.Type, count = t.Count }),
+            total = page.Total,
+            matching = page.Matching,
+            options = page.Options,
+            columns = page.Columns,
+            rows = page.Rows.Select(r => r.Id),
+        };
+    }
+
+    /// <summary>The alignment tree's roots and their children, ids only, finished items in (code review CR120).</summary>
+    private static object Forest(JsonArray a)
+    {
+        var includeArchived = a[2]!.GetValue<bool>();
+        var subjects = a[0].Deserialize<List<SubjectListItem>>(Json)!.Where(s => includeArchived || !s.Archived);
+        var edges = a[1].Deserialize<List<AlignmentEdge>>(Json)!;
+        return new AlignmentForest(subjects, edges, includeDone: true, maxNodes: 10_000).Forest().Select(Tree).ToList();
+    }
+
+    private static object Tree(AlignmentNodeRead node)
+        => new { id = node.Id, children = (node.Children ?? []).Select(Tree).ToList() };
 
     private static object Period(string kind, DateOnly day)
     {

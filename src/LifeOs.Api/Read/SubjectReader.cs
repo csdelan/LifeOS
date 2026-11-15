@@ -99,6 +99,7 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
         {
             type = filter.Type,
             types = filter.Types.ToArray(),
+            orLinked = filter.OrLinked,
             includeArchived = filter.IncludeArchived,
             includeSeries = filter.IncludeSeries,
             excludeRepetitions = filter.ExcludeRepetitions,
@@ -118,7 +119,11 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
         await using var db = await OpenAsync(cancellationToken);
         return (await db.QueryAsync<SubjectListItem, BountyText, CoverText, SubjectListItem>(new CommandDefinition(ListSelect + """
             WHERE (@type::text IS NULL OR s.type = @type)
-              AND (cardinality(@types::text[]) = 0 OR s.type = ANY(@types))
+              AND (cardinality(@types::text[]) = 0 OR s.type = ANY(@types)
+                   OR (@orLinked AND EXISTS (
+                         SELECT 1 FROM bsk.v_subject_relation r
+                         JOIN bsk.v_subject o ON o.id = CASE WHEN r.from_subject = s.id THEN r.to_subject ELSE r.from_subject END
+                         WHERE (r.from_subject = s.id OR r.to_subject = s.id) AND (@includeArchived OR NOT o.archived))))
               AND (@includeArchived OR NOT s.archived)
               AND (@includeSeries OR NOT bsk.is_task_series(s.type, s.attributes))
               AND NOT (@excludeRepetitions AND ser.id IS NOT NULL AND NOT bsk.is_task_series(s.type, s.attributes))
@@ -558,6 +563,55 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
             WHERE r.from_subject = ANY(@fromIds) AND r.relation = ANY(@relations) AND NOT t.archived
             ORDER BY t.title
             """, new { fromIds = fromIds.ToArray(), relations = relations.ToArray() }, cancellationToken: cancellationToken))).AsList();
+    }
+
+    /// <summary>
+    /// What the Map draws and the <c>alignment</c> tool folds (code review CR120): every Identity
+    /// Statement, Goal, Project and Task, a repeating Task once as its series, and any other item
+    /// an edge links, with the edges among them. The Map read every subject of every type and
+    /// every edge, and the tool every subject but the series.
+    /// </summary>
+    public async Task<AlignmentRead> GetAlignmentAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
+    {
+        var subjects = await ListSubjectsAsync(
+            new SubjectFilter
+            {
+                Types = AlignmentTypes, OrLinked = true, IncludeArchived = includeArchived,
+                IncludeSeries = true, ExcludeRepetitions = true,
+            },
+            cancellationToken);
+        var ids = subjects.Select(s => s.Id).ToArray();
+        await using var db = await OpenAsync(cancellationToken);
+        var edges = (await db.QueryAsync<AlignmentEdge>(new CommandDefinition("""
+            SELECT r.from_subject AS from_id, r.to_subject AS to_id, r.relation
+            FROM bsk.v_subject_relation r
+            WHERE r.from_subject = ANY(@ids) AND r.to_subject = ANY(@ids)
+            ORDER BY r.from_subject, r.relation, r.to_subject
+            """, new { ids }, cancellationToken: cancellationToken))).AsList();
+        return new AlignmentRead { Subjects = subjects, Edges = edges };
+    }
+
+    /// <summary>The types the alignment tree is made of: an identity statement and what serves it, down to Tasks.</summary>
+    public static readonly IReadOnlyList<string> AlignmentTypes =
+        [SubjectTypes.Value, SubjectTypes.Goal, SubjectTypes.Project, SubjectTypes.Task];
+
+    /// <summary>
+    /// How many subjects of each of <paramref name="types"/> a list reads (a repeating Task's
+    /// series left out, its repetitions in), archived ones only when asked: Browse's type list.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, int>> CountListedAsync(
+        IReadOnlyCollection<string> types, bool includeArchived, CancellationToken cancellationToken = default)
+    {
+        await using var db = await OpenAsync(cancellationToken);
+        return (await db.QueryAsync<(string Type, int N)>(new CommandDefinition("""
+            SELECT s.type, count(*)::int AS n
+            FROM bsk.v_subject s
+            WHERE s.type = ANY(@types)
+              AND (@includeArchived OR NOT s.archived)
+              AND NOT bsk.is_task_series(s.type, s.attributes)
+            GROUP BY s.type
+            """, new { types = types.ToArray(), includeArchived }, cancellationToken: cancellationToken)))
+            .ToDictionary(r => r.Type, r => r.N, StringComparer.Ordinal);
     }
 
     public async Task<IReadOnlyList<AlignmentEdge>> GetAlignmentEdgesAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
@@ -1018,6 +1072,13 @@ public sealed record SubjectFilter
     /// every type.
     /// </summary>
     public IReadOnlyCollection<string> Types { get; init; } = [];
+
+    /// <summary>
+    /// With <see cref="Types"/>: a subject of another type passes too when an edge links it to a
+    /// subject this filter's archive rule keeps: the Map draws a Habit that serves a goal (code
+    /// review CR120).
+    /// </summary>
+    public bool OrLinked { get; init; }
 
     public bool IncludeArchived { get; init; }
 

@@ -95,6 +95,9 @@ public sealed class TaskEndpointTests(ClassDatabase classDb) : IClassFixture<Cla
         var mapped = await GetAsync(c, "/api/subjects?type=Task&includeSeries=true&excludeRepetitions=true");
         Assert.NotNull(Find(mapped, series));
         Assert.Null(Find(mapped, repetition));
+        var aligned = (await GetAsync(c, "/api/alignment")).GetProperty("subjects");
+        Assert.NotNull(Find(aligned, series));
+        Assert.Null(Find(aligned, repetition));
 
         var listItem = await GetAsync(c, $"/api/subjects/{repetition}/list-item");
         Assert.Equal(series, listItem.GetProperty("seriesId").GetGuid());

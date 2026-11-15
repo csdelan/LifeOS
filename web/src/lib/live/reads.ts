@@ -4,6 +4,7 @@ import { api, ApiRequestError, unwrap, unwrapBlob, unwrapOrNull } from "@/lib/li
 import { normalizeCover, normalizeCoverSearch, withNormalCover } from "@/lib/cover";
 import { repeatingSection, type RecapSection } from "@/lib/review-recap";
 import type { DashboardRead, LifeOsReads } from "@/lib/reads";
+import { liveBrowseReads } from "@/lib/features/browse/reads";
 import { liveMeasurementReads } from "@/lib/features/measurements/reads";
 import type { SubjectSearch } from "@/lib/browse";
 import { seriesFromDue } from "@/lib/task-series";
@@ -75,6 +76,7 @@ function artifactObjectUrl(id: string): Promise<string | null> {
 
 export const liveReads: LifeOsReads = {
   ...liveMeasurementReads,
+  ...liveBrowseReads,
 
   async listSubjects(opts) {
     const data = await unwrap(
@@ -82,6 +84,7 @@ export const liveReads: LifeOsReads = {
         params: {
           query: {
             type: opts?.type,
+            types: opts?.types?.length ? [...opts.types] : undefined,
             includeArchived: opts?.includeArchived,
             includeSeries: opts?.includeSeries,
             excludeRepetitions: opts?.excludeRepetitions,

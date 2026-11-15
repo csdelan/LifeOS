@@ -1,3 +1,4 @@
+import { browseKeys } from "@/lib/features/browse/keys";
 import { measurementKeys } from "@/lib/features/measurements/keys";
 import { meQueryKey } from "@/lib/me";
 
@@ -7,6 +8,7 @@ import { meQueryKey } from "@/lib/me";
  */
 export const qk = {
   ...measurementKeys,
+  ...browseKeys,
   me: meQueryKey,
   subjects: ["subjects"] as const,
   subject: (id: string) => ["subject", id] as const,

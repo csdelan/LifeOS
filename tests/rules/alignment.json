@@ -1,0 +1,510 @@
+{
+  "about": "The Map\u0027s alignment tree: AlignmentForest in src/LifeOs.Api/Mcp/AlignmentForest.cs, which the alignment tool folds, and buildAlignmentForest in web/src/lib/derive.ts, which the Map\u0027s outline folds, from the same read (GET /api/alignment). Each case answers the roots, each with its children, in order. supersedes isn\u0027t alignment, and an edge to an item not read is left out.",
+  "cases": [
+    {
+      "rule": "forest",
+      "args": [
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "type": "Value",
+            "title": "I am fit",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "type": "Project",
+            "title": "Training block",
+            "status": "Active",
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "type": "Task",
+            "title": "Long run",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "type": "Task",
+            "title": "Buy shoes",
+            "status": "Completed",
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "type": "Task",
+            "title": "Orphan task",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "type": "Project",
+            "title": "Shared project",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000010",
+            "type": "Task",
+            "title": "Archived run",
+            "status": null,
+            "archived": true
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000011",
+            "type": "Project",
+            "title": "Loop one",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000012",
+            "type": "Project",
+            "title": "Loop two",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000013",
+            "type": "Goal",
+            "title": "Run an ultra",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000014",
+            "type": "Value",
+            "title": "A second value",
+            "status": null,
+            "archived": false
+          }
+        ],
+        [
+          {
+            "fromId": "00000000-0000-4000-8000-000000000002",
+            "toId": "00000000-0000-4000-8000-000000000001",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000003",
+            "toId": "00000000-0000-4000-8000-000000000002",
+            "relation": "results_in"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000004",
+            "toId": "00000000-0000-4000-8000-000000000003",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000005",
+            "toId": "00000000-0000-4000-8000-000000000003",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000007",
+            "toId": "00000000-0000-4000-8000-000000000002",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000009",
+            "toId": "00000000-0000-4000-8000-000000000002",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000009",
+            "toId": "00000000-0000-4000-8000-000000000006",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000010",
+            "toId": "00000000-0000-4000-8000-000000000003",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000011",
+            "toId": "00000000-0000-4000-8000-000000000012",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000012",
+            "toId": "00000000-0000-4000-8000-000000000011",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000013",
+            "toId": "00000000-0000-4000-8000-000000000002",
+            "relation": "supersedes"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000004",
+            "toId": "00000000-0000-4000-8000-000000000099",
+            "relation": "serves"
+          }
+        ],
+        false
+      ],
+      "out": [
+        {
+          "id": "00000000-0000-4000-8000-000000000014",
+          "children": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "children": [
+            {
+              "id": "00000000-0000-4000-8000-000000000002",
+              "children": [
+                {
+                  "id": "00000000-0000-4000-8000-000000000009",
+                  "children": []
+                },
+                {
+                  "id": "00000000-0000-4000-8000-000000000003",
+                  "children": [
+                    {
+                      "id": "00000000-0000-4000-8000-000000000005",
+                      "children": []
+                    },
+                    {
+                      "id": "00000000-0000-4000-8000-000000000004",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "id": "00000000-0000-4000-8000-000000000007",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000013",
+          "children": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000006",
+          "children": [
+            {
+              "id": "00000000-0000-4000-8000-000000000009",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000008",
+          "children": []
+        }
+      ]
+    },
+    {
+      "rule": "forest",
+      "args": [
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "type": "Value",
+            "title": "I am fit",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "type": "Project",
+            "title": "Training block",
+            "status": "Active",
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "type": "Task",
+            "title": "Long run",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "type": "Task",
+            "title": "Buy shoes",
+            "status": "Completed",
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "type": "Goal",
+            "title": "Write a book",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "type": "Habit",
+            "title": "Stretch",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "type": "Task",
+            "title": "Orphan task",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "type": "Project",
+            "title": "Shared project",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000010",
+            "type": "Task",
+            "title": "Archived run",
+            "status": null,
+            "archived": true
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000011",
+            "type": "Project",
+            "title": "Loop one",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000012",
+            "type": "Project",
+            "title": "Loop two",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000013",
+            "type": "Goal",
+            "title": "Run an ultra",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000014",
+            "type": "Value",
+            "title": "A second value",
+            "status": null,
+            "archived": false
+          }
+        ],
+        [
+          {
+            "fromId": "00000000-0000-4000-8000-000000000002",
+            "toId": "00000000-0000-4000-8000-000000000001",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000003",
+            "toId": "00000000-0000-4000-8000-000000000002",
+            "relation": "results_in"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000004",
+            "toId": "00000000-0000-4000-8000-000000000003",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000005",
+            "toId": "00000000-0000-4000-8000-000000000003",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000007",
+            "toId": "00000000-0000-4000-8000-000000000002",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000009",
+            "toId": "00000000-0000-4000-8000-000000000002",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000009",
+            "toId": "00000000-0000-4000-8000-000000000006",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000010",
+            "toId": "00000000-0000-4000-8000-000000000003",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000011",
+            "toId": "00000000-0000-4000-8000-000000000012",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000012",
+            "toId": "00000000-0000-4000-8000-000000000011",
+            "relation": "serves"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000013",
+            "toId": "00000000-0000-4000-8000-000000000002",
+            "relation": "supersedes"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000004",
+            "toId": "00000000-0000-4000-8000-000000000099",
+            "relation": "serves"
+          }
+        ],
+        true
+      ],
+      "out": [
+        {
+          "id": "00000000-0000-4000-8000-000000000014",
+          "children": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "children": [
+            {
+              "id": "00000000-0000-4000-8000-000000000002",
+              "children": [
+                {
+                  "id": "00000000-0000-4000-8000-000000000009",
+                  "children": []
+                },
+                {
+                  "id": "00000000-0000-4000-8000-000000000003",
+                  "children": [
+                    {
+                      "id": "00000000-0000-4000-8000-000000000010",
+                      "children": []
+                    },
+                    {
+                      "id": "00000000-0000-4000-8000-000000000005",
+                      "children": []
+                    },
+                    {
+                      "id": "00000000-0000-4000-8000-000000000004",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "id": "00000000-0000-4000-8000-000000000007",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000013",
+          "children": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000006",
+          "children": [
+            {
+              "id": "00000000-0000-4000-8000-000000000009",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000008",
+          "children": []
+        }
+      ]
+    },
+    {
+      "rule": "forest",
+      "args": [
+        [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "type": "Value",
+            "title": "I am fit",
+            "status": null,
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "type": "Goal",
+            "title": "Run a marathon",
+            "status": "Active",
+            "archived": false
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "type": "Project",
+            "title": "Training block",
+            "status": "Active",
+            "archived": false
+          }
+        ],
+        [
+          {
+            "fromId": "00000000-0000-4000-8000-000000000003",
+            "toId": "00000000-0000-4000-8000-000000000002",
+            "relation": "results_in"
+          },
+          {
+            "fromId": "00000000-0000-4000-8000-000000000002",
+            "toId": "00000000-0000-4000-8000-000000000001",
+            "relation": "serves"
+          }
+        ],
+        false
+      ],
+      "out": [
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "children": [
+            {
+              "id": "00000000-0000-4000-8000-000000000002",
+              "children": [
+                {
+                  "id": "00000000-0000-4000-8000-000000000003",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

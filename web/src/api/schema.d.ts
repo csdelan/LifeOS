@@ -324,6 +324,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alignment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetAlignment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetBrowse"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/timers": {
         parameters: {
             query?: never;
@@ -2348,6 +2380,10 @@ export interface components {
             toId: string;
             relation: string;
         };
+        AlignmentRead: {
+            subjects: components["schemas"]["SubjectListItem"][];
+            edges: components["schemas"]["AlignmentEdge"][];
+        };
         AllowAgentBody: {
             name?: null | string;
             clientUri?: null | string;
@@ -2463,6 +2499,32 @@ export interface components {
         BountyTypeDefaults: {
             type: string;
             lines: components["schemas"]["BountyLineRow"][];
+        };
+        BrowseFilterOption: {
+            value: string;
+            label: string;
+            /** Format: int32 */
+            count: number;
+        };
+        BrowseOptionsRead: {
+            statuses?: components["schemas"]["BrowseFilterOption"][];
+            areas?: components["schemas"]["BrowseFilterOption"][];
+            tags?: components["schemas"]["BrowseFilterOption"][];
+        };
+        BrowseRead: {
+            types: components["schemas"]["BrowseTypeCount"][];
+            /** Format: int32 */
+            total: number;
+            /** Format: int32 */
+            matching: number;
+            options: components["schemas"]["BrowseOptionsRead"];
+            columns: string[];
+            rows: components["schemas"]["SubjectListItem"][];
+        };
+        BrowseTypeCount: {
+            type: string;
+            /** Format: int32 */
+            count: number;
         };
         CaptureBody: {
             text?: string;
@@ -4216,6 +4278,11 @@ export interface operations {
                 status?: string;
                 limit?: number;
                 excludeRepetitions?: boolean;
+                types?: string[];
+                area?: string;
+                tag?: string;
+                dueFrom?: string;
+                dueTo?: string;
             };
             header?: never;
             path?: never;
@@ -4673,6 +4740,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlignmentEdge"][];
+                };
+            };
+        };
+    };
+    GetAlignment: {
+        parameters: {
+            query?: {
+                includeArchived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlignmentRead"];
+                };
+            };
+        };
+    };
+    GetBrowse: {
+        parameters: {
+            query?: {
+                type?: string;
+                text?: string;
+                status?: string[];
+                area?: string[];
+                tag?: string[];
+                due?: string;
+                entered?: string;
+                archived?: boolean;
+                sort?: string;
+                dir?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowseRead"];
                 };
             };
         };
