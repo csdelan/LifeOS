@@ -393,7 +393,12 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
     }
 
     /// <summary>A repeating Task and every repetition it has made, latest first; null when it isn't one.</summary>
-    public async Task<TaskSeriesHistory?> GetTaskSeriesHistoryAsync(Guid id, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// A repeating Task and its repetitions, latest first: the newest <paramref name="limit"/> of
+    /// them when given, cut in SQL, with how many there are in all (code review CR121).
+    /// </summary>
+    public async Task<TaskSeriesHistory?> GetTaskSeriesHistoryAsync(
+        Guid id, int? limit = null, CancellationToken cancellationToken = default)
     {
         await using var db = await OpenAsync(cancellationToken);
         var series = (await QuerySeriesAsync(db, includeArchived: true, id, cancellationToken)).FirstOrDefault();
@@ -413,8 +418,13 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
             FROM bsk.v_task_repetition
             WHERE series_id = @id
             ORDER BY occurrence DESC NULLS LAST, created_at DESC
-            """, new { id }, cancellationToken: cancellationToken))).AsList();
-        return new TaskSeriesHistory { Series = series, Repetitions = repetitions };
+            LIMIT @limit
+            """, new { id, limit }, cancellationToken: cancellationToken))).AsList();
+        var count = limit is { } cut && repetitions.Count < cut
+            ? repetitions.Count
+            : await db.ExecuteScalarAsync<int>(new CommandDefinition(
+                "SELECT count(*)::int FROM bsk.v_task_repetition WHERE series_id = @id", new { id }, cancellationToken: cancellationToken));
+        return new TaskSeriesHistory { Series = series, Repetitions = repetitions, RepetitionCount = count };
     }
 
     /// <summary>
@@ -612,18 +622,6 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
             GROUP BY s.type
             """, new { types = types.ToArray(), includeArchived }, cancellationToken: cancellationToken)))
             .ToDictionary(r => r.Type, r => r.N, StringComparer.Ordinal);
-    }
-
-    public async Task<IReadOnlyList<AlignmentEdge>> GetAlignmentEdgesAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
-    {
-        await using var db = await OpenAsync(cancellationToken);
-        return (await db.QueryAsync<AlignmentEdge>(new CommandDefinition("""
-            SELECT r.from_subject AS from_id, r.to_subject AS to_id, r.relation
-            FROM bsk.v_subject_relation r
-            JOIN bsk.v_subject f ON f.id = r.from_subject
-            JOIN bsk.v_subject t ON t.id = r.to_subject
-            WHERE @includeArchived OR (NOT f.archived AND NOT t.archived)
-            """, new { includeArchived }, cancellationToken: cancellationToken))).AsList();
     }
 
     public async Task<IReadOnlyList<ConcerningEvent>> GetConcerningEventsAsync(Guid id, CancellationToken cancellationToken = default)
@@ -835,19 +833,36 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
     }
 
     /// <summary>
-    /// Every timed Task's timer (TASKS-2), running first, then most recently changed.
-    /// Archived tasks are left out, as in every default view (D9).
+    /// Timed Tasks' timers (TASKS-2), running first, then most recently changed. Archived tasks
+    /// are left out, as in every default view (D9). <paramref name="active"/> keeps the running
+    /// and paused ones, what the shell and <c>life_snapshot</c> show; <paramref name="status"/>
+    /// keeps those of Tasks the subject list's status filter would (<c>open</c>, <c>closed</c> or
+    /// one status), so the Tasks page reads the timers of the Tasks it reads (code review CR121).
     /// </summary>
-    public async Task<IReadOnlyList<TaskTimer>> GetTimersAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<TaskTimer>> GetTimersAsync(
+        bool active = false, string? status = null, CancellationToken cancellationToken = default)
     {
+        status = status?.Trim();
+        var parameters = new
+        {
+            active,
+            open = string.Equals(status, SubjectFilter.Open, StringComparison.OrdinalIgnoreCase),
+            closed = string.Equals(status, SubjectFilter.Closed, StringComparison.OrdinalIgnoreCase),
+            status = string.IsNullOrEmpty(status) ? null : status,
+        };
         await using var db = await OpenAsync(cancellationToken);
         return (await db.QueryAsync<TaskTimer>(new CommandDefinition("""
-            SELECT subject_id, subject_urn, subject_title, state, running_since,
-                   total_seconds, session_seconds, session_started_at, sessions, last_changed_at
-            FROM bsk.v_task_timer
-            WHERE NOT archived
-            ORDER BY (state = 'running') DESC, (state = 'paused') DESC, last_changed_at DESC
-            """, cancellationToken: cancellationToken))).AsList();
+            SELECT t.subject_id, t.subject_urn, t.subject_title, t.state, t.running_since,
+                   t.total_seconds, t.session_seconds, t.session_started_at, t.sessions, t.last_changed_at
+            FROM bsk.v_task_timer t
+            LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = t.subject_id
+            WHERE NOT t.archived
+              AND (NOT @active OR t.state IN ('running', 'paused'))
+              AND (NOT @open OR NOT bsk.is_terminal_status(c.status))
+              AND (NOT @closed OR bsk.is_terminal_status(c.status))
+              AND (@open OR @closed OR @status::text IS NULL OR lower(btrim(c.status)) = lower(@status))
+            ORDER BY (t.state = 'running') DESC, (t.state = 'paused') DESC, t.last_changed_at DESC
+            """, parameters, cancellationToken: cancellationToken))).AsList();
     }
 
     public async Task<TaskTimer?> GetTimerAsync(Guid subjectId, CancellationToken cancellationToken = default)
@@ -867,7 +882,14 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
         return (await db.QueryAsync<AreaRow>(new CommandDefinition("SELECT id, urn, name, description, notes, created_at FROM bsk.v_area ORDER BY name", cancellationToken: cancellationToken))).AsList();
     }
 
-    public async Task<IReadOnlyList<HabitRow>> GetHabitsAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<HabitRow>> GetHabitsAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
+        => QueryHabitsAsync(includeArchived, null, cancellationToken);
+
+    /// <summary>One habit's row, archived or not, or null when <paramref name="id"/> is no habit (code review CR121).</summary>
+    public async Task<HabitRow?> GetHabitAsync(Guid id, CancellationToken cancellationToken = default)
+        => (await QueryHabitsAsync(true, id, cancellationToken)).FirstOrDefault();
+
+    private async Task<IReadOnlyList<HabitRow>> QueryHabitsAsync(bool includeArchived, Guid? habitId, CancellationToken cancellationToken)
     {
         await using var db = await OpenAsync(cancellationToken);
         var rows = (await db.QueryAsync<HabitRow, BountyText, HabitEstablishment, HabitRow>(new CommandDefinition("""
@@ -886,9 +908,10 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
             LEFT JOIN bsk.v_habit_streak st ON st.habit_id = h.id
             LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = h.id
             LEFT JOIN bsk.v_habit_establishment e ON e.habit_id = h.id
-            WHERE @includeArchived OR NOT h.archived
+            WHERE (@includeArchived OR NOT h.archived)
+              AND (@habitId::uuid IS NULL OR h.id = @habitId)
             ORDER BY h.name
-            """, new { includeArchived }, cancellationToken: cancellationToken),
+            """, new { includeArchived, habitId }, cancellationToken: cancellationToken),
             (habit, bounty, establishment) =>
             {
                 habit.Bounty = BountyRows.Headline(SubjectTypes.Habit, bounty?.BountyJson);

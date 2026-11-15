@@ -23,3 +23,26 @@ export function usePaged(rows: readonly { id: string }[], pagedFor: string, sele
 }
 
 export type Paged = ReturnType<typeof usePaged>;
+
+/** The most rows one read asks the server for: the API's limits top out there. */
+export const MAX_READ = 1000;
+
+/**
+ * How many rows to ask the server for (code review CR120, CR121): `page` of them, a page more
+ * each Show more or Show older, and one page again when `pagedFor` changes (another item, type
+ * or filter). `full` says whether a read of `count` rows filled the ask, so there may be more.
+ */
+export function useServerPages(pagedFor: string, page = LIST_PAGE) {
+  const [pages, setPages] = useState(1);
+  const [pagesFor, setPagesFor] = useState(pagedFor);
+  if (pagesFor !== pagedFor) {
+    setPagesFor(pagedFor);
+    setPages(1);
+  }
+  const limit = Math.min(pages * page, MAX_READ);
+  return {
+    limit,
+    more: () => setPages((p) => p + 1),
+    full: (count: number) => count >= limit && limit < MAX_READ,
+  };
+}

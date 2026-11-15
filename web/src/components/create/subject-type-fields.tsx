@@ -14,7 +14,7 @@ import {
 import { RecurrenceEditor } from "@/components/create/recurrence-editor";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { DateChip } from "@/components/primitives/date-chip";
-import { useAreas, usePeople, useSubjectsOfTypes } from "@/lib/queries";
+import { useAreas, useParentOptions, usePeople } from "@/lib/queries";
 import { defaultStatus, isTerminal, typeLabel } from "@/lib/production-ui-types";
 import type { SubjectType, TaskRepeat } from "@/lib/production-ui-types";
 import {
@@ -45,9 +45,11 @@ export function SubjectTypeFields({
   const fields = visibleFields(type, mode, values);
   const { data: areas } = useAreas();
   const { data: people } = usePeople();
-  // Only the types its pickers offer: a Task's parents are Goals and Projects, so the form never
-  // downloads every Task there is (code review CR76).
-  const { data: parentSubjects } = useSubjectsOfTypes(pickerTypes(fields));
+  // Only the types its pickers offer, a Task's parents being Goals and Projects, so the form never
+  // downloads every Task there is (code review CR76); and only the open ones, with any picked
+  // already, not every Goal and Project ever made (code review CR121).
+  const picked = [values.parent ?? "", ...(values.parents ?? [])];
+  const { data: parentSubjects } = useParentOptions(pickerTypes(fields), picked);
 
   return (
     <div className="space-y-4">
@@ -165,7 +167,7 @@ function FieldBlock({
     const options = subjects.filter(
       (s) => !s.archived && (!field.parentTypes || field.parentTypes.includes(s.type)),
     );
-    const selected = options.find((s) => s.id === parent);
+    const selected = subjects.find((s) => s.id === parent);
     return (
       <Field label={field.label} required={field.required} error={error} hint={field.hint}>
         {editing ? (

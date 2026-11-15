@@ -76,8 +76,8 @@ export interface Effect<K extends Name> {
 export const moves = {
   /** One subject's own reads: its detail, its list row and its history (renames and attribute changes leave events). */
   subject: (id: string): QueryKeys => [qk.subject(id), qk.listItem(id), qk.history(id)],
-  /** Everywhere subjects are listed: the lists, Focus, and the Map's edges (its outline is built from the lists). */
-  subjectLists: [qk.subjects, qk.dashboard, ["edges"]] as QueryKeys,
+  /** Everywhere subjects are listed: the lists, Browse and the Map (all under `qk.subjects`), and Focus. */
+  subjectLists: [qk.subjects, qk.dashboard] as QueryKeys,
   /** What an earn or a give-back moves (REWARD-1): the wallet, the ledger and the life domains. */
   earnings: [qk.wallet, qk.ledger, qk.domains] as QueryKeys,
   /**
@@ -187,7 +187,8 @@ export const writeEffects: { [K in Name]: Effect<K> } = {
   },
   link: {
     says: (_, [, , , remove]) => (remove ? "Unlinked" : "Linked"),
-    refreshes: ([from, , to]) => [qk.relations(from), qk.relations(to), ["edges"], qk.dashboard],
+    // The Map draws the edges and what they link (code review CR120).
+    refreshes: ([from, , to]) => [qk.relations(from), qk.relations(to), [...qk.subjects, "alignment"], qk.dashboard],
   },
   relate: {
     says: () => "Related",

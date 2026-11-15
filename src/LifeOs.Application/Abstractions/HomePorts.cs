@@ -55,6 +55,14 @@ public interface ISpaceRepository
     /// </summary>
     Task<IReadOnlyList<SpacePhoto>> GetPhotosAsync(Guid? spaceId = null, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// What the home's shots show of their photos (code review CR121): each shot's first and newest
+    /// live photos (those tied with them on day and when added too, so the fold picks as it would
+    /// among all), the photos in <paramref name="baselines"/>, and how many each shot has, by space
+    /// and the shot's id in lower case. Not every photo of every space.
+    /// </summary>
+    Task<ShotPhotoEnds> GetShotEndsAsync(IReadOnlyCollection<Guid> baselines, CancellationToken cancellationToken = default);
+
     /// <summary>The live photo with that id, or null (never added, or removed).</summary>
     Task<SpacePhoto?> GetPhotoAsync(Guid id, CancellationToken cancellationToken = default);
 
@@ -68,3 +76,10 @@ public interface ISpaceRepository
     Task<IReadOnlyList<Guid>> AppendPhotoVersionsAsync(
         IReadOnlyList<SpacePhotoWrite> writes, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// <see cref="ISpaceRepository.GetShotEndsAsync"/>'s answer: the photos the home's shots show,
+/// and each shot's photo count by space and the shot's id in lower case.
+/// </summary>
+public sealed record ShotPhotoEnds(
+    IReadOnlyList<SpacePhoto> Photos, IReadOnlyDictionary<(Guid SpaceId, string ShotKey), int> Counts);

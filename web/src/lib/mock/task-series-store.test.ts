@@ -180,9 +180,9 @@ describe("repeating Tasks in the mock store (TASKS-3, D16)", () => {
   });
 
   it("puts a repeating task on the Map once, under what it serves", async () => {
-    const subjects = await mockReads.listSubjects({ includeSeries: true, excludeRepetitions: true });
+    const { subjects, edges } = await mockReads.alignment({ includeArchived: false });
     expect(subjects.some((s) => !!s.seriesId && !s.isSeries)).toBe(false);
-    const forest = buildAlignmentForest(subjects, await mockReads.edges());
+    const forest = buildAlignmentForest(subjects, edges);
     const flat = (nodes: typeof forest): typeof forest => nodes.flatMap((n) => [n, ...flat(n.children)]);
     const shops = flat(forest).filter((n) => n.subject.title === "Shop for Sunday dinner");
     expect(shops).toHaveLength(1);

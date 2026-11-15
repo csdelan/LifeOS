@@ -35,6 +35,8 @@ public static class ReadEndpoints
             .Produces<IReadOnlyList<JournalEntry>>();
         api.MapGet("/subjects/{id:guid}/history", GetHistory).WithName("GetHistory")
             .Produces<IReadOnlyList<StatusHistoryEntry>>();
+        api.MapGet("/subjects/{id:guid}/timer", GetTimer).WithName("GetTimer")
+            .Produces<TaskTimer>().Produces(StatusCodes.Status404NotFound);
         api.MapGet("/subjects/{id:guid}/files", GetFiles).WithName("GetSubjectFiles")
             .Produces<IReadOnlyList<ArtifactRecord>>();
         api.MapGet("/tags", GetTagUniverse).WithName("GetTagUniverse")
@@ -53,10 +55,10 @@ public static class ReadEndpoints
             .Produces<IReadOnlyList<PersonRow>>();
         api.MapGet("/habits", GetHabits).WithName("GetHabits")
             .Produces<IReadOnlyList<HabitRow>>();
+        api.MapGet("/habits/{id:guid}", GetHabit).WithName("GetHabit")
+            .Produces<HabitRow>().Produces(StatusCodes.Status404NotFound);
         api.MapGet("/habits/occurrences", GetOccurrences).WithName("GetHabitOccurrences")
             .Produces<IReadOnlyList<HabitOccurrenceRow>>();
-        api.MapGet("/edges", GetEdges).WithName("GetAlignmentEdges")
-            .Produces<IReadOnlyList<AlignmentEdge>>();
         api.MapGet("/alignment", GetAlignment).WithName("GetAlignment")
             .Produces<AlignmentRead>();
         api.MapGet("/browse", GetBrowse).WithName("GetBrowse")
@@ -86,8 +88,18 @@ public static class ReadEndpoints
             },
             cancellationToken));
 
-    private static async Task<IResult> GetTimers(SubjectReader reader, CancellationToken cancellationToken)
-        => Results.Ok((await reader.GetTimersAsync(cancellationToken: cancellationToken)));
+    /// <summary>
+    /// Timed Tasks' timers: with <paramref name="active"/>, the running and paused ones (the
+    /// shell's), and with <paramref name="status"/>, those of the Tasks a list of that status reads
+    /// (the Tasks page's), not every timer ever (code review CR121).
+    /// </summary>
+    private static async Task<IResult> GetTimers(
+        SubjectReader reader, CancellationToken cancellationToken, bool active = false, string? status = null)
+        => Results.Ok(await reader.GetTimersAsync(active, status, cancellationToken));
+
+    /// <summary>One Task's timer; 404 when it has never run (code review CR121).</summary>
+    private static async Task<IResult> GetTimer(Guid id, SubjectReader reader, CancellationToken cancellationToken)
+        => await reader.GetTimerAsync(id, cancellationToken) is { } timer ? Results.Ok(timer) : Results.NotFound();
 
     /// <summary>
     /// Subjects of a type, or every type. A repeating Task's series is left out unless
@@ -196,6 +208,10 @@ public static class ReadEndpoints
     private static async Task<IResult> GetHabits(SubjectReader reader, CancellationToken cancellationToken, bool includeArchived = false)
         => Results.Ok((await reader.GetHabitsAsync(includeArchived, cancellationToken: cancellationToken)));
 
+    /// <summary>One habit, archived or not, for its detail; 404 when the id is no habit (code review CR121).</summary>
+    private static async Task<IResult> GetHabit(Guid id, SubjectReader reader, CancellationToken cancellationToken)
+        => await reader.GetHabitAsync(id, cancellationToken) is { } habit ? Results.Ok(habit) : Results.NotFound();
+
     /// <summary>
     /// Habit days: one habit's or every habit's, on one day (<paramref name="on"/>) or from
     /// <paramref name="from"/> to <paramref name="to"/> (each end optional; a review's days,
@@ -207,7 +223,4 @@ public static class ReadEndpoints
 
     private static DateOnly? Day(string? text)
         => !string.IsNullOrWhiteSpace(text) && DateOnly.TryParse(text, out var parsed) ? parsed : null;
-
-    private static async Task<IResult> GetEdges(SubjectReader reader, CancellationToken cancellationToken, bool includeArchived = false)
-        => Results.Ok((await reader.GetAlignmentEdgesAsync(includeArchived, cancellationToken: cancellationToken)));
 }

@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/subjects/{id}/timer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetTimer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/subjects/{id}/files": {
         parameters: {
             query?: never;
@@ -292,14 +308,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/habits/occurrences": {
+    "/api/habits/{id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["GetHabitOccurrences"];
+        get: operations["GetHabit"];
         put?: never;
         post?: never;
         delete?: never;
@@ -308,14 +324,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/edges": {
+    "/api/habits/occurrences": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["GetAlignmentEdges"];
+        get: operations["GetHabitOccurrences"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4129,6 +4145,8 @@ export interface components {
         TaskSeriesHistory: {
             series: components["schemas"]["TaskSeriesRow"];
             repetitions: components["schemas"]["TaskRepetitionRow"][];
+            /** Format: int32 */
+            repetitionCount: number;
         };
         TaskSeriesRow: {
             /** Format: uuid */
@@ -4508,6 +4526,35 @@ export interface operations {
             };
         };
     };
+    GetTimer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskTimer"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     GetSubjectFiles: {
         parameters: {
             query?: never;
@@ -4697,6 +4744,35 @@ export interface operations {
             };
         };
     };
+    GetHabit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HabitRow"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     GetHabitOccurrences: {
         parameters: {
             query?: {
@@ -4718,28 +4794,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HabitOccurrenceRow"][];
-                };
-            };
-        };
-    };
-    GetAlignmentEdges: {
-        parameters: {
-            query?: {
-                includeArchived?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AlignmentEdge"][];
                 };
             };
         };
@@ -4800,7 +4854,10 @@ export interface operations {
     };
     GetTimers: {
         parameters: {
-            query?: never;
+            query?: {
+                active?: boolean;
+                status?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5642,7 +5699,9 @@ export interface operations {
     };
     GetTaskSeries: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+            };
             header?: never;
             path: {
                 id: string;

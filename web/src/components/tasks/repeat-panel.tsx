@@ -3,10 +3,11 @@ import { toast } from "sonner";
 import { RepeatIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/primitives/status-pill";
+import { LIST_PAGE, MAX_READ } from "@/components/primitives/use-paged";
 import { formatDay, formatDayFull } from "@/lib/dates";
 import { isTerminal } from "@/lib/production-ui-types";
 import type { TaskRepeat, TaskRepetitionRow, TaskSeriesCounts } from "@/lib/production-ui-types";
-import { useTaskSeriesHistory, useWrites } from "@/lib/queries";
+import { useListItem, useTaskSeriesHistory, useWrites } from "@/lib/queries";
 import { repeatLabel, seriesTally } from "@/lib/task-series";
 import { cn } from "@/lib/utils";
 import { useWriteAction } from "@/lib/write-action";
@@ -31,15 +32,18 @@ export function RepeatPanel({
   onOpenSubject?: (id: string) => void;
 }) {
   const writes = useWrites();
-  const { data: history } = useTaskSeriesHistory(repeating.seriesId);
-  const [showAll, setShowAll] = useState(false);
+  // The newest few repetitions, then a page more each Show more, read on the server: a daily
+  // Task's years of them don't all load to show six (code review CR121).
+  const [limit, setLimit] = useState(FIRST_ROWS);
+  const { data: history } = useTaskSeriesHistory(repeating.seriesId, limit);
+  // A repetition's own row, to offer Mark missed: it may be older than the rows read.
+  const { data: own } = useListItem(repeating.isSeries ? undefined : subjectId);
   const changing = useWriteAction({ report: "toast", fallback: "Couldn't change it." });
   const busy = changing.pending;
   const counts: TaskSeriesCounts = history?.series ?? repeating;
   const stopped = history?.series.stopped ?? repeating.stopped;
   const rows = history?.repetitions ?? [];
-  const shown = showAll ? rows : rows.slice(0, FIRST_ROWS);
-  const own = rows.find((r) => r.id === subjectId);
+  const count = history?.repetitionCount ?? rows.length;
   const label = repeatLabel(repeating.recurrence) ?? "Repeats";
 
   async function move(id: string, status: string, done: string) {
@@ -75,7 +79,7 @@ export function RepeatPanel({
               Stop repeating
             </Button>
           )
-        ) : own && !own.closed && !own.archived ? (
+        ) : own && !isTerminal(own.status) && !own.archived ? (
           <Button
             variant="outline"
             size="xs"
@@ -126,9 +130,9 @@ export function RepeatPanel({
         ) : null}
       </p>
 
-      {shown.length > 0 ? (
+      {rows.length > 0 ? (
         <ul className="space-y-1" aria-label="Repetitions">
-          {shown.map((row) => (
+          {rows.map((row) => (
             <RepetitionItem
               key={row.id}
               row={row}
@@ -138,9 +142,17 @@ export function RepeatPanel({
           ))}
         </ul>
       ) : null}
-      {rows.length > FIRST_ROWS ? (
-        <Button variant="ghost" size="xs" onClick={() => setShowAll((v) => !v)}>
-          {showAll ? "Show fewer" : `Show all ${rows.length}`}
+      {rows.length < count && limit < MAX_READ ? (
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => setLimit((l) => Math.min(l === FIRST_ROWS ? LIST_PAGE : l + LIST_PAGE, MAX_READ))}
+        >
+          {limit === FIRST_ROWS && count <= LIST_PAGE ? `Show all ${count}` : `Show ${Math.min(count - rows.length, LIST_PAGE)} more`}
+        </Button>
+      ) : limit > FIRST_ROWS ? (
+        <Button variant="ghost" size="xs" onClick={() => setLimit(FIRST_ROWS)}>
+          Show fewer
         </Button>
       ) : null}
     </section>

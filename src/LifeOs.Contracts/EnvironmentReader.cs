@@ -19,10 +19,13 @@ public sealed class EnvironmentReader(ISpaceRepository spaces, IHomeCalendar cal
     /// Then and Now (<c>GET /api/environment</c>).
     /// </summary>
     public async Task<EnvironmentRead> GetHomeAsync(CancellationToken cancellationToken = default)
-        => EnvironmentRows.From(
-            await home.GetAsync(cancellationToken),
-            await spaces.GetSpacesAsync(cancellationToken),
-            await spaces.GetPhotosAsync(cancellationToken: cancellationToken));
+    {
+        var all = await spaces.GetSpacesAsync(cancellationToken);
+        // Each shot's ends and picked baseline, and its count, not every photo (code review CR121).
+        var ends = await spaces.GetShotEndsAsync(
+            [.. all.SelectMany(s => s.Shots).Select(s => s.Baseline).OfType<Guid>()], cancellationToken);
+        return EnvironmentRows.From(await home.GetAsync(cancellationToken), all, ends.Photos, ends.Counts);
+    }
 
     /// <summary>
     /// A space's photos (<c>GET /api/environment/spaces/{id}/photos</c>), of one shot when

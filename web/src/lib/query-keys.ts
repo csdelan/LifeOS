@@ -71,5 +71,4 @@ export const qk = {
   dashboard: ["dashboard"] as const,
   // Under the dashboard, so every subject write that refreshes Focus refreshes these too.
   appointments: (on: string) => ["dashboard", "appointments", on] as const,
-  edges: (archived: boolean) => ["edges", archived] as const,
 };

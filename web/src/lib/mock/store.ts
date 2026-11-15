@@ -1332,12 +1332,14 @@ export function mockTaskSeries(includeArchived = false): TaskSeriesRow[] {
 }
 
 /** `GET /api/tasks/series/{id}`: a repeating Task and its repetitions, latest first. */
-export function mockTaskSeriesHistory(id: string): TaskSeriesHistory | null {
+export function mockTaskSeriesHistory(id: string, limit?: number): TaskSeriesHistory | null {
   const series = byId(id);
   if (!series || !isSeries(state, id)) return null;
+  const repetitions = repetitionRows(state, series.urn);
   return {
     series: { ...seriesRow(state, series), bounty: withBounty(series).bounty ?? null },
-    repetitions: repetitionRows(state, series.urn),
+    repetitions: limit == null ? repetitions : repetitions.slice(0, limit),
+    repetitionCount: repetitions.length,
   };
 }
 

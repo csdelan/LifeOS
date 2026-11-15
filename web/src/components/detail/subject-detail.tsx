@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Resolver } from "react-hook-form";
@@ -40,7 +40,7 @@ import { canHaveCover } from "@/lib/cover";
 import { DecisionActions, RecordDecisionAction } from "@/components/detail/decision-relationships";
 import { canStartDecisionFrom, type LinkedItem } from "@/lib/decisions";
 import {
-  useHabits,
+  useHabit,
   useListItem,
   useRelations,
   useSubject,
@@ -115,7 +115,8 @@ function ItemDetail({
   const { data: rels } = useRelations(subjectId);
   const { data: tags } = useSubjectTags(subjectId);
   const { data: files } = useSubjectFiles(subjectId);
-  const { data: habits } = useHabits();
+  // Its habit row, read only for a habit, where this read every habit to find it (code review CR121).
+  const { data: habitRow } = useHabit(subjectId, (data?.type ?? list?.type) === "Habit");
   const [editing, setEditing] = useState(false);
   const [choosingCover, setChoosingCover] = useState(false);
   const [coverPicks, setCoverPicks] = useState(0);
@@ -129,10 +130,7 @@ function ItemDetail({
   const { setError: setSaveError } = saving;
   const { openNew } = useCreateActions();
 
-  const habit = useMemo(
-    () => (habits ?? []).find((h) => h.id === subjectId),
-    [habits, subjectId],
-  );
+  const habit = habitRow ?? undefined;
 
   const form = useForm<SubjectFormValues>({
     resolver: zodResolver(subjectFormSchema) as Resolver<SubjectFormValues>,

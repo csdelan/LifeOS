@@ -270,11 +270,13 @@ public static class EnvironmentRows
 
     /// <summary>
     /// The home today. <paramref name="spaces"/> carry the shots (the fold's read leaves them
-    /// out) and <paramref name="photos"/> are every live photo; without them each space reads
-    /// with its one unnamed shot and no photos.
+    /// out) and <paramref name="photos"/> the live photos they show, each shot's ends and baseline
+    /// at least, with <paramref name="counts"/> its photo count when they aren't every photo;
+    /// without them each space reads with its one unnamed shot and no photos.
     /// </summary>
     public static EnvironmentRead From(
-        HomeReading home, IReadOnlyList<Space>? spaces = null, IReadOnlyList<SpacePhoto>? photos = null)
+        HomeReading home, IReadOnlyList<Space>? spaces = null, IReadOnlyList<SpacePhoto>? photos = null,
+        IReadOnlyDictionary<(Guid SpaceId, string ShotKey), int>? counts = null)
     {
         var total = TotalWeight(home.Spaces);
         var names = home.Spaces.ToDictionary(s => s.Id, s => s.Name);
@@ -297,7 +299,7 @@ public static class EnvironmentRows
                     Score = Points(day?.Score),
                     LastRatedOn = day?.LastRatedOn is { } last ? Day(last) : null,
                     Parts = Parts(day),
-                    Shots = Shots(spaces?.FirstOrDefault(s => s.Id == space.Id) ?? space, photos ?? [], on)
+                    Shots = Shots(spaces?.FirstOrDefault(s => s.Id == space.Id) ?? space, photos ?? [], on, counts)
                 };
             }).ToList(),
             FixNext = home.FixNext.Select(x => new FixNextRow
@@ -331,10 +333,12 @@ public static class EnvironmentRows
 
     /// <summary>
     /// <paramref name="space"/>'s shots, each with its photo count, baseline and newest photo,
-    /// read on their days through <paramref name="on"/>.
+    /// read on their days through <paramref name="on"/>. The count is <paramref name="counts"/>'
+    /// when given, as <paramref name="photos"/> are then only the ones the shots show.
     /// </summary>
     public static IReadOnlyList<SpaceShotRow> Shots(
-        Space space, IReadOnlyList<SpacePhoto> photos, Func<DateOnly, HomeDay> on)
+        Space space, IReadOnlyList<SpacePhoto> photos, Func<DateOnly, HomeDay> on,
+        IReadOnlyDictionary<(Guid SpaceId, string ShotKey), int>? counts = null)
     {
         var mine = photos.Where(p => p.SpaceId == space.Id).ToList();
         return space.Shots.Select(shot =>
@@ -345,7 +349,9 @@ public static class EnvironmentRows
             {
                 Id = shot.Id,
                 Name = space.ShotName(shot),
-                Photos = ShotPhotos.Of(shot, mine).Count,
+                Photos = counts is null
+                    ? ShotPhotos.Of(shot, mine).Count
+                    : counts.GetValueOrDefault((space.Id, shot.Id.ToLowerInvariant())),
                 Baseline = baseline is null ? null : Photo(baseline, space, baseline.Id, on),
                 Newest = newest is null ? null : Photo(newest, space, baseline?.Id, on)
             };

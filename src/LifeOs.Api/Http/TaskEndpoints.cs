@@ -31,9 +31,19 @@ public static class TaskEndpoints
         SubjectReader reader, CancellationToken cancellationToken, bool includeArchived = false)
         => Results.Ok(await reader.GetTaskSeriesAsync(includeArchived, cancellationToken));
 
-    /// <summary>A repeating Task (by the series' id) and its repetitions, latest first.</summary>
-    private static async Task<IResult> GetSeries(Guid id, SubjectReader reader, CancellationToken cancellationToken)
-        => await reader.GetTaskSeriesHistoryAsync(id, cancellationToken) is { } history ? Results.Ok(history) : Results.NotFound();
+    /// <summary>
+    /// A repeating Task (by the series' id) and its repetitions, latest first; with <c>limit</c>
+    /// (1 to 1000), the newest that many, and how many there are in all (code review CR121).
+    /// </summary>
+    private static async Task<IResult> GetSeries(Guid id, int? limit, SubjectReader reader, CancellationToken cancellationToken)
+    {
+        if (limit is not null and not (>= 1 and <= 1000))
+        {
+            throw new ArgumentException($"limit is a whole number from 1 to 1000, not {limit}.");
+        }
+
+        return await reader.GetTaskSeriesHistoryAsync(id, limit, cancellationToken) is { } history ? Results.Ok(history) : Results.NotFound();
+    }
 
     /// <summary>
     /// Every repetition of an unarchived repeating Task due from <c>from</c> to <c>to</c>

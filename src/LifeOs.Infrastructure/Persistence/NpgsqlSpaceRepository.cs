@@ -99,6 +99,32 @@ public sealed class NpgsqlSpaceRepository(NpgsqlDataSource dataSource) : ISpaceR
                 new { spaceId }, cancellationToken))
             .Select(r => r.ToPhoto()).ToList();
 
+    public async Task<ShotPhotoEnds> GetShotEndsAsync(IReadOnlyCollection<Guid> baselines, CancellationToken cancellationToken = default)
+    {
+        var rows = (await QueryAsync<ShotEndRow>("""
+            WITH p AS (
+                SELECT id, space_id, shot_id, day, artifact_id, added_at, changed_at, event_id, photo_key,
+                       rank() OVER (PARTITION BY space_id, lower(shot_id) ORDER BY day, added_at) AS from_first,
+                       rank() OVER (PARTITION BY space_id, lower(shot_id) ORDER BY day DESC, added_at DESC) AS from_last,
+                       count(*) OVER (PARTITION BY space_id, lower(shot_id))::int AS shot_photos
+                FROM bsk.v_space_photo
+            )
+            SELECT id, space_id AS spaceid, shot_id AS shotid, to_char(day, 'YYYY-MM-DD') AS day,
+                   artifact_id AS artifactid, added_at AS addedat, changed_at AS changedat, event_id AS eventid,
+                   shot_photos AS shotphotos
+            FROM p
+            WHERE from_first = 1 OR from_last = 1 OR photo_key = ANY(@baselines)
+            ORDER BY day, added_at, id
+            """, new { baselines = baselines.Select(b => b.ToString()).ToArray() }, cancellationToken)).ToList();
+        var counts = new Dictionary<(Guid SpaceId, string ShotKey), int>();
+        foreach (var row in rows)
+        {
+            counts[(row.SpaceId, (row.ShotId ?? "").ToLowerInvariant())] = row.ShotPhotos;
+        }
+
+        return new ShotPhotoEnds([.. rows.Select(r => r.ToPhoto())], counts);
+    }
+
     public async Task<SpacePhoto?> GetPhotoAsync(Guid id, CancellationToken cancellationToken = default)
         => (await QueryAsync<PhotoRow>(PhotoSql + " WHERE photo_key = @id::text", new { id }, cancellationToken))
             .Select(r => r.ToPhoto()).FirstOrDefault();
@@ -209,7 +235,7 @@ public sealed class NpgsqlSpaceRepository(NpgsqlDataSource dataSource) : ISpaceR
             SpaceShotsJson.Parse(Shots));
     }
 
-    private sealed class PhotoRow
+    private class PhotoRow
     {
         public Guid Id { get; set; }
         public Guid SpaceId { get; set; }
@@ -221,6 +247,11 @@ public sealed class NpgsqlSpaceRepository(NpgsqlDataSource dataSource) : ISpaceR
         public Guid EventId { get; set; }
 
         public SpacePhoto ToPhoto() => new(Id, SpaceId, ShotId, ParseDay(Day), ArtifactId, Utc(AddedAt), Utc(ChangedAt), EventId);
+    }
+
+    private sealed class ShotEndRow : PhotoRow
+    {
+        public int ShotPhotos { get; set; }
     }
 
     private sealed class RatingRow

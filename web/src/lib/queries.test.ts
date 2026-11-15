@@ -32,7 +32,6 @@ async function staleAfter(write: (writes: LifeOsWriteClient) => Promise<unknown>
 const archivedListKeys = [
   qk.subjects,
   qk.dashboard,
-  ["edges", false],
   qk.subject("s1"),
   qk.listItem("s1"),
   qk.history("s1"),
@@ -119,10 +118,9 @@ describe("a write's success", () => {
 
 // Code review CR37 and CR120: the Map's outline and its graph fold the one read of what the Map draws.
 describe("the Map's reads", () => {
-  it("ask for what the Map draws once, and for no subject list or edges besides", async () => {
+  it("ask for what the Map draws once, and for no subject list besides", async () => {
     const alignment = vi.spyOn(mockReads, "alignment");
     const subjects = vi.spyOn(mockReads, "listSubjects");
-    const edges = vi.spyOn(mockReads, "edges");
     const client = new QueryClient();
     const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
     const { result } = renderHook(
@@ -133,7 +131,6 @@ describe("the Map's reads", () => {
     await waitFor(() => expect(result.current.forest.data?.length).toBeGreaterThan(0));
     expect(alignment).toHaveBeenCalledTimes(1);
     expect(subjects).not.toHaveBeenCalled();
-    expect(edges).not.toHaveBeenCalled();
     // A repeating Task is drawn once, as its series, and none of its repetitions (TASKS-3).
     const drawn = result.current.graph.data!.subjects;
     expect(drawn.some((s) => s.isSeries)).toBe(true);

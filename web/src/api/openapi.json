@@ -437,6 +437,40 @@
         }
       }
     },
+    "/api/subjects/{id}/timer": {
+      "get": {
+        "tags": [
+          "Reads"
+        ],
+        "operationId": "GetTimer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskTimer"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/subjects/{id}/files": {
       "get": {
         "tags": [
@@ -687,6 +721,40 @@
         }
       }
     },
+    "/api/habits/{id}": {
+      "get": {
+        "tags": [
+          "Reads"
+        ],
+        "operationId": "GetHabit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HabitRow"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/habits/occurrences": {
       "get": {
         "tags": [
@@ -733,39 +801,6 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/HabitOccurrenceRow"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/edges": {
-      "get": {
-        "tags": [
-          "Reads"
-        ],
-        "operationId": "GetAlignmentEdges",
-        "parameters": [
-          {
-            "name": "includeArchived",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AlignmentEdge"
                   }
                 }
               }
@@ -926,6 +961,23 @@
           "Reads"
         ],
         "operationId": "GetTimers",
+        "parameters": [
+          {
+            "name": "active",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1973,6 +2025,14 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
             }
           }
         ],
@@ -13478,7 +13538,8 @@
       "TaskSeriesHistory": {
         "required": [
           "series",
-          "repetitions"
+          "repetitions",
+          "repetitionCount"
         ],
         "type": "object",
         "properties": {
@@ -13490,6 +13551,10 @@
             "items": {
               "$ref": "#/components/schemas/TaskRepetitionRow"
             }
+          },
+          "repetitionCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

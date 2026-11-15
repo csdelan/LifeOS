@@ -1,4 +1,3 @@
-import type { AlignmentEdge } from "@/lib/derive";
 import { fits, type ArtifactAppSide } from "@/lib/live/fits";
 import { api, ApiRequestError, unwrap, unwrapBlob, unwrapOrNull } from "@/lib/live/http";
 import { normalizeCover, normalizeCoverSearch, withNormalCover } from "@/lib/cover";
@@ -140,16 +139,16 @@ export const liveReads: LifeOsReads = {
     return fits<TagUniverseItem[]>()(data);
   },
 
-  async journal(id) {
+  async journal(id, limit) {
     const data = await unwrap(
-      api().GET("/api/subjects/{id}/journal", { params: { path: { id } } }),
+      api().GET("/api/subjects/{id}/journal", { params: { path: { id }, query: { limit } } }),
     );
     return fits<JournalEntry[]>()(data);
   },
 
-  async history(id) {
+  async history(id, limit) {
     const data = await unwrap(
-      api().GET("/api/subjects/{id}/history", { params: { path: { id } } }),
+      api().GET("/api/subjects/{id}/history", { params: { path: { id }, query: { limit } } }),
     );
     return fits<StatusHistoryEntry[]>()(data);
   },
@@ -195,6 +194,11 @@ export const liveReads: LifeOsReads = {
     return fits<HabitRow[]>()(data);
   },
 
+  async habit(id) {
+    const data = await unwrapOrNull(api().GET("/api/habits/{id}", { params: { path: { id } } }));
+    return data ? fits<HabitRow>()(data) : null;
+  },
+
   async appointments(opts) {
     const data = await unwrap(api().GET("/api/appointments", { params: { query: { on: opts.on } } }));
     return fits<AppointmentRow[]>()(data);
@@ -216,9 +220,16 @@ export const liveReads: LifeOsReads = {
     return fits<HabitOccurrenceRow[]>()(data);
   },
 
-  async timers() {
-    const data = await unwrap(api().GET("/api/timers"));
+  async timers(opts) {
+    const data = await unwrap(
+      api().GET("/api/timers", { params: { query: { active: opts?.active, status: opts?.status } } }),
+    );
     return fits<TaskTimer[]>()(data);
+  },
+
+  async timer(taskId) {
+    const data = await unwrapOrNull(api().GET("/api/subjects/{id}/timer", { params: { path: { id: taskId } } }));
+    return data ? fits<TaskTimer>()(data) : null;
   },
 
   async taskSeries(opts) {
@@ -228,8 +239,10 @@ export const liveReads: LifeOsReads = {
     return fits<TaskSeriesRow[]>()(data);
   },
 
-  async taskSeriesHistory(id) {
-    const data = await unwrapOrNull(api().GET("/api/tasks/series/{id}", { params: { path: { id } } }));
+  async taskSeriesHistory(id, limit) {
+    const data = await unwrapOrNull(
+      api().GET("/api/tasks/series/{id}", { params: { path: { id }, query: { limit } } }),
+    );
     return data ? fits<TaskSeriesHistory>()(data) : null;
   },
 
@@ -408,18 +421,6 @@ export const liveReads: LifeOsReads = {
     const at = recorded.findIndex((section) => section.id === "overdue");
     recorded.splice(at < 0 ? recorded.length : at + 1, 0, repeating);
     return recorded;
-  },
-
-  async edges(opts) {
-    // TODO(api): GET /api/edges is the bulk alignment-edge read for BROWSE-1.
-    // Confirm it returns serves / results_in / supersedes for every subject (not a
-    // per-subject walk). Do not add a second graph-specific store.
-    const data = await unwrap(
-      api().GET("/api/edges", {
-        params: { query: { includeArchived: opts?.includeArchived } },
-      }),
-    );
-    return fits<AlignmentEdge[]>()(data);
   },
 
   async dashboard() {

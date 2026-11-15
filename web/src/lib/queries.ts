@@ -118,17 +118,42 @@ function joinLists(results: { data?: SubjectListItem[]; isLoading: boolean }[]) 
 
 /**
  * The live subjects of `types`, read a type at a time, each sharing `useSubjects(type)`'s cache:
- * a picker that offers Goals and Projects reads those, not every Task there is (code review CR76).
+ * a picker that offers Goals and Projects reads those, not every Task there is (code review CR76),
+ * and with `status: "open"` only the open ones (code review CR121).
  */
-export function useSubjectsOfTypes(types: readonly SubjectType[], enabled = true) {
+export function useSubjectsOfTypes(types: readonly SubjectType[], scope: { status?: "open"; enabled?: boolean } = {}) {
   return useQueries({
     queries: types.map((type) => ({
-      queryKey: subjectListKey(type, false, false, {}),
-      queryFn: () => reads().listSubjects({ type }),
-      enabled,
+      queryKey: subjectListKey(type, false, false, { status: scope.status }),
+      queryFn: () => reads().listSubjects({ type, status: scope.status }),
+      enabled: scope.enabled ?? true,
     })),
     combine: joinLists,
   });
+}
+
+const presentItems = (results: { data?: SubjectListItem | null }[]) =>
+  results.flatMap((r) => (r.data ? [r.data] : []));
+
+/**
+ * What a parent picker or filter offers (code review CR121): the open items of `types`, and any
+ * of `picked` they leave out (a closed parent already chosen), each read on its own, not every
+ * Goal and Project ever made.
+ */
+export function useParentOptions(types: readonly SubjectType[], picked: readonly string[]) {
+  const open = useSubjectsOfTypes(types, { status: "open" });
+  const pickedKey = picked.filter(Boolean).join(",");
+  const missing = useMemo(() => {
+    if (!open.data) return [];
+    const known = new Set(open.data.map((s) => s.id));
+    return [...new Set(pickedKey ? pickedKey.split(",") : [])].filter((id) => !known.has(id));
+  }, [open.data, pickedKey]);
+  const extra = useQueries({
+    queries: missing.map((id) => ({ queryKey: qk.listItem(id), queryFn: () => reads().getListItem(id) })),
+    combine: presentItems,
+  });
+  const data = useMemo(() => (open.data ? [...open.data, ...extra] : undefined), [open.data, extra]);
+  return { data, isLoading: open.isLoading };
 }
 
 /**
@@ -155,11 +180,13 @@ export function useTaskSeries(includeArchived = false) {
 }
 
 /** One repeating Task's repetitions, latest first. */
-export function useTaskSeriesHistory(seriesId: string | undefined) {
+/** A series and its newest `limit` repetitions; the last answer stays while more of the same series load. */
+export function useTaskSeriesHistory(seriesId: string | undefined, limit: number) {
   return useQuery({
-    queryKey: qk.taskSeriesHistory(seriesId ?? ""),
-    queryFn: () => reads().taskSeriesHistory(seriesId!),
+    queryKey: [...qk.taskSeriesHistory(seriesId ?? ""), limit],
+    queryFn: () => reads().taskSeriesHistory(seriesId!, limit),
     enabled: !!seriesId,
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[2] === seriesId ? previous : undefined),
   });
 }
 
@@ -214,19 +241,23 @@ export function useTagUniverse() {
   });
 }
 
-export function useJournal(id: string | undefined) {
+/** An item's newest `limit` journal entries; the last answer stays while older ones of the same item load. */
+export function useJournal(id: string | undefined, limit: number) {
   return useQuery({
-    queryKey: qk.journal(id ?? ""),
-    queryFn: () => reads().journal(id!),
+    queryKey: [...qk.journal(id ?? ""), limit],
+    queryFn: () => reads().journal(id!, limit),
     enabled: !!id,
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[1] === id ? previous : undefined),
   });
 }
 
-export function useHistory(id: string | undefined) {
+/** An item's newest `limit` status changes; the last answer stays while older ones of the same item load. */
+export function useHistory(id: string | undefined, limit: number) {
   return useQuery({
-    queryKey: qk.history(id ?? ""),
-    queryFn: () => reads().history(id!),
+    queryKey: [...qk.history(id ?? ""), limit],
+    queryFn: () => reads().history(id!, limit),
     enabled: !!id,
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[1] === id ? previous : undefined),
   });
 }
 
@@ -402,17 +433,20 @@ export function useAlignmentForest(includeArchived: boolean, lens: MapLens) {
   };
 }
 
-export function useAlignmentEdges(includeArchived: boolean) {
-  return useQuery({
-    queryKey: qk.edges(includeArchived),
-    queryFn: () => reads().edges({ includeArchived }),
-  });
-}
-
+/** Every live habit: what a page that lists them all reads (`scoped-reads.test.ts` names each). */
 export function useHabits() {
   return useQuery({
     queryKey: qk.habits,
     queryFn: () => reads().habits(),
+  });
+}
+
+/** One habit, for its detail, read only when the item is one (code review CR121). */
+export function useHabit(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...qk.habits, "one", id ?? ""],
+    queryFn: () => reads().habit(id!),
+    enabled: !!id && enabled,
   });
 }
 
@@ -432,22 +466,34 @@ export function useOccurrences(habitId: string, from: string, to: string) {
   });
 }
 
-/** Every timed Task's timer — one read feeds the detail widget, Tasks rows and the shell. */
-export function useTimers() {
+/**
+ * The timers of the Tasks a list of `status` reads (`open`, `closed`, one status, or every one
+ * when left out), for the Tasks page's rows (code review CR121).
+ */
+export function useTimers(status: string | undefined, enabled = true) {
   return useQuery({
-    queryKey: qk.timers,
-    queryFn: () => reads().timers(),
+    queryKey: [...qk.timers, "list", status ?? "all"],
+    queryFn: () => reads().timers({ status }),
+    enabled,
+  });
+}
+
+/** The timer running now, or null: the shell reads the running and paused ones, not every timer ever. */
+export function useRunningTimer() {
+  return useQuery({
+    queryKey: [...qk.timers, "active"],
+    queryFn: () => reads().timers({ active: true }),
+    select: (timers) => timers.find((t) => t.state === "running") ?? null,
   });
 }
 
 /** One task's timer, or null when it has never run. */
 export function useTimer(taskId: string | undefined) {
-  const { data, ...rest } = useTimers();
-  const timer = useMemo(
-    () => (taskId ? (data ?? []).find((t) => t.subjectId === taskId) ?? null : null),
-    [data, taskId],
-  );
-  return { ...rest, data: timer };
+  return useQuery({
+    queryKey: [...qk.timers, "task", taskId ?? ""],
+    queryFn: () => reads().timer(taskId!),
+    enabled: !!taskId,
+  });
 }
 
 /** Every currency's balance (REWARD-1). */

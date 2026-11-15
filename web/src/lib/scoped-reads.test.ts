@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
  * repetition of every repeating Task to drop them, and a habit's grid read its whole history for a
  * month. Then Browse and the Map read every subject of every type, Spaces, Metrics and a review a
  * day among them; now the server pages Browse and answers what the Map draws (code review CR120).
+ * And the shell read every timer ever for the running one, a detail every habit for its own and
+ * every journal entry and status change, and the pickers every Goal and Project (code review CR121).
  * These find a read like that coming back, in the app's code (the mock answers them all).
  * `ScopedReadsTests` is the server's twin.
  */
@@ -47,7 +49,13 @@ function firstArgument(args: string): string {
   return args;
 }
 
-describe("scoped reads (code review CR107, CR120)", () => {
+/** Each place that reads every live habit, and why. */
+const EVERY_HABIT: Record<string, string> = {
+  "/src/pages/habits-page.tsx": "The Habits page lists every habit.",
+  "/src/components/reviews/review-looking-back.tsx": "A review looks back on every habit's week.",
+};
+
+describe("scoped reads (code review CR107, CR120, CR121)", () => {
   it("reads the app's code", () => {
     expect(Object.keys(sources)).toEqual(expect.arrayContaining(["/src/lib/queries.ts", "/src/pages/map-page.tsx"]));
   });
@@ -75,5 +83,28 @@ describe("scoped reads (code review CR107, CR120)", () => {
 
   it("reads a habit's days for a day or a range, never its whole history", () => {
     expect(readers(/\.occurrences\(/g, (args) => !/\b(on|from)\b/.test(args))).toEqual([]);
+  });
+
+  it("reads every habit only where a page lists them all, and a detail its own", () => {
+    expect(readers(/(?<!function )\buseHabits\(/g, () => true)).toEqual(Object.keys(EVERY_HABIT).sort());
+  });
+
+  it("reads the timers of the Tasks shown, the running one, or one Task's, never every timer", () => {
+    expect(readers(/\.timers\(/g, (args) => !/\b(active|status)\b/.test(args))).toEqual([]);
+    expect(readers(/(?<!function )\buseTimers\(/g, () => true)).toEqual(["/src/pages/tasks-page.tsx"]);
+  });
+
+  it("reads a picker's open parents, not every Goal and Project", () => {
+    expect(readers(/(?<!function )\buseSubjectsOfTypes\(/g, (args) => !/status:\s*"open"/.test(args))).toEqual([]);
+  });
+
+  it("reads an item's journal, status history and a series' repetitions a page at a time", () => {
+    // A read, not its cache key (`qk.journal(id)`), which names no limit.
+    for (const read of [/(?<!\bqk)\.journal\(/g, /(?<!\bqk)\.history\(/g, /(?<!\bqk)\.taskSeriesHistory\(/g]) {
+      expect(readers(read, (args) => !args.includes(","))).toEqual([]);
+    }
+    for (const hook of [/(?<!function )\buseJournal\(/g, /(?<!function )\buseHistory\(/g, /(?<!function )\buseTaskSeriesHistory\(/g]) {
+      expect(readers(hook, (args) => !args.includes(","))).toEqual([]);
+    }
   });
 });

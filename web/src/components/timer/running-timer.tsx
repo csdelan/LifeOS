@@ -3,7 +3,7 @@ import { PauseIcon, SquareIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TimerStateBadge } from "@/components/timer/task-timer";
 import { useTimerControl } from "@/components/timer/use-timer-control";
-import { useTimers } from "@/lib/queries";
+import { useRunningTimer } from "@/lib/queries";
 import type { TaskTimer } from "@/lib/production-ui-types";
 import { formatClock, liveSeconds, useNow } from "@/lib/timer";
 import { cn } from "@/lib/utils";
@@ -13,8 +13,7 @@ import { cn } from "@/lib/utils";
  * nothing while no timer runs. The title opens the Task; Pause and Stop act in place.
  */
 export function RunningTimer({ compact = false, className }: { compact?: boolean; className?: string }) {
-  const { data } = useTimers();
-  const running = (data ?? []).find((t) => t.state === "running");
+  const { data: running } = useRunningTimer();
   if (!running) return null;
   return <RunningTimerCard key={running.subjectId} timer={running} compact={compact} className={className} />;
 }

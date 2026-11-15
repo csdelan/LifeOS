@@ -23,11 +23,11 @@ import { TimerChip } from "@/components/timer/task-timer";
 import { SeriesList } from "@/components/tasks/series-list";
 import { useTaskSettleOnOpen } from "@/components/tasks/use-task-settle-on-open";
 import {
-  useAlignmentEdges,
   useAreas,
   useCreateSubject,
   useSubjects,
-  useSubjectsOfTypes,
+  useParentOptions,
+  useRelations,
   useTagUniverse,
   useTimers,
 } from "@/lib/queries";
@@ -67,28 +67,28 @@ const DEFAULT_VIEW: TasksView = {
 /** What a Task's parent filter offers. */
 const PARENT_TYPES: readonly SubjectType[] = ["Goal", "Project"];
 const NO_PARENTS: SubjectListItem[] = [];
+const NO_PICKS: string[] = [];
 
 export function TasksPage() {
   const search = useSearch({ from: "/tasks" });
   const navigate = useNavigate({ from: "/tasks" });
   const selected = search.selected;
-  const { data: parentRows } = useSubjectsOfTypes(PARENT_TYPES);
-  const { data: edges } = useAlignmentEdges(true);
   const { data: areas } = useAreas();
   const { data: tags } = useTagUniverse();
-  const { data: timers } = useTimers();
   const { setDirty, requestNavigation } = useDirty();
   const [filters, setFilters] = useState<TasksView>(() => loadView("tasks", DEFAULT_VIEW));
+  // The open Goals and Projects, and the one filtered by if it's closed (code review CR121).
+  const { data: parentRows } = useParentOptions(PARENT_TYPES, filters.parent ? [filters.parent] : NO_PICKS);
   const activeView = filters.status === "active";
   const repeatingView = filters.status === "repeating";
   // Active, the view it opens on, reads open Tasks only, and a view of one status reads that
   // status only, not every repetition ever done; All alone reads every Task (code review CR76,
   // CR99). A Task with no status yet is Not started, which only the open read finds.
   const oneStatus = !activeView && !repeatingView && filters.status !== "all" ? filters.status : undefined;
-  const tasks = useSubjects("Task", !activeView, false, {
-    status: activeView || oneStatus === defaultStatus("Task") ? "open" : oneStatus,
-    enabled: !repeatingView,
-  });
+  const listStatus = activeView || oneStatus === defaultStatus("Task") ? "open" : oneStatus;
+  const tasks = useSubjects("Task", !activeView, false, { status: listStatus, enabled: !repeatingView });
+  // The timers of the Tasks read, not every timer ever (code review CR121).
+  const { data: timers } = useTimers(listStatus, !repeatingView);
   const { data, isLoading } = tasks;
   const today = todayIso();
   // A repeating Task's date that passed while the app was closed gets its repetition (TASKS-3).
@@ -105,15 +105,12 @@ export function TasksPage() {
 
   const parents = parentRows ?? NO_PARENTS;
 
-  const parentOf = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const e of edges ?? []) {
-      const kids = map.get(e.fromId) ?? [];
-      kids.push(e.toId);
-      map.set(e.fromId, kids);
-    }
-    return map;
-  }, [edges]);
+  // The parent filtered by: its own children, not every edge there is (code review CR121).
+  const { data: parentRelations } = useRelations(filters.parent || undefined);
+  const childrenOfParent = useMemo(
+    () => new Set((parentRelations?.children ?? []).map((c) => c.subjectId)),
+    [parentRelations],
+  );
 
   const filtered = useMemo(() => {
     let rows = (data ?? []).filter((t) => t.type === "Task");
@@ -132,7 +129,7 @@ export function TasksPage() {
       );
     }
     if (filters.parent) {
-      rows = rows.filter((t) => (parentOf.get(t.id) ?? []).includes(filters.parent));
+      rows = rows.filter((t) => childrenOfParent.has(t.id));
     }
     if (filters.due === "overdue") rows = rows.filter((t) => isOverdueTask(t, today));
     if (filters.due === "today") rows = rows.filter((t) => t.due === today);
@@ -142,7 +139,7 @@ export function TasksPage() {
     if (filters.scheduled === "upcoming") rows = rows.filter((t) => t.scheduled && t.scheduled > today);
     if (filters.scheduled === "none") rows = rows.filter((t) => !t.scheduled);
     return rows;
-  }, [data, filters, tagFilter, parentOf, today]);
+  }, [data, filters, tagFilter, childrenOfParent, today]);
 
   // Grouped and sorted once per change to the list, not on every render (code review CR99).
   const grouped = useMemo(() => groupTasks(filtered, today), [filtered, today]);

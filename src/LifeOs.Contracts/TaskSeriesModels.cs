@@ -92,11 +92,17 @@ public sealed class TaskRepetitionRow
     public bool Archived { get; set; }
 }
 
-/// <summary><c>GET /api/tasks/series/{id}</c>: a repeating Task and every repetition it has made, latest first.</summary>
+/// <summary>
+/// <c>GET /api/tasks/series/{id}</c>: a repeating Task and the repetitions it has made, latest
+/// first, the newest <c>limit</c> of them when asked (code review CR121).
+/// </summary>
 public sealed class TaskSeriesHistory
 {
     public TaskSeriesRow Series { get; set; } = new();
     public IReadOnlyList<TaskRepetitionRow> Repetitions { get; set; } = [];
+
+    /// <summary>How many repetitions it has made in all, archived ones too.</summary>
+    public int RepetitionCount { get; set; }
 }
 
 /// <summary>

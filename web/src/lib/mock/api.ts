@@ -9,7 +9,6 @@
 
 import { todayIso } from "@/lib/dates";
 import type { DashboardRead, LifeOsReads, ListSubjectsOptions, SubjectRelations } from "@/lib/reads";
-import type { AlignmentEdge } from "@/lib/derive";
 import { deriveDashboard } from "@/lib/mock/dashboard";
 import type {
   ActivityDayDetailRead,
@@ -146,22 +145,25 @@ function listOf(
   status?: string,
   limit?: number,
 ): SubjectListItem[] {
-  const wanted = status?.trim().toLowerCase();
   const rows = storeState()
     .subjects.filter((s) => {
       if (!includeArchived && s.archived) return false;
       if (type && s.type !== type) return false;
       // A repeating Task's series stays out of the lists: its repetitions are the Tasks (D16).
       if (!includeSeries && isTaskSeries(s.id)) return false;
-      // The kernel's folded status, as the API filters it: an item with none is open.
-      const current = s.status ?? "";
-      if (wanted === "open" && isTerminal(current)) return false;
-      if (wanted === "closed" && !isTerminal(current)) return false;
-      if (wanted && wanted !== "open" && wanted !== "closed" && current.toLowerCase() !== wanted) return false;
-      return true;
+      return statusPasses(s.status, status);
     })
     .map(listed);
   return limit == null ? rows : rows.slice(0, limit);
+}
+
+/** Whether a folded status passes a list's status filter (`open`, `closed` or one), as the API's does: none is open. */
+function statusPasses(status: string | null | undefined, filter: string | undefined): boolean {
+  const wanted = filter?.trim().toLowerCase();
+  const current = status ?? "";
+  if (wanted === "open") return !isTerminal(current);
+  if (wanted === "closed") return isTerminal(current);
+  return !wanted || current.toLowerCase() === wanted;
 }
 
 /** A subject as the list reads give it: with its bounty, cover and repeat, as the live API does. */
@@ -269,14 +271,17 @@ export const mockReads: LifeOsReads = {
     return tagUniverse(storeState());
   },
 
-  async journal(id: string): Promise<JournalEntry[]> {
+  async journal(id: string, limit?: number): Promise<JournalEntry[]> {
     await wait();
-    return storeState().journals[id] ?? [];
+    // The newest `limit`, oldest first, as the API answers.
+    const entries = [...(storeState().journals[id] ?? [])].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+    return limit == null ? entries : entries.slice(Math.max(0, entries.length - limit));
   },
 
-  async history(id: string): Promise<StatusHistoryEntry[]> {
+  async history(id: string, limit?: number): Promise<StatusHistoryEntry[]> {
     await wait();
-    return storeState().history[id] ?? [];
+    const changes = storeState().history[id] ?? [];
+    return limit == null ? changes : changes.slice(0, limit);
   },
 
   async inbox(): Promise<InboxItem[]> {
@@ -338,6 +343,11 @@ export const mockReads: LifeOsReads = {
     return mockHabits();
   },
 
+  async habit(id: string): Promise<HabitRow | null> {
+    await wait();
+    return mockHabits().find((h) => h.id === id) ?? null;
+  },
+
   async appointments(opts: { on: string }): Promise<AppointmentRow[]> {
     await wait();
     return appointmentsOn(opts.on);
@@ -354,9 +364,19 @@ export const mockReads: LifeOsReads = {
     });
   },
 
-  async timers(): Promise<TaskTimer[]> {
+  async timers(opts?: { active?: boolean; status?: string }): Promise<TaskTimer[]> {
     await wait();
-    return listTimers();
+    const subjects = new Map(storeState().subjects.map((s) => [s.id, s]));
+    return listTimers().filter(
+      (t) =>
+        (!opts?.active || t.state === "running" || t.state === "paused") &&
+        statusPasses(subjects.get(t.subjectId)?.status, opts?.status),
+    );
+  },
+
+  async timer(taskId: string): Promise<TaskTimer | null> {
+    await wait();
+    return listTimers().find((t) => t.subjectId === taskId) ?? null;
   },
 
   async taskSeries(opts?: { includeArchived?: boolean }): Promise<TaskSeriesRow[]> {
@@ -364,9 +384,9 @@ export const mockReads: LifeOsReads = {
     return mockTaskSeries(opts?.includeArchived);
   },
 
-  async taskSeriesHistory(id: string): Promise<TaskSeriesHistory | null> {
+  async taskSeriesHistory(id: string, limit?: number): Promise<TaskSeriesHistory | null> {
     await wait();
-    return mockTaskSeriesHistory(id);
+    return mockTaskSeriesHistory(id, limit);
   },
 
   async wallet(): Promise<Wallet> {
@@ -530,15 +550,6 @@ export const mockReads: LifeOsReads = {
       inbox: s.inbox,
       series: mockTaskSeries(false).flatMap((row) => mockTaskSeriesHistory(row.id) ?? []),
     });
-  },
-
-  async edges(opts?: { includeArchived?: boolean }): Promise<AlignmentEdge[]> {
-    await wait();
-    const s = storeState();
-    const allowed = new Set(
-      s.subjects.filter((x) => opts?.includeArchived || !x.archived).map((x) => x.id),
-    );
-    return s.edges.filter((e) => allowed.has(e.fromId) && allowed.has(e.toId));
   },
 
   async dashboard(): Promise<DashboardRead> {

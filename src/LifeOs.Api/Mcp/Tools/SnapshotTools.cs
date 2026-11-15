@@ -79,8 +79,7 @@ public sealed class SnapshotTools(SubjectReader subjects, FocusReader focus, Rew
         var appointments = (await subjects.GetAppointmentsBetweenAsync(today, weekEnd, cancellationToken))
             .Select(a => new { a.Id, a.Urn, a.Title, a.Date, a.StartTime, a.EndTime, a.Location, a.Status });
 
-        var timers = (await subjects.GetTimersAsync(cancellationToken: cancellationToken))
-            .Where(t => t.State is "running" or "paused")
+        var timers = (await subjects.GetTimersAsync(active: true, cancellationToken: cancellationToken))
             .Select(t => new { t.SubjectId, t.SubjectUrn, t.SubjectTitle, t.State, t.RunningSince, t.TotalSeconds });
 
         object? domains = null;

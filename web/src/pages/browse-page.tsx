@@ -51,7 +51,7 @@ import {
 } from "@/lib/production-ui-types";
 import { useListItem } from "@/lib/queries";
 import { qk } from "@/lib/query-keys";
-import { LIST_PAGE } from "@/components/primitives/use-paged";
+import { MAX_READ, useServerPages } from "@/components/primitives/use-paged";
 import { loadView, saveView } from "@/lib/view-state";
 import { ReadFailed } from "@/components/primitives/read-state";
 import {
@@ -109,14 +109,8 @@ export function BrowsePage() {
 
   // The server counts, filters, sorts and pages the list (code review CR120): Browse reads a page
   // of rows, a page more each Show more, and a new type or filter starts again from the first.
-  const pagedFor = `${type}:${JSON.stringify(filters)}`;
-  const [pages, setPages] = useState(1);
-  const [pagesFor, setPagesFor] = useState(pagedFor);
-  if (pagesFor !== pagedFor) {
-    setPagesFor(pagedFor);
-    setPages(1);
-  }
-  const browse = useBrowse({ ...filters, type, limit: pages * LIST_PAGE });
+  const pages = useServerPages(`${type}:${JSON.stringify(filters)}`);
+  const browse = useBrowse({ ...filters, type, limit: pages.limit });
   const { data, isLoading, isError } = browse;
 
   // Come back to the type and item left open last time (NAV-1), unless the link names them.
@@ -346,8 +340,8 @@ export function BrowsePage() {
             <BrowseList
               label={heading}
               rows={rows}
-              matching={matching}
-              onMore={() => setPages(Math.ceil(rows.length / LIST_PAGE) + 1)}
+              matching={Math.min(matching, MAX_READ)}
+              onMore={pages.more}
               columns={columns}
               filters={filters}
               selected={selected}

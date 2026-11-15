@@ -127,7 +127,7 @@ export function TaskTimerPanel({
         </p>
       ) : null}
       <TimerSummary
-        timer={timer}
+        timer={timer ?? null}
         total={total}
         estimateSeconds={estimateSeconds}
         showSessions={!active}

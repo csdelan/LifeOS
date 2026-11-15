@@ -4,7 +4,6 @@
  * code never imports the mock, and the production bundle can leave the mock out.
  */
 
-import type { AlignmentEdge } from "@/lib/derive";
 import type { HabitDay } from "@/lib/habit-days";
 import type { BrowseReads } from "@/lib/features/browse/reads";
 import type { MeasurementReads } from "@/lib/features/measurements/reads";
@@ -119,8 +118,10 @@ export interface LifeOsReads extends MeasurementReads, BrowseReads {
   relations(id: string): Promise<SubjectRelations>;
   tags(id: string): Promise<string[]>;
   tagUniverse(): Promise<TagUniverseItem[]>;
-  journal(id: string): Promise<JournalEntry[]>;
-  history(id: string): Promise<StatusHistoryEntry[]>;
+  /** The newest `limit` journal entries (every one when left out), oldest first (code review CR121). */
+  journal(id: string, limit?: number): Promise<JournalEntry[]>;
+  /** The newest `limit` status changes (every one when left out), newest first (code review CR121). */
+  history(id: string, limit?: number): Promise<StatusHistoryEntry[]>;
   inbox(): Promise<InboxItem[]>;
   /** The newest `limit` (50 when left out) items to leave the Inbox, most recently resolved first (Back to Inbox). */
   inboxResolved(limit?: number): Promise<ResolvedInboxItem[]>;
@@ -142,6 +143,8 @@ export interface LifeOsReads extends MeasurementReads, BrowseReads {
   areas(): Promise<AreaRow[]>;
   people(): Promise<PersonRow[]>;
   habits(): Promise<HabitRow[]>;
+  /** One habit, archived or not; null when the id is no habit (code review CR121). */
+  habit(id: string): Promise<HabitRow | null>;
   /** Habit days, of one habit, on one day or over a range (a weekly review's check-offs). */
   occurrences(opts?: { habitId?: string; on?: string; from?: string; to?: string }): Promise<HabitOccurrenceRow[]>;
   /**
@@ -149,12 +152,21 @@ export interface LifeOsReads extends MeasurementReads, BrowseReads {
    * occurrences, never the series itself; all-day first, then by start time.
    */
   appointments(opts: { on: string }): Promise<AppointmentRow[]>;
-  /** Every timed Task's timer (TASKS-2), running first. Archived tasks are left out. */
-  timers(): Promise<TaskTimer[]>;
+  /**
+   * Timed Tasks' timers (TASKS-2), running first; archived tasks are left out. `active` keeps the
+   * running and paused ones, and `status` those of the Tasks a list of that status reads (`open`,
+   * `closed` or one status), so no screen reads every timer ever (code review CR121).
+   */
+  timers(opts?: { active?: boolean; status?: string }): Promise<TaskTimer[]>;
+  /** One Task's timer; null when it has never run. */
+  timer(taskId: string): Promise<TaskTimer | null>;
   /** Every repeating Task (TASKS-3), by title, with its repetitions counted. */
   taskSeries(opts?: { includeArchived?: boolean }): Promise<TaskSeriesRow[]>;
-  /** A repeating Task (by the series' id) and its repetitions, latest first; null when it isn't one. */
-  taskSeriesHistory(id: string): Promise<TaskSeriesHistory | null>;
+  /**
+   * A repeating Task (by the series' id) and its repetitions, latest first, the newest `limit`
+   * when given, with how many there are in all; null when it isn't one (code review CR121).
+   */
+  taskSeriesHistory(id: string, limit?: number): Promise<TaskSeriesHistory | null>;
   /** Every currency's balance (REWARD-1), and what a Coin is worth. */
   wallet(): Promise<Wallet>;
   /** Every life domain's progression (REWARD-6 / REWARD-7, xp-domains plan §3.11). */
@@ -221,11 +233,5 @@ export interface LifeOsReads extends MeasurementReads, BrowseReads {
    */
   reviews(opts?: { kind?: ReviewKind; from?: string; to?: string }): Promise<ReviewDoc[]>;
   recap(opts: { start: string; end: string; asOf: string }): Promise<RecapSection[]>;
-  /**
-   * Bulk alignment edges (serves / results_in / supersedes) for Map outline + graph.
-   * // TODO(api): live GET /api/edges — already sketched in OpenAPI; confirm it returns
-   * the full graph (not per-subject) before relying on it in live mode.
-   */
-  edges(opts?: { includeArchived?: boolean }): Promise<AlignmentEdge[]>;
   dashboard(): Promise<DashboardRead>;
 }

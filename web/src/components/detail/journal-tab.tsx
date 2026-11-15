@@ -5,11 +5,16 @@ import { EmptyState } from "@/components/primitives/empty-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { JournalEditor } from "@/components/journal/journal-editor";
 import { looksLikeHtml, sanitizeJournalHtml } from "@/components/journal/journal-html";
+import { useServerPages } from "@/components/primitives/use-paged";
 import { useJournal, useWrites } from "@/lib/queries";
 import { formatTimestamp } from "@/lib/dates";
 
+/** How many journal entries the tab reads at first, and how many more each Show older (code review CR121). */
+export const JOURNAL_PAGE = 20;
+
 export function JournalTab({ subjectId }: { subjectId: string }) {
-  const { data, isLoading } = useJournal(subjectId);
+  const pages = useServerPages(subjectId, JOURNAL_PAGE);
+  const { data, isLoading } = useJournal(subjectId, pages.limit);
   const writes = useWrites();
   const [composing, setComposing] = useState(false);
 
@@ -36,6 +41,11 @@ export function JournalTab({ subjectId }: { subjectId: string }) {
             </li>
           ))}
         </ol>
+      ) : null}
+      {data && pages.full(data.length) ? (
+        <Button variant="ghost" size="xs" onClick={pages.more}>
+          Show older
+        </Button>
       ) : null}
       <Separator />
       {composing ? (

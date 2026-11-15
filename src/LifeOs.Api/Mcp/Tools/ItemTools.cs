@@ -122,7 +122,7 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
             .ToList();
 
         object? series = null;
-        if (detail.Repeating is { IsSeries: true } repeat && (await subjects.GetTaskSeriesHistoryAsync(repeat.SeriesId, cancellationToken: cancellationToken)) is { } h)
+        if (detail.Repeating is { IsSeries: true } repeat && (await subjects.GetTaskSeriesHistoryAsync(repeat.SeriesId, HistoryLimit, cancellationToken)) is { } h)
         {
             // What each repetition pays is the rewards area's (code review CR115).
             if (!options.AllowsAttribute(Bounty.AttributeKey))
@@ -130,7 +130,7 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
                 h.Series.Bounty = null;
             }
 
-            series = new { h.Series, Repetitions = h.Repetitions.Take(HistoryLimit).ToList() };
+            series = new { h.Series, h.Repetitions, h.RepetitionCount };
         }
 
         object? habit = null;

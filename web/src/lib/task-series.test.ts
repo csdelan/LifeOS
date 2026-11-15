@@ -135,6 +135,7 @@ describe("a review's repeating tasks (TASKS-3)", () => {
       repetition("2026-10-07", "Completed"),
       repetition("2026-09-30", "Completed"),
     ],
+    repetitionCount: 5,
   };
 
   it("counts each one's repetitions due in the period, the done against the done and missed", () => {
@@ -151,6 +152,7 @@ describe("a review's repeating tasks (TASKS-3)", () => {
         repetition("2026-10-24", "Cancelled"),
         repetition("2026-10-17", "Completed", { archived: true }),
       ],
+      repetitionCount: 3,
     };
     const [row] = seriesInPeriod([week], "2026-10-12", "2026-10-31", "2026-10-29");
     expect(periodReading(row)).toBe("None closed yet · 1 still to do · 1 skipped");
@@ -173,6 +175,7 @@ describe("a review's repeating tasks (TASKS-3)", () => {
     const rent: TaskSeriesHistory = {
       series: seriesRow("rent", "Pay rent"),
       repetitions: [repetition("2026-11-01", "Not started")],
+      repetitionCount: 1,
     };
     expect(seriesInPeriod([trash, rent], "2026-10-26", "2026-11-01", "2026-10-29").map((r) => r.title)).toEqual([
       "Pay rent",
