@@ -6,8 +6,9 @@
 chose its P0 and P1, CR58 to CR67, built (2026-11-13), then its P2, CR68 to CR90, built
 (2026-11-13) ([Third review](#third-review-2026-11-13)). The fourth review scored 6.4, and CR91
 to CR107 are built from it ([Fourth review](#fourth-review-2026-11-13)). The fifth scored 6.5 and
-carries every proposal the fourth left open; none of its own is chosen yet
-([Fifth review](#fifth-review-2026-11-14)).
+carries every proposal the fourth left open. R1 to R11 and R14 to R18 are built as CR108 to CR123
+(2026-11-14 and 2026-11-15; R18's query budget waits for R13), and R12, R13 and R19 to R35 are
+still proposed ([Fifth review](#fifth-review-2026-11-14)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
@@ -558,7 +559,7 @@ seam members no screen calls (`artifact`, `spaceRatings`, editing and deleting a
 rule tied to two file paths; `CREATABLE_TYPES`, `PARENT_MAP`, `ATTR_KEYS_BY_TYPE`, `PERSON_ROLES` and
 `habitDay` without shared cases; `qk.recap` refreshed by nothing; the README, ten stale `TODO(api)`
 notes, the `bump` and `emit` nobody hears, and the dead draft `docs/pilot/production-ui-types.ts`
-(347 lines). Web screens: `MetricFields` and one `PhotoPicker`; a shared page-test harness (Map,
+(347 lines; deleted 2026-11-15). Web screens: `MetricFields` and one `PhotoPicker`; a shared page-test harness (Map,
 Rewards, Food, People and Areas have no page test); three segmented controls, two Unsaved edits
 dialogs, settle-on-open written four ways, and a "G F" shortcut the palette shows that nothing
 handles; the list-plus-detail wiring five times, where Habits and Rewards don't pass

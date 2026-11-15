@@ -14,7 +14,9 @@ below approved as written.
 Every phase is one small, reviewable commit carrying, where applicable:
 
 - a **numbered migration** in `db/` (schema/predicate/view; idempotent; strict-build clean),
-- a **`bsk` verb** (the only write path — invariant 9) + its Application service / Npgsql repo,
+- a **`bsk` verb** + its Application service / Npgsql repo. The Application services are the
+  one write path (invariant 9); `bsk` was its only door during this plan, and the API and
+  `/mcp` came later as doors into the same services,
 - a **reader view / projection** for `bsk_reader` (many readers, one writer),
 - **tests** against the Postgres fixture (`./test.ps1`).
 

@@ -45,9 +45,10 @@ prototype (step 3.1) runs on Phase 1; the rest of Phase 3 needs Phase 2.
   in `src/LifeOs.Api`.
 - §10: the outside facts this plan relies on, with sources.
 
-No requirement entries exist for this work yet. Proposed IDs: **OPS-1** (backups),
-**AGENT-1** (agents read LifeOS), **AGENT-2** (agents write to LifeOS), **AGENT-3** (Claude
-works the jobs Chris assigns it). Chris writes their Workflow sections; this plan is the how.
+Its requirement entries are in [ui-requirements.md](ui-requirements.md) (added 2026-11-15):
+**OPS-1** (backups), **AGENT-1** (agents read LifeOS), **AGENT-2** (agents write to LifeOS),
+**AGENT-3** (Claude works the jobs Chris assigns it). Chris writes their Workflow sections;
+this plan is the how.
 
 ## 1. Where the data is today
 
@@ -856,8 +857,9 @@ using it.
     `f1ec147b-08d1-4cc3-93fd-1bed4aba6b93`, which the consent page added to the list. An
     `inbox` call through it ran ok at 17:18 UTC, and the logs show no failure writing the
     call row or reading the list.
-  - The first client (`2c63d7f7-…`) may still be listed. If Connected agents shows two
-    Claudes, revoke the one with no recent calls.
+  - The first client (`2c63d7f7-…`) was revoked once reconnects were fixed (130d283,
+    migration 0048, below), as was Claude Code's earlier client; `f1ec147b-…` is the live
+    claude.ai client.
 - **Connecting again keeps the agent (2026-10-28).** Staging showed three Claude entries in
   Connected agents:
   - the first claude.ai client, no longer used;
@@ -1021,8 +1023,8 @@ dictation from the Reviews page answers.
 - covers.
 
 Every tool calls the same Application service its `/api` endpoint calls, never SQL, so
-every rule and invariant holds. The API is still a door into `bsk`, the only writer
-(invariant 7).
+every rule and invariant holds. `/mcp`, like the API and `bsk`, is a door into the
+Application services, the one write path (ontology §5, invariant 9).
 
 ### 5.3 Attribution
 
@@ -1058,8 +1060,12 @@ web's "via Claude" isn't built yet.
   answers a retry, not the door (code review CR68): `IActivityWriter.WriteOnceAsync` writes the
   text, the event and its edges in one transaction that inserts nothing when the id is already
   there, and the capture, journal and reflection services finish and answer the first write
-  (`RequestRetryTests`). A retry racing its first call can still file a second Idea or Problem,
-  since filing runs after the capture commits.
+  (`RequestRetryTests`). Since code review CR114 (`7718089`), filing is one write (the Idea or
+  Problem, its edge from the capture and its flag), and a retry that comes after its first call
+  finds what that call filed. A retry *racing* its first call can still file a second Idea:
+  both see the capture with nothing filed yet, and nothing ties an Idea to one capture. A
+  Problem can't be filed twice, since its title is unique (migration 0006) and the loser files
+  the winner's.
 - **Undo** works the kernel's normal way: set a status back, or dismiss a capture in
   triage. Nothing an agent can do deletes anything.
 - **Records.** The access log records writes like reads, and the event store keeps them
@@ -1107,7 +1113,7 @@ refresh a session that's already open. So something has to run Claude:
 |---|---|---|---|---|---|
 | **Cloud routine, fired** | LifeOS (or anyone holding its token) POSTs to the routine's own URL | A cloud run has to start up, so minutes rather than seconds (3.1 measures it) | No | Chris's subscription. At most 30 fires an hour per routine and 100 an hour per account | Life jobs, and code jobs in repos that build on Linux |
 | **Cloud routine, on a schedule** | Its schedule, at most once an hour | Up to the interval | No | Subscription | A backstop for a fire that went missing |
-| **Desktop app scheduled task** | Its cron, set through chat, as often as every minute | Up to the interval | Yes, with the Claude app open | Subscription | Code jobs that need the PC. The daily report already runs this way (`lifeos-daily-report`) |
+| **Desktop app scheduled task** | Its cron, set through chat, as often as every minute | Up to the interval | Yes, with the Claude app open | Subscription | Code jobs that need the PC. The daily report ran this way (`lifeos-daily-report`, retired 2026-11-15, §9), and the vault's nightly sweep does |
 | `claude -p` from Task Scheduler | Windows Task Scheduler | Up to the interval | Yes | Subscription, unless `ANTHROPIC_API_KEY` is set, which silently bills the API instead | A fallback for the desktop task. claude.ai connectors may not load |
 | Channels | Events pushed into an interactive Claude Code session that's kept open | Seconds | Yes, with a session kept open | Subscription | Not chosen: a research preview that needs a development flag |
 | Managed Agents (API) | LifeOS sends events to an agent session that keeps running | Seconds | No | The API, separate from the subscription, plus $0.08 for each hour a session runs | Later, if minutes turn out too slow |
@@ -1216,7 +1222,7 @@ only Commitments use it today, so Tasks need an **Assign to** control (step 3.2)
    for itself. Watching everything is noisier, costs more and is riskier.
 2. **How soon.** Recommended: within minutes, through the fire, for cloud jobs. The other
    choices are within the hour (the schedule alone, with no fire to build) or by morning
-   (folded into the daily report).
+   (folded into the daily report, which has since been retired, §9).
 3. **What Claude may do without asking.** Recommended:
    - Life jobs: add Tasks and journal entries, and set the status of its own Task. Completing
      or cancelling anything else waits for Chris.
@@ -1230,7 +1236,7 @@ only Commitments use it today, so Tasks need an **Assign to** control (step 3.2)
 
 | Step | What | Done when |
 |---|---|---|
-| 3.1 | **Prototype on two repos.** No LifeOS code, so it runs on Phase 1. Chris makes two small real Tasks. Until Assign to exists, the tag `claude` stands for the assignment. One is tagged `lifeos` (web: a fix from his queue). The other is tagged `blueskies` (desktop: a small change in BlueSkies.Platform, for example from its `FOLLOWUP-ISSUES.md`). The LifeOS job runs in a cloud routine with `csdelan/LifeOS` attached, fired by hand at the URL and token the routine shows, the way LifeOS will fire it. The BlueSkies job runs from a desktop app scheduled task on the PC. It's also tried once in the cloud routine, to see how far Linux gets. Until Phase 2, Claude reports in the pull request and by email, as the daily report does, and Chris moves the statuses | Both jobs went from tagged to a result without Chris opening a chat, and one question was asked and answered along the way. This section records what was found: whether the connector stayed signed in unattended; whether a routine fires by URL; how long a job takes from fire to result; the usage of an empty check and of a real job; whether the cloud can build and test each repo (LifeOS's database tests need Docker, and BlueSkies has Windows-only projects and the `\\bart` shares); and which branches a cloud run may push to |
+| 3.1 | **Prototype on two repos.** No LifeOS code, so it runs on Phase 1. Chris makes two small real Tasks. Until Assign to exists, the tag `claude` stands for the assignment. One is tagged `lifeos` (web: a fix from his queue). The other is tagged `blueskies` (desktop: a small change in BlueSkies.Platform, for example from its `FOLLOWUP-ISSUES.md`). The LifeOS job runs in a cloud routine with `csdelan/LifeOS` attached, fired by hand at the URL and token the routine shows, the way LifeOS will fire it. The BlueSkies job runs from a desktop app scheduled task on the PC. It's also tried once in the cloud routine, to see how far Linux gets. Until Phase 2, Claude reports in the pull request and by email, as the daily report did, and Chris moves the statuses | Both jobs went from tagged to a result without Chris opening a chat, and one question was asked and answered along the way. This section records what was found: whether the connector stayed signed in unattended; whether a routine fires by URL; how long a job takes from fire to result; the usage of an empty check and of a real job; whether the cloud can build and test each repo (LifeOS's database tests need Docker, and BlueSkies has Windows-only projects and the `\\bart` shares); and which branches a cloud run may push to |
 | 3.2 | Assign to in the web, the queue tool, and writes scoped to the job | Tests: the queue lists only Chris's assignments, oldest first, without the agent's own writes. A write outside the agent's Tasks is refused. Assign to sets and clears the assignee |
 | 3.3 | The fire from LifeOS | Tests against a stand-in endpoint: an assignment fires once; a burst fires once; an answer on a Waiting Task fires; the body has ids only; a failed fire is logged and not retried. On staging, an assignment shows up as a run of the routine |
 | 3.4 | The runners for real: the routine with its backstop, and the PC task | Chris assigns real jobs of both kinds for a week. From what he saw, he settles the backstop interval and decision 3 |
@@ -1293,9 +1299,14 @@ only Commitments use it today, so Tasks need an **Assign to** control (step 3.2)
 
 ## 9. Later (not planned here)
 
-- **Proactive coaching.** Under way outside this plan: since 2026-10-28 a desktop app
-  scheduled task reads `/mcp` at 4 AM and emails Chris a daily report. Beyond Phase 3's
-  wake-ups (§6.3), LifeOS itself never pushes.
+- **Proactive coaching.** Tried outside this plan, and retired: a desktop app scheduled task
+  (`lifeos-daily-report`) read `/mcp` at 4 AM and emailed Chris a daily report. It ran fine
+  five times, 2026-10-28 to 2026-11-01, was switched off after that, and Chris retired it on
+  2026-11-15. The task stays switched off with its prompt kept, so reviving it is one toggle.
+  What it did is covered two ways now: the 3 AM vault sweep's summary is the daily digest of
+  what was filed (notes plan, N6), and "what to focus on" belongs to the daily command center,
+  TODAY-1 and TODAY-2, which Chris put next after the notes system. Beyond Phase 3's wake-ups
+  (§6.3), LifeOS itself never pushes.
 - **More agent features:**
   - prompts for the reviews (REVIEW-1, REVIEW-2);
   - voice capture through an agent (CAP-3);

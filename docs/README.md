@@ -30,11 +30,11 @@ a plan's decisions section settles a question, so read it before asking again.
 | [measurements-plan.md](pilot/measurements-plan.md) | Weight, any metric, lab visits and charts (D20). |
 | [reviews-plan.md](pilot/reviews-plan.md) | Daily and weekly reviews (D3, D8). |
 | [agent-access-plan.md](pilot/agent-access-plan.md) | Backups, then the `/mcp` connector, its write levels, and an assistant. |
-| [code-review-plan.md](pilot/code-review-plan.md) | The code review fixes, CR1 to CR26. |
+| [code-review-plan.md](pilot/code-review-plan.md) | The code reviews' fixes (CR1 onward), each review's scores and its open proposals. |
 
-[pilot/production-ui-types.ts](pilot/production-ui-types.ts) is the interim, hand-written type
-seed the web app started from. The web's API types are now generated
-(`scripts/generate-web-client.ps1`).
+The web's API types are generated (`scripts/generate-web-client.ps1`); its own types are in
+`web/src/lib/production-ui-types.ts`. The hand-written draft they started from,
+`docs/pilot/production-ui-types.ts`, was deleted on 2026-11-15.
 
 ## Storage, hosting and operations
 

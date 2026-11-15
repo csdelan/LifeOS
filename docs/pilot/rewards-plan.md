@@ -218,7 +218,10 @@ awards them only for specific things, per item. Time on the timer has no default
 
 - **Status vocabulary (D7):** Habit = Building, Established, Abandoned. Building is the
   default (first in the list), and a habit with no status reads as Building.
-  `DismissStatusFor(Habit)` = Abandoned.
+  `DismissStatusFor(Habit)` = Abandoned. *Since migration 0049 (2026-10-28, REWARD-2):*
+  Planned comes first, Planned → Building → Established | Abandoned. A new habit starts
+  Planned and isn't tracked, paid or counted toward its establish window until it moves to
+  Building; a habit with no status still reads as Building.
 - **Terminal set:** `established` joins `bsk.is_terminal_status` and `StatusVocabulary`'s
   terminal set (`abandoned` is already there). Update the Pilot's `PilotVocab` mirror too, or
   the drift-guard test fails.
@@ -378,7 +381,8 @@ number from 0025.
   7 / 30 / 100 runs, established); habit triggers and defaults in `BountyTriggers` /
   `BountyDefaults`, partial priced as half of followed; `AdherenceService` reconciles after
   every recording and `bsk adhere` prints what it earned. Notes for R6: the web's
-  `STATUS_BY_TYPE` / `TERMINAL_STATUSES` (and the copy in `docs/pilot/production-ui-types.ts`)
+  `STATUS_BY_TYPE` / `TERMINAL_STATUSES` (and the copy in `docs/pilot/production-ui-types.ts`,
+  since deleted)
   still treat Habit as status-less; add the Habit vocabulary and `established` with the
   "Ready to establish" badge. The Pilot already offers Change status on habits. Graduated
   habits already drop off the web's Today list, because their occurrences stop.

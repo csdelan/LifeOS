@@ -65,7 +65,7 @@ starts at the first drink (§7.6).**
 | Days | Midnight to midnight in the home zone (America/Los_Angeles), like all Health XP. An entry counts on the day it was eaten. |
 | Rounding | Each award (the fast, the food) is rounded to whole XP, halves up, before the multiplier. Rounding the two parts separately can differ from rounding the day's total by 1 XP at most. The day never pays more than 40 base. |
 | Multiplier | Applies on top, as for all Health XP: each award is paid at the multiplier of the day it's credited to, so 40 base can pay up to 52. |
-| The 70-XP successful day | Diet XP counts toward it. A perfect diet day is 40 of the 70, so the other 30 must come from exercise, sleep or habits. That's intended. |
+| The 70-XP successful day | Diet XP counts toward it. A perfect diet day is 40 of the 70, so the other 30 must come from exercise, sleep or habits. That's intended. *Since superseded:* the bar fell to 60 on 2026-10-22, and levels v2 (D17) replaced it with an active day, 20 action XP or more at the low levels (xp-domains plan §7.2). Diet XP is action XP, so it counts toward that and toward the 90-day average (ui-requirements REWARD-7). |
 | A day with nothing logged | Pays nothing and isn't marked as a failure. |
 | Fasting help | **Begin fast** offers the time of the last food entry. Logging food with calories while a fast is running offers to end the fast at that time. A running fast shows a live counter: "Fasting 14 h 20 m · earning since 12 h". A 0-calorie entry (black coffee, water) never ends a fast. |
 | Views | **Day** (the default): a gallery of the day's entries and a summary. **Week**, Monday to Sunday. **Month**, a calendar. Each shows diet XP for every day and in total. |
@@ -136,7 +136,8 @@ The numbers are Chris's first pass. After 2–4 weeks of real logging, look at:
 - the spread of daily diet XP: does an ordinary day sit around 15 and a great one near 35?
 - whether 2,000 is the right full-credit line for his activity level
 - the Health minimum: the 70-XP successful day (xp-domains plan §2.4) should be recalibrated
-  with diet XP in the mix, since diet can supply up to 40 of it
+  with diet XP in the mix, since diet can supply up to 40 of it. (It was: 60 from 2026-10-22,
+  then levels v2's active day of 20 action XP, xp-domains plan §7.)
 
 ## 3. Design
 
@@ -419,7 +420,8 @@ tinted between their neighbours (§8).
 - **Upload:** `POST /api/food/meals/{id}/photo` (multipart) stores the image as an artifact
   with its bytes in `bsk.artifact_blob` (`IArtifactBlobStore`), then writes a new meal version
   carrying it. It's the live API's first multipart endpoint. The web's document capture still
-  stubs one (`captureDocument`), so build it to be reused there.
+  stubs one (`captureDocument`), so build it to be reused there. (Built since: CAP-4's
+  `captureDocument` posts multipart to `POST /api/capture/document`, 2026-11-08.)
 - **Size:** the browser resizes before uploading, to 1,200 px on the long side as a JPEG at
   about 0.8 quality (roughly 150 KB). Three photos a day is then about 165 MB a year in
   Postgres. **Check the Supabase plan's database limit before F6** (the free plan's is
@@ -646,10 +648,10 @@ Until 2026-10-27 (two drinks free): 2 beers 33, 3 beers 29, 4 beers 24, 12 beers
   /api/food/meals/{id}`; `bsk food edit` without `--alcohol` or `--no-alcohol`).
 - **Migration 0038:** `bsk.v_meal` gains `alcoholic`; `bsk.v_food_day` gains `drinks` and
   `drink_event_ids` (the drinks' event versions).
-- **`DietRules`** gains `DrinksFree` (2) and `DrinkCutPercent` (10); `DietDayFacts` gains
-  `Drinks`. `DietScore` carries `Drinks`, `DrinkFactor` and `FastAwardUncut` (what the fast
-  pays before the close). The drift test checks the cut reaches 0 at
-  `DrinksFree + 100 / DrinkCutPercent` drinks (12).
+- **`DietRules`** gains `DrinksFree` (2 at F7; 0 since §7.6) and `DrinkCutPercent` (10);
+  `DietDayFacts` gains `Drinks`. `DietScore` carries `Drinks`, `DrinkFactor` and
+  `FastAwardUncut` (what the fast pays before the close). The drift test checks the cut
+  reaches 0 at `DrinksFree + 100 / DrinkCutPercent` drinks (12 at F7; 10 since §7.6).
 - **`FoodRewards`:** the fast award's base is `FastAwardUncut` while the day is open and
   `FastAward` once it's closed. A closed day with any drinks also cites the drinks' versions
   (and the close), so adding, removing or flagging a drink re-scores the fast. Any drinks,
@@ -862,7 +864,8 @@ apart from those two columns.
 - **CLI:** `bsk food photo <entry> --file <path>` and `bsk food photo <entry> --remove`. The
   CLI reads the same `Storage__*` environment variables.
 - **Not reused yet:** the live client's multipart write is built to serve document capture,
-  but `captureDocument` is still a stub.
+  but `captureDocument` is still a stub. (Since 2026-11-08 it isn't: CAP-4's live
+  `captureDocument` posts the file to `POST /api/capture/document`.)
 
 **F7 (2026-10-22).** As planned in §7, plus:
 
@@ -896,14 +899,16 @@ apart from those two columns.
 **F8 (2026-10-22).** As planned in §7, plus:
 
 - **The Log food sheet's Alcoholic drink switch** sits just above the score, with what a drink
-  is and what more than two cost. On, the score greys out at 1 and the meal type reads "Drink
+  is and what more than two cost (since §7.6, that each drink cuts the day's diet XP by 10%).
+  On, the score greys out at 1 and the meal type reads "Drink
   (it's alcoholic)" on a new entry, or Drink on one already logged. Off, the score picked
   before comes back. Log again carries the flag, and its chip says "drink" in place of the
   score ("IPA · drink · 200 cal").
 - **The gallery** shows a drink as a glass of beer on its score tile, with "1 · alcoholic" where
   other entries name their score's word. The entry's button says "(alcoholic drink)".
 - **The Diet XP card** adds the drinks under the parts ("4 drinks · 20% off the day's diet
-  XP"; "2 drinks · the cut starts above 2"). While the day is open with a cut and a paid fast,
+  XP"; "2 drinks · the cut starts above 2"; since §7.6, "1 drink · 10% off the day's diet
+  XP"). While the day is open with a cut and a paid fast,
   it adds that the fast is re-scored when the day closes. "On track for" is already cut.
 - **The Sobriety streak card** sits under the Diet XP card on the Day view. It shows "12 days
   sober" ("0 days sober" the day after a drink) or "A drink today", then "Drink-free since

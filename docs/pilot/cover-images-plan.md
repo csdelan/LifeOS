@@ -104,8 +104,9 @@ A cover is one object under the subject's `cover` attribute:
 - **`url` is `urls.raw`,** kept whole so `ixid` stays. Pages add size parameters to it.
 - **`position_y`** (0–100, default 50) is where the banner is centred vertically, as CSS
   `object-position: 50% <n>%`. Repositioning changes only this.
-- **Only the three types.** `Value`, `Goal` and `Project` may have a cover. Anything else is
-  refused in words. Areas are an easy later addition (§6).
+- **Only these types.** `Value`, `Goal` and `Project` may have a cover, and `Habit` since
+  2026-10-29 (`Covers.Types`). Anything else is refused in words. Areas are an easy later
+  addition (§6).
 - **Changed in place, no history.** Like a rename, a cover change rewrites the attribute and
   writes no event. Changing the cover forgets the old one. It's presentation, not a record
   of what happened.

@@ -26,8 +26,9 @@ tree-first navigation and high-polish direction in §5.
   requirements (NAV-2 back/forward, BROWSE-1 graph, JOURNAL-2 rich media, CAP-3 AI capture,
   REVIEW-3 monthly, GEN-0's "web-centric, polished" mandate) are this doc's charter.
 - [ui-refactor-plan.md](ui-refactor-plan.md) §3 — the kernel API surface (write verbs +
-  reader views) the web UI consumes. `production-ui-types.ts` (beside this doc) is the
-  TypeScript mirror of it, for scaffolding.
+  reader views) the web UI consumes. A hand-written TypeScript mirror of it,
+  `production-ui-types.ts`, sat beside this doc for scaffolding; it was deleted on 2026-11-15
+  (§8).
 
 ## 1. The one architectural pivot — API in front of Application
 
@@ -263,8 +264,9 @@ built (they are thin, but on the governed path).
 
 ## 8. Reference — read models & verb surface
 
-`production-ui-types.ts` (beside this doc) is the TypeScript mirror of
+`production-ui-types.ts`, beside this doc until 2026-11-15, was the TypeScript mirror of
 [ReadModels.cs](../../src/LifeOs.Pilot/Reader/ReadModels.cs) and the write-verb table in
 [ui-refactor-plan.md](ui-refactor-plan.md) §3, plus the interim vocabulary from
-[PilotVocab.cs](../../src/LifeOs.Pilot/Shell/PilotVocab.cs). It exists to shape mock data and
-UI types during scaffolding; in Production it is **replaced** by the OpenAPI-generated client.
+[PilotVocab.cs](../../src/LifeOs.Pilot/Shell/PilotVocab.cs). It shaped mock data and UI types
+during scaffolding. The OpenAPI-generated client (`web/src/api`) has replaced it, and the web's
+own types are in `web/src/lib/production-ui-types.ts`, so the draft was deleted.

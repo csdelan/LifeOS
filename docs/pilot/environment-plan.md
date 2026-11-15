@@ -387,6 +387,10 @@ of its level going in. The web branches on `kind`.
   - **Rate:** a card's button opens the same sheet for that space alone, with Tidiness and
     Cleanliness first.
   - **Spaces editor:** add, rename, weight, pace and archive, with each space's share shown.
+    Since 2026-10-29 (466018c, HOME-1) it's **Manage spaces**, a table one line per space
+    (Space, Weight, Pace, % of score, then Shots, Change and Archive as icon buttons), full
+    width below the score, the cards and the chart. What weight and pace mean is said in words
+    only while there are no spaces, and in ⓘ tips after that.
   - **Home Score chart** (30 / 90 / 365): the daily score, with the shown level's bar as a
     dashed step line and exception days hatched, plus a table view.
 - **Character page, Environment card:** the same as Health's (xp-domains plan §7.4.9), with

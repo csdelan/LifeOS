@@ -34,7 +34,8 @@ the user think in storage terms; never bend the store to mirror a screen.
 
 - **Many readers, one writer.** The Pilot **reads** PostgreSQL directly through the
   read-only `bsk_reader` role over the flattened `bsk.v_*` views. It **writes** only by
-  shelling out to the `bsk` CLI (invariant 9 — `bsk` is the sole write path). There is
+  shelling out to the `bsk` CLI (invariant 9: the Application services are the one write path,
+  and `bsk` is the Pilot's door into them, as the API and `/mcp` are the web's and agents'). There is
   **no `ProjectReference`** from the Pilot to the kernel, and there must never be one.
 - Reads live in `src/LifeOs.Pilot/Reader/SubjectReader.cs` (plain Dapper SQL over the
   views; `DefaultTypeMap.MatchNamesWithUnderscores = true`, so `snake_case` columns map to

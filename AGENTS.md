@@ -101,8 +101,7 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   in `components/<feature>/`.
 - After changing an endpoint or a read model, run `./scripts/generate-web-client.ps1` and commit
   `web/src/api/openapi.json` and `schema.d.ts`: a .NET test checks the first and CI the second.
-  It needs no running API, so the "Regenerating the web API types" steps in `verifying.md` are
-  no longer needed.
+  It needs Docker, not a running API.
 - `TreatWarningsAsErrors` is on.
 - CI (`.github/workflows/ci.yml`) runs all of this on Linux: the .NET and unit tests in **UTC**,
   Playwright in Pacific (`web/playwright.config.ts` sets the browser's `timezoneId` and the test

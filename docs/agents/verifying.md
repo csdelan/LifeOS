@@ -22,15 +22,32 @@ seed data: make the change and click through it in one page load.
 
 ## Live check: web + API + a throwaway database
 
+Run `./scripts/live-check.ps1 -Name <x> -Seed -Web`. It makes and migrates
+`lifeos_check_<x>` in the dev container, starts the fakes (`scripts/live-check/fakes.mjs`),
+builds and runs the API as staging runs (`ASPNETCORE_ENVIRONMENT=Check`), signs a token, starts
+Vite and prints the line that signs the browser in. The URLs, token and session are in
+`%USERPROFILE%\.lifeos\live-check\<x>\state.json`. `-Stop` stops only what it started, drops
+the database and deletes what it wrote. A port in use stops it: pick another with `-ApiPort`,
+`-FakePort` or `-WebPort` rather than stopping another session's process.
+
+The steps below are what it does, for when one needs to change.
+
 1. **Database.** Create one in the dev container:
    `docker exec lifeos-postgres psql -U lifeos -d lifeos -c "CREATE DATABASE lifeos_<x>"`. Migrate
    it with `dotnet run --project src/LifeOs.Cli -- migrate -c "<conn>"`. Build the connection
    strings from the `LocalDevelopmentDefault` constants in `src/LifeOs.Infrastructure`
    (`KernelConnectionString.cs` and `ReaderConnectionString.cs`) with the database name swapped. Seed it through `bsk` with
    `BSK_CONNECTION_STRING` set. Afterwards, `DROP DATABASE lifeos_<x> WITH (FORCE)`.
-2. **API.** Run `src/LifeOs.Api` with `--no-launch-profile` on a spare port (5281). Environment
-   variables beat user secrets, and the user secrets point at the real Supabase, so override all
-   of these:
+2. **API.** Run `src/LifeOs.Api` with `--no-launch-profile` on a spare port (5281) and
+   `ASPNETCORE_ENVIRONMENT=Check` (any name but Development), so the user secrets, which point
+   at the real Supabase, don't load and the API acts as staging does. Outside Development it also
+   needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (fakes). Set:
+   - `ConnectionStrings__Owner` and `ConnectionStrings__Reader` for the throwaway database.
+     Configuration beats `BSK_CONNECTION_STRING`, so setting only that isn't enough.
+   - `Storage__SupabaseUrl` at the fake and any `Storage__SupabaseSecretKey` starting
+     `sb_secret_`. Food photos, room photos and lab reports then upload there, as on staging.
+     Without Storage they go into the throwaway database, which is allowed only because it's
+     on this machine.
    - `ALLOWED_EMAILS`, `Auth__Issuer`, `Auth__Audience`;
    - `Auth__JwksUrl` pointing at a fake endpoint that answers `{"keys":[]}`;
    - `Auth__JwtSecret`, then mint an HS256 token with header `kid: "supabase-legacy-hs256"` and
@@ -53,6 +70,9 @@ seed data: make the change and click through it in one page load.
      cloned from `tests/LifeOs.Tests/OuraFixtures/*.json`. **Never real Oura data** (it's against
      Oura's API agreement).
    - Unsplash: any `/photos/{id}` from `UnsplashFixtures/photo.json` with the id swapped.
+   - Supabase Storage, kept in memory: `POST /storage/v1/bucket`, then `POST` and `GET`
+     `/storage/v1/object/{bucket}/{key}`. Answer 404 to an upload before the bucket exists, as
+     Supabase does; the API then creates the bucket and retries.
 4. **Web.** Put the values in `web/.env.<mode>.local` (it outranks `.env.local`; `.env.*` is
    gitignored) and run Vite with `--mode <mode>` on a free port (5175 or up). Use a fake
    `VITE_SUPABASE_URL` such as `http://127.0.0.1:5399`. Sign in by writing the session into
@@ -66,21 +86,14 @@ seed data: make the change and click through it in one page load.
 
 - Git Bash rewrites environment values that start with `/`, which breaks a base64 secret. Use hex,
   or regenerate until there's no leading `/`.
+- Another session's API, fake or Vite may still hold 5281, 5399 or 5175. Check the port and
+  pick another rather than stopping its process.
 - When the Claude browser pane is hidden, `requestAnimationFrame` doesn't run. A Radix sheet then
   stays mounted (`data-state=closed`) with an overlay that eats clicks. That's the pane, not the
   app. Dispatch `animationend` to clear it, and read state with page text or JS rather than
   screenshots.
 - A sonner toast under the pointer never hides. Move the mouse off it first.
 - While a sheet animates, read several boxes in one `evaluate`.
-
-## Regenerating the web API types
-
-Run the API with `--no-launch-profile`, `ASPNETCORE_URLS=http://127.0.0.1:5281`,
-`ASPNETCORE_ENVIRONMENT=Development` and the HS256 auth variables above (`Auth__JwksUrl` empty);
-it needs no database. Then
-`./scripts/generate-web-client.ps1 -OpenApiUrl http://127.0.0.1:5281/openapi/v1.json`, which writes
-`web/src/api/schema.d.ts`. Kill the API by port afterwards. Don't commit an `openapi.json`
-snapshot.
 
 ## The WinForms Pilot
 
