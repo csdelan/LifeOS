@@ -82,7 +82,7 @@ public sealed class AttachmentServiceTests(ClassDatabase classDb) : IClassFixtur
 
         await using var connection = await OpenAsync();
         var eventCount = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            "SELECT count(*) FROM bsk.event WHERE external_id = @sha;",
+            "SELECT count(*) FROM bsk.event WHERE external_id = 'inbox:' || @sha;",
             new { sha = first.Sha256 }, cancellationToken: Ct));
         Assert.Equal(1, eventCount);
 

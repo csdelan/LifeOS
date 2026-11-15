@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using LifeOs.Application.Abstractions;
 using LifeOs.Domain;
 
@@ -12,9 +11,10 @@ namespace LifeOs.Application.Capture;
 /// the CLI, and transcription itself is out of scope — the kernel stores the audio
 /// and whatever transcript it is given.
 ///
-/// Idempotency is content-addressed: the payload's sha256 is the event's external_id,
-/// so re-capturing an identical file from the same source collapses to one event and
-/// one blob (epic invariant 7). A configurable size guard rejects oversized payloads
+/// Idempotency is content-addressed: the event's external_id is the Inbox's intake and the
+/// payload's sha256 (<see cref="BinaryIntake.Inbox"/>), so re-capturing an identical file from
+/// the same source collapses to one event and one blob (epic invariant 7), and a file that
+/// matches a photo stored for a meal or a room is still a capture of its own (code review CR112). A configurable size guard rejects oversized payloads
 /// before any bytes are written.
 /// </summary>
 public sealed class AttachmentService(
@@ -60,31 +60,21 @@ public sealed class AttachmentService(
                 $"Payload is {bytes.Length} bytes, which exceeds the {maxBytes}-byte limit.", nameof(bytes));
         }
 
-        var sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes));
         var resolvedContentType = string.IsNullOrWhiteSpace(contentType)
             ? ContentTypes.Guess(filename)
             : contentType.Trim();
 
         // A direct capture happened when we recorded it (occurred_at == recorded_at).
-        var now = clock.UtcNow;
-        var capture = new NewBinaryCapture(
-            Kind: kind,
-            Provenance: Provenances.Declared,
-            OccurredAt: now,
-            RecordedAt: now,
-            SourceId: eventSource.Id,
-            Sha256: sha256,
-            Bytes: bytes,
-            ContentType: resolvedContentType,
-            ByteSize: bytes.Length,
-            Filename: string.IsNullOrWhiteSpace(filename) ? null : filename,
-            TextContent: textSidecar ?? string.Empty);
+        var capture = NewBinaryCapture.Of(
+            BinaryIntake.Inbox, kind, bytes, resolvedContentType, eventSource.Id, clock.UtcNow,
+            filename: string.IsNullOrWhiteSpace(filename) ? null : filename,
+            textContent: textSidecar ?? string.Empty);
 
         var result = await blobs.PutAsync(capture, cancellationToken);
 
         return new AttachmentResult(
             result.EventId, result.ArtifactId, result.Deduplicated,
-            sha256, bytes.Length, resolvedContentType, kind);
+            capture.Sha256, bytes.Length, resolvedContentType, kind);
     }
 }
 

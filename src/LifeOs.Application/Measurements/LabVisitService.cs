@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Photos;
@@ -131,20 +130,13 @@ public sealed class LabVisitService(
         var visit = await ResolveAsync(reference, cancellationToken);
         var contentType = LabReportChecks.Check(bytes);
         var now = clock.UtcNow;
-        var stored = await blobs.PutAsync(new NewBinaryCapture(
-            Kind: EventKinds.Measurement,
-            Provenance: Provenances.Declared,
-            OccurredAt: visit.CollectedAt,
-            RecordedAt: now,
-            SourceId: eventSource.Id,
-            Sha256: Convert.ToHexStringLower(SHA256.HashData(bytes)),
-            Bytes: bytes,
-            ContentType: contentType,
-            ByteSize: bytes.Length,
-            Filename: PhotoChecks.CleanName(filename),
-            PayloadJson: VisitPayload(visit.Id, visit.Lab, visit.Note, report: null)), cancellationToken);
+        var stored = await blobs.PutAsync(NewBinaryCapture.Of(
+            BinaryIntake.LabReport, EventKinds.Measurement, bytes, contentType, eventSource.Id, now,
+            occurredAt: visit.CollectedAt,
+            filename: PhotoChecks.CleanName(filename),
+            payloadJson: VisitPayload(visit.Id, visit.Lab, visit.Note, report: null)), cancellationToken);
 
-        // The same bytes were stored before (for this visit or anything else): point at them.
+        // The same bytes were stored before as a lab report (for this visit or another): point at them.
         if (stored.Deduplicated && visit.Report?.ArtifactId != stored.ArtifactId)
         {
             await metrics.AppendReadingsAsync(

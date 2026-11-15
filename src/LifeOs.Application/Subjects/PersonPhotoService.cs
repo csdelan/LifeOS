@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using LifeOs.Application.Abstractions;
@@ -51,19 +50,10 @@ public sealed class PersonPhotoService(
         var person = await ResolvePersonAsync(reference, cancellationToken);
         var contentType = PhotoChecks.Check(bytes);
 
-        var now = clock.UtcNow;
-        var stored = await blobs.PutAsync(new NewBinaryCapture(
-            Kind: EventKinds.Observation,
-            Provenance: Provenances.Declared,
-            OccurredAt: now,
-            RecordedAt: now,
-            SourceId: eventSource.Id,
-            Sha256: Convert.ToHexStringLower(SHA256.HashData(bytes)),
-            Bytes: bytes,
-            ContentType: contentType,
-            ByteSize: bytes.Length,
-            Filename: PhotoChecks.CleanName(filename),
-            PayloadJson: JsonSerializer.Serialize(new Dictionary<string, object>
+        var stored = await blobs.PutAsync(NewBinaryCapture.Of(
+            BinaryIntake.PersonPhoto, EventKinds.Observation, bytes, contentType, eventSource.Id, clock.UtcNow,
+            filename: PhotoChecks.CleanName(filename),
+            payloadJson: JsonSerializer.Serialize(new Dictionary<string, object>
             {
                 [PayloadKey] = new { person = person.Id },
             })), cancellationToken);

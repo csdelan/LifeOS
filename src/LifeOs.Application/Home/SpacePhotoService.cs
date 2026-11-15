@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text.Json;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Photos;
@@ -71,18 +70,11 @@ public sealed class SpacePhotoService(
 
         var id = Guid.NewGuid();
         var occurredAt = await OccurredAtAsync(on, today, now, cancellationToken);
-        var stored = await blobs.PutAsync(new NewBinaryCapture(
-            Kind: EventKinds.Observation,
-            Provenance: Provenances.Declared,
-            OccurredAt: occurredAt,
-            RecordedAt: now,
-            SourceId: eventSource.Id,
-            Sha256: Convert.ToHexStringLower(SHA256.HashData(bytes)),
-            Bytes: bytes,
-            ContentType: contentType,
-            ByteSize: bytes.Length,
-            Filename: PhotoChecks.CleanName(filename),
-            PayloadJson: Payload(id, target.Id, onShot.Id, on, photo: null)), cancellationToken);
+        var stored = await blobs.PutAsync(NewBinaryCapture.Of(
+            BinaryIntake.SpacePhoto, EventKinds.Observation, bytes, contentType, eventSource.Id, now,
+            occurredAt: occurredAt,
+            filename: PhotoChecks.CleanName(filename),
+            payloadJson: Payload(id, target.Id, onShot.Id, on, photo: null)), cancellationToken);
 
         if (!stored.Deduplicated)
         {

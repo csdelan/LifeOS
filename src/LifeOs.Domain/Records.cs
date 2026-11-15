@@ -81,10 +81,13 @@ public sealed record SubjectEventEdge(Guid SubjectId, string Relation, string Pr
 /// A binary capture to write as one atomic unit: an event, its artifact (whose text
 /// <c>content</c> is the transcript/description sidecar — empty when there is none),
 /// and the binary payload with its metadata. <see cref="Sha256"/> is the lowercase-hex
-/// content hash; it doubles as the event's <c>external_id</c>, so re-capturing an
-/// identical file from the same source collapses to one event (idempotency, inv. 7).
+/// content hash. With the <see cref="Intake"/> it names the event's <c>external_id</c>
+/// (<see cref="ExternalId"/>), so re-capturing an identical file from the same source for the
+/// same feature collapses to one event (idempotency, inv. 7; code review CR112). Every door
+/// builds one through <see cref="Of"/>.
 /// </summary>
 public sealed record NewBinaryCapture(
+    BinaryIntake Intake,
     string Kind,
     string Provenance,
     DateTimeOffset OccurredAt,
@@ -96,12 +99,33 @@ public sealed record NewBinaryCapture(
     long ByteSize,
     string? Filename = null,
     string TextContent = "",
-    string PayloadJson = "{}");
+    string PayloadJson = "{}")
+{
+    public string ExternalId => Intake.ExternalId(Sha256);
+
+    /// <summary>
+    /// The one intake every file comes in by: the feature it's for, its kind, its bytes and
+    /// what they are, hashed here. A direct capture happened when it was recorded, unless
+    /// <paramref name="occurredAt"/> says otherwise.
+    /// </summary>
+    public static NewBinaryCapture Of(
+        BinaryIntake intake, string kind, byte[] bytes, string contentType, string sourceId,
+        DateTimeOffset recordedAt, DateTimeOffset? occurredAt = null, string? filename = null,
+        string payloadJson = "{}", string textContent = "")
+    {
+        ArgumentNullException.ThrowIfNull(intake);
+        ArgumentNullException.ThrowIfNull(bytes);
+        return new NewBinaryCapture(
+            intake, kind, Provenances.Declared, occurredAt ?? recordedAt, recordedAt, sourceId,
+            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)),
+            bytes, contentType, bytes.Length, filename, textContent, payloadJson);
+    }
+}
 
 /// <summary>
 /// The outcome of a binary capture: the event and artifact written (or, on a dedup
 /// hit, the pre-existing ones). <see cref="Deduplicated"/> is <c>true</c> when an
-/// event for this (source, hash) already existed and nothing new was inserted.
+/// event for this (source, feature, hash) already existed and nothing new was inserted.
 /// </summary>
 public sealed record BinaryCaptureResult(Guid EventId, Guid ArtifactId, bool Deduplicated);
 

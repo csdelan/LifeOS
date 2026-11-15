@@ -90,12 +90,18 @@ write them — append-only and single-writer hold below the door.
 
 ## Idempotency — content-addressed, aligned with the existing invariant
 
-Re-capturing an identical file must not duplicate bytes. The payload's `sha256` is used as the
-event's `external_id`, so the write is deduplicated by the *existing* `(source_id, external_id)`
-unique index (epic invariant 7) — no new mechanism. `PutAsync` first probes for an event with the
-same `(source_id, sha256)`; on a hit it returns the pre-existing ids with `Deduplicated = true`
-and inserts nothing. Dedup is therefore scoped per source, exactly like every other idempotent
-ingest.
+Re-capturing an identical file must not duplicate bytes. The event's `external_id` is the
+feature the file is for and the payload's `sha256` (`inbox:<sha256>`, `food_photo:<sha256>`, ...;
+`BinaryIntake` in `LifeOs.Domain`), so the write is deduplicated by the *existing*
+`(source_id, external_id)` unique index (epic invariant 7) — no new mechanism. `PutAsync` first
+probes for an event with the same `(source_id, external_id)`; on a hit it returns the
+pre-existing ids with `Deduplicated = true` and inserts nothing. Dedup is therefore scoped per
+source and per feature: the same bytes shared to the Inbox and set as a meal's photo are two
+events, one object. Until code review CR112 the key was the bare hash for every feature, so an
+Inbox file that matched a meal's photo came back as the photo's event and was flagged into the
+Inbox; the probe still finds a feature's own event stored under the bare hash (its kind, and its
+payload key, or an empty payload for the Inbox). Every door builds its capture with
+`NewBinaryCapture.Of`, naming its feature.
 
 ## The write/read paths (`bsk`, when it was the only writer; the API now writes through the same Application services)
 
@@ -121,7 +127,7 @@ When the host has a Supabase **secret** key (`Storage__SupabaseSecretKey`; see
 `IObjectStorage` (`SupabaseObjectStorage`, in `LifeOs.Infrastructure/Storage`) and new bytes go
 there instead of `artifact_blob`:
 
-1. **Probe** for the same `(source_id, sha256)`, exactly as before. A hit writes nothing.
+1. **Probe** for the same `(source_id, external_id)`, exactly as before. A hit writes nothing.
 2. **Upload** to the private bucket (default `lifeos-artifacts`, created on first use) at the
    content-addressed key `artifacts/<sha256>`, never overwriting (`x-upsert: false`). An object
    already there counts as uploaded: same key, same bytes.

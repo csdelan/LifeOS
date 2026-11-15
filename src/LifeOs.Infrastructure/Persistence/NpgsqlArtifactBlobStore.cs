@@ -20,17 +20,27 @@ namespace LifeOs.Infrastructure.Persistence;
 /// transaction. A failed upload writes nothing; a failed transaction leaves an object nothing
 /// points at, which the next upload of the same bytes reuses.</item>
 /// </list>
-/// Dedup is content-addressed either way: an event already present for (source_id, sha256)
-/// short-circuits the write and is returned as-is. Reads find the bytes wherever they are, so
+/// Dedup is content-addressed within a feature either way: an event already present for the
+/// source and the capture's <c>external_id</c> (its <see cref="BinaryIntake"/> and sha256, code
+/// review CR112) short-circuits the write and is returned as-is, as is one the feature stored
+/// before CR112 under the bare hash. Reads find the bytes wherever they are, so
 /// artifacts stored before object storage was configured still read from the database. A
 /// store built on the reader connection serves reads only.
 /// </summary>
 public sealed class NpgsqlArtifactBlobStore(NpgsqlDataSource dataSource, IObjectStorage? objects = null) : IArtifactBlobStore
 {
+    // The feature's own event for these bytes, or one it stored before CR112 under the bare hash:
+    // of its kind and carrying its payload key, or, for the Inbox, an empty payload. Both arms are
+    // lookups on event_source_external_key.
     private const string FindExistingSql = """
         SELECT id AS EventId, artifact_id AS ArtifactId
         FROM bsk.event
-        WHERE source_id = @SourceId AND external_id = @Sha256
+        WHERE source_id = @SourceId
+          AND (external_id = @ExternalId
+               OR (external_id = @Sha256 AND kind = @Kind
+                   AND CASE WHEN @PayloadKey::text IS NULL THEN payload = '{}'::jsonb
+                            ELSE jsonb_exists(payload, @PayloadKey::text) END))
+        ORDER BY external_id = @ExternalId DESC
         LIMIT 1;
         """;
 
@@ -57,7 +67,7 @@ public sealed class NpgsqlArtifactBlobStore(NpgsqlDataSource dataSource, IObject
             (kind, provenance, occurred_at, recorded_at, source_id, external_id,
              payload, artifact_id)
         VALUES
-            (@Kind, @Provenance, @OccurredAt, @RecordedAt, @SourceId, @Sha256,
+            (@Kind, @Provenance, @OccurredAt, @RecordedAt, @SourceId, @ExternalId,
              @Payload::jsonb, @ArtifactId)
         RETURNING id;
         """;
@@ -101,8 +111,8 @@ public sealed class NpgsqlArtifactBlobStore(NpgsqlDataSource dataSource, IObject
         if (objects is null)
         {
             await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-            // Content-addressed idempotency: an identical file already captured from this
-            // source collapses to the existing event — no second event, no second blob.
+            // Content-addressed idempotency: an identical file already stored from this source
+            // for this feature collapses to the existing event — no second event, no second blob.
             if (await FindExistingAsync(connection, transaction, capture, cancellationToken) is { } stored)
             {
                 await transaction.CommitAsync(cancellationToken);
@@ -123,6 +133,7 @@ public sealed class NpgsqlArtifactBlobStore(NpgsqlDataSource dataSource, IObject
 
         // Probe before uploading, so a re-captured file costs no upload. Nothing is held open
         // across the upload; a capture racing this one trips the (source_id, external_id) index.
+        // Another feature's object for the same bytes is reused at the same key.
         if (await FindExistingAsync(connection, null, capture, cancellationToken) is { } existing)
         {
             return existing;
@@ -227,7 +238,7 @@ public sealed class NpgsqlArtifactBlobStore(NpgsqlDataSource dataSource, IObject
     {
         var existing = await connection.QuerySingleOrDefaultAsync<ExistingCapture>(new CommandDefinition(
             FindExistingSql,
-            new { capture.SourceId, capture.Sha256 },
+            new { capture.SourceId, capture.ExternalId, capture.Sha256, capture.Kind, capture.Intake.PayloadKey },
             transaction: transaction, cancellationToken: cancellationToken));
         return existing is null ? null : new BinaryCaptureResult(existing.EventId, existing.ArtifactId, Deduplicated: true);
     }
@@ -256,7 +267,7 @@ public sealed class NpgsqlArtifactBlobStore(NpgsqlDataSource dataSource, IObject
                 capture.OccurredAt,
                 capture.RecordedAt,
                 capture.SourceId,
-                capture.Sha256,
+                capture.ExternalId,
                 Payload = capture.PayloadJson,
                 ArtifactId = artifactId
             },

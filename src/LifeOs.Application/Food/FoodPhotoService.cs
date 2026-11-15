@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Photos;
@@ -43,19 +42,10 @@ public sealed class FoodPhotoService(
         var meal = await food.ResolveMealAsync(reference, cancellationToken);
         var contentType = PhotoChecks.Check(bytes);
 
-        var now = clock.UtcNow;
-        var stored = await blobs.PutAsync(new NewBinaryCapture(
-            Kind: EventKinds.Observation,
-            Provenance: Provenances.Declared,
-            OccurredAt: now,
-            RecordedAt: now,
-            SourceId: eventSource.Id,
-            Sha256: Convert.ToHexStringLower(SHA256.HashData(bytes)),
-            Bytes: bytes,
-            ContentType: contentType,
-            ByteSize: bytes.Length,
-            Filename: PhotoChecks.CleanName(filename),
-            PayloadJson: JsonSerializer.Serialize(new { food_photo = new { meal = meal.Id } })), cancellationToken);
+        var stored = await blobs.PutAsync(NewBinaryCapture.Of(
+            BinaryIntake.FoodPhoto, EventKinds.Observation, bytes, contentType, eventSource.Id, clock.UtcNow,
+            filename: PhotoChecks.CleanName(filename),
+            payloadJson: JsonSerializer.Serialize(new { food_photo = new { meal = meal.Id } })), cancellationToken);
 
         return await food.SetPhotoAsync(meal.Id.ToString(), stored.ArtifactId, cancellationToken);
     }

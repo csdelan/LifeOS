@@ -17,10 +17,11 @@ public interface IArtifactBlobStore
 {
     /// <summary>
     /// Writes an event, its artifact (text sidecar), and the binary payload as one
-    /// atomic unit, deduplicated by content hash: if an event already exists for
-    /// (<see cref="NewBinaryCapture.SourceId"/>, <see cref="NewBinaryCapture.Sha256"/>),
+    /// atomic unit, deduplicated by content hash within a feature: if an event already exists
+    /// for (<see cref="NewBinaryCapture.SourceId"/>, <see cref="NewBinaryCapture.ExternalId"/>),
     /// nothing is inserted and the pre-existing ids are returned with
-    /// <see cref="BinaryCaptureResult.Deduplicated"/> set.
+    /// <see cref="BinaryCaptureResult.Deduplicated"/> set. The same bytes stored for another
+    /// feature are an event of their own (code review CR112).
     /// </summary>
     Task<BinaryCaptureResult> PutAsync(NewBinaryCapture capture, CancellationToken cancellationToken = default);
 

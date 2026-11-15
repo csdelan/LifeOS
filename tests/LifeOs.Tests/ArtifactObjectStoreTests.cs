@@ -30,7 +30,7 @@ public sealed class ArtifactObjectStoreTests(ClassDatabase classDb) : IClassFixt
     {
         var now = DateTimeOffset.UtcNow;
         return new NewBinaryCapture(
-            EventKinds.Observation, Provenances.Declared, now, now, source, sha, bytes, "image/jpeg", bytes.Length,
+            BinaryIntake.FoodPhoto, EventKinds.Observation, Provenances.Declared, now, now, source, sha, bytes, "image/jpeg", bytes.Length,
             filename, PayloadJson: """{"test":true}""");
     }
 
@@ -67,7 +67,7 @@ public sealed class ArtifactObjectStoreTests(ClassDatabase classDb) : IClassFixt
         // The event points at the artifact and carries the hash, as a database capture does.
         var evt = await connection.QuerySingleAsync<(string Kind, Guid ArtifactId, string ExternalId)>(new CommandDefinition(
             "SELECT kind, artifact_id, external_id FROM bsk.event WHERE id = @EventId;", put, cancellationToken: Ct));
-        Assert.Equal(("observation", put.ArtifactId, sha), evt);
+        Assert.Equal(("observation", put.ArtifactId, $"food_photo:{sha}"), evt);
 
         var view = await connection.QuerySingleAsync<(bool HasBytes, string ContentType, long Size, string Filename, string StoredIn)>(
             new CommandDefinition(
@@ -109,7 +109,7 @@ public sealed class ArtifactObjectStoreTests(ClassDatabase classDb) : IClassFixt
 
         await using var connection = await OpenAsync();
         Assert.Equal(0, await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            "SELECT count(*) FROM bsk.event WHERE external_id = @sha;", new { sha }, cancellationToken: Ct)));
+            "SELECT count(*) FROM bsk.event WHERE external_id = 'food_photo:' || @sha;", new { sha }, cancellationToken: Ct)));
         Assert.Equal(0, await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             "SELECT count(*) FROM bsk.artifact_object WHERE sha256 = @sha;", new { sha }, cancellationToken: Ct)));
     }
