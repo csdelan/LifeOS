@@ -1,6 +1,7 @@
 using Dapper;
 using LifeOs.Infrastructure;
 using LifeOs.Infrastructure.Migrations;
+using LifeOs.Tests.Scale;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -42,6 +43,15 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// <summary>Whether <c>bsk_writer</c> could sign in before this server gave it a password.</summary>
     public bool WriterCouldSignInAfterMigrating { get; private set; }
 
+    private Lazy<Task<SeededTemplate>>? seeded;
+
+    /// <summary>
+    /// The seeded template (<see cref="SeededTemplate"/>), made the first time a test asks for it
+    /// and kept for the rest of the run.
+    /// </summary>
+    internal Task<SeededTemplate> SeededTemplateAsync()
+        => (seeded ?? throw new InvalidOperationException("The container isn't started yet.")).Value;
+
     public async ValueTask InitializeAsync()
     {
         await _container.StartAsync();
@@ -71,19 +81,22 @@ public sealed class PostgresFixture : IAsyncLifetime
 
         await CopyAsync(server, SharedDatabase, HabitViewZone, CancellationToken.None);
         ConnectionString = On(server, SharedDatabase);
+        seeded = new Lazy<Task<SeededTemplate>>(() => SeededTemplate.BuildAsync(ConnectionString));
     }
 
     /// <summary>
-    /// A new database copied from the template, with <paramref name="zone"/> as its home zone
-    /// (<c>bsk.home_zone</c>, which a copy doesn't inherit). Database settings reach new sessions
-    /// only, so this runs before anything connects to it.
+    /// A new database copied from <paramref name="template"/> (the migrated template unless
+    /// named), with <paramref name="zone"/> as its home zone (<c>bsk.home_zone</c>, which a copy
+    /// doesn't inherit). Database settings reach new sessions only, so this runs before anything
+    /// connects to it.
     /// </summary>
-    internal static async Task CopyAsync(string adminConnectionString, string name, string zone, CancellationToken ct)
+    internal static async Task CopyAsync(
+        string adminConnectionString, string name, string zone, CancellationToken ct, string template = TemplateDatabase)
     {
         await using var admin = new NpgsqlConnection(adminConnectionString);
         await admin.OpenAsync(ct);
         await admin.ExecuteAsync(new CommandDefinition(
-            $"CREATE DATABASE {name} TEMPLATE {TemplateDatabase};", cancellationToken: ct));
+            $"CREATE DATABASE {name} TEMPLATE {template};", cancellationToken: ct));
         await admin.ExecuteAsync(new CommandDefinition(
             $"ALTER DATABASE {name} SET bsk.home_zone = '{zone}';", cancellationToken: ct));
     }

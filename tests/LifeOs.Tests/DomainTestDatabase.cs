@@ -43,6 +43,9 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
 
     public string ConnectionString { get; }
 
+    /// <summary>Its home zone (<c>bsk.home_zone</c>), which every kernel on it is given.</summary>
+    public string ZoneName => zone;
+
     /// <summary>A kernel on this database, in its zone.</summary>
     public ServiceProvider Kernel { get; }
 
@@ -75,6 +78,19 @@ internal sealed class DomainTestDatabase : IAsyncDisposable
         await PostgresFixture.CopyAsync(postgres.ConnectionString, name, zone, ct);
         var connectionString = PostgresFixture.On(postgres.ConnectionString, name);
         return new DomainTestDatabase(postgres.ConnectionString, name, connectionString, zone, ct);
+    }
+
+    /// <summary>
+    /// A new copy of the seeded template, three years of made-up use (<see cref="Scale.SeededTemplate"/>),
+    /// made the first time a test asks for one. Its home zone is the seed's, UTC.
+    /// </summary>
+    public static async Task<DomainTestDatabase> CreateSeededAsync(PostgresFixture postgres, CancellationToken ct)
+    {
+        await postgres.SeededTemplateAsync();
+        var name = $"seeded_{Guid.NewGuid():N}";
+        await PostgresFixture.CopyAsync(postgres.ConnectionString, name, Scale.SeededTemplate.Zone, ct, Scale.SeededTemplate.Database);
+        var connectionString = PostgresFixture.On(postgres.ConnectionString, name);
+        return new DomainTestDatabase(postgres.ConnectionString, name, connectionString, Scale.SeededTemplate.Zone, ct);
     }
 
     /// <summary>Today in the home zone.</summary>

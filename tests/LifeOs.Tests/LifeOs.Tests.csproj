@@ -62,6 +62,13 @@
     </EmbeddedResource>
   </ItemGroup>
 
+  <!-- Three years of made-up use, run once a test run to make the seeded template (code review R13). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Scale\seed.sql">
+      <LogicalName>Scale.seed.sql</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>

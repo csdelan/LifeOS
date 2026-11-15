@@ -90,6 +90,11 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   every row (the wallet, a day's ledger or domain credit) takes its own; on a shared one, the
   wallet may have opened in an earlier test, so read when from `OpenAsync`. There's no serial
   collection: every class runs alongside the others. Fake time with `TestClock`.
+- What a read or write costs on three years of made-up use: `DomainTestDatabase.CreateSeededAsync`
+  copies the seeded template (`tests/LifeOs.Tests/Scale/seed.sql`, made once a run), and
+  `QueryMeter.Kernel` or `Readers` counts each statement's rows of `bsk.event` read and full scans.
+  `HotPathBudgetTests` holds the hot paths to budgets, those over listed in `Over` with why. A new
+  stream goes in the seed, in the kernel's shape, with its rows checked in `SeedTests`.
 - Web, from `web/`: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`. Playwright:
   `npm run test:e2e` and `npm run a11y`, one spec per feature in `web/e2e/golden` and
   `web/e2e/a11y`, helpers in `e2e/support.ts`. They run against a mock-mode build (`dist-e2e`),
