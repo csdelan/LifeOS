@@ -206,7 +206,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - The mock is thin for a new feature: it stores rows and returns plausible results, and leaves
   refusal wording and reward reconcile to the .NET tests (code-review-plan.md, CR10). A feature's
   mock goes in its own `web/src/lib/mock/<feature>-store.ts`, as food, activity, environment and
-  measurements do; `store.ts` keeps subjects, the ledger and settle.
+  measurements do; `store.ts` keeps subjects, the ledger and settle. The older features' copy of
+  the reward economy in `lib/mock` isn't kept in step: the next time a rule it copies changes in
+  the kernel, that part becomes canned reads, and its exact amounts are checked in .NET (CR124).
 - Mock mode sends none of the API's security headers. A feature that uses a browser permission
   (camera, microphone, location) or loads from a new kind of URL also needs
   `src/LifeOs.Api/Http/SecurityHeaders.cs` changed, or it breaks only on staging.

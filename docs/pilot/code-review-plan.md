@@ -1,7 +1,7 @@
 # Code review fixes plan
 
 **Status:** CR1 to CR26 built (2026-11-12). CR27 to CR56, the second review's P0, P1 and P2, built
-(2026-11-13), and CR57 for its choice A; choices B and C wait for Chris
+(2026-11-13), and CR57 for its choice A; Chris chose B on 2026-11-15 (CR124), and C waits for him
 ([Second review](#second-review-2026-11-13)). The third review scored the code 6.1 of 10, and Chris
 chose its P0 and P1, CR58 to CR67, built (2026-11-13), then its P2, CR68 to CR90, built
 (2026-11-13) ([Third review](#third-review-2026-11-13)). The fourth review scored 6.4, and CR91
@@ -124,6 +124,11 @@ commit each, and skipped P3 (listed under the second review, so it isn't lost).
   installed copy's commit with `origin/main`, isn't built: it needs a fetch at startup, and the
   schema check covers the case that does harm (new rules in a migration). A C#-only rule change
   still reaches the Pilot only through `install-bsk.ps1`, as before.
+- **CR124 (choice B):** the mock's copy of the reward economy (about 3,200 lines in `lib/mock`,
+  with about 1,800 of tests) is no longer kept in step with the kernel. Nothing is rewritten now:
+  the next time a rule it copies changes in the kernel, that part of the mock becomes canned reads,
+  and the exact amounts are checked in the .NET tests only. This extends CR10's thin mock from new
+  features to the old ones. AGENTS.md says so beside the thin-mock rule.
 
 ## Items
 
@@ -251,6 +256,7 @@ misses `.claude/`.
   *Chosen 2026-11-13: run them at start, without the item sweep or an Oura sync (CR57).*
 - **B.** Stop maintaining the mock's copy of the reward economy, replacing each part with
   canned reads when its rule next changes, and check exact amounts in .NET.
+  *Chosen 2026-11-15, as recommended (CR124).*
 - **C.** A non-owner database role for the API, so it can't drop the append-only triggers.
 
 ## Third review (2026-11-13)
@@ -570,7 +576,8 @@ handles; the list-plus-detail wiring five times, where Habits and Rewards don't 
 - **B:** the mock's copy of the reward economy is about 3,200 lines in `lib/mock`, with about 1,800
   lines of tests. Since 6152b61 no commit touched the copied folds, but both commits that changed
   kernel code (CR105 and the People photo) also had to edit the mock, and CR106 moved Focus's rules
-  into the mock (`mock/dashboard.ts`) rather than deleting them.
+  into the mock (`mock/dashboard.ts`) rather than deleting them. *Chosen 2026-11-15: each part
+  becomes canned reads when its rule next changes (CR124).*
 - **C:** unchanged.
 - **D (new):** the Goal and Habit gates (a Goal can't be Active without a target date; a Habit needs
   a Goal or an Identity Statement) live in the web twice (`lib/subject-forms.ts`, and a copy in
