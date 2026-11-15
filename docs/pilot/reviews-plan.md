@@ -217,7 +217,7 @@ browser, is #28's and #29's design, so no port is built ahead of it.
 | **R1** | The Review type, `bsk.v_review`, the rules in Domain, `ReviewService`, `bsk review`, the `/mcp` guide row | 0052 | Yes |
 | **R2** | `/api/reviews`: list, open, complete, keep focus; the recap read; habit days for a range; `schema.d.ts` regenerated | — | After R1 |
 | **R3** | The live Reviews page: Monday-to-Sunday weeks named by their Sunday, open on view, Missed and late, the recap and the habit check-offs | — | After R2 |
-| **R4** | Where answers live until SuperJournal: decided, nothing to build (§4) | — | — |
+| **R4** | Where answers live until SuperJournal: decided, nothing to build (§4). Superseded on 2026-11-12 by the vault (R5) | — | — |
 | **R5** | Answers in the notes vault (§4.1): the review links to its dictated, formatted reflection | 0054 | After the vault, the Notes Spec and agent writes at `capture` |
 
 - **Migration numbers:** this plan takes 0052. Branch `claude/superjournal-connect-9e24c0` has
@@ -242,6 +242,11 @@ browser, is #28's and #29's design, so no port is built ahead of it.
   I can dictate my daily reflections, then I can just have AI agents summarize those, format
   them, and write them into Obsidian in a predefined format." He still uses SuperJournal for
   other things.
+- **2026-11-15, Chris:** the SuperJournal epic (#27) is parked. Reviews no longer need it, its
+  deploy still waits on csdelan/SuperJournal#2 and csdelan/BlueSkies.Platform#184, and LifeOS won't
+  carry its hosting alone, so it restarts when SuperJournal is stood up for BlueSkies
+  (csdelan/BlueSkies.Platform#68). #29 is closed as superseded, and #28's branch stays parked,
+  not rebased.
 - **Filled in here:** lazy creation on first open; one per kind and period; nothing opens ahead
   of its day; Missed read, not written; a late completion stays missed; Missed as Drop's status;
   keep focus on by default.
@@ -264,6 +269,7 @@ browser, is #28's and #29's design, so no port is built ahead of it.
 - [x] R1 — Reviews in the kernel (migration 0052)
 - [x] R2 — The reviews API
 - [x] R3 — The live Reviews page
-- [x] R4 — Answers until SuperJournal: Chris chose to wait, so nothing was built (§4)
+- [x] R4 — Answers until SuperJournal: Chris chose to wait, so nothing was built (§4).
+  Superseded on 2026-11-12, when the answers moved to the notes vault (R5)
 - [ ] R5 — Answers in the notes vault (built 2026-11-12, migration 0054, §4.1; done when a daily
   and a weekly review have been answered by dictation, notes plan N8)
