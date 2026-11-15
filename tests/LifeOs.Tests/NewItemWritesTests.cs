@@ -58,4 +58,21 @@ public sealed class NewItemWritesTests
         Assert.Empty(outcome.Failed);
         Assert.Null(NewItemWrites.Report(outcome.Created.Title, outcome.Failed));
     }
+
+    [Fact]
+    public void A_new_Habit_is_made_serving_its_first_pending_Goal_or_Identity_Statement()
+    {
+        // Code review CR125: the kernel makes a Habit only with a parent, so the Pilot sends the
+        // first serves link from it with bsk new, and links the rest after.
+        (string Relation, string OtherUrn, bool Incoming)[] pending =
+        [
+            ("results_in", "urn:bsk:idea:spark-1", true),
+            ("serves", "urn:bsk:goal:fit-1", false),
+            ("serves", "urn:bsk:value:steady-1", false),
+        ];
+
+        Assert.Equal(("serves", "urn:bsk:goal:fit-1", false), NewItemWrites.MadeWith(PilotVocab.Habit, pending));
+        Assert.Null(NewItemWrites.MadeWith(PilotVocab.Task, pending));
+        Assert.Null(NewItemWrites.MadeWith(PilotVocab.Habit, [("results_in", "urn:bsk:idea:spark-1", true)]));
+    }
 }

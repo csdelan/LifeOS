@@ -116,9 +116,11 @@ public sealed class PlannedHabitTests(ClassDatabase classDb) : IClassFixture<Cla
         var subjects = kernel.GetRequiredService<SubjectService>();
         var goal = await subjects.CreateAsync(SubjectTypes.Goal, Unique("planned goal"), cancellationToken: Ct);
 
-        var made = await subjects.CreateAsync(SubjectTypes.Habit, Unique("made habit"), cancellationToken: Ct);
+        // A Habit is made serving a Goal or an Identity Statement (code review CR125).
+        var made = (await kernel.GetRequiredService<SubjectCreationService>().CreateAsync(
+            SubjectTypes.Habit, Unique("made habit"), "{}", goal.Urn, SubjectRelations.Serves, Ct)).Subject;
         var (child, _) = await subjects.CreateWithParentEdgeAsync(
-            SubjectTypes.Habit, Unique("child habit"), "{}", SubjectRelations.Serves, goal.Id, Ct);
+            SubjectTypes.Habit, Unique("child habit"), "{}", SubjectRelations.Serves, goal, Ct);
         var task = await subjects.CreateAsync(SubjectTypes.Task, Unique("plain task"), cancellationToken: Ct);
 
         Assert.Equal("Planned", await StatusAsync(made.Id));
@@ -129,7 +131,7 @@ public sealed class PlannedHabitTests(ClassDatabase classDb) : IClassFixture<Cla
         // The web's New: the habit reads back Planned, with no progress toward establishing.
         await using var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct);
         var created = await host.Client.PostAsJsonAsync(
-            "/api/subjects", new { type = SubjectTypes.Habit, title = Unique("web habit") }, Ct);
+            "/api/subjects", new { type = SubjectTypes.Habit, title = Unique("web habit"), parent = goal.Urn, relation = "serves" }, Ct);
         Assert.True(created.IsSuccessStatusCode, await created.Content.ReadAsStringAsync(Ct));
         var id = (await created.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("id").GetGuid();
         var row = (await host.Client.GetFromJsonAsync<JsonElement>("/api/habits", Ct)).EnumerateArray()
@@ -142,8 +144,8 @@ public sealed class PlannedHabitTests(ClassDatabase classDb) : IClassFixture<Cla
     public async Task A_planned_habit_has_no_schedule_and_no_progress_even_with_a_start_behind_it()
     {
         await using var kernel = Kernel();
-        var habit = await kernel.GetRequiredService<SubjectService>().CreateAsync(
-            SubjectTypes.Habit, Unique("planned habit"), Daily(startOffset: 5), cancellationToken: Ct);
+        var habit = await kernel.GetRequiredService<SubjectService>().MakeAsync(
+            SubjectTypes.Habit, Unique("planned habit"), Daily(startOffset: 5), Ct);
 
         Assert.Empty(await OccurrencesAsync(habit.Id));
         Assert.Null(await EstablishmentAsync(habit.Id));
@@ -153,8 +155,8 @@ public sealed class PlannedHabitTests(ClassDatabase classDb) : IClassFixture<Cla
     public async Task A_planned_habits_days_are_refused_and_nothing_is_written()
     {
         await using var kernel = Kernel();
-        var habit = await kernel.GetRequiredService<SubjectService>().CreateAsync(
-            SubjectTypes.Habit, Unique("unstarted habit"), Daily(startOffset: 2), cancellationToken: Ct);
+        var habit = await kernel.GetRequiredService<SubjectService>().MakeAsync(
+            SubjectTypes.Habit, Unique("unstarted habit"), Daily(startOffset: 2), Ct);
         var adherence = kernel.GetRequiredService<AdherenceService>();
 
         var refused = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -177,8 +179,8 @@ public sealed class PlannedHabitTests(ClassDatabase classDb) : IClassFixture<Cla
     public async Task Starting_to_track_a_new_habit_schedules_it_from_that_day_whatever_its_start()
     {
         await using var kernel = Kernel();
-        var habit = await kernel.GetRequiredService<SubjectService>().CreateAsync(
-            SubjectTypes.Habit, Unique("starting habit"), Daily(startOffset: 5), cancellationToken: Ct);
+        var habit = await kernel.GetRequiredService<SubjectService>().MakeAsync(
+            SubjectTypes.Habit, Unique("starting habit"), Daily(startOffset: 5), Ct);
 
         await kernel.GetRequiredService<StatusService>().ChangeStatusAsync(habit.Urn, "Building", Ct);
 

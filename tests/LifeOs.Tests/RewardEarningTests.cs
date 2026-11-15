@@ -43,7 +43,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres, ClassDatabase c
     }
 
     private Task<SubjectRef> CreateAsync(Kernel kernel, string type, string attributesJson = "{}")
-        => kernel.Subjects.CreateAsync(type, $"earning {type} {Guid.NewGuid():N}", attributesJson, cancellationToken: Ct);
+        => kernel.Subjects.MakeAsync(type, $"earning {type} {Guid.NewGuid():N}", attributesJson, Ct);
 
     /// <summary>
     /// A status change written straight to the event store — a completion whose own
@@ -251,7 +251,8 @@ public sealed class RewardEarningTests(PostgresFixture postgres, ClassDatabase c
             new EventSource(KernelSources.Cli),
             kernel.Provider.GetRequiredService<TaskSeriesService>(),
             kernel.Provider.GetRequiredService<ITimerRepository>(),
-            kernel.Provider.GetRequiredService<AfterCommit>());
+            kernel.Provider.GetRequiredService<AfterCommit>(),
+            kernel.Provider.GetRequiredService<ISubjectRepository>());
         var completed = await backdated.ChangeStatusAsync(task.Urn, "Completed", Ct);
 
         Assert.Empty(completed.Awards);
@@ -266,7 +267,8 @@ public sealed class RewardEarningTests(PostgresFixture postgres, ClassDatabase c
     public async Task Other_statuses_earn_nothing(string type, string status)
     {
         var kernel = Build();
-        var item = await CreateAsync(kernel, type);
+        // A Goal is Active only with a target date (code review CR125).
+        var item = await CreateAsync(kernel, type, """{"target_date": "2027-12-31"}""");
 
         var changed = await kernel.Status.ChangeStatusAsync(item.Urn, status, Ct);
 

@@ -22,7 +22,7 @@ public sealed class RuleParityTests
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    public static TheoryData<string> Files => new(["activity", "home", "reviews", "levels", "diet", "statuses", "catalogs", "browse", "alignment"]);
+    public static TheoryData<string> Files => new(["activity", "home", "reviews", "levels", "diet", "statuses", "catalogs", "browse", "alignment", "gates"]);
 
     [Theory]
     [MemberData(nameof(Files))]
@@ -114,6 +114,9 @@ public sealed class RuleParityTests
 
         ("alignment", "forest") => Forest(a),
 
+        ("gates", "goal") => SubjectGates.GoalRefusal(Text(a[0]), Bool(a[1]), Text(a[2]), Bool(a[3])),
+        ("gates", "habit") => SubjectGates.HabitRefusal(a[0] is null ? null : Int(a[0]), Int(a[1])),
+
         _ => throw new InvalidOperationException($"tests/rules/{file}.json names a rule this test doesn't know: {rule}."),
     };
 
@@ -178,6 +181,8 @@ public sealed class RuleParityTests
     };
 
     private static int Int(JsonNode? node) => node!.GetValue<int>();
+
+    private static bool Bool(JsonNode? node) => node!.GetValue<bool>();
 
     private static long Long(JsonNode? node) => node!.GetValue<long>();
 

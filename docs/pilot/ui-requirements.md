@@ -686,7 +686,9 @@ Build:      built
   not-followed = `violates`, **partial = fixed half-credit** (per D2), gated by an
   `allows_partial` attribute. Streak = derived. "Unrecorded until end of period, then
   not-followed" is a projection rule, not a stored fact. Parents (Goal / Value) = `serves`
-  edges, with ≥1 enforced on save. Backfill / correct = append a corrective adherence event.
+  edges, with ≥1 enforced by the kernel at every door (code review CR125): a Habit is made only
+  serving a Goal or Identity Statement, and its last one can't be unlinked. A Habit made before
+  that with none is left alone. Backfill / correct = append a corrective adherence event.
 - Kernel delta: (1) the **partial-credit** third state (backlog); (2) an **occurrence +
   streak projection** over cadence & adherence events; (3) present Habit-Commitment misses
   as a gentle streak break — **exclude them from the confrontational breach report**;
@@ -920,15 +922,18 @@ Build:      built
   `state_change` (D7 vocab: New → Active → Completed / Abandoned). The "≥1 Value" link
   is a `serves` edge Goal→Value (the ontology's canonical Goal-serves-Value); GEN-7
   prepopulates it when the Goal is created under a Value.
-- Kernel delta: none of its own — rides D7 (status vocab + terminal set) and D1 (Area). "No
-  progress %/bar" = nothing stored.
-- Implications: the two gates — **target date required to activate** and **≥1 Value** — are
-  **app-layer validations**, not kernel invariants (the kernel would still accept a Goal
-  without them; the app is the gatekeeper). This matches the tenet; flag if you ever want them
-  enforced in the kernel like the leaf rule. Completion / abandonment notes ride the
-  `state_change` event.
-- Open decisions: keep the activation gates app-side (recommended for the Pilot) vs
-  kernel-enforced.
+- Kernel delta: the activation gate (`SubjectGates`, code review CR125); otherwise it rides D7
+  (status vocab + terminal set) and D1 (Area). "No progress %/bar" = nothing stored.
+- Implications: **target date required to activate** is the kernel's: the Application services
+  every door shares refuse a status of Active for a Goal with no `target_date`, and clearing the
+  date of an Active Goal, so `bsk`, the web and agents all meet it. Only the change that breaks it
+  is refused: a Goal that was Active without a date before the gate can still be edited and set
+  Active again. The web's form says it first, on the Target date field, from a copy that
+  `tests/rules/gates.json` ties to the kernel's. **≥1 Value** stays a form rule, since the
+  workflow above calls it provisional; the kernel still accepts a Goal without one. Completion /
+  abandonment notes ride the `state_change` event.
+- Decided (2026-11-15, fifth code review's choice D, CR125): the activation gate is
+  kernel-enforced, not app-side. The Pilot is frozen and keeps its own copy.
 
 
 ### GEN-9 — Projects use a type-specific form and may stand alone

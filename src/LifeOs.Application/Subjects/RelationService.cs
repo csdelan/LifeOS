@@ -56,7 +56,9 @@ public sealed class RelationService(SubjectService subjects, IRelationRepository
     /// resolver; the relation must be a real subject-to-subject relation. Removal is a
     /// hard delete — an alignment edge is a structural fact, not a lifecycle to reflect
     /// on — so this is not recorded as an event. Idempotent: removing an edge that is
-    /// not there succeeds with <c>Removed = 0</c> rather than throwing.
+    /// not there succeeds with <c>Removed = 0</c> rather than throwing. A Habit's last Goal or
+    /// Identity Statement stays (GEN-3, <see cref="SubjectGates"/>, code review CR125): link
+    /// another first.
     /// </summary>
     public async Task<UnlinkResult> UnlinkAsync(
         string fromReference, string relation, string toReference,
@@ -73,7 +75,12 @@ public sealed class RelationService(SubjectService subjects, IRelationRepository
         var from = await subjects.ResolveAsync(fromReference, cancellationToken);
         var to = await subjects.ResolveAsync(toReference, cancellationToken);
 
-        var removed = await relations.DeleteAsync(from.Id, relation, to.Id, cancellationToken);
+        var removed = from.Type == SubjectTypes.Habit && SubjectGates.IsHabitParent(relation, to.Type)
+            ? await relations.DeleteUnlessLastAsync(
+                  from.Id, relation, to.Id, new KeptEdges(SubjectRelations.Serves, SubjectGates.HabitParentTypes),
+                  cancellationToken)
+              ?? throw new SubjectGateException(SubjectGates.HabitRefusal(1, 0)!)
+            : await relations.DeleteAsync(from.Id, relation, to.Id, cancellationToken);
         return new UnlinkResult(from, relation, to, removed);
     }
 }

@@ -113,10 +113,11 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
     /// (child <paramref name="relation"/> parent) — the atomic half of parent-first
     /// creation (GEN-7). Relation validity and the parent are the caller's to settle
     /// (see <see cref="ChildCreationService"/>); this just builds the child and hands
-    /// the pair to the store so it is all-or-nothing.
+    /// the pair to the store so it is all-or-nothing. It's the only way a Habit is made: a
+    /// Habit is born serving a Goal or an Identity Statement (code review CR125).
     /// </summary>
     public async Task<(SubjectRef Child, Guid EdgeId)> CreateWithParentEdgeAsync(
-        string type, string title, string attributesJson, string relation, Guid parentId,
+        string type, string title, string attributesJson, string relation, SubjectRef parent,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(title))
@@ -127,8 +128,8 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
         var cleanTitle = NormalizeTitle(title);
         var urn = Urns.Build(type, cleanTitle);
         var (childId, edgeId) = await subjects.CreateWithParentEdgeAsync(
-            Insertable(urn, type, cleanTitle, attributesJson),
-            relation, parentId, Provenances.Declared, cancellationToken);
+            Insertable(urn, type, cleanTitle, attributesJson, servesParent: SubjectGates.IsHabitParent(relation, parent.Type)),
+            relation, parent.Id, Provenances.Declared, cancellationToken);
         return (new SubjectRef(childId, urn, type, cleanTitle), edgeId);
     }
 
@@ -260,11 +261,18 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
     /// The subject to insert, with the status its type is born with, if any. A Task made with a
     /// pattern is a repeating Task (D16), so one it can't repeat on is refused here, before
     /// anything is written, whichever door made it; so is a Value without its statement (code
-    /// review CR72), promotion's included.
+    /// review CR72), promotion's included, and a Habit made without a Goal or Identity Statement
+    /// it serves (<paramref name="servesParent"/>, code review CR125).
     /// </summary>
     private NewSubject Insertable(
-        string urn, string type, string title, string attributesJson, Guid? originEventId = null)
+        string urn, string type, string title, string attributesJson, Guid? originEventId = null,
+        bool servesParent = false)
     {
+        if (type == SubjectTypes.Habit && SubjectGates.HabitRefusal(null, servesParent ? 1 : 0) is { } refusal)
+        {
+            throw new SubjectGateException(refusal);
+        }
+
         var attributes = Recurrence.NormalizeAttributes(attributesJson);
         if (type == SubjectTypes.Task && PatternOf(attributes) is { } pattern)
         {

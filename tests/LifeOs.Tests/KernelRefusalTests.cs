@@ -35,6 +35,7 @@ public sealed class KernelRefusalTests
         { new FoodConflictException("A fast started elsewhere."), StatusCodes.Status409Conflict },
         { new LedgerConflictException("habit:x:2026-11-12"), StatusCodes.Status409Conflict },
         { new InsufficientBalanceException(Currencies.Coins, 3, 10), StatusCodes.Status400BadRequest },
+        { new SubjectGateException(SubjectGates.HabitNeedsParent), StatusCodes.Status400BadRequest },
         { new OuraConnectionException("Oura isn't connected."), StatusCodes.Status409Conflict },
         { new OuraUnavailableException("Oura timed out."), StatusCodes.Status502BadGateway },
         { new ObjectStorageException("Storage refused the upload."), StatusCodes.Status502BadGateway },

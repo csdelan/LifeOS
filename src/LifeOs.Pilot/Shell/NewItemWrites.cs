@@ -39,6 +39,31 @@ internal static class NewItemWrites
         return new Outcome<T>(created, failed);
     }
 
+    /// <summary>
+    /// The pending link a new item is made with, or null when it's made on its own (code review
+    /// CR125). The kernel makes a Habit only serving a Goal or Identity Statement, so a Habit's
+    /// first <c>serves</c> link from it goes with <c>bsk new</c> as its parent, and the rest follow.
+    /// A Habit with none is still sent, for the kernel to refuse in its own words.
+    /// </summary>
+    public static (string Relation, string OtherUrn, bool Incoming)? MadeWith(
+        string type, IReadOnlyList<(string Relation, string OtherUrn, bool Incoming)> pending)
+    {
+        if (type != PilotVocab.Habit)
+        {
+            return null;
+        }
+
+        foreach (var link in pending)
+        {
+            if (link.Relation == "serves" && !link.Incoming && link.OtherUrn.Length > 0)
+            {
+                return link;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>What to tell Chris when some follow-ups failed, or null when they all saved.</summary>
     public static string? Report(string title, IReadOnlyList<string> failed)
         => failed.Count == 0

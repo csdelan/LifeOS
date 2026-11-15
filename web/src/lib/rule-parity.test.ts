@@ -14,6 +14,7 @@ import { fade, partDrag, partValue, ratingPoints, spaceScore } from "@/lib/home-
 import { STATUS_BY_TYPE, initialStatus, isTerminal } from "@/lib/production-ui-types";
 import type { HomePart, ReviewKind, SubjectType } from "@/lib/production-ui-types";
 import { reviewPeriod } from "@/lib/reviews";
+import { goalRefusal, habitRefusal } from "@/lib/subject-gates";
 import { addDays } from "@/lib/dates";
 import { isOccurrenceDate, parseRecurrence } from "@/lib/recurrence";
 import { DIASTOLIC_KEY, SYSTOLIC_KEY, WEIGHT_KEY } from "@/lib/features/measurements/measurements";
@@ -145,6 +146,12 @@ const rules: Record<string, Record<string, (...args: unknown[]) => unknown>> = {
         includeArchived: includeArchived as boolean,
       }).map(tree),
   },
+  // The Goal and Habit gates the forms say first (code review CR125).
+  gates: {
+    goal: (statusBefore, targetBefore, statusAfter, targetAfter) =>
+      goalRefusal(statusBefore as string | null, targetBefore as boolean, statusAfter as string | null, targetAfter as boolean),
+    habit: (before, after) => habitRefusal(before as number | null, n(after)),
+  },
   statuses: {
     statuses: (type) => STATUS_BY_TYPE[s(type) as SubjectType] ?? [],
     initial: (type) => initialStatus(s(type) as SubjectType),
@@ -172,6 +179,7 @@ describe("the web's copies of kernel rules", () => {
         "browse.json",
         "catalogs.json",
         "diet.json",
+        "gates.json",
         "home.json",
         "levels.json",
         "recurrence.json",

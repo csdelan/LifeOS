@@ -7,8 +7,9 @@ chose its P0 and P1, CR58 to CR67, built (2026-11-13), then its P2, CR68 to CR90
 (2026-11-13) ([Third review](#third-review-2026-11-13)). The fourth review scored 6.4, and CR91
 to CR107 are built from it ([Fourth review](#fourth-review-2026-11-13)). The fifth scored 6.5 and
 carries every proposal the fourth left open. R1 to R11 and R14 to R18 are built as CR108 to CR123
-(2026-11-14 and 2026-11-15; R18's query budget waits for R13), and R12, R13 and R19 to R35 are
-still proposed ([Fifth review](#fifth-review-2026-11-14)).
+(2026-11-14 and 2026-11-15; R18's query budget waits for R13), its choice D as CR125
+(2026-11-15), and R12, R13 and R19 to R35 are still proposed
+([Fifth review](#fifth-review-2026-11-14)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
@@ -129,6 +130,34 @@ commit each, and skipped P3 (listed under the second review, so it isn't lost).
   the next time a rule it copies changes in the kernel, that part of the mock becomes canned reads,
   and the exact amounts are checked in the .NET tests only. This extends CR10's thin mock from new
   features to the old ones. AGENTS.md says so beside the thin-mock rule.
+- **CR125 (choice D):** a Goal can't be Active without a target date (GEN-8), and a Habit serves
+  at least one Goal or Identity Statement (GEN-3), refused by the services every door shares
+  (`SubjectGates`, `SubjectGateException`, an invalid request): a status of Active
+  (`StatusService`), clearing an Active Goal's date (`AttributeService`), a Habit made any way but
+  under a Goal or Identity Statement it serves, promotion's included (`SubjectService`), and
+  unlinking its last one (`RelationService`, which locks the Habit while it counts). Only the
+  change that breaks a gate is refused, so items made before it are left alone. The web's form
+  keeps its copy, so focus still moves to the field; `tests/rules/gates.json` ties it to the
+  kernel's, and `subject-detail.tsx`'s copy that couldn't run is gone. A Goal's "≥1 Value" stays a
+  form rule, as GEN-8 calls it provisional. The Pilot is frozen and keeps its own checks, but makes
+  a Habit with its first `serves` link as the parent, since `bsk new` now refuses one without.
+  To count what was there before, in the Supabase SQL editor:
+
+  ```sql
+  SELECT 'Active Goals without a target date' AS what, count(*) AS how_many
+  FROM bsk.v_subject_current c
+  JOIN bsk.subject s ON s.id = c.subject_id
+  WHERE s.type = 'Goal' AND c.status = 'Active'
+    AND btrim(coalesce(s.attributes->>'target_date', '')) = ''
+  UNION ALL
+  SELECT 'Habits serving no Goal or Identity Statement', count(*)
+  FROM bsk.subject h
+  WHERE h.type = 'Habit'
+    AND NOT EXISTS (
+        SELECT 1 FROM bsk.subject_relation r
+        JOIN bsk.subject p ON p.id = r.to_subject
+        WHERE r.from_subject = h.id AND r.relation = 'serves' AND p.type IN ('Goal', 'Value'));
+  ```
 
 ## Items
 
@@ -584,4 +613,5 @@ handles; the list-plus-detail wiring five times, where Habits and Rewards don't 
   `subject-detail.tsx` that can't run because the form refuses first) and in the Pilot, but not in
   Application, so `bsk` and agents skip them. `ui-requirements.md` puts them in the app layer.
   Either move them into Application, refused at every door, or record that they stay in the screens
-  and delete the web's copy that can't run.
+  and delete the web's copy that can't run. *Chosen 2026-11-15: into Application, refused at every
+  door (CR125).*

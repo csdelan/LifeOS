@@ -465,7 +465,7 @@ public sealed class TaskSeriesTests(ClassDatabase classDb) : IClassFixture<Class
         Assert.Contains("finished", finished.Message);
 
         // Once each week and after the last completion are for Tasks.
-        var habit = await k.Subjects.CreateAsync(SubjectTypes.Habit, Unique("Floss"), cancellationToken: Ct);
+        var habit = await k.Subjects.MakeAsync(SubjectTypes.Habit, Unique("Floss"), cancellationToken: Ct);
         await Assert.ThrowsAsync<ArgumentException>(() => k.Recurrence.SetAsync(habit.Urn, Recurrence.Each("week"), Ct));
         await Assert.ThrowsAsync<ArgumentException>(
             () => k.Recurrence.SetAsync(habit.Urn, Recurrence.Interval(3, "days", Recurrence.FromCompletion), Ct));

@@ -146,10 +146,10 @@ public sealed class DomainCreditTests(PostgresFixture postgres)
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
         var kernel = Build(db);
-        var habit = await kernel.Subjects.CreateAsync(
+        var habit = await kernel.Subjects.MakeAsync(
             SubjectTypes.Habit, $"credit habit {Guid.NewGuid():N}",
             JsonSerializer.Serialize(new { start = TodayUtc.AddDays(-4).ToString("yyyy-MM-dd"), recurrence = new { freq = "daily" } }),
-            cancellationToken: Ct);
+            Ct);
         // A new habit is Planned; tracking it lets its days be recorded.
         await kernel.Status.ChangeStatusAsync(habit.Urn, "Building", Ct);
         await kernel.Bounties.SetAsync(habit.Urn, BountyTriggers.Followed, Environment(9), cancellationToken: Ct);

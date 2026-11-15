@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { emptyFormValues, groupFields, groupTitle, isDetailDirty, visibleFields } from "@/lib/subject-forms";
+import {
+  emptyFormValues,
+  groupFields,
+  groupTitle,
+  isDetailDirty,
+  subjectFormSchema,
+  visibleFields,
+  type SubjectFormValues,
+} from "@/lib/subject-forms";
+import { GOAL_NEEDS_TARGET_DATE, HABIT_NEEDS_PARENT } from "@/lib/subject-gates";
 import type { SubjectType } from "@/lib/production-ui-types";
 
 describe("read-only → edit dirty logic", () => {
@@ -42,5 +51,37 @@ describe("the Overview's groups", () => {
     expect(groupTitle("repeat", "Habit")).toBe("Schedule");
     expect(groupTitle("repeat", "Task")).toBe("Repeats");
     expect(groupTitle("when", "Appointment")).toBe("When");
+  });
+});
+
+// The kernel's gates, said by the form before anything is written (code review CR125); the
+// rule's own cases are in tests/rules/gates.json.
+describe("a Goal's and a Habit's gates on the form", () => {
+  function issues(values: Partial<SubjectFormValues> & Pick<SubjectFormValues, "type" | "mode">) {
+    const parsed = subjectFormSchema.safeParse({ ...emptyFormValues(values.type, values.mode), title: "It", ...values });
+    return parsed.success ? [] : parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+  }
+  const goal = (status: string, targetDate: string, shown?: SubjectFormValues["shown"]) =>
+    issues({ type: "Goal", mode: shown ? "edit" : "create", status, parent: "value-1", attrs: { target_date: targetDate }, shown });
+
+  it("keeps a Goal from becoming Active without a target date, on the Target date field", () => {
+    expect(goal("Active", "")).toEqual([{ path: "attrs.target_date", message: GOAL_NEEDS_TARGET_DATE }]);
+    expect(goal("Active", "", { status: "New", targetDate: false, parents: 1 })).toHaveLength(1);
+    expect(goal("Active", "", { status: "Active", targetDate: true, parents: 1 })).toHaveLength(1);
+    expect(goal("Active", "2027-06-30")).toEqual([]);
+    expect(goal("New", "")).toEqual([]);
+  });
+
+  it("leaves an Active Goal made before the gate, with no target date, editable", () => {
+    expect(goal("Active", "", { status: "Active", targetDate: false, parents: 1 })).toEqual([]);
+  });
+
+  it("keeps a Habit serving a Goal or Identity Statement, unless it never did", () => {
+    const habit = (parents: string[], shown?: SubjectFormValues["shown"]) =>
+      issues({ type: "Habit", mode: shown ? "edit" : "create", parents, shown });
+    expect(habit([])).toEqual([{ path: "parents", message: HABIT_NEEDS_PARENT }]);
+    expect(habit([], { status: "Building", targetDate: false, parents: 1 })).toHaveLength(1);
+    expect(habit(["goal-1"])).toEqual([]);
+    expect(habit([], { status: "Building", targetDate: false, parents: 0 })).toEqual([]);
   });
 });

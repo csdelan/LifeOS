@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { todayIso } from "@/lib/dates";
+import { goalRefusal, habitRefusal } from "@/lib/subject-gates";
 import {
   SERIES_STATUSES,
   STATUS_BY_TYPE,
@@ -72,6 +73,13 @@ export interface TypeFormConfig {
 
 export type FormMode = "create" | "edit";
 
+/**
+ * What an item had when its edit form opened, which the gates compare with what a save would leave
+ * (`lib/subject-gates.ts`, code review CR125): its status, whether it had a target date, and how
+ * many Goals and Identity Statements it served. A new item has none.
+ */
+export type ShownForGates = { status: string; targetDate: boolean; parents: number };
+
 export type SubjectFormValues = {
   mode: FormMode;
   type: SubjectType;
@@ -83,6 +91,7 @@ export type SubjectFormValues = {
   person: string;
   tags: string;
   attrs: Record<string, string>;
+  shown?: ShownForGates;
 };
 
 export const subjectFormSchema = z
@@ -97,6 +106,7 @@ export const subjectFormSchema = z
     person: z.string(),
     tags: z.string(),
     attrs: z.record(z.string()),
+    shown: z.object({ status: z.string(), targetDate: z.boolean(), parents: z.number() }).optional(),
   })
   .superRefine((val, ctx) => {
     const type = val.type as SubjectType;
@@ -121,12 +131,13 @@ export const subjectFormSchema = z
         message: "An Identity Statement needs its statement.",
       });
     }
-    if (type === "Goal" && val.status === "Active" && !val.attrs.target_date) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["attrs", "target_date"],
-        message: "A Goal cannot become Active without a target date.",
-      });
+    // The kernel's gates (code review CR125): said here first, so focus moves to the field.
+    const activation =
+      type === "Goal"
+        ? goalRefusal(val.shown?.status ?? null, val.shown?.targetDate ?? false, val.status, !!val.attrs.target_date?.trim())
+        : null;
+    if (activation) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["attrs", "target_date"], message: activation });
     }
     if (type === "Goal" && !val.parent) {
       ctx.addIssue({
@@ -135,15 +146,12 @@ export const subjectFormSchema = z
         message: "Connect this Goal to an Identity Statement.",
       });
     }
-    if (type === "Habit") {
-      const n = new Set([val.parent, ...val.parents].filter((id) => id && id !== NONE)).size;
-      if (n < 1) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["parents"],
-          message: "A Habit needs at least one Goal or Identity Statement.",
-        });
-      }
+    const parentless =
+      type === "Habit"
+        ? habitRefusal(val.shown ? val.shown.parents : null, selectedParentIds(val as SubjectFormValues).length)
+        : null;
+    if (parentless) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["parents"], message: parentless });
     }
   });
 
@@ -590,6 +598,7 @@ export function formValuesFromDetail(
     if (extra.habit.recurrence && !attrs.recurrence) attrs.recurrence = extra.habit.recurrence;
   }
   if (detail.type === "Appointment" && detail.due && !attrs.date) attrs.date = detail.due;
+  const parents = extra?.parents ?? [];
   return {
     mode: "edit",
     type: detail.type,
@@ -597,10 +606,15 @@ export function formValuesFromDetail(
     status: detail.status || defaultStatus(detail.type),
     area: detail.area ?? extra?.list?.area ?? "",
     parent: extra?.parentId ?? "",
-    parents: extra?.parents ?? [],
+    parents,
     person: extra?.personId ?? "",
     tags: extra?.tags ?? "",
     attrs,
+    shown: {
+      status: detail.status ?? "",
+      targetDate: !!attrs.target_date?.trim(),
+      parents: new Set([extra?.parentId, ...parents].filter((id) => id && id !== NONE)).size,
+    },
   };
 }
 

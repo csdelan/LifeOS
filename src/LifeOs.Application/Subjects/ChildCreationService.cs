@@ -44,7 +44,7 @@ public sealed class ChildCreationService(SubjectService subjects)
         }
 
         var (child, edgeId) = await subjects.CreateWithParentEdgeAsync(
-            childType, title, attributesJson, relation, parent.Id, cancellationToken);
+            childType, title, attributesJson, relation, parent, cancellationToken);
 
         return new ChildCreationResult(child, relation, parent, edgeId);
     }

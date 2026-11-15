@@ -13,6 +13,24 @@ namespace LifeOs.Tests;
 /// </summary>
 internal static class TestHabits
 {
+    /// <summary>
+    /// Makes a <paramref name="type"/> as every door does, so a Habit is made serving a Goal of its
+    /// own, made beside it (code review CR125); any other type is made on its own.
+    /// </summary>
+    public static async Task<SubjectRef> MakeAsync(
+        this Application.Subjects.SubjectService subjects, string type, string title, string attributesJson = "{}",
+        CancellationToken cancellationToken = default)
+    {
+        if (type != SubjectTypes.Habit)
+        {
+            return await subjects.CreateAsync(type, title, attributesJson, cancellationToken: cancellationToken);
+        }
+
+        var goal = await subjects.CreateAsync(SubjectTypes.Goal, $"{title} goal", cancellationToken: cancellationToken);
+        return (await subjects.CreateWithParentEdgeAsync(
+            type, title, attributesJson, SubjectRelations.Serves, goal, cancellationToken)).Child;
+    }
+
     public static Task<SubjectRef> CreateTrackedHabitAsync(
         this IServiceProvider kernel, string title, string attributesJson = "{}",
         CancellationToken cancellationToken = default)

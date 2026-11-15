@@ -464,10 +464,17 @@ public sealed class NewSubjectDialog : Form
                 args.Add(area);
             }
 
+            // A Habit is made serving its first Goal or Identity Statement (code review CR125).
+            var links = _relationships.Pending.ToList();
             if (_parentUrn is not null)
             {
                 args.Add("--parent");
                 args.Add(_parentUrn);
+            }
+            else if (NewItemWrites.MadeWith(_currentType, links) is { } madeWith)
+            {
+                args.AddRange(["--parent", madeWith.OtherUrn, "--relation", madeWith.Relation]);
+                links.Remove(madeWith);
             }
 
             if (_currentType == PilotVocab.Value)
@@ -484,7 +491,7 @@ public sealed class NewSubjectDialog : Form
 
             _tags.CommitPending();
             var outcome = NewItemWrites.Run(
-                () => _bsk.RunJson<CreatedSubject>(args.ToArray()), created => created.Urn, FollowUps());
+                () => _bsk.RunJson<CreatedSubject>(args.ToArray()), created => created.Urn, FollowUps(links));
 
             // The item exists now, so the dialog closes on it whatever else failed; a second
             // Save would make it again (code review CR67).
@@ -503,12 +510,16 @@ public sealed class NewSubjectDialog : Form
         }
     }
 
-    /// <summary>What finishes the new item after <c>bsk new</c>, each on its own (code review CR67).</summary>
-    private List<NewItemWrites.FollowUp> FollowUps()
+    /// <summary>
+    /// What finishes the new item after <c>bsk new</c>, each on its own (code review CR67): its
+    /// tags, each of <paramref name="links"/> (the pending links less the one a Habit was made
+    /// with), its repeat and its attendee.
+    /// </summary>
+    private List<NewItemWrites.FollowUp> FollowUps(IReadOnlyList<(string Relation, string OtherUrn, bool Incoming)> links)
     {
         var tags = _tags.Tags.ToList();
         var followUps = new List<NewItemWrites.FollowUp> { new("its tags", urn => BskWrites.ApplyTags(_bsk, urn, tags)) };
-        foreach (var link in _relationships.Pending.ToList())
+        foreach (var link in links)
         {
             followUps.Add(new($"its {link.Relation} link to {link.OtherUrn}", urn => BskWrites.ApplyLinks(_bsk, urn, [link])));
         }

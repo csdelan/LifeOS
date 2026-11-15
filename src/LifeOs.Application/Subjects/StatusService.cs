@@ -26,10 +26,14 @@ namespace LifeOs.Application.Subjects;
 /// Closing a Task (a terminal status) stops its timer first when it's running or paused, so
 /// its time is recorded up to then and no timer runs on a closed task (TASKS-2).
 /// </para>
+/// <para>
+/// A Goal becomes Active only with a target date (GEN-8, <see cref="SubjectGates"/>, code review
+/// CR125); one already Active without one isn't refused for being set Active again.
+/// </para>
 /// </summary>
 public sealed class StatusService(
     SubjectService subjects, IEventStore events, RewardService rewards, IClock clock, EventSource eventSource,
-    TaskSeriesService taskSeries, ITimerRepository timers, AfterCommit afterCommit)
+    TaskSeriesService taskSeries, ITimerRepository timers, AfterCommit afterCommit, ISubjectRepository repository)
 {
     public async Task<StatusResult> ChangeStatusAsync(
         string reference, string newStatus, CancellationToken cancellationToken = default)
@@ -41,6 +45,10 @@ public sealed class StatusService(
 
         var subject = await subjects.ResolveAsync(reference, cancellationToken);
         var status = VocabularyStatus(subject.Type, newStatus);
+        if (subject.Type == SubjectTypes.Goal)
+        {
+            await CheckGoalAsync(subject, status, cancellationToken);
+        }
 
         var followUp = await taskSeries.BeforeStatusAsync(subject, status, cancellationToken);
 
@@ -84,6 +92,24 @@ public sealed class StatusService(
             Repetitions = made.Value,
             FollowUpsPending = earned.Pending || made.Pending,
         };
+    }
+
+    /// <summary>Refuses a status that would leave the Goal Active without a target date (GEN-8).</summary>
+    private async Task CheckGoalAsync(SubjectRef goal, string status, CancellationToken cancellationToken)
+    {
+        if (status != SubjectGates.ActiveStatus)
+        {
+            // Only Active needs the target date, so nothing is read.
+            return;
+        }
+
+        var before = await repository.GetStatusAsync(goal.Id, cancellationToken);
+        var hasTarget = SubjectGates.HasTargetDate(
+            await repository.GetAttributeValueAsync(goal.Id, SubjectGates.TargetDateKey, cancellationToken));
+        if (SubjectGates.GoalRefusal(before, hasTarget, status, hasTarget) is { } refusal)
+        {
+            throw new SubjectGateException(refusal);
+        }
     }
 
     /// <summary>

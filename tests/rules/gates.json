@@ -1,0 +1,199 @@
+{
+  "about": "The Goal and Habit gates (GEN-8, GEN-3, code review CR125): SubjectGates.GoalRefusal and HabitRefusal in C#, goalRefusal and habitRefusal in the web's lib/subject-gates.ts, which the forms say before anything is written. A Goal's args are its status and whether it has a target date, before (null for a new Goal) and after; a Habit's are how many Goals and Identity Statements it serves before (null for a new Habit) and after. The answer is the refusal, or null.",
+  "cases": [
+    {
+      "rule": "goal",
+      "args": [
+        null,
+        false,
+        "Active",
+        false
+      ],
+      "out": "A Goal can't be Active without a target date."
+    },
+    {
+      "rule": "goal",
+      "args": [
+        null,
+        false,
+        "Active",
+        true
+      ],
+      "out": null
+    },
+    {
+      "rule": "goal",
+      "args": [
+        null,
+        false,
+        null,
+        false
+      ],
+      "out": null
+    },
+    {
+      "rule": "goal",
+      "args": [
+        "New",
+        false,
+        "Active",
+        false
+      ],
+      "out": "A Goal can't be Active without a target date."
+    },
+    {
+      "rule": "goal",
+      "args": [
+        "New",
+        true,
+        "Active",
+        true
+      ],
+      "out": null
+    },
+    {
+      "rule": "goal",
+      "args": [
+        "Completed",
+        false,
+        "Active",
+        false
+      ],
+      "out": "A Goal can't be Active without a target date."
+    },
+    {
+      "rule": "goal",
+      "args": [
+        "Abandoned",
+        true,
+        "Active",
+        true
+      ],
+      "out": null
+    },
+    {
+      "rule": "goal",
+      "args": [
+        "Active",
+        true,
+        "Active",
+        false
+      ],
+      "out": "A Goal can't be Active without a target date."
+    },
+    {
+      "rule": "goal",
+      "args": [
+        "New",
+        true,
+        "New",
+        false
+      ],
+      "out": null
+    },
+    {
+      "rule": "goal",
+      "args": [
+        "Active",
+        true,
+        "Completed",
+        false
+      ],
+      "out": null
+    },
+    {
+      "rule": "goal",
+      "args": [
+        "Active",
+        false,
+        "Active",
+        false
+      ],
+      "out": null
+    },
+    {
+      "rule": "goal",
+      "args": [
+        "Active",
+        false,
+        "Completed",
+        false
+      ],
+      "out": null
+    },
+    {
+      "rule": "goal",
+      "args": [
+        "new",
+        false,
+        " active ",
+        false
+      ],
+      "out": "A Goal can't be Active without a target date."
+    },
+    {
+      "rule": "habit",
+      "args": [
+        null,
+        0
+      ],
+      "out": "A Habit needs at least one Goal or Identity Statement it serves."
+    },
+    {
+      "rule": "habit",
+      "args": [
+        null,
+        1
+      ],
+      "out": null
+    },
+    {
+      "rule": "habit",
+      "args": [
+        null,
+        2
+      ],
+      "out": null
+    },
+    {
+      "rule": "habit",
+      "args": [
+        1,
+        0
+      ],
+      "out": "A Habit needs at least one Goal or Identity Statement it serves."
+    },
+    {
+      "rule": "habit",
+      "args": [
+        2,
+        1
+      ],
+      "out": null
+    },
+    {
+      "rule": "habit",
+      "args": [
+        1,
+        1
+      ],
+      "out": null
+    },
+    {
+      "rule": "habit",
+      "args": [
+        0,
+        0
+      ],
+      "out": null
+    },
+    {
+      "rule": "habit",
+      "args": [
+        0,
+        1
+      ],
+      "out": null
+    }
+  ]
+}

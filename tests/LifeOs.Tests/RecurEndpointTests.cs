@@ -44,7 +44,8 @@ public sealed class RecurEndpointTests(ClassDatabase classDb) : IClassFixture<Cl
     public async Task Recur_sets_checks_and_clears_a_recurrence()
     {
         await using var host = await StartAsync();
-        var habit = (await PostAsync(host.Client, "/api/subjects", new { type = "Habit", title = Unique("stretch") }))
+        var goal = (await PostAsync(host.Client, "/api/subjects", new { type = "Goal", title = Unique("limber") })).GetProperty("id").GetGuid();
+        var habit = (await PostAsync(host.Client, "/api/subjects", new { type = "Habit", title = Unique("stretch"), parent = goal.ToString(), relation = "serves" }))
             .GetProperty("id").GetGuid();
 
         var set = await PostAsync(host.Client, "/api/recur", new

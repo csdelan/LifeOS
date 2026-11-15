@@ -288,7 +288,11 @@ public sealed class McpServerTests(PostgresFixture postgres, ClassDatabase class
             type = SubjectTypes.Value, title = $"Maker {ns}",
             attrs = new Dictionary<string, string> { ["statement"] = "I am someone who makes things." },
         });
-        var goal = await PostSubjectAsync(host, new { type = SubjectTypes.Goal, title = $"Ship the shed {ns}", parent = value.Id.ToString(), relation = "serves" });
+        var goal = await PostSubjectAsync(host, new
+        {
+            type = SubjectTypes.Goal, title = $"Ship the shed {ns}", parent = value.Id.ToString(), relation = "serves",
+            attrs = new Dictionary<string, string> { ["target_date"] = "2027-09-30" },
+        });
         await PostOkAsync(host, "api/status", new { subject = goal.Id.ToString(), status = "Active" });
         var project = await PostSubjectAsync(host, new { type = SubjectTypes.Project, title = $"Shed frame {ns}", parent = goal.Id.ToString(), relation = "results_in" });
         var task = await PostSubjectAsync(host, new

@@ -184,7 +184,9 @@ public sealed class TaskEndpointTests(ClassDatabase classDb) : IClassFixture<Cla
         Assert.Equal(HttpStatusCode.BadRequest, completing.StatusCode);
 
         // Once each week is for Tasks.
-        var habit = (await PostAsync(c, "/api/subjects", new { type = "Habit", title = Unique("Floss") })).GetProperty("id").GetGuid();
+        var flossGoal = (await PostAsync(c, "/api/subjects", new { type = "Goal", title = Unique("Teeth") })).GetProperty("id").GetGuid();
+        var habit = (await PostAsync(c, "/api/subjects", new { type = "Habit", title = Unique("Floss"), parent = flossGoal.ToString(), relation = "serves" }))
+            .GetProperty("id").GetGuid();
         var refused = await c.PostAsJsonAsync("/api/recur", new
         {
             subject = habit.ToString(), recurrence = new { freq = "each", period = "week" }

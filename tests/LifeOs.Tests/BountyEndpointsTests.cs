@@ -39,9 +39,13 @@ public sealed class BountyEndpointsTests(ClassDatabase classDb) : IClassFixture<
     private static Task<JsonElement> GetAsync(HttpClient client, string path)
         => client.GetFromJsonAsync<JsonElement>(path, Ct);
 
+    /// <summary>A new item of <paramref name="type"/>; a Habit serves a Goal made beside it (code review CR125).</summary>
     private static async Task<Guid> NewAsync(HttpClient client, string type)
-        => (await PostAsync(client, "/api/subjects", new { type, title = Unique($"priced {type}") }))
+    {
+        string? parent = type == SubjectTypes.Habit ? (await NewAsync(client, SubjectTypes.Goal)).ToString() : null;
+        return (await PostAsync(client, "/api/subjects", new { type, title = Unique($"priced {type}"), parent, relation = parent is null ? null : "serves" }))
             .GetProperty("id").GetGuid();
+    }
 
     private static Dictionary<string, long> Amounts(JsonElement amounts)
         => amounts.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetInt64());

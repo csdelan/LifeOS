@@ -73,9 +73,9 @@ public sealed class HomeZoneDateTests(PostgresFixture postgres)
         var (subjects, status) = (Get<SubjectService>(), Get<StatusService>());
 
         // Everything here happens within a minute of that instant.
-        var habit = await subjects.CreateAsync(
+        var habit = await subjects.MakeAsync(
             SubjectTypes.Habit, $"zone habit {Guid.NewGuid():N}", JsonSerializer.Serialize(new { recurrence = new { freq = "daily" } }),
-            cancellationToken: Ct);
+            Ct);
         await status.ChangeStatusAsync(habit.Urn, "Building", Ct);
         var task = await subjects.CreateAsync(SubjectTypes.Task, $"zone task {Guid.NewGuid():N}", "{}", cancellationToken: Ct);
         await Get<BountyService>().SetAsync(task.Urn, null, new Dictionary<string, long> { [Currencies.EnvironmentXp] = 5 }, cancellationToken: Ct);

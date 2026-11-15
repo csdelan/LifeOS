@@ -204,7 +204,7 @@ public sealed class RecurrenceTests(ClassDatabase classDb) : IClassFixture<Class
         var attributes = provider.GetRequiredService<AttributeService>();
 
         // How the web and `bsk new --attr` sent it: a string attribute holding the object.
-        var created = await subjects.CreateAsync(
+        var created = await subjects.MakeAsync(
             SubjectTypes.Habit, $"text habit {Guid.NewGuid():N}",
             attributesJson: """{"recurrence":"{\"freq\":\"weekly\",\"on\":[\"wed\",\"mon\"]}"}""",
             cancellationToken: Ct);

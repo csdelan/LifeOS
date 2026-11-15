@@ -38,7 +38,7 @@ public sealed class CoverServiceTests(ClassDatabase classDb) : IClassFixture<Cla
             ? """{"statement":"I am someone who looks up at the hills."}"""
             : "{}";
         return provider.GetRequiredService<SubjectService>()
-            .CreateAsync(type, $"{type} cover {Guid.NewGuid():N}", attributes, cancellationToken: Ct);
+            .MakeAsync(type, $"{type} cover {Guid.NewGuid():N}", attributes, Ct);
     }
 
     private async Task<string?> StoredCover(Guid id)

@@ -183,7 +183,20 @@ public interface IRelationRepository
     Task<int> DeleteAsync(
         Guid fromSubject, string relation, Guid toSubject,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes an edge as <see cref="DeleteAsync"/> does, unless it's the last of
+    /// <paramref name="fromSubject"/>'s edges that <paramref name="kept"/> names: then nothing is
+    /// removed and it answers null. The subject's row is locked while it counts, so two removals
+    /// at once can't take away the last two (a Habit's parents, code review CR125).
+    /// </summary>
+    Task<int?> DeleteUnlessLastAsync(
+        Guid fromSubject, string relation, Guid toSubject, KeptEdges kept,
+        CancellationToken cancellationToken = default);
 }
+
+/// <summary>Which of a subject's edges it must keep one of: those of <see cref="Relation"/> to a subject of one of <see cref="ToTypes"/>.</summary>
+public sealed record KeptEdges(string Relation, IReadOnlyList<string> ToTypes);
 
 /// <summary>
 /// What a change the system makes follows (code review CR69): the event that caused it, or the

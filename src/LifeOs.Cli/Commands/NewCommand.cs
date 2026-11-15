@@ -37,7 +37,8 @@ internal static class NewCommand
         };
         var parentOption = new Option<string?>("--parent")
         {
-            Description = "Create beneath this parent (urn/short id/title) and relate to it atomically (GEN-7)."
+            Description = "Create beneath this parent (urn/short id/title) and relate to it atomically (GEN-7). "
+                          + "A Habit needs one: a Goal or Identity Statement it serves (--relation serves)."
         };
         var relationOption = new Option<string?>("--relation")
         {

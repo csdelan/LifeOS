@@ -56,6 +56,20 @@ public sealed class AttributeService(
             throw new ArgumentException(ValueStatements.Missing);
         }
 
+        // An Active Goal keeps its target date (GEN-8, code review CR125).
+        if (subject.Type == SubjectTypes.Goal
+            && assignments.Any(a => string.Equals(a.Key.Trim(), SubjectGates.TargetDateKey, StringComparison.Ordinal)
+                && string.IsNullOrWhiteSpace(a.Value)))
+        {
+            var status = await repository.GetStatusAsync(subject.Id, cancellationToken);
+            var hadTarget = SubjectGates.HasTargetDate(
+                await repository.GetAttributeValueAsync(subject.Id, SubjectGates.TargetDateKey, cancellationToken));
+            if (SubjectGates.GoalRefusal(status, hadTarget, status, targetAfter: false) is { } refusal)
+            {
+                throw new SubjectGateException(refusal);
+            }
+        }
+
         if (subject.Type == SubjectTypes.Task)
         {
             var pattern = assignments.FirstOrDefault(a =>

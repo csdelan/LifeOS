@@ -62,7 +62,7 @@ public sealed class HabitPartialFlagTests(ClassDatabase classDb) : IClassFixture
     {
         await using var kernel = classDb.Kernel();
         var attributes = flag is null ? "{}" : $$"""{"{{AdherenceResults.AllowsPartialKey}}": {{flag}}}""";
-        return await kernel.GetRequiredService<SubjectService>().CreateAsync(
-            SubjectTypes.Habit, $"Stretch {Guid.NewGuid():N}", attributes, cancellationToken: Ct);
+        return await kernel.GetRequiredService<SubjectService>().MakeAsync(
+            SubjectTypes.Habit, $"Stretch {Guid.NewGuid():N}", attributes, Ct);
     }
 }

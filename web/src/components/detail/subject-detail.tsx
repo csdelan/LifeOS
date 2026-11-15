@@ -52,7 +52,6 @@ import {
   hasRecurrenceField,
   isDetailDirty,
   parseAttrBag,
-  selectedParentIds,
   subjectFormSchema,
   type SubjectFormValues,
 } from "@/lib/subject-forms";
@@ -180,19 +179,10 @@ function ItemDetail({
   const cfg = formConfig(subject.type);
   const childTypes = childTypesFor(subject.type);
 
-  /** Checked before anything is written; a problem is said beside Save and nothing runs. */
-  function saveProblem(values: SubjectFormValues): string | null {
-    if (subject.type === "Goal" && values.status === "Active" && !values.attrs.target_date) {
-      return "A Goal needs a target date before it can be Active.";
-    }
-    if (subject.type === "Habit" && selectedParentIds(values).length < 1) {
-      return "A Habit needs at least one Goal or Identity Statement.";
-    }
-    return bountyProblem(bountyDraft) ?? targetProblem(targetDraft);
-  }
-
   function save(values: SubjectFormValues) {
-    const problem = saveProblem(values);
+    // Checked before anything is written; a problem is said beside Save and nothing runs. A
+    // Goal's and a Habit's gates are the form's (lib/subject-forms.ts), which the kernel's match.
+    const problem = bountyProblem(bountyDraft) ?? targetProblem(targetDraft);
     if (problem) {
       setSaveError(problem);
       return;

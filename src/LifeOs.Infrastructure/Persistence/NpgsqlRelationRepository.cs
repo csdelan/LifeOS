@@ -61,4 +61,45 @@ public sealed class NpgsqlRelationRepository(NpgsqlDataSource dataSource) : IRel
             new { fromSubject, relation, toSubject },
             cancellationToken: cancellationToken));
     }
+
+    public async Task<int?> DeleteUnlessLastAsync(
+        Guid fromSubject, string relation, Guid toSubject, KeptEdges kept,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = dataSource.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // A removal beside this one waits here, and its count then sees what this one removed.
+        await connection.ExecuteAsync(new CommandDefinition(
+            "SELECT 1 FROM bsk.subject WHERE id = @fromSubject FOR UPDATE;",
+            new { fromSubject }, transaction, cancellationToken: cancellationToken));
+
+        const string countSql = """
+            SELECT count(*) FILTER (WHERE r.relation = @relation AND r.to_subject = @toSubject) AS this_edge,
+                   count(*) FILTER (WHERE NOT (r.relation = @relation AND r.to_subject = @toSubject)) AS others
+            FROM bsk.subject_relation r
+            JOIN bsk.subject s ON s.id = r.to_subject
+            WHERE r.from_subject = @fromSubject
+              AND r.relation = @keptRelation
+              AND s.type = ANY(@keptTypes);
+            """;
+        var counts = await connection.QuerySingleAsync<(long ThisEdge, long Others)>(new CommandDefinition(
+            countSql,
+            new { fromSubject, relation, toSubject, keptRelation = kept.Relation, keptTypes = kept.ToTypes.ToArray() },
+            transaction, cancellationToken: cancellationToken));
+        if (counts.ThisEdge > 0 && counts.Others == 0)
+        {
+            return null;
+        }
+
+        var removed = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            DELETE FROM bsk.subject_relation
+            WHERE from_subject = @fromSubject AND relation = @relation AND to_subject = @toSubject;
+            """,
+            new { fromSubject, relation, toSubject }, transaction, cancellationToken: cancellationToken));
+        await transaction.CommitAsync(cancellationToken);
+        return removed;
+    }
 }
