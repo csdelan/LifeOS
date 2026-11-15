@@ -3,13 +3,17 @@ import { cn } from "@/lib/utils";
 
 export type ActivityTone = "today" | "steps" | "sleep" | "exercise" | "tags";
 
-// Each class written out in full, so Tailwind finds it.
-const TONE: Record<ActivityTone, { cap: string; tile: string }> = {
-  today: { cap: "border-t-activity-today", tile: "bg-activity-today/12 text-activity-today" },
-  steps: { cap: "border-t-activity-steps", tile: "bg-activity-steps/12 text-activity-steps" },
-  sleep: { cap: "border-t-activity-sleep", tile: "bg-activity-sleep/12 text-activity-sleep" },
-  exercise: { cap: "border-t-activity-exercise", tile: "bg-activity-exercise/12 text-activity-exercise" },
-  tags: { cap: "border-t-activity-tags", tile: "bg-activity-tags/12 text-activity-tags" },
+// Each class written out in full, so Tailwind finds it. The card is a surface in its own colour
+// (index.css), which also draws the line along its top.
+const TONE: Record<ActivityTone, { surface: string; tile: string }> = {
+  today: { surface: "[--surface-tone:var(--activity-today)]", tile: "bg-activity-today/12 text-activity-today" },
+  steps: { surface: "[--surface-tone:var(--activity-steps)]", tile: "bg-activity-steps/12 text-activity-steps" },
+  sleep: { surface: "[--surface-tone:var(--activity-sleep)]", tile: "bg-activity-sleep/12 text-activity-sleep" },
+  exercise: {
+    surface: "[--surface-tone:var(--activity-exercise)]",
+    tile: "bg-activity-exercise/12 text-activity-exercise",
+  },
+  tags: { surface: "[--surface-tone:var(--activity-tags)]", tile: "bg-activity-tags/12 text-activity-tags" },
 };
 
 /**
@@ -27,7 +31,7 @@ export function ActivityCard({
     <section
       aria-labelledby={titleId}
       data-tone={tone}
-      className={cn("space-y-4 rounded-xl border-t-4 bg-card p-4 ring-1 ring-foreground/10", TONE[tone].cap, className)}
+      className={cn("surface space-y-4 p-4", TONE[tone].surface, className)}
       {...rest}
     >
       {children}

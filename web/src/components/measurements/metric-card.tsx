@@ -180,7 +180,8 @@ export function MetricCard({
     <section
       aria-labelledby={layout === "card" ? titleId : undefined}
       aria-label={layout === "inline" ? group.name : undefined}
-      className={cn("space-y-4", layout === "card" && "rounded-xl bg-card p-4 ring-1 ring-foreground/10")}
+      data-tone="green"
+      className={cn("space-y-4", layout === "card" && "surface p-4")}
     >
       {layout === "card" ? (
         <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">

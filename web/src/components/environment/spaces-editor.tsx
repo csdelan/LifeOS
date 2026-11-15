@@ -237,7 +237,7 @@ export function SpacesEditor() {
   }
 
   return (
-    <section aria-labelledby={titleId} className="space-y-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+    <section aria-labelledby={titleId} data-tone="blue" className="surface space-y-3 p-4">
       <h2 id={titleId} className="font-heading text-xl">
         Manage spaces
       </h2>

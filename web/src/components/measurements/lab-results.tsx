@@ -185,7 +185,7 @@ function LabVisitItem({
   const summary = visitSummary(visit);
   const spoken = `${title}: ${summary.toLowerCase()}${visit.report ? ", with its report" : ""}`;
   return (
-    <li className="rounded-xl bg-card ring-1 ring-foreground/10" data-testid="lab-visit">
+    <li data-tone="green" className="surface" data-testid="lab-visit">
       <h4 className="px-1.5 py-1.5">
         <button
           type="button"

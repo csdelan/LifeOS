@@ -80,7 +80,8 @@ export function SpaceCard({
   return (
     <article
       aria-labelledby={titleId}
-      className="space-y-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10"
+      data-tone="blue"
+      className="surface space-y-3 p-4"
       data-testid="space-card"
     >
       <div className="flex items-start justify-between gap-2">

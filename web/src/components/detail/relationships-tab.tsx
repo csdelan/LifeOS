@@ -71,7 +71,7 @@ export function RelationshipsTab({
         <DecisionRelationships rels={data} onOpenSubject={onOpenSubject} />
       ) : (
         <>
-          <DetailSection title="Parents" icon={ArrowUpIcon}>
+          <DetailSection title="Parents" tone="blue" icon={ArrowUpIcon}>
             <p className="text-xs text-muted-foreground">Alignment edges — this is structure, not tagging.</p>
             {data?.parents.length ? (
               <ul className="space-y-1.5">
@@ -87,7 +87,7 @@ export function RelationshipsTab({
               <p className="text-sm text-muted-foreground">No parents — unaligned for now.</p>
             )}
           </DetailSection>
-          <DetailSection title="Children" icon={ArrowDownIcon}>
+          <DetailSection title="Children" tone="blue" icon={ArrowDownIcon}>
             {data?.children.length ? (
               <div className="space-y-3">
                 {Object.entries(grouped).map(([type, rows]) => (
@@ -110,7 +110,7 @@ export function RelationshipsTab({
           </DetailSection>
         </>
       )}
-      <DetailSection title="Add relationship" icon={Link2Icon}>
+      <DetailSection title="Add relationship" tone="blue" icon={Link2Icon}>
         <p className="text-xs text-muted-foreground">
           {decision
             ? "Add an existing item to Context (what prompted it), Resulting work (what carries it out) or Replaces (an earlier Decision this one reversed). "

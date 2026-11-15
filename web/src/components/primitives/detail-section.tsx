@@ -1,19 +1,23 @@
 import { useId, type ComponentType, type ReactNode } from "react";
+import type { Tone } from "@/lib/tones";
 import { cn } from "@/lib/utils";
 
 /**
- * One group on an item's detail: a titled card. Its title is a heading and names the section,
- * so a screen reader (or a test) finds it as a region by that name; `action` sits beside the
- * title, outside it, so a button there doesn't change the name.
+ * One group on an item's detail: a titled card in the colour of what it holds (`tone`, as
+ * `lib/tones.ts` says). Its title is a heading and names the section, so a screen reader (or a
+ * test) finds it as a region by that name; `action` sits beside the title, outside it, so a
+ * button there doesn't change the name.
  */
 export function DetailSection({
   title,
+  tone,
   icon: Icon,
   action,
   className,
   children,
 }: {
   title: string;
+  tone: Tone;
   icon?: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   action?: ReactNode;
   className?: string;
@@ -21,13 +25,14 @@ export function DetailSection({
 }) {
   const id = useId();
   return (
-    <section
-      aria-labelledby={id}
-      className={cn("min-w-0 rounded-xl bg-muted/40 px-3.5 pt-2.5 pb-3 ring-1 ring-foreground/8", className)}
-    >
+    <section aria-labelledby={id} data-tone={tone} className={cn("surface min-w-0 px-3.5 pt-2.5 pb-3", className)}>
       <div className="mb-2 flex min-h-7 flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <h3 id={id} className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          {Icon ? <Icon className="size-4 text-primary/80" aria-hidden /> : null}
+          {Icon ? (
+            <span className="grid size-6 shrink-0 place-items-center rounded-md bg-(--tone)/18 text-(--tone)">
+              <Icon className="size-4" aria-hidden />
+            </span>
+          ) : null}
           {title}
         </h3>
         {action ? <div className="ml-auto flex flex-wrap items-center gap-1.5">{action}</div> : null}

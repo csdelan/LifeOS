@@ -28,7 +28,7 @@ export function StartTrackingCard({ weight }: { weight: MetricTemplate }) {
   }
 
   return (
-    <section aria-labelledby={`${id}-title`} className="space-y-4 rounded-xl bg-card p-5 ring-1 ring-foreground/10">
+    <section aria-labelledby={`${id}-title`} data-tone="green" className="surface space-y-4 p-5">
       <div className="flex items-start gap-3">
         <span className="rounded-lg bg-muted p-2" aria-hidden>
           <WeightIcon className="size-5 text-muted-foreground" />

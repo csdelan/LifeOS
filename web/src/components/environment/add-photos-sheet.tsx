@@ -335,7 +335,8 @@ function AddPhotosForm({
             {rows.map((row, i) => (
               <li
                 key={row.key}
-                className="flex gap-3 rounded-xl p-2 ring-1 ring-foreground/10"
+                data-tone="blue"
+                className="surface flex gap-3 p-2"
                 data-testid="pending-photo"
               >
                 <img src={row.url} alt="" className="size-20 shrink-0 rounded-lg object-cover" />

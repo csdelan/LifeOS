@@ -84,7 +84,8 @@ export function MealGallery({
         icon={UtensilsIcon}
         title="Nothing logged"
         description="Log what you eat and drink with calories: the day's diet XP comes from its quality, its calories and your fasting."
-        className="rounded-xl ring-1 ring-foreground/10"
+        data-tone="green"
+        className="surface"
       />
     );
   }
@@ -112,7 +113,8 @@ export function MealGallery({
                     ? `${name}${drink}, ${range}: show the ${group.count} entries`
                     : `${name}${drink}, ${range}: change, delete or have another`
                 }
-                className="flex h-full w-full items-stretch gap-3 rounded-xl bg-card p-3 text-left ring-1 ring-foreground/10 transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50"
+                data-tone="green"
+                className="surface flex h-full w-full items-stretch gap-3 p-3 text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50"
               >
                 {photo ? (
                   // The thumbnail is its own button, laid over this spot.

@@ -35,7 +35,8 @@ export function PeoplePage() {
             <li key={p.id}>
               <button
                 type="button"
-                className="flex min-h-11 w-full cursor-pointer items-center justify-between rounded-xl bg-card px-4 py-3 text-left ring-1 ring-foreground/10 focus-visible:ring-2 focus-visible:ring-ring/50"
+                data-tone="rose"
+                className="surface flex min-h-11 w-full cursor-pointer items-center justify-between px-4 py-3 text-left focus-visible:ring-2 focus-visible:ring-ring/50"
                 onClick={() => void navigate({ to: "/map", search: { selected: p.id } })}
               >
                 <div className="flex min-w-0 items-center gap-3">

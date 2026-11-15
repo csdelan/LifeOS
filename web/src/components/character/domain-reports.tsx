@@ -127,8 +127,9 @@ export function DomainReports() {
         <ReadFailed read={report} what="The report" />
         {report.data ? (
           <div
+            data-tone="green"
             className={cn(
-              "space-y-6 rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-opacity",
+              "surface space-y-6 p-4 transition-opacity",
               report.isPlaceholderData && "opacity-60",
             )}
           >
@@ -153,7 +154,7 @@ export function DomainReports() {
         </div>
         {domains.isLoading ? <ListSkeleton rows={1} /> : null}
         {levels.length > 0 ? (
-          <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+          <div data-tone="green" className="surface p-4">
             {levels.length >= SPIDER_MIN ? <LevelSpider points={levels} /> : <LevelBars points={levels} />}
           </div>
         ) : null}
@@ -686,7 +687,8 @@ function ReportTable({
       tabIndex={0}
       role="region"
       aria-label={`Every life domain over the last ${label}, as a table`}
-      className="overflow-x-auto rounded-xl bg-card ring-1 ring-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      data-tone="green"
+      className="surface overflow-x-auto focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <table className="w-full text-sm whitespace-nowrap">
         <caption className="sr-only">Every life domain over the last {label}</caption>

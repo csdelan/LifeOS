@@ -79,7 +79,8 @@ export function TaskTimerPanel({
   return (
     <section
       aria-label="Timer"
-      className={cn("rounded-lg border bg-muted/30 px-3 py-2", className)}
+      data-tone="blue"
+      className={cn("surface px-3 py-2", className)}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {active ? (

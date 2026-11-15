@@ -26,7 +26,7 @@ export function AreasPage() {
         />
         <ul className="mt-8 space-y-3">
           {(data ?? []).map((a) => (
-            <li key={a.id} className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+            <li key={a.id} data-tone="teal" className="surface p-4">
               <h2 className="font-heading text-xl">{a.name}</h2>
               <p className="mt-1 text-sm text-muted-foreground">{a.description}</p>
             </li>

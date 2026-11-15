@@ -163,14 +163,14 @@ export function GalleryPage() {
         </Section>
 
         <Section title="ListRow">
-          <div className="rounded-xl bg-card p-2 ring-1 ring-foreground/10">
+          <div data-tone="teal" className="surface p-2">
             <ListRow item={sample} selected />
             <ListRow item={{ ...sample, id: "2", title: "Buy race shoes", due: addDays(todayIso(), -2), status: "Not started" }} />
           </div>
         </Section>
 
         <Section title="TreeNode">
-          <ul className="rounded-xl bg-card p-2 ring-1 ring-foreground/10" aria-label="Example outline">
+          <ul data-tone="teal" className="surface p-2" aria-label="Example outline">
             <TreeNode
               subject={{ ...sample, type: "Value", title: "Craftsman of systems", status: null, due: null }}
               depth={0}
@@ -244,7 +244,7 @@ export function GalleryPage() {
             Live mock subject — read-only first, explicit Edit / Save / Cancel. Tags and
             Relationships are visually separate.
           </p>
-          <div className="h-[32rem] overflow-hidden rounded-xl bg-card shadow-(--shadow-lift) ring-1 ring-foreground/10">
+          <div data-tone="teal" className="surface h-[32rem] overflow-hidden shadow-(--shadow-lift)">
             <SubjectDetail subjectId="goal-lifeos" />
           </div>
         </Section>

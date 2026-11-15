@@ -45,7 +45,9 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   are in `lib/reads.ts`. A feature's types, reads, writes, effects, query keys and
   hooks live in `lib/features/<feature>/` and are spread into the shared seams
   (`features/measurements` is the pattern; the other features move there as they're next
-  worked on). Pages load lazily (`lazyRouteComponent` in `router.tsx`).
+  worked on). Pages load lazily (`lazyRouteComponent` in `router.tsx`). A card, or a group on
+  a detail, is a `surface` with the `data-tone` of what it holds (`lib/tones.ts`, `index.css`);
+  `surfaces.test.ts` finds a card built by hand from `rounded-xl` and a faint ring.
   A screen reads what it shows: a picker over every item searches on the server
   (`SubjectSearchCombobox`), Browse pages on the server (`GET /api/browse`), the Map reads what it
   draws (`GET /api/alignment`, which `/mcp`'s alignment shares), and `src/lib/scoped-reads.test.ts`

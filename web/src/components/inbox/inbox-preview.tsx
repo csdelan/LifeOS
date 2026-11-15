@@ -285,7 +285,7 @@ export function ResolvedPreview({
 
       <TagEditor item={item} hint="Tagging here doesn't change where it lives." />
 
-      <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+      <section data-tone="ember" className="surface p-4">
         <p className="text-sm font-medium">Back to Inbox</p>
         <p className="mb-3 text-xs text-muted-foreground">
           {reopen
@@ -322,8 +322,9 @@ function ActionCard({
   return (
     <section
       onFocus={onFocus}
+      data-tone="ember"
       className={cn(
-        "rounded-xl bg-card p-4 ring-1 ring-foreground/10",
+        "surface p-4",
         active && "ring-primary/40",
       )}
     >

@@ -34,7 +34,8 @@ export function TreeSkeleton() {
 export function CardSkeleton() {
   return (
     <div
-      className="rounded-xl bg-card p-4 ring-1 ring-foreground/10"
+      data-tone="teal"
+      className="surface p-4"
       role="status"
       aria-label="Loading"
       aria-busy="true"

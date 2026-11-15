@@ -23,7 +23,7 @@ export function TodayAppointments({
   const { data, isLoading, isError } = appointments;
 
   return (
-    <section className={cn("rounded-xl bg-card p-4 ring-1 ring-foreground/10", className)}>
+    <section data-tone="blue" className={cn("surface p-4", className)}>
       <h2 className="type-scale-section mb-3 text-muted-foreground">Today's appointments</h2>
       {isLoading ? (
         <ListSkeleton rows={2} />

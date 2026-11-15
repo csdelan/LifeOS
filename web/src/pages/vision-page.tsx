@@ -140,7 +140,8 @@ function GalleryTile({
 }) {
   return (
     <article
-      className="relative flex w-full flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow hover:shadow-(--shadow-lift) has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ring/50"
+      data-tone="teal"
+      className="surface relative flex w-full flex-col overflow-hidden transition-shadow hover:shadow-(--shadow-lift) has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ring/50"
     >
       {item.cover ? (
         <CoverImage

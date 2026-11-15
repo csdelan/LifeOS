@@ -49,7 +49,7 @@ export function AttachmentChip({
   return (
     <div
       className={cn(
-        "rounded-xl border bg-card p-3 ring-1 ring-foreground/10",
+        "rounded-lg border bg-card p-3",
         className,
       )}
     >

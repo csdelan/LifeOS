@@ -242,7 +242,8 @@ function AgentCard({
   return (
     <article
       aria-labelledby={titleId}
-      className="rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10"
+      data-tone="teal"
+      className="surface px-4 py-3"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">

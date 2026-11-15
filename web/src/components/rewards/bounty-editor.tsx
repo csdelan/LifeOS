@@ -231,7 +231,7 @@ export function BountySection({
   );
   if (framed) {
     return (
-      <DetailSection title="Bounty" icon={CoinsIcon} action={change}>
+      <DetailSection title="Bounty" tone="amber" icon={CoinsIcon} action={change}>
         {body}
       </DetailSection>
     );

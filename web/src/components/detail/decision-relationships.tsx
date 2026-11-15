@@ -154,7 +154,7 @@ function RelationGroup({
   onOpenSubject?: (id: string) => void;
 }) {
   return (
-    <DetailSection title={title}>
+    <DetailSection title={title} tone="blue">
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       {rows.length > 0 ? (
         <ul className="space-y-1.5">

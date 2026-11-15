@@ -70,7 +70,7 @@ export function HomeScoreChart({ levelBar }: { levelBar?: LevelBarLine }) {
   ];
 
   return (
-    <section aria-labelledby={titleId} className="space-y-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+    <section aria-labelledby={titleId} data-tone="blue" className="surface space-y-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h2 id={titleId} className="font-heading text-xl">
           Home Score by day

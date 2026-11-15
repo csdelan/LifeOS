@@ -26,7 +26,8 @@ export function ConnectCard({
   return (
     <section
       aria-labelledby="connect-title"
-      className="mx-auto max-w-lg space-y-4 rounded-xl bg-card p-5 ring-1 ring-foreground/10"
+      data-tone="green"
+      className="surface mx-auto max-w-lg space-y-4 p-5"
     >
       <h2 id="connect-title" className="font-heading text-xl">
         Connect Oura

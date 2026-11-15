@@ -99,7 +99,7 @@ export function MetricListRow({
     ? `${group.name}: ${value}${flags ? `, ${flags.toLowerCase()}` : ""}, ${when}`
     : `${group.name}: nothing logged yet`;
   return (
-    <li className="rounded-xl bg-card ring-1 ring-foreground/10" data-testid="metric-list-row">
+    <li data-tone="green" className="surface" data-testid="metric-list-row">
       <div className="flex items-center gap-2 py-1.5 pr-3 pl-1.5">
         <Heading className="min-w-0 flex-1">
           <button
@@ -179,7 +179,7 @@ export function ArchivedMetrics({ groups }: { groups: MetricGroup[] }) {
       <h2 id={titleId} className="text-sm font-medium text-muted-foreground">
         Archived
       </h2>
-      <ul className="divide-y rounded-xl ring-1 ring-foreground/10" aria-label="Archived metrics">
+      <ul data-tone="green" className="surface divide-y" aria-label="Archived metrics">
         {groups.map((group) => {
           const on = group.metrics[0].archivedOn;
           const count = group.metrics.reduce((n, m) => n + m.readings, 0);

@@ -90,7 +90,7 @@ export function FoodPeriodView({
     <div className={cn("space-y-6 transition-opacity", stale && "opacity-60")} aria-busy={stale || undefined}>
       <PeriodTotals days={days} today={today} unit={unit} sobriety={range.data?.sobriety ?? null} />
 
-      <section aria-labelledby="period-title" className="min-w-0 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+      <section aria-labelledby="period-title" data-tone="green" className="surface min-w-0 p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 id="period-title" className="type-scale-section text-muted-foreground">
             Diet XP by day
@@ -159,8 +159,9 @@ function PeriodTotals({
   return (
     <dl
       aria-label={`Totals for this ${unit}`}
+      data-tone="green"
       className={cn(
-        "grid grid-cols-2 gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10",
+        "surface grid grid-cols-2 gap-3 p-4",
         sobriety ? "md:grid-cols-3" : "md:grid-cols-4",
       )}
     >

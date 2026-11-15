@@ -122,7 +122,7 @@ export function CharacterPage() {
             </h2>
             <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {others.map((d) => (
-                <li key={d.key} className="rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10">
+                <li key={d.key} data-tone="green" className="surface px-4 py-3">
                   <p className="flex items-baseline justify-between gap-2">
                     <span className="font-medium">
                       <span aria-hidden>{domainSymbol(d.key)} </span>
@@ -180,7 +180,7 @@ function DomainCard({ domain }: { domain: DomainRow }) {
   const fallHistory = fallHistoryText(domain);
 
   return (
-    <section aria-labelledby={headingId} className="rounded-xl bg-card ring-1 ring-foreground/10">
+    <section aria-labelledby={headingId} data-tone="green" className="surface">
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
         <h2 id={headingId} className="font-heading text-xl">
           <span aria-hidden>{domainSymbol(domain.key)} </span>
@@ -454,7 +454,7 @@ function RankLadder({ domain }: { domain: DomainRow }) {
       <h2 id={headingId} className="type-scale-section mb-3 text-muted-foreground">
         {domain.name} ranks
       </h2>
-      <ol className="divide-y rounded-xl bg-card ring-1 ring-foreground/10">
+      <ol data-tone="green" className="surface divide-y">
         {ranks.map((r) => {
           const current = r.rank === held;
           const isBest = r.rank === best && best > held;

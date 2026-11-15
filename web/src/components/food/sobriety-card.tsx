@@ -11,7 +11,7 @@ import { sobrietyDetail, sobrietyHeadline } from "@/lib/sobriety";
 export function SobrietyCard({ sobriety, today }: { sobriety: SobrietyRow | null; today: string }) {
   if (!sobriety) return null;
   return (
-    <section aria-labelledby="sobriety-title" className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+    <section aria-labelledby="sobriety-title" data-tone="green" className="surface p-4">
       <h2 id="sobriety-title" className="type-scale-section text-muted-foreground">
         Sobriety streak{sobriety.asOf === today ? "" : `, as of ${formatDay(sobriety.asOf)}`}
       </h2>

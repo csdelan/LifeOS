@@ -581,7 +581,7 @@ function PeriodReport({
           {groups.map((g) => (
             <li key={g.date}>
               <h4 className="mb-1.5 text-xs font-medium text-muted-foreground">{formatDayFull(g.date)}</h4>
-              <ul className="divide-y rounded-xl ring-1 ring-foreground/10">
+              <ul data-tone="amber" className="surface divide-y">
                 {g.rows.map((row) => (
                   <LedgerEntry key={row.id} row={row} onOpenSubject={onOpenSubject} />
                 ))}

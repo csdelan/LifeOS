@@ -56,7 +56,7 @@ export function SummaryCard({ summary, isToday }: { summary: FoodDaySummary; isT
         : "Pays when you close the day";
 
   return (
-    <section aria-labelledby="diet-title" className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+    <section aria-labelledby="diet-title" data-tone="green" className="surface p-4">
       <h2 id="diet-title" className="type-scale-section text-muted-foreground">
         Diet XP
       </h2>

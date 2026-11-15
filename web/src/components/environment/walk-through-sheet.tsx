@@ -300,7 +300,7 @@ function WalkThroughForm({
               const panelId = `${ids}-${space.id}-panel`;
               const picks = picksText(draft);
               return (
-                <li key={space.id} className="rounded-xl ring-1 ring-foreground/10" data-testid="walk-through-space">
+                <li key={space.id} data-tone="blue" className="surface" data-testid="walk-through-space">
                   <h3>
                     <button
                       type="button"

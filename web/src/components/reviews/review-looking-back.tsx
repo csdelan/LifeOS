@@ -164,7 +164,7 @@ function RecapList({ sections }: { sections: RecapSection[] }) {
   return (
     <div className="mt-4 space-y-4">
       {sections.map((section) => (
-        <div key={section.id} className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+        <div key={section.id} data-tone="violet" className="surface p-4">
           <h3 className="type-scale-section text-muted-foreground">{section.label}</h3>
           {section.items.length === 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">Nothing recorded.</p>

@@ -211,6 +211,19 @@
   --type-habit: oklch(0.44 0.07 155);
   --type-appointment: oklch(0.5 0.1 35);
   --type-reward: oklch(0.53 0.13 60);
+  /* Tones (UI polish, 2026-11-15): the colour of a card or a detail's section, by what it holds,
+     on its edge, the line along its top, a light tint and its icon's tile. Teal is the item and
+     its purpose (the default); blue when things happen and how they connect; amber rewards and
+     money; violet what repeats and reflection; green health and growth; ember what needs
+     attention; rose people. Each reaches 3:1 or more on its icon tile. */
+  --tone-teal: oklch(0.48 0.09 168);
+  --tone-blue: oklch(0.5 0.12 250);
+  --tone-amber: oklch(0.55 0.13 70);
+  --tone-violet: oklch(0.5 0.13 305);
+  --tone-green: oklch(0.5 0.11 145);
+  --tone-ember: oklch(0.55 0.15 40);
+  --tone-rose: oklch(0.52 0.14 355);
+  --surface-tint: 6%;
 }
 
 .dark {
@@ -228,7 +241,9 @@
   --muted-foreground: oklch(0.78 0.02 90);
   --accent: oklch(0.27 0.024 170);
   --accent-foreground: oklch(0.94 0.01 85);
-  --destructive: oklch(0.7 0.16 22);
+  /* Lighter than the other dark tones: it's read as small text on its own faint tint, often on
+     a tinted surface, and still clears 4.5:1 there. */
+  --destructive: oklch(0.76 0.14 22);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 14%);
   --ring: oklch(0.78 0.08 168);
@@ -315,6 +330,14 @@
   --type-habit: oklch(0.78 0.07 155);
   --type-appointment: oklch(0.8 0.08 45);
   --type-reward: oklch(0.8 0.11 65);
+  --tone-teal: oklch(0.8 0.1 168);
+  --tone-blue: oklch(0.8 0.1 250);
+  --tone-amber: oklch(0.83 0.11 75);
+  --tone-violet: oklch(0.8 0.1 305);
+  --tone-green: oklch(0.8 0.11 145);
+  --tone-ember: oklch(0.8 0.12 40);
+  --tone-rose: oklch(0.8 0.1 355);
+  --surface-tint: 8%;
 }
 
 @layer base {
@@ -401,11 +424,50 @@
   }
 }
 
+/* A card, or a section of an item's detail: a surface tinted with its tone (see --tone-teal),
+   with an edge and a line along its top in that tone. data-tone names the tone, teal when it
+   names none; a card with a colour of its own sets --surface-tone instead (the Activity page's).
+   Inside it, --tone is that colour, for an icon's tile (bg-(--tone)/18 text-(--tone)). The ring
+   and the line are Tailwind's ring and inset shadows, so a focus ring on a card still shows. */
+@utility surface {
+  --tone: var(--surface-tone, var(--tone-teal));
+  border-radius: var(--radius-xl);
+  background-color: color-mix(in oklch, var(--card), var(--tone) var(--surface-tint));
+  --tw-ring-color: color-mix(in oklch, var(--tone) 38%, transparent);
+  --tw-ring-shadow: 0 0 0 1px var(--tw-ring-color);
+  --tw-inset-shadow: inset 0 2px 0 0 color-mix(in oklch, var(--tone) 70%, transparent);
+  box-shadow:
+    var(--tw-inset-shadow), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+  &[data-tone="blue"] {
+    --tone: var(--tone-blue);
+  }
+  &[data-tone="amber"] {
+    --tone: var(--tone-amber);
+  }
+  &[data-tone="violet"] {
+    --tone: var(--tone-violet);
+  }
+  &[data-tone="green"] {
+    --tone: var(--tone-green);
+  }
+  &[data-tone="ember"] {
+    --tone: var(--tone-ember);
+  }
+  &[data-tone="rose"] {
+    --tone: var(--tone-rose);
+  }
+}
+
 /* High-contrast mode drops background colours: keep the bars, and the hatching, visible. */
 @media (forced-colors: active) {
   [data-metric-bar] {
     background-color: CanvasText;
     forced-color-adjust: none;
+  }
+  /* A surface's edge is a shadow, which this mode drops: outline it instead. */
+  .surface {
+    outline: 1px solid CanvasText;
   }
   /* The banner's scene keeps its own fills, which the system's text colour may not read on. */
   [data-banner-scene] {

@@ -87,6 +87,7 @@ export function RepeatPanel({
   return (
     <DetailSection
       title="Repeats"
+      tone="violet"
       icon={RepeatIcon}
       action={
         <>

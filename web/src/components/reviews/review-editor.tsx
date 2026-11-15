@@ -55,7 +55,7 @@ export function ReviewEditor({
 
       <section className="space-y-4">
         <h2 className="font-heading text-xl">Planning {reviewSpan(doc.planStart, doc.planEnd)}</h2>
-        <div className="flex items-center justify-between rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+        <div data-tone="violet" className="surface flex items-center justify-between p-4">
           <div>
             <p className="type-scale-section text-attention">Primary focus</p>
             <p className="font-heading text-xl">{dash?.primaryFocus.title ?? "—"}</p>
@@ -125,7 +125,7 @@ function ReviewReflectionSection({ doc, onDictate }: { doc: ReviewDoc; onDictate
         Reflection
       </h2>
       {reflection ? (
-        <div className="space-y-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+        <div data-tone="violet" className="surface space-y-3 p-4">
           <p className="text-sm whitespace-pre-wrap">{reflection.summary}</p>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <a

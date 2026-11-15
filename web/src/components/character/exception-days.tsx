@@ -39,7 +39,7 @@ export function ExceptionDays({ today }: { today: string }) {
   }
 
   return (
-    <section aria-labelledby={headingId} className="rounded-xl bg-card ring-1 ring-foreground/10">
+    <section aria-labelledby={headingId} data-tone="violet" className="surface">
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
         <h2 id={headingId} className="font-heading text-lg">
           Exception days

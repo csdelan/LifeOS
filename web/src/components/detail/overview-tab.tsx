@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DetailSection, PropertyList } from "@/components/primitives/detail-section";
+import type { Tone } from "@/lib/tones";
 import { FieldBlock } from "@/components/create/subject-type-fields";
 import { useFieldOptions, type FieldLayout } from "@/components/create/field-options";
 import { AttachmentChip } from "@/components/artifacts/attachment-chip";
@@ -33,6 +34,9 @@ import {
 } from "@/lib/subject-forms";
 import { useWriteAction } from "@/lib/write-action";
 import { EstablishmentPanel } from "./establishment-panel";
+
+/** Each group's colour (`lib/tones.ts`): a Habit's loop is growth, the dates are when. */
+const GROUP_TONE: Record<"loop" | "details" | "when", Tone> = { loop: "green", details: "teal", when: "blue" };
 
 /**
  * An item's Overview, in groups: what it's about as prose, then its details and dates as label
@@ -94,7 +98,7 @@ export function OverviewTab({
   const group = (key: "loop" | "details" | "when", icon: typeof SlidersHorizontalIcon) => {
     const fields = groups[key];
     return fields ? (
-      <DetailSection title={groupTitle(key, type)} icon={icon}>
+      <DetailSection title={groupTitle(key, type)} tone={GROUP_TONE[key]} icon={icon}>
         <PropertyList>{fieldsOf(fields)}</PropertyList>
       </DetailSection>
     ) : null;
@@ -159,7 +163,7 @@ export function OverviewTab({
           editRows={editing && repeatFields.length > 0 ? fieldsOf(repeatFields) : undefined}
         />
       ) : repeatFields.length > 0 && (editing || hasRepeat) ? (
-        <DetailSection title={groupTitle("repeat", type)} icon={RepeatIcon}>
+        <DetailSection title={groupTitle("repeat", type)} tone="violet" icon={RepeatIcon}>
           <PropertyList>{fieldsOf(repeatFields)}</PropertyList>
           {/* Making occurrences is a write of its own, so it waits until the edit is saved. */}
           {subject.type === "Appointment" && savedPattern && !editing ? (
@@ -168,7 +172,7 @@ export function OverviewTab({
         </DetailSection>
       ) : null}
       {(files ?? []).length > 0 ? (
-        <DetailSection title="Files" icon={PaperclipIcon}>
+        <DetailSection title="Files" tone="teal" icon={PaperclipIcon}>
           <p className="text-xs text-muted-foreground">Related documents and kept audio. Open plays the managed copy.</p>
           <ul className="space-y-2">
             {(files ?? []).map((file) => (

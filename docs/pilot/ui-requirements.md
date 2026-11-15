@@ -533,6 +533,20 @@ the columns shown.
   same groups with the inputs in them; a hint or the required mark shows only while editing, and
   Stop repeating, Repeat again and Mark missed wait until the edit is saved. The ID and Archive
   close the tab. Relationships uses the same cards. Each group's title names it as a region.
+- Section colours (web, 2026-11-15): every card on every page, and every group on a detail, is
+  coloured by what it holds, so it stands out against the page in the dark and its colour says
+  something. Chris chose this from five looks (a lighter surface, a teal tint, a teal line along
+  the top, a teal bar down the left, and colour by section). Each card has a light tint, an edge
+  and a line along its top in its colour, and a detail's group puts its icon on a tile of it.
+  Teal is the item and its purpose (Details, Goals, the primary focus, and any card with no other
+  colour); blue when things happen and how they connect (Dates, appointments, Parents and
+  Children, the Timer, Environment); amber rewards and money (Bounty, the wallet's spendable
+  currencies, treats, the ledger); violet what repeats and reflection (Repeats, reviews,
+  exception days); green health and growth (a Habit's loop, Establishing, habits, food,
+  measurements, Character, the XP currencies, savings goals); ember what needs attention
+  (Streak, the Inbox, Due & overdue); rose people. The Activity page's cards keep their own
+  colours. The dark theme's red is lighter, so small red text on its tint still reads at 4.5:1
+  on a tinted card.
 
 
 

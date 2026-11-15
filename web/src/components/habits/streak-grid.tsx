@@ -54,6 +54,7 @@ export function StreakGrid({
   return (
     <DetailSection
       title="Streak"
+      tone="ember"
       icon={FlameIcon}
       action={
         <>

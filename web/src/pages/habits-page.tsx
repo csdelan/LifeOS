@@ -193,8 +193,9 @@ function HabitItem({
   return (
     <li>
       <div
+        data-tone="green"
         className={cn(
-          "flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2.5 ring-1 ring-foreground/10 sm:flex-nowrap",
+          "surface flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 sm:flex-nowrap",
           today ? HABIT_STATE_ROW[today.state] : null,
           selected && "bg-primary/8 ring-primary/20",
         )}
@@ -257,8 +258,9 @@ function PlannedSection({
         {habits.map((h) => (
           <li key={h.id}>
             <div
+              data-tone="green"
               className={cn(
-                "flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2.5 ring-1 ring-foreground/10 sm:flex-nowrap",
+                "surface flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 sm:flex-nowrap",
                 selected === h.id && "bg-primary/8 ring-primary/20",
               )}
             >
@@ -328,8 +330,9 @@ function GraduatedSection({
                 <button
                   type="button"
                   onClick={() => onSelect(h.id)}
+                  data-tone="green"
                   className={cn(
-                    "min-h-11 w-full rounded-xl px-3 py-2.5 text-left ring-1 ring-foreground/10 hover:bg-muted/70",
+                    "surface min-h-11 w-full px-3 py-2.5 text-left hover:bg-muted/70",
                     selected === h.id && "bg-primary/8 ring-primary/20",
                   )}
                 >
@@ -345,8 +348,9 @@ function GraduatedSection({
           return (
             <li key={h.id}>
               <div
+                data-tone="green"
                 className={cn(
-                  "flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2.5 ring-1 ring-foreground/10 sm:flex-nowrap",
+                  "surface flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 sm:flex-nowrap",
                   isMaintainedToday(today.state) ? HABIT_STATE_ROW[today.state] : null,
                   selected === h.id && "bg-primary/8 ring-primary/20",
                 )}

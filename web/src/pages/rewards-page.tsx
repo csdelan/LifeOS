@@ -27,6 +27,7 @@ import {
 } from "@/lib/rewards";
 import type { RewardRow, Wallet } from "@/lib/production-ui-types";
 import { cn } from "@/lib/utils";
+import type { Tone } from "@/lib/tones";
 import { useWriteAction } from "@/lib/write-action";
 import { ReadFailed, type Read } from "@/components/primitives/read-state";
 
@@ -191,7 +192,7 @@ export function RewardsPage() {
                 Nothing yet. Complete a task or follow a habit to start earning.
               </p>
             ) : null}
-            <ul className="divide-y rounded-xl ring-1 ring-foreground/10">
+            <ul data-tone="amber" className="surface divide-y">
               {(ledger.data ?? []).map((row) => (
                 <li key={row.id} className="flex items-baseline justify-between gap-3 px-3 py-2.5 text-sm">
                   <div className="min-w-0">
@@ -288,7 +289,8 @@ function WalletSection({
             return (
               <li
                 key={line.currency}
-                className="rounded-xl px-3 py-3 ring-1 ring-foreground/10"
+                data-tone={line.spendable ? "amber" : "green"}
+                className="surface px-3 py-3"
                 aria-label={`${line.label}: ${balance.toLocaleString()}`}
               >
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -343,8 +345,10 @@ function CardShell({
   onEdit: () => void;
   children: React.ReactNode;
 }) {
+  // A treat is spending, in the rewards' amber; a savings goal is growth, in green.
+  const tone: Tone = reward.kind === "savings" ? "green" : "amber";
   return (
-    <div className="flex h-full flex-col gap-2 rounded-xl px-4 py-3 ring-1 ring-foreground/10">
+    <div data-tone={tone} className="surface flex h-full flex-col gap-2 px-4 py-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate font-medium">{reward.name}</h3>
@@ -466,7 +470,7 @@ function ArchivedRow({ reward }: { reward: RewardRow }) {
   const writes = useWrites();
   const { run, pending } = useWriteAction({ report: "toast" });
   return (
-    <li className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 ring-1 ring-foreground/10">
+    <li data-tone="amber" className="surface flex items-center justify-between gap-3 px-3 py-2">
       <span className="truncate text-sm text-muted-foreground">{reward.name}</span>
       <Button
         size="sm"

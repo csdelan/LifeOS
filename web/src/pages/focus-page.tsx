@@ -99,7 +99,7 @@ export function FocusPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card tone="ember">
             <CardHeader>
               <p className="type-scale-section text-muted-foreground">Inbox</p>
               <CardTitle className="font-heading text-4xl tabular-nums">
@@ -128,7 +128,7 @@ export function FocusPage() {
         />
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+          <section data-tone="ember" className="surface p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="type-scale-section text-attention">Due & overdue</h2>
               <Link to="/tasks" className="text-xs text-muted-foreground hover:text-foreground">
@@ -169,7 +169,7 @@ export function FocusPage() {
             )}
           </section>
 
-          <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+          <section data-tone="green" className="surface p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="type-scale-section text-muted-foreground">Today's habits</h2>
               <Link to="/habits" className="text-xs text-muted-foreground hover:text-foreground">
@@ -221,7 +221,7 @@ export function FocusPage() {
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+          <section data-tone="teal" className="surface p-4">
             <h2 className="type-scale-section mb-3 text-muted-foreground">Active goals</h2>
             {data.activeGoals.length === 0 ? (
               <EmptyState title="No active goals" className="py-6" />
@@ -239,7 +239,7 @@ export function FocusPage() {
               ))
             )}
           </section>
-          <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+          <section data-tone="blue" className="surface p-4">
             <h2 className="type-scale-section mb-3 text-muted-foreground">Active projects</h2>
             {data.activeProjects.length === 0 ? (
               <EmptyState title="No active projects" className="py-6" />
@@ -260,7 +260,7 @@ export function FocusPage() {
         </div>
 
         {data.nextActions.length > 0 ? (
-          <section className="mt-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+          <section data-tone="teal" className="surface mt-4 p-4">
             <h2 className="type-scale-section mb-3 text-muted-foreground">In progress</h2>
             {isLoading ? <ListSkeleton rows={3} /> : data.nextActions.map((t) => (
               <ListRow

@@ -36,7 +36,7 @@ export function FastingCard({ day }: { day: FoodDayRead }) {
   );
 
   return (
-    <section aria-labelledby="fasting-title" className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+    <section aria-labelledby="fasting-title" data-tone="green" className="surface p-4">
       <h2 id="fasting-title" className="type-scale-section mb-3 flex items-center gap-1.5 text-muted-foreground">
         <HourglassIcon className="size-3.5" aria-hidden />
         Fasting

@@ -37,7 +37,7 @@ export function EstablishmentPanel({
   const fields = establishment ? targetFields(establishment) : null;
   const problem = editing ? targetProblem(draft) : null;
   return (
-    <DetailSection title="Establishing" icon={SproutIcon}>
+    <DetailSection title="Establishing" tone="green" icon={SproutIcon}>
       {stage === "planned" ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm">
