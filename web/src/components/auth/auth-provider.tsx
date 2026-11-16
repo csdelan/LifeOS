@@ -62,7 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     if (live) {
-      await (await getSupabase()).auth.signOut();
+      // This browser only. Supabase's default, "global", ends every session of the account, and
+      // the agents Chris connects (the claude.ai connector, the nightly sweep's) sign in as him:
+      // signing out on one device left the connector unable to renew, and it read nothing until
+      // it was connected again (2026-11-16).
+      await (await getSupabase()).auth.signOut({ scope: "local" });
     }
     setSession(null);
     queryClient.clear();
