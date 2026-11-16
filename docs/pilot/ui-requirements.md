@@ -2365,6 +2365,14 @@ Horizon:    Pilot phase 2
 Definition: active
 Build:      building
 
+**Update (2026-11-16 — the daily and weekly reviews are built):** the API and the live page
+came on 2026-11-08 (reviews plan R2, R3). The answers moved into the vault (R5) and were first
+used for Sun Nov 15, so REVIEW-1 and REVIEW-2 are `built`. This one stays `building` for what's
+left (reviews plan §7):
+- monthly reviews (REVIEW-3);
+- the guided reflection-then-planning flow;
+- a missed review showing wherever other due or missed things do.
+
 **Workflow (Chris):**
 - Daily, weekly, and monthly review sessions are commitments I make to myself, not optional
   informational reminders in a separate notification system.
@@ -2427,7 +2435,13 @@ up (reviews plan §4). Build stays `building`: the API and the live page are nex
 ### REVIEW-1 — I want to perform daily reviews
 Horizon:    Pilot phase 2
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-11-16 — answered by dictation, reviews plan R5):** Chris dictated his daily
+reflection for Sun Nov 15 on his phone with the keyboard's mic (CAP-2). The sweep filed it as a
+vault note, now linked to the review, and Chris checked on staging that the page shows its
+summary and *Open in Obsidian*. Build is `built`. Still to come (reviews plan §7): a reason for
+a missed review.
 
 **Update (2026-11-12 — answers move to the notes vault):** Chris chose to dictate his
 reflections and have an agent format each into a note in his Obsidian vault, in the Notes
@@ -2533,7 +2547,15 @@ plan R5).
 ### REVIEW-2 — I want to perform weekly reviews (every Sunday)
 Horizon:    Pilot phase 2
 Definition: active
-Build:      building
+Build:      built
+
+**Update (2026-11-16 — answered by dictation, reviews plan R5):** the first weekly review, Sun
+Nov 15, was dictated on Chris's laptop. The sweep filed it as a vault note, now linked to the
+review, and the page shows its summary and *Open in Obsidian*. He came to it at 12:01 AM Monday,
+a minute after its day ended, wrote it late, and kept the rule of no grace period. Build is
+`built`. Still to come (reviews plan §7):
+- the weekly-specific questions;
+- Goals whose target date lands in the coming week.
 
 **Update (2026-11-12 — answers move to the notes vault):** as REVIEW-1: the weekly
 reflection is dictated and filed as a vault note the review links to (reviews plan §4, R5),

@@ -249,6 +249,10 @@ browser, is #28's and #29's design, so no port is built ahead of it.
   carry its hosting alone, so it restarts when SuperJournal is stood up for BlueSkies
   (csdelan/BlueSkies.Platform#68). #29 is closed as superseded, and #28's branch stays parked,
   not rebased.
+- **2026-11-16, Chris:** no grace period. His first weekly review was still open at 12:01 AM
+  Monday, a minute after its day ended, so the page had turned to the next week. He weighed
+  letting a review's day run to 3 or 4 AM, then kept the rule as it is: "don't change it". He
+  wrote it late from the Weekly tab's previous week, and it reads Completed late.
 - **Filled in here:** lazy creation on first open; one per kind and period; nothing opens ahead
   of its day; Missed read, not written; a late completion stays missed; Missed as Drop's status;
   keep focus on by default.
@@ -273,5 +277,5 @@ browser, is #28's and #29's design, so no port is built ahead of it.
 - [x] R3 — The live Reviews page
 - [x] R4 — Answers until SuperJournal: Chris chose to wait, so nothing was built (§4).
   Superseded on 2026-11-12, when the answers moved to the notes vault (R5)
-- [ ] R5 — Answers in the notes vault (built 2026-11-12, migration 0054, §4.1; done when a daily
-  and a weekly review have been answered by dictation, notes plan N8)
+- [x] R5 — Answers in the notes vault (built 2026-11-12, migration 0054, §4.1; the first daily
+  and weekly, for Sun 2026-11-15, were dictated, filed and linked on 2026-11-16, notes plan N8)
