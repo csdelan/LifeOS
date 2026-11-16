@@ -553,8 +553,9 @@ export interface ResolvedInboxItem extends InboxItem {
 }
 
 /**
- * Metadata for a managed binary artifact (`bsk.v_artifact` / `artifact_blob`).
- * Bytes are not inlined — fetch them via `LifeOsReads.artifactBytesUrl`.
+ * Metadata for a managed binary artifact (`bsk.v_artifact` / `artifact_blob`). Its bytes are
+ * never on the record, live or mock: a screen gets them from `LifeOsReads.artifactBytesUrl`
+ * (`useArtifactBytesUrl`). An Inbox voice capture's buttons once read a URL only the mock set.
  */
 export interface ArtifactRecord {
   id: string;
@@ -566,11 +567,6 @@ export interface ArtifactRecord {
   byteSize: number;
   sha256?: string | null;
   hasBytes: boolean;
-  /**
-   * Mock: an object URL for the retained blob.
-   * Live: leave unset and resolve through `artifactBytesUrl`.
-   */
-  bytesUrl?: string | null;
   /** App-side duration for voice captures; the kernel does not store this. */
   durationSeconds?: number | null;
 }

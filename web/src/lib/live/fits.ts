@@ -46,7 +46,7 @@ type Missing<G, T, AppSide extends string, P extends string = ""> = T extends re
  * The API's response as the type the app reads, checked by tsc rather than cast (code review
  * CR38): the response's generated type must fit the app's as `Widened` says it, and carry every
  * field the app's type names except the app-side ones listed, which the app fills in itself.
- * `fits<InboxItem[], "bytesUrl">()(await unwrap(...))`. A field the API drops, renames or retypes then fails
+ * `fits<InboxItem[], "durationSeconds">()(await unwrap(...))`. A field the API drops, renames or retypes then fails
  * the build here, where an `as` cast let it read as undefined.
  */
 export function fits<T, AppSide extends string = never>() {
@@ -63,4 +63,4 @@ export function fits<T, AppSide extends string = never>() {
 }
 
 /** The fields of a stored file's record that the app fills in itself (CAP-2 / CAP-4). */
-export type ArtifactAppSide = "bytesUrl" | "durationSeconds";
+export type ArtifactAppSide = "durationSeconds";

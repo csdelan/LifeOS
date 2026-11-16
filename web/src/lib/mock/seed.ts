@@ -100,6 +100,8 @@ export interface MockState {
   concerning: Record<string, ConcerningEvent[]>;
   events: MockEvent[];
   artifacts: Record<string, ArtifactRecord>;
+  /** Each artifact's bytes as a URL, by artifact id: apart from its record, as `artifact_blob` is. */
+  artifactBytes: Record<string, string>;
   eventRelations: MockEventRelation[];
   inbox: InboxItem[];
   /** Rows that left the Inbox, newest first — mirrors `bsk.v_inbox_resolved`. */
@@ -1221,6 +1223,7 @@ export function createSeed(): MockState {
   // Option-B seed: object URL + metadata (not real kernel bytes). Inbox + one filed file.
   const events: MockEvent[] = [];
   const artifacts: Record<string, ArtifactRecord> = {};
+  const artifactBytes: Record<string, string> = {};
   const eventRelations: MockEventRelation[] = [];
 
   const docText = "%PDF-1.4\nDisputed Comcast charge — August statement, account 4421.\n";
@@ -1233,8 +1236,8 @@ export function createSeed(): MockState {
     byteSize: docText.length,
     sha256: "aa".repeat(32),
     hasBytes: true,
-    bytesUrl: dataUrlFor(docText, "application/pdf"),
   };
+  artifactBytes["art-doc-inbox"] = dataUrlFor(docText, "application/pdf");
   events.push({
     id: "inbox-doc-1",
     kind: "note",
@@ -1251,7 +1254,6 @@ export function createSeed(): MockState {
     attachment: artifacts["art-doc-inbox"],
   });
 
-  const voiceUrl = silentWavDataUrl();
   artifacts["art-voice-inbox"] = {
     id: "art-voice-inbox",
     eventId: "inbox-voice-1",
@@ -1261,9 +1263,9 @@ export function createSeed(): MockState {
     byteSize: 44,
     sha256: "bb".repeat(32),
     hasBytes: true,
-    bytesUrl: voiceUrl,
     durationSeconds: 42,
   };
+  artifactBytes["art-voice-inbox"] = silentWavDataUrl();
   events.push({
     id: "inbox-voice-1",
     kind: "voice",
@@ -1290,9 +1292,9 @@ export function createSeed(): MockState {
     byteSize: 44,
     sha256: "cc".repeat(32),
     hasBytes: true,
-    bytesUrl: silentWavDataUrl(),
     durationSeconds: 18,
   };
+  artifactBytes["art-voice-needs"] = silentWavDataUrl();
   events.push({
     id: "inbox-voice-2",
     kind: "voice",
@@ -1321,8 +1323,8 @@ export function createSeed(): MockState {
     byteSize: filedText.length,
     sha256: "dd".repeat(32),
     hasBytes: true,
-    bytesUrl: dataUrlFor(filedText, "text/plain"),
   };
+  artifactBytes["art-doc-filed"] = dataUrlFor(filedText, "text/plain");
   events.push({
     id: "event-doc-filed",
     kind: "note",
@@ -1685,6 +1687,7 @@ export function createSeed(): MockState {
     concerning,
     events,
     artifacts,
+    artifactBytes,
     eventRelations,
     inbox,
     resolved,

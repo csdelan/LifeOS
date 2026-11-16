@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RecordedAudio } from "@/components/artifacts/recorded-audio";
 import { CaptureKindTabs } from "@/components/create/capture-kind-tabs";
 import { revokeIfBlobUrl } from "@/lib/artifacts";
 import { useWrites } from "@/lib/queries";
@@ -440,13 +441,7 @@ export function VoiceCaptureDialog({
         <div className="space-y-3">
           {about ? null : <CaptureKindTabs value={kind} onChange={setKind} disabled={pending} />}
           {playbackUrl ? (
-            <audio
-              className="w-full"
-              controls
-              src={playbackUrl}
-              preload="metadata"
-              aria-label="Playback of recorded audio"
-            />
+            <RecordedAudio className="w-full" src={playbackUrl} label="Playback of recorded audio" />
           ) : null}
           <Textarea
             ref={transcriptRef}

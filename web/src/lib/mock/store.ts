@@ -165,8 +165,8 @@ export function resetStore() {
 }
 
 function revokeArtifacts(s: MockState) {
-  for (const artifact of Object.values(s.artifacts)) {
-    revokeIfBlobUrl(artifact.bytesUrl);
+  for (const url of Object.values(s.artifactBytes)) {
+    revokeIfBlobUrl(url);
   }
 }
 
@@ -883,10 +883,10 @@ export function putArtifact(opts: {
     byteSize: opts.blob.size,
     sha256: opts.sha256 ?? null,
     hasBytes: true,
-    bytesUrl: objectUrlFor(opts.blob),
     durationSeconds: opts.durationSeconds ?? null,
   };
   state.artifacts = { ...state.artifacts, [id]: record };
+  state.artifactBytes = { ...state.artifactBytes, [id]: objectUrlFor(opts.blob) };
   return record;
 }
 
@@ -937,6 +937,12 @@ export function relateEvent(eventId: string, subjectRef: string, as?: EventRelat
 
 export function getArtifact(id: string): ArtifactRecord | undefined {
   return state.artifacts[id] ?? Object.values(state.artifacts).find((a) => a.eventId === id);
+}
+
+/** An artifact's bytes as a URL, by its id or its event's, as `GET /api/artifacts/{id}/content`. */
+export function artifactBytesOf(id: string): string | undefined {
+  const artifact = getArtifact(id);
+  return artifact?.hasBytes ? state.artifactBytes[artifact.id] : undefined;
 }
 
 export function filesForSubject(subjectRef: string): ArtifactRecord[] {

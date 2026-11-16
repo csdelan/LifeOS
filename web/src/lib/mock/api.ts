@@ -75,6 +75,7 @@ import {
   detailWithBounty,
   filesForSubject,
   getArtifact,
+  artifactBytesOf,
   getState as storeState,
   listReviews,
   listTimers,
@@ -319,8 +320,7 @@ export const mockReads: LifeOsReads = {
 
   async artifactBytesUrl(id: string): Promise<string | null> {
     await wait();
-    // TODO(api): stream from the kernel's bytes-fetch / export path.
-    return getArtifact(id)?.bytesUrl ?? mockSpacePhotoUrl(id) ?? mockLabReportUrl(id);
+    return artifactBytesOf(id) ?? mockSpacePhotoUrl(id) ?? mockLabReportUrl(id);
   },
 
   async subjectFiles(subjectId: string): Promise<ArtifactRecord[]> {
