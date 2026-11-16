@@ -586,7 +586,8 @@ export interface CaptureDocumentRequest {
 }
 
 export interface CaptureVoiceRequest {
-  audioBlob: Blob;
+  /** None when a phone's keyboard dictated the words, which records nothing (CAP-2). */
+  audioBlob?: Blob;
   transcript: string;
   type: CaptureKind;
   keepAudio: boolean;

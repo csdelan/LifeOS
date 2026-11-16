@@ -1038,7 +1038,8 @@ export function captureDocument(req: {
 }
 
 export function captureVoice(req: {
-  audioBlob: Blob;
+  /** None when a phone's keyboard dictated the words (CAP-2). */
+  audioBlob?: Blob;
   transcript: string;
   type: CaptureKind;
   keepAudio: boolean;
@@ -1054,13 +1055,13 @@ export function captureVoice(req: {
   const retainAudio = req.keepAudio || needsTranscription;
   const occurredAt = nowIso();
   const eventId = newId();
-  const contentType = req.contentType || req.audioBlob.type || "audio/webm";
+  const contentType = req.contentType || req.audioBlob?.type || "audio/webm";
   const filename = req.filename || `voice-${occurredAt.slice(0, 19).replace(/[:T]/g, "-")}.${
     contentType.includes("mp4") ? "m4a" : contentType.includes("wav") ? "wav" : "webm"
   }`;
 
   let artifact: ArtifactRecord | undefined;
-  if (retainAudio) {
+  if (retainAudio && req.audioBlob) {
     artifact = putArtifact({
       eventId,
       eventKind: "voice",

@@ -161,7 +161,9 @@ Notes Spec and the dictation pipeline. For reviews it means:
    and the capture concerns it. The connector's `inbox` shows what each capture concerns, so the
    agent knows which review a dictation answers. A capture dictated anywhere else is matched by
    its words and the day it was recorded, and the agent asks in `00 Inbox` when it can't tell (a
-   Sunday's daily or weekly, say).
+   Sunday's daily or weekly, say). On a phone the button opens a text box that the keyboard's own
+   mic writes into, since Chrome on Android won't let the page record and transcribe at once
+   (CAP-2, 2026-11-16): the sweep files only words.
 4. **The page.** The Reflection section replaces the three answer boxes. It names what to talk
    about (what worked well, what to do differently, the plan), has *Dictate reflection*, and once
    the reflection is filed shows its summary and *Open in Obsidian*

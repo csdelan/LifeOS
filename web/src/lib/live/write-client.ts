@@ -342,7 +342,7 @@ export function createLiveWriteClient(): LifeOsWriteClient {
       const transcript = req.transcript.trim();
       const keep = req.keepAudio || !transcript;
       const form = new FormData();
-      if (keep) {
+      if (keep && req.audioBlob) {
         const type = req.audioBlob.type || "audio/webm";
         form.append("audio", req.audioBlob, `voice.${extensionForMime(type)}`);
       }

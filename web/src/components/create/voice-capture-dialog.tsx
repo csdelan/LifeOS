@@ -16,7 +16,8 @@ import { useWrites } from "@/lib/queries";
 import type { CaptureKind } from "@/lib/production-ui-types";
 import { errorText } from "@/lib/write-action";
 
-type Phase = "idle" | "recording" | "review" | "error";
+/** `type` is a phone's: no recording, its keyboard's dictation writes the words (below). */
+type Phase = "idle" | "recording" | "review" | "type" | "error";
 
 type SpeechCtor = new () => {
   continuous: boolean;
@@ -47,6 +48,17 @@ function pickRecorderMime(): string {
   const types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"];
   if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return "";
   return types.find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
+}
+
+/**
+ * Whether this is a phone or tablet, which dictates with its keyboard's mic rather than the page's
+ * (Chris, 2026-11-16, CAP-2). Chrome on Android gives the microphone to one listener at a time:
+ * while the page recorded the audio, its speech recognition heard nothing, so a reflection
+ * dictated on the phone kept a recording and no words, and the nightly sweep files only words.
+ * The keyboard's own dictation (Gboard's voice typing) writes into the transcript box instead.
+ */
+function dictatesWithKeyboard(): boolean {
+  return window.matchMedia?.("(pointer: coarse) and (hover: none)").matches === true;
 }
 
 /**
@@ -235,7 +247,8 @@ export function VoiceCaptureDialog({
           if (!cancelled) setTranscript(`${finals}${interim}`);
         };
         rec.onerror = (ev) => {
-          if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+          // audio-capture: something else holds the microphone, so no words will come.
+          if (ev.error === "not-allowed" || ev.error === "service-not-allowed" || ev.error === "audio-capture") {
             setForceKeep(true);
             setKeepAudio(true);
           }
@@ -256,9 +269,11 @@ export function VoiceCaptureDialog({
       }
     }
 
-    // Each opening starts a new recording, so the last one's state goes as the microphone starts.
+    // Each opening starts afresh, so the last one's state goes as the microphone starts, or on a
+    // phone as the empty box opens for the keyboard's dictation.
+    const keyboard = dictatesWithKeyboard();
     // oxlint-disable-next-line react/set-state-in-effect
-    setPhase("recording");
+    setPhase(keyboard ? "type" : "recording");
     setError(null);
     setTranscript("");
     setKind("Note");
@@ -266,7 +281,8 @@ export function VoiceCaptureDialog({
     setForceKeep(false);
     setLevel(0);
     blobRef.current = null;
-    void start();
+    if (keyboard) requestAnimationFrame(() => transcriptRef.current?.focus());
+    else void start();
 
     return () => {
       cancelled = true;
@@ -303,17 +319,17 @@ export function VoiceCaptureDialog({
 
   async function submit() {
     const blob = blobRef.current;
-    if (!blob) {
-      setError("Nothing was recorded. Try again.");
+    const text = transcript.trim();
+    if (!blob && !text) {
+      setError(phase === "type" ? "Say or type something first." : "Nothing was recorded. Try again.");
       return;
     }
-    const text = transcript.trim();
-    const keep = forceKeep || keepAudio || !text;
+    const keep = blob !== null && (forceKeep || keepAudio || !text);
     setError(null);
     setPending(true);
     try {
       await writes.captureVoice({
-        audioBlob: blob,
+        audioBlob: blob ?? undefined,
         transcript: text,
         type: about ? "Note" : kind,
         keepAudio: keep,
@@ -330,6 +346,8 @@ export function VoiceCaptureDialog({
 
   const recording = phase === "recording";
   const reviewing = phase === "review";
+  const typing = phase === "type";
+  const hasWords = transcript.trim() !== "";
   const levelPct = Math.round(level * 100);
 
   return (
@@ -349,7 +367,7 @@ export function VoiceCaptureDialog({
         }
       }}
       escapeDiscards
-      dirty={recording || reviewing}
+      dirty={recording || reviewing || (typing && hasWords)}
     >
       <DialogHeader>
         <DialogTitle>{about?.title ?? "Voice capture"}</DialogTitle>
@@ -363,7 +381,13 @@ export function VoiceCaptureDialog({
       </DialogHeader>
 
       <div className="sr-only" role="status" aria-live="assertive" aria-atomic="true">
-        {recording ? "Recording in progress" : reviewing ? "Review your capture" : (error ?? "")}
+        {recording
+          ? "Recording in progress"
+          : reviewing
+            ? "Review your capture"
+            : typing
+              ? "Tap the mic on your keyboard and talk"
+              : (error ?? "")}
       </div>
 
       {phase === "error" ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -412,7 +436,7 @@ export function VoiceCaptureDialog({
         </div>
       ) : null}
 
-      {reviewing ? (
+      {reviewing || typing ? (
         <div className="space-y-3">
           {about ? null : <CaptureKindTabs value={kind} onChange={setKind} disabled={pending} />}
           {playbackUrl ? (
@@ -426,34 +450,48 @@ export function VoiceCaptureDialog({
           ) : null}
           <Textarea
             ref={transcriptRef}
-            rows={5}
+            rows={typing ? 8 : 5}
             value={transcript}
             onChange={(e) => setTranscript(e.target.value)}
-            placeholder="Transcript…"
+            placeholder={typing ? "Your words…" : "Transcript…"}
             aria-label="Transcript"
           />
-          {forceKeep ? (
+          {typing ? (
+            <p className="text-xs text-muted-foreground">
+              Tap the mic on your keyboard and talk: your phone writes the words here.
+            </p>
+          ) : !hasWords ? (
+            // Said, never silent: a capture with no words keeps only its recording, which the
+            // nightly sweep can't file.
+            <p className="text-xs text-muted-foreground">
+              {forceKeep ? "Live transcript unavailable" : "No words came through"}, so only the
+              audio will be kept.
+              {about ? " The nightly sweep files only words: type them here to have it filed." : null}
+            </p>
+          ) : forceKeep ? (
             <p className="text-xs text-muted-foreground">
               Live transcript unavailable — audio will be kept.
             </p>
           ) : null}
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="keep-audio"
-              checked={forceKeep || keepAudio}
-              disabled={forceKeep || pending}
-              onCheckedChange={(v) => setKeepAudio(v === true)}
-            />
-            <Label htmlFor="keep-audio" className="text-sm font-normal">
-              Keep audio
-            </Label>
-          </div>
+          {reviewing ? (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="keep-audio"
+                checked={forceKeep || keepAudio}
+                disabled={forceKeep || pending}
+                onCheckedChange={(v) => setKeepAudio(v === true)}
+              />
+              <Label htmlFor="keep-audio" className="text-sm font-normal">
+                Keep audio
+              </Label>
+            </div>
+          ) : null}
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={discardAndClose}>
               Discard
             </Button>
-            <Button type="button" onClick={() => void submit()} disabled={pending}>
+            <Button type="button" onClick={() => void submit()} disabled={pending || (typing && !hasWords)}>
               {pending ? "Capturing…" : "Capture"}
             </Button>
           </div>

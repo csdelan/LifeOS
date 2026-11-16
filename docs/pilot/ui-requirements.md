@@ -1837,6 +1837,17 @@ Horizon:    Pilot phase 2
 Definition: active
 Build:      built
 
+**Update (2026-11-16 — a phone dictates with its keyboard):** on a phone or tablet the dialog
+doesn't record: it opens the transcript box, the keyboard's own mic (Gboard's voice typing) writes
+the words, and they go as a voice capture with no audio. Capture waits for words. Chrome on
+Android gives the microphone to one listener at a time, so while the page recorded, its speech
+recognition heard nothing: Chris's first daily reflection dictated on his phone (2026-11-15) kept
+only its recording, and the nightly sweep files only words. Chris chose this over recording only
+on the phone (Chrome on Android stops listening at every pause) and transcription on a server (an
+outside service and a key). On a laptop it records and transcribes as before, and a recording
+with no words now says so in review instead of saving silently, adding for a review's reflection
+that the sweep needs the words typed in.
+
 **Update (2026-11-08 — live on the web):** `POST /api/capture/voice` takes the transcript and,
 only when **Keep audio** is on or there's no transcript, the recording (multipart). A
 transcript-only note is a `voice` event with no audio; one with no transcript keeps its audio

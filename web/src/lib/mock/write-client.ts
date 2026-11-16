@@ -554,12 +554,12 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       await wait();
       // TODO(api): multipart upload to the kernel's voice write path (`bsk voice`).
       const keep = req.keepAudio || !req.transcript.trim();
-      const sha256 = keep ? (await sha256Hex(req.audioBlob)) ?? null : null;
-      const ext = extensionForMime(req.audioBlob.type || "audio/webm");
+      const sha256 = keep && req.audioBlob ? (await sha256Hex(req.audioBlob)) ?? null : null;
+      const ext = extensionForMime(req.audioBlob?.type || "audio/webm");
       const result = captureVoice({
         ...req,
         sha256,
-        contentType: req.audioBlob.type || "audio/webm",
+        contentType: req.audioBlob?.type || "audio/webm",
         filename: `voice.${ext}`,
       });
       bump();
