@@ -646,3 +646,5 @@ migrations that move data, changes to the event log's payloads or the reward eco
 outside programs read that it would remove or rename. A proposal above that it builds starts "Built
 as CR<n> (nightly <date>)". Each night adds a bullet here with its score, its review and the CRs it
 built.
+
+- **2026-11-17** at 58a9e53: 6.6 (+0.1). [Review](../agents/quality-reviews/2026-11-17.md).

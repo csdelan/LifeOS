@@ -86,6 +86,7 @@ Overall per area (mean of its six dimensions) and the repo score (mean of the ar
 | 2026-11-13 | 308b96d | Claude Opus 5.5, third review's area reviewers | 6.8 | 6.3 | 6.4 | 6.0 | 5.6 | 5.6 | **6.1** |
 | 2026-11-13 | 6152b61 | Claude Opus 5.5, fourth review's area reviewers | 6.7 | 6.9 | 6.3 | 6.4 | 6.2 | 6.0 | **6.4** |
 | 2026-11-14 | 1a079d3 | Claude Opus 5.5, fifth review's area reviewers | 6.5 | 6.8 | 6.4 | 6.4 | 6.3 | 6.3 | **6.5** |
+| 2026-11-17 | 58a9e53 | Claude Opus 5.5, nightly review | 7.0 | 6.3 | 7.0 | 6.2 | 6.7 | 6.5 | **6.6** |
 
 Each dimension, as the mean of the six areas:
 
@@ -94,6 +95,7 @@ Each dimension, as the mean of the six areas:
 | 2026-11-13 | 308b96d | 6.3 | 5.5 | 6.7 | 5.4 | 5.5 | 7.3 |
 | 2026-11-13 | 6152b61 | 6.5 | 5.8 | 6.8 | 5.8 | 6.1 | 7.4 |
 | 2026-11-14 | 1a079d3 | 6.5 | 5.9 | 6.8 | 6.0 | 6.2 | 7.4 |
+| 2026-11-17 | 58a9e53 | 6.3 | 6.3 | 7.1 | 6.6 | 6.3 | 7.1 |
 
 Each area's six scores at 6152b61 (Structure, Single source, Safeguards, Scalability,
 Extendibility, Readability):
@@ -167,6 +169,7 @@ worked out afterwards from git.
 | 2026-11-13 | da72df9 | After CR58–CR67 (third review's P0, P1) | 108,537 | 0.64 | 0.33 | 39 | 26.3% | 10,474 | production-ui-types.ts (2460) |
 | 2026-11-13 | 6152b61 | After CR68–CR90 (its P2); second scores | 104,556 | 0.68 | 0.35 | 34 | 22.2% | 12,722 | production-ui-types.ts (2097) |
 | 2026-11-14 | 1a079d3 | After CR91–CR107; third scores | 105,777 | 0.68 | 0.37 | 30 | 19.2% | 12,916 | production-ui-types.ts (2106) |
+| 2026-11-17 | 58a9e53 | Nightly review | 108,142 | 0.75 | 0.37 | 31 | 19.6% | 13,223 | production-ui-types.ts (2107) |
 
 From 6152b61 the API's count includes `src/LifeOs.Contracts`, which CR89 made from `src/LifeOs.Api/Read`.
 Part of that row's fall in prod lines, and the mock's rise, is CR84 moving about 2,200 lines that only
