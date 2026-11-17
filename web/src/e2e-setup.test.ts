@@ -10,6 +10,11 @@ const specs = import.meta.glob<string>("/e2e/**/*.spec.ts", { query: "?raw", imp
 const config = Object.values(
   import.meta.glob<string>("/playwright.config.ts", { query: "?raw", import: "default", eager: true }),
 )[0];
+const tsconfigs = import.meta.glob<string>(["/tsconfig.json", "/tsconfig.e2e.json"], {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
 
 function where(pattern: RegExp): string[] {
   return Object.entries(specs).flatMap(([file, source]) =>
@@ -48,6 +53,13 @@ describe("the Playwright specs (code review CR104)", () => {
       });
     }
     expect(realClock).toEqual([]);
+  });
+
+  // Code review CR133 (fifth review R34): Playwright strips a spec's types without checking them,
+  // so the specs have a tsconfig of their own that `npm run typecheck` (tsc -b) builds.
+  it("are type-checked by npm run typecheck", () => {
+    expect(tsconfigs["/tsconfig.json"]).toMatch(/"path":\s*"\.\/tsconfig\.e2e\.json"/);
+    expect(tsconfigs["/tsconfig.e2e.json"]).toMatch(/"include":\s*\["e2e"\]/);
   });
 
   it("run against a build of the app, as it ships", () => {

@@ -43,7 +43,7 @@ test.describe("golden paths: repeating tasks and timers", () => {
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).toBeHidden();
 
-    const group = (name: string) => page.locator("section", { has: page.getByRole("heading", { name }) });
+    const group = (name: string | RegExp) => page.locator("section", { has: page.getByRole("heading", { name }) });
     const overdue = group(/^Overdue/).getByRole("button", { name: /Water plants/ });
     const today = group(/^Today/).getByRole("button", { name: /Water plants/ });
     await expect(overdue).toContainText("Every Wednesday");

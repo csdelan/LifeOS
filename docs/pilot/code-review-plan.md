@@ -585,7 +585,7 @@ names the CR whose check it widens, or the fourth review's proposal it carries.
 | R31 | CLI | `bsk` is the door CR26 left out: every exception, refusal or fault, exits 1 with its message, `--json` errors carry no kind, and resolving the connection, `--json` and building services is copied into 77 verbs. One `Cli.Verb` helper on `KernelRefusals`' table: exit 2 for a refusal, 1 for a fault, and a JSON `kind`. | CR26 | M |
 | R32 | Ops | Four `.env` parsers that disagree: `fly-setup.ps1` and `LifeOsBackup.psm1` strip only double quotes, so a single-quoted value reaches Fly and GitHub secrets with its quotes, which breaks staging at the next deploy. Also four connection-string parsers and four ways to run `bsk`. One module (`LifeOsConnection.psm1`, with R11's `Get-MainBsk`), tested on quoted values. | | S–M |
 | R33 | Web screens | No accessibility scan opens the shell's overlays: the palette, Quick and Voice capture, Redeem, the reward form, either Unsaved edits dialog. Scan each, and a check that every file rendering a dialog's or a sheet's content is opened by a spec or listed with why. | CR97 | M |
-| R34 | Web | `web/e2e` is never type-checked (`tsconfig.node.json` leaves it out), and five errors are there today (`golden/tasks.spec.ts` calls `group(name: string)` with a RegExp). Include it, and `e2e-setup.test.ts` checks it stays included. | CR104 | S |
+| R34 | Web | Built as CR133 (nightly 2026-11-17); `tsconfig.e2e.json`, which `tsconfig.json` references, so `npm run typecheck` checks the specs. `web/e2e` is never type-checked (`tsconfig.node.json` leaves it out), and five errors are there today (`golden/tasks.spec.ts` calls `group(name: string)` with a RegExp). Include it, and `e2e-setup.test.ts` checks it stays included. | CR104 | S |
 | R35 | Ops (latent) | `deploy.yml`'s concurrency group covers the whole run, so once production is on, staging waits behind the last production approval. A group per job and environment, as `migrate.yml` has. | 4th #28 | S |
 
 The review's suggested order: R1 to R11; then R13, so R12 and R14 to R18 can be ranked by what
@@ -651,4 +651,5 @@ built.
   Built: CR129 (a food, room-rating, exception-day or Oura-sync write answers pending when its
   settle or rank-up fails after the commit); CR130 (the Food Log golden spec counts its days from its
   fixed clock, and no spec that fixes one reads the real date); CR131 (the item detail's tabs say a
-  failed read, R24 in part); CR132 (the `habits` tool's description names the states it answers).
+  failed read, R24 in part); CR132 (the `habits` tool's description names the states it answers);
+  CR133 (the e2e specs are type-checked, R34).
