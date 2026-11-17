@@ -14,7 +14,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// is append-only. Dates and wall-clock times are the database's home zone
 /// (<c>bsk.home_zone()</c>), the zone the views read.
 /// </summary>
-public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFoodLogRepository
+public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource, IClock clock) : IFoodLogRepository
 {
     // Aliased to the row's property names (the CLI host doesn't turn on underscore matching);
     // dates as text, since Dapper has no DateOnly mapping in every host.
@@ -44,11 +44,12 @@ public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFood
         FROM bsk.v_food_day
         """;
 
-    // A fast that's still running reaches now.
+    // A fast that's still running reaches now: the kernel's clock, which a TestClock moves, not
+    // the database's now() (code review CR134).
     private const string OverlapSql = FastSql + """
          WHERE (@except::uuid IS NULL OR fast_id <> @except::uuid)
-           AND started_at < coalesce(@to::timestamptz, now())
-           AND @from::timestamptz < coalesce(ended_at, now())
+           AND started_at < coalesce(@to::timestamptz, @now::timestamptz)
+           AND @from::timestamptz < coalesce(ended_at, @now::timestamptz)
          ORDER BY started_at
         """;
 
@@ -203,7 +204,7 @@ public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFood
     }
 
     /// <summary>Re-checks the guard under the lock; throws when it no longer holds.</summary>
-    private static async Task CheckAsync(
+    private async Task CheckAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction, FoodGuard guard,
         CancellationToken cancellationToken)
     {
@@ -244,11 +245,12 @@ public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource) : IFood
         return await connection.QueryAsync<T>(new CommandDefinition(sql, args, cancellationToken: cancellationToken));
     }
 
-    private static object OverlapArgs(FastSpan span) => new
+    private object OverlapArgs(FastSpan span) => new
     {
         except = span.Except,
         from = span.From.ToUniversalTime(),
-        to = span.To?.ToUniversalTime()
+        to = span.To?.ToUniversalTime(),
+        now = clock.UtcNow.ToUniversalTime()
     };
 
     /// <summary>A LIKE pattern for ids starting with <paramref name="prefix"/>: hex and dashes only.</summary>

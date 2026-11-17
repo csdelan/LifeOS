@@ -5,6 +5,7 @@ using LifeOs.Application.Food;
 using LifeOs.Cli.Commands;
 using LifeOs.Domain;
 using LifeOs.Infrastructure.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
 namespace LifeOs.Tests;
@@ -214,6 +215,29 @@ public sealed class FoodLogServiceTests(PostgresFixture postgres)
         Assert.Equal(17.5m, view.Score.Quality);
         Assert.Equal(3.5m, (await food.GetRecentAsync(cancellationToken: Ct)).Single(m => m.Name == "Pasta").Score);
         Assert.Equal(3.5m, (await food.GetDaysAsync(day, day, Ct)).Days.Single().Score.AverageScore);
+    }
+
+    /// <summary>
+    /// Code review CR134: a running fast reaches the kernel's now, not the database's. With the
+    /// kernel's clock ahead of the database's, a past fast inside the running one is still refused.
+    /// </summary>
+    [Fact]
+    public async Task A_running_fast_reaches_the_kernels_now_not_the_databases()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var now = Now().AddDays(10);
+        var services = db.Services();
+        services.AddSingleton<IClock>(new TestClock(now));
+        await using var kernel = services.BuildServiceProvider();
+        var food = kernel.GetRequiredService<FoodLogService>();
+
+        await food.BeginFastAsync(now.AddHours(-1), Ct);
+        var overlap = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => food.RecordFastAsync(now.AddMinutes(-50), now.AddMinutes(-20), Ct));
+
+        Assert.Contains("still running", overlap.Message);
+        Assert.Single(await kernel.GetRequiredService<IFoodLogRepository>().GetOverlappingFastsAsync(
+            new FastSpan(now.AddMinutes(-50), now.AddMinutes(-20), null), Ct));
     }
 
     [Fact]
