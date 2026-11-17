@@ -27,6 +27,7 @@ const noChoice = { chosen: false, chosenAt: null, chosenIn: null, lapsedTitle: n
 const base: DashboardRead = {
   primaryFocus: { title: "No active goal yet", subjectId: "", kind: "goal", ...noChoice },
   objectives: [],
+  milestones: [],
   dueAndOverdue: [],
   nextActions: [],
   inboxCount: 0,
@@ -163,6 +164,41 @@ describe("FocusPage's Primary focus (TODAY-1, D6, focus plan G1)", () => {
     expect(card()).toHaveTextContent("Your focus, Run a half-marathon, is completed.");
     expect(card()).toHaveTextContent("Suggested: the Active Goal with the nearest target date.");
     expect(within(card()).getByRole("link", { name: "Choose one in a review" })).toBeInTheDocument();
+  });
+});
+
+describe("FocusPage's milestones (focus plan G2)", () => {
+  beforeEach(() => {
+    dashboard = base;
+  });
+
+  it("lists the focus Goal's sub-goals with their target dates, above its projects", () => {
+    dashboard = {
+      ...base,
+      primaryFocus: { ...base.primaryFocus, title: "Run a half marathon", subjectId: "half" },
+      milestones: [
+        { id: "5k", title: "Run a 5K", targetDate: "2026-12-06" },
+        { id: "10k", title: "Run a 10K", targetDate: null },
+      ],
+      objectives: [{ id: "couch", title: "Couch to 5K", subjectId: "couch" }],
+    };
+    render(<FocusPage />);
+
+    const milestones = screen.getByRole("heading", { name: "Milestones" }).parentElement!;
+    const rows = within(milestones).getAllByRole("listitem");
+    expect(rows.map((r) => r.textContent)).toEqual([expect.stringContaining("Run a 5K"), "Run a 10K"]);
+    expect(within(rows[0]).getByText(/Dec 6/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Projects" })).toBeInTheDocument();
+    expect(screen.getByText("Couch to 5K")).toBeInTheDocument();
+  });
+
+  it("shows no milestones, and no Projects heading, for a focus without sub-goals", () => {
+    dashboard = { ...base, objectives: [{ id: "couch", title: "Couch to 5K", subjectId: "couch" }] };
+    render(<FocusPage />);
+
+    expect(screen.queryByRole("heading", { name: "Milestones" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Projects" })).not.toBeInTheDocument();
+    expect(screen.getByText("Couch to 5K")).toBeInTheDocument();
   });
 });
 

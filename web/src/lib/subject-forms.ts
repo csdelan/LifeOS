@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { todayIso } from "@/lib/dates";
+import { formatDay, todayIso } from "@/lib/dates";
 import { goalRefusal, habitRefusal } from "@/lib/subject-gates";
 import {
   SERIES_STATUSES,
@@ -143,7 +143,7 @@ export const subjectFormSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["parent"],
-        message: "Connect this Goal to an Identity Statement.",
+        message: "Connect this Goal to an Identity Statement, or put it under a Goal.",
       });
     }
     const parentless =
@@ -193,7 +193,14 @@ const CONFIG: Partial<Record<SubjectType, TypeFormConfig>> = {
         kind: "textarea",
         placeholder: "What is true when this is done?",
       },
-      { key: "parent", label: "Identity Statement", kind: "parent", parentTypes: ["Value"], required: true },
+      // A Goal serves an Identity Statement, or a Goal it's a milestone of (a sub-goal, focus plan G2).
+      {
+        key: "parent",
+        label: "Identity Statement or Goal",
+        kind: "parent",
+        parentTypes: ["Value", "Goal"],
+        required: true,
+      },
       { key: "target_date", label: "Target date", kind: "date" },
       areaField(),
       statusField(),
@@ -633,6 +640,30 @@ export function attrsToWrite(
     if (v !== "") out[k] = v;
   }
   return out;
+}
+
+/**
+ * The parent an item's form shows when it's edited: its Identity Statement, or for a Goal that
+ * serves none, the Goal it's a sub-goal of (focus plan G2).
+ */
+export function formParentId(
+  type: SubjectType,
+  parents: readonly { type: SubjectType; subjectId: string }[],
+): string | undefined {
+  const value = parents.find((p) => p.type === "Value");
+  return (type === "Goal" ? (value ?? parents.find((p) => p.type === "Goal")) : value)?.subjectId;
+}
+
+/**
+ * Said under a sub-goal's target date when it falls after its parent Goal's (focus plan G2): a
+ * milestone that lands after what it's a milestone of is likely a slip, but not refused.
+ */
+export function subGoalDateWarning(
+  targetDate: string | undefined,
+  parent: { type: SubjectType; title: string; targetDate?: string | null } | undefined,
+): string | undefined {
+  if (!targetDate || parent?.type !== "Goal" || !parent.targetDate || targetDate <= parent.targetDate) return undefined;
+  return `After ${parent.title}'s target date, ${formatDay(parent.targetDate)}.`;
 }
 
 export function selectedParentIds(values: SubjectFormValues): string[] {

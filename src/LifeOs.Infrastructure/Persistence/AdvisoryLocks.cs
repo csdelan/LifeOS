@@ -18,6 +18,9 @@ internal static class AdvisoryLocks
     /// <summary>Every timer write: starting a timer can pause another, so writes to different tasks serialize too.</summary>
     public const long Timers = 0x7469_6D65_7273; // "timers"
 
+    /// <summary>Every alignment link (serves, results_in): its loop check reads the edges above it.</summary>
+    public const long Alignment = 0x616C_6967_6E; // "align"
+
     /// <summary>Every Oura sync.</summary>
     public const long OuraSync = 0x6F75_7261_7379_6E63; // "ourasync"
 

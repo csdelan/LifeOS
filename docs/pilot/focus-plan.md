@@ -142,6 +142,27 @@ Chris would have to date it ahead of every other Goal.
 - **Built (G1, 2026-11-17):** the review's picker is a short list of the Active Goals rather
   than the server search (§2.3). Choosing the focus you already have writes nothing and leaves
   the review's switch as it was, since the focus was kept.
+- **Built (G2, 2026-11-17):**
+  - The loop check walks `serves` and `results_in` together, so a Goal can't serve a Project
+    that results in it either. It runs in `RelationService.LinkResolvedAsync`, the one path that
+    links two items already there (`bsk link`, `POST /api/link`, a Decision's links), under one
+    advisory lock (`AdvisoryLocks.Alignment`), so two links at once can't close a loop between
+    them. Parent-first creation can't close one, since the new item has no edges yet, so it isn't
+    checked. A Goal linked to itself is refused too. The refusal names the path: "'Run a half
+    marathon' can't serve 'Run a 5K': 'Run a 5K' already sits under 'Run a half marathon' (…)".
+  - §3 said the drift diagnostic needed no change, but the wishes check (`30__wishes.sql`) asked
+    for an open Project or Task under each Goal, so a long-term Goal worked on only through its
+    sub-goals would have been a wish. An open sub-goal now counts as work toward its parent, and
+    the finding lands on the sub-goal with nothing under it.
+  - The relations read (`RelationEdge`) carries each item's status and target date, so a Goal's
+    Relationships tab shows its sub-goals' and every other row's. The group is named
+    *Sub-goal*, singular like the tab's other groups. The Focus card's milestones are the focus
+    Goal's direct Active sub-goals; its projects come from the sub-goals at any depth, through
+    Active ones only, so a finished sub-goal's projects drop out with it.
+  - The New dialog and the Map call a Goal made under a Goal a *Sub-goal*. The Goal form's
+    parent picker offers Identity Statements and Goals, never the Goal itself, and a Goal that
+    serves no Identity Statement shows its parent Goal there when it's edited. A target date
+    after the parent Goal's is said under the field, and saving still works.
 
 ## 6. Later
 
@@ -158,4 +179,4 @@ Chris would have to date it ahead of every other Goal.
 
 - [x] G0 — This plan
 - [x] G1 — A Primary focus you choose (migration 0074)
-- [ ] G2 — Sub-goals
+- [x] G2 — Sub-goals

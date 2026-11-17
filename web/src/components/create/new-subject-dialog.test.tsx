@@ -74,7 +74,7 @@ describe("NewSubjectDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Connect this Goal to an Identity Statement.",
+      "Connect this Goal to an Identity Statement, or put it under a Goal.",
     );
     expect(create).not.toHaveBeenCalled();
   });
@@ -91,6 +91,23 @@ describe("NewSubjectDialog", () => {
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ type: "Goal", parent: "value-steward", relation: "serves" }),
+    );
+  });
+
+  it("offers a sub-goal under a Goal and makes it serve that Goal (focus plan G2)", async () => {
+    writes = createMockWriteClient();
+    const create = vi.spyOn(writes, "newSubject");
+    const onOpenChange = vi.fn();
+    const half: CreateParent = { id: "goal-half", title: "Run a half-marathon", type: "Goal" };
+    renderDialog({ initialParent: half, initialType: "Goal", onOpenChange });
+
+    expect(screen.getByRole("heading", { name: "New Sub-goal" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Run a 10K" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "Goal", parent: "goal-half", relation: "serves" }),
     );
   });
 

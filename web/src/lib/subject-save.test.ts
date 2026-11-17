@@ -30,6 +30,17 @@ describe("relationshipWrites", () => {
     ]);
   });
 
+  it("moves a Goal from its identity statement to under a Goal, as a sub-goal (focus plan G2)", () => {
+    const before = form("Goal", { parent: "v1" });
+    const after = form("Goal", { parent: "goal-half" });
+    expect(
+      relationshipWrites("Goal", "g", after, { values: before, edges: [{ subjectId: "v1", relation: "serves" }] }),
+    ).toEqual([
+      { kind: "link", from: "g", relation: "serves", to: "goal-half" },
+      { kind: "link", from: "g", relation: "serves", to: "v1", remove: true },
+    ]);
+  });
+
   it("leaves a Goal's statement alone when the form didn't change it", () => {
     const values = form("Goal", { parent: "v1" });
     expect(

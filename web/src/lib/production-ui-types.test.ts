@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   STATUS_BY_TYPE,
   defaultStatus,
+  childLabel,
   inferChildRelation,
   initialStatus,
   isTerminal,
@@ -41,7 +42,16 @@ describe("inferChildRelation", () => {
     expect(inferChildRelation("Project", "Goal")).toBe("results_in");
     expect(inferChildRelation("Task", "Project")).toBe("serves");
     expect(inferChildRelation("Task", "Goal")).toBe("serves");
+    expect(inferChildRelation("Goal", "Goal")).toBe("serves");
     expect(inferChildRelation("Habit", "Goal")).toBeUndefined();
+  });
+});
+
+describe("childLabel", () => {
+  it("calls a Goal under a Goal a sub-goal, and anything else by its type (focus plan G2)", () => {
+    expect(childLabel("Goal", "Goal")).toBe("Sub-goal");
+    expect(childLabel("Goal", "Value")).toBe("Goal");
+    expect(childLabel("Project", "Goal")).toBe("Project");
   });
 });
 

@@ -531,9 +531,11 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
     {
         await using var db = await OpenAsync(cancellationToken);
         return (await db.QueryAsync<RelationEdge>(new CommandDefinition("""
-            SELECT r.relation, r.to_urn AS urn, r.to_type AS type, r.to_subject AS subject_id, s.title
+            SELECT r.relation, r.to_urn AS urn, r.to_type AS type, r.to_subject AS subject_id, s.title,
+                   c.status, s.attributes->>'target_date' AS target_date
             FROM bsk.v_subject_relation r
             JOIN bsk.v_subject s ON s.id = r.to_subject
+            LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = r.to_subject
             WHERE r.from_subject = @id
             ORDER BY r.to_type, r.to_urn
             """, new { id }, cancellationToken: cancellationToken))).AsList();
@@ -544,9 +546,11 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
     {
         await using var db = await OpenAsync(cancellationToken);
         return (await db.QueryAsync<RelationEdge>(new CommandDefinition("""
-            SELECT r.relation, r.from_urn AS urn, r.from_type AS type, r.from_subject AS subject_id, s.title
+            SELECT r.relation, r.from_urn AS urn, r.from_type AS type, r.from_subject AS subject_id, s.title,
+                   c.status, s.attributes->>'target_date' AS target_date
             FROM bsk.v_subject_relation r
             JOIN bsk.v_subject s ON s.id = r.from_subject
+            LEFT JOIN bsk_derived.subject_current_source c ON c.subject_id = r.from_subject
             WHERE r.to_subject = @id
             ORDER BY r.from_type, r.from_urn
             """, new { id }, cancellationToken: cancellationToken))).AsList();

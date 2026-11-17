@@ -179,6 +179,53 @@ public sealed class FocusEndpointTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task The_focus_goals_sub_goals_are_its_milestones_and_their_projects_its_objectives()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
+        var today = await db.TodayAsync();
+        Dictionary<string, string> By(int offset) => new() { ["target_date"] = today.AddDays(offset).ToString("yyyy-MM-dd") };
+
+        // Sub-goals made under their parent, with no relation named: a Goal under a Goal serves it.
+        var half = await NewAsync(host, new { type = SubjectTypes.Goal, title = "Run a half-marathon", attrs = By(200) });
+        var tenK = await NewAsync(host, new { type = SubjectTypes.Goal, title = "Run a 10K", parent = half.ToString(), attrs = By(90) });
+        var fiveK = await NewAsync(host, new { type = SubjectTypes.Goal, title = "Run a 5K", parent = half.ToString(), attrs = By(30) });
+        var trail = await NewAsync(host, new { type = SubjectTypes.Goal, title = "Run a trail race", parent = half.ToString(), attrs = By(150) });
+        var pace = await NewAsync(host, new { type = SubjectTypes.Goal, title = "Hold a 5:30 pace", parent = tenK.ToString(), attrs = By(60) });
+        foreach (var goal in new[] { half, tenK, fiveK, pace })
+        {
+            await StatusAsync(host, goal, "Active");
+        }
+
+        var couch = await NewAsync(host, new { type = SubjectTypes.Project, title = "Couch to 5K", parent = fiveK.ToString() });
+        var intervals = await NewAsync(host, new { type = SubjectTypes.Project, title = "Interval sessions", parent = pace.ToString() });
+        var shoes = await NewAsync(host, new { type = SubjectTypes.Project, title = "Trail shoes", parent = trail.ToString() });
+        var fence = await NewAsync(host, new { type = SubjectTypes.Project, title = "Paint the fence" });
+        foreach (var project in new[] { couch, intervals, shoes, fence })
+        {
+            await StatusAsync(host, project, "Active");
+        }
+
+        // The 5K's date is nearest, so it would be the suggestion: Chris chooses the half-marathon.
+        await PostOkAsync(host, "/api/focus/primary", new { goalId = half });
+        var focus = await host.Client.GetFromJsonAsync<JsonElement>("/api/focus", Ct);
+
+        Assert.Equal(half.ToString(), focus.GetProperty("primaryFocus").GetProperty("subjectId").GetString());
+        // Its Active sub-goals, soonest first; the trail race isn't Active, and the pace is the 10K's.
+        Assert.Equal([fiveK, tenK], Ids(focus.GetProperty("milestones")));
+        Assert.Equal(today.AddDays(30).ToString("yyyy-MM-dd"), focus.GetProperty("milestones")[0].GetProperty("targetDate").GetString());
+        // The projects under it at any depth through Active sub-goals; not the New one's, nor the fence.
+        Assert.Equal([couch, intervals], Ids(focus.GetProperty("objectives")));
+
+        // A Goal's relations say each sub-goal's status and target date, for its page.
+        var relations = await host.Client.GetFromJsonAsync<JsonElement>($"/api/subjects/{half}/relations", Ct);
+        var tenKRow = Assert.Single(relations.GetProperty("children").EnumerateArray(), c => c.GetProperty("subjectId").GetGuid() == tenK);
+        Assert.Equal("serves", tenKRow.GetProperty("relation").GetString());
+        Assert.Equal("Active", tenKRow.GetProperty("status").GetString());
+        Assert.Equal(today.AddDays(90).ToString("yyyy-MM-dd"), tenKRow.GetProperty("targetDate").GetString());
+    }
+
+    [Fact]
     public async Task With_no_active_goal_focus_says_so_and_offers_any_active_projects()
     {
         await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);

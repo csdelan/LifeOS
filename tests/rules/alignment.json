@@ -1,5 +1,5 @@
 {
-  "about": "The Map\u0027s alignment tree: AlignmentForest in src/LifeOs.Api/Mcp/AlignmentForest.cs, which the alignment tool folds, and buildAlignmentForest in web/src/lib/derive.ts, which the Map\u0027s outline folds, from the same read (GET /api/alignment). Each case answers the roots, each with its children, in order. supersedes isn\u0027t alignment, and an edge to an item not read is left out.",
+  "about": "The Map\u0027s alignment tree: AlignmentForest in src/LifeOs.Api/Mcp/AlignmentForest.cs, which the alignment tool folds, and buildAlignmentForest in web/src/lib/derive.ts, which the Map\u0027s outline folds, from the same read (GET /api/alignment). Each case answers the roots, each with its children, in order. supersedes isn\u0027t alignment, and an edge to an item not read is left out. childRelation and childTypes are parent-first creation\u0027s pairs: ParentChildRelations in C#, PARENT_MAP in the web\u0027s lib/production-ui-types.ts.",
   "cases": [
     {
       "rule": "forest",
@@ -505,6 +505,106 @@
           ]
         }
       ]
+    },
+    {
+      "rule": "childRelation",
+      "args": [
+        "Goal",
+        "Value"
+      ],
+      "out": "serves"
+    },
+    {
+      "rule": "childRelation",
+      "args": [
+        "Goal",
+        "Goal"
+      ],
+      "out": "serves"
+    },
+    {
+      "rule": "childRelation",
+      "args": [
+        "Project",
+        "Goal"
+      ],
+      "out": "results_in"
+    },
+    {
+      "rule": "childRelation",
+      "args": [
+        "Task",
+        "Project"
+      ],
+      "out": "serves"
+    },
+    {
+      "rule": "childRelation",
+      "args": [
+        "Task",
+        "Goal"
+      ],
+      "out": "serves"
+    },
+    {
+      "rule": "childRelation",
+      "args": [
+        "Habit",
+        "Goal"
+      ],
+      "out": null
+    },
+    {
+      "rule": "childRelation",
+      "args": [
+        "Goal",
+        "Project"
+      ],
+      "out": null
+    },
+    {
+      "rule": "childRelation",
+      "args": [
+        "Project",
+        "Project"
+      ],
+      "out": null
+    },
+    {
+      "rule": "childTypes",
+      "args": [
+        "Value"
+      ],
+      "out": [
+        "Goal"
+      ]
+    },
+    {
+      "rule": "childTypes",
+      "args": [
+        "Goal"
+      ],
+      "out": [
+        "Project",
+        "Task",
+        "Goal"
+      ]
+    },
+    {
+      "rule": "childTypes",
+      "args": [
+        "Project"
+      ],
+      "out": [
+        "Task"
+      ]
+    },
+    {
+      "rule": "childTypes",
+      "args": [
+        "Task"
+      ],
+      "out": []
     }
   ]
 }

@@ -48,6 +48,7 @@ import {
   attrsToWrite,
   emptyFormValues,
   formConfig,
+  formParentId,
   formValuesFromDetail,
   hasRecurrenceField,
   isDetailDirty,
@@ -127,7 +128,6 @@ function ItemDetail({
 
   useEffect(() => {
     if (!data || editing) return;
-    const valueParent = (rels?.parents ?? []).find((p) => p.type === "Value");
     const habitParents = (rels?.parents ?? [])
       .filter((p) => p.type === "Goal" || p.type === "Value")
       .map((p) => p.subjectId);
@@ -135,7 +135,7 @@ function ItemDetail({
       formValuesFromDetail(data, {
         list,
         habit,
-        parentId: valueParent?.subjectId,
+        parentId: formParentId(data.type, rels?.parents ?? []),
         parents: habitParents,
         tags: (tags ?? []).join(", "),
       }),
@@ -250,7 +250,6 @@ function ItemDetail({
 
   function cancel() {
     if (!data) return;
-    const valueParent = (rels?.parents ?? []).find((p) => p.type === "Value");
     const habitParents = (rels?.parents ?? [])
       .filter((p) => p.type === "Goal" || p.type === "Value")
       .map((p) => p.subjectId);
@@ -258,7 +257,7 @@ function ItemDetail({
       formValuesFromDetail(data, {
         list,
         habit,
-        parentId: valueParent?.subjectId,
+        parentId: formParentId(data.type, rels?.parents ?? []),
         parents: habitParents,
         tags: (tags ?? []).join(", "),
       }),

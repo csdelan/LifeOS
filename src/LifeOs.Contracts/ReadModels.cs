@@ -107,6 +107,12 @@ public sealed class RelationEdge
     public string Type { get; set; } = "";
     public Guid SubjectId { get; set; }
     public string? Title { get; set; }
+
+    /// <summary>The related item's status, or null when it has none (a Goal's sub-goals show it, focus plan G2).</summary>
+    public string? Status { get; set; }
+
+    /// <summary>The related item's target date (<c>yyyy-MM-dd</c>), when it has one.</summary>
+    public string? TargetDate { get; set; }
 }
 
 /// <summary>A raw alignment edge used to compose the Map forest client-side.</summary>
@@ -382,8 +388,14 @@ public sealed class DashboardRead
     /// </summary>
     public required FocusGoal PrimaryFocus { get; set; }
 
-    /// <summary>Up to three Active projects that result in the focus, or any Active ones when none do.</summary>
+    /// <summary>
+    /// Up to three Active projects that result in the focus or in any of its Active sub-goals,
+    /// nearest target date first, or any Active ones when none do (focus plan G2).
+    /// </summary>
     public IReadOnlyList<FocusObjective> Objectives { get; set; } = [];
+
+    /// <summary>The focus Goal's Active sub-goals, its milestones, nearest target date first (focus plan G2).</summary>
+    public IReadOnlyList<FocusMilestone> Milestones { get; set; } = [];
 
     /// <summary>Open Tasks due today or late, or whose do-date has come, soonest first (TASKS-1).</summary>
     public IReadOnlyList<SubjectListItem> DueAndOverdue { get; set; } = [];
@@ -436,6 +448,16 @@ public sealed class FocusObjective
     public Guid Id { get; set; }
     public string Title { get; set; } = "";
     public Guid SubjectId { get; set; }
+}
+
+/// <summary>One of the focus Goal's Active sub-goals (focus plan G2).</summary>
+public sealed class FocusMilestone
+{
+    public Guid Id { get; set; }
+    public string Title { get; set; } = "";
+
+    /// <summary>Its target date (<c>yyyy-MM-dd</c>), when it has one.</summary>
+    public string? TargetDate { get; set; }
 }
 
 public sealed class AppointmentRow

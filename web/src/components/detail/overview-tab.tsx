@@ -76,7 +76,7 @@ export function OverviewTab({
   const values = form.watch();
   const type = subject.type;
   const visible = visibleFields(type, values.mode, values);
-  const options = useFieldOptions(visible, values);
+  const options = useFieldOptions(visible, values, subject.id);
   const shown = editing
     ? visible
     : visible.filter((f) => f.kind !== "textarea" || f.key === "statement" || !!values.attrs[f.key]?.trim());

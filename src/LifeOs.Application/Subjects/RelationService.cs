@@ -5,8 +5,8 @@ namespace LifeOs.Application.Subjects;
 
 /// <summary>
 /// Wires subjects together (<c>bsk link</c>). Both endpoints are named through the
-/// shared resolver, the leaf-only rule is enforced before anything is written, and
-/// the edge is recorded as a declared relation. Other M3 commands (promote, decide)
+/// shared resolver, the leaf-only rule and the no-loop rule (<see cref="RelationRules"/>) are
+/// enforced before anything is written, and the edge is recorded as a declared relation. Other M3 commands (promote, decide)
 /// reuse <see cref="LinkResolvedAsync"/> to record their edges between already-known
 /// subjects without re-resolving.
 /// </summary>
@@ -46,6 +46,16 @@ public sealed class RelationService(SubjectService subjects, IRelationRepository
         if (rejection is not null)
         {
             throw new InvalidOperationException(rejection);
+        }
+
+        // Only a link between two items already there can close a loop: a new item has no edges
+        // yet, so parent-first creation never does (focus plan G2).
+        if (RelationRules.Acyclic.Contains(relation))
+        {
+            var outcome = await relations.CreateUnlessLoopAsync(
+                from.Id, relation, to.Id, Provenances.Declared, RelationRules.Acyclic, cancellationToken);
+            return outcome.Id
+                ?? throw new InvalidOperationException(RelationRules.LoopRefusal(from.Title, relation, to.Title, outcome.Loop));
         }
 
         return await relations.CreateAsync(from.Id, relation, to.Id, Provenances.Declared, cancellationToken);

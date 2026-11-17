@@ -10,6 +10,13 @@ import type { HabitOccurrenceRow, HabitRow, SubjectListItem } from "@/lib/produc
 import type { DashboardRead } from "@/lib/reads";
 import { lapsedAs, type FocusChoiceInput } from "@/lib/mock/focus-store";
 
+/** Nearest target date first, undated last, then by title: the API's order. */
+function soonest(items: SubjectListItem[]): SubjectListItem[] {
+  return [...items].sort(
+    (a, b) => (a.targetDate || "9999").localeCompare(b.targetDate || "9999") || a.title.localeCompare(b.title),
+  );
+}
+
 export function deriveDashboard(input: {
   subjects: SubjectListItem[];
   edges: AlignmentEdge[];
@@ -48,21 +55,38 @@ export function deriveDashboard(input: {
   const choice = input.focusChoice ?? null;
   const held = choice?.goalId ? (activeGoals.find((g) => g.id === choice.goalId) ?? null) : null;
   const lapsed = choice?.goalId && !held ? subjects.find((x) => x.id === choice.goalId) : undefined;
-  const suggested =
-    [...activeGoals].sort(
-      (a, b) =>
-        (a.targetDate ?? "9999").localeCompare(b.targetDate ?? "9999") ||
-        a.title.localeCompare(b.title),
-    )[0] ?? null;
+  const suggested = soonest(activeGoals)[0] ?? null;
   const primary = held ?? suggested;
 
-  const childProjectIds = new Set(
+  // Its Active sub-goals are its milestones, and the projects that result in it or in any of
+  // them, at any depth through Active ones, are its objectives (focus plan G2).
+  const activeGoalIds = new Set(activeGoals.map((g) => g.id));
+  const under = (id: string) =>
     edges
-      .filter((e) => primary && e.toId === primary.id && e.relation === "results_in")
-      .map((e) => e.fromId),
+      .filter((e) => e.toId === id && e.relation === "serves" && activeGoalIds.has(e.fromId) && e.fromId !== primary?.id)
+      .map((e) => e.fromId);
+  const reached = new Set<string>(primary ? [primary.id] : []);
+  const next = [...reached];
+  for (let id = next.shift(); id; id = next.shift()) {
+    for (const sub of under(id)) {
+      if (!reached.has(sub)) {
+        reached.add(sub);
+        next.push(sub);
+      }
+    }
+  }
+  const direct = new Set(primary ? under(primary.id) : []);
+  const milestones = soonest(activeGoals.filter((g) => direct.has(g.id))).map((g) => ({
+    id: g.id,
+    title: g.title,
+    targetDate: g.targetDate ?? null,
+  }));
+
+  const childProjectIds = new Set(
+    edges.filter((e) => reached.has(e.toId) && e.relation === "results_in").map((e) => e.fromId),
   );
   const fromProjects = activeProjects.filter((p) => childProjectIds.has(p.id));
-  const objectives = (fromProjects.length > 0 ? fromProjects : activeProjects)
+  const objectives = soonest(fromProjects.length > 0 ? fromProjects : activeProjects)
     .slice(0, 3)
     .map((p) => ({ id: p.id, title: p.title, subjectId: p.id }));
 
@@ -80,6 +104,7 @@ export function deriveDashboard(input: {
     },
     objectives:
       input.objectives && input.objectives.length > 0 ? input.objectives : objectives,
+    milestones,
     dueAndOverdue,
     nextActions,
     inboxCount,

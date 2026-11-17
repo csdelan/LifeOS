@@ -374,6 +374,10 @@ or, with none chosen or the chosen Goal ended, "Suggested: the Active Goal with 
 date.", and says when a chosen focus has ended. `bsk focus` sets it too, and `life_snapshot`
 shows it.
 
+**Update (2026-11-17 — built, [focus plan](focus-plan.md) G2):** the Focus card lists the focus
+Goal's Active sub-goals and their target dates as its milestones, and its projects are the
+Active Projects that result in the focus or in any of its Active sub-goals, nearest date first.
+
 
 ### TODAY-2 — Today's priorities combine manual planning with explainable suggestions
 Horizon:    Pilot
@@ -886,6 +890,7 @@ Build:      built
   - Project → Goal: `results_in`
   - Task → Project: `serves`
   - Task → Goal (direct): `serves`
+  - Goal → Goal (a sub-goal, [focus plan](focus-plan.md) G2): `serves`
   These pairs are unambiguous, so the UI infers the relation silently; only a genuinely
   ambiguous pair prompts. The **leaf invariant** (nothing serves a Task) makes the child-type
   chooser under a Task empty for free.
@@ -953,6 +958,12 @@ Build:      built
 "I can't create subgoals from those (short term goals as milestones of long term goals)." A
 Goal will take sub-goals: Goals that `serves` it, made from its page like a Project. A
 sub-goal satisfies the Identity Statement rule through its parent, and no link may close a loop.
+
+**Update (2026-11-17 — built, [focus plan](focus-plan.md) G2):** a Goal's *Child* and the Map
+offer a *Sub-goal*, which `serves` the Goal. The form's parent is "Identity Statement or Goal",
+and a sub-goal dated after its parent Goal says so without refusing. A Goal's Relationships tab
+lists its sub-goals with their statuses and target dates. The kernel refuses a `serves` or
+`results_in` link that would close a loop, from every door, naming the path.
 
 
 ### GEN-9 — Projects use a type-specific form and may stand alone

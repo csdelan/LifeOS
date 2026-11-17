@@ -1,11 +1,14 @@
--- title: Wishes — Goals with no open Project or Task working toward them
+-- title: Wishes — Goals with no open Project, Task or sub-goal working toward them
 --
--- A Goal is a wish when nothing is actually being done to reach it: no open Project or
--- Task works toward it. A Project works toward a Goal by `results_in`, the link LifeOS
+-- A Goal is a wish when nothing is actually being done to reach it: no open Project, Task or
+-- sub-goal works toward it. A Project works toward a Goal by `results_in`, the link LifeOS
 -- makes when a Project is created under its Goal (GEN-7, ParentChildRelations), or by
--- `serves`; a Task created right under a Goal `serves` it. The alignment tree follows
--- both relations, and so does this. A Goal worked toward only by finished Projects or
--- Tasks (done, abandoned, …) is still a wish — that work is over. "Open" is defined by
+-- `serves`; a Task created right under a Goal `serves` it, and so does a sub-goal, a Goal
+-- that is one of its milestones (focus plan G2). An open sub-goal counts as work toward its
+-- parent: when nothing works toward the sub-goal, it is the wish, so the finding lands where
+-- the work is missing. The alignment tree follows both relations, and so does this. A Goal
+-- worked toward only by finished Projects, Tasks or sub-goals (done, abandoned, …) is still
+-- a wish — that work is over. "Open" is defined by
 -- bsk.is_terminal_status (migration 0008); an item with no recorded status counts as open.
 --
 -- Status is read from bsk_derived.subject_current_source, which recomputes the
@@ -13,15 +16,15 @@
 -- on `bsk rebuild` having run.
 --
 -- Evidence is the absent/expected relation (a Goal expects an open Project resulting in
--- it), plus any finished Projects or Tasks that worked toward it — so the finding shows
--- whether the Goal has nothing at all, or only spent work.
+-- it), plus any finished Projects, Tasks or sub-goals that worked toward it — so the finding
+-- shows whether the Goal has nothing at all, or only spent work.
 
 WITH toward AS (
-    -- What works toward each Goal: a Project or Task linked to it by either relation, with
-    -- its current status.
+    -- What works toward each Goal: a Project, Task or sub-goal linked to it by either relation,
+    -- with its current status.
     SELECT r.to_subject AS goal_id, w.id, w.type, w.urn, r.relation, scs.status
     FROM bsk.subject_relation r
-    JOIN bsk.subject w ON w.id = r.from_subject AND w.type IN ('Project', 'Task')
+    JOIN bsk.subject w ON w.id = r.from_subject AND w.type IN ('Project', 'Task', 'Goal')
     LEFT JOIN bsk_derived.subject_current_source scs ON scs.subject_id = w.id
     WHERE r.relation IN ('serves', 'results_in')
 )
@@ -32,8 +35,8 @@ SELECT
     g.title AS subject_title,
     CASE
         WHEN EXISTS (SELECT 1 FROM toward t WHERE t.goal_id = g.id)
-        THEN 'Nothing open works toward this Goal — the Project(s) or Task(s) that did are finished.'
-        ELSE 'No Project or Task works toward this Goal.'
+        THEN 'Nothing open works toward this Goal — the Project(s), Task(s) or sub-goal(s) that did are finished.'
+        ELSE 'No Project, Task or sub-goal works toward this Goal.'
     END AS summary,
     -- The expected-but-absent relation, then any finished work as context.
     jsonb_build_array(
@@ -41,7 +44,7 @@ SELECT
             'kind', 'expected_relation',
             'relation', 'results_in',
             'expected_from_type', 'Project',
-            'note', 'a Goal expects an open Project resulting in it, or an open Task serving it'
+            'note', 'a Goal expects an open Project resulting in it, or an open Task or sub-goal serving it'
         )
     )
     || coalesce((

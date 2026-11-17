@@ -23,6 +23,7 @@ import {
   areaSelectValue,
   formConfig,
   statusOptionsFor,
+  subGoalDateWarning,
   visibleFields,
   type FieldDef,
   type SubjectFormValues,
@@ -441,6 +442,11 @@ export function FieldBlock({
   }
 
   if (field.kind === "date") {
+    const parentId = form.watch("parent");
+    const late =
+      type === "Goal" && field.key === "target_date"
+        ? subGoalDateWarning(attr, subjects.find((s) => s.id === parentId))
+        : undefined;
     return (
       <Field
         layout={layout}
@@ -448,7 +454,7 @@ export function FieldBlock({
         label={field.label}
         required={field.required}
         error={error}
-        hint={field.hint}
+        hint={late ?? field.hint}
       >
         {editing ? (
           <Input

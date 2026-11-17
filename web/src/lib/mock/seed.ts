@@ -2099,6 +2099,8 @@ export function toRelationEdge(
     type: other.type,
     subjectId: other.id,
     title: other.title,
+    status: other.status ?? null,
+    targetDate: other.targetDate ?? null,
   };
 }
 

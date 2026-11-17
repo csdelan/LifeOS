@@ -11,8 +11,10 @@ import { ListSkeleton } from "@/components/primitives/skeletons";
 import { DecisionRelationships } from "@/components/detail/decision-relationships";
 import { DECISION_LINK_GROUPS, decisionLinkWrite, type DecisionLinkGroup } from "@/lib/decisions";
 import { useRelations, useWrites } from "@/lib/queries";
-import { LINK_TARGET_TYPES, typeLabel } from "@/lib/production-ui-types";
-import type { Relation, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
+import { StatusPill } from "@/components/primitives/status-pill";
+import { DateChip } from "@/components/primitives/date-chip";
+import { LINK_TARGET_TYPES, childLabel, defaultStatus, isTerminal, typeLabel } from "@/lib/production-ui-types";
+import type { Relation, RelationEdge, SubjectListItem, SubjectType } from "@/lib/production-ui-types";
 import { useWriteAction } from "@/lib/write-action";
 
 export function RelationshipsTab({
@@ -79,10 +81,11 @@ export function RelationshipsTab({
             {data?.parents.length ? (
               <ul className="space-y-1.5">
                 {data.parents.map((e) => (
-                  <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
+                  <li key={`${e.relation}-${e.subjectId}`} className="flex flex-wrap items-center gap-2 text-sm">
                     <TypeBadge type={e.type} />
                     <span>{e.title}</span>
                     <span className="text-[0.6875rem] text-muted-foreground">{e.relation}</span>
+                    <EdgeState edge={e} />
                   </li>
                 ))}
               </ul>
@@ -93,14 +96,16 @@ export function RelationshipsTab({
           <DetailSection title="Children" tone="blue" icon={ArrowDownIcon}>
             {data?.children.length ? (
               <div className="space-y-3">
-                {Object.entries(grouped).map(([type, rows]) => (
-                  <div key={type}>
-                    <p className="mb-1 text-[0.8125rem] text-muted-foreground">{typeLabel(type as SubjectType)}</p>
+                {Object.entries(grouped).map(([childType, rows]) => (
+                  <div key={childType}>
+                    {/* A Goal's Goals are its sub-goals, its milestones (focus plan G2). */}
+                    <p className="mb-1 text-[0.8125rem] text-muted-foreground">{childLabel(childType as SubjectType, type)}</p>
                     <ul className="space-y-1.5">
                       {rows.map((e) => (
-                        <li key={`${e.relation}-${e.subjectId}`} className="flex items-center gap-2 text-sm">
+                        <li key={`${e.relation}-${e.subjectId}`} className="flex flex-wrap items-center gap-2 text-sm">
                           <TypeBadge type={e.type} />
                           <span>{e.title}</span>
+                          <EdgeState edge={e} />
                         </li>
                       ))}
                     </ul>
@@ -197,6 +202,19 @@ export function RelationshipsTab({
     </div>
   );
 }
+/** Where the item at the other end stands: its status, and its target date while it's open. */
+function EdgeState({ edge }: { edge: RelationEdge }) {
+  const status = edge.status || defaultStatus(edge.type);
+  if (!status && !edge.targetDate) return null;
+  const closed = isTerminal(status);
+  return (
+    <span className="ml-auto flex items-center gap-1.5">
+      {status ? <StatusPill status={status} /> : null}
+      {closed ? null : <DateChip date={edge.targetDate} kind="target" />}
+    </span>
+  );
+}
+
 function groupByType<T extends { type: SubjectType }>(rows: T[]): Record<string, T[]> {
   const out: Record<string, T[]> = {};
   for (const row of rows) {

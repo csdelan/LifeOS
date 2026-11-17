@@ -175,6 +175,17 @@ public interface IRelationRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Records an edge as <see cref="CreateAsync"/> does, unless following <paramref name="acyclic"/>
+    /// edges up from <paramref name="toSubject"/> already reaches <paramref name="fromSubject"/>:
+    /// then nothing is written and it answers that path's titles, <paramref name="toSubject"/>'s
+    /// first. Every such link takes one lock, so two at once can't close a loop between them
+    /// (focus plan G2).
+    /// </summary>
+    Task<LinkOutcome> CreateUnlessLoopAsync(
+        Guid fromSubject, string relation, Guid toSubject, string provenance, IReadOnlyList<string> acyclic,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Removes a directed edge (from → relation → to). An alignment edge is a
     /// structural fact, not a lifecycle event, so removal is a hard delete rather
     /// than a tombstone (unlike status / archive, whose history matters). Returns the
@@ -194,6 +205,9 @@ public interface IRelationRepository
         Guid fromSubject, string relation, Guid toSubject, KeptEdges kept,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>An edge recorded (<see cref="Id"/>), or the path that refused it (<see cref="Loop"/>).</summary>
+public sealed record LinkOutcome(Guid? Id, IReadOnlyList<string> Loop);
 
 /// <summary>Which of a subject's edges it must keep one of: those of <see cref="Relation"/> to a subject of one of <see cref="ToTypes"/>.</summary>
 public sealed record KeptEdges(string Relation, IReadOnlyList<string> ToTypes);

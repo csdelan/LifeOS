@@ -75,15 +75,17 @@ public sealed class FocusReader(SubjectReader subjects, IHomeCalendar calendar, 
         var goals = Active(SubjectTypes.Goal);
         var projects = Active(SubjectTypes.Project);
 
-        // The goal Chris chose leads, or the one with the nearest target date; the projects that
-        // result in it are its objectives, or any Active ones when none do.
+        // The goal Chris chose leads, or the one with the nearest target date. Its Active
+        // sub-goals are its milestones, and the projects that result in it or in any of them, at
+        // any depth, are its objectives, or any Active ones when none do (focus plan G2).
         var pick = await PrimaryAsync(goals, cancellationToken);
         var primary = pick.Goal;
-        var serving = primary is null
+        var (milestones, reached) = await SubGoalsAsync(primary, goals, cancellationToken);
+        var serving = reached.Count == 0
             ? []
             : (await subjects.GetAlignmentTargetsAsync(
                     [.. projects.Select(p => p.Id)], [SubjectRelations.ResultsIn], cancellationToken))
-                .Where(t => t.Id == primary.Id)
+                .Where(t => reached.Contains(t.Id))
                 .Select(t => t.FromId)
                 .ToHashSet();
         var objectives = projects.Where(p => serving.Contains(p.Id)).ToList();
@@ -105,10 +107,11 @@ public sealed class FocusReader(SubjectReader subjects, IHomeCalendar calendar, 
             },
             Objectives =
             [
-                .. (objectives.Count > 0 ? objectives : projects)
+                .. Soonest(objectives.Count > 0 ? objectives : projects)
                     .Take(ObjectiveLimit)
                     .Select(p => new FocusObjective { Id = p.Id, Title = p.Title, SubjectId = p.Id }),
             ],
+            Milestones = [.. milestones.Select(g => new FocusMilestone { Id = g.Id, Title = g.Title, TargetDate = g.TargetDate })],
             DueAndOverdue = focus.DueAndOverdue,
             NextActions = [.. focus.InProgress.Take(NextActionLimit)],
             InboxCount = focus.InboxCount,
@@ -140,6 +143,45 @@ public sealed class FocusReader(SubjectReader subjects, IHomeCalendar calendar, 
             .FirstOrDefault();
         return new FocusPick(suggested, Chosen: false, choice);
     }
+
+    /// <summary>
+    /// <paramref name="goal"/>'s Active sub-goals among <paramref name="activeGoals"/> (focus plan
+    /// G2): the ones right under it, soonest first, and every Goal reached down from it through
+    /// Active ones, itself included; none of either without a goal. A finished sub-goal stops the
+    /// walk: what's under it is done with it.
+    /// </summary>
+    private async Task<(IReadOnlyList<SubjectListItem> Direct, IReadOnlySet<Guid> Reached)> SubGoalsAsync(
+        SubjectListItem? goal, IReadOnlyList<SubjectListItem> activeGoals, CancellationToken cancellationToken)
+    {
+        if (goal is null)
+        {
+            return ([], new HashSet<Guid>());
+        }
+
+        var byId = activeGoals.ToDictionary(g => g.Id);
+        var under = (await subjects.GetAlignmentTargetsAsync(
+                [.. activeGoals.Where(g => g.Id != goal.Id).Select(g => g.Id)], [SubjectRelations.Serves], cancellationToken))
+            .Where(t => byId.ContainsKey(t.Id))
+            .ToLookup(t => t.Id, t => byId[t.FromId]);
+
+        var reached = new HashSet<Guid> { goal.Id };
+        var next = new Queue<Guid>([goal.Id]);
+        while (next.TryDequeue(out var id))
+        {
+            foreach (var sub in under[id].Where(s => reached.Add(s.Id)))
+            {
+                next.Enqueue(sub.Id);
+            }
+        }
+
+        return ([.. Soonest(under[goal.Id].DistinctBy(g => g.Id))], reached);
+    }
+
+    /// <summary>Nearest target date first, undated last, then by title.</summary>
+    private static IEnumerable<SubjectListItem> Soonest(IEnumerable<SubjectListItem> items)
+        => items
+            .OrderBy(s => string.IsNullOrEmpty(s.TargetDate) ? "9999" : s.TargetDate, StringComparer.Ordinal)
+            .ThenBy(s => s.Title, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>A habit being built: tracked, not Planned, not yet Established or Abandoned.</summary>
     public static bool IsBuilding(HabitRow habit)

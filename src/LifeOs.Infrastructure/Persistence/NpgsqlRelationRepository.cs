@@ -12,13 +12,64 @@ public sealed class NpgsqlRelationRepository(NpgsqlDataSource dataSource) : IRel
         WHERE from_subject = @fromSubject AND relation = @relation AND to_subject = @toSubject;
         """;
 
+    // The shortest path up from @toSubject to @fromSubject by @relations, as titles from the first
+    // to the last, or none. A path stops at an item it has been through, so a loop already in the
+    // graph can't keep it walking.
+    private const string LoopSql = """
+        WITH RECURSIVE up(node, path) AS (
+            SELECT @toSubject::uuid, ARRAY[@toSubject::uuid]
+            UNION ALL
+            SELECT r.to_subject, up.path || r.to_subject
+            FROM up
+            JOIN bsk.subject_relation r ON r.from_subject = up.node AND r.relation = ANY(@relations)
+            WHERE up.node <> @fromSubject AND r.to_subject <> ALL(up.path)
+        ),
+        loop AS (
+            SELECT path FROM up WHERE node = @fromSubject ORDER BY cardinality(path) LIMIT 1
+        )
+        SELECT s.title
+        FROM loop
+        CROSS JOIN LATERAL unnest(loop.path) WITH ORDINALITY AS p(id, n)
+        JOIN bsk.subject s ON s.id = p.id
+        ORDER BY p.n;
+        """;
+
     public async Task<Guid> CreateAsync(
         Guid fromSubject, string relation, Guid toSubject, string provenance,
         CancellationToken cancellationToken = default)
     {
         await using var connection = dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
+        return await InsertAsync(connection, null, fromSubject, relation, toSubject, provenance, cancellationToken);
+    }
 
+    public async Task<LinkOutcome> CreateUnlessLoopAsync(
+        Guid fromSubject, string relation, Guid toSubject, string provenance, IReadOnlyList<string> acyclic,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = dataSource.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // A link beside this one waits here, and its check then sees the edge this one added.
+        await AdvisoryLocks.TakeAsync(connection, transaction, AdvisoryLocks.Alignment, cancellationToken);
+        var loop = (await connection.QueryAsync<string>(new CommandDefinition(
+            LoopSql, new { fromSubject, toSubject, relations = acyclic.ToArray() }, transaction,
+            cancellationToken: cancellationToken))).AsList();
+        if (loop.Count > 0)
+        {
+            return new LinkOutcome(null, loop);
+        }
+
+        var id = await InsertAsync(connection, transaction, fromSubject, relation, toSubject, provenance, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new LinkOutcome(id, []);
+    }
+
+    private static async Task<Guid> InsertAsync(
+        NpgsqlConnection connection, NpgsqlTransaction? transaction,
+        Guid fromSubject, string relation, Guid toSubject, string provenance, CancellationToken cancellationToken)
+    {
         // An edge is stored once (subject_relation_edge_key, code review CR111): a second link
         // answers the edge already there. The statement's snapshot can miss an edge another link
         // committed while it ran, which the second read sees.
@@ -37,9 +88,9 @@ public sealed class NpgsqlRelationRepository(NpgsqlDataSource dataSource) : IRel
 
         var args = new { fromSubject, relation, toSubject, provenance };
         return await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition(
-                sql, args, cancellationToken: cancellationToken))
+                sql, args, transaction, cancellationToken: cancellationToken))
             ?? await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
-                ExistingSql, args, cancellationToken: cancellationToken));
+                ExistingSql, args, transaction, cancellationToken: cancellationToken));
     }
 
     public async Task<int> DeleteAsync(

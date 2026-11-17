@@ -26,8 +26,8 @@ export interface SavedRelationships {
 /** A Habit serves each Goal or identity statement it's for (there's no canonical pair). */
 const HABIT_PARENT_RELATION: Relation = inferChildRelation("Habit", "Goal") ?? "serves";
 
-/** A Goal serves its identity statement. */
-const GOAL_VALUE_RELATION: Relation = inferChildRelation("Goal", "Value") ?? "serves";
+/** A Goal serves its identity statement, or the Goal it's a sub-goal of (focus plan G2): the same relation. */
+const GOAL_PARENT_RELATION: Relation = inferChildRelation("Goal", "Value") ?? "serves";
 
 /**
  * The writes after the item itself is made or renamed: `alreadyLinked` is the parent a create
@@ -63,11 +63,11 @@ export function relationshipWrites(
     const wanted = values.parent;
     const shown = before?.values.parent;
     if (wanted && !linked.has(wanted)) {
-      writes.push({ kind: "link", from: subjectId, relation: GOAL_VALUE_RELATION, to: wanted });
+      writes.push({ kind: "link", from: subjectId, relation: GOAL_PARENT_RELATION, to: wanted });
     }
-    // Moved to another identity statement, or cleared: the one the form showed goes.
+    // Moved to another identity statement or Goal, or cleared: the one the form showed goes.
     if (shown && shown !== wanted && linked.has(shown)) {
-      writes.push({ kind: "link", from: subjectId, relation: relationTo(shown, GOAL_VALUE_RELATION), to: shown, remove: true });
+      writes.push({ kind: "link", from: subjectId, relation: relationTo(shown, GOAL_PARENT_RELATION), to: shown, remove: true });
     }
   }
 

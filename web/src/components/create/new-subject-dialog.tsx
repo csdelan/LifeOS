@@ -28,6 +28,7 @@ import { TypeBadge } from "@/components/primitives/type-badge";
 import { splitTags } from "@/lib/tag-suggest";
 import {
   CREATABLE_TYPES,
+  childLabel,
   childTypesFor,
   initialStatus,
   inferChildRelation,
@@ -82,6 +83,8 @@ export function NewSubjectDialog({
   const writes = useWrites();
   const fetchListItem = useFetchListItem();
   const childTypes = initialParent ? childTypesFor(initialParent.type) : [];
+  // A Goal made under a Goal is a sub-goal (focus plan G2).
+  const labelOf = (t: SubjectType) => (initialParent ? childLabel(t, initialParent.type) : typeLabel(t));
   const typeChoices = initialLink
     ? pendingLinkTypes(initialLink)
     : childTypes.length > 0
@@ -226,7 +229,7 @@ export function NewSubjectDialog({
   return (
     <FormDialog open={open} onOpenChange={onOpenChange} className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
       <DialogHeader>
-        <DialogTitle>New {typeLabel(type)}</DialogTitle>
+        <DialogTitle>New {labelOf(type)}</DialogTitle>
         <DialogDescription>
           Type-specific create. Attributes are filtered to this type; due and scheduled
           stay independent.
@@ -265,7 +268,7 @@ export function NewSubjectDialog({
               <SelectContent>
                 {typeChoices.map((t) => (
                   <SelectItem key={t} value={t}>
-                    {typeLabel(t)}
+                    {labelOf(t)}
                   </SelectItem>
                 ))}
               </SelectContent>

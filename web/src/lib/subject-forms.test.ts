@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   emptyFormValues,
+  formParentId,
   groupFields,
   groupTitle,
   isDetailDirty,
+  subGoalDateWarning,
   subjectFormSchema,
   visibleFields,
   type SubjectFormValues,
@@ -76,6 +78,14 @@ describe("a Goal's and a Habit's gates on the form", () => {
     expect(goal("Active", "", { status: "Active", targetDate: false, parents: 1 })).toEqual([]);
   });
 
+  it("keeps a Goal under an Identity Statement or a Goal (focus plan G2)", () => {
+    const parented = (parent: string) => issues({ type: "Goal", mode: "create", status: "New", parent });
+    expect(parented("")).toEqual([
+      { path: "parent", message: "Connect this Goal to an Identity Statement, or put it under a Goal." },
+    ]);
+    expect(parented("goal-half")).toEqual([]);
+  });
+
   it("keeps a Habit serving a Goal or Identity Statement, unless it never did", () => {
     const habit = (parents: string[], shown?: SubjectFormValues["shown"]) =>
       issues({ type: "Habit", mode: shown ? "edit" : "create", parents, shown });
@@ -83,5 +93,28 @@ describe("a Goal's and a Habit's gates on the form", () => {
     expect(habit([], { status: "Building", targetDate: false, parents: 1 })).toHaveLength(1);
     expect(habit(["goal-1"])).toEqual([]);
     expect(habit([], { status: "Building", targetDate: false, parents: 0 })).toEqual([]);
+  });
+});
+
+describe("a sub-goal's form (focus plan G2)", () => {
+  it("shows a Goal's Identity Statement as its parent, or the Goal it's under when it serves none", () => {
+    const value = { type: "Value" as const, subjectId: "v1" };
+    const goal = { type: "Goal" as const, subjectId: "g1" };
+    expect(formParentId("Goal", [goal, value])).toBe("v1");
+    expect(formParentId("Goal", [goal])).toBe("g1");
+    expect(formParentId("Goal", [])).toBeUndefined();
+    // A Habit's Goals are its parents list, not its one parent.
+    expect(formParentId("Habit", [goal])).toBeUndefined();
+  });
+
+  it("warns, without refusing, when a sub-goal's target date is after its parent Goal's", () => {
+    const half = { type: "Goal" as const, title: "Run a half marathon", targetDate: "2027-05-01" };
+    expect(subGoalDateWarning("2027-06-01", half)).toMatch(/^After Run a half marathon's target date, /);
+    expect(subGoalDateWarning("2027-05-01", half)).toBeUndefined();
+    expect(subGoalDateWarning("2027-04-01", half)).toBeUndefined();
+    expect(subGoalDateWarning("", half)).toBeUndefined();
+    expect(subGoalDateWarning("2027-06-01", { ...half, targetDate: null })).toBeUndefined();
+    expect(subGoalDateWarning("2027-06-01", { ...half, type: "Value" })).toBeUndefined();
+    expect(subGoalDateWarning("2027-06-01", undefined)).toBeUndefined();
   });
 });

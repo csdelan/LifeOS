@@ -146,19 +146,27 @@ export function initialStatus(type: SubjectType): string {
 }
 
 /**
- * Canonical parent→child relation map (GEN-7). Key is [childType, parentType].
- * The child is the edge's `from`, the parent the `to`. Used for inline create-child
- * in the Map/tree; unambiguous pairs infer the relation silently.
+ * Canonical parent→child relation map (GEN-7), the kernel's `ParentChildRelations`, whose cases
+ * are in tests/rules/alignment.json. Key is [childType, parentType]. The child is the edge's
+ * `from`, the parent the `to`. Used for inline create-child in the Map/tree; unambiguous pairs
+ * infer the relation silently. A Goal under a Goal is one of its milestones, a sub-goal (focus
+ * plan G2).
  */
 export const PARENT_MAP: Array<{ child: SubjectType; parent: SubjectType; relation: Relation }> = [
   { child: "Goal",    parent: "Value",   relation: "serves" },
   { child: "Project", parent: "Goal",    relation: "results_in" },
   { child: "Task",    parent: "Project", relation: "serves" },
   { child: "Task",    parent: "Goal",    relation: "serves" },
+  { child: "Goal",    parent: "Goal",    relation: "serves" },
 ];
 
 export function inferChildRelation(child: SubjectType, parent: SubjectType): Relation | undefined {
   return PARENT_MAP.find((m) => m.child === child && m.parent === parent)?.relation;
+}
+
+/** What a child is called under its parent: a Goal under a Goal is a sub-goal (focus plan G2). */
+export function childLabel(child: SubjectType, parent: SubjectType): string {
+  return child === "Goal" && parent === "Goal" ? "Sub-goal" : typeLabel(child);
 }
 
 /**
@@ -499,6 +507,8 @@ export interface RelationEdge {
   type: SubjectType;       // the OTHER end's type
   subjectId: string;       // the OTHER end's id
   title?: string | null;
+  status?: string | null;  // the OTHER end's status, null while it has had none
+  targetDate?: string | null;
 }
 
 /** An event that concerns a subject. */

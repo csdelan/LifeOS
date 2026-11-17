@@ -1,5 +1,8 @@
+using System.Net;
+using System.Net.Http.Json;
 using Dapper;
 using LifeOs.Application.Subjects;
+using LifeOs.Cli;
 using LifeOs.Domain;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -9,7 +12,8 @@ namespace LifeOs.Tests;
 /// <summary>
 /// <c>bsk link</c> (M3.2): linking produces a relation row, the leaf-only rule
 /// rejects <c>X serves Task</c> with a clear message, and a Task serving a
-/// Commitment (or standing alone) is allowed.
+/// Commitment (or standing alone) is allowed. No <c>serves</c> or <c>results_in</c> link may
+/// close a loop, from any door (focus plan G2).
 /// </summary>
 public sealed class RelationServiceTests(ClassDatabase classDb) : IClassFixture<ClassDatabase>
 {
@@ -67,6 +71,95 @@ public sealed class RelationServiceTests(ClassDatabase classDb) : IClassFixture<
             "SELECT count(*) FROM bsk.subject_relation WHERE to_subject = @task;",
             new { task = task.Id }, cancellationToken: Ct));
         Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public async Task A_link_that_would_close_a_loop_is_refused_from_every_door_and_names_the_path()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var children = provider.GetRequiredService<ChildCreationService>();
+        var relations = provider.GetRequiredService<RelationService>();
+        var ns = Guid.NewGuid().ToString("N");
+
+        // Sub-goals made under their parents, as a Goal's + Child makes them: each serves the one above.
+        var half = await subjects.CreateAsync(SubjectTypes.Goal, $"Run a half-marathon {ns}", cancellationToken: Ct);
+        var tenK = (await children.CreateChildAsync(SubjectTypes.Goal, $"Run a 10K {ns}", half.Urn, cancellationToken: Ct)).Child;
+        var fiveK = (await children.CreateChildAsync(SubjectTypes.Goal, $"Run a 5K {ns}", tenK.Urn, cancellationToken: Ct)).Child;
+        var plan = (await children.CreateChildAsync(SubjectTypes.Project, $"Couch to 5K {ns}", fiveK.Urn, cancellationToken: Ct)).Child;
+
+        var loop = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => relations.LinkAsync(half.Urn, SubjectRelations.Serves, fiveK.Urn, Ct));
+        Assert.Equal(
+            $"'{half.Title}' can't serve '{fiveK.Title}': '{fiveK.Title}' already sits under '{half.Title}' "
+            + $"({fiveK.Title} → {tenK.Title} → {half.Title}), so the link would close a loop. Unlink one of those first.",
+            loop.Message);
+
+        // results_in is followed too, and an item can't sit under itself.
+        var viaProject = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => relations.LinkAsync(half.Urn, SubjectRelations.ResultsIn, plan.Urn, Ct));
+        Assert.Contains($"({plan.Title} → {fiveK.Title} → {tenK.Title} → {half.Title})", viaProject.Message, StringComparison.Ordinal);
+        var itself = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => relations.LinkAsync(tenK.Urn, SubjectRelations.Serves, tenK.Urn, Ct));
+        Assert.Equal($"'{tenK.Title}' can't serve itself.", itself.Message);
+
+        // bsk link and the API refuse it in the same words.
+        var (exit, _, error) = await ConsoleCapture.RunAsync(() => BskRoot.Create().Command
+            .Parse(["link", half.Urn, SubjectRelations.Serves, fiveK.Urn, "--connection", classDb.ConnectionString])
+            .InvokeAsync(cancellationToken: Ct));
+        Assert.Equal(1, exit);
+        Assert.Contains("would close a loop", error, StringComparison.Ordinal);
+        await using (var host = await ApiTestHost.StartAsync(classDb.ConnectionString, Ct))
+        {
+            var answer = await host.Client.PostAsJsonAsync(
+                "/api/link", new { from = half.Id.ToString(), relation = SubjectRelations.Serves, to = fiveK.Id.ToString() }, Ct);
+            Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+            Assert.Contains("would close a loop", await answer.Content.ReadAsStringAsync(Ct), StringComparison.Ordinal);
+        }
+
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await connection.OpenAsync(Ct);
+        Assert.Equal(0, await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject_relation WHERE from_subject = @half OR (from_subject = @tenK AND to_subject = @tenK);",
+            new { half = half.Id, tenK = tenK.Id }, cancellationToken: Ct)));
+
+        // A link that closes nothing still lands: the 5K can serve the half-marathon directly too.
+        await relations.LinkAsync(fiveK.Urn, SubjectRelations.Serves, half.Urn, Ct);
+    }
+
+    [Fact]
+    public async Task Two_links_at_once_cannot_close_a_loop_between_them()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var relations = provider.GetRequiredService<RelationService>();
+        var ns = Guid.NewGuid().ToString("N");
+        var first = await subjects.CreateAsync(SubjectTypes.Goal, $"first goal {ns}", cancellationToken: Ct);
+        var second = await subjects.CreateAsync(SubjectTypes.Goal, $"second goal {ns}", cancellationToken: Ct);
+
+        var refused = await Task.WhenAll(
+            Refused(relations.LinkAsync(first.Urn, SubjectRelations.Serves, second.Urn, Ct)),
+            Refused(relations.LinkAsync(second.Urn, SubjectRelations.Serves, first.Urn, Ct)));
+
+        Assert.Equal(1, refused.Count(r => r));
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await connection.OpenAsync(Ct);
+        Assert.Equal(1, await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject_relation WHERE from_subject IN (@first, @second);",
+            new { first = first.Id, second = second.Id }, cancellationToken: Ct)));
+
+        static async Task<bool> Refused(Task link)
+        {
+            try
+            {
+                await link;
+                return false;
+            }
+            catch (InvalidOperationException)
+            {
+                return true;
+            }
+        }
     }
 
     [Fact]

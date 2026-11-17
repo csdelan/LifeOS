@@ -11,7 +11,7 @@ import {
 import { ENVIRONMENT, HEALTH, levelFor, totalFor } from "@/lib/mock/domain-fold";
 import { exerciseVerdict } from "@/lib/mock/exercise-rules";
 import { fade, partDrag, partValue, ratingPoints, spaceScore } from "@/lib/home-score";
-import { STATUS_BY_TYPE, initialStatus, isTerminal } from "@/lib/production-ui-types";
+import { STATUS_BY_TYPE, childTypesFor, inferChildRelation, initialStatus, isTerminal } from "@/lib/production-ui-types";
 import type { HomePart, ReviewKind, SubjectType } from "@/lib/production-ui-types";
 import { reviewPeriod } from "@/lib/reviews";
 import { goalRefusal, habitRefusal } from "@/lib/subject-gates";
@@ -145,6 +145,10 @@ const rules: Record<string, Record<string, (...args: unknown[]) => unknown>> = {
       buildAlignmentForest(subjects as SubjectListItem[], edges as AlignmentEdge[], {
         includeArchived: includeArchived as boolean,
       }).map(tree),
+    // What a child made under a parent is linked by, and what may be made under each type (GEN-7,
+    // focus plan G2): PARENT_MAP is the kernel's ParentChildRelations.
+    childRelation: (child, parent) => inferChildRelation(s(child) as SubjectType, s(parent) as SubjectType) ?? null,
+    childTypes: (parent) => childTypesFor(s(parent) as SubjectType),
   },
   // The Goal and Habit gates the forms say first (code review CR125).
   gates: {

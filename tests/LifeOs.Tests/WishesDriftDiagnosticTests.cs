@@ -140,6 +140,39 @@ public sealed class WishesDriftDiagnosticTests(ClassDatabase classDb) : IClassFi
     }
 
     [Fact]
+    public async Task A_goal_worked_toward_through_an_open_sub_goal_is_not_a_wish_but_the_empty_sub_goal_is()
+    {
+        await using var connection = await OpenAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var goal = await InsertSubjectAsync(connection, "Goal", ns);
+        var milestone = await InsertSubjectAsync(connection, "Goal", $"{ns}-m");
+        await InsertServesAsync(connection, milestone, goal);
+        await SetStatusAsync(connection, milestone, "Active");
+
+        // The work that's missing is the milestone's, so that's where the finding lands.
+        Assert.Null(await FindAsync("wishes", goal));
+        Assert.NotNull(await FindAsync("wishes", milestone));
+    }
+
+    [Fact]
+    public async Task A_goal_whose_only_sub_goal_is_finished_is_still_a_wish()
+    {
+        await using var connection = await OpenAsync();
+        var ns = Guid.NewGuid().ToString("N");
+        var goal = await InsertSubjectAsync(connection, "Goal", ns);
+        var milestone = await InsertSubjectAsync(connection, "Goal", $"{ns}-m");
+        await InsertServesAsync(connection, milestone, goal);
+        await SetStatusAsync(connection, milestone, "Completed");
+
+        var finding = await FindAsync("wishes", goal);
+
+        Assert.NotNull(finding);
+        Assert.Contains("sub-goal(s) that did are finished", finding!.Summary, StringComparison.Ordinal);
+        Assert.Contains(finding.Evidence.EnumerateArray(), e =>
+            e.GetProperty("kind").GetString() == "subject" && e.GetProperty("id").GetString() == milestone.ToString());
+    }
+
+    [Fact]
     public async Task Goal_with_no_serving_project_is_a_wish()
     {
         await using var connection = await OpenAsync();
@@ -149,7 +182,7 @@ public sealed class WishesDriftDiagnosticTests(ClassDatabase classDb) : IClassFi
         var finding = await FindAsync("wishes", goal);
 
         Assert.NotNull(finding);
-        Assert.Contains("No Project or Task works toward", finding!.Summary, StringComparison.Ordinal);
+        Assert.Contains("No Project, Task or sub-goal works toward", finding!.Summary, StringComparison.Ordinal);
         // Evidence names the absent/expected relation: the one a Project made under its Goal has.
         var expected = Assert.Single(finding.Evidence.EnumerateArray());
         Assert.Equal("expected_relation", expected.GetProperty("kind").GetString());

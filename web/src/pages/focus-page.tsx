@@ -11,6 +11,7 @@ import { MaintainingGroup } from "@/components/habits/maintaining-group";
 import { HABIT_STATE_ROW } from "@/components/habits/habit-state-styles";
 import { useTaskSettleOnOpen } from "@/components/tasks/use-task-settle-on-open";
 import { TodayAppointments } from "@/components/appointments/today-appointments";
+import { FocusMilestones } from "@/components/focus/focus-milestones";
 import { cn } from "@/lib/utils";
 import { useDashboard, useWrites } from "@/lib/queries";
 import { isOverdue, todayIso } from "@/lib/dates";
@@ -91,17 +92,23 @@ export function FocusPage() {
                 </Link>
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <ol className="space-y-2">
-                {data.objectives.map((o, i) => (
-                  <li key={o.id} className="flex items-start gap-3 text-sm">
-                    <span className="mt-0.5 flex size-5 items-center justify-center rounded-full bg-primary/10 text-[0.6875rem] font-medium text-primary">
-                      {i + 1}
-                    </span>
-                    {o.title}
-                  </li>
-                ))}
-              </ol>
+            <CardContent className="space-y-4">
+              <FocusMilestones milestones={data.milestones} />
+              <div>
+                {data.milestones.length > 0 && data.objectives.length > 0 ? (
+                  <h2 className="type-scale-section mb-2 text-muted-foreground">Projects</h2>
+                ) : null}
+                <ol className="space-y-2">
+                  {data.objectives.map((o, i) => (
+                    <li key={o.id} className="flex items-start gap-3 text-sm">
+                      <span className="mt-0.5 flex size-5 items-center justify-center rounded-full bg-primary/10 text-[0.6875rem] font-medium text-primary">
+                        {i + 1}
+                      </span>
+                      {o.title}
+                    </li>
+                  ))}
+                </ol>
+              </div>
             </CardContent>
           </Card>
 

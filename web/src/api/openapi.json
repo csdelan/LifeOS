@@ -8032,6 +8032,7 @@
         "required": [
           "primaryFocus",
           "objectives",
+          "milestones",
           "dueAndOverdue",
           "nextActions",
           "inboxCount",
@@ -8049,6 +8050,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/FocusObjective"
+            }
+          },
+          "milestones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FocusMilestone"
             }
           },
           "dueAndOverdue": {
@@ -9435,6 +9442,28 @@
             ]
           },
           "lapsedAs": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "FocusMilestone": {
+        "required": [
+          "id",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "targetDate": {
             "type": [
               "null",
               "string"
@@ -12100,6 +12129,18 @@
             "format": "uuid"
           },
           "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "targetDate": {
             "type": [
               "null",
               "string"

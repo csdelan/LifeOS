@@ -65,6 +65,28 @@ test.describe("accessibility: every page, habits and tasks", () => {
     await expectAccessible(page);
   });
 
+  // Sub-goals (focus plan G2): the New Sub-goal dialog with its late-date warning, then Focus
+  // with the focus Goal's milestones, which the seed doesn't have.
+  test("axe serious/critical: a sub-goal's form and the Focus milestones", async ({ page }) => {
+    await page.goto("/map?selected=goal-lifeos");
+    await page.getByRole("button", { name: "Child", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("combobox", { name: "Subject type" }).click();
+    await page.getByRole("option", { name: "Sub-goal" }).click();
+    await dialog.getByLabel("Title").fill("Ship the focus plan");
+    await dialog.getByLabel("Target date").fill("2099-01-01");
+    await expect(dialog.getByText("After Ship LifeOS production UI's target date")).toBeVisible();
+    await expectAccessible(page, { exclude: ".react-flow" });
+
+    await dialog.getByRole("combobox", { name: "Status" }).click();
+    await page.getByRole("option", { name: "Active" }).click();
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toBeHidden();
+    await page.getByRole("link", { name: "Focus" }).first().click();
+    await expect(page.getByRole("heading", { name: "Milestones" })).toBeVisible();
+    await expectAccessible(page);
+  });
+
   test("axe serious/critical: a task's timer, and Complete asking first", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/browse?type=Task&selected=task-shoes");

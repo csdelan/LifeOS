@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useCreateSubject } from "@/lib/queries";
 import type { AlignmentNode } from "@/lib/derive";
 import { isFinished } from "@/lib/map-show";
-import { childTypesFor, inferChildRelation, typeLabel } from "@/lib/production-ui-types";
+import { childLabel, childTypesFor, inferChildRelation, typeLabel } from "@/lib/production-ui-types";
 import type { SubjectType } from "@/lib/production-ui-types";
 import { TreeNode } from "@/components/primitives/tree-node";
 import { Button } from "@/components/ui/button";
@@ -92,6 +92,7 @@ function InlineCreate({
   const types: SubjectType[] = isSibling ? ["Task"] : childTypes;
   const [type, setType] = useState<SubjectType>(types[0]);
   const [title, setTitle] = useState("");
+  const labelOf = (t: SubjectType) => (isSibling ? typeLabel(t) : childLabel(t, parent.subject.type));
   const create = useCreateSubject();
   // Enter and Add both run through here, one create at a time: a second Enter while the first is
   // still saving made a second item (code review CR60).
@@ -126,15 +127,15 @@ function InlineCreate({
               type === t ? "bg-primary/12 text-primary" : "text-muted-foreground"
             }`}
           >
-            {typeLabel(t)}
+            {labelOf(t)}
           </button>
         ))}
       </div>
       <Input
         autoFocus
         value={title}
-        placeholder={isSibling ? "New sibling…" : `New ${typeLabel(type).toLowerCase()}…`}
-        aria-label={isSibling ? "New sibling title" : `New ${typeLabel(type)} title`}
+        placeholder={isSibling ? "New sibling…" : `New ${labelOf(type).toLowerCase()}…`}
+        aria-label={isSibling ? "New sibling title" : `New ${labelOf(type)} title`}
         className="h-7"
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {

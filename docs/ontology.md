@@ -144,7 +144,7 @@ Stage 1 had the first eleven; the last seven came with the features that needed 
 | Type | What it represents |
 | --- | --- |
 | **Value** | An enduring principle — who I've chosen to be. Stated as a short **handle** (the title, which drives the slug) plus a full first-person **identity statement** (`attributes.statement`, required). The top of the alignment graph. |
-| **Goal** | A desired outcome that serves a Value. |
+| **Goal** | A desired outcome that serves a Value, or serves a Goal as one of its milestones (a sub-goal). |
 | **Problem** | A durable open question I return to (the reuse-by-title anchor, §6). |
 | **Project** | A body of work that results in outcomes and serves Goals/Commitments. |
 | **Task** | A unit of work. Deliberately a **leaf** (§5) — nothing serves a Task. |
@@ -266,6 +266,9 @@ migrations cite them by number.
 9. **Reuse-by-title where it matters** (migration `0006`). A `Problem` is unique by title,
    backed by a real unique index — so "the durable question I keep returning to" is
    genuinely *one* object, not a new one each time I raise it.
+10. **No alignment loops** (`RelationRules`). A `serves` or `results_in` link that would put an
+   item under itself, through any chain of either, is refused. A Goal under its own sub-goal
+   would have no root to hang from, so what it serves stops being answerable.
 
 Enforcing these in the database rather than only in `bsk` is deliberate: the README's
 vision is *many* doors into *one* authoritative store (mobile, voice, agents, future BCI).

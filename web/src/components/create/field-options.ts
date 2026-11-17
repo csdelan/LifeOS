@@ -6,7 +6,7 @@ import type { FieldDef, SubjectFormValues } from "@/lib/subject-forms";
 export type FieldOptions = {
   areas: { id: string; urn: string; name: string }[];
   people: { id: string; title: string; personKind?: string | null }[];
-  subjects: { id: string; title: string; type: SubjectType; archived: boolean }[];
+  subjects: { id: string; title: string; type: SubjectType; archived: boolean; targetDate?: string | null }[];
 };
 
 /**
@@ -15,9 +15,11 @@ export type FieldOptions = {
  */
 export type FieldLayout = "stacked" | "row" | "block";
 
+/** `self` is the item being edited, which can't be its own parent (a Goal is offered Goals). */
 export function useFieldOptions(
   fields: FieldDef[],
   values: Pick<SubjectFormValues, "parent" | "parents">,
+  self?: string,
 ): FieldOptions {
   const { data: areas } = useAreas();
   const { data: people } = usePeople();
@@ -26,7 +28,11 @@ export function useFieldOptions(
   // already, not every Goal and Project ever made (code review CR121).
   const picked = [values.parent ?? "", ...(values.parents ?? [])];
   const { data: subjects } = useParentOptions(pickerTypes(fields), picked);
-  return { areas: areas ?? [], people: people ?? [], subjects: subjects ?? [] };
+  return {
+    areas: areas ?? [],
+    people: people ?? [],
+    subjects: (subjects ?? []).filter((s) => s.id !== self),
+  };
 }
 
 /** The types the visible parent pickers offer, each once. */

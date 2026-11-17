@@ -41,4 +41,28 @@ test.describe("golden paths: focus", () => {
     await expect(focus).toContainText("Suggested: the Active Goal with the nearest target date.");
     await expect(focus.getByRole("link", { name: "Choose one in a review" })).toBeVisible();
   });
+
+  // Sub-goals (focus plan G2): a Goal made under the focus Goal is one of its milestones, and a
+  // target date after the focus's is said, not refused.
+  test("make a sub-goal under the focus Goal and see it as a milestone on Focus", async ({ page }) => {
+    await page.goto("/map?selected=goal-lifeos");
+    await page.getByRole("button", { name: "Child", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("combobox", { name: "Subject type" }).click();
+    await page.getByRole("option", { name: "Sub-goal" }).click();
+    await expect(dialog.getByRole("heading", { name: "New Sub-goal" })).toBeVisible();
+    await dialog.getByLabel("Title").fill("Ship the focus plan");
+    await dialog.getByLabel("Target date").fill("2099-01-01");
+    await expect(dialog.getByText("After Ship LifeOS production UI's target date")).toBeVisible();
+    await dialog.getByRole("combobox", { name: "Status" }).click();
+    await page.getByRole("option", { name: "Active" }).click();
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toBeHidden();
+
+    await page.getByRole("link", { name: "Focus" }).first().click();
+    const focus = page.locator("[data-slot=card]", { hasText: "Primary focus" });
+    await expect(focus).toContainText("Ship LifeOS production UI");
+    await expect(focus.getByRole("heading", { name: "Milestones" })).toBeVisible();
+    await expect(focus.getByRole("link", { name: "Ship the focus plan" })).toBeVisible();
+  });
 });

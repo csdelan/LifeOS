@@ -113,6 +113,8 @@ public sealed class RuleParityTests
         ("browse", "page") => BrowsePage(a),
 
         ("alignment", "forest") => Forest(a),
+        ("alignment", "childRelation") => ParentChildRelations.Infer(Text(a[0])!, Text(a[1])!),
+        ("alignment", "childTypes") => ParentChildRelations.ChildTypesFor(Text(a[0])!),
 
         ("gates", "goal") => SubjectGates.GoalRefusal(Text(a[0]), Bool(a[1]), Text(a[2]), Bool(a[3])),
         ("gates", "habit") => SubjectGates.HabitRefusal(a[0] is null ? null : Int(a[0]), Int(a[1])),

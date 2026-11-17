@@ -2640,6 +2640,7 @@ export interface components {
         DashboardRead: {
             primaryFocus: components["schemas"]["FocusGoal"];
             objectives: components["schemas"]["FocusObjective"][];
+            milestones: components["schemas"]["FocusMilestone"][];
             dueAndOverdue: components["schemas"]["SubjectListItem"][];
             nextActions: components["schemas"]["SubjectListItem"][];
             /** Format: int32 */
@@ -3030,6 +3031,12 @@ export interface components {
             chosenIn: null | string;
             lapsedTitle: null | string;
             lapsedAs: null | string;
+        };
+        FocusMilestone: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            targetDate?: null | string;
         };
         FocusObjective: {
             /** Format: uuid */
@@ -3751,6 +3758,8 @@ export interface components {
             /** Format: uuid */
             subjectId: string;
             title?: null | string;
+            status?: null | string;
+            targetDate?: null | string;
         };
         RenameBody: {
             subject?: string;

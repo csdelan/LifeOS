@@ -5,12 +5,14 @@ namespace LifeOs.Domain;
 /// When a child is created from an existing parent, the edge is the child
 /// <c>serves</c> / <c>results_in</c> the parent (child is the edge's <c>from</c>,
 /// parent the <c>to</c>). The dominant Pilot hierarchy is Value → Goal → Project →
-/// Task, with Task also allowed directly under a Goal:
+/// Task, with Task also allowed directly under a Goal, and a Goal under a Goal as one of
+/// its milestones (a sub-goal, focus plan G2):
 /// <list type="bullet">
 ///   <item>Goal → Value: <c>serves</c></item>
 ///   <item>Project → Goal: <c>results_in</c></item>
 ///   <item>Task → Project: <c>serves</c></item>
 ///   <item>Task → Goal: <c>serves</c></item>
+///   <item>Goal → Goal: <c>serves</c></item>
 /// </list>
 /// These pairs are unambiguous, so the relation is inferred silently. Any other pair
 /// returns <c>null</c> — the caller must name the relation explicitly or the pair is
@@ -27,6 +29,7 @@ public static class ParentChildRelations
         [(SubjectTypes.Project, SubjectTypes.Goal)] = SubjectRelations.ResultsIn,
         [(SubjectTypes.Task, SubjectTypes.Project)] = SubjectRelations.Serves,
         [(SubjectTypes.Task, SubjectTypes.Goal)] = SubjectRelations.Serves,
+        [(SubjectTypes.Goal, SubjectTypes.Goal)] = SubjectRelations.Serves,
     };
 
     /// <summary>

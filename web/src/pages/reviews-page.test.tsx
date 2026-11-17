@@ -143,6 +143,7 @@ describe("ReviewsPage's Primary focus (TODAY-1, D6, focus plan G1)", () => {
         lapsedTitle: null,
         lapsedAs: null,
       },
+      milestones: [],
       objectives: [],
       dueAndOverdue: [],
       nextActions: [],
